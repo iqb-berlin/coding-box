@@ -12,6 +12,7 @@ import { CodingJobBackendService } from '../../services/coding-job-backend.servi
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { AppService } from '../../../core/services/app.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
+import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 
 const createDependencyMock = (): Record<string, jest.Mock> => new Proxy({} as Record<string, jest.Mock>, {
   get(target, property: string) {
@@ -152,6 +153,10 @@ describe('CoderTrainingComponent', () => {
       { id: 1, name: 'Coder 1', username: 'coder1' },
       { id: 2, name: 'Coder 2', username: 'coder2' }
     ] as never;
+  });
+
+  afterEach(() => {
+    TestBed.inject(SessionRecoveryService).clearAllDrafts();
   });
 
   it('covers the common training selection workflow', () => {
@@ -776,5 +781,86 @@ describe('CoderTrainingComponent', () => {
     ]);
     expect(component.variablesFormArray.at(0).get('bundleCaseOrderingMode')?.value).toBe('alternating');
     expect(component.variablesFormArray.at(0).get('includeDeriveError')?.value).toBe(true);
+  });
+
+  it('restores an active training draft after reauthentication', () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    sessionRecoveryService.clearAllDrafts();
+
+    component.ngOnInit();
+    component.trainingForm.patchValue({
+      trainingLabel: 'Recovered training',
+      caseOrderingMode: 'alternating',
+      caseSelectionMode: 'random',
+      showScore: true,
+      allowComments: false,
+      suppressGeneralInstructions: true,
+      includeDerivedVariables: true,
+      referenceTrainingIds: [99],
+      referenceMode: 'same'
+    });
+    component.toggleCoderSelection(component.coders[1]);
+    component.onVariablesSelectionChange(['UNIT::VAR']);
+    component.setDeriveErrorIncludedForControl(component.variablesFormArray.at(0) as FormGroup, true);
+    component.onBundleSelectionChange([5]);
+    component.updateBundleSampleCount(5, 3);
+    component.updateBundleCaseOrderingMode(5, 'continuous');
+    component.variableFilterCtrl.setValue('VAR', { emitEvent: false });
+    component.bundleFilterCtrl.setValue('Derived', { emitEvent: false });
+
+    sessionRecoveryService.captureRegisteredDrafts();
+    expect(sessionRecoveryService.peekDraft('coder-training-active-state')).toEqual(expect.objectContaining({
+      workspaceId: 1,
+      mode: 'create',
+      selectedCoderIds: [2],
+      selectedBundleIds: [5],
+      variableFilter: 'VAR',
+      bundleFilter: 'Derived'
+    }));
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(CoderTrainingComponent);
+    component = fixture.componentInstance;
+    let restoredFilteredVariableKeys: string[] = [];
+    let restoredFilteredBundleNames: string[] = [];
+    component.filteredVariables$.subscribe(variables => {
+      restoredFilteredVariableKeys = variables.map(variable => `${variable.unitName}::${variable.variableId}`);
+    });
+    component.filteredBundles$.subscribe(bundles => {
+      restoredFilteredBundleNames = bundles.map(bundle => bundle.name);
+    });
+    component.ngOnInit();
+
+    expect(component.trainingForm.get('trainingLabel')?.value).toBe('Recovered training');
+    expect(component.trainingForm.get('caseOrderingMode')?.value).toBe('alternating');
+    expect(component.trainingForm.get('caseSelectionMode')?.value).toBe('random');
+    expect(component.trainingForm.get('showScore')?.value).toBe(true);
+    expect(component.trainingForm.get('allowComments')?.value).toBe(false);
+    expect(component.trainingForm.get('suppressGeneralInstructions')?.value).toBe(true);
+    expect(component.trainingForm.get('referenceTrainingIds')?.value).toEqual([99]);
+    expect(component.trainingForm.get('referenceMode')?.value).toBe('same');
+    expect(component.selectedCoders.has(2)).toBe(true);
+    expect(component.selectedBundleArray).toEqual([5]);
+    expect(component.manualVariablesSelectControl.value).toEqual(['UNIT::VAR']);
+    expect(component.variableFilterCtrl.value).toBe('VAR');
+    expect(component.bundleFilterCtrl.value).toBe('Derived');
+    expect(restoredFilteredVariableKeys).toEqual(['UNIT::VAR']);
+    expect(restoredFilteredBundleNames).toEqual(['Derived Bundle']);
+    expect(component.variablesFormArray.controls).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        value: expect.objectContaining({
+          unitId: 'UNIT',
+          variableId: 'VAR',
+          includeDeriveError: true
+        })
+      }),
+      expect.objectContaining({
+        value: expect.objectContaining({
+          bundleId: 5,
+          sampleCount: 3,
+          bundleCaseOrderingMode: 'continuous'
+        })
+      })
+    ]));
   });
 });

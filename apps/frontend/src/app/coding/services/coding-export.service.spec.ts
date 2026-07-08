@@ -34,7 +34,8 @@ describe('CodingExportService', () => {
       getWorkspaceTokenPolicy: jest.fn().mockReturnValue(of(workspaceTokenPolicy))
     } as unknown as jest.Mocked<AppService>;
     workspaceSettingsServiceMock = {
-      getReplayUrlExportMode: jest.fn().mockReturnValue(of('auth'))
+      getReplayUrlExportMode: jest.fn().mockReturnValue(of('auth')),
+      getReplayUrlExportTokenDurationDays: jest.fn((_: number, maxDurationDays: number) => of(maxDurationDays))
     } as unknown as jest.Mocked<WorkspaceSettingsService>;
 
     TestBed.configureTestingModule({
@@ -70,6 +71,10 @@ describe('CodingExportService', () => {
       1,
       DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
       EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+    );
+    expect(workspaceSettingsServiceMock.getReplayUrlExportTokenDurationDays).toHaveBeenCalledWith(
+      1,
+      DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS
     );
     const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/1/coding/coding-list` &&
       request.params.get('authToken') === 'auth-token'
@@ -157,13 +162,37 @@ describe('CodingExportService', () => {
       expect(res).toBeDefined();
     });
 
+    expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(
+      1,
+      DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
+      EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+    );
     const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/1/coding/results-by-version` &&
+      request.params.get('authToken') === 'auth-token' &&
       request.params.get('version') === 'v2' &&
       request.params.get('includeReplayUrls') === 'true' &&
       request.params.get('includeResponseValues') === 'false' &&
       request.params.get('includeGeoGebraResponseValues') === 'false'
     );
     expect(req.request.method).toBe('GET');
+    req.flush(new Blob());
+  });
+
+  it('should use the configured export replay token duration for coding results by version', () => {
+    workspaceSettingsServiceMock.getReplayUrlExportTokenDurationDays.mockReturnValueOnce(of(30));
+
+    service.getCodingResultsByVersion(1, 'v2', true, false).subscribe(res => {
+      expect(res).toBeDefined();
+    });
+
+    expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(
+      1,
+      30,
+      EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+    );
+    const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/1/coding/results-by-version` &&
+      request.params.get('authToken') === 'auth-token'
+    );
     req.flush(new Blob());
   });
 
@@ -197,6 +226,25 @@ describe('CodingExportService', () => {
       includeGeoGebraFiles: false,
       includeGeoGebraResponseValues: false,
       authToken: ''
+    });
+    req.flush({ jobId: 'job-1', message: 'started' });
+  });
+
+  it('should use external replay tokens for result export jobs with replay URLs', () => {
+    service.startExportJob(1, 'results-by-version', 'v1', 'csv', true).subscribe(res => {
+      expect(res).toBeDefined();
+    });
+
+    expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(
+      1,
+      DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
+      EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+    );
+    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/export/start`);
+    expect(req.request.body).toMatchObject({
+      exportType: 'results-by-version',
+      includeReplayUrl: true,
+      authToken: 'auth-token'
     });
     req.flush({ jobId: 'job-1', message: 'started' });
   });

@@ -300,6 +300,11 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
   });
 
   it('includes selected training job variables in manual-only export references', async () => {
+    const trainingOnlyVariable = {
+      unitName: 'TRAINING_UNIT',
+      // Keep an id ending in 0 because these can be absent from the coding-list-derived manual set.
+      variableId: '10'
+    };
     const manualJobVariablesQuery = {
       select: jest.fn().mockReturnThis(),
       addSelect: jest.fn().mockReturnThis(),
@@ -307,7 +312,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
       distinct: jest.fn().mockReturnThis(),
-      getRawMany: jest.fn().mockResolvedValue([{ unitName: 'DHB011', variableId: '10' }])
+      getRawMany: jest.fn().mockResolvedValue([trainingOnlyVariable])
     };
     const codingJobUnitRepository = {
       createQueryBuilder: jest.fn().mockReturnValue(manualJobVariablesQuery)
@@ -343,7 +348,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       ) => Promise<Array<{ unitName: string; variableId: string; includeDeriveError?: boolean }>>
     }).getManualCodingVariableReferences(13, undefined, [21]);
 
-    expect(references).toEqual([{ unitName: 'DHB011', variableId: '10', includeDeriveError: undefined }]);
+    expect(references).toEqual([{ ...trainingOnlyVariable, includeDeriveError: undefined }]);
     expect(manualJobVariablesQuery.andWhere).toHaveBeenCalledWith(
       expect.stringContaining('cj.training_id IN (:...coderTrainingIds)'),
       { coderTrainingIds: [21] }
@@ -1896,6 +1901,11 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
   });
 
   it('includes selected training job variables in the manual-only aggregated export', async () => {
+    const trainingOnlyVariable = {
+      unitName: 'TRAINING_UNIT',
+      // Keep an id ending in 0 because these can be absent from the coding-list-derived manual set.
+      variableId: '10'
+    };
     const createQueryBuilder = (rawRows: unknown[] = []) => {
       const qb = {
         innerJoin: jest.fn().mockReturnThis(),
@@ -1915,18 +1925,18 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     };
 
     const manualJobVariablesQuery = createQueryBuilder([{
-      unitName: 'DHB011',
-      variableId: '10'
+      unitName: trainingOnlyVariable.unitName,
+      variableId: trainingOnlyVariable.variableId
     }]);
     const variableRecordsQuery = createQueryBuilder([{
-      unitName: 'DHB011',
-      variableId: '10',
+      unitName: trainingOnlyVariable.unitName,
+      variableId: trainingOnlyVariable.variableId,
       bookletName: 'BOOKLET-A'
     }]);
     const manualCodingQuery = createQueryBuilder([{
       personId: '10',
-      unitName: 'DHB011',
-      variableId: '10',
+      unitName: trainingOnlyVariable.unitName,
+      variableId: trainingOnlyVariable.variableId,
       cju_code: '1',
       coding_issue_option: null,
       code_v1: null,
@@ -2006,7 +2016,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     expect(manualJobVariablesQuery.andWhere).not.toHaveBeenCalledWith('cj.training_id IS NULL');
     expect(variableRecordsQuery.andWhere).not.toHaveBeenCalledWith('cj.training_id IS NULL');
     expect(manualCodingQuery.andWhere).not.toHaveBeenCalledWith('cj.training_id IS NULL');
-    expect(worksheet?.getRow(1).getCell(4).value).toBe('DHB011_10');
+    expect(worksheet?.getRow(1).getCell(4).value).toBe('TRAINING_UNIT_10');
     expect(worksheet?.getRow(2).getCell(4).value).toBe('1');
   });
 

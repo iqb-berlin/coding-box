@@ -22,6 +22,7 @@ import { CodingJob } from '../../../coding/models/coding-job.model';
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { utf8ToBase64 } from '../../../shared/utils/common-utils';
 import { CodingScheme } from '../../../models/coding-interfaces';
+import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 
 function createUnsignedJwt(payload: Record<string, unknown>): string {
   const encode = (value: Record<string, unknown>) => btoa(JSON.stringify(value))
@@ -148,6 +149,7 @@ describe('ReplayComponent', () => {
   };
 
   beforeEach(async () => {
+    sessionStorage.clear();
     routeParams = {
       page: 'page-1', testPerson: 'valid@test@person', unitId: 'unit-123', anchor: undefined
     };
@@ -204,6 +206,7 @@ describe('ReplayComponent', () => {
   afterEach(() => {
     jest.useRealTimers();
     jest.restoreAllMocks();
+    sessionStorage.clear();
     window.history.pushState({}, '', '/');
   });
 
@@ -246,6 +249,32 @@ describe('ReplayComponent', () => {
     expect(component.codingService.showScore).toBe(true);
     expect(component.codingService.allowComments).toBe(false);
     expect(component.codingService.suppressGeneralInstructions).toBe(true);
+  });
+
+  it('should sync the selected workspace from replay query params', async () => {
+    const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      anchor: 'VAR1'
+    };
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'coding',
+      workspaceId: '47'
+    };
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(appService.selectedWorkspaceId).toBe(47);
   });
 
   it('should keep server timings from replay payload', () => {
@@ -858,6 +887,98 @@ describe('ReplayComponent', () => {
     expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', true);
   });
 
+  it('should load the recovered coding unit instead of stale route params after session recovery', async () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-old',
+      anchor: 'OLD_VAR'
+    };
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'coding',
+      codingJobId: '77',
+      workspaceId: '47'
+    };
+    codingJobBackendServiceMock.getCodingJobUnits.mockReturnValue(of([
+      {
+        responseId: 1,
+        unitName: 'unit-old',
+        unitAlias: 'Old Unit',
+        variableId: 'OLD_VAR',
+        variableAnchor: 'OLD_VAR',
+        variablePage: '0',
+        bookletName: 'person',
+        personLogin: 'valid',
+        personCode: 'test',
+        personGroup: '',
+        isDoubleCoded: false,
+        otherCoders: []
+      },
+      {
+        responseId: 2,
+        unitName: 'unit-new',
+        unitAlias: 'New Unit',
+        variableId: 'NEW_VAR',
+        variableAnchor: 'NEW_VAR',
+        variablePage: '1',
+        bookletName: 'person',
+        personLogin: 'valid',
+        personCode: 'test',
+        personGroup: '',
+        isDoubleCoded: false,
+        otherCoders: []
+      }
+    ]));
+    sessionRecoveryService.saveDraft('replay-active-coding-state', {
+      workspaceId: 47,
+      codingJobId: 77,
+      currentUnitIndex: 1,
+      testPerson: 'valid@test@person',
+      unitId: 'unit-new',
+      page: '1',
+      anchor: 'NEW_VAR',
+      originResponseId: null,
+      coding: {
+        codingJobId: 77,
+        currentVariableId: 'NEW_VAR',
+        selectedCodes: [],
+        pendingSelections: [],
+        openUnitKeys: [],
+        notes: [],
+        codingJobComment: '',
+        codingJobCommentChanged: false
+      }
+    });
+
+    fixture.destroy();
+    replayBackendService.getReplayPayload.mockClear();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(replayBackendService.getReplayPayload).toHaveBeenCalledWith(
+      47,
+      'valid@test@person',
+      'unit-new',
+      'valid-token'
+    );
+    expect(replayBackendService.getReplayPayload).not.toHaveBeenCalledWith(
+      47,
+      'valid@test@person',
+      'unit-old',
+      'valid-token'
+    );
+    expect(component.unitId).toBe('unit-new');
+    expect(component.codingService.currentVariableId).toBe('NEW_VAR');
+    expect(sessionRecoveryService.peekDraft('replay-active-coding-state')).toBeNull();
+  });
+
   it('should replace an expired replay auth token before loading coding job units', async () => {
     const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
     const expiredToken = createUnsignedJwt({
@@ -1087,6 +1208,45 @@ describe('ReplayComponent', () => {
     expect(window.location.href).not.toContain('auth=');
   });
 
+  it('should coalesce concurrent replay recovery restores after reauthentication', async () => {
+    const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+    const privateComponent = component as unknown as {
+      authToken: string;
+      restoreReplayAfterReAuthentication: () => Promise<void>;
+    };
+    const oldToken = createUnsignedJwt({
+      workspace: '47',
+      exp: Math.floor(Date.now() / 1000) + 60
+    });
+    const tokenSubject = new Subject<string>();
+    window.history.pushState(
+      {},
+      '',
+      `/#/replay/valid%40test%40person/unit-123/0/VAR1?auth=${oldToken}&mode=coding&codingJobId=77&workspaceId=47`
+    );
+
+    component.isCodingMode = true;
+    component.workspaceId = 47;
+    privateComponent.authToken = oldToken;
+    component.codingService.setAuthToken(oldToken);
+    (jwtDecodeModule.jwtDecode as jest.Mock).mockReturnValue({ workspace: '47' });
+    appService.createOwnToken.mockClear();
+    appService.createOwnToken.mockReturnValue(tokenSubject.asObservable());
+
+    const firstRestore = privateComponent.restoreReplayAfterReAuthentication();
+    const secondRestore = privateComponent.restoreReplayAfterReAuthentication();
+    await Promise.resolve();
+
+    expect(appService.createOwnToken).toHaveBeenCalledTimes(1);
+
+    tokenSubject.next('fresh-token-after-login');
+    tokenSubject.complete();
+    await Promise.all([firstRestore, secondRestore]);
+
+    expect(privateComponent.authToken).toBe('fresh-token-after-login');
+    expect(appService.createOwnToken).toHaveBeenCalledTimes(1);
+  });
+
   it('should not refresh an invalid replay auth token after successful reauthentication', async () => {
     const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
     const privateComponent = component as unknown as { authToken: string };
@@ -1114,6 +1274,252 @@ describe('ReplayComponent', () => {
     expect(appService.createOwnToken).not.toHaveBeenCalled();
     expect(privateComponent.authToken).toBe('invalid-token');
     expect(window.location.href).toContain('auth=invalid-token');
+  });
+
+  it('should keep replay recovery drafts until workspace context is loaded', async () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    const privateComponent = component as unknown as {
+      restoreReplayRecoveryDraft: () => Promise<boolean>;
+    };
+    const draft = {
+      workspaceId: 47,
+      codingJobId: 77,
+      currentUnitIndex: 0,
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      page: '0',
+      anchor: 'VAR1',
+      originResponseId: null,
+      coding: {
+        codingJobId: 77,
+        currentVariableId: 'VAR1',
+        selectedCodes: [],
+        pendingSelections: [],
+        openUnitKeys: [],
+        notes: [],
+        codingJobComment: ''
+      }
+    };
+    sessionRecoveryService.saveDraft('replay-active-coding-state', draft);
+    component.isCodingMode = true;
+    component.workspaceId = 0;
+    component.codingService.codingJobId = 77;
+    codingJobBackendServiceMock.saveCodingProgress.mockClear();
+
+    await expect(privateComponent.restoreReplayRecoveryDraft()).resolves.toBe(false);
+
+    expect(sessionRecoveryService.peekDraft('replay-active-coding-state')).toEqual(draft);
+    expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+  });
+
+  it('should clear replay recovery drafts after recovered coding state is saved', async () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    const privateComponent = component as unknown as {
+      restoreReplayRecoveryDraft: () => Promise<boolean>;
+      unitsData: unknown;
+    };
+    component.isCodingMode = true;
+    component.workspaceId = 47;
+    privateComponent.unitsData = {
+      id: 77,
+      name: 'Coding Job 77',
+      currentUnitIndex: 0,
+      units: [{
+        id: 0,
+        name: 'unit-123',
+        alias: null,
+        bookletId: 0,
+        testPerson: 'valid@test@person',
+        variableId: 'VAR1',
+        variableAnchor: 'VAR1',
+        variablePage: '0'
+      }]
+    };
+    component.codingService.codingJobId = 77;
+    const compositeKey = component.codingService.generateCompositeKey(
+      'valid@test@person',
+      'unit-123',
+      'VAR1'
+    );
+    sessionRecoveryService.saveDraft('replay-active-coding-state', {
+      workspaceId: 47,
+      codingJobId: 77,
+      currentUnitIndex: 0,
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      page: '0',
+      anchor: 'VAR1',
+      originResponseId: null,
+      coding: {
+        codingJobId: 77,
+        currentVariableId: 'VAR1',
+        selectedCodes: [],
+        pendingSelections: [[compositeKey, {
+          id: 7,
+          code: '7',
+          label: 'Seven',
+          score: 2
+        }]],
+        openUnitKeys: [],
+        notes: [],
+        codingJobComment: ''
+      }
+    });
+    codingJobBackendServiceMock.saveCodingProgress.mockClear();
+
+    await expect(privateComponent.restoreReplayRecoveryDraft()).resolves.toBe(true);
+
+    expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledWith(
+      47,
+      77,
+      {
+        testPerson: 'valid@test@person',
+        unitId: 'unit-123',
+        variableId: 'VAR1',
+        selectedCode: {
+          id: 7,
+          code: '7',
+          label: 'Seven',
+          score: 2,
+          codingIssueOption: null
+        }
+      },
+      'valid-token'
+    );
+    expect(sessionRecoveryService.peekDraft('replay-active-coding-state')).toBeNull();
+  });
+
+  it('should not restore replay recovery drafts in coding issue review mode', async () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    const privateComponent = component as unknown as {
+      restoreReplayRecoveryDraft: () => Promise<boolean>;
+      unitsData: unknown;
+    };
+    component.isCodingMode = true;
+    component.isCodingIssueReviewMode = true;
+    component.workspaceId = 47;
+    privateComponent.unitsData = {
+      id: 77,
+      name: 'Coding Job 77',
+      currentUnitIndex: 0,
+      units: [{
+        id: 0,
+        name: 'unit-123',
+        alias: null,
+        bookletId: 0,
+        testPerson: 'valid@test@person',
+        variableId: 'VAR1',
+        variableAnchor: 'VAR1',
+        variablePage: '0'
+      }]
+    };
+    component.codingService.codingJobId = 77;
+    component.codingService.isCodingIssueReviewMode = true;
+    const compositeKey = component.codingService.generateCompositeKey(
+      'valid@test@person',
+      'unit-123',
+      'VAR1'
+    );
+    const draft = {
+      workspaceId: 47,
+      codingJobId: 77,
+      currentUnitIndex: 0,
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      page: '0',
+      anchor: 'VAR1',
+      originResponseId: null,
+      coding: {
+        codingJobId: 77,
+        currentVariableId: 'VAR1',
+        selectedCodes: [],
+        pendingSelections: [[compositeKey, {
+          id: 7,
+          code: '7',
+          label: 'Seven',
+          score: 2
+        }]],
+        openUnitKeys: [],
+        notes: [],
+        codingJobComment: ''
+      }
+    };
+    sessionRecoveryService.saveDraft('replay-active-coding-state', draft);
+    codingJobBackendServiceMock.saveCodingProgress.mockClear();
+
+    await expect(privateComponent.restoreReplayRecoveryDraft()).resolves.toBe(false);
+
+    expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+    expect(sessionRecoveryService.peekDraft('replay-active-coding-state')).toEqual(draft);
+  });
+
+  it('should restore coding decision replay drafts and notify the opener', async () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    const postMessage = jest.fn();
+    Object.defineProperty(window, 'opener', {
+      value: { postMessage },
+      configurable: true
+    });
+    const privateComponent = component as unknown as {
+      restoreReplayRecoveryDraft: () => Promise<boolean>;
+    };
+    component.isCodingMode = true;
+    component.isCodingDecisionMode = true;
+    component.workspaceId = 47;
+    component.originResponseId = 501;
+    component.testPerson = 'valid@test@person';
+    component.unitId = 'unit-123';
+    component.codingService.currentVariableId = 'VAR1';
+    const compositeKey = component.codingService.generateCompositeKey(
+      'valid@test@person',
+      'unit-123',
+      'VAR1'
+    );
+    sessionRecoveryService.saveDraft('replay-active-coding-state', {
+      workspaceId: 47,
+      codingJobId: null,
+      mode: 'coding-decision',
+      currentUnitIndex: 0,
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      page: '0',
+      anchor: 'VAR1',
+      originResponseId: 501,
+      coding: {
+        codingJobId: null,
+        currentVariableId: 'VAR1',
+        selectedCodes: [],
+        pendingSelections: [[compositeKey, {
+          id: 7,
+          code: '7',
+          label: 'Seven',
+          score: 2
+        }]],
+        openUnitKeys: [],
+        notes: [[compositeKey, 'Recovered note']],
+        codingJobComment: ''
+      }
+    });
+    codingJobBackendServiceMock.saveCodingProgress.mockClear();
+
+    await expect(privateComponent.restoreReplayRecoveryDraft()).resolves.toBe(true);
+
+    expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'replayCodeSelected',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      variableId: 'VAR1',
+      code: '7',
+      score: 2,
+      notes: 'Recovered note',
+      responseId: 501
+    }, '*');
+    expect(sessionRecoveryService.peekDraft('replay-active-coding-state')).toBeNull();
+    Object.defineProperty(window, 'opener', {
+      value: null,
+      configurable: true
+    });
   });
 
   it('should load coding-review mode as read-only without coding job status side effects', async () => {

@@ -20,6 +20,11 @@ import { JobDefinitionRefreshDialogComponent } from './job-definition-refresh-di
 import {
   JobDefinitionDistributionSummaryDialogComponent
 } from './job-definition-distribution-summary-dialog.component';
+import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
+import {
+  CODING_JOB_DEFINITION_RECOVERY_KEY,
+  CodingJobDefinitionDialogComponent
+} from '../coding-job-definition-dialog/coding-job-definition-dialog.component';
 
 describe('CodingJobDefinitionsComponent', () => {
   let component: CodingJobDefinitionsComponent;
@@ -27,6 +32,8 @@ describe('CodingJobDefinitionsComponent', () => {
   let overlayContainer: OverlayContainer;
 
   beforeEach(async () => {
+    sessionStorage.clear();
+
     await TestBed.configureTestingModule({
       providers: [
         provideNoopAnimations(),
@@ -97,6 +104,7 @@ describe('CodingJobDefinitionsComponent', () => {
   });
 
   afterEach(() => {
+    TestBed.inject(SessionRecoveryService).clearAllDrafts();
     overlayContainer.ngOnDestroy();
   });
 
@@ -765,6 +773,42 @@ describe('CodingJobDefinitionsComponent', () => {
           assignedCoderConfigs: [{ coderId: 1, capacityPercent: 75 }]
         })
       })
+    }));
+  });
+
+  it('reopens a recovered job definition draft after reauthentication', () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    const matDialog = TestBed.inject(MatDialog);
+    const dialogRefMock = { afterClosed: () => of(false) };
+    const dialogOpenSpy = jest.spyOn(matDialog, 'open').mockReturnValue(dialogRefMock as never);
+
+    sessionRecoveryService.saveDraft(CODING_JOB_DEFINITION_RECOVERY_KEY, {
+      workspaceId: 1,
+      mode: 'definition',
+      isEdit: false,
+      formValue: {},
+      doubleCodingMode: 'absolute',
+      selectedVariables: [],
+      selectedVariableBundles: [],
+      selectedCoderConfigs: [],
+      unitNameFilter: '',
+      variableIdFilter: '',
+      bundleNameFilter: '',
+      availabilityFilter: 'all',
+      trainingRequiredFilter: 'all'
+    });
+
+    sessionRecoveryService.notifyRestoredAuthentication();
+
+    expect(dialogOpenSpy).toHaveBeenCalledWith(CodingJobDefinitionDialogComponent, expect.objectContaining({
+      data: {
+        isEdit: false,
+        mode: 'definition',
+        jobDefinitionId: undefined,
+        codingJob: undefined,
+        readOnly: undefined,
+        createdJobsCount: undefined
+      }
     }));
   });
 });

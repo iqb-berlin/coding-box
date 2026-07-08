@@ -8,6 +8,10 @@ import {
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import {
+  DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
+  EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+} from '../../../core/services/auth-session.config';
 
 describe('ExportJobService', () => {
   let service: ExportJobService;
@@ -23,10 +27,18 @@ describe('ExportJobService', () => {
       downloadExportFile: jest.fn()
     } as unknown as jest.Mocked<CodingJobBackendService>;
     appServiceMock = {
-      createOwnToken: jest.fn().mockReturnValue(of('auth-token'))
+      createOwnToken: jest.fn().mockReturnValue(of('auth-token')),
+      getWorkspaceTokenPolicy: jest.fn().mockReturnValue(of({
+        scopes: {
+          'replay:read': { maxDurationDays: DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS },
+          'replay-statistics:write': { maxDurationDays: 1 },
+          'coding-job:operate': { maxDurationDays: 1 }
+        }
+      }))
     } as unknown as jest.Mocked<AppService>;
     workspaceSettingsServiceMock = {
-      getReplayUrlExportMode: jest.fn().mockReturnValue(of('auth'))
+      getReplayUrlExportMode: jest.fn().mockReturnValue(of('auth')),
+      getReplayUrlExportTokenDurationDays: jest.fn((_: number, maxDurationDays: number) => of(maxDurationDays))
     } as unknown as jest.Mocked<WorkspaceSettingsService>;
 
     TestBed.configureTestingModule({
@@ -139,8 +151,12 @@ describe('ExportJobService', () => {
 
       expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(
         1,
+        DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
+        EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+      );
+      expect(workspaceSettingsServiceMock.getReplayUrlExportTokenDurationDays).toHaveBeenCalledWith(
         1,
-        ['replay:read', 'replay-statistics:write']
+        DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS
       );
       expect(codingJobBackendServiceMock.startExportJob).toHaveBeenCalledWith(
         1,
@@ -150,6 +166,22 @@ describe('ExportJobService', () => {
           authToken: 'auth-token',
           serverUrl: window.location.origin
         })
+      );
+    });
+
+    it('should use the configured export replay token duration', () => {
+      workspaceSettingsServiceMock.getReplayUrlExportTokenDurationDays.mockReturnValueOnce(of(30));
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
+
+      service.startJob(1, {
+        exportType: 'detailed',
+        includeReplayUrl: true
+      }).subscribe();
+
+      expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(
+        1,
+        30,
+        EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
       );
     });
 
