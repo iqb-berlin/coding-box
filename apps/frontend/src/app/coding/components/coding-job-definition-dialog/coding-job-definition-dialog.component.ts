@@ -55,6 +55,7 @@ import { MissingsProfileService } from '../../services/missings-profile.service'
 import { CodingJobBulkCreationDialogComponent, BulkCreationData, BulkCreationResult } from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import { JobDefinitionRefreshDialogComponent } from '../coding-job-definitions/job-definition-refresh-dialog.component';
+import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 
 export interface CodingJobDefinitionDialogData {
   codingJob?: CodingJob;
@@ -88,6 +89,42 @@ export interface JobDefinition {
   createdJobsCount?: number;
   created_at?: Date;
   updated_at?: Date;
+}
+
+export const CODING_JOB_DEFINITION_RECOVERY_KEY = 'coding-job-definition-active-state';
+
+interface CodingJobDefinitionRecoveryVariable {
+  unitName: string;
+  variableId: string;
+  includeDeriveError?: boolean;
+}
+
+interface CodingJobDefinitionRecoveryBundle {
+  id: number;
+  name: string;
+  caseOrderingMode?: 'continuous' | 'alternating';
+  variables: CodingJobDefinitionRecoveryVariable[];
+}
+
+export interface CodingJobDefinitionRecoveryDraft {
+  workspaceId?: number;
+  mode: 'definition';
+  isEdit: boolean;
+  jobDefinitionId?: number;
+  codingJob?: CodingJob;
+  readOnly?: boolean;
+  createdJobsCount?: number;
+  formValue: Record<string, unknown>;
+  doubleCodingMode: 'absolute' | 'percentage';
+  selectedVariables: CodingJobDefinitionRecoveryVariable[];
+  selectedVariableBundles: CodingJobDefinitionRecoveryBundle[];
+  selectedCoderConfigs: JobDefinitionCoderConfig[];
+  unitNameFilter: string;
+  variableIdFilter: string;
+  bundleNameFilter: string;
+  availabilityFilter: 'all' | 'full' | 'partial' | 'none';
+  trainingRequiredFilter: 'all' | 'true' | 'false';
+  distributionSeed?: string;
 }
 
 interface CreationResults {
@@ -172,7 +209,15 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private matDialog = inject(MatDialog);
   private translateService = inject(TranslateService);
+  private sessionRecoveryService = inject(SessionRecoveryService);
   private destroy$ = new Subject<void>();
+  private unregisterRecoveryProvider?: () => void;
+  private hasRestoredRecoveryDraft = false;
+  private variablesLoadedForRecovery = false;
+  private variableBundlesLoadedForRecovery = false;
+  private availableCodersLoadedForRecovery = false;
+  private existingJobDefinitionsLoadedForRecovery = false;
+  private missingsProfilesLoadedForRecovery = false;
 
   codingJobForm!: FormGroup;
   isLoading = false;
@@ -255,6 +300,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     this.initForm();
+    this.registerRecoveryProvider();
+    this.sessionRecoveryService.restore$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.restoreDefinitionRecoveryDraft());
     this.bindSelectionPreviewRefresh();
     this.codingJobForm.valueChanges
       .pipe(debounceTime(150), takeUntil(this.destroy$))
@@ -272,6 +321,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     if (this.data.mode === 'definition') {
       this.loadExistingJobDefinitions();
       this.loadMissingsProfiles();
+    } else {
+      this.existingJobDefinitionsLoadedForRecovery = true;
+      this.missingsProfilesLoadedForRecovery = true;
     }
 
     this.dataSource.filterPredicate = (row, filter: string): boolean => {
@@ -301,9 +353,225 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.unregisterRecoveryProvider?.();
+    this.unregisterRecoveryProvider = undefined;
     this.selectionPreviewSubscription.unsubscribe();
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  private registerRecoveryProvider(): void {
+    if (this.data.mode !== 'definition') {
+      return;
+    }
+
+    this.unregisterRecoveryProvider = this.sessionRecoveryService.registerProvider({
+      key: CODING_JOB_DEFINITION_RECOVERY_KEY,
+      capture: () => this.createDefinitionRecoveryDraft()
+    });
+  }
+
+  private createDefinitionRecoveryDraft(): CodingJobDefinitionRecoveryDraft | null {
+    if (
+      this.data.mode !== 'definition' ||
+      this.isReadOnly ||
+      !this.codingJobForm ||
+      !this.hasRecoverableDefinitionState()
+    ) {
+      return null;
+    }
+
+    return {
+      workspaceId: this.appService.selectedWorkspaceId,
+      mode: 'definition',
+      isEdit: this.data.isEdit,
+      jobDefinitionId: this.data.jobDefinitionId,
+      codingJob: this.data.codingJob ? { ...this.data.codingJob } : undefined,
+      readOnly: this.data.readOnly,
+      createdJobsCount: this.data.createdJobsCount,
+      formValue: this.codingJobForm.getRawValue(),
+      doubleCodingMode: this.doubleCodingMode,
+      selectedVariables: this.getSelectedDefinitionVariables(),
+      selectedVariableBundles: this.getSelectedDefinitionVariableBundles().map(bundle => ({
+        id: bundle.id,
+        name: bundle.name,
+        caseOrderingMode: bundle.caseOrderingMode,
+        variables: bundle.variables.map(variable => ({
+          unitName: variable.unitName,
+          variableId: variable.variableId,
+          ...(variable.includeDeriveError === true ? { includeDeriveError: true } : {})
+        }))
+      })),
+      selectedCoderConfigs: this.getSelectedCoderConfigs(),
+      unitNameFilter: this.unitNameFilter,
+      variableIdFilter: this.variableIdFilter,
+      bundleNameFilter: this.bundleNameFilter,
+      availabilityFilter: this.availabilityFilter,
+      trainingRequiredFilter: this.trainingRequiredFilter,
+      distributionSeed: this.getDistributionSeed()
+    };
+  }
+
+  private hasRecoverableDefinitionState(): boolean {
+    if (this.data.isEdit) {
+      return true;
+    }
+
+    const formValue = this.codingJobForm.getRawValue();
+    const hasFormChanges = this.codingJobForm.dirty && (
+      formValue.durationSeconds !== 1 ||
+      formValue.maxCodingCases !== null ||
+      (formValue.doubleCodingAbsolute ?? 0) !== 0 ||
+      (formValue.doubleCodingPercentage ?? 0) !== 0 ||
+      formValue.caseOrderingMode !== 'continuous' ||
+      formValue.showScore !== false ||
+      formValue.allowComments !== true ||
+      formValue.suppressGeneralInstructions === true ||
+      (formValue.missingsProfileId ?? 0) !== 0
+    );
+
+    return this.selectedVariables.selected.length > 0 ||
+      this.selectedVariableBundles.selected.length > 0 ||
+      this.selectedCoders.selected.length > 0 ||
+      this.unitNameFilter.trim().length > 0 ||
+      this.variableIdFilter.trim().length > 0 ||
+      this.bundleNameFilter.trim().length > 0 ||
+      this.availabilityFilter !== 'all' ||
+      this.trainingRequiredFilter !== 'all' ||
+      hasFormChanges;
+  }
+
+  private restoreDefinitionRecoveryDraft(): boolean {
+    if (this.hasRestoredRecoveryDraft || !this.areDefinitionRecoveryDependenciesLoaded()) {
+      return false;
+    }
+
+    const draft = this.sessionRecoveryService.peekDraft<CodingJobDefinitionRecoveryDraft>(
+      CODING_JOB_DEFINITION_RECOVERY_KEY
+    );
+    if (!draft || !this.isDefinitionRecoveryDraftForCurrentContext(draft)) {
+      return false;
+    }
+
+    this.hasRestoredRecoveryDraft = true;
+    this.applyDefinitionRecoveryDraft(draft);
+    return true;
+  }
+
+  private areDefinitionRecoveryDependenciesLoaded(): boolean {
+    return this.variablesLoadedForRecovery &&
+      this.variableBundlesLoadedForRecovery &&
+      this.availableCodersLoadedForRecovery &&
+      this.existingJobDefinitionsLoadedForRecovery &&
+      this.missingsProfilesLoadedForRecovery;
+  }
+
+  private isDefinitionRecoveryDraftForCurrentContext(
+    draft: CodingJobDefinitionRecoveryDraft
+  ): boolean {
+    if (this.data.mode !== 'definition' || this.isReadOnly) {
+      return false;
+    }
+    if (draft.workspaceId !== this.appService.selectedWorkspaceId) {
+      return false;
+    }
+    if (draft.mode !== this.data.mode || draft.isEdit !== this.data.isEdit) {
+      return false;
+    }
+    if (draft.isEdit) {
+      return draft.jobDefinitionId === this.data.jobDefinitionId;
+    }
+
+    return true;
+  }
+
+  private applyDefinitionRecoveryDraft(draft: CodingJobDefinitionRecoveryDraft): void {
+    this.codingJobForm.patchValue(draft.formValue, { emitEvent: false });
+    this.doubleCodingMode = draft.doubleCodingMode;
+    this.definitionDistributionSeed = draft.distributionSeed;
+    this.unitNameFilter = draft.unitNameFilter;
+    this.variableIdFilter = draft.variableIdFilter;
+    this.bundleNameFilter = draft.bundleNameFilter;
+    this.availabilityFilter = draft.availabilityFilter;
+    this.trainingRequiredFilter = draft.trainingRequiredFilter;
+
+    this.restoreRecoveredCoders(draft.selectedCoderConfigs);
+    this.selectedVariables = this.createVariableSelectionModel(
+      draft.selectedVariables.map(variable => this.findRecoveredVariable(variable))
+    );
+    this.selectedVariableBundles = new SelectionModel<VariableBundle>(
+      true,
+      draft.selectedVariableBundles.map(bundle => this.findRecoveredBundle(bundle))
+    );
+    this.bindSelectionPreviewRefresh();
+    this.applyBundleFilter();
+    if (this.unitNameFilter.trim().length > 0 || this.trainingRequiredFilter !== 'all') {
+      this.loadCodingIncompleteVariables(this.unitNameFilter || undefined, true);
+    } else {
+      this.applyAvailabilityFilter();
+    }
+    this.queueDistributionPreviewRefresh();
+  }
+
+  private restoreRecoveredCoders(coderConfigs: JobDefinitionCoderConfig[]): void {
+    const configByCoderId = new Map(
+      coderConfigs.map(config => [config.coderId, this.normalizeCoderCapacityPercent(config.capacityPercent)])
+    );
+    this.availableCoders = this.availableCoders.map(coder => ({
+      ...coder,
+      capacityPercent: configByCoderId.get(coder.id) ?? this.getCoderCapacityPercent(coder)
+    }));
+    this.selectedCoders = new SelectionModel<Coder>(
+      true,
+      this.availableCoders.filter(coder => configByCoderId.has(coder.id))
+    );
+  }
+
+  private findRecoveredVariable(savedVariable: CodingJobDefinitionRecoveryVariable): Variable {
+    const variable = this.variables.find(candidate => (
+      candidate.unitName === savedVariable.unitName &&
+      candidate.variableId === savedVariable.variableId
+    ));
+    if (variable) {
+      variable.includeDeriveError = savedVariable.includeDeriveError === true;
+      return variable;
+    }
+
+    return {
+      unitName: savedVariable.unitName,
+      variableId: savedVariable.variableId,
+      includeDeriveError: savedVariable.includeDeriveError === true
+    };
+  }
+
+  private findRecoveredBundle(savedBundle: CodingJobDefinitionRecoveryBundle): VariableBundle {
+    const bundle = this.variableBundles.find(candidate => candidate.id === savedBundle.id);
+    if (!bundle) {
+      return {
+        ...savedBundle,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+    }
+
+    bundle.caseOrderingMode = savedBundle.caseOrderingMode;
+    const savedVariablesByKey = new Map(
+      savedBundle.variables.map(variable => [
+        this.getVariableUsageKey(variable.unitName, variable.variableId),
+        variable
+      ])
+    );
+    bundle.variables.forEach(variable => {
+      const savedVariable = savedVariablesByKey.get(
+        this.getVariableUsageKey(variable.unitName, variable.variableId)
+      );
+      variable.includeDeriveError = savedVariable?.includeDeriveError === true;
+    });
+    return bundle;
+  }
+
+  private clearDefinitionRecoveryDraft(): void {
+    this.sessionRecoveryService.clearDraft(CODING_JOB_DEFINITION_RECOVERY_KEY);
   }
 
   private bindSelectionPreviewRefresh(): void {
@@ -459,9 +727,13 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         }
         this.bindSelectionPreviewRefresh();
         this.queueDistributionPreviewRefresh();
+        this.availableCodersLoadedForRecovery = true;
+        this.restoreDefinitionRecoveryDraft();
       },
       error: () => {
         this.isLoadingAvailableCoders = false;
+        this.availableCodersLoadedForRecovery = true;
+        this.restoreDefinitionRecoveryDraft();
       }
     });
   }
@@ -531,6 +803,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   loadExistingJobDefinitions(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
+      this.existingJobDefinitionsLoadedForRecovery = true;
+      this.restoreDefinitionRecoveryDraft();
       return;
     }
 
@@ -549,9 +823,13 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         this.buildDisabledVariablesSet();
         this.applyJobDefinitionUsage();
         this.applyAvailabilityFilter();
+        this.existingJobDefinitionsLoadedForRecovery = true;
+        this.restoreDefinitionRecoveryDraft();
       },
       error: () => {
         // Silently fail - disabled variables will just not be disabled
+        this.existingJobDefinitionsLoadedForRecovery = true;
+        this.restoreDefinitionRecoveryDraft();
       }
     });
   }
@@ -628,6 +906,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private loadMissingsProfiles(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
+      this.missingsProfilesLoadedForRecovery = true;
+      this.restoreDefinitionRecoveryDraft();
       return;
     }
 
@@ -649,9 +929,13 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
             const defaultProfile = profiles.find(profile => profile.label === 'IQB-Standard') ?? profiles[0];
             control.setValue(defaultProfile.id, { emitEvent: false });
           }
+          this.missingsProfilesLoadedForRecovery = true;
+          this.restoreDefinitionRecoveryDraft();
         },
         error: () => {
           this.isLoadingMissingsProfiles = false;
+          this.missingsProfilesLoadedForRecovery = true;
+          this.restoreDefinitionRecoveryDraft();
         }
       });
   }
@@ -669,12 +953,16 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       this.processVariableSelection();
       this.totalVariableAnalysisRecords = this.variables.length;
       this.isLoadingVariableAnalysis = false;
+      this.variablesLoadedForRecovery = true;
+      this.restoreDefinitionRecoveryDraft();
       return;
     }
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.isLoadingVariableAnalysis = false;
+      this.variablesLoadedForRecovery = true;
+      this.restoreDefinitionRecoveryDraft();
       return;
     }
 
@@ -698,9 +986,13 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         this.processVariableSelection();
         this.totalVariableAnalysisRecords = variables.length;
         this.isLoadingVariableAnalysis = false;
+        this.variablesLoadedForRecovery = true;
+        this.restoreDefinitionRecoveryDraft();
       },
       error: () => {
         this.isLoadingVariableAnalysis = false;
+        this.variablesLoadedForRecovery = true;
+        this.restoreDefinitionRecoveryDraft();
       }
     });
   }
@@ -834,13 +1126,19 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
               this.selectedVariableBundles.select(...preSelected);
             }
           }
+          this.variableBundlesLoadedForRecovery = true;
+          this.restoreDefinitionRecoveryDraft();
         },
         error: () => {
           this.isLoadingBundles = false;
+          this.variableBundlesLoadedForRecovery = true;
+          this.restoreDefinitionRecoveryDraft();
         }
       });
     } else {
       this.isLoadingBundles = false;
+      this.variableBundlesLoadedForRecovery = true;
+      this.restoreDefinitionRecoveryDraft();
     }
   }
 
@@ -2095,6 +2393,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       next: createdDefinition => {
         this.isSaving = false;
         this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.definition-created-success'), this.translateService.instant('common.close'), { duration: 3000 });
+        this.clearDefinitionRecoveryDraft();
         this.dialogRef.close(createdDefinition);
       },
       error: error => {
@@ -2313,6 +2612,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         this.translateService.instant('common.close'),
         { duration: 4000 }
       );
+      this.clearDefinitionRecoveryDraft();
       this.dialogRef.close(result);
     } catch (error) {
       this.isSaving = false;
@@ -2360,6 +2660,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       next: updatedDefinition => {
         this.isSaving = false;
         this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.definition-updated-success'), this.translateService.instant('common.close'), { duration: 3000 });
+        this.clearDefinitionRecoveryDraft();
         this.dialogRef.close(updatedDefinition);
       },
       error: error => {
@@ -2448,6 +2749,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       next: createdDefinition => {
         this.isSaving = false;
         this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.definition-submitted-review'), this.translateService.instant('common.close'), { duration: 3000 });
+        this.clearDefinitionRecoveryDraft();
         this.dialogRef.close(createdDefinition);
       },
       error: error => {
@@ -2463,6 +2765,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.clearDefinitionRecoveryDraft();
     this.dialogRef.close();
   }
 
