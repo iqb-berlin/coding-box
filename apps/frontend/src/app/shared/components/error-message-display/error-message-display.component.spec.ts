@@ -65,6 +65,14 @@ describe('ErrorMessageDisplayComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('error.reauthentication_title');
   });
 
+  it('should elevate priority errors while the global reauthentication message is visible', () => {
+    router.url = '/coding';
+    fixture.detectChanges();
+
+    const priorityErrors = fixture.nativeElement.querySelector('.priority-errors') as HTMLElement;
+    expect(priorityErrors.classList.contains('re-authentication-active')).toBe(true);
+  });
+
   it('should not offer dismissing the global reauthentication message', () => {
     router.url = '/coding';
     fixture.detectChanges();

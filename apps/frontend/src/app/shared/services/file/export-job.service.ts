@@ -16,10 +16,10 @@ import {
   tap
 } from 'rxjs/operators';
 import { CodingExportEstimate, CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
-import { AppService } from '../../../core/services/app.service';
+import { AppService, WorkspaceTokenPolicy } from '../../../core/services/app.service';
 import {
-  API_SPECIAL_TOKEN_DURATION_DAYS,
-  REPLAY_WORKSPACE_TOKEN_SCOPES
+  DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
+  EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
 } from '../../../core/services/auth-session.config';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 
@@ -185,11 +185,7 @@ export class ExportJobService implements OnDestroy {
             });
           }
 
-          return this.appService.createOwnToken(
-            workspaceId,
-            API_SPECIAL_TOKEN_DURATION_DAYS,
-            REPLAY_WORKSPACE_TOKEN_SCOPES
-          ).pipe(
+          return this.createExternalReplayToken(workspaceId).pipe(
             map(authToken => ({
               ...config,
               authToken,
@@ -199,6 +195,31 @@ export class ExportJobService implements OnDestroy {
           );
         })
       );
+  }
+
+  private createExternalReplayToken(workspaceId: number): Observable<string> {
+    return this.appService.getWorkspaceTokenPolicy().pipe(
+      map(policy => this.getExternalReplayTokenMaxDurationDays(policy)),
+      switchMap(maxDurationDays => this.workspaceSettingsService.getReplayUrlExportTokenDurationDays(
+        workspaceId,
+        maxDurationDays
+      )),
+      switchMap(durationDays => this.appService.createOwnToken(
+        workspaceId,
+        durationDays,
+        EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+      ))
+    );
+  }
+
+  private getExternalReplayTokenMaxDurationDays(policy: WorkspaceTokenPolicy): number {
+    const maxDurations = EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+      .map(scope => policy.scopes[scope]?.maxDurationDays)
+      .filter((duration): duration is number => Number.isInteger(duration) && duration >= 1);
+
+    return maxDurations.length ?
+      Math.min(...maxDurations) :
+      DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
   }
 
   private addJob(job: ExportJob): void {

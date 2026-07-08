@@ -43,6 +43,7 @@ import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { CodingJobBackendService, JobDefinition } from '../../services/coding-job-backend.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { AppService } from '../../../core/services/app.service';
+import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
 import { CoderTraining, CaseSelectionMode, ReferenceMode } from '../../models/coder-training.model';
 import {
@@ -61,6 +62,43 @@ export interface VariableConfig {
 export interface VariableGrouping {
   manual: { control: FormGroup; index: number }[];
   bundles: { bundle: VariableBundle; variables: { control: FormGroup; index: number }[] }[];
+}
+
+export const CODER_TRAINING_RECOVERY_KEY = 'coder-training-active-state';
+
+interface CoderTrainingRecoveryFormValue {
+  trainingLabel: string;
+  caseOrderingMode: 'continuous' | 'alternating';
+  caseSelectionMode: CaseSelectionMode;
+  showScore: boolean;
+  allowComments: boolean;
+  suppressGeneralInstructions: boolean;
+  includeDerivedVariables: boolean;
+  referenceTrainingIds: number[];
+  referenceMode: ReferenceMode | null;
+}
+
+interface CoderTrainingRecoveryVariable {
+  variableId: string;
+  unitId: string;
+  sampleCount: number;
+  bundleId?: number;
+  bundleName?: string;
+  bundleCaseOrderingMode?: 'continuous' | 'alternating';
+  includeDeriveError?: boolean;
+}
+
+export interface CoderTrainingRecoveryDraft {
+  workspaceId?: number;
+  mode: 'create' | 'edit';
+  editTraining?: CoderTraining | null;
+  formValue: CoderTrainingRecoveryFormValue;
+  selectedCoderIds: number[];
+  selectedBundleIds: number[];
+  manualVariableKeys: string[];
+  variables: CoderTrainingRecoveryVariable[];
+  variableFilter: string;
+  bundleFilter: string;
 }
 
 interface ValidationItem {
@@ -115,8 +153,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   private codingJobBackendService = inject(CodingJobBackendService);
   private codingTrainingBackendService = inject(CodingTrainingBackendService);
   private appService = inject(AppService);
+  private sessionRecoveryService = inject(SessionRecoveryService);
   private fb = inject(FormBuilder);
   private backendMessageTranslator = inject(BackendMessageTranslatorService);
+  private unregisterRecoveryProvider?: () => void;
+  private hasRestoredRecoveryDraft = false;
 
   // Cached grouped variables data
   private _groupedVariables: VariableGrouping = { manual: [], bundles: [] };
@@ -272,6 +313,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.registerRecoveryProvider();
+    this.sessionRecoveryService.restore$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.restoreTrainingRecoveryDraft());
+
     this.loadCoders();
     this.loadAvailableVariables();
     this.loadAvailableTrainings();
@@ -305,6 +351,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         this.populateTrainingSelectionsFromTraining();
       }
 
+      this.restoreTrainingRecoveryDraft();
       this.isLoadingVariables = false;
       this.isLoadingBundles = false;
       this.changeDetectorRef.markForCheck();
@@ -397,12 +444,182 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.unregisterRecoveryProvider?.();
+    this.unregisterRecoveryProvider = undefined;
     this.destroy$.next();
     this.destroy$.complete();
   }
 
   get variablesFormArray(): FormArray {
     return this.trainingForm.get('variables') as FormArray;
+  }
+
+  private registerRecoveryProvider(): void {
+    this.unregisterRecoveryProvider = this.sessionRecoveryService.registerProvider({
+      key: CODER_TRAINING_RECOVERY_KEY,
+      capture: () => this.createTrainingRecoveryDraft()
+    });
+  }
+
+  private createTrainingRecoveryDraft(): CoderTrainingRecoveryDraft | null {
+    if (!this.hasRecoverableTrainingState()) {
+      return null;
+    }
+
+    return {
+      workspaceId: this.appService.selectedWorkspaceId,
+      mode: this.isEditMode ? 'edit' : 'create',
+      editTraining: this.editTraining ? { ...this.editTraining } : null,
+      formValue: this.getTrainingRecoveryFormValue(),
+      selectedCoderIds: Array.from(this.selectedCoders),
+      selectedBundleIds: Array.from(this.selectedBundleIds),
+      manualVariableKeys: this.manualVariablesSelectControl.value || [],
+      variables: this.variablesFormArray.controls.map(control => ({
+        variableId: control.get('variableId')?.value || '',
+        unitId: control.get('unitId')?.value || '',
+        sampleCount: Number(control.get('sampleCount')?.value) || 10,
+        ...(control.get('bundleId')?.value ? { bundleId: control.get('bundleId')?.value } : {}),
+        ...(control.get('bundleName')?.value ? { bundleName: control.get('bundleName')?.value } : {}),
+        ...(control.get('bundleCaseOrderingMode')?.value ?
+          { bundleCaseOrderingMode: control.get('bundleCaseOrderingMode')?.value } :
+          {}),
+        ...(control.get('includeDeriveError')?.value === true ? { includeDeriveError: true } : {})
+      })),
+      variableFilter: this.variableFilterCtrl.value || '',
+      bundleFilter: this.bundleFilterCtrl.value || ''
+    };
+  }
+
+  private getTrainingRecoveryFormValue(): CoderTrainingRecoveryFormValue {
+    const rawValue = this.trainingForm.getRawValue();
+    return {
+      trainingLabel: rawValue.trainingLabel || '',
+      caseOrderingMode: rawValue.caseOrderingMode || 'continuous',
+      caseSelectionMode: rawValue.caseSelectionMode || 'oldest_first',
+      showScore: rawValue.showScore === true,
+      allowComments: rawValue.allowComments !== false,
+      suppressGeneralInstructions: rawValue.suppressGeneralInstructions === true,
+      includeDerivedVariables: rawValue.includeDerivedVariables !== false,
+      referenceTrainingIds: Array.isArray(rawValue.referenceTrainingIds) ?
+        rawValue.referenceTrainingIds :
+        [],
+      referenceMode: rawValue.referenceMode || null
+    };
+  }
+
+  private hasRecoverableTrainingState(): boolean {
+    if (this.isEditMode) {
+      return true;
+    }
+
+    const formValue = this.getTrainingRecoveryFormValue();
+    return formValue.trainingLabel.trim().length > 0 ||
+      formValue.caseOrderingMode !== 'continuous' ||
+      formValue.caseSelectionMode !== 'oldest_first' ||
+      formValue.showScore ||
+      !formValue.allowComments ||
+      formValue.suppressGeneralInstructions ||
+      !formValue.includeDerivedVariables ||
+      formValue.referenceTrainingIds.length > 0 ||
+      !!formValue.referenceMode ||
+      this.selectedCoders.size > 0 ||
+      this.selectedBundleIds.size > 0 ||
+      this.variablesFormArray.length > 0 ||
+      !!this.variableFilterCtrl.value ||
+      !!this.bundleFilterCtrl.value;
+  }
+
+  private restoreTrainingRecoveryDraft(): boolean {
+    if (this.hasRestoredRecoveryDraft || !this.availableVariablesLoaded || !this.availableBundlesLoaded) {
+      return false;
+    }
+
+    const draft = this.sessionRecoveryService.peekDraft<CoderTrainingRecoveryDraft>(
+      CODER_TRAINING_RECOVERY_KEY
+    );
+    if (!draft || !this.isTrainingRecoveryDraftForCurrentContext(draft)) {
+      return false;
+    }
+
+    this.applyTrainingRecoveryDraft(draft);
+    this.hasRestoredRecoveryDraft = true;
+    return true;
+  }
+
+  private isTrainingRecoveryDraftForCurrentContext(draft: CoderTrainingRecoveryDraft): boolean {
+    if (draft.workspaceId !== this.appService.selectedWorkspaceId) {
+      return false;
+    }
+
+    const currentMode = this.isEditMode ? 'edit' : 'create';
+    if (draft.mode !== currentMode) {
+      return false;
+    }
+
+    if (draft.mode === 'edit') {
+      return !!draft.editTraining?.id && draft.editTraining.id === this.editTraining?.id;
+    }
+
+    return true;
+  }
+
+  private applyTrainingRecoveryDraft(draft: CoderTrainingRecoveryDraft): void {
+    this.trainingForm.patchValue({
+      trainingLabel: draft.formValue.trainingLabel,
+      caseOrderingMode: draft.formValue.caseOrderingMode,
+      caseSelectionMode: draft.formValue.caseSelectionMode,
+      showScore: draft.formValue.showScore,
+      allowComments: draft.formValue.allowComments,
+      suppressGeneralInstructions: draft.formValue.suppressGeneralInstructions,
+      includeDerivedVariables: draft.formValue.includeDerivedVariables,
+      referenceTrainingIds: draft.formValue.referenceTrainingIds,
+      referenceMode: draft.formValue.referenceMode
+    });
+
+    while (this.variablesFormArray.length > 0) {
+      this.variablesFormArray.removeAt(0);
+    }
+
+    this.selectedCoders = new Set(draft.selectedCoderIds);
+    this.selectedBundleIds = new Set(draft.selectedBundleIds);
+    this.bundleSelection$.next(Array.from(this.selectedBundleIds));
+
+    draft.variables.forEach(variable => {
+      if (variable.bundleId && variable.bundleCaseOrderingMode) {
+        const bundle = this.availableBundles.find(candidate => candidate.id === variable.bundleId);
+        if (bundle) {
+          bundle.caseOrderingMode = variable.bundleCaseOrderingMode;
+        }
+      }
+
+      this.addVariable(
+        variable.variableId,
+        variable.unitId,
+        variable.sampleCount,
+        variable.bundleId,
+        variable.bundleName,
+        true,
+        variable.bundleCaseOrderingMode,
+        variable.includeDeriveError === true
+      );
+    });
+
+    this.isSyncing = true;
+    try {
+      this.manualVariablesSelectControl.setValue(draft.manualVariableKeys, { emitEvent: false });
+    } finally {
+      this.isSyncing = false;
+    }
+    this.variableFilterCtrl.setValue(draft.variableFilter || '');
+    this.bundleFilterCtrl.setValue(draft.bundleFilter || '');
+
+    this.updateGroupedVariables();
+    this.checkForOverlaps();
+    this.changeDetectorRef.markForCheck();
+  }
+
+  private clearTrainingRecoveryDraft(): void {
+    this.sessionRecoveryService.clearDraft(CODER_TRAINING_RECOVERY_KEY);
   }
 
   private loadAvailableVariables(): void {
@@ -1462,6 +1679,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           }
 
           this.showSuccess(translatedMessage);
+          this.clearTrainingRecoveryDraft();
           this.startTraining.emit({ selectedCoders, variableConfigs });
           this.onClose();
         } else {
@@ -1480,6 +1698,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   onClose(): void {
+    this.clearTrainingRecoveryDraft();
     this.close.emit();
   }
 

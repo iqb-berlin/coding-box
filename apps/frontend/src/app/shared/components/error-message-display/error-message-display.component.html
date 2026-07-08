@@ -1,4 +1,7 @@
-<div class="error-messages-container priority-errors">
+<div
+  class="error-messages-container priority-errors"
+  [class.re-authentication-active]="showGlobalReAuthenticationMessage"
+>
   @if (appService.backendUnavailable) {
   <div class="error-message backend-unavailable">
     <div class="error-content">
