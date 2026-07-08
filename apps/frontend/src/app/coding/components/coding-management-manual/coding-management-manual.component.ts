@@ -266,6 +266,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private readonly pendingCodingJobsReloadScopes =
     new Set<ConcreteCodingJobsReloadScope>();
 
+  private pendingCodingJobsReloadTimer?: ReturnType<typeof setTimeout>;
+
   private readonly manualCodingTabsWithoutCompletion: ManualCodingTab[] = [
     'preparation',
     'planning',
@@ -326,6 +328,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private responseAnalysisGuardWorkspaceId: number | null = null;
   private hasShownResponseAnalysisPollingError = false;
   private pendingManualStateRefreshAfterBackgroundJob = false;
+  private pendingForcedManualStateRefreshAfterBackgroundJob = false;
   private pendingCodingFreshnessRefreshAfterBackgroundJob = false;
   private pendingForcedCodingFreshnessRefreshAfterBackgroundJob = false;
   private readonly handleWindowFocus = () => {
@@ -609,6 +612,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.responseAnalysisRequestCancel$.complete();
     this.finalizeResponseAnalysisGuardOnDestroy();
     this.document.defaultView?.removeEventListener('focus', this.handleWindowFocus);
+    if (this.pendingCodingJobsReloadTimer) {
+      clearTimeout(this.pendingCodingJobsReloadTimer);
+      this.pendingCodingJobsReloadTimer = undefined;
+    }
     this.destroy$.next();
     this.destroy$.complete();
 
@@ -714,6 +721,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.hasLoadedManualCodingJobRefreshSetting &&
       (this.activeManualTab === 'planning' ||
         !this.autoRefreshManualCodingJobs);
+  }
+
+  shouldShowManualTabLoadHint(tab: ManualCodingTab): boolean {
+    return (tab === 'training' || tab === 'execution') &&
+      this.isManualTab(tab) &&
+      this.shouldShowManualRefreshButton() &&
+      !this.shouldRenderManualTabData(tab);
   }
 
   shouldShowPlanningOverview(): boolean {
@@ -1686,10 +1700,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   reloadCodingJobsList(reloadScope: CodingJobsReloadScope = 'active'): void {
     const concreteReloadScopes =
       this.getConcreteCodingJobsReloadScopes(reloadScope);
-    this.getCodingJobsComponentsForReload(reloadScope)
-      .forEach(component => component.loadCodingJobs());
     concreteReloadScopes.forEach(scope => {
-      this.pendingCodingJobsReloadScopes.delete(scope);
+      const component = this.getCodingJobsComponentForScope(scope);
+      if (component) {
+        component.loadCodingJobs();
+        this.pendingCodingJobsReloadScopes.delete(scope);
+      } else {
+        this.pendingCodingJobsReloadScopes.add(scope);
+      }
     });
     if (this.shouldReloadCoderTrainings(reloadScope) &&
       this.coderTrainingsListComponent) {
@@ -1698,13 +1716,26 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   refreshManualCodingPlanning(): void {
+    const activeTab = this.activeManualTab;
     if (this.shouldSuppressCodingStatusChecks()) {
       this.pendingManualStateRefreshAfterBackgroundJob = true;
+      this.pendingForcedManualStateRefreshAfterBackgroundJob = true;
+      if (activeTab !== 'planning') {
+        this.pendingCodingFreshnessRefreshAfterBackgroundJob = true;
+        this.pendingForcedCodingFreshnessRefreshAfterBackgroundJob = true;
+      }
+      if (this.shouldLoadManualTabWhileStatusChecksAreSuppressed(activeTab)) {
+        this.loadManualTabData(activeTab, {
+          forceRefresh: true,
+          reloadCodingJobs: true,
+          codingJobsReloadScope: 'active',
+          deferStatusChecks: true
+        });
+      }
       return;
     }
 
     this.invalidateCodingStatusCache();
-    const activeTab = this.activeManualTab;
     this.loadManualTabData(activeTab, {
       forceRefresh: true,
       reloadCodingJobs: true,
@@ -1731,15 +1762,32 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private refreshManualStateAfterExternalChange(
-    options: { forceCodingFreshness?: boolean } = {}
+    options: {
+      forceCodingFreshness?: boolean;
+      forceManualTabData?: boolean;
+    } = {}
   ): void {
     if (this.shouldSuppressCodingStatusChecks()) {
       this.pendingManualStateRefreshAfterBackgroundJob = true;
+      if (options.forceManualTabData) {
+        this.pendingForcedManualStateRefreshAfterBackgroundJob = true;
+      }
+      if (options.forceCodingFreshness) {
+        this.pendingCodingFreshnessRefreshAfterBackgroundJob = true;
+        this.pendingForcedCodingFreshnessRefreshAfterBackgroundJob = true;
+      }
       return;
     }
 
     const activeTab = this.activeManualTab;
-    this.loadManualTabData(activeTab, { reloadCodingJobs: false });
+    const loadOptions: {
+      reloadCodingJobs: boolean;
+      forceRefresh?: boolean;
+    } = { reloadCodingJobs: false };
+    if (options.forceManualTabData) {
+      loadOptions.forceRefresh = true;
+    }
+    this.loadManualTabData(activeTab, loadOptions);
     if (activeTab !== 'planning') {
       if (options.forceCodingFreshness) {
         this.loadCodingFreshness({ force: true });
@@ -1760,18 +1808,21 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private refreshPendingManualStatusAfterBackgroundJob(): void {
     const shouldRefreshManualState = this.pendingManualStateRefreshAfterBackgroundJob;
+    const forceManualTabData = this.pendingForcedManualStateRefreshAfterBackgroundJob;
     const shouldRefreshCodingFreshness = this.pendingCodingFreshnessRefreshAfterBackgroundJob ||
       this.pendingForcedCodingFreshnessRefreshAfterBackgroundJob;
     const forceCodingFreshness = this.pendingForcedCodingFreshnessRefreshAfterBackgroundJob;
     const activeTab = this.activeManualTab;
 
     this.pendingManualStateRefreshAfterBackgroundJob = false;
+    this.pendingForcedManualStateRefreshAfterBackgroundJob = false;
     this.pendingCodingFreshnessRefreshAfterBackgroundJob = false;
     this.pendingForcedCodingFreshnessRefreshAfterBackgroundJob = false;
 
     if (shouldRefreshManualState) {
       this.refreshManualStateAfterExternalChange({
-        forceCodingFreshness: shouldRefreshCodingFreshness && forceCodingFreshness
+        forceCodingFreshness: shouldRefreshCodingFreshness && forceCodingFreshness,
+        forceManualTabData
       });
     }
 
@@ -1911,25 +1962,21 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return tab === 'preparation';
   }
 
-  private getCodingJobsComponentsForReload(
-    reloadScope: CodingJobsReloadScope
-  ): CodingJobsComponent[] {
-    return this.uniqueCodingJobsComponents(
-      this.getConcreteCodingJobsReloadScopes(reloadScope)
-        .map(scope => this.getCodingJobsComponentForScope(scope))
-    );
-  }
+  private schedulePendingCodingJobsReloadForTab(tab: ManualCodingTab): void {
+    const hasPendingReloadForTab = this.getCodingJobsScopeForTab(tab)
+      .some(scope => this.pendingCodingJobsReloadScopes.has(scope));
+    if (!hasPendingReloadForTab) {
+      return;
+    }
 
-  private uniqueCodingJobsComponents(
-    candidateComponents: Array<CodingJobsComponent | undefined>
-  ): CodingJobsComponent[] {
-    const uniqueComponents: CodingJobsComponent[] = [];
-    candidateComponents.forEach(component => {
-      if (component && !uniqueComponents.includes(component)) {
-        uniqueComponents.push(component);
-      }
-    });
-    return uniqueComponents;
+    if (this.pendingCodingJobsReloadTimer) {
+      clearTimeout(this.pendingCodingJobsReloadTimer);
+    }
+
+    this.pendingCodingJobsReloadTimer = setTimeout(() => {
+      this.pendingCodingJobsReloadTimer = undefined;
+      this.reloadPendingCodingJobsForTab(tab);
+    }, 0);
   }
 
   private getProductiveCodingJobsComponent(): CodingJobsComponent | undefined {
@@ -2005,6 +2052,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private shouldReloadCoderTrainings(reloadScope: CodingJobsReloadScope): boolean {
     return this.getConcreteCodingJobsReloadScopes(reloadScope)
       .includes('training');
+  }
+
+  private shouldLoadManualTabWhileStatusChecksAreSuppressed(
+    tab: ManualCodingTab
+  ): boolean {
+    return tab === 'training' || tab === 'execution';
   }
 
   isAnyPlanningDataLoading(): boolean {
@@ -3140,6 +3193,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       reloadCodingJobs?: boolean;
       codingJobsReloadScope?: CodingJobsReloadScope;
       forceRefresh?: boolean;
+      deferStatusChecks?: boolean;
     } = {}
   ): void {
     if (!this.isManualTabAvailable(tab)) {
@@ -3150,6 +3204,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const reloadCodingJobs = options.reloadCodingJobs ?? false;
     const codingJobsReloadScope = options.codingJobsReloadScope ?? 'active';
     const forceRefresh = options.forceRefresh ?? false;
+    const deferStatusChecks = options.deferStatusChecks ?? false;
     if (this.shouldSkipAutomaticManualTabLoad(forceRefresh, tab)) {
       return;
     }
@@ -3161,23 +3216,27 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.loadResponseAnalysis();
         return;
       case 'planning':
-        if (forceRefresh) {
+        if (forceRefresh && !deferStatusChecks) {
           this.loadPlanningDataBundle(forceRefresh);
         }
         return;
       case 'training':
         if (reloadCodingJobs) {
           this.reloadCodingJobsList(codingJobsReloadScope);
+          this.schedulePendingCodingJobsReloadForTab(tab);
         } else {
           this.reloadPendingCodingJobsForTab(tab);
         }
         return;
       case 'execution':
-        this.loadCodingProgressOverview();
-        this.loadCaseCoverageOverview();
-        this.loadWorkspaceKappaSummary();
+        if (!deferStatusChecks) {
+          this.loadCodingProgressOverview();
+          this.loadCaseCoverageOverview();
+          this.loadWorkspaceKappaSummary();
+        }
         if (reloadCodingJobs) {
           this.reloadCodingJobsList(codingJobsReloadScope);
+          this.schedulePendingCodingJobsReloadForTab(tab);
         } else {
           this.reloadPendingCodingJobsForTab(tab);
         }
