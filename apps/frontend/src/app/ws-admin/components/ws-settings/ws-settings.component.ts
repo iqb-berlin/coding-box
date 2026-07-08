@@ -96,6 +96,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   maxTokenDurationDays = DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
   readonly externalReplayTokenScopes = EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES;
   replayUrlExportMode: ReplayUrlExportMode = DEFAULT_REPLAY_URL_EXPORT_MODE;
+  replayUrlExportTokenDurationDays = DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
   autoFetchCodingStatistics = true;
   autoRefreshManualCodingJobs = true;
   evaluationMode = false;
@@ -109,7 +110,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    this.loadWorkspaceTokenPolicy();
+    this.loadWorkspaceTokenPolicy(workspaceId);
     if (workspaceId) {
       this.workspaceSettingsService
         .getReplayUrlExportMode(workspaceId)
@@ -224,12 +225,21 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
 
   isTokenDurationValid(): boolean {
     const duration = Number(this.duration);
+    return this.isDurationWithinReplayTokenPolicy(duration);
+  }
+
+  isReplayUrlExportTokenDurationValid(): boolean {
+    const duration = Number(this.replayUrlExportTokenDurationDays);
+    return this.isDurationWithinReplayTokenPolicy(duration);
+  }
+
+  private isDurationWithinReplayTokenPolicy(duration: number): boolean {
     return Number.isInteger(duration) &&
       duration >= this.minTokenDurationDays &&
       duration <= this.maxTokenDurationDays;
   }
 
-  private loadWorkspaceTokenPolicy(): void {
+  private loadWorkspaceTokenPolicy(workspaceId?: number): void {
     this.appService.getWorkspaceTokenPolicy().subscribe({
       next: policy => {
         this.maxTokenDurationDays = this.getMaxTokenDurationDaysForScopes(
@@ -239,8 +249,22 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         if (Number(this.duration) > this.maxTokenDurationDays) {
           this.duration = this.maxTokenDurationDays;
         }
+        if (workspaceId) {
+          this.loadReplayUrlExportTokenDuration(workspaceId);
+        }
       }
     });
+  }
+
+  private loadReplayUrlExportTokenDuration(workspaceId: number): void {
+    this.workspaceSettingsService
+      .getReplayUrlExportTokenDurationDays(
+        workspaceId,
+        this.maxTokenDurationDays
+      )
+      .subscribe(durationDays => {
+        this.replayUrlExportTokenDurationDays = durationDays;
+      });
   }
 
   private getMaxTokenDurationDaysForScopes(
@@ -249,7 +273,10 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   ): number {
     const maxDurations = scopes
       .map(scope => policy.scopes[scope]?.maxDurationDays)
-      .filter((duration): duration is number => Number.isInteger(duration) && duration >= this.minTokenDurationDays);
+      .filter((duration): duration is number => (
+        Number.isInteger(duration) &&
+        duration >= this.minTokenDurationDays
+      ));
 
     return maxDurations.length ? Math.min(...maxDurations) : this.maxTokenDurationDays;
   }
@@ -299,6 +326,50 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
           }
         });
     }
+  }
+
+  saveReplayUrlExportTokenDuration(): void {
+    if (!this.isReplayUrlExportTokenDurationValid()) {
+      this.snackBar.open(
+        this.translateService.instant('ws-settings.token-duration-invalid'),
+        this.translateService.instant('close'),
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.workspaceSettingsService
+      .setReplayUrlExportTokenDurationDays(
+        workspaceId,
+        Number(this.replayUrlExportTokenDurationDays),
+        this.maxTokenDurationDays
+      )
+      .subscribe({
+        next: () => {
+          this.snackBar.open(
+            this.translateService.instant(
+              'ws-settings.replay-url-export-token-duration-saved'
+            ),
+            this.translateService.instant('close'),
+            { duration: 3000 }
+          );
+        },
+        error: () => {
+          this.snackBar.open(
+            this.translateService.instant('ws-settings.error-saving-setting'),
+            this.translateService.instant('close'),
+            {
+              duration: 3000,
+              panelClass: ['error-snackbar']
+            }
+          );
+        }
+      });
   }
 
   editMissingsProfiles(): void {

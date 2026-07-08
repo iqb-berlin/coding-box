@@ -7,10 +7,8 @@ import { SERVER_URL } from '../../injection-tokens';
 import { AppService, WorkspaceTokenPolicy } from '../../core/services/app.service';
 import { CodeBookContentSetting } from '../../../../../../api-dto/coding/codebook-content-setting';
 import {
-  API_SPECIAL_TOKEN_DURATION_DAYS,
   DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
-  EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES,
-  REPLAY_WORKSPACE_TOKEN_SCOPES
+  EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
 } from '../../core/services/auth-session.config';
 import { WorkspaceSettingsService } from '../../ws-admin/services/workspace-settings.service';
 
@@ -81,11 +79,7 @@ export class CodingExportService {
     return this.getReplayExportAuthToken(
       workspace_id,
       includeReplayUrls,
-      () => this.appService.createOwnToken(
-        workspace_id,
-        API_SPECIAL_TOKEN_DURATION_DAYS,
-        REPLAY_WORKSPACE_TOKEN_SCOPES
-      ).pipe(catchError(() => of('')))
+      () => this.createExternalReplayToken(workspace_id)
     ).pipe(
       switchMap(token => {
         const params = new HttpParams()
@@ -117,11 +111,7 @@ export class CodingExportService {
     return this.getReplayExportAuthToken(
       workspace_id,
       includeReplayUrls,
-      () => this.appService.createOwnToken(
-        workspace_id,
-        API_SPECIAL_TOKEN_DURATION_DAYS,
-        REPLAY_WORKSPACE_TOKEN_SCOPES
-      ).pipe(catchError(() => of('')))
+      () => this.createExternalReplayToken(workspace_id)
     ).pipe(
       switchMap(token => {
         const params = new HttpParams()
@@ -250,17 +240,7 @@ export class CodingExportService {
     const authToken$ = this.getReplayExportAuthToken(
       workspaceId,
       exportType === 'coding-list' || includeReplayUrls,
-      () => {
-        if (exportType === 'coding-list') {
-          return this.createExternalReplayToken(workspaceId);
-        }
-
-        return this.appService.createOwnToken(
-          workspaceId,
-          API_SPECIAL_TOKEN_DURATION_DAYS,
-          REPLAY_WORKSPACE_TOKEN_SCOPES
-        ).pipe(catchError(() => of('')));
-      }
+      () => this.createExternalReplayToken(workspaceId)
     );
 
     return authToken$.pipe(
@@ -303,7 +283,11 @@ export class CodingExportService {
 
   private createExternalReplayToken(workspaceId: number): Observable<string> {
     return this.appService.getWorkspaceTokenPolicy().pipe(
-      map(policy => this.getExternalReplayTokenDurationDays(policy)),
+      map(policy => this.getExternalReplayTokenMaxDurationDays(policy)),
+      switchMap(maxDurationDays => this.workspaceSettingsService.getReplayUrlExportTokenDurationDays(
+        workspaceId,
+        maxDurationDays
+      )),
       switchMap(durationDays => this.appService.createOwnToken(
         workspaceId,
         durationDays,
@@ -312,7 +296,7 @@ export class CodingExportService {
     );
   }
 
-  private getExternalReplayTokenDurationDays(policy: WorkspaceTokenPolicy): number {
+  private getExternalReplayTokenMaxDurationDays(policy: WorkspaceTokenPolicy): number {
     const maxDurations = EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
       .map(scope => policy.scopes[scope]?.maxDurationDays)
       .filter((duration): duration is number => Number.isInteger(duration) && duration >= 1);

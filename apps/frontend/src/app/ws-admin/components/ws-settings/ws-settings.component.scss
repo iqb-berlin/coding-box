@@ -93,7 +93,23 @@ h4 {
 }
 
 .replay-url-export-mode {
-  margin-bottom: 0;
+  margin-bottom: 20px;
+}
+
+.replay-url-export-token-duration {
+  border-top: 1px solid #e0e0e0;
+  padding-top: 20px;
+}
+
+.replay-url-export-token-duration-control {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 320px;
+
+  mat-form-field {
+    width: 170px;
+  }
 }
 
 .full-width {
@@ -219,17 +235,26 @@ button mat-icon {
     flex-direction: column;
     align-items: stretch;
   }
+
+  .replay-url-export-token-duration-control {
+    min-width: 0;
+  }
 }
 
 @media (max-width: 480px) {
   .token-actions,
   .token-copy-action,
+  .replay-url-export-token-duration-control,
   .database-export-actions,
   .missings-profiles-actions,
   .processes-actions,
   .replay-statistics-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .replay-url-export-token-duration-control mat-form-field {
+    width: 100%;
   }
 
   button[mat-raised-button],
