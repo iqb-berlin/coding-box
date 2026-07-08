@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Controller,
   Get,
+  NotFoundException,
   Post,
   Put,
   Delete,
@@ -19,6 +20,10 @@ import {
   AccessLevelGuard,
   RequireAccessLevel
 } from '../admin/workspace/access-level.guard';
+import {
+  DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
+  DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS
+} from '../../../../../api-dto/workspaces/workspace-setting-defaults';
 
 interface WorkspaceSettingWriteDto {
   key: string;
@@ -31,11 +36,65 @@ interface WorkspaceSettingsBatchDto {
 }
 
 interface WorkspaceSettingResponse {
-  id: string;
+  id: string | number;
   key: string;
   value: string;
   description?: string;
 }
+
+const DEFAULT_WORKSPACE_SETTINGS: Record<string, {
+  value: unknown;
+  description: string;
+}> = {
+  'auto-fetch-coding-statistics': {
+    value: { enabled: false },
+    description:
+      'Controls whether coding statistics are automatically fetched in the coding management component'
+  },
+  'auto-refresh-manual-coding-jobs': {
+    value: { enabled: true },
+    description:
+      'Controls whether manual coding job tables refresh automatically when the browser window regains focus'
+  },
+  'evaluation-mode': {
+    value: { enabled: false },
+    description:
+      'Controls whether expensive automatic coding refreshes are disabled for evaluation sessions'
+  },
+  'show-test-results-log-anomalies': {
+    value: { enabled: false },
+    description:
+      'Controls whether log anomalies are shown as a column in the test results table'
+  },
+  'include-derive-error-in-manual-coding': {
+    value: { enabled: false },
+    description:
+      'Controls whether DERIVE_ERROR responses can be included in manual coding jobs'
+  },
+  'enable-regex-search': {
+    value: { enabled: false },
+    description:
+      'Controls whether selected workspace search fields interpret input as regular expressions'
+  },
+  'response-matching-mode': {
+    value: { flags: [] },
+    description:
+      'Controls how responses are aggregated by value similarity for coding case distribution'
+  },
+  'replay-url-export-mode': {
+    value: { mode: 'auth' },
+    description:
+      'Controls whether exported replay URLs use temporary auth tokens or workspace login links'
+  },
+  'replay-url-export-token-duration-days': {
+    value: { durationDays: DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS },
+    description: 'Controls how many days exported auth replay URLs stay valid'
+  },
+  'auth-session-idle-timeout-minutes': {
+    value: { timeoutMinutes: DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES },
+    description: 'Controls after how many inactive minutes users must reauthenticate'
+  }
+};
 
 @UseGuards(JwtAuthGuard, WorkspaceGuard)
 @Controller('workspace/:workspaceId/settings')
@@ -56,79 +115,11 @@ export class WorkspaceSettingsController {
     });
 
     if (!setting) {
-      if (key === 'auto-fetch-coding-statistics') {
-        return {
-          id: 0,
-          key: settingKey,
-          value: JSON.stringify({ enabled: false }),
-          description:
-            'Controls whether coding statistics are automatically fetched in the coding management component'
-        };
-      }
-      if (key === 'auto-refresh-manual-coding-jobs') {
-        return {
-          id: 0,
-          key: settingKey,
-          value: JSON.stringify({ enabled: true }),
-          description:
-            'Controls whether manual coding job tables refresh automatically when the browser window regains focus'
-        };
-      }
-      if (key === 'evaluation-mode') {
-        return {
-          id: 0,
-          key: settingKey,
-          value: JSON.stringify({ enabled: false }),
-          description:
-            'Controls whether expensive automatic coding refreshes are disabled for evaluation sessions'
-        };
-      }
-      if (key === 'show-test-results-log-anomalies') {
-        return {
-          id: 0,
-          key: settingKey,
-          value: JSON.stringify({ enabled: false }),
-          description:
-            'Controls whether log anomalies are shown as a column in the test results table'
-        };
-      }
-      if (key === 'include-derive-error-in-manual-coding') {
-        return {
-          id: 0,
-          key: settingKey,
-          value: JSON.stringify({ enabled: false }),
-          description:
-            'Controls whether DERIVE_ERROR responses can be included in manual coding jobs'
-        };
-      }
-      if (key === 'enable-regex-search') {
-        return {
-          id: 0,
-          key: settingKey,
-          value: JSON.stringify({ enabled: false }),
-          description:
-            'Controls whether selected workspace search fields interpret input as regular expressions'
-        };
-      }
-      if (key === 'response-matching-mode') {
-        return {
-          id: 0,
-          key: settingKey,
-          value: JSON.stringify({ flags: [] }),
-          description:
-            'Controls how responses are aggregated by value similarity for coding case distribution'
-        };
-      }
-      if (key === 'replay-url-export-mode') {
-        return {
-          id: 0,
-          key: settingKey,
-          value: JSON.stringify({ mode: 'auth' }),
-          description:
-            'Controls whether exported replay URLs use temporary auth tokens or workspace login links'
-        };
-      }
-      throw new Error(`Setting ${key} not found for workspace ${workspaceId}`);
+      return this.getDefaultWorkspaceSettingResponse(
+        workspaceId,
+        key,
+        settingKey
+      );
     }
 
     return {
@@ -136,6 +127,26 @@ export class WorkspaceSettingsController {
       key: setting.key,
       value: setting.content,
       description: `Workspace setting: ${key}`
+    };
+  }
+
+  private getDefaultWorkspaceSettingResponse(
+    workspaceId: number,
+    key: string,
+    settingKey: string
+  ): WorkspaceSettingResponse {
+    const defaultSetting = DEFAULT_WORKSPACE_SETTINGS[key];
+    if (!defaultSetting) {
+      throw new NotFoundException(
+        `Setting ${key} not found for workspace ${workspaceId}`
+      );
+    }
+
+    return {
+      id: 0,
+      key: settingKey,
+      value: JSON.stringify(defaultSetting.value),
+      description: defaultSetting.description
     };
   }
 

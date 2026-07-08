@@ -1,11 +1,15 @@
 import { Repository } from 'typeorm';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { WorkspaceSettingsController } from './workspace-settings.controller';
 import { Setting } from '../database/entities/setting.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../admin/workspace/workspace.guard';
 import { AccessLevelGuard } from '../admin/workspace/access-level.guard';
+import {
+  DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
+  DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS
+} from '../../../../../api-dto/workspaces/workspace-setting-defaults';
 
 interface TransactionalSettingRepositoryMock {
   findOne: jest.Mock<Promise<Setting | null>, [unknown]>;
@@ -155,6 +159,44 @@ describe('WorkspaceSettingsController', () => {
       description:
         'Controls whether exported replay URLs use temporary auth tokens or workspace login links'
     });
+  });
+
+  it('returns replay URL export token duration by default when it is missing', async () => {
+    settingRepository.findOne.mockResolvedValue(null);
+
+    await expect(
+      controller.getWorkspaceSetting(5, 'replay-url-export-token-duration-days')
+    ).resolves.toEqual({
+      id: 0,
+      key: 'workspace-5-replay-url-export-token-duration-days',
+      value: JSON.stringify({
+        durationDays: DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS
+      }),
+      description: 'Controls how many days exported auth replay URLs stay valid'
+    });
+  });
+
+  it('returns auth session idle timeout by default when it is missing', async () => {
+    settingRepository.findOne.mockResolvedValue(null);
+
+    await expect(
+      controller.getWorkspaceSetting(5, 'auth-session-idle-timeout-minutes')
+    ).resolves.toEqual({
+      id: 0,
+      key: 'workspace-5-auth-session-idle-timeout-minutes',
+      value: JSON.stringify({
+        timeoutMinutes: DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES
+      }),
+      description: 'Controls after how many inactive minutes users must reauthenticate'
+    });
+  });
+
+  it('returns not found for an unknown missing workspace setting', async () => {
+    settingRepository.findOne.mockResolvedValue(null);
+
+    await expect(
+      controller.getWorkspaceSetting(5, 'unknown-setting')
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('saves workspace settings in a single transaction', async () => {
