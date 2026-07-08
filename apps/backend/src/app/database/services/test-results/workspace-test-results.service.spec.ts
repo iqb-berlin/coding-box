@@ -1494,6 +1494,86 @@ describe('WorkspaceTestResultsService', () => {
       repeatedStartThreshold: 2
     };
 
+    it('should split booklet-scoped log anomaly lookups into batches', async () => {
+      const bookletIds = Array.from({ length: 1001 }, (_, index) => index + 1);
+      const bookletLogQbs: Array<ReturnType<typeof mockQueryBuilder>> = [];
+      const sessionQbs: Array<ReturnType<typeof mockQueryBuilder>> = [];
+      const unitQbs: Array<ReturnType<typeof mockQueryBuilder>> = [];
+      (bookletLogRepository.createQueryBuilder as jest.Mock)
+        .mockImplementation(() => {
+          const qb = mockQueryBuilder();
+          bookletLogQbs.push(qb);
+          return qb;
+        });
+      (sessionRepository.createQueryBuilder as jest.Mock)
+        .mockImplementation(() => {
+          const qb = mockQueryBuilder();
+          sessionQbs.push(qb);
+          return qb;
+        });
+      (unitRepository.createQueryBuilder as jest.Mock)
+        .mockImplementation(() => {
+          const qb = mockQueryBuilder();
+          unitQbs.push(qb);
+          return qb;
+        });
+
+      const serviceWithLogAnomalyLookup =
+        service as unknown as WorkspaceTestResultsServiceWithLogAnomalyLookup;
+      await serviceWithLogAnomalyLookup.findLogAnomaliesForBooklets(
+        bookletIds,
+        thresholds
+      );
+
+      expect(bookletLogQbs).toHaveLength(2);
+      expect(sessionQbs).toHaveLength(2);
+      expect(unitQbs).toHaveLength(2);
+      expect(bookletLogQbs[0].where.mock.calls[0][1].bookletIds)
+        .toHaveLength(1000);
+      expect(bookletLogQbs[1].where.mock.calls[0][1].bookletIds)
+        .toEqual([1001]);
+    });
+
+    it('should split unit log lookups into batches', async () => {
+      const bookletLogQb = mockQueryBuilder();
+      const sessionQb = mockQueryBuilder();
+      const unitQb = mockQueryBuilder();
+      const unitLogQbs: Array<ReturnType<typeof mockQueryBuilder>> = [];
+      (bookletLogRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValue(bookletLogQb);
+      (sessionRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValue(sessionQb);
+      (unitRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValue(unitQb);
+      (unitLogRepository.createQueryBuilder as jest.Mock)
+        .mockImplementation(() => {
+          const qb = mockQueryBuilder();
+          unitLogQbs.push(qb);
+          return qb;
+        });
+      unitQb.getMany.mockResolvedValue(
+        Array.from({ length: 1001 }, (_, index) => ({
+          id: index + 1,
+          bookletid: 1,
+          name: `unit-${index + 1}.xml`,
+          alias: `unit-${index + 1}`
+        }))
+      );
+
+      const serviceWithLogAnomalyLookup =
+        service as unknown as WorkspaceTestResultsServiceWithLogAnomalyLookup;
+      await serviceWithLogAnomalyLookup.findLogAnomaliesForBooklets(
+        [1],
+        thresholds
+      );
+
+      expect(unitLogQbs).toHaveLength(2);
+      expect(unitLogQbs[0].where.mock.calls[0][1].unitIds)
+        .toHaveLength(1000);
+      expect(unitLogQbs[1].where.mock.calls[0][1].unitIds)
+        .toEqual([1001]);
+    });
+
     it('should report long loading from unit STARTED/ENDED logs', async () => {
       const bookletLogQb = mockQueryBuilder();
       const sessionQb = mockQueryBuilder();

@@ -2122,6 +2122,22 @@
             </div>
           </div>
 
+          <div
+            *ngIf="shouldShowManualTabLoadHint('preparation')"
+            class="info-alert manual-refresh-hint"
+          >
+            <mat-icon class="info-alert-icon">refresh</mat-icon>
+            <div class="info-alert-content">
+              <strong>{{
+                'coding-management-manual.manual-load-hint.title' | translate
+              }}</strong>
+              <span>{{
+                'coding-management-manual.manual-load-hint.preparation'
+                  | translate
+              }}</span>
+            </div>
+          </div>
+
           <coding-box-variable-bundle-manager
             *ngIf="shouldRenderManualTabData('preparation')"
           ></coding-box-variable-bundle-manager>

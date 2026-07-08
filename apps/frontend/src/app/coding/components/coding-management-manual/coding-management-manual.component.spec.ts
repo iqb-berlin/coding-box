@@ -2066,6 +2066,21 @@ describe('CodingManagementManualComponent', () => {
     expect(reloadCodingJobsListSpy).toHaveBeenCalledWith('active');
   });
 
+  it('should show a manual load hint for preparation data', () => {
+    component.selectedManualTabIndex = 0;
+    component.autoRefreshManualCodingJobs = false;
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      hasLoadedManualCodingJobRefreshSetting: boolean;
+      loadedManualTabData: Record<string, boolean>;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
+    componentInternals.loadedManualTabData.preparation = false;
+
+    expect(component.shouldShowManualTabLoadHint('preparation')).toBe(true);
+  });
+
   it('should reload only the targeted coding jobs table', () => {
     const productiveLoadCodingJobs = jest.fn();
     const trainingLoadCodingJobs = jest.fn();

@@ -1540,10 +1540,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
-  refreshCodingFreshnessStatusManually(): void {
-    this.loadCodingFreshnessStatus({ force: true });
-  }
-
   private refreshCodingFreshnessStatusAfterChange(): void {
     if (this.autoRefreshCodingStatus) {
       this.loadCodingFreshnessStatus({ force: true });
@@ -1630,10 +1626,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   get hasCodingFreshnessWarning(): boolean {
     return this.codingFreshnessWarnings.length > 0 ||
       this.shouldShowSecondAutocodingWaitingState;
-  }
-
-  get shouldShowCodingFreshnessManualNotice(): boolean {
-    return !this.autoRefreshCodingStatus;
   }
 
   get codingFreshnessDisplayWarnings(): CodingFreshnessSummaryItemDto[] {
