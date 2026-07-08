@@ -724,7 +724,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   shouldShowManualTabLoadHint(tab: ManualCodingTab): boolean {
-    return (tab === 'training' || tab === 'execution') &&
+    const tabSupportsManualLoadHint =
+      tab === 'preparation' || tab === 'training' || tab === 'execution';
+
+    return tabSupportsManualLoadHint &&
       this.isManualTab(tab) &&
       this.shouldShowManualRefreshButton() &&
       !this.shouldRenderManualTabData(tab);

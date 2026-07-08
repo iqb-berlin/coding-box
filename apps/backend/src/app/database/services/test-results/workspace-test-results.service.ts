@@ -295,9 +295,20 @@ interface LogDeleteCounts {
   sessions: number;
 }
 
+type LogAnomalySessionRow = {
+  id: number;
+  bookletid: number;
+  browser: string | null;
+  os: string | null;
+  screen: string | null;
+  ts: number | null;
+  loadcompletems: number | null;
+};
+
 @Injectable()
 export class WorkspaceTestResultsService {
   private readonly logger = new Logger(WorkspaceTestResultsService.name);
+  private static readonly logAnomalyQueryBatchSize = 1000;
   private static readonly codingResponseStatuses = [
     statusStringToNumber('NOT_REACHED') || 1,
     statusStringToNumber('DISPLAYED') || 2,
@@ -955,6 +966,34 @@ export class WorkspaceTestResultsService {
     );
   }
 
+  private getLogAnomalyIdBatches(ids: number[]): number[][] {
+    const batches: number[][] = [];
+    for (
+      let index = 0;
+      index < ids.length;
+      index += WorkspaceTestResultsService.logAnomalyQueryBatchSize
+    ) {
+      batches.push(
+        ids.slice(
+          index,
+          index + WorkspaceTestResultsService.logAnomalyQueryBatchSize
+        )
+      );
+    }
+    return batches;
+  }
+
+  private async loadLogAnomalyRowsInBatches<T>(
+    ids: number[],
+    loadBatch: (batchIds: number[]) => Promise<T[]>
+  ): Promise<T[]> {
+    const rows: T[] = [];
+    for (const batchIds of this.getLogAnomalyIdBatches(ids)) {
+      rows.push(...await loadBatch(batchIds));
+    }
+    return rows;
+  }
+
   private async getBookletNamesById(
     bookletIds: number[]
   ): Promise<Map<number, string>> {
@@ -962,13 +1001,18 @@ export class WorkspaceTestResultsService {
       return new Map();
     }
 
-    const rows = await this.bookletRepository
-      .createQueryBuilder('bookletEntity')
-      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
-      .select('bookletEntity.id', 'id')
-      .addSelect('bookletinfo.name', 'name')
-      .where('bookletEntity.id IN (:...bookletIds)', { bookletIds })
-      .getRawMany<{ id: number | string; name: string | null }>();
+    const rows = await this.loadLogAnomalyRowsInBatches(
+      bookletIds,
+      batchIds => this.bookletRepository
+        .createQueryBuilder('bookletEntity')
+        .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
+        .select('bookletEntity.id', 'id')
+        .addSelect('bookletinfo.name', 'name')
+        .where('bookletEntity.id IN (:...bookletIds)', {
+          bookletIds: batchIds
+        })
+        .getRawMany<{ id: number | string; name: string | null }>()
+    );
 
     return new Map(
       rows.map(row => [Number(row.id), String(row.name || '')])
@@ -993,15 +1037,6 @@ export class WorkspaceTestResultsService {
     thresholds: LogAnomalyThresholds,
     exclusions?: ResolvedWorkspaceExclusions
   ): Promise<Map<number, LogAnomalySummary[]>> {
-    type SessionLogRow = {
-      id: number;
-      bookletid: number;
-      browser: string | null;
-      os: string | null;
-      screen: string | null;
-      ts: number | null;
-      loadcompletems: number | null;
-    };
     let uniqueBookletIds = Array.from(
       new Set(bookletIds.map(id => Number(id)).filter(id => id > 0))
     );
@@ -1029,46 +1064,55 @@ export class WorkspaceTestResultsService {
     }
 
     const [bookletLogs, sessions, units] = await Promise.all([
-      this.bookletLogRepository
-        .createQueryBuilder('bookletLog')
-        .where('bookletLog.bookletid IN (:...bookletIds)', {
-          bookletIds: uniqueBookletIds
-        })
-        .select([
-          'bookletLog.id',
-          'bookletLog.bookletid',
-          'bookletLog.key',
-          'bookletLog.parameter',
-          'bookletLog.ts'
-        ])
-        .orderBy('bookletLog.bookletid', 'ASC')
-        .addOrderBy('bookletLog.ts', 'ASC', 'NULLS LAST')
-        .addOrderBy('bookletLog.id', 'ASC')
-        .getMany(),
-      this.sessionRepository
-        .createQueryBuilder('session')
-        .where('session.bookletid IN (:...bookletIds)', {
-          bookletIds: uniqueBookletIds
-        })
-        .select('session.id', 'id')
-        .addSelect('session.bookletid', 'bookletid')
-        .addSelect('session.browser', 'browser')
-        .addSelect('session.os', 'os')
-        .addSelect('session.screen', 'screen')
-        .addSelect('session.ts', 'ts')
-        .addSelect('session.loadcompletems', 'loadcompletems')
-        .orderBy('session.bookletid', 'ASC')
-        .addOrderBy('session.id', 'ASC')
-        .getRawMany<SessionLogRow>(),
-      this.unitRepository
-        .createQueryBuilder('unit')
-        .where('unit.bookletid IN (:...bookletIds)', {
-          bookletIds: uniqueBookletIds
-        })
-        .select(['unit.id', 'unit.bookletid', 'unit.name', 'unit.alias'])
-        .orderBy('unit.bookletid', 'ASC')
-        .addOrderBy('unit.id', 'ASC')
-        .getMany()
+      this.loadLogAnomalyRowsInBatches(
+        uniqueBookletIds,
+        batchIds => this.bookletLogRepository
+          .createQueryBuilder('bookletLog')
+          .where('bookletLog.bookletid IN (:...bookletIds)', {
+            bookletIds: batchIds
+          })
+          .select([
+            'bookletLog.id',
+            'bookletLog.bookletid',
+            'bookletLog.key',
+            'bookletLog.parameter',
+            'bookletLog.ts'
+          ])
+          .orderBy('bookletLog.bookletid', 'ASC')
+          .addOrderBy('bookletLog.ts', 'ASC', 'NULLS LAST')
+          .addOrderBy('bookletLog.id', 'ASC')
+          .getMany()
+      ),
+      this.loadLogAnomalyRowsInBatches(
+        uniqueBookletIds,
+        batchIds => this.sessionRepository
+          .createQueryBuilder('session')
+          .where('session.bookletid IN (:...bookletIds)', {
+            bookletIds: batchIds
+          })
+          .select('session.id', 'id')
+          .addSelect('session.bookletid', 'bookletid')
+          .addSelect('session.browser', 'browser')
+          .addSelect('session.os', 'os')
+          .addSelect('session.screen', 'screen')
+          .addSelect('session.ts', 'ts')
+          .addSelect('session.loadcompletems', 'loadcompletems')
+          .orderBy('session.bookletid', 'ASC')
+          .addOrderBy('session.id', 'ASC')
+          .getRawMany<LogAnomalySessionRow>()
+      ),
+      this.loadLogAnomalyRowsInBatches(
+        uniqueBookletIds,
+        batchIds => this.unitRepository
+          .createQueryBuilder('unit')
+          .where('unit.bookletid IN (:...bookletIds)', {
+            bookletIds: batchIds
+          })
+          .select(['unit.id', 'unit.bookletid', 'unit.name', 'unit.alias'])
+          .orderBy('unit.bookletid', 'ASC')
+          .addOrderBy('unit.id', 'ASC')
+          .getMany()
+      )
     ]);
 
     const visibleUnits = shouldApplyExclusions ?
@@ -1082,24 +1126,27 @@ export class WorkspaceTestResultsService {
       (units || []);
     const unitIds = visibleUnits.map(unit => Number(unit.id)).filter(id => id > 0);
     const unitLogs = unitIds.length > 0 ?
-      await this.unitLogRepository
-        .createQueryBuilder('unitLog')
-        .where('unitLog.unitid IN (:...unitIds)', { unitIds })
-        .select([
-          'unitLog.id',
-          'unitLog.unitid',
-          'unitLog.key',
-          'unitLog.parameter',
-          'unitLog.ts'
-        ])
-        .orderBy('unitLog.unitid', 'ASC')
-        .addOrderBy('unitLog.ts', 'ASC', 'NULLS LAST')
-        .addOrderBy('unitLog.id', 'ASC')
-        .getMany() :
+      await this.loadLogAnomalyRowsInBatches(
+        unitIds,
+        batchIds => this.unitLogRepository
+          .createQueryBuilder('unitLog')
+          .where('unitLog.unitid IN (:...unitIds)', { unitIds: batchIds })
+          .select([
+            'unitLog.id',
+            'unitLog.unitid',
+            'unitLog.key',
+            'unitLog.parameter',
+            'unitLog.ts'
+          ])
+          .orderBy('unitLog.unitid', 'ASC')
+          .addOrderBy('unitLog.ts', 'ASC', 'NULLS LAST')
+          .addOrderBy('unitLog.id', 'ASC')
+          .getMany()
+      ) :
       [];
 
     const logsByBooklet = new Map<number, BookletLog[]>();
-    const sessionsByBooklet = new Map<number, SessionLogRow[]>();
+    const sessionsByBooklet = new Map<number, LogAnomalySessionRow[]>();
     const unitsByBooklet = new Map<number, Unit[]>();
     const unitLogsByUnit = new Map<number, UnitLog[]>();
 
