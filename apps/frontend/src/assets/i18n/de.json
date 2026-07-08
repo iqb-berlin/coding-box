@@ -1175,7 +1175,7 @@
     "show-replay-statistics": "Replay-Statistiken anzeigen",
     "coding": "Kodierung",
     "evaluation-mode": "Auswertungsmodus",
-    "evaluation-mode-description": "Wenn aktiviert, werden teure automatische Aktualisierungen in der Kodierungsverwaltung ausgeschaltet. Statistiken und Übersichten werden dann gezielt per Aktualisieren-Button geladen.",
+    "evaluation-mode-description": "Wenn aktiviert, arbeitet die Kodierungsverwaltung im Manuell-laden-Modus: teure automatische Aktualisierungen werden ausgeschaltet und Statistiken, Übersichten sowie Kodierjob-Tabellen werden gezielt per Aktualisieren-Button geladen.",
     "evaluation-mode-enabled": "Auswertungsmodus aktiviert",
     "evaluation-mode-disabled": "Auswertungsmodus deaktiviert",
     "auto-fetch-coding-statistics": "Automatisches Laden der Kodierstatistiken",
@@ -1934,6 +1934,7 @@
     },
     "manual-load-hint": {
       "title": "Daten manuell laden",
+      "preparation": "Die Vorbereitungsdaten wurden noch nicht geladen. Klicken Sie auf Aktualisieren, um Variablenbündel und Vorbereitungsdaten zu laden.",
       "training": "Die Schulungsdaten wurden noch nicht geladen. Klicken Sie auf Aktualisieren, um Schulungen und Kodierjobs zu laden.",
       "execution": "Die Durchführungsdaten wurden noch nicht geladen. Klicken Sie auf Aktualisieren, um Kodierjobs und Statusdaten zu laden."
     },
@@ -2117,6 +2118,13 @@
       "validation-running": "Validierung wird durchgeführt...",
       "validation-page-progress": "Validierung wird durchgeführt (Seite {{page}})...",
       "view-results-button": "Validierungs Ergebnisse anzeigen"
+    }
+  },
+  "test-results-page": {
+    "coding-status": {
+      "manual-title": "Kodierstatus wird manuell aktualisiert",
+      "manual-text": "Automatische Statusprüfungen sind für diesen Arbeitsbereich deaktiviert. Aktualisieren Sie den Kodierstatus in der Kodierungsverwaltung bei Bedarf manuell.",
+      "refresh": "Kodierstatus aktualisieren"
     }
   },
   "coding-variables-dialog": {

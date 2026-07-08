@@ -251,6 +251,20 @@ describe('TestResultsComponent', () => {
     expect(component.logAnomalySummaryRequested).toBe(false);
   });
 
+  it('should not show manual coding status controls on the test results page', () => {
+    (component as unknown as {
+      setAutoRefreshCodingStatus: (enabled: boolean) => void;
+    }).setAutoRefreshCodingStatus(false);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).not.toContain(
+      'Kodierstatus wird manuell aktualisiert'
+    );
+    expect(fixture.nativeElement.textContent).not.toContain(
+      'test-results-page.coding-status.manual-title'
+    );
+  });
+
   it('should hide log quality when disabled by workspace setting', () => {
     expect(component.showTestResultsLogAnomalies).toBe(false);
     expect(fixture.nativeElement.textContent).not.toContain('Log-Qualität');
@@ -423,24 +437,7 @@ describe('TestResultsComponent', () => {
     expect(testResultService.getWorkspaceOverview).toHaveBeenCalledWith(1);
     expect(codingStatisticsService.getCodingFreshness).not.toHaveBeenCalled();
     expect(testPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
-    expect(component.shouldShowCodingFreshnessManualNotice).toBe(true);
     expect(testPersonCodingService.notifyTestResultsChanged).toHaveBeenCalled();
-  });
-
-  it('should keep manual coding status refresh visible after a manual check', () => {
-    const testPersonCodingService = TestBed.inject(TestPersonCodingService) as unknown as {
-      invalidateCodingStatusCache: jest.Mock;
-    };
-
-    testPersonCodingService.invalidateCodingStatusCache.mockClear();
-    (component as unknown as {
-      setAutoRefreshCodingStatus: (enabled: boolean) => void;
-    }).setAutoRefreshCodingStatus(false);
-
-    component.refreshCodingFreshnessStatusManually();
-
-    expect(component.shouldShowCodingFreshnessManualNotice).toBe(true);
-    expect(testPersonCodingService.invalidateCodingStatusCache).toHaveBeenCalledWith(1);
   });
 
   it('should ignore stale manual coding status responses after status was cleared', () => {
@@ -463,7 +460,9 @@ describe('TestResultsComponent', () => {
       setAutoRefreshCodingStatus: (enabled: boolean) => void;
     }).setAutoRefreshCodingStatus(false);
 
-    component.refreshCodingFreshnessStatusManually();
+    (component as unknown as {
+      loadCodingFreshnessStatus: (options?: { force?: boolean }) => void;
+    }).loadCodingFreshnessStatus({ force: true });
     component.onFlatTableResponseDeleted();
     codingFreshness$.next({ items: [] });
     codingFreshness$.complete();
