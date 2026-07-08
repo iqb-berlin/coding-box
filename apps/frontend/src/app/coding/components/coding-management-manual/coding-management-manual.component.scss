@@ -1076,6 +1076,15 @@
     }
   }
 
+  .manual-refresh-hint {
+    background-color: #fff8e1;
+    border-left-color: #f9a825;
+
+    .info-alert-icon {
+      color: #f9a825;
+    }
+  }
+
   .case-coverage-info {
     background-color: #fff3e0;
     border-left-color: #f57c00;
