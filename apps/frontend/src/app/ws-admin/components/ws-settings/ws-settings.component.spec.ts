@@ -75,7 +75,9 @@ describe('WsSettingsComponent', () => {
       getReplayUrlExportMode: jest.fn().mockReturnValue(of('auth')),
       setReplayUrlExportMode: jest.fn().mockReturnValue(of({})),
       getReplayUrlExportTokenDurationDays: jest.fn((_: number, maxDurationDays: number) => of(maxDurationDays)),
-      setReplayUrlExportTokenDurationDays: jest.fn().mockReturnValue(of({}))
+      setReplayUrlExportTokenDurationDays: jest.fn().mockReturnValue(of({})),
+      getAuthSessionIdleTimeoutMinutes: jest.fn().mockReturnValue(of(45)),
+      setAuthSessionIdleTimeoutMinutes: jest.fn().mockReturnValue(of({}))
     } as unknown as jest.Mocked<WorkspaceSettingsService>;
 
     mockClipboard = {
@@ -150,6 +152,8 @@ describe('WsSettingsComponent', () => {
       expect(component.replayUrlExportMode).toBe('auth');
       expect(mockWorkspaceSettingsService.getReplayUrlExportTokenDurationDays).toHaveBeenCalledWith(1, 90);
       expect(component.replayUrlExportTokenDurationDays).toBe(90);
+      expect(mockWorkspaceSettingsService.getAuthSessionIdleTimeoutMinutes).toHaveBeenCalledWith(1);
+      expect(component.authSessionIdleTimeoutMinutes).toBe(45);
     });
   });
 
@@ -279,6 +283,37 @@ describe('WsSettingsComponent', () => {
       component.replayUrlExportTokenDurationDays = 45;
 
       component.saveReplayUrlExportTokenDuration();
+
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+  });
+
+  describe('saveAuthSessionIdleTimeout', () => {
+    it('should persist auth session idle timeout minutes', () => {
+      component.authSessionIdleTimeoutMinutes = 60;
+
+      component.saveAuthSessionIdleTimeout();
+
+      expect(mockWorkspaceSettingsService.setAuthSessionIdleTimeoutMinutes).toHaveBeenCalledWith(1, 60);
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+
+    it('should reject invalid auth session idle timeout minutes before saving', () => {
+      component.authSessionIdleTimeoutMinutes = 481;
+
+      component.saveAuthSessionIdleTimeout();
+
+      expect(mockWorkspaceSettingsService.setAuthSessionIdleTimeoutMinutes).not.toHaveBeenCalled();
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+
+    it('should show an error when auth session idle timeout cannot be saved', () => {
+      mockWorkspaceSettingsService.setAuthSessionIdleTimeoutMinutes.mockReturnValue(
+        throwError(() => new Error('error'))
+      );
+      component.authSessionIdleTimeoutMinutes = 60;
+
+      component.saveAuthSessionIdleTimeout();
 
       expect(mockSnackBar.open).toHaveBeenCalled();
     });

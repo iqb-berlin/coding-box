@@ -1090,6 +1090,45 @@ describe('ReplayComponent', () => {
     expect(window.location.href).not.toContain('auth=');
   });
 
+  it('should coalesce concurrent replay recovery restores after reauthentication', async () => {
+    const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+    const privateComponent = component as unknown as {
+      authToken: string;
+      restoreReplayAfterReAuthentication: () => Promise<void>;
+    };
+    const oldToken = createUnsignedJwt({
+      workspace: '47',
+      exp: Math.floor(Date.now() / 1000) + 60
+    });
+    const tokenSubject = new Subject<string>();
+    window.history.pushState(
+      {},
+      '',
+      `/#/replay/valid%40test%40person/unit-123/0/VAR1?auth=${oldToken}&mode=coding&codingJobId=77&workspaceId=47`
+    );
+
+    component.isCodingMode = true;
+    component.workspaceId = 47;
+    privateComponent.authToken = oldToken;
+    component.codingService.setAuthToken(oldToken);
+    (jwtDecodeModule.jwtDecode as jest.Mock).mockReturnValue({ workspace: '47' });
+    appService.createOwnToken.mockClear();
+    appService.createOwnToken.mockReturnValue(tokenSubject.asObservable());
+
+    const firstRestore = privateComponent.restoreReplayAfterReAuthentication();
+    const secondRestore = privateComponent.restoreReplayAfterReAuthentication();
+    await Promise.resolve();
+
+    expect(appService.createOwnToken).toHaveBeenCalledTimes(1);
+
+    tokenSubject.next('fresh-token-after-login');
+    tokenSubject.complete();
+    await Promise.all([firstRestore, secondRestore]);
+
+    expect(privateComponent.authToken).toBe('fresh-token-after-login');
+    expect(appService.createOwnToken).toHaveBeenCalledTimes(1);
+  });
+
   it('should not refresh an invalid replay auth token after successful reauthentication', async () => {
     const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
     const privateComponent = component as unknown as { authToken: string };

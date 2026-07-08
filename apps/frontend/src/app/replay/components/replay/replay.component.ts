@@ -154,6 +154,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private readonly replayNotesCommitSubject = new Subject<PendingReplayNotesCommit>();
   private replayReAuthenticationPending = false;
   private replayTokenRefreshRunning = false;
+  private replayRecoveryRestorePromise: Promise<void> | null = null;
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
   @ViewChild(CodeSelectorComponent) codeSelectorComponent: CodeSelectorComponent | undefined;
   @ViewChild('watermark')
@@ -314,8 +315,21 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private async restoreReplayAfterReAuthentication(): Promise<void> {
-    await this.refreshReplayAuthTokenAfterReAuthentication();
-    await this.restoreReplayRecoveryDraft();
+    if (this.replayRecoveryRestorePromise) {
+      await this.replayRecoveryRestorePromise;
+      return;
+    }
+
+    this.replayRecoveryRestorePromise = (async () => {
+      await this.refreshReplayAuthTokenAfterReAuthentication();
+      await this.restoreReplayRecoveryDraft();
+    })();
+
+    try {
+      await this.replayRecoveryRestorePromise;
+    } finally {
+      this.replayRecoveryRestorePromise = null;
+    }
   }
 
   private async refreshReplayAuthTokenForWorkspace(workspaceId: number): Promise<boolean> {

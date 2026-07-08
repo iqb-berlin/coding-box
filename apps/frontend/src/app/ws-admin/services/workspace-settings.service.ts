@@ -1,13 +1,16 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, Subject } from 'rxjs';
 import { finalize, shareReplay, tap } from 'rxjs/operators';
 import { SERVER_URL } from '../../injection-tokens';
 import { WorkspaceSettings } from '../models/workspace-settings.model';
 import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 import {
+  DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
   DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
   DEFAULT_REPLAY_URL_EXPORT_MODE,
+  MAX_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
+  MIN_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
   type ReplayUrlExportMode
 } from '../../core/services/auth-session.config';
 
@@ -25,8 +28,14 @@ export const DEFAULT_RESPONSE_MATCHING_MODE: ResponseMatchingModeDto = {
   flags: []
 };
 
+export interface AuthSessionIdleTimeoutChange {
+  workspaceId: number;
+  timeoutMinutes: number;
+}
+
 const REPLAY_URL_EXPORT_MODE_SETTING_KEY = 'replay-url-export-mode';
 const REPLAY_URL_EXPORT_TOKEN_DURATION_DAYS_SETTING_KEY = 'replay-url-export-token-duration-days';
+const AUTH_SESSION_IDLE_TIMEOUT_MINUTES_SETTING_KEY = 'auth-session-idle-timeout-minutes';
 
 @Injectable({
   providedIn: 'root'
@@ -34,6 +43,13 @@ const REPLAY_URL_EXPORT_TOKEN_DURATION_DAYS_SETTING_KEY = 'replay-url-export-tok
 export class WorkspaceSettingsService {
   private http = inject(HttpClient);
   private rawServerUrl = inject(SERVER_URL);
+
+  private readonly authSessionIdleTimeoutChangedSubject =
+    new Subject<AuthSessionIdleTimeoutChange>();
+
+  readonly authSessionIdleTimeoutChanged$ =
+    this.authSessionIdleTimeoutChangedSubject.asObservable();
+
   private readonly settingsCacheTtlMs = 10_000;
   private readonly settingsCache = new Map<
   string,
@@ -476,6 +492,45 @@ export class WorkspaceSettingsService {
     );
   }
 
+  getAuthSessionIdleTimeoutMinutes(workspaceId: number): Observable<number> {
+    return new Observable(observer => {
+      this.getWorkspaceSetting(
+        workspaceId,
+        AUTH_SESSION_IDLE_TIMEOUT_MINUTES_SETTING_KEY,
+        true
+      ).subscribe({
+        next: setting => {
+          observer.next(this.parseAuthSessionIdleTimeoutMinutes(setting.value));
+          observer.complete();
+        },
+        error: () => {
+          observer.next(this.normalizeAuthSessionIdleTimeoutMinutes(undefined));
+          observer.complete();
+        }
+      });
+    });
+  }
+
+  setAuthSessionIdleTimeoutMinutes(
+    workspaceId: number,
+    timeoutMinutes: number
+  ): Observable<WorkspaceSettings> {
+    const normalizedTimeoutMinutes = this.normalizeAuthSessionIdleTimeoutMinutes(timeoutMinutes);
+    return this.setWorkspaceSetting(
+      workspaceId,
+      AUTH_SESSION_IDLE_TIMEOUT_MINUTES_SETTING_KEY,
+      JSON.stringify({ timeoutMinutes: normalizedTimeoutMinutes }),
+      'Controls after how many inactive minutes users must reauthenticate'
+    ).pipe(
+      tap(() => {
+        this.authSessionIdleTimeoutChangedSubject.next({
+          workspaceId,
+          timeoutMinutes: normalizedTimeoutMinutes
+        });
+      })
+    );
+  }
+
   getResponseMatchingMode(
     workspaceId: number
   ): Observable<ResponseMatchingFlag[]> {
@@ -647,6 +702,42 @@ export class WorkspaceSettingsService {
     }
 
     return Math.min(durationDays, normalizedMaxDurationDays);
+  }
+
+  private parseAuthSessionIdleTimeoutMinutes(value: string): number {
+    const directValue = Number(value);
+    if (Number.isFinite(directValue)) {
+      return this.normalizeAuthSessionIdleTimeoutMinutes(directValue);
+    }
+
+    try {
+      const parsed = JSON.parse(value) as {
+        timeoutMinutes?: unknown;
+      } | number;
+      if (typeof parsed === 'number') {
+        return this.normalizeAuthSessionIdleTimeoutMinutes(parsed);
+      }
+      if (typeof parsed === 'object' && parsed !== null) {
+        return this.normalizeAuthSessionIdleTimeoutMinutes(Number(parsed.timeoutMinutes));
+      }
+    } catch {
+      return this.normalizeAuthSessionIdleTimeoutMinutes(undefined);
+    }
+
+    return this.normalizeAuthSessionIdleTimeoutMinutes(undefined);
+  }
+
+  private normalizeAuthSessionIdleTimeoutMinutes(
+    timeoutMinutes: number | undefined
+  ): number {
+    if (typeof timeoutMinutes !== 'number' || !Number.isInteger(timeoutMinutes)) {
+      return DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES;
+    }
+
+    return Math.min(
+      MAX_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
+      Math.max(MIN_AUTH_SESSION_IDLE_TIMEOUT_MINUTES, timeoutMinutes)
+    );
   }
 
   private getSettingCacheKey(workspaceId: number, key: string): string {

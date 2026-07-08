@@ -254,6 +254,55 @@ describe('WorkspaceSettingsService', () => {
     });
   });
 
+  describe('getAuthSessionIdleTimeoutMinutes', () => {
+    it('should return parsed auth session idle timeout minutes', () => {
+      service.getAuthSessionIdleTimeoutMinutes(1).subscribe(val => {
+        expect(val).toBe(45);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/auth-session-idle-timeout-minutes`);
+      req.flush({ value: '{"timeoutMinutes":45}' });
+    });
+
+    it('should clamp auth session idle timeout minutes to the policy range', () => {
+      service.getAuthSessionIdleTimeoutMinutes(1).subscribe(val => {
+        expect(val).toBe(480);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/auth-session-idle-timeout-minutes`);
+      req.flush({ value: '{"timeoutMinutes":900}' });
+    });
+
+    it('should return the default on error', () => {
+      service.getAuthSessionIdleTimeoutMinutes(1).subscribe(val => {
+        expect(val).toBe(30);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/auth-session-idle-timeout-minutes`);
+      req.flush({}, { status: 404, statusText: 'Not Found' });
+    });
+  });
+
+  describe('setAuthSessionIdleTimeoutMinutes', () => {
+    it('should persist auth session idle timeout minutes', () => {
+      const changes: { workspaceId: number; timeoutMinutes: number }[] = [];
+      const subscription = service.authSessionIdleTimeoutChanged$.subscribe(change => {
+        changes.push(change);
+      });
+
+      service.setAuthSessionIdleTimeoutMinutes(1, 45).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        key: 'auth-session-idle-timeout-minutes',
+        value: '{"timeoutMinutes":45}',
+        description: 'Controls after how many inactive minutes users must reauthenticate'
+      });
+      req.flush({});
+
+      expect(changes).toEqual([{ workspaceId: 1, timeoutMinutes: 45 }]);
+      subscription.unsubscribe();
+    });
+  });
+
   describe('setAutoRefreshManualCodingJobs', () => {
     it('should persist the setting', () => {
       service.setAutoRefreshManualCodingJobs(1, false).subscribe();

@@ -25,9 +25,12 @@ import { JournalComponent } from '../journal/journal.component';
 import { EditMissingsProfilesDialogComponent } from '../../../coding/components/edit-missings-profiles-dialog/edit-missings-profiles-dialog.component';
 import { ReplayStatisticsDialogComponent } from '../replay-statistics-dialog/replay-statistics-dialog.component';
 import {
+  DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
   DEFAULT_REPLAY_URL_EXPORT_MODE,
   DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
   EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES,
+  MAX_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
+  MIN_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
   type ReplayUrlExportMode,
   WorkspaceTokenScope
 } from '../../../core/services/auth-session.config';
@@ -94,9 +97,12 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   duration = DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
   readonly minTokenDurationDays = 1;
   maxTokenDurationDays = DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
+  readonly minAuthSessionIdleTimeoutMinutes = MIN_AUTH_SESSION_IDLE_TIMEOUT_MINUTES;
+  readonly maxAuthSessionIdleTimeoutMinutes = MAX_AUTH_SESSION_IDLE_TIMEOUT_MINUTES;
   readonly externalReplayTokenScopes = EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES;
   replayUrlExportMode: ReplayUrlExportMode = DEFAULT_REPLAY_URL_EXPORT_MODE;
   replayUrlExportTokenDurationDays = DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
+  authSessionIdleTimeoutMinutes = DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES;
   autoFetchCodingStatistics = true;
   autoRefreshManualCodingJobs = true;
   evaluationMode = false;
@@ -116,6 +122,11 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         .getReplayUrlExportMode(workspaceId)
         .subscribe(mode => {
           this.replayUrlExportMode = mode;
+        });
+      this.workspaceSettingsService
+        .getAuthSessionIdleTimeoutMinutes(workspaceId)
+        .subscribe(timeoutMinutes => {
+          this.authSessionIdleTimeoutMinutes = timeoutMinutes;
         });
       this.workspaceSettingsService
         .getEvaluationMode(workspaceId)
@@ -231,6 +242,13 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   isReplayUrlExportTokenDurationValid(): boolean {
     const duration = Number(this.replayUrlExportTokenDurationDays);
     return this.isDurationWithinReplayTokenPolicy(duration);
+  }
+
+  isAuthSessionIdleTimeoutValid(): boolean {
+    const duration = Number(this.authSessionIdleTimeoutMinutes);
+    return Number.isInteger(duration) &&
+      duration >= this.minAuthSessionIdleTimeoutMinutes &&
+      duration <= this.maxAuthSessionIdleTimeoutMinutes;
   }
 
   private isDurationWithinReplayTokenPolicy(duration: number): boolean {
@@ -354,6 +372,49 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
           this.snackBar.open(
             this.translateService.instant(
               'ws-settings.replay-url-export-token-duration-saved'
+            ),
+            this.translateService.instant('close'),
+            { duration: 3000 }
+          );
+        },
+        error: () => {
+          this.snackBar.open(
+            this.translateService.instant('ws-settings.error-saving-setting'),
+            this.translateService.instant('close'),
+            {
+              duration: 3000,
+              panelClass: ['error-snackbar']
+            }
+          );
+        }
+      });
+  }
+
+  saveAuthSessionIdleTimeout(): void {
+    if (!this.isAuthSessionIdleTimeoutValid()) {
+      this.snackBar.open(
+        this.translateService.instant('ws-settings.auth-session-idle-timeout-invalid'),
+        this.translateService.instant('close'),
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.workspaceSettingsService
+      .setAuthSessionIdleTimeoutMinutes(
+        workspaceId,
+        Number(this.authSessionIdleTimeoutMinutes)
+      )
+      .subscribe({
+        next: () => {
+          this.snackBar.open(
+            this.translateService.instant(
+              'ws-settings.auth-session-idle-timeout-saved'
             ),
             this.translateService.instant('close'),
             { duration: 3000 }

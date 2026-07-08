@@ -170,6 +170,9 @@ export class ReplayCodingService {
         if (!keyParts) {
           return Promise.resolve();
         }
+        if (selectedCode !== null && !this.isSelectedCodePersistable(compositeKey, selectedCode)) {
+          return Promise.resolve();
+        }
         return this.saveCodingProgress(
           workspaceId,
           jobId,
