@@ -12,11 +12,13 @@ import {
   BACKEND_CONNECTIVITY_ERROR_MESSAGE
 } from '../interceptors/app-http-error.class';
 import { SUPPRESS_GLOBAL_HTTP_ERROR } from '../interceptors/http-error-context';
+import { SessionRecoveryService } from './session-recovery.service';
 
 describe('AppService', () => {
   let service: AppService;
   let httpMock: HttpTestingController;
   let logoServiceMock: jest.Mocked<LogoService>;
+  let sessionRecoveryService: SessionRecoveryService;
 
   const mockServerUrl = 'http://localhost/api/';
 
@@ -46,14 +48,34 @@ describe('AppService', () => {
 
     service = TestBed.inject(AppService);
     httpMock = TestBed.inject(HttpTestingController);
+    sessionRecoveryService = TestBed.inject(SessionRecoveryService);
   });
 
   afterEach(() => {
     httpMock.verify();
+    sessionStorage.clear();
   });
 
   it('should be created', () => {
     expect(service).toBeTruthy();
+  });
+
+  describe('selectedWorkspaceId', () => {
+    it('should emit selected workspace changes', () => {
+      const workspaceIds: number[] = [];
+      const subscription = service.selectedWorkspaceId$.subscribe(workspaceId => {
+        workspaceIds.push(workspaceId);
+      });
+
+      service.selectedWorkspaceId = 1;
+      service.selectedWorkspaceId = 1;
+      service.selectedWorkspaceId = 2;
+      service.selectedWorkspaceId = null;
+
+      expect(workspaceIds).toEqual([1, 2, 0]);
+      expect(service.selectedWorkspaceId).toBe(0);
+      subscription.unsubscribe();
+    });
   });
 
   describe('createOwnToken', () => {
@@ -251,6 +273,14 @@ describe('AppService', () => {
       expect(service.authBootstrapStatus).toBe('ready');
     });
 
+    it('should clear recovery drafts when auth state is cleared explicitly', () => {
+      sessionRecoveryService.saveDraft('active-form', { field: 'value' });
+
+      service.clearAuthState();
+
+      expect(sessionRecoveryService.peekDraft('active-form')).toBeNull();
+    });
+
     it('should clear auth state and mark reauthentication as required', () => {
       service.requireReAuthentication('/coding');
 
@@ -266,6 +296,53 @@ describe('AppService', () => {
       service.requireReAuthentication();
 
       expect(service.reAuthenticationReturnUrl).toBe('/workspace-admin/1');
+    });
+
+    it('should capture registered recovery drafts before requiring reauthentication', () => {
+      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      const unregister = sessionRecoveryService.registerProvider({
+        key: 'active-form',
+        capture: () => ({ field: 'value' })
+      });
+
+      service.requireReAuthentication('/coding');
+
+      expect(sessionRecoveryService.peekDraft('active-form')).toEqual({ field: 'value' });
+      expect(sessionRecoveryService.consumeDraft('active-form')).toEqual({ field: 'value' });
+      unregister();
+    });
+
+    it('should keep recovery drafts saved during reauthentication scoped to the current user', () => {
+      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+
+      service.requireReAuthentication('/coding');
+      sessionRecoveryService.saveDraft('late-active-form', { field: 'late-value' });
+
+      expect(sessionRecoveryService.peekDraft('late-active-form')).toEqual({ field: 'late-value' });
+      sessionRecoveryService.setOwnerId(undefined);
+      expect(sessionRecoveryService.peekDraft('late-active-form')).toBeNull();
+      sessionRecoveryService.setOwnerId('user1');
+      expect(sessionRecoveryService.consumeDraft('late-active-form')).toEqual({ field: 'late-value' });
+    });
+
+    it('should keep recovery drafts scoped when reauthentication is requested repeatedly', () => {
+      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      let fieldValue = 'first-value';
+      const unregister = sessionRecoveryService.registerProvider({
+        key: 'active-form',
+        capture: () => ({ field: fieldValue })
+      });
+
+      service.requireReAuthentication('/coding');
+      fieldValue = 'second-value';
+      service.requireReAuthentication('/workspace-admin/1');
+
+      expect(sessionRecoveryService.peekDraft('active-form')).toEqual({ field: 'second-value' });
+      sessionRecoveryService.setOwnerId(undefined);
+      expect(sessionRecoveryService.peekDraft('active-form')).toBeNull();
+      sessionRecoveryService.setOwnerId('user1');
+      expect(sessionRecoveryService.consumeDraft('active-form')).toEqual({ field: 'second-value' });
+      unregister();
     });
 
     it('should clear the return URL when reauthentication is dismissed', () => {

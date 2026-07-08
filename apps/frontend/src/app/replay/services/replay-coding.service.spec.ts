@@ -1110,6 +1110,192 @@ describe('ReplayCodingService', () => {
     });
   });
 
+  describe('session recovery', () => {
+    it('restores and re-saves recovered coding state', async () => {
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
+      codingJobBackendServiceMock.saveCodingNotes.mockReturnValue(of({} as CodingJob));
+      const pendingCommentSave = new Subject<CodingJob>();
+      codingJobBackendServiceMock.updateCodingJob.mockReturnValueOnce(pendingCommentSave.asObservable());
+      service.codingJobId = 100;
+      const commentSavePromise = service.saveCodingJobComment(1, 'comment');
+
+      await service.handleCodeSelected(
+        { variableId: 'v1', code: { id: 7, label: 'Seven', score: 2 } as never },
+        'p1',
+        'u1',
+        1,
+        null
+      );
+      await service.saveNotes(1, 'p1', 'u1', 'v1', 'note');
+
+      const snapshot = service.createRecoverySnapshot();
+      expect(snapshot).not.toBeNull();
+      expect(snapshot?.codingJobCommentChanged).toBe(true);
+      pendingCommentSave.next({} as CodingJob);
+      pendingCommentSave.complete();
+      await commentSavePromise;
+
+      codingJobBackendServiceMock.saveCodingProgress.mockClear();
+      codingJobBackendServiceMock.saveCodingNotes.mockClear();
+      codingJobBackendServiceMock.updateCodingJob.mockClear();
+      codingJobBackendServiceMock.updateCodingJob.mockReturnValue(of({} as CodingJob));
+
+      service.resetCodingData();
+      service.codingJobId = 100;
+      expect(service.restoreRecoverySnapshot(snapshot!)).toBe(true);
+      await expect(service.saveRecoveredCodingState(1, null)).resolves.toBe(true);
+
+      expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledWith(
+        1,
+        100,
+        {
+          testPerson: 'p1',
+          unitId: 'u1',
+          variableId: 'v1',
+          selectedCode: {
+            id: 7,
+            code: '7',
+            label: 'Seven',
+            score: 2,
+            codingIssueOption: null
+          }
+        }
+      );
+      expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenCalledWith(
+        1,
+        100,
+        {
+          testPerson: 'p1',
+          unitId: 'u1',
+          variableId: 'v1',
+          notes: 'note'
+        }
+      );
+      expect(codingJobBackendServiceMock.updateCodingJob).toHaveBeenCalledWith(1, 100, { comment: 'comment' });
+    });
+
+    it('keeps recovered coding state unsaved when required context is missing', async () => {
+      service.codingJobId = 100;
+
+      await expect(service.saveRecoveredCodingState(0, null)).resolves.toBe(false);
+
+      expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.saveCodingNotes).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+    });
+
+    it('rejects recovered coding state when the recovered job comment cannot be saved', async () => {
+      service.codingJobId = 100;
+      service.restoreRecoverySnapshot({
+        codingJobId: 100,
+        currentVariableId: 'v1',
+        selectedCodes: [],
+        pendingSelections: [],
+        openUnitKeys: [],
+        notes: [],
+        codingJobComment: 'comment',
+        codingJobCommentChanged: true
+      });
+      codingJobBackendServiceMock.updateCodingJob.mockReturnValue(throwError(() => new Error('save failed')));
+
+      await expect(service.saveRecoveredCodingState(1, null)).rejects.toThrow('save failed');
+    });
+
+    it('persists recovered cleared coding job comments', async () => {
+      service.codingJobId = 100;
+      service.codingJobComment = 'comment before timeout';
+      codingJobBackendServiceMock.updateCodingJob.mockReturnValue(of({} as CodingJob));
+
+      expect(service.restoreRecoverySnapshot({
+        codingJobId: 100,
+        currentVariableId: 'v1',
+        selectedCodes: [],
+        pendingSelections: [],
+        openUnitKeys: [],
+        notes: [],
+        codingJobComment: '',
+        codingJobCommentChanged: true
+      })).toBe(true);
+
+      await expect(service.saveRecoveredCodingState(1, null)).resolves.toBe(true);
+
+      expect(codingJobBackendServiceMock.updateCodingJob).toHaveBeenCalledWith(1, 100, { comment: '' });
+    });
+
+    it('captures pending cleared coding job comments in recovery snapshots', async () => {
+      const pendingCommentSave = new Subject<CodingJob>();
+      codingJobBackendServiceMock.updateCodingJob.mockReturnValue(pendingCommentSave.asObservable());
+      service.codingJobId = 100;
+
+      const commentSavePromise = service.saveCodingJobComment(1, '');
+
+      expect(service.createRecoverySnapshot()).toEqual(expect.objectContaining({
+        codingJobComment: '',
+        codingJobCommentChanged: true
+      }));
+
+      pendingCommentSave.next({} as CodingJob);
+      pendingCommentSave.complete();
+      await commentSavePromise;
+
+      expect(service.createRecoverySnapshot()).toEqual(expect.objectContaining({
+        codingJobCommentChanged: false
+      }));
+    });
+
+    it('keeps the latest overlapping coding job comment save recoverable after an earlier save completes', async () => {
+      const firstCommentSave = new Subject<CodingJob>();
+      const latestCommentSave = new Subject<CodingJob>();
+      codingJobBackendServiceMock.updateCodingJob
+        .mockReturnValueOnce(firstCommentSave.asObservable())
+        .mockReturnValueOnce(latestCommentSave.asObservable());
+      service.codingJobId = 100;
+
+      const firstSavePromise = service.saveCodingJobComment(1, 'older comment');
+      const latestSavePromise = service.saveCodingJobComment(1, '');
+
+      firstCommentSave.next({} as CodingJob);
+      firstCommentSave.complete();
+      await firstSavePromise;
+
+      expect(service.createRecoverySnapshot()).toEqual(expect.objectContaining({
+        codingJobComment: '',
+        codingJobCommentChanged: true
+      }));
+
+      latestCommentSave.error(new Error('latest save failed'));
+      await latestSavePromise;
+
+      expect(service.createRecoverySnapshot()).toEqual(expect.objectContaining({
+        codingJobComment: '',
+        codingJobCommentChanged: true
+      }));
+    });
+
+    it('does not persist recovered new-code-needed progress before required notes are present', async () => {
+      service.codingJobId = 100;
+      const key = service.generateCompositeKey('p1', 'u1', 'v1');
+      service.restoreRecoverySnapshot({
+        codingJobId: 100,
+        currentVariableId: 'v1',
+        selectedCodes: [],
+        pendingSelections: [[key, {
+          id: -2,
+          code: '-2',
+          label: 'New code needed',
+          codingIssueOption: -2
+        }]],
+        openUnitKeys: [],
+        notes: [],
+        codingJobComment: ''
+      });
+
+      await expect(service.saveRecoveredCodingState(1, null)).resolves.toBe(true);
+
+      expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+    });
+  });
+
   describe('read-only review mode', () => {
     beforeEach(() => {
       service.isReviewMode = true;

@@ -672,5 +672,45 @@ describe('CodingReplayService', () => {
         'http://example.com/#/replay/login@code@group@BOOKLET/UNIT/0/TEXT_ANCHOR?workspaceId=7'
       );
     });
+
+    it('should generate auth-token replay URLs without workspaceId in bulk mode', async () => {
+      const items = [
+        {
+          responseId: 1,
+          unitName: 'UNIT',
+          unitAlias: null,
+          variableId: 'VAR',
+          variableAnchor: 'VAR',
+          bookletName: 'BOOKLET',
+          personLogin: 'login',
+          personCode: 'code',
+          personGroup: 'group'
+        }
+      ];
+
+      mockCodingListService.getVariablePageMap.mockResolvedValue(new Map([
+        ['VAR', '0']
+      ]));
+      (replayUrlUtil.generateReplayUrl as jest.Mock).mockImplementation(params => (
+        `${params.serverUrl}/#/replay?auth=${params.authToken}&workspaceId=${params.workspaceId ?? ''}`
+      ));
+
+      const result = await service.generateReplayUrlsForItemsBulk(
+        7,
+        items,
+        'http://example.com',
+        'token-123'
+      );
+
+      expect(replayUrlUtil.generateReplayUrl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          authToken: 'token-123',
+          workspaceId: undefined
+        })
+      );
+      expect(result[0].replayUrl).toBe(
+        'http://example.com/#/replay?auth=token-123&workspaceId='
+      );
+    });
   });
 });

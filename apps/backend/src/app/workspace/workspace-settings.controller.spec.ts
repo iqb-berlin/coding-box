@@ -1,7 +1,15 @@
 import { Repository } from 'typeorm';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { WorkspaceSettingsController } from './workspace-settings.controller';
 import { Setting } from '../database/entities/setting.entity';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { WorkspaceGuard } from '../admin/workspace/workspace.guard';
+import { AccessLevelGuard } from '../admin/workspace/access-level.guard';
+import {
+  DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
+  DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS
+} from '../../../../../api-dto/workspaces/workspace-setting-defaults';
 
 interface TransactionalSettingRepositoryMock {
   findOne: jest.Mock<Promise<Setting | null>, [unknown]>;
@@ -10,6 +18,7 @@ interface TransactionalSettingRepositoryMock {
 }
 
 interface SettingRepositoryMock extends TransactionalSettingRepositoryMock {
+  delete: jest.Mock<Promise<{ affected?: number | null }>, [unknown]>;
   manager: {
     transaction: jest.Mock;
   };
@@ -30,6 +39,8 @@ describe('WorkspaceSettingsController', () => {
       findOne: jest.fn(),
       create: jest.fn((setting: Partial<Setting>) => setting as Setting),
       save: jest.fn((setting: Setting) => Promise.resolve(setting)),
+      delete: jest.fn<Promise<{ affected?: number | null }>, [unknown]>()
+        .mockResolvedValue({ affected: 1 }),
       manager: {
         transaction: jest.fn((
           callback: (entityManager: {
@@ -43,6 +54,27 @@ describe('WorkspaceSettingsController', () => {
     controller = new WorkspaceSettingsController(
       settingRepository as unknown as Repository<Setting>
     );
+  });
+
+  it('protects the settings controller with workspace auth guards', () => {
+    expect(Reflect.getMetadata(GUARDS_METADATA, WorkspaceSettingsController)).toEqual([
+      JwtAuthGuard,
+      WorkspaceGuard
+    ]);
+  });
+
+  it.each([
+    'createWorkspaceSettings',
+    'createWorkspaceSetting',
+    'updateWorkspaceSetting',
+    'deleteWorkspaceSetting'
+  ] as const)('requires study manager access for %s', methodName => {
+    const handler = WorkspaceSettingsController.prototype[methodName];
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      AccessLevelGuard
+    ]);
+    expect(Reflect.getMetadata('accessLevel', handler)).toBe(3);
   });
 
   it('returns the default coding statistics auto-fetch setting disabled when it is missing', async () => {
@@ -115,6 +147,58 @@ describe('WorkspaceSettingsController', () => {
     });
   });
 
+  it('returns replay URL export auth mode by default when it is missing', async () => {
+    settingRepository.findOne.mockResolvedValue(null);
+
+    await expect(
+      controller.getWorkspaceSetting(5, 'replay-url-export-mode')
+    ).resolves.toEqual({
+      id: 0,
+      key: 'workspace-5-replay-url-export-mode',
+      value: JSON.stringify({ mode: 'auth' }),
+      description:
+        'Controls whether exported replay URLs use temporary auth tokens or workspace login links'
+    });
+  });
+
+  it('returns replay URL export token duration by default when it is missing', async () => {
+    settingRepository.findOne.mockResolvedValue(null);
+
+    await expect(
+      controller.getWorkspaceSetting(5, 'replay-url-export-token-duration-days')
+    ).resolves.toEqual({
+      id: 0,
+      key: 'workspace-5-replay-url-export-token-duration-days',
+      value: JSON.stringify({
+        durationDays: DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS
+      }),
+      description: 'Controls how many days exported auth replay URLs stay valid'
+    });
+  });
+
+  it('returns auth session idle timeout by default when it is missing', async () => {
+    settingRepository.findOne.mockResolvedValue(null);
+
+    await expect(
+      controller.getWorkspaceSetting(5, 'auth-session-idle-timeout-minutes')
+    ).resolves.toEqual({
+      id: 0,
+      key: 'workspace-5-auth-session-idle-timeout-minutes',
+      value: JSON.stringify({
+        timeoutMinutes: DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES
+      }),
+      description: 'Controls after how many inactive minutes users must reauthenticate'
+    });
+  });
+
+  it('returns not found for an unknown missing workspace setting', async () => {
+    settingRepository.findOne.mockResolvedValue(null);
+
+    await expect(
+      controller.getWorkspaceSetting(5, 'unknown-setting')
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it('saves workspace settings in a single transaction', async () => {
     transactionalSettingRepository.findOne.mockResolvedValue(null);
 
@@ -180,5 +264,28 @@ describe('WorkspaceSettingsController', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(settingRepository.manager.transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects updating a setting ID from another workspace', async () => {
+    await expect(
+      controller.updateWorkspaceSetting(
+        5,
+        'workspace-6-replay-url-export-mode',
+        { value: JSON.stringify({ mode: 'auth' }) }
+      )
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(settingRepository.findOne).not.toHaveBeenCalled();
+  });
+
+  it('rejects deleting a setting ID from another workspace', async () => {
+    await expect(
+      controller.deleteWorkspaceSetting(
+        5,
+        'workspace-6-replay-url-export-mode'
+      )
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(settingRepository.delete).not.toHaveBeenCalled();
   });
 });

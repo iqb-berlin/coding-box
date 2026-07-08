@@ -356,6 +356,36 @@ describe('CodingManagementManualComponent', () => {
     expect(loadCodingFreshnessSpy).toHaveBeenCalledWith({ force: true });
   });
 
+  it('should keep a suppressed manual refresh forced after a background guard clears', () => {
+    component.selectedManualTabIndex = 3;
+    const componentInternals = component as unknown as {
+      pendingManualStateRefreshAfterBackgroundJob: boolean;
+      pendingForcedManualStateRefreshAfterBackgroundJob: boolean;
+      refreshPendingManualStatusAfterBackgroundJob(): void;
+      loadManualTabData(
+        tab: string,
+        options?: { reloadCodingJobs?: boolean; forceRefresh?: boolean }
+      ): void;
+      loadCodingFreshness(options?: { force?: boolean }): void;
+    };
+    componentInternals.pendingManualStateRefreshAfterBackgroundJob = true;
+    componentInternals.pendingForcedManualStateRefreshAfterBackgroundJob = true;
+    const loadManualTabDataSpy = jest
+      .spyOn(componentInternals, 'loadManualTabData')
+      .mockImplementation();
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+
+    componentInternals.refreshPendingManualStatusAfterBackgroundJob();
+
+    expect(loadManualTabDataSpy).toHaveBeenCalledWith('execution', {
+      reloadCodingJobs: false,
+      forceRefresh: true
+    });
+    expect(loadCodingFreshnessSpy).toHaveBeenCalled();
+  });
+
   it('should flag duplicate findings as diagnostic when aggregation is disabled', () => {
     component.responseAnalysis = {
       emptyResponses: { total: 0, totalUncoded: 0, items: [] },
@@ -1961,6 +1991,94 @@ describe('CodingManagementManualComponent', () => {
 
     expect(reloadCodingJobsListSpy).toHaveBeenCalledTimes(1);
     expect(reloadCodingJobsListSpy).toHaveBeenCalledWith('active');
+  });
+
+  it('should still reveal execution data when a background guard suppresses status checks', () => {
+    component.selectedManualTabIndex = 3;
+    component.autoRefreshManualCodingJobs = false;
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      hasLoadedManualCodingJobRefreshSetting: boolean;
+      pendingManualStateRefreshAfterBackgroundJob: boolean;
+      shouldSuppressCodingStatusChecks(): boolean;
+      loadCodingProgressOverview(): void;
+      loadCaseCoverageOverview(): void;
+      loadWorkspaceKappaSummary(): void;
+      loadCodingFreshness(options?: { force?: boolean }): void;
+      reloadCodingJobsList(reloadScope?: string): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
+    jest
+      .spyOn(componentInternals, 'shouldSuppressCodingStatusChecks')
+      .mockReturnValue(true);
+    const codingProgressSpy = jest
+      .spyOn(componentInternals, 'loadCodingProgressOverview')
+      .mockImplementation();
+    const caseCoverageSpy = jest
+      .spyOn(componentInternals, 'loadCaseCoverageOverview')
+      .mockImplementation();
+    const kappaSummarySpy = jest
+      .spyOn(componentInternals, 'loadWorkspaceKappaSummary')
+      .mockImplementation();
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+    const reloadCodingJobsListSpy = jest
+      .spyOn(componentInternals, 'reloadCodingJobsList')
+      .mockImplementation();
+
+    component.refreshManualCodingPlanning();
+
+    expect(component.shouldRenderManualTabData('execution')).toBe(true);
+    expect(componentInternals.pendingManualStateRefreshAfterBackgroundJob).toBe(true);
+    expect(codingProgressSpy).not.toHaveBeenCalled();
+    expect(caseCoverageSpy).not.toHaveBeenCalled();
+    expect(kappaSummarySpy).not.toHaveBeenCalled();
+    expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
+    expect(reloadCodingJobsListSpy).toHaveBeenCalledWith('active');
+  });
+
+  it('should still reveal training data when a background guard suppresses status checks', () => {
+    component.selectedManualTabIndex = 2;
+    component.autoRefreshManualCodingJobs = false;
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      hasLoadedManualCodingJobRefreshSetting: boolean;
+      pendingManualStateRefreshAfterBackgroundJob: boolean;
+      shouldSuppressCodingStatusChecks(): boolean;
+      reloadCodingJobsList(reloadScope?: string): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
+    jest
+      .spyOn(componentInternals, 'shouldSuppressCodingStatusChecks')
+      .mockReturnValue(true);
+    const reloadCodingJobsListSpy = jest
+      .spyOn(componentInternals, 'reloadCodingJobsList')
+      .mockImplementation();
+
+    component.refreshManualCodingPlanning();
+
+    expect(component.shouldRenderManualTabData('training')).toBe(true);
+    expect(component.shouldShowManualTabLoadHint('training')).toBe(false);
+    expect(componentInternals.pendingManualStateRefreshAfterBackgroundJob).toBe(true);
+    expect(reloadCodingJobsListSpy).toHaveBeenCalledWith('active');
+  });
+
+  it('should show a manual load hint for preparation data', () => {
+    component.selectedManualTabIndex = 0;
+    component.autoRefreshManualCodingJobs = false;
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      hasLoadedManualCodingJobRefreshSetting: boolean;
+      loadedManualTabData: Record<string, boolean>;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
+    componentInternals.loadedManualTabData.preparation = false;
+
+    expect(component.shouldShowManualTabLoadHint('preparation')).toBe(true);
   });
 
   it('should reload only the targeted coding jobs table', () => {

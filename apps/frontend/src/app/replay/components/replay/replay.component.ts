@@ -39,7 +39,7 @@ import { UnitsReplayComponent } from '../units-replay/units-replay.component';
 import { CodeSelectorComponent } from '../../../coding/components/code-selector/code-selector.component';
 import { CodingJobCommentDialogComponent } from '../../../coding/components/coding-job-comment-dialog/coding-job-comment-dialog.component';
 import { NavigateCodingCasesDialogComponent, NavigateCodingCasesDialogData } from '../navigate-coding-cases-dialog/navigate-coding-cases-dialog.component';
-import { ReplayCodingService } from '../../services/replay-coding.service';
+import { ReplayCodingRecoverySnapshot, ReplayCodingService, SavedCode } from '../../services/replay-coding.service';
 import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { hasManualInstruction } from '../../../coding/utils/manual-coding.util';
@@ -49,6 +49,7 @@ import {
   REPLAY_WORKSPACE_TOKEN_SCOPES,
   WorkspaceTokenScope
 } from '../../../core/services/auth-session.config';
+import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 
 interface ReplayUnitPayload {
   unitDef: FilesDto[];
@@ -66,6 +67,21 @@ interface ReplayUnitPayload {
 interface PendingReplayNotesCommit {
   variableId: string;
   notes: string;
+}
+
+type ReplayRecoveryMode = 'coding' | 'coding-decision';
+
+interface ReplayRecoveryDraft {
+  workspaceId: number;
+  codingJobId: number | null;
+  mode?: ReplayRecoveryMode;
+  currentUnitIndex: number;
+  testPerson: string;
+  unitId: string;
+  page?: string;
+  anchor?: string;
+  originResponseId: number | null;
+  coding: ReplayCodingRecoverySnapshot;
 }
 
 @Component({
@@ -101,6 +117,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private translateService = inject(TranslateService);
   codingService = inject(ReplayCodingService);
   private codingJobBackendService = inject(CodingJobBackendService);
+  private sessionRecoveryService = inject(SessionRecoveryService);
 
   player: string = '';
   unitDef: string = '';
@@ -131,10 +148,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private codingProgressLoadedForJobKey: string | null = null;
   private activeStatusUpdatedForJobKey: string | null = null;
   private authBootstrapSubscription: Subscription | null = null;
+  private sessionRecoverySubscription: Subscription | null = null;
   private replayNotesCommitSubscription: Subscription | null = null;
+  private unregisterRecoveryProvider: (() => void) | null = null;
   private readonly replayNotesCommitSubject = new Subject<PendingReplayNotesCommit>();
   private replayReAuthenticationPending = false;
   private replayTokenRefreshRunning = false;
+  private replayRecoveryRestorePromise: Promise<void> | null = null;
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
   @ViewChild(CodeSelectorComponent) codeSelectorComponent: CodeSelectorComponent | undefined;
   @ViewChild('watermark')
@@ -165,6 +185,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private readonly ANCHOR_HIGHLIGHT_MAX_ATTEMPTS = 40;
   private readonly REPLAY_NOTES_COMMIT_DEBOUNCE_MS = 750;
   private readonly REPLAY_NOTES_COMMIT_DEDUPE_MS = 1000;
+  private readonly replayRecoveryKey = 'replay-active-coding-state';
   private lastReplayNotesCommitKey: string | null = null;
   private replayNotesCommitDedupeTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -178,6 +199,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   ngOnInit(): void {
     this.replayStartTime = performance.now();
+    this.unregisterRecoveryProvider = this.sessionRecoveryService.registerProvider({
+      key: this.replayRecoveryKey,
+      capture: () => this.createReplayRecoveryDraft()
+    });
     this.authBootstrapSubscription = this.appService.authBootstrapStatus$.subscribe(status => {
       if (status === 'session-expired') {
         this.replayReAuthenticationPending = true;
@@ -186,9 +211,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
       if (status === 'ready' && this.replayReAuthenticationPending) {
         this.replayReAuthenticationPending = false;
-        this.refreshReplayAuthTokenAfterReAuthentication().catch(() => undefined);
+        this.restoreReplayAfterReAuthentication().catch(() => undefined);
       }
     });
+    this.sessionRecoverySubscription = this.sessionRecoveryService.restore$
+      .subscribe(() => this.restoreReplayAfterReAuthentication().catch(() => undefined));
     this.replayNotesCommitSubscription = this.replayNotesCommitSubject
       .pipe(debounceTime(this.REPLAY_NOTES_COMMIT_DEBOUNCE_MS))
       .subscribe(commit => this.sendReplayNotesCommitted(commit.variableId, commit.notes));
@@ -285,6 +312,24 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
 
     await this.refreshReplayAuthTokenForWorkspace(workspaceId);
+  }
+
+  private async restoreReplayAfterReAuthentication(): Promise<void> {
+    if (this.replayRecoveryRestorePromise) {
+      await this.replayRecoveryRestorePromise;
+      return;
+    }
+
+    this.replayRecoveryRestorePromise = (async () => {
+      await this.refreshReplayAuthTokenAfterReAuthentication();
+      await this.restoreReplayRecoveryDraft();
+    })();
+
+    try {
+      await this.replayRecoveryRestorePromise;
+    } finally {
+      this.replayRecoveryRestorePromise = null;
+    }
   }
 
   private async refreshReplayAuthTokenForWorkspace(workspaceId: number): Promise<boolean> {
@@ -428,8 +473,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.resetUnitData();
         this.authToken = await this.getAuthToken();
         const queryParams = await firstValueFrom(this.route.queryParams);
+        let restoredReplayRecovery = false;
         this.workspaceId = this.getWorkspaceIdFromQueryParams(queryParams) ||
           this.getWorkspaceIdFromAuthToken(this.authToken);
+        if (this.workspaceId > 0) {
+          this.appService.selectedWorkspaceId = this.workspaceId;
+        }
         await this.refreshExpiredReplayAuthToken(this.workspaceId);
         this.codingService.setAuthToken(this.authToken);
         const workspace = this.workspaceId ? String(this.workspaceId) : undefined;
@@ -537,6 +586,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
                   await this.codingService.loadSavedCodingProgress(this.workspaceId, jobId);
                   this.codingProgressLoadedForJobKey = jobKey;
                 }
+                restoredReplayRecovery = await this.restoreReplayRecoveryDraft();
                 if (!this.isReviewMode &&
                   !this.isCodingIssueReviewMode &&
                   !this.codingService.isCompletedJobReview &&
@@ -586,8 +636,16 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
           const testPersonInput = this.testPersonInput();
           const unitIdInput = this.unitIdInput();
+          const replayWorkspaceId = this.workspaceId || Number(workspace);
 
-          if (this.isPrintMode && params.unitId) {
+          if (restoredReplayRecovery && !this.isPrintMode) {
+            if (this.canLoadReplayWithCurrentAuth(replayWorkspaceId)) {
+              await this.loadAndApplyUnitData(replayWorkspaceId, this.getReplayRequestAuthToken());
+            } else {
+              this.storeErrorInStatistics('QueryError');
+              ReplayComponent.throwError('QueryError');
+            }
+          } else if (this.isPrintMode && params.unitId) {
             this.unitId = params.unitId;
             if (this.canLoadReplayWithCurrentAuth(Number(workspace))) {
               await this.loadAndApplyUnitData(Number(workspace), this.getReplayRequestAuthToken());
@@ -1067,13 +1125,203 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.codingService.resetCodingData();
   }
 
+  private createReplayRecoveryDraft(): ReplayRecoveryDraft | null {
+    if (!this.canUseReplayRecovery()) {
+      return null;
+    }
+
+    const codingSnapshot = this.codingService.createRecoverySnapshot();
+    if (!codingSnapshot) {
+      return null;
+    }
+
+    return {
+      workspaceId: this.workspaceId,
+      codingJobId: this.codingService.codingJobId,
+      mode: this.getReplayRecoveryMode(),
+      currentUnitIndex: this.unitsData?.currentUnitIndex ?? this.currentUnitIndex,
+      testPerson: this.testPerson,
+      unitId: this.unitId,
+      page: this.page,
+      anchor: this.anchor,
+      originResponseId: this.originResponseId,
+      coding: codingSnapshot
+    };
+  }
+
+  private async restoreReplayRecoveryDraft(): Promise<boolean> {
+    if (!this.canUseReplayRecovery()) {
+      return false;
+    }
+
+    const draft = this.sessionRecoveryService.peekDraft<ReplayRecoveryDraft>(this.replayRecoveryKey);
+    if (!draft || !this.isReplayRecoveryDraftForCurrentContext(draft)) {
+      return false;
+    }
+
+    if (this.unitsData && Number.isInteger(draft.currentUnitIndex)) {
+      const restoredIndex = Math.min(
+        Math.max(draft.currentUnitIndex, 0),
+        Math.max(this.unitsData.units.length - 1, 0)
+      );
+      this.unitsData = {
+        ...this.unitsData,
+        currentUnitIndex: restoredIndex
+      };
+      this.currentUnitIndex = restoredIndex;
+    }
+
+    if (draft.testPerson) {
+      this.testPerson = draft.testPerson;
+    }
+    if (draft.unitId) {
+      this.unitId = draft.unitId;
+    }
+    this.page = draft.page ?? this.page;
+    this.anchor = draft.anchor ?? this.anchor;
+
+    const restored = this.codingService.restoreRecoverySnapshot(draft.coding);
+    if (!restored) {
+      return false;
+    }
+
+    if (this.isCodingDecisionMode) {
+      const notifiedOpener = this.notifyDecisionReplayRecovery(draft);
+      if (notifiedOpener) {
+        this.sessionRecoveryService.clearDraft(this.replayRecoveryKey);
+      }
+      return notifiedOpener;
+    }
+
+    try {
+      const saved = await this.codingService.saveRecoveredCodingState(this.workspaceId, this.unitsData);
+      if (!saved) {
+        return false;
+      }
+      this.sessionRecoveryService.clearDraft(this.replayRecoveryKey);
+      return true;
+    } catch {
+      this.sessionRecoveryService.saveDraft(this.replayRecoveryKey, draft);
+      return false;
+    }
+  }
+
+  private isReplayRecoveryDraftForCurrentContext(draft: ReplayRecoveryDraft): boolean {
+    if (draft.workspaceId && (!this.workspaceId || draft.workspaceId !== this.workspaceId)) {
+      return false;
+    }
+
+    const draftMode = draft.mode ?? 'coding';
+    if (draftMode !== this.getReplayRecoveryMode()) {
+      return false;
+    }
+
+    if (draftMode === 'coding-decision') {
+      return !!draft.originResponseId &&
+        !!this.originResponseId &&
+        draft.originResponseId === this.originResponseId;
+    }
+
+    const currentJobId = this.codingService.codingJobId || this.unitsData?.id || null;
+    return !draft.codingJobId || (!!currentJobId && draft.codingJobId === currentJobId);
+  }
+
+  private getReplayRecoveryMode(): ReplayRecoveryMode {
+    return this.isCodingDecisionMode ? 'coding-decision' : 'coding';
+  }
+
+  private canUseReplayRecovery(): boolean {
+    return this.isCodingMode &&
+      !this.isReviewMode &&
+      !this.isCodingIssueReviewMode;
+  }
+
+  private notifyDecisionReplayRecovery(draft: ReplayRecoveryDraft): boolean {
+    if (!window.opener || !draft.originResponseId) {
+      return false;
+    }
+
+    const selectedCodes = this.getEffectiveRecoverySelectedCodes(draft.coding);
+    const notesByCompositeKey = new Map(draft.coding.notes || []);
+    let notified = false;
+
+    selectedCodes.forEach((selectedCode, compositeKey) => {
+      const keyParts = this.parseRecoveryCompositeKey(compositeKey);
+      if (!keyParts) {
+        return;
+      }
+
+      const notes = notesByCompositeKey.get(compositeKey) || '';
+      window.opener.postMessage({
+        type: 'replayCodeSelected',
+        testPerson: keyParts.testPerson,
+        unitId: keyParts.unitId,
+        variableId: keyParts.variableId,
+        code: selectedCode.code ?? String(selectedCode.id),
+        score: selectedCode.score ?? null,
+        notes,
+        responseId: draft.originResponseId
+      }, '*');
+      notesByCompositeKey.delete(compositeKey);
+      notified = true;
+    });
+
+    notesByCompositeKey.forEach((notes, compositeKey) => {
+      const keyParts = this.parseRecoveryCompositeKey(compositeKey);
+      if (!keyParts) {
+        return;
+      }
+
+      window.opener.postMessage({
+        type: 'replayNotesCommitted',
+        testPerson: keyParts.testPerson,
+        unitId: keyParts.unitId,
+        variableId: keyParts.variableId,
+        notes,
+        responseId: draft.originResponseId
+      }, '*');
+      notified = true;
+    });
+
+    return notified;
+  }
+
+  private getEffectiveRecoverySelectedCodes(snapshot: ReplayCodingRecoverySnapshot): Map<string, SavedCode> {
+    const selectedCodes = new Map<string, SavedCode>(snapshot.selectedCodes || []);
+    (snapshot.pendingSelections || []).forEach(([compositeKey, selectedCode]) => {
+      if (selectedCode === null) {
+        selectedCodes.delete(compositeKey);
+      } else {
+        selectedCodes.set(compositeKey, selectedCode);
+      }
+    });
+    return selectedCodes;
+  }
+
+  private parseRecoveryCompositeKey(compositeKey: string): { testPerson: string; unitId: string; variableId: string } | null {
+    const parts = compositeKey.split('::');
+    if (parts.length < 4) {
+      return null;
+    }
+
+    return {
+      testPerson: parts[0],
+      unitId: parts[2],
+      variableId: parts[3]
+    };
+  }
+
   ngOnDestroy(): void {
     this.routerSubscription?.unsubscribe();
     this.authBootstrapSubscription?.unsubscribe();
+    this.sessionRecoverySubscription?.unsubscribe();
     this.replayNotesCommitSubscription?.unsubscribe();
+    this.unregisterRecoveryProvider?.();
     this.routerSubscription = null;
     this.authBootstrapSubscription = null;
+    this.sessionRecoverySubscription = null;
     this.replayNotesCommitSubscription = null;
+    this.unregisterRecoveryProvider = null;
     this.cancelPendingAnchorHighlight();
     this.resetSnackBars();
     this.watermarkObserver?.disconnect();
