@@ -251,6 +251,32 @@ describe('ReplayComponent', () => {
     expect(component.codingService.suppressGeneralInstructions).toBe(true);
   });
 
+  it('should sync the selected workspace from replay query params', async () => {
+    const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      anchor: 'VAR1'
+    };
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'coding',
+      workspaceId: '47'
+    };
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(appService.selectedWorkspaceId).toBe(47);
+  });
+
   it('should keep server timings from replay payload', () => {
     expect((component as unknown as { serverTimings: Record<string, number> | null }).serverTimings)
       .toEqual({

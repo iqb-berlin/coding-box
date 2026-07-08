@@ -475,6 +475,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         const queryParams = await firstValueFrom(this.route.queryParams);
         this.workspaceId = this.getWorkspaceIdFromQueryParams(queryParams) ||
           this.getWorkspaceIdFromAuthToken(this.authToken);
+        if (this.workspaceId > 0) {
+          this.appService.selectedWorkspaceId = this.workspaceId;
+        }
         await this.refreshExpiredReplayAuthToken(this.workspaceId);
         this.codingService.setAuthToken(this.authToken);
         const workspace = this.workspaceId ? String(this.workspaceId) : undefined;
