@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, Injector, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import {
   EMPTY,
@@ -9,12 +9,18 @@ import {
   map,
   of,
   shareReplay,
+  switchMap,
   tap,
   throwError
 } from 'rxjs';
 import Keycloak from 'keycloak-js';
 import { SERVER_URL } from '../../injection-tokens';
 import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
+import { AppService, WorkspaceTokenPolicy } from '../../core/services/app.service';
+import {
+  DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
+  EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+} from '../../core/services/auth-session.config';
 import { ExpectedCombinationDto } from '../../../../../../api-dto/coding/expected-combination.dto';
 import {
   ValidateCodingCompletenessResponseDto
@@ -33,7 +39,10 @@ import {
   StartCodingFreshnessJobDto
 } from '../../../../../../api-dto/coding/coding-freshness.dto';
 import { AutocodingReadinessDto } from '../../../../../../api-dto/coding/autocoding-readiness.dto';
-import { ResponseMatchingFlag } from '../../ws-admin/services/workspace-settings.service';
+import {
+  ResponseMatchingFlag,
+  WorkspaceSettingsService
+} from '../../ws-admin/services/workspace-settings.service';
 import { CodingBackgroundJobsService } from './coding-background-jobs.service';
 
 interface ExternalCodingImportWithPreviewDto {
@@ -242,7 +251,9 @@ export interface AppliedResultsOverview {
 export class TestPersonCodingService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
+  private injector = inject(Injector);
   private keycloak = inject(Keycloak, { optional: true });
+  private workspaceSettingsService = inject(WorkspaceSettingsService);
   private codingBackgroundJobsService = inject(CodingBackgroundJobsService);
   private autoCodingCompletedSubject = new Subject<AutoCodingCompletedEvent>();
   private testResultsChangedSubject = new Subject<TestResultsChangedEvent>();
@@ -1770,16 +1781,18 @@ export class TestPersonCodingService {
       calculationLevel
     );
 
-    return this.http
-      .get(
-        `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa/export/xlsx`,
-        {
-          headers: this.authHeader,
-          params,
-          responseType: 'blob',
-          context: suppressGlobalHttpErrorContext()
-        }
-      );
+    return this.getReplayExportAuthToken(workspaceId).pipe(
+      switchMap(authToken => this.http
+        .get(
+          `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa/export/xlsx`,
+          {
+            headers: this.authHeader,
+            params: params.set('authToken', authToken),
+            responseType: 'blob',
+            context: suppressGlobalHttpErrorContext()
+          }
+        ))
+    );
   }
 
   exportCohensKappaStatisticsAsCsv(
@@ -1849,6 +1862,39 @@ export class TestPersonCodingService {
     }
 
     return scopedParams;
+  }
+
+  private getReplayExportAuthToken(workspaceId: number): Observable<string> {
+    return this.workspaceSettingsService.getReplayUrlExportMode(workspaceId)
+      .pipe(
+        switchMap(mode => (
+          mode === 'auth' ?
+            this.createExternalReplayToken(workspaceId) :
+            of('')
+        ))
+      );
+  }
+
+  private createExternalReplayToken(workspaceId: number): Observable<string> {
+    const appService = this.injector.get(AppService);
+    return appService.getWorkspaceTokenPolicy().pipe(
+      map(policy => this.getExternalReplayTokenDurationDays(policy)),
+      switchMap(durationDays => appService.createOwnToken(
+        workspaceId,
+        durationDays,
+        EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+      ))
+    );
+  }
+
+  private getExternalReplayTokenDurationDays(policy: WorkspaceTokenPolicy): number {
+    const maxDurations = EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+      .map(scope => policy.scopes[scope]?.maxDurationDays)
+      .filter((duration): duration is number => Number.isInteger(duration) && duration >= 1);
+
+    return maxDurations.length ?
+      Math.min(...maxDurations) :
+      DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
   }
 
   getWorkspaceCohensKappaSummary(

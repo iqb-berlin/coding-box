@@ -162,7 +162,8 @@ export class CodingReplayService {
       personCode: string;
       personGroup: string;
     }>,
-    serverUrl: string
+    serverUrl: string,
+    authToken = ''
   ): Promise<
     Array<{
       responseId: number;
@@ -224,7 +225,8 @@ export class CodingReplayService {
           workspaceId,
           serverUrl,
           variablePage,
-          ''
+          authToken,
+          !authToken
         );
         return { ...item, replayUrl };
       } catch (error) {
@@ -356,7 +358,8 @@ export class CodingReplayService {
     workspaceId: number,
     serverUrl: string,
     variablePage: string,
-    authToken: string
+    authToken: string,
+    includeWorkspaceId = true
   ): string {
     return generateReplayUrl({
       serverUrl,
@@ -368,7 +371,7 @@ export class CodingReplayService {
       variablePage,
       variableAnchor: metadata.variableAnchor,
       authToken,
-      workspaceId
+      workspaceId: includeWorkspaceId ? workspaceId : undefined
     });
   }
 

@@ -143,7 +143,8 @@ export class CodingItemBuilderService {
         unitId: unitKey,
         variablePage,
         variableAnchor,
-        authToken
+        authToken,
+        workspaceId: authToken ? undefined : workspaceId
       });
 
       return {
@@ -223,7 +224,8 @@ export class CodingItemBuilderService {
         unitId: unitKey,
         variablePage,
         variableAnchor,
-        authToken
+        authToken,
+        workspaceId: authToken ? undefined : workspaceId
       });
 
       const baseItem: CodingItem & Record<string, unknown> = {
@@ -328,7 +330,8 @@ export class CodingItemBuilderService {
         unitId: unitKey,
         variablePage,
         variableAnchor,
-        authToken
+        authToken,
+        workspaceId: authToken ? undefined : workspaceId
       });
 
       const baseItem: CodingItem & Record<string, unknown> = {

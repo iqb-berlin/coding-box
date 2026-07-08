@@ -11,6 +11,7 @@
 }
 
 .token-settings-card,
+.replay-url-export-mode-card,
 .access-rights-card,
 .journal-card,
 .database-export-card,
@@ -57,6 +58,7 @@ mat-card-content {
 }
 
 .token-container,
+.replay-url-export-mode-container,
 .missings-profiles-container,
 .database-export-container,
 .processes-container,
@@ -88,6 +90,10 @@ h4 {
   margin-bottom: 20px;
   color: #666;
   line-height: 1.5;
+}
+
+.replay-url-export-mode {
+  margin-bottom: 0;
 }
 
 .full-width {
@@ -192,6 +198,7 @@ button mat-icon {
   }
 
   .token-settings-card,
+  .replay-url-export-mode-card,
   .access-rights-card,
   .journal-card,
   .database-export-card,

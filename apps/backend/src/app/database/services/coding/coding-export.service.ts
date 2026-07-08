@@ -763,7 +763,8 @@ export class CodingExportService {
         unitId: unitName,
         variablePage,
         variableAnchor,
-        authToken
+        authToken,
+        workspaceId: authToken ? undefined : workspaceId
       });
     }
 
@@ -780,7 +781,8 @@ export class CodingExportService {
       unitId: unitName,
       variablePage,
       variableAnchor,
-      authToken
+      authToken,
+      workspaceId: authToken ? undefined : workspaceId
     });
   }
 
