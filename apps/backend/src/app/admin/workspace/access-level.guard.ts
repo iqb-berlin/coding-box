@@ -48,7 +48,9 @@ export class AccessLevelGuard implements CanActivate {
     }
 
     // Get workspace ID from route params
-    const workspaceId = parseWorkspaceId(request.params.workspace_id);
+    const workspaceId = parseWorkspaceId(
+      request.params.workspace_id ?? request.params.workspaceId
+    );
 
     if (!workspaceId) {
       throw new UnauthorizedException('Workspace ID not found in request');

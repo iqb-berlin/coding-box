@@ -12,6 +12,7 @@ import {
   EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES,
   REPLAY_WORKSPACE_TOKEN_SCOPES
 } from '../../core/services/auth-session.config';
+import { WorkspaceSettingsService } from '../../ws-admin/services/workspace-settings.service';
 
 @Injectable({
   providedIn: 'root'
@@ -20,9 +21,14 @@ export class CodingExportService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
   private appService = inject(AppService);
+  private workspaceSettingsService = inject(WorkspaceSettingsService);
 
   getCodingListAsCsv(workspace_id: number, trainingRequired?: boolean): Observable<Blob> {
-    return this.createExternalReplayToken(workspace_id).pipe(
+    return this.getReplayExportAuthToken(
+      workspace_id,
+      true,
+      () => this.createExternalReplayToken(workspace_id)
+    ).pipe(
       switchMap(token => {
         let params = new HttpParams()
           .set('authToken', token)
@@ -42,7 +48,11 @@ export class CodingExportService {
   }
 
   getCodingListAsExcel(workspace_id: number, trainingRequired?: boolean): Observable<Blob> {
-    return this.createExternalReplayToken(workspace_id).pipe(
+    return this.getReplayExportAuthToken(
+      workspace_id,
+      true,
+      () => this.createExternalReplayToken(workspace_id)
+    ).pipe(
       switchMap(token => {
         let params = new HttpParams()
           .set('authToken', token)
@@ -68,12 +78,15 @@ export class CodingExportService {
     includeResponseValues: boolean = true,
     includeGeoGebraResponseValues: boolean = false
   ): Observable<Blob> {
-    return this.appService.createOwnToken(
+    return this.getReplayExportAuthToken(
       workspace_id,
-      API_SPECIAL_TOKEN_DURATION_DAYS,
-      REPLAY_WORKSPACE_TOKEN_SCOPES
+      includeReplayUrls,
+      () => this.appService.createOwnToken(
+        workspace_id,
+        API_SPECIAL_TOKEN_DURATION_DAYS,
+        REPLAY_WORKSPACE_TOKEN_SCOPES
+      ).pipe(catchError(() => of('')))
     ).pipe(
-      catchError(() => of('')),
       switchMap(token => {
         const params = new HttpParams()
           .set('authToken', token)
@@ -101,12 +114,15 @@ export class CodingExportService {
     includeGeoGebraFiles: boolean = false,
     includeGeoGebraResponseValues: boolean = false
   ): Observable<Blob> {
-    return this.appService.createOwnToken(
+    return this.getReplayExportAuthToken(
       workspace_id,
-      API_SPECIAL_TOKEN_DURATION_DAYS,
-      REPLAY_WORKSPACE_TOKEN_SCOPES
+      includeReplayUrls,
+      () => this.appService.createOwnToken(
+        workspace_id,
+        API_SPECIAL_TOKEN_DURATION_DAYS,
+        REPLAY_WORKSPACE_TOKEN_SCOPES
+      ).pipe(catchError(() => of('')))
     ).pipe(
-      catchError(() => of('')),
       switchMap(token => {
         const params = new HttpParams()
           .set('authToken', token)
@@ -231,13 +247,21 @@ export class CodingExportService {
     includeGeoGebraFiles: boolean = false,
     includeGeoGebraResponseValues: boolean = false
   ): Observable<{ jobId: string; message: string }> {
-    const authToken$ = exportType === 'coding-list' ?
-      this.createExternalReplayToken(workspaceId) :
-      this.appService.createOwnToken(
-        workspaceId,
-        API_SPECIAL_TOKEN_DURATION_DAYS,
-        REPLAY_WORKSPACE_TOKEN_SCOPES
-      ).pipe(catchError(() => of('')));
+    const authToken$ = this.getReplayExportAuthToken(
+      workspaceId,
+      exportType === 'coding-list' || includeReplayUrls,
+      () => {
+        if (exportType === 'coding-list') {
+          return this.createExternalReplayToken(workspaceId);
+        }
+
+        return this.appService.createOwnToken(
+          workspaceId,
+          API_SPECIAL_TOKEN_DURATION_DAYS,
+          REPLAY_WORKSPACE_TOKEN_SCOPES
+        ).pipe(catchError(() => of('')));
+      }
+    );
 
     return authToken$.pipe(
       switchMap(token => {
@@ -260,6 +284,21 @@ export class CodingExportService {
         );
       })
     );
+  }
+
+  private getReplayExportAuthToken(
+    workspaceId: number,
+    includeReplayUrls: boolean,
+    createToken: () => Observable<string>
+  ): Observable<string> {
+    if (!includeReplayUrls) {
+      return of('');
+    }
+
+    return this.workspaceSettingsService.getReplayUrlExportMode(workspaceId)
+      .pipe(
+        switchMap(mode => (mode === 'auth' ? createToken() : of('')))
+      );
   }
 
   private createExternalReplayToken(workspaceId: number): Observable<string> {
