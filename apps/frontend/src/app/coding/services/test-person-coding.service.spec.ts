@@ -50,7 +50,8 @@ describe('TestPersonCodingService', () => {
       }))
     } as unknown as jest.Mocked<AppService>;
     workspaceSettingsServiceMock = {
-      getReplayUrlExportMode: jest.fn().mockReturnValue(of('auth'))
+      getReplayUrlExportMode: jest.fn().mockReturnValue(of('auth')),
+      getReplayUrlExportTokenDurationDays: jest.fn((_: number, maxDurationDays: number) => of(maxDurationDays))
     } as unknown as jest.Mocked<WorkspaceSettingsService>;
 
     // Mock localStorage using Object.defineProperty
@@ -970,9 +971,28 @@ describe('TestPersonCodingService', () => {
         request.params.get('coderIds') === '31' &&
         request.params.get('authToken') === 'replay-auth-token'
       ));
+      expect(workspaceSettingsServiceMock.getReplayUrlExportTokenDurationDays).toHaveBeenCalledWith(123, 90);
       expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(123, 90, ['replay:read']);
       expect(req.request.method).toBe('GET');
       expect(req.request.responseType).toBe('blob');
+      req.flush(mockBlob);
+    });
+
+    it('should use the configured replay token duration for kappa XLSX export links', () => {
+      const mockBlob = new Blob(['xlsx'], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      workspaceSettingsServiceMock.getReplayUrlExportTokenDurationDays.mockReturnValueOnce(of(30));
+
+      service.exportCohensKappaStatisticsAsXlsx(mockWorkspaceId).subscribe(response => {
+        expect(response).toEqual(mockBlob);
+      });
+
+      expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(123, 30, ['replay:read']);
+      const req = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/xlsx` &&
+        request.params.get('authToken') === 'replay-auth-token'
+      ));
       req.flush(mockBlob);
     });
 

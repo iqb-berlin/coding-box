@@ -1878,7 +1878,11 @@ export class TestPersonCodingService {
   private createExternalReplayToken(workspaceId: number): Observable<string> {
     const appService = this.injector.get(AppService);
     return appService.getWorkspaceTokenPolicy().pipe(
-      map(policy => this.getExternalReplayTokenDurationDays(policy)),
+      map(policy => this.getExternalReplayTokenMaxDurationDays(policy)),
+      switchMap(maxDurationDays => this.workspaceSettingsService.getReplayUrlExportTokenDurationDays(
+        workspaceId,
+        maxDurationDays
+      )),
       switchMap(durationDays => appService.createOwnToken(
         workspaceId,
         durationDays,
@@ -1887,7 +1891,7 @@ export class TestPersonCodingService {
     );
   }
 
-  private getExternalReplayTokenDurationDays(policy: WorkspaceTokenPolicy): number {
+  private getExternalReplayTokenMaxDurationDays(policy: WorkspaceTokenPolicy): number {
     const maxDurations = EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
       .map(scope => policy.scopes[scope]?.maxDurationDays)
       .filter((duration): duration is number => Number.isInteger(duration) && duration >= 1);

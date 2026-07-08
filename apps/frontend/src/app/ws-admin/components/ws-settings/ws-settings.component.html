@@ -66,6 +66,34 @@
           </div>
         </div>
       </div>
+      @if (replayUrlExportMode === 'auth') {
+        <div class="setting-item replay-url-export-token-duration">
+          <div class="setting-info">
+            <h4>{{ 'ws-settings.replay-url-export-token-duration-heading' | translate }}</h4>
+            <p>{{ 'ws-settings.replay-url-export-token-duration-description' | translate:{ max: maxTokenDurationDays } }}</p>
+          </div>
+          <div class="setting-control replay-url-export-token-duration-control">
+            <mat-form-field>
+              <mat-label>{{ 'ws-settings.validity-days' | translate }}</mat-label>
+              <input
+                matInput
+                [(ngModel)]="replayUrlExportTokenDurationDays"
+                type="number"
+                [min]="minTokenDurationDays"
+                [max]="maxTokenDurationDays"
+                step="1"/>
+              <mat-hint>{{ 'ws-settings.enter-validity-days' | translate:{ max: maxTokenDurationDays } }}</mat-hint>
+            </mat-form-field>
+            <button
+              mat-raised-button
+              color="primary"
+              [disabled]="!isReplayUrlExportTokenDurationValid()"
+              (click)="saveReplayUrlExportTokenDuration()">
+              <mat-icon>save</mat-icon> {{ 'ws-settings.save-replay-url-export-token-duration' | translate }}
+            </button>
+          </div>
+        </div>
+      }
     </mat-card-content>
   </mat-card>
 

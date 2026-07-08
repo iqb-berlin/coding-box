@@ -6,6 +6,7 @@ import { SERVER_URL } from '../../injection-tokens';
 import { WorkspaceSettings } from '../models/workspace-settings.model';
 import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 import {
+  DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
   DEFAULT_REPLAY_URL_EXPORT_MODE,
   type ReplayUrlExportMode
 } from '../../core/services/auth-session.config';
@@ -25,6 +26,7 @@ export const DEFAULT_RESPONSE_MATCHING_MODE: ResponseMatchingModeDto = {
 };
 
 const REPLAY_URL_EXPORT_MODE_SETTING_KEY = 'replay-url-export-mode';
+const REPLAY_URL_EXPORT_TOKEN_DURATION_DAYS_SETTING_KEY = 'replay-url-export-token-duration-days';
 
 @Injectable({
   providedIn: 'root'
@@ -431,6 +433,49 @@ export class WorkspaceSettingsService {
     );
   }
 
+  getReplayUrlExportTokenDurationDays(
+    workspaceId: number,
+    maxDurationDays = DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS
+  ): Observable<number> {
+    return new Observable(observer => {
+      this.getWorkspaceSetting(
+        workspaceId,
+        REPLAY_URL_EXPORT_TOKEN_DURATION_DAYS_SETTING_KEY,
+        true
+      ).subscribe({
+        next: setting => {
+          observer.next(
+            this.parseReplayUrlExportTokenDurationDays(setting.value, maxDurationDays)
+          );
+          observer.complete();
+        },
+        error: () => {
+          observer.next(
+            this.normalizeReplayUrlExportTokenDurationDays(undefined, maxDurationDays)
+          );
+          observer.complete();
+        }
+      });
+    });
+  }
+
+  setReplayUrlExportTokenDurationDays(
+    workspaceId: number,
+    durationDays: number,
+    maxDurationDays = DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS
+  ): Observable<WorkspaceSettings> {
+    const normalizedDurationDays = this.normalizeReplayUrlExportTokenDurationDays(
+      durationDays,
+      maxDurationDays
+    );
+    return this.setWorkspaceSetting(
+      workspaceId,
+      REPLAY_URL_EXPORT_TOKEN_DURATION_DAYS_SETTING_KEY,
+      JSON.stringify({ durationDays: normalizedDurationDays }),
+      'Controls how many days exported auth replay URLs stay valid'
+    );
+  }
+
   getResponseMatchingMode(
     workspaceId: number
   ): Observable<ResponseMatchingFlag[]> {
@@ -553,6 +598,55 @@ export class WorkspaceSettingsService {
 
   private isReplayUrlExportMode(value: unknown): value is ReplayUrlExportMode {
     return value === 'auth' || value === 'workspaceId';
+  }
+
+  private parseReplayUrlExportTokenDurationDays(value: string, maxDurationDays: number): number {
+    const directValue = Number(value);
+    if (Number.isFinite(directValue)) {
+      return this.normalizeReplayUrlExportTokenDurationDays(directValue, maxDurationDays);
+    }
+
+    try {
+      const parsed = JSON.parse(value) as {
+        durationDays?: unknown;
+      } | number;
+      if (typeof parsed === 'number') {
+        return this.normalizeReplayUrlExportTokenDurationDays(parsed, maxDurationDays);
+      }
+      if (typeof parsed === 'object' && parsed !== null) {
+        return this.normalizeReplayUrlExportTokenDurationDays(
+          Number(parsed.durationDays),
+          maxDurationDays
+        );
+      }
+    } catch {
+      return this.normalizeReplayUrlExportTokenDurationDays(undefined, maxDurationDays);
+    }
+
+    return this.normalizeReplayUrlExportTokenDurationDays(undefined, maxDurationDays);
+  }
+
+  private normalizeReplayUrlExportTokenDurationDays(
+    durationDays: number | undefined,
+    maxDurationDays: number
+  ): number {
+    const normalizedMaxDurationDays = Number.isInteger(maxDurationDays) && maxDurationDays >= 1 ?
+      maxDurationDays :
+      DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
+    const fallbackDurationDays = Math.min(
+      DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
+      normalizedMaxDurationDays
+    );
+
+    if (
+      durationDays === undefined ||
+      !Number.isInteger(durationDays) ||
+      durationDays < 1
+    ) {
+      return fallbackDurationDays;
+    }
+
+    return Math.min(durationDays, normalizedMaxDurationDays);
   }
 
   private getSettingCacheKey(workspaceId: number, key: string): string {

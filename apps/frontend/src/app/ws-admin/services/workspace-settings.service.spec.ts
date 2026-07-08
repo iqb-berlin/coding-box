@@ -213,6 +213,47 @@ describe('WorkspaceSettingsService', () => {
     });
   });
 
+  describe('getReplayUrlExportTokenDurationDays', () => {
+    it('should return parsed replay URL export token duration', () => {
+      service.getReplayUrlExportTokenDurationDays(1, 90).subscribe(val => {
+        expect(val).toBe(45);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/replay-url-export-token-duration-days`);
+      req.flush({ value: '{"durationDays":45}' });
+    });
+
+    it('should clamp replay URL export token duration to the policy maximum', () => {
+      service.getReplayUrlExportTokenDurationDays(1, 60).subscribe(val => {
+        expect(val).toBe(60);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/replay-url-export-token-duration-days`);
+      req.flush({ value: '{"durationDays":90}' });
+    });
+
+    it('should return the policy-clamped default on error', () => {
+      service.getReplayUrlExportTokenDurationDays(1, 60).subscribe(val => {
+        expect(val).toBe(60);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/replay-url-export-token-duration-days`);
+      req.flush({}, { status: 404, statusText: 'Not Found' });
+    });
+  });
+
+  describe('setReplayUrlExportTokenDurationDays', () => {
+    it('should persist the replay URL export token duration', () => {
+      service.setReplayUrlExportTokenDurationDays(1, 45, 90).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        key: 'replay-url-export-token-duration-days',
+        value: '{"durationDays":45}',
+        description: 'Controls how many days exported auth replay URLs stay valid'
+      });
+      req.flush({});
+    });
+  });
+
   describe('setAutoRefreshManualCodingJobs', () => {
     it('should persist the setting', () => {
       service.setAutoRefreshManualCodingJobs(1, false).subscribe();
