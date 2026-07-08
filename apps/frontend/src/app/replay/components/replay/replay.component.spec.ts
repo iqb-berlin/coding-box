@@ -887,6 +887,98 @@ describe('ReplayComponent', () => {
     expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', true);
   });
 
+  it('should load the recovered coding unit instead of stale route params after session recovery', async () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-old',
+      anchor: 'OLD_VAR'
+    };
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'coding',
+      codingJobId: '77',
+      workspaceId: '47'
+    };
+    codingJobBackendServiceMock.getCodingJobUnits.mockReturnValue(of([
+      {
+        responseId: 1,
+        unitName: 'unit-old',
+        unitAlias: 'Old Unit',
+        variableId: 'OLD_VAR',
+        variableAnchor: 'OLD_VAR',
+        variablePage: '0',
+        bookletName: 'person',
+        personLogin: 'valid',
+        personCode: 'test',
+        personGroup: '',
+        isDoubleCoded: false,
+        otherCoders: []
+      },
+      {
+        responseId: 2,
+        unitName: 'unit-new',
+        unitAlias: 'New Unit',
+        variableId: 'NEW_VAR',
+        variableAnchor: 'NEW_VAR',
+        variablePage: '1',
+        bookletName: 'person',
+        personLogin: 'valid',
+        personCode: 'test',
+        personGroup: '',
+        isDoubleCoded: false,
+        otherCoders: []
+      }
+    ]));
+    sessionRecoveryService.saveDraft('replay-active-coding-state', {
+      workspaceId: 47,
+      codingJobId: 77,
+      currentUnitIndex: 1,
+      testPerson: 'valid@test@person',
+      unitId: 'unit-new',
+      page: '1',
+      anchor: 'NEW_VAR',
+      originResponseId: null,
+      coding: {
+        codingJobId: 77,
+        currentVariableId: 'NEW_VAR',
+        selectedCodes: [],
+        pendingSelections: [],
+        openUnitKeys: [],
+        notes: [],
+        codingJobComment: '',
+        codingJobCommentChanged: false
+      }
+    });
+
+    fixture.destroy();
+    replayBackendService.getReplayPayload.mockClear();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(replayBackendService.getReplayPayload).toHaveBeenCalledWith(
+      47,
+      'valid@test@person',
+      'unit-new',
+      'valid-token'
+    );
+    expect(replayBackendService.getReplayPayload).not.toHaveBeenCalledWith(
+      47,
+      'valid@test@person',
+      'unit-old',
+      'valid-token'
+    );
+    expect(component.unitId).toBe('unit-new');
+    expect(component.codingService.currentVariableId).toBe('NEW_VAR');
+    expect(sessionRecoveryService.peekDraft('replay-active-coding-state')).toBeNull();
+  });
+
   it('should replace an expired replay auth token before loading coding job units', async () => {
     const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
     const expiredToken = createUnsignedJwt({

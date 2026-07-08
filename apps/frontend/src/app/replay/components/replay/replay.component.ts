@@ -473,6 +473,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.resetUnitData();
         this.authToken = await this.getAuthToken();
         const queryParams = await firstValueFrom(this.route.queryParams);
+        let restoredReplayRecovery = false;
         this.workspaceId = this.getWorkspaceIdFromQueryParams(queryParams) ||
           this.getWorkspaceIdFromAuthToken(this.authToken);
         if (this.workspaceId > 0) {
@@ -585,7 +586,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
                   await this.codingService.loadSavedCodingProgress(this.workspaceId, jobId);
                   this.codingProgressLoadedForJobKey = jobKey;
                 }
-                await this.restoreReplayRecoveryDraft();
+                restoredReplayRecovery = await this.restoreReplayRecoveryDraft();
                 if (!this.isReviewMode &&
                   !this.isCodingIssueReviewMode &&
                   !this.codingService.isCompletedJobReview &&
@@ -635,8 +636,16 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
           const testPersonInput = this.testPersonInput();
           const unitIdInput = this.unitIdInput();
+          const replayWorkspaceId = this.workspaceId || Number(workspace);
 
-          if (this.isPrintMode && params.unitId) {
+          if (restoredReplayRecovery && !this.isPrintMode) {
+            if (this.canLoadReplayWithCurrentAuth(replayWorkspaceId)) {
+              await this.loadAndApplyUnitData(replayWorkspaceId, this.getReplayRequestAuthToken());
+            } else {
+              this.storeErrorInStatistics('QueryError');
+              ReplayComponent.throwError('QueryError');
+            }
+          } else if (this.isPrintMode && params.unitId) {
             this.unitId = params.unitId;
             if (this.canLoadReplayWithCurrentAuth(Number(workspace))) {
               await this.loadAndApplyUnitData(Number(workspace), this.getReplayRequestAuthToken());

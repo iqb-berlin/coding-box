@@ -27,6 +27,7 @@ export interface ReplayCodingRecoverySnapshot {
   openUnitKeys: string[];
   notes: Array<[string, string]>;
   codingJobComment: string;
+  codingJobCommentChanged?: boolean;
 }
 
 interface CodingContextSnapshot {
@@ -74,6 +75,9 @@ export class ReplayCodingService {
   showScore = false;
   allowComments = true;
   suppressGeneralInstructions = false;
+  private codingJobCommentRevision = 0;
+  private savedCodingJobCommentRevision = 0;
+  private recoveredCodingJobCommentChanged = false;
 
   resetCodingData() {
     this.codingDataRunId += 1;
@@ -106,6 +110,9 @@ export class ReplayCodingService {
     this.showScore = false;
     this.allowComments = true;
     this.suppressGeneralInstructions = false;
+    this.codingJobCommentRevision = 0;
+    this.savedCodingJobCommentRevision = 0;
+    this.recoveredCodingJobCommentChanged = false;
   }
 
   setAuthToken(authToken?: string): void {
@@ -139,7 +146,8 @@ export class ReplayCodingService {
       pendingSelections: Array.from(this.latestRequestedSelectionByKey.entries()),
       openUnitKeys: Array.from(this.openUnitKeys),
       notes: Array.from(this.notes.entries()),
-      codingJobComment: this.codingJobComment
+      codingJobComment: this.codingJobComment,
+      codingJobCommentChanged: this.hasUnsavedCodingJobComment()
     };
   }
 
@@ -154,7 +162,13 @@ export class ReplayCodingService {
     this.latestRequestedSelectionByKey = new Map(snapshot.pendingSelections || []);
     this.openUnitKeys = new Set(snapshot.openUnitKeys || []);
     this.notes = new Map(snapshot.notes || []);
-    this.codingJobComment = snapshot.codingJobComment || this.codingJobComment;
+    this.codingJobComment = snapshot.codingJobComment ?? this.codingJobComment;
+    this.recoveredCodingJobCommentChanged = snapshot.codingJobCommentChanged === true ||
+      (
+        snapshot.codingJobCommentChanged === undefined &&
+        typeof snapshot.codingJobComment === 'string' &&
+        snapshot.codingJobComment.trim().length > 0
+      );
     return true;
   }
 
@@ -200,11 +214,25 @@ export class ReplayCodingService {
       });
 
     await Promise.all([...progressSaves, ...noteSaves]);
-    if (this.codingJobComment.trim()) {
+    if (this.recoveredCodingJobCommentChanged) {
       await this.saveCodingJobComment(workspaceId, this.codingJobComment, { throwOnError: true });
+      this.recoveredCodingJobCommentChanged = false;
     }
     this.checkCodingJobCompletion(unitsData);
     return true;
+  }
+
+  private hasUnsavedCodingJobComment(): boolean {
+    return this.codingJobCommentRevision > this.savedCodingJobCommentRevision;
+  }
+
+  private nextCodingJobCommentRevision(): number {
+    this.codingJobCommentRevision += 1;
+    return this.codingJobCommentRevision;
+  }
+
+  private markCodingJobCommentRevisionSaved(revision: number): void {
+    this.savedCodingJobCommentRevision = Math.max(this.savedCodingJobCommentRevision, revision);
   }
 
   private get authTokenArg(): [string] | [] {
@@ -730,9 +758,11 @@ export class ReplayCodingService {
 
     try {
       this.codingJobComment = comment;
+      const commentRevision = this.nextCodingJobCommentRevision();
       await firstValueFrom(
         this.codingJobBackendService.updateCodingJob(workspaceId, this.codingJobId, { comment }, ...this.authTokenArg)
       );
+      this.markCodingJobCommentRevisionSaved(commentRevision);
     } catch (error) {
       if (options.throwOnError) {
         throw error;
