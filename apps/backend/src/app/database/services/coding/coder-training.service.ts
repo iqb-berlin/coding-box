@@ -1358,7 +1358,7 @@ export class CoderTrainingService {
   }
 
   private toSqlScoreLiteral(score: number | null): string {
-    return score === null ? 'NULL' : score.toString();
+    return score === null ? 'NULL::integer' : score.toString();
   }
 
   private buildComparisonMissingScoreByJobSqlExpression(
@@ -1876,8 +1876,8 @@ export class CoderTrainingService {
       .createQueryBuilder('cju')
       .innerJoin('cju.coding_job', 'cj')
       .select('cju.response_id', 'responseId')
-      .addSelect('MIN(cju.unit_name)', 'unitName')
-      .addSelect('MIN(cju.variable_id)', 'variableId')
+      .addSelect('cju.unit_name', 'unitName')
+      .addSelect('cju.variable_id', 'variableId')
       .addSelect(
         `COUNT(DISTINCT cj.id) FILTER (
           WHERE cj.id IN (:...${selectedJobParameterName})
@@ -1888,8 +1888,10 @@ export class CoderTrainingService {
       .where('cj.workspace_id = :workspaceId', { workspaceId })
       .andWhere('cj.training_id = :trainingId', { trainingId })
       .groupBy('cju.response_id')
-      .orderBy('MIN(cju.unit_name)', 'ASC')
-      .addOrderBy('MIN(cju.variable_id)', 'ASC')
+      .addGroupBy('cju.unit_name')
+      .addGroupBy('cju.variable_id')
+      .orderBy('cju.unit_name', 'ASC')
+      .addOrderBy('cju.variable_id', 'ASC')
       .addOrderBy('cju.response_id', 'ASC')
       .setParameter(selectedJobParameterName, selectedJobIds);
 
@@ -1992,10 +1994,18 @@ export class CoderTrainingService {
         return;
       }
 
-      valuesByResponseAndJob.set(`${responseId}:${jobId}`, {
-        code: this.toKappaCode(row.code),
-        score: this.toNullableScore(row.score)
-      });
+      valuesByResponseAndJob.set(
+        this.getTrainingKappaValueKey(
+          responseId,
+          row.unitName,
+          row.variableId,
+          jobId
+        ),
+        {
+          code: this.toKappaCode(row.code),
+          score: this.toNullableScore(row.score)
+        }
+      );
     });
 
     const casesByVariable = new Map<string, WithinTrainingKappaCase[]>();
@@ -2023,8 +2033,22 @@ export class CoderTrainingService {
           const scores: Array<{ score1: number | null; score2: number | null }> = [];
 
           variableCases.forEach(item => {
-            const coder1Value = valuesByResponseAndJob.get(`${item.responseId}:${coder1.id}`);
-            const coder2Value = valuesByResponseAndJob.get(`${item.responseId}:${coder2.id}`);
+            const coder1Value = valuesByResponseAndJob.get(
+              this.getTrainingKappaValueKey(
+                item.responseId,
+                item.unitName,
+                item.variableId,
+                coder1.id
+              )
+            );
+            const coder2Value = valuesByResponseAndJob.get(
+              this.getTrainingKappaValueKey(
+                item.responseId,
+                item.unitName,
+                item.variableId,
+                coder2.id
+              )
+            );
             codes.push({
               code1: coder1Value?.code ?? null,
               code2: coder2Value?.code ?? null
@@ -4257,6 +4281,15 @@ export class CoderTrainingService {
 
   private getTrainingKappaVariableKey(unitName: string, variableId: string): string {
     return `${unitName}:${variableId}`;
+  }
+
+  private getTrainingKappaValueKey(
+    responseId: number,
+    unitName: string,
+    variableId: string,
+    jobId: number
+  ): string {
+    return `${responseId}:${unitName}:${variableId}:${jobId}`;
   }
 
   private createEmptyTrainingKappaStatistics(

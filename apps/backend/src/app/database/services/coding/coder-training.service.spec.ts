@@ -3173,6 +3173,7 @@ describe('CoderTrainingService', () => {
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
         groupBy: jest.fn().mockReturnThis(),
+        addGroupBy: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
         addOrderBy: jest.fn().mockReturnThis(),
         setParameter: jest.fn().mockReturnThis(),
@@ -3192,6 +3193,12 @@ describe('CoderTrainingService', () => {
           validValueCount: '2'
         },
         {
+          responseId: 101,
+          unitName: 'U2',
+          variableId: 'V2',
+          validValueCount: '2'
+        },
+        {
           responseId: 201,
           unitName: 'U2',
           variableId: 'V2',
@@ -3207,6 +3214,12 @@ describe('CoderTrainingService', () => {
         },
         {
           responseId: 101, jobId: 13, unitName: 'U1', variableId: 'V1', code: '1', score: 1
+        },
+        {
+          responseId: 101, jobId: 11, unitName: 'U2', variableId: 'V2', code: '2', score: 2
+        },
+        {
+          responseId: 101, jobId: 12, unitName: 'U2', variableId: 'V2', code: '2', score: 2
         },
         {
           responseId: 102, jobId: 11, unitName: 'U1', variableId: 'V1', code: '1', score: 1
@@ -3286,6 +3299,13 @@ describe('CoderTrainingService', () => {
       });
 
       expect(fullComparisonSpy).not.toHaveBeenCalled();
+      expect(caseQb.addSelect).toHaveBeenCalledWith('cju.unit_name', 'unitName');
+      expect(caseQb.addSelect).toHaveBeenCalledWith('cju.variable_id', 'variableId');
+      expect(caseQb.groupBy).toHaveBeenCalledWith('cju.response_id');
+      expect(caseQb.addGroupBy).toHaveBeenCalledWith('cju.unit_name');
+      expect(caseQb.addGroupBy).toHaveBeenCalledWith('cju.variable_id');
+      expect(caseQb.orderBy).toHaveBeenCalledWith('cju.unit_name', 'ASC');
+      expect(caseQb.addOrderBy).toHaveBeenCalledWith('cju.variable_id', 'ASC');
       expect(caseQb.setParameter).toHaveBeenCalledWith('withinTrainingKappaCaseSelectedJobIds', [11, 12, 13]);
       expect(valueQb.andWhere).toHaveBeenCalledWith(
         'cj.id IN (:...withinTrainingKappaValueJobIds)',
@@ -3305,10 +3325,13 @@ describe('CoderTrainingService', () => {
           }),
           expect.objectContaining({
             coder1Id: 11,
-            coder2Id: 13,
+            coder2Id: 12,
             unitName: 'U2',
             variableId: 'V2',
-            codes: [{ code1: 1, code2: null }]
+            codes: [
+              { code1: 2, code2: 2 },
+              { code1: 1, code2: null }
+            ]
           })
         ]),
         'code'
@@ -3326,13 +3349,13 @@ describe('CoderTrainingService', () => {
           unitName: 'U2',
           variableId: 'V2',
           meanKappa: null,
-          caseCount: 0,
+          caseCount: 1,
           validPairCount: 0,
           coderPairCount: 0
         })
       ]);
       expect(result.workspaceSummary).toMatchObject({
-        totalDoubleCodedResponses: 2,
+        totalDoubleCodedResponses: 3,
         totalCoderPairs: 3,
         averageKappa: 0.6,
         variablesIncluded: 2,
@@ -3367,7 +3390,7 @@ describe('CoderTrainingService', () => {
             id: 'mir', label: 'custom invalid response', code: -41, score: 2
           },
           {
-            id: 'mci', label: 'custom coding impossible', code: -42, score: 3
+            id: 'mci', label: 'custom coding impossible', code: -42, score: null
           },
           {
             id: 'custom', label: 'custom missing', code: -43, score: 4
@@ -3385,6 +3408,7 @@ describe('CoderTrainingService', () => {
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
         groupBy: jest.fn().mockReturnThis(),
+        addGroupBy: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
         addOrderBy: jest.fn().mockReturnThis(),
         setParameter: jest.fn().mockReturnThis(),
@@ -3442,10 +3466,12 @@ describe('CoderTrainingService', () => {
         .find(([, alias]) => alias === 'score')?.[0] as string;
       expect(caseValidCountExpression).toContain('WHEN cju.code = -3 OR cju.coding_issue_option = -3');
       expect(caseValidCountExpression).toContain('WHEN 11 THEN 2');
+      expect(caseValidCountExpression).toContain('WHEN 11 THEN NULL::integer');
       expect(caseValidCountExpression).toContain('WHEN -43 THEN 4');
       expect(caseValidCountExpression).not.toContain('AND (cju.score) IS NOT NULL');
       expect(valueScoreExpression).toContain('WHEN cju.code = -3 OR cju.coding_issue_option = -3');
       expect(valueScoreExpression).toContain('WHEN 11 THEN 2');
+      expect(valueScoreExpression).toContain('WHEN 11 THEN NULL::integer');
       expect(valueScoreExpression).toContain('WHEN -43 THEN 4');
       expect(valueScoreExpression).not.toBe('cju.score');
       expect(codingStatisticsService.calculateCohensKappa).toHaveBeenCalledWith(
