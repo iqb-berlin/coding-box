@@ -1185,6 +1185,29 @@ describe('ReplayCodingService', () => {
 
       await expect(service.saveRecoveredCodingState(1, null)).rejects.toThrow('save failed');
     });
+
+    it('does not persist recovered new-code-needed progress before required notes are present', async () => {
+      service.codingJobId = 100;
+      const key = service.generateCompositeKey('p1', 'u1', 'v1');
+      service.restoreRecoverySnapshot({
+        codingJobId: 100,
+        currentVariableId: 'v1',
+        selectedCodes: [],
+        pendingSelections: [[key, {
+          id: -2,
+          code: '-2',
+          label: 'New code needed',
+          codingIssueOption: -2
+        }]],
+        openUnitKeys: [],
+        notes: [],
+        codingJobComment: ''
+      });
+
+      await expect(service.saveRecoveredCodingState(1, null)).resolves.toBe(true);
+
+      expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+    });
   });
 
   describe('read-only review mode', () => {

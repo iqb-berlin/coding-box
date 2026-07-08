@@ -97,6 +97,42 @@
     </mat-card-content>
   </mat-card>
 
+  <mat-card class="auth-session-card">
+    <mat-card-header>
+      <mat-card-title>{{ 'ws-settings.auth-session-heading' | translate }}</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="auth-session-container">
+        <div class="setting-item auth-session-timeout">
+          <div class="setting-info">
+            <h4>{{ 'ws-settings.auth-session-idle-timeout-heading' | translate }}</h4>
+            <p>{{ 'ws-settings.auth-session-idle-timeout-description' | translate:{ min: minAuthSessionIdleTimeoutMinutes, max: maxAuthSessionIdleTimeoutMinutes } }}</p>
+          </div>
+          <div class="setting-control auth-session-timeout-control">
+            <mat-form-field>
+              <mat-label>{{ 'ws-settings.validity-minutes' | translate }}</mat-label>
+              <input
+                matInput
+                [(ngModel)]="authSessionIdleTimeoutMinutes"
+                type="number"
+                [min]="minAuthSessionIdleTimeoutMinutes"
+                [max]="maxAuthSessionIdleTimeoutMinutes"
+                step="1"/>
+              <mat-hint>{{ 'ws-settings.enter-validity-minutes' | translate:{ min: minAuthSessionIdleTimeoutMinutes, max: maxAuthSessionIdleTimeoutMinutes } }}</mat-hint>
+            </mat-form-field>
+            <button
+              mat-raised-button
+              color="primary"
+              [disabled]="!isAuthSessionIdleTimeoutValid()"
+              (click)="saveAuthSessionIdleTimeout()">
+              <mat-icon>save</mat-icon> {{ 'ws-settings.save-auth-session-idle-timeout' | translate }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
   <mat-card class="missings-profiles-card">
     <mat-card-header>
       <mat-card-title>{{ 'workspace.coding-missing-profiles' | translate }}</mat-card-title>

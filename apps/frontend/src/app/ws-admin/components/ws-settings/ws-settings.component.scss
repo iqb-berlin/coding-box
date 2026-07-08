@@ -12,6 +12,7 @@
 
 .token-settings-card,
 .replay-url-export-mode-card,
+.auth-session-card,
 .access-rights-card,
 .journal-card,
 .database-export-card,
@@ -59,6 +60,7 @@ mat-card-content {
 
 .token-container,
 .replay-url-export-mode-container,
+.auth-session-container,
 .missings-profiles-container,
 .database-export-container,
 .processes-container,
@@ -101,7 +103,8 @@ h4 {
   padding-top: 20px;
 }
 
-.replay-url-export-token-duration-control {
+.replay-url-export-token-duration-control,
+.auth-session-timeout-control {
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -215,6 +218,7 @@ button mat-icon {
 
   .token-settings-card,
   .replay-url-export-mode-card,
+  .auth-session-card,
   .access-rights-card,
   .journal-card,
   .database-export-card,
@@ -239,12 +243,17 @@ button mat-icon {
   .replay-url-export-token-duration-control {
     min-width: 0;
   }
+
+  .auth-session-timeout-control {
+    min-width: 0;
+  }
 }
 
 @media (max-width: 480px) {
   .token-actions,
   .token-copy-action,
   .replay-url-export-token-duration-control,
+  .auth-session-timeout-control,
   .database-export-actions,
   .missings-profiles-actions,
   .processes-actions,
@@ -254,6 +263,10 @@ button mat-icon {
   }
 
   .replay-url-export-token-duration-control mat-form-field {
+    width: 100%;
+  }
+
+  .auth-session-timeout-control mat-form-field {
     width: 100%;
   }
 

@@ -63,7 +63,6 @@ export class AppService {
   userProfile: KeycloakProfile = {};
   isLoggedInKeycloak = false;
   errorMessagesDisabled = false;
-  selectedWorkspaceId = 0;
   dataLoading: boolean | number = false;
   appLogo: AppLogoDto = standardLogo;
   postMessage$ = new Subject<MessageEvent>();
@@ -74,11 +73,31 @@ export class AppService {
   needsReAuthentication = false;
   sessionExpiryWarning = false;
   reAuthenticationReturnUrl?: string;
+  private selectedWorkspaceIdValue = 0;
+  private readonly selectedWorkspaceIdSubject = new Subject<number>();
+  readonly selectedWorkspaceId$ = this.selectedWorkspaceIdSubject.asObservable();
   private explicitLogoutInProgress = false;
   private authBootstrapStatusSubject = new BehaviorSubject<AuthBootstrapStatus>('checking');
 
   constructor() {
     this.loadLogoSettings();
+  }
+
+  get selectedWorkspaceId(): number {
+    return this.selectedWorkspaceIdValue;
+  }
+
+  set selectedWorkspaceId(workspaceId: number | null | undefined) {
+    const numericWorkspaceId = Number(workspaceId);
+    const nextWorkspaceId = Number.isFinite(numericWorkspaceId) ?
+      numericWorkspaceId :
+      0;
+    if (nextWorkspaceId === this.selectedWorkspaceIdValue) {
+      return;
+    }
+
+    this.selectedWorkspaceIdValue = nextWorkspaceId;
+    this.selectedWorkspaceIdSubject.next(nextWorkspaceId);
   }
 
   createOwnToken(

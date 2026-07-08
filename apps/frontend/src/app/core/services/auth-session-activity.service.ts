@@ -5,9 +5,11 @@ import { Router } from '@angular/router';
 import Keycloak from 'keycloak-js';
 import { AppService } from './app.service';
 import {
+  DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
   AUTH_SESSION_IDLE_TIMEOUT_MS,
-  AUTH_SESSION_WARNING_DELAY_MS
+  getAuthSessionWarningDelayMs
 } from './auth-session.config';
+import { WorkspaceSettingsService } from '../../ws-admin/services/workspace-settings.service';
 
 @Injectable({
   providedIn: 'root'
@@ -15,6 +17,7 @@ import {
 export class AuthSessionActivityService implements OnDestroy {
   private readonly keycloak = inject(Keycloak);
   private readonly appService = inject(AppService);
+  private readonly workspaceSettingsService = inject(WorkspaceSettingsService);
   private readonly router = inject(Router);
   private readonly ngZone = inject(NgZone);
   private readonly activityEvents = ['mousemove', 'touchstart', 'keydown', 'click', 'scroll'];
@@ -29,6 +32,9 @@ export class AuthSessionActivityService implements OnDestroy {
   private lastActivityBroadcastAt = 0;
   private lastObservedExternalActivityAt = 0;
   private started = false;
+  private idleTimeoutMs = AUTH_SESSION_IDLE_TIMEOUT_MS;
+  private timeoutSettingsWorkspaceId: number | null = null;
+  private timeoutSettingsRequestId = 0;
 
   start(): void {
     if (this.started) {
@@ -39,6 +45,8 @@ export class AuthSessionActivityService implements OnDestroy {
     this.started = true;
     this.registerActivityListeners();
     this.registerCrossTabActivityListeners();
+    this.registerWorkspaceSelectionListeners();
+    this.registerTimeoutSettingsListeners();
     this.restart();
   }
 
@@ -50,14 +58,24 @@ export class AuthSessionActivityService implements OnDestroy {
       return;
     }
 
+    this.scheduleTimers();
+    this.refreshTimeoutSettingsForCurrentWorkspace();
+  }
+
+  private scheduleTimers(): void {
     this.ngZone.runOutsideAngular(() => {
-      this.warningTimeoutId = setTimeout(() => this.showWarning(), AUTH_SESSION_WARNING_DELAY_MS);
-      this.expiryTimeoutId = setTimeout(() => this.expireSession(), AUTH_SESSION_IDLE_TIMEOUT_MS);
+      this.warningTimeoutId = setTimeout(
+        () => this.showWarning(),
+        getAuthSessionWarningDelayMs(this.idleTimeoutMs)
+      );
+      this.expiryTimeoutId = setTimeout(() => this.expireSession(), this.idleTimeoutMs);
     });
   }
 
   stop(): void {
     this.started = false;
+    this.timeoutSettingsRequestId += 1;
+    this.timeoutSettingsWorkspaceId = null;
     this.clearTimers();
     while (this.cleanupActivityListeners.length) {
       this.cleanupActivityListeners.pop()?.();
@@ -114,6 +132,35 @@ export class AuthSessionActivityService implements OnDestroy {
       this.activityChannel?.close();
       this.activityChannel = undefined;
     });
+  }
+
+  private registerTimeoutSettingsListeners(): void {
+    const subscription =
+      this.workspaceSettingsService.authSessionIdleTimeoutChanged$
+        .subscribe(change => {
+          if (change.workspaceId !== this.appService.selectedWorkspaceId) {
+            return;
+          }
+
+          this.timeoutSettingsWorkspaceId = change.workspaceId;
+          this.applyIdleTimeoutMinutes(change.timeoutMinutes);
+        });
+    this.cleanupActivityListeners.push(() => subscription.unsubscribe());
+  }
+
+  private registerWorkspaceSelectionListeners(): void {
+    const subscription = this.appService.selectedWorkspaceId$
+      .subscribe(() => this.handleWorkspaceSelectionChanged());
+    this.cleanupActivityListeners.push(() => subscription.unsubscribe());
+  }
+
+  private handleWorkspaceSelectionChanged(): void {
+    this.timeoutSettingsRequestId += 1;
+    this.timeoutSettingsWorkspaceId = null;
+    this.idleTimeoutMs = AUTH_SESSION_IDLE_TIMEOUT_MS;
+    if (this.started) {
+      this.restart();
+    }
   }
 
   private broadcastActivity(): void {
@@ -197,6 +244,54 @@ export class AuthSessionActivityService implements OnDestroy {
 
   private isAuthenticatedSession(): boolean {
     return !!this.keycloak.authenticated && !this.appService.needsReAuthentication;
+  }
+
+  private refreshTimeoutSettingsForCurrentWorkspace(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.timeoutSettingsRequestId += 1;
+      this.timeoutSettingsWorkspaceId = null;
+      this.applyIdleTimeoutMinutes(DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES);
+      return;
+    }
+
+    if (this.timeoutSettingsWorkspaceId === workspaceId) {
+      return;
+    }
+
+    this.timeoutSettingsWorkspaceId = workspaceId;
+    this.timeoutSettingsRequestId += 1;
+    const requestId = this.timeoutSettingsRequestId;
+    this.workspaceSettingsService
+      .getAuthSessionIdleTimeoutMinutes(workspaceId)
+      .subscribe({
+        next: timeoutMinutes => {
+          if (requestId === this.timeoutSettingsRequestId) {
+            this.applyIdleTimeoutMinutes(timeoutMinutes);
+          }
+        },
+        error: () => {
+          if (requestId === this.timeoutSettingsRequestId) {
+            this.applyIdleTimeoutMinutes(DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES);
+          }
+        }
+      });
+  }
+
+  private applyIdleTimeoutMinutes(timeoutMinutes: number): void {
+    const nextIdleTimeoutMs = timeoutMinutes * 60 * 1000;
+    if (nextIdleTimeoutMs === this.idleTimeoutMs) {
+      return;
+    }
+
+    this.idleTimeoutMs = nextIdleTimeoutMs;
+    if (!this.started || !this.isAuthenticatedSession()) {
+      return;
+    }
+
+    this.clearTimers();
+    this.appService.setSessionExpiryWarning(false);
+    this.scheduleTimers();
   }
 
   private clearTimers(): void {

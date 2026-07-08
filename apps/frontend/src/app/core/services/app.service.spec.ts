@@ -60,6 +60,24 @@ describe('AppService', () => {
     expect(service).toBeTruthy();
   });
 
+  describe('selectedWorkspaceId', () => {
+    it('should emit selected workspace changes', () => {
+      const workspaceIds: number[] = [];
+      const subscription = service.selectedWorkspaceId$.subscribe(workspaceId => {
+        workspaceIds.push(workspaceId);
+      });
+
+      service.selectedWorkspaceId = 1;
+      service.selectedWorkspaceId = 1;
+      service.selectedWorkspaceId = 2;
+      service.selectedWorkspaceId = null;
+
+      expect(workspaceIds).toEqual([1, 2, 0]);
+      expect(service.selectedWorkspaceId).toBe(0);
+      subscription.unsubscribe();
+    });
+  });
+
   describe('createOwnToken', () => {
     it('should request a self-service workspace token', () => {
       service.createOwnToken(7, 1, ['replay:read', 'replay-statistics:write']).subscribe(token => {
