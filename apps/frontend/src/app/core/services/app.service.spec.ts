@@ -12,11 +12,13 @@ import {
   BACKEND_CONNECTIVITY_ERROR_MESSAGE
 } from '../interceptors/app-http-error.class';
 import { SUPPRESS_GLOBAL_HTTP_ERROR } from '../interceptors/http-error-context';
+import { SessionRecoveryService } from './session-recovery.service';
 
 describe('AppService', () => {
   let service: AppService;
   let httpMock: HttpTestingController;
   let logoServiceMock: jest.Mocked<LogoService>;
+  let sessionRecoveryService: SessionRecoveryService;
 
   const mockServerUrl = 'http://localhost/api/';
 
@@ -46,10 +48,12 @@ describe('AppService', () => {
 
     service = TestBed.inject(AppService);
     httpMock = TestBed.inject(HttpTestingController);
+    sessionRecoveryService = TestBed.inject(SessionRecoveryService);
   });
 
   afterEach(() => {
     httpMock.verify();
+    sessionStorage.clear();
   });
 
   it('should be created', () => {
@@ -251,6 +255,14 @@ describe('AppService', () => {
       expect(service.authBootstrapStatus).toBe('ready');
     });
 
+    it('should clear recovery drafts when auth state is cleared explicitly', () => {
+      sessionRecoveryService.saveDraft('active-form', { field: 'value' });
+
+      service.clearAuthState();
+
+      expect(sessionRecoveryService.peekDraft('active-form')).toBeNull();
+    });
+
     it('should clear auth state and mark reauthentication as required', () => {
       service.requireReAuthentication('/coding');
 
@@ -266,6 +278,33 @@ describe('AppService', () => {
       service.requireReAuthentication();
 
       expect(service.reAuthenticationReturnUrl).toBe('/workspace-admin/1');
+    });
+
+    it('should capture registered recovery drafts before requiring reauthentication', () => {
+      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      const unregister = sessionRecoveryService.registerProvider({
+        key: 'active-form',
+        capture: () => ({ field: 'value' })
+      });
+
+      service.requireReAuthentication('/coding');
+
+      expect(sessionRecoveryService.peekDraft('active-form')).toEqual({ field: 'value' });
+      expect(sessionRecoveryService.consumeDraft('active-form')).toEqual({ field: 'value' });
+      unregister();
+    });
+
+    it('should keep recovery drafts saved during reauthentication scoped to the current user', () => {
+      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+
+      service.requireReAuthentication('/coding');
+      sessionRecoveryService.saveDraft('late-active-form', { field: 'late-value' });
+
+      expect(sessionRecoveryService.peekDraft('late-active-form')).toEqual({ field: 'late-value' });
+      sessionRecoveryService.setOwnerId(undefined);
+      expect(sessionRecoveryService.peekDraft('late-active-form')).toBeNull();
+      sessionRecoveryService.setOwnerId('user1');
+      expect(sessionRecoveryService.consumeDraft('late-active-form')).toEqual({ field: 'late-value' });
     });
 
     it('should clear the return URL when reauthentication is dismissed', () => {

@@ -1110,6 +1110,75 @@ describe('ReplayCodingService', () => {
     });
   });
 
+  describe('session recovery', () => {
+    it('restores and re-saves recovered coding state', async () => {
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
+      codingJobBackendServiceMock.saveCodingNotes.mockReturnValue(of({} as CodingJob));
+      codingJobBackendServiceMock.updateCodingJob.mockReturnValue(of({} as CodingJob));
+      service.codingJobId = 100;
+      service.codingJobComment = 'comment';
+
+      await service.handleCodeSelected(
+        { variableId: 'v1', code: { id: 7, label: 'Seven', score: 2 } as never },
+        'p1',
+        'u1',
+        1,
+        null
+      );
+      await service.saveNotes(1, 'p1', 'u1', 'v1', 'note');
+
+      const snapshot = service.createRecoverySnapshot();
+      expect(snapshot).not.toBeNull();
+
+      codingJobBackendServiceMock.saveCodingProgress.mockClear();
+      codingJobBackendServiceMock.saveCodingNotes.mockClear();
+      codingJobBackendServiceMock.updateCodingJob.mockClear();
+
+      service.resetCodingData();
+      service.codingJobId = 100;
+      expect(service.restoreRecoverySnapshot(snapshot!)).toBe(true);
+      await expect(service.saveRecoveredCodingState(1, null)).resolves.toBe(true);
+
+      expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledWith(
+        1,
+        100,
+        {
+          testPerson: 'p1',
+          unitId: 'u1',
+          variableId: 'v1',
+          selectedCode: {
+            id: 7,
+            code: '7',
+            label: 'Seven',
+            score: 2,
+            codingIssueOption: null
+          }
+        }
+      );
+      expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenCalledWith(
+        1,
+        100,
+        {
+          testPerson: 'p1',
+          unitId: 'u1',
+          variableId: 'v1',
+          notes: 'note'
+        }
+      );
+      expect(codingJobBackendServiceMock.updateCodingJob).toHaveBeenCalledWith(1, 100, { comment: 'comment' });
+    });
+
+    it('keeps recovered coding state unsaved when required context is missing', async () => {
+      service.codingJobId = 100;
+
+      await expect(service.saveRecoveredCodingState(0, null)).resolves.toBe(false);
+
+      expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.saveCodingNotes).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+    });
+  });
+
   describe('read-only review mode', () => {
     beforeEach(() => {
       service.isReviewMode = true;

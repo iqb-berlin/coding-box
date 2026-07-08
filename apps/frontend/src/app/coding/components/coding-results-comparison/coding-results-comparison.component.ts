@@ -40,6 +40,7 @@ import { TestPersonCodingService } from '../../services/test-person-coding.servi
 import { CoderTraining } from '../../models/coder-training.model';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
+import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import type { ReviewCodeSelection } from '../../../replay/services/units-replay.service';
 import {
@@ -221,6 +222,19 @@ interface SelectedCodeSlot {
   trainingId?: number;
 }
 
+interface TrainingDiscussionRecoveryEntry {
+  responseId: number;
+  codeValue: string;
+  score: number | null;
+  notes: string;
+}
+
+interface TrainingDiscussionRecoveryDraft {
+  workspaceId: number;
+  trainingId: number;
+  entries: TrainingDiscussionRecoveryEntry[];
+}
+
 interface ModalValueSummary {
   modalValue: string | null;
   deviationCount: number | null;
@@ -288,6 +302,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   private appService = inject(AppService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private postMessageService = inject(PostMessageService);
+  private sessionRecoveryService = inject(SessionRecoveryService);
   private dialog = inject(MatDialog);
   private testPersonCodingService = inject(TestPersonCodingService);
   private ngUnsubscribe = new Subject<void>();
@@ -300,6 +315,8 @@ export class CodingResultsComparisonComponent implements OnInit {
   private paginator?: MatPaginator;
   private hasInitializedBetweenCoderSelection = false;
   private hasInitializedWithinCoderSelection = false;
+  private unregisterRecoveryProvider: (() => void) | null = null;
+  private readonly trainingDiscussionRecoveryKey = 'training-discussion-active-state';
 
   isLoading = false;
   isLoadingKappa = false;
@@ -409,6 +426,14 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.unregisterRecoveryProvider = this.sessionRecoveryService.registerProvider({
+      key: this.trainingDiscussionRecoveryKey,
+      capture: () => this.createTrainingDiscussionRecoveryDraft()
+    });
+    this.sessionRecoveryService.restore$
+      .pipe(takeUntil(this.ngUnsubscribe))
+      .subscribe(() => this.restoreTrainingDiscussionRecoveryDraft());
+
     this.setupFilterPredicate();
     this.setupTableFilterChanges();
     this.discussionManagerLabel = this.appService.authData.userName || this.appService.loggedUser?.preferred_username || 'Diskussion';
@@ -443,6 +468,8 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   ngOnDestroy(): void {
+    this.unregisterRecoveryProvider?.();
+    this.unregisterRecoveryProvider = null;
     this.cancelComparisonRequest();
     this.cancelKappaRequest();
     this.ngUnsubscribe.next();
@@ -1125,6 +1152,7 @@ export class CodingResultsComparisonComponent implements OnInit {
       this.discussionCodeByResponseId[responseId] = parsedCode !== null ? parsedCode.toString() : '';
       this.discussionScoreByResponseId[responseId] = withinComparison.discussionScore ?? null;
       this.discussionNotesByResponseId[responseId] = withinComparison.discussionNotes || '';
+      this.clearTrainingDiscussionRecoveryEntry(responseId);
       return;
     }
 
@@ -1174,8 +1202,10 @@ export class CodingResultsComparisonComponent implements OnInit {
             const normalizedSavedNotes = (result.notes || '').trim() || null;
             if (normalizedPendingNotes !== normalizedSavedNotes) {
               this.onDiscussionCodeBlur(withinComparison, result.score);
+              return;
             }
           }
+          this.clearTrainingDiscussionRecoveryEntry(responseId);
         },
         error: error => {
           if (this.comparisonMode !== 'within-training' ||
@@ -1184,6 +1214,16 @@ export class CodingResultsComparisonComponent implements OnInit {
             return;
           }
           this.isSavingDiscussionByResponseId[responseId] = false;
+          if (this.isRecoverableDiscussionAuthError(error)) {
+            const message = 'Diskussionsergebnis wird nach erneuter Anmeldung gespeichert.';
+            this.discussionErrorByResponseId[responseId] = message;
+            const draft = this.createTrainingDiscussionRecoveryDraft();
+            if (draft) {
+              this.saveTrainingDiscussionRecoveryDraft(draft);
+            }
+            this.snackBar.open(message, this.translate.instant('common.close'), { duration: 4000 });
+            return;
+          }
           delete this.pendingDiscussionNotesByResponseId[responseId];
           const message = this.getDiscussionSaveErrorMessage(error);
           this.discussionErrorByResponseId[responseId] = message;
@@ -1416,6 +1456,11 @@ export class CodingResultsComparisonComponent implements OnInit {
         this.discussionNotesByResponseId[item.responseId] = '';
       }
     });
+  }
+
+  private isRecoverableDiscussionAuthError(error: unknown): boolean {
+    return this.appService.needsReAuthentication ||
+      (error instanceof HttpErrorResponse && (error.status === 401 || error.status === 403));
   }
 
   openReplay(comparison: TrainingComparison | WithinTrainingComparison): void {
@@ -2008,6 +2053,7 @@ export class CodingResultsComparisonComponent implements OnInit {
             this.initDiscussionValues(mappedData);
             this.updateDisplayedColumns();
             this.refreshDisplayedRows();
+            this.restoreTrainingDiscussionRecoveryDraft();
             if (this.showKappaStatistics) {
               this.loadKappaStatistics();
             }
@@ -2359,5 +2405,146 @@ export class CodingResultsComparisonComponent implements OnInit {
     }
 
     this.onDiscussionCodeBlur(row, this.getDiscussionScoreOverride(responseId));
+  }
+
+  private createTrainingDiscussionRecoveryDraft(): TrainingDiscussionRecoveryDraft | null {
+    if (this.comparisonMode !== 'within-training' || !this.selectedTrainingForWithin) {
+      return null;
+    }
+
+    const entries = this.withinTrainingData
+      .map(row => this.createTrainingDiscussionRecoveryEntry(row))
+      .filter((entry): entry is TrainingDiscussionRecoveryEntry => entry !== null);
+
+    if (entries.length === 0) {
+      return null;
+    }
+
+    return {
+      workspaceId: this.data.workspaceId,
+      trainingId: this.selectedTrainingForWithin,
+      entries
+    };
+  }
+
+  private createTrainingDiscussionRecoveryEntry(row: WithinTrainingComparison): TrainingDiscussionRecoveryEntry | null {
+    const responseId = row.responseId;
+    const codeValue = Object.prototype.hasOwnProperty.call(this.discussionCodeByResponseId, responseId) ?
+      this.discussionCodeByResponseId[responseId] :
+      this.getPersistedDiscussionCodeValue(row);
+    const score = Object.prototype.hasOwnProperty.call(this.discussionScoreByResponseId, responseId) ?
+      this.discussionScoreByResponseId[responseId] :
+      row.discussionScore ?? null;
+    const notes = Object.prototype.hasOwnProperty.call(this.discussionNotesByResponseId, responseId) ?
+      this.discussionNotesByResponseId[responseId] :
+      row.discussionNotes || '';
+
+    const hasPendingNotes = Object.prototype.hasOwnProperty.call(this.pendingDiscussionNotesByResponseId, responseId);
+    const isDirty = codeValue !== this.getPersistedDiscussionCodeValue(row) ||
+      score !== (row.discussionScore ?? null) ||
+      notes !== (row.discussionNotes || '') ||
+      hasPendingNotes ||
+      !!this.isSavingDiscussionByResponseId[responseId] ||
+      !!this.discussionErrorByResponseId[responseId];
+    if (!isDirty) {
+      return null;
+    }
+
+    return {
+      responseId,
+      codeValue,
+      score,
+      notes: hasPendingNotes ? this.pendingDiscussionNotesByResponseId[responseId] : notes
+    };
+  }
+
+  private getPersistedDiscussionCodeValue(row: WithinTrainingComparison): string {
+    return row.discussionCode !== null && row.discussionCode !== undefined ?
+      this.mapCodeForDisplay(row.discussionCode.toString()) :
+      '';
+  }
+
+  private restoreTrainingDiscussionRecoveryDraft(): boolean {
+    const draft = this.sessionRecoveryService.peekDraft<TrainingDiscussionRecoveryDraft>(
+      this.trainingDiscussionRecoveryKey
+    );
+    if (!draft || !this.isTrainingDiscussionRecoveryDraftForCurrentContext(draft)) {
+      return false;
+    }
+    if (this.withinTrainingData.length === 0) {
+      return false;
+    }
+
+    let restoredAnyEntry = false;
+    draft.entries.forEach(entry => {
+      const row = this.withinTrainingData.find(item => item.responseId === entry.responseId);
+      if (!row) {
+        return;
+      }
+
+      restoredAnyEntry = true;
+      this.discussionCodeByResponseId[entry.responseId] = entry.codeValue;
+      this.discussionScoreByResponseId[entry.responseId] = entry.score;
+      this.discussionNotesByResponseId[entry.responseId] = entry.notes;
+      this.discussionErrorByResponseId[entry.responseId] = '';
+      this.onDiscussionCodeBlur(row, entry.score);
+    });
+
+    return restoredAnyEntry;
+  }
+
+  private isTrainingDiscussionRecoveryDraftForCurrentContext(draft: TrainingDiscussionRecoveryDraft): boolean {
+    return draft.workspaceId === this.data.workspaceId &&
+      draft.trainingId === this.selectedTrainingForWithin &&
+      this.comparisonMode === 'within-training';
+  }
+
+  private saveTrainingDiscussionRecoveryDraft(draft: TrainingDiscussionRecoveryDraft): void {
+    const existingDraft = this.sessionRecoveryService.peekDraft<TrainingDiscussionRecoveryDraft>(
+      this.trainingDiscussionRecoveryKey
+    );
+    if (!existingDraft || !this.isSameTrainingDiscussionRecoveryContext(existingDraft, draft)) {
+      this.sessionRecoveryService.saveDraft(this.trainingDiscussionRecoveryKey, draft);
+      return;
+    }
+
+    const entriesByResponseId = new Map<number, TrainingDiscussionRecoveryEntry>();
+    existingDraft.entries.forEach(entry => entriesByResponseId.set(entry.responseId, entry));
+    draft.entries.forEach(entry => entriesByResponseId.set(entry.responseId, entry));
+    this.sessionRecoveryService.saveDraft(this.trainingDiscussionRecoveryKey, {
+      ...draft,
+      entries: Array.from(entriesByResponseId.values())
+    });
+  }
+
+  private clearTrainingDiscussionRecoveryEntry(responseId: number): void {
+    const draft = this.sessionRecoveryService.peekDraft<TrainingDiscussionRecoveryDraft>(
+      this.trainingDiscussionRecoveryKey
+    );
+    if (!draft || !this.isTrainingDiscussionRecoveryDraftForCurrentContext(draft)) {
+      return;
+    }
+
+    const entries = draft.entries.filter(entry => entry.responseId !== responseId);
+    if (entries.length === draft.entries.length) {
+      return;
+    }
+
+    if (entries.length > 0) {
+      this.sessionRecoveryService.saveDraft(this.trainingDiscussionRecoveryKey, {
+        ...draft,
+        entries
+      });
+    } else {
+      this.sessionRecoveryService.clearDraft(this.trainingDiscussionRecoveryKey);
+    }
+  }
+
+  private isSameTrainingDiscussionRecoveryContext(
+    first: TrainingDiscussionRecoveryDraft,
+    second: TrainingDiscussionRecoveryDraft
+  ): boolean {
+    return first.workspaceId === second.workspaceId &&
+      first.trainingId === second.trainingId;
   }
 }

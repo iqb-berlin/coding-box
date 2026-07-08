@@ -84,6 +84,20 @@ describe('AuthSessionActivityService', () => {
     service.stop();
   }));
 
+  it('should reset idle timers on activity from another tab', fakeAsync(() => {
+    service.start();
+
+    tick(AUTH_SESSION_IDLE_TIMEOUT_MS - 1000);
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'coding-box-auth-session-activity',
+      newValue: JSON.stringify({ source: 'other-tab', timestamp: Date.now() })
+    }));
+    tick(1000);
+
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+    service.stop();
+  }));
+
   it('should force a token refresh when the user returns after the warning', fakeAsync(() => {
     service.start();
     tick(AUTH_SESSION_WARNING_DELAY_MS);
