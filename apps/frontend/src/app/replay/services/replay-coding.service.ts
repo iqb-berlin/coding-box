@@ -9,7 +9,7 @@ import {
 import { findVariableCodingByPublicId } from '../../coding/utils/coding-scheme.util';
 import { UnitsReplay, UnitsReplayUnit } from './units-replay.service';
 
-interface SavedCode {
+export interface SavedCode {
   id: number;
   code?: string;
   label: string;
@@ -17,6 +17,16 @@ interface SavedCode {
   description?: string;
   codingIssueOption?: number;
   [key: string]: unknown;
+}
+
+export interface ReplayCodingRecoverySnapshot {
+  codingJobId: number | null;
+  currentVariableId: string;
+  selectedCodes: Array<[string, SavedCode]>;
+  pendingSelections: Array<[string, SavedCode | null]>;
+  openUnitKeys: string[];
+  notes: Array<[string, string]>;
+  codingJobComment: string;
 }
 
 interface CodingContextSnapshot {
@@ -100,6 +110,98 @@ export class ReplayCodingService {
 
   setAuthToken(authToken?: string): void {
     this.authToken = authToken || undefined;
+  }
+
+  createRecoverySnapshot(): ReplayCodingRecoverySnapshot | null {
+    const selectedCodes = new Map(this.selectedCodes);
+    this.latestRequestedSelectionByKey.forEach((selectedCode, compositeKey) => {
+      if (selectedCode === null) {
+        selectedCodes.delete(compositeKey);
+      } else {
+        selectedCodes.set(compositeKey, selectedCode);
+      }
+    });
+
+    const hasRecoverableState = !!this.codingJobId ||
+      selectedCodes.size > 0 ||
+      this.latestRequestedSelectionByKey.size > 0 ||
+      this.notes.size > 0 ||
+      this.openUnitKeys.size > 0 ||
+      !!this.codingJobComment.trim();
+    if (!hasRecoverableState) {
+      return null;
+    }
+
+    return {
+      codingJobId: this.codingJobId,
+      currentVariableId: this.currentVariableId,
+      selectedCodes: Array.from(selectedCodes.entries()),
+      pendingSelections: Array.from(this.latestRequestedSelectionByKey.entries()),
+      openUnitKeys: Array.from(this.openUnitKeys),
+      notes: Array.from(this.notes.entries()),
+      codingJobComment: this.codingJobComment
+    };
+  }
+
+  restoreRecoverySnapshot(snapshot: ReplayCodingRecoverySnapshot): boolean {
+    if (snapshot.codingJobId && this.codingJobId && snapshot.codingJobId !== this.codingJobId) {
+      return false;
+    }
+
+    this.codingJobId = this.codingJobId || snapshot.codingJobId;
+    this.currentVariableId = snapshot.currentVariableId || this.currentVariableId;
+    this.selectedCodes = new Map(snapshot.selectedCodes || []);
+    this.latestRequestedSelectionByKey = new Map(snapshot.pendingSelections || []);
+    this.openUnitKeys = new Set(snapshot.openUnitKeys || []);
+    this.notes = new Map(snapshot.notes || []);
+    this.codingJobComment = snapshot.codingJobComment || this.codingJobComment;
+    return true;
+  }
+
+  async saveRecoveredCodingState(workspaceId: number, unitsData: UnitsReplay | null): Promise<boolean> {
+    const jobId = this.codingJobId;
+    if (!jobId || !workspaceId || this.isReviewMode) {
+      return false;
+    }
+
+    const progressSaves = Array.from(this.latestRequestedSelectionByKey.entries())
+      .map(([compositeKey, selectedCode]) => {
+        const keyParts = this.parseCompositeKey(compositeKey);
+        if (!keyParts) {
+          return Promise.resolve();
+        }
+        return this.saveCodingProgress(
+          workspaceId,
+          jobId,
+          keyParts.testPerson,
+          keyParts.unitId,
+          keyParts.variableId,
+          selectedCode
+        );
+      });
+
+    const noteSaves = Array.from(this.notes.entries())
+      .map(([compositeKey, notes]) => {
+        const keyParts = this.parseCompositeKey(compositeKey);
+        if (!keyParts) {
+          return Promise.resolve();
+        }
+        return this.saveNotes(
+          workspaceId,
+          keyParts.testPerson,
+          keyParts.unitId,
+          keyParts.variableId,
+          notes,
+          unitsData
+        );
+      });
+
+    await Promise.all([...progressSaves, ...noteSaves]);
+    if (this.codingJobComment.trim()) {
+      await this.saveCodingJobComment(workspaceId, this.codingJobComment);
+    }
+    this.checkCodingJobCompletion(unitsData);
+    return true;
   }
 
   private get authTokenArg(): [string] | [] {
@@ -448,6 +550,19 @@ export class ReplayCodingService {
     }
 
     return `${normalizedTestPerson}::${bookletId}::${unitId}::${variableId}`;
+  }
+
+  private parseCompositeKey(compositeKey: string): { testPerson: string; unitId: string; variableId: string } | null {
+    const parts = compositeKey.split('::');
+    if (parts.length < 4) {
+      return null;
+    }
+
+    return {
+      testPerson: parts[0],
+      unitId: parts[2],
+      variableId: parts[3]
+    };
   }
 
   private normalizeCodingTestPerson(testPerson: string): string {

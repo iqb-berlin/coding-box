@@ -11,6 +11,7 @@ import { CodingFacadeService } from '../../../services/facades/coding-facade.ser
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { DoubleCodedReviewComponent } from './double-coded-review.component';
+import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 
 describe('DoubleCodedReviewComponent', () => {
   let component: DoubleCodedReviewComponent;
@@ -269,6 +270,7 @@ describe('DoubleCodedReviewComponent', () => {
 
   afterEach(() => {
     overlayContainer.ngOnDestroy();
+    sessionStorage.clear();
   });
 
   it('renders the reusable decision cell and updates its selection through Material select', async () => {
@@ -350,6 +352,52 @@ describe('DoubleCodedReviewComponent', () => {
       { code: 2, coderNames: ['Coder B'] }
     ]);
     expect(openSpy).toHaveBeenCalledWith(openedUrl, '_blank');
+  });
+
+  it('captures changed review selections as a recovery draft', async () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const reviewItem = component.dataSource.data[0];
+    component.selectionForm.get(component.getItemControlName(reviewItem))?.setValue('1002');
+    component.getCommentControl(reviewItem).setValue('Recovered comment');
+
+    sessionRecoveryService.captureRegisteredDrafts();
+
+    expect(sessionRecoveryService.peekDraft('double-coded-review-active-state')).toEqual({
+      workspaceId: 1,
+      entries: [
+        {
+          responseId: 501,
+          selectedValue: '1002',
+          comment: 'Recovered comment'
+        }
+      ]
+    });
+  });
+
+  it('restores review selections from a recovery draft', async () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    sessionRecoveryService.saveDraft('double-coded-review-active-state', {
+      workspaceId: 1,
+      entries: [
+        {
+          responseId: 501,
+          selectedValue: '1002',
+          comment: 'Recovered comment'
+        }
+      ]
+    });
+
+    sessionRecoveryService.notifyRestoredAuthentication();
+
+    const reviewItem = component.dataSource.data[0];
+    expect(component.selectionForm.get(component.getItemControlName(reviewItem))?.value).toBe('1002');
+    expect(component.selectionForm.get(component.getCommentControlName(reviewItem))?.value).toBe('Recovered comment');
   });
 
   it('selects an available coder result from a replay code selection', async () => {

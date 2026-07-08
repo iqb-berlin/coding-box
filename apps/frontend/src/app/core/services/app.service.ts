@@ -23,6 +23,7 @@ import { LogoService } from './logo.service';
 import { SERVER_URL } from '../../injection-tokens';
 import { suppressGlobalHttpErrorContext } from '../interceptors/http-error-context';
 import { WorkspaceTokenScope } from './auth-session.config';
+import { SessionRecoveryService } from './session-recovery.service';
 
 export interface WorkspaceTokenPolicy {
   scopes: Record<WorkspaceTokenScope, {
@@ -47,6 +48,7 @@ export class AppService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
   private logoService = inject(LogoService);
+  private sessionRecoveryService = inject(SessionRecoveryService);
 
   static defaultAuthData = <AuthDataDto>{
     userId: 0,
@@ -112,6 +114,7 @@ export class AppService {
   loadAuthenticatedUser(identity: string): Observable<boolean> {
     this.setAuthBootstrapStatus('backend-login-running');
     this.keycloakIdentity = identity;
+    this.sessionRecoveryService.setOwnerId(identity);
 
     return this.getAuthDataWithRetry(identity)
       .pipe(
@@ -145,6 +148,7 @@ export class AppService {
     }
 
     this.setAuthBootstrapStatus('backend-login-running');
+    this.sessionRecoveryService.setOwnerId(identity);
     return this.getAuthDataWithRetry(identity)
       .pipe(
         map(authData => {
@@ -311,6 +315,7 @@ export class AppService {
     this.setSessionExpiryWarning(false);
     this.setNeedsReAuthentication(false);
     this.setAuthBootstrapStatus('ready');
+    this.sessionRecoveryService.notifyRestoredAuthentication();
   }
 
   markAuthDataFailed(): void {
@@ -348,13 +353,21 @@ export class AppService {
     return logoutInProgress;
   }
 
-  clearAuthState(options: { clearReAuthentication?: boolean; clearReturnUrl?: boolean } = {}): void {
+  clearAuthState(options: {
+    clearReAuthentication?: boolean;
+    clearReturnUrl?: boolean;
+    clearRecoveryDrafts?: boolean;
+  } = {}): void {
     localStorage.removeItem('id_token');
     this.keycloakIdentity = undefined;
     this.userProfile = {};
     this.isLoggedInKeycloak = false;
     this.loggedUser = undefined;
     this.updateAuthData(AppService.defaultAuthData);
+    if (options.clearRecoveryDrafts ?? true) {
+      this.sessionRecoveryService.clearAllDrafts();
+      this.sessionRecoveryService.setOwnerId(undefined);
+    }
 
     if (options.clearReAuthentication ?? true) {
       this.needsReAuthentication = false;
@@ -372,7 +385,13 @@ export class AppService {
 
   requireReAuthentication(returnUrl?: string): void {
     const normalizedReturnUrl = this.normalizeInternalRoute(returnUrl) || this.reAuthenticationReturnUrl;
-    this.clearAuthState({ clearReAuthentication: false, clearReturnUrl: false });
+    this.sessionRecoveryService.setOwnerId(this.loggedUser?.sub || this.keycloakIdentity);
+    this.sessionRecoveryService.captureRegisteredDrafts();
+    this.clearAuthState({
+      clearReAuthentication: false,
+      clearReturnUrl: false,
+      clearRecoveryDrafts: false
+    });
     this.reAuthenticationReturnUrl = normalizedReturnUrl;
     this.setSessionExpiryWarning(false);
     this.setNeedsReAuthentication(true);

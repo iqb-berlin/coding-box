@@ -20,6 +20,7 @@ import { AppService } from '../../../core/services/app.service';
 import { CoderTraining } from '../../models/coder-training.model';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
+import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 
 describe('CodingResultsComparisonComponent', () => {
   const comparisonSummary = (visibleRows: number) => ({
@@ -93,6 +94,7 @@ describe('CodingResultsComparisonComponent', () => {
     authData: { userName: string };
     loggedUser: { preferred_username?: string } | undefined;
     createOwnToken: jest.Mock;
+    needsReAuthentication: boolean;
   };
   let snackBar: {
     open: jest.Mock;
@@ -132,7 +134,8 @@ describe('CodingResultsComparisonComponent', () => {
     appService = {
       authData: { userName: 'Test User' },
       loggedUser: undefined,
-      createOwnToken: jest.fn()
+      createOwnToken: jest.fn(),
+      needsReAuthentication: false
     };
     snackBar = {
       open: jest.fn()
@@ -204,6 +207,7 @@ describe('CodingResultsComparisonComponent', () => {
   afterEach(() => {
     jest.useRealTimers();
     jest.restoreAllMocks();
+    sessionStorage.clear();
   });
 
   it('should create', () => {
@@ -1784,6 +1788,128 @@ describe('CodingResultsComparisonComponent', () => {
       'common.close',
       { duration: 4000 }
     );
+  });
+
+  it('should keep a discussion result as recovery draft when saving fails because authentication expired', () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    const row = {
+      responseId: 1,
+      unitName: 'Unit1',
+      variableId: 'Var1',
+      testperson: 'Test1',
+      discussionCode: null,
+      discussionScore: null,
+      discussionNotes: null,
+      discussionSource: null as 'manual' | 'auto_agreement' | null,
+      coders: []
+    };
+    codingTrainingBackendService.saveDiscussionResult.mockReturnValue(throwError(() => new HttpErrorResponse({
+      status: 401
+    })));
+    appService.needsReAuthentication = true;
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.withinTrainingData = [row];
+    component.discussionCodeByResponseId[1] = '7';
+    component.discussionScoreByResponseId[1] = 2;
+    component.discussionNotesByResponseId[1] = 'Replay note';
+
+    component.onDiscussionCodeBlur(row, 2);
+
+    expect(component.discussionErrorByResponseId[1]).toBe('Diskussionsergebnis wird nach erneuter Anmeldung gespeichert.');
+    expect(sessionRecoveryService.peekDraft('training-discussion-active-state')).toEqual({
+      workspaceId: 1,
+      trainingId: 5,
+      entries: [
+        {
+          responseId: 1,
+          codeValue: '7',
+          score: 2,
+          notes: 'Replay note'
+        }
+      ]
+    });
+  });
+
+  it('should restore a discussion recovery draft after authentication is ready again', () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    const row = {
+      responseId: 1,
+      unitName: 'Unit1',
+      variableId: 'Var1',
+      testperson: 'Test1',
+      discussionCode: null,
+      discussionScore: null,
+      discussionNotes: null,
+      discussionSource: null as 'manual' | 'auto_agreement' | null,
+      coders: []
+    };
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.withinTrainingData = [row];
+    sessionRecoveryService.saveDraft('training-discussion-active-state', {
+      workspaceId: 1,
+      trainingId: 5,
+      entries: [
+        {
+          responseId: 1,
+          codeValue: '7',
+          score: 2,
+          notes: 'Replay note'
+        }
+      ]
+    });
+
+    sessionRecoveryService.notifyRestoredAuthentication();
+
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, 7, 2, 'Replay note');
+    expect(sessionRecoveryService.peekDraft('training-discussion-active-state')).toBeNull();
+  });
+
+  it('should keep discussion recovery entries that are not loaded on the current page', () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    const row = {
+      responseId: 1,
+      unitName: 'Unit1',
+      variableId: 'Var1',
+      testperson: 'Test1',
+      discussionCode: null,
+      discussionScore: null,
+      discussionNotes: null,
+      discussionSource: null as 'manual' | 'auto_agreement' | null,
+      coders: []
+    };
+    const missingPageEntry = {
+      responseId: 2,
+      codeValue: '9',
+      score: 1,
+      notes: 'Still pending'
+    };
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.withinTrainingData = [row];
+    sessionRecoveryService.saveDraft('training-discussion-active-state', {
+      workspaceId: 1,
+      trainingId: 5,
+      entries: [
+        {
+          responseId: 1,
+          codeValue: '7',
+          score: 2,
+          notes: 'Replay note'
+        },
+        missingPageEntry
+      ]
+    });
+
+    sessionRecoveryService.notifyRestoredAuthentication();
+
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, 7, 2, 'Replay note');
+    expect(sessionRecoveryService.peekDraft('training-discussion-active-state')).toEqual({
+      workspaceId: 1,
+      trainingId: 5,
+      entries: [missingPageEntry]
+    });
   });
 
   describe('calculateStatistics', () => {

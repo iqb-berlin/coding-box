@@ -25,6 +25,7 @@ import {
 } from 'rxjs';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { AppService } from '../../../core/services/app.service';
+import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
@@ -104,6 +105,18 @@ type DoubleCodedResolutionDecision = {
   resolutionComment?: string;
 };
 
+interface DoubleCodedReviewRecoveryEntry {
+  responseId: number;
+  selectedValue: string;
+  comment: string;
+  replayDecision?: ReplayDecisionResult;
+}
+
+interface DoubleCodedReviewRecoveryDraft {
+  workspaceId: number;
+  entries: DoubleCodedReviewRecoveryEntry[];
+}
+
 interface CoderColumnMeta {
   columnId: string;
   coderId: number;
@@ -150,6 +163,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   private codingFacadeService = inject(CodingFacadeService);
   private codingStatisticsService = inject(CodingStatisticsService);
   private postMessageService = inject(PostMessageService);
+  private sessionRecoveryService = inject(SessionRecoveryService);
 
   constructor(
     @Optional() public dialogRef: MatDialogRef<DoubleCodedReviewComponent>,
@@ -186,11 +200,21 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   replayLoadingByResponseId: Record<number, boolean> = {};
   private replayDecisionByResponseId = new Map<number, ReplayDecisionResult>();
   private replayWindowByResponseId = new Map<number, MessageEventSource>();
+  private defaultReviewValueByResponseId = new Map<number, { selectedValue: string; comment: string }>();
+  private unregisterRecoveryProvider: (() => void) | null = null;
   private readonly replayDecisionPrefix = 'replay:';
+  private readonly reviewRecoveryKey = 'double-coded-review-active-state';
   private readonly standaloneCodingIssueOptionIds = new Set([-3, -4]);
 
   ngOnInit(): void {
     this.initializeForm();
+    this.unregisterRecoveryProvider = this.sessionRecoveryService.registerProvider({
+      key: this.reviewRecoveryKey,
+      capture: () => this.createReviewRecoveryDraft()
+    });
+    this.sessionRecoveryService.restore$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.restoreReviewRecoveryDraft());
     this.setupFilters();
     this.loadCoders();
     this.loadFilterOptions();
@@ -200,6 +224,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.unregisterRecoveryProvider?.();
+    this.unregisterRecoveryProvider = null;
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -423,6 +449,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     Object.keys(this.selectionForm.controls).forEach(key => {
       this.selectionForm.removeControl(key);
     });
+    this.defaultReviewValueByResponseId = this.defaultReviewValueByResponseId || new Map();
+    this.defaultReviewValueByResponseId.clear();
 
     const currentItems = this.dataSource.data;
 
@@ -446,6 +474,15 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       if (this.hasConflict(item) || (resolvedResult && resolvedResult.supervisorComment)) {
         const defaultComment = resolvedResult ? (resolvedResult.supervisorComment || '') : '';
         this.selectionForm.addControl(commentControlName, new FormControl(defaultComment));
+        this.defaultReviewValueByResponseId.set(item.responseId, {
+          selectedValue: defaultValue,
+          comment: defaultComment
+        });
+      } else {
+        this.defaultReviewValueByResponseId.set(item.responseId, {
+          selectedValue: defaultValue,
+          comment: ''
+        });
       }
     });
   }
@@ -1146,6 +1183,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
         this.totalItems = response.total;
 
         this.updateForm();
+        this.restoreReviewRecoveryDraft();
         this.isLoading = false;
       },
       error: () => {
@@ -1330,6 +1368,100 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
         this.isLoading = false;
       }
     });
+  }
+
+  private createReviewRecoveryDraft(): DoubleCodedReviewRecoveryDraft | null {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId || !this.selectionForm || this.allData.length === 0) {
+      return null;
+    }
+
+    const entries = this.allData
+      .map(item => this.createReviewRecoveryEntry(item))
+      .filter((entry): entry is DoubleCodedReviewRecoveryEntry => entry !== null);
+    if (entries.length === 0) {
+      return null;
+    }
+
+    return {
+      workspaceId,
+      entries
+    };
+  }
+
+  private createReviewRecoveryEntry(item: DoubleCodedItem): DoubleCodedReviewRecoveryEntry | null {
+    if (item.isResolved) {
+      return null;
+    }
+
+    const selectedValue = this.selectionForm.get(this.getItemControlName(item))?.value || '';
+    const comment = this.selectionForm.get(this.getCommentControlName(item))?.value || '';
+    const replayDecision = this.replayDecisionByResponseId.get(item.responseId);
+    const defaults = this.defaultReviewValueByResponseId.get(item.responseId) || {
+      selectedValue: '',
+      comment: ''
+    };
+    const isDirty = !!replayDecision ||
+      selectedValue !== defaults.selectedValue ||
+      comment !== defaults.comment;
+    if (!isDirty) {
+      return null;
+    }
+
+    return {
+      responseId: item.responseId,
+      selectedValue,
+      comment,
+      ...(replayDecision ? { replayDecision } : {})
+    };
+  }
+
+  private restoreReviewRecoveryDraft(): boolean {
+    const draft = this.sessionRecoveryService.peekDraft<DoubleCodedReviewRecoveryDraft>(this.reviewRecoveryKey);
+    if (!draft || draft.workspaceId !== this.appService.selectedWorkspaceId) {
+      return false;
+    }
+    if (this.allData.length === 0 || !this.selectionForm) {
+      return false;
+    }
+
+    const remainingEntries: DoubleCodedReviewRecoveryEntry[] = [];
+    draft.entries.forEach(entry => {
+      const item = this.allData.find(candidate => candidate.responseId === entry.responseId);
+      if (!item) {
+        remainingEntries.push(entry);
+        return;
+      }
+
+      if (entry.replayDecision) {
+        this.replayDecisionByResponseId.set(entry.responseId, entry.replayDecision);
+        item.selectedCoderResult = undefined;
+      } else {
+        this.replayDecisionByResponseId.delete(entry.responseId);
+      }
+
+      const selectedValue = entry.selectedValue ||
+        (entry.replayDecision ? this.getReplayDecisionControlValue(item) : '');
+      this.getOrCreateFormControl(this.getItemControlName(item)).setValue(selectedValue);
+      if (selectedValue && !entry.replayDecision) {
+        this.onSelectionChange(item, selectedValue);
+      }
+
+      if (entry.comment || this.selectionForm.get(this.getCommentControlName(item))) {
+        this.getOrCreateFormControl(this.getCommentControlName(item)).setValue(entry.comment);
+      }
+    });
+
+    if (remainingEntries.length > 0) {
+      this.sessionRecoveryService.saveDraft(this.reviewRecoveryKey, {
+        ...draft,
+        entries: remainingEntries
+      });
+    } else {
+      this.sessionRecoveryService.clearDraft(this.reviewRecoveryKey);
+    }
+
+    return remainingEntries.length !== draft.entries.length;
   }
 
   private showError(message: string): void {
