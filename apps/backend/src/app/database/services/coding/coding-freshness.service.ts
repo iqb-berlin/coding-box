@@ -33,6 +33,7 @@ import { CodingJobFreshnessStatus } from '../../../../../../../api-dto/coding/jo
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { IQB_STANDARD_MISSING_CODES, MissingsProfilesService } from './missings-profiles.service';
 import { getNonCodingIssueReviewJobSqlCondition } from './coding-job-type.util';
+import { getCodingVariableIdCandidateSql } from './coding-response-candidate.util';
 
 type UnitCodingPresence = Record<CodingFreshnessVersion, boolean>;
 
@@ -420,24 +421,40 @@ export class CodingFreshnessService {
     }
 
     const revision = await this.incrementRevision(workspaceId);
-    const responseCounts = await this.getResponseCountsByUnit(workspaceId, ids);
     const workspacePresence = await this.getWorkspaceCodingPresence(workspaceId);
     const unitPresence = await this.getUnitCodingPresence(workspaceId, ids);
+    const manualReviewUnitIds = ids.filter(unitId => unitPresence.get(unitId)?.v2);
+    const manualResponseCounts = manualReviewUnitIds.length > 0 ?
+      await this.getResponseCountsByUnit(workspaceId, manualReviewUnitIds) :
+      new Map<number, number>();
+    const autoCodingVersionsToRefresh = this.getAutoCodingVersionsToRefresh(workspacePresence);
+    const autoCodingResponseCountsByVersion = new Map<CodingFreshnessVersion, Map<number, number>>();
     const rows: FreshnessUpsert[] = [];
 
-    this.getAutoCodingVersionsToRefresh(workspacePresence).forEach(version => {
+    for (const version of autoCodingVersionsToRefresh) {
+      autoCodingResponseCountsByVersion.set(
+        version,
+        await this.getAutoCodingCandidateResponseCountsByUnit(workspaceId, ids, version)
+      );
+    }
+
+    autoCodingVersionsToRefresh.forEach(version => {
       ids.forEach(unitId => {
-        const state: CodingFreshnessState =
-          unitPresence.get(unitId)?.[version] ? 'STALE' : 'PENDING';
+        const autoCodingResponseCount =
+          autoCodingResponseCountsByVersion.get(version)?.get(unitId) || 0;
+        let state: CodingFreshnessState = 'CURRENT';
+        if (autoCodingResponseCount > 0) {
+          state = unitPresence.get(unitId)?.[version] ? 'STALE' : 'PENDING';
+        }
         rows.push(this.buildRow(
           workspaceId,
           unitId,
           version,
           state,
           reason,
-          responseCounts.get(unitId) || 0,
+          autoCodingResponseCount,
           revision,
-          null
+          state === 'CURRENT' ? revision : null
         ));
       });
     });
@@ -450,7 +467,7 @@ export class CodingFreshnessService {
           'v2',
           'MANUAL_REVIEW_REQUIRED',
           reason,
-          responseCounts.get(unitId) || 0,
+          manualResponseCounts.get(unitId) || 0,
           revision,
           null
         ));
@@ -2048,6 +2065,80 @@ export class CodingFreshnessService {
 
     countRows.forEach(row => result.set(Number(row.unitId), Number(row.count || 0)));
     return result;
+  }
+
+  private async getAutoCodingCandidateResponseCountsByUnit(
+    workspaceId: number,
+    unitIds: number[],
+    version: CodingFreshnessVersion,
+    manager?: EntityManager
+  ): Promise<Map<number, number>> {
+    const ids = this.uniquePositiveIds(unitIds);
+    const result = new Map<number, number>();
+    ids.forEach(id => result.set(id, 0));
+    if (ids.length === 0) {
+      return result;
+    }
+
+    const autoCoderRun = version === 'v3' ? 2 : 1;
+    const responseRepository = manager ?
+      manager.getRepository(ResponseEntity) :
+      this.responseRepository;
+    const countRows = await this.collectChunked(ids, this.ID_QUERY_BATCH_SIZE, async chunkIds => {
+      const query = responseRepository
+        .createQueryBuilder('response')
+        .select('response.unitid', 'unitId')
+        .addSelect('COUNT(response.id)', 'count')
+        .innerJoin('response.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
+        .innerJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('response.unitid IN (:...unitIds)', { unitIds: chunkIds })
+        .andWhere(
+          new Brackets(qb => {
+            qb.where('response.status IN (:...statuses)', {
+              statuses: [3, 2, 1]
+            }).orWhere('response.status_v1 = :derivePending', {
+              derivePending: statusStringToNumber('DERIVE_PENDING') as number
+            });
+          })
+        )
+        .andWhere(getCodingVariableIdCandidateSql('response'))
+        .groupBy('response.unitid');
+
+      this.applyAutoCodingSourceFilter(query, autoCoderRun);
+      await this.applyWorkspaceExclusions(workspaceId, query);
+
+      return query.getRawMany<{ unitId: number | string; count: string }>();
+    });
+
+    countRows.forEach(row => result.set(Number(row.unitId), Number(row.count || 0)));
+    return result;
+  }
+
+  private applyAutoCodingSourceFilter(
+    query: SelectQueryBuilder<ResponseEntity>,
+    autoCoderRun: 1 | 2
+  ): void {
+    if (autoCoderRun === 1) {
+      query.andWhere('response.is_autocoder_generated IS NOT TRUE');
+      return;
+    }
+
+    query.andWhere(
+      new Brackets(qb => {
+        qb.where('response.is_autocoder_generated IS NOT TRUE').orWhere(
+          `response.is_autocoder_generated = :generatedWithSourceCoding
+            AND (
+              response.status_v1 IS NOT NULL
+              OR response.status_v2 IS NOT NULL
+            )`,
+          { generatedWithSourceCoding: true }
+        );
+      })
+    );
   }
 
   private existsVersionExpression(version: CodingFreshnessVersion): string {
