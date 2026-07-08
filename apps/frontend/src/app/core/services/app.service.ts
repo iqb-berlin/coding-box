@@ -404,7 +404,10 @@ export class AppService {
 
   requireReAuthentication(returnUrl?: string): void {
     const normalizedReturnUrl = this.normalizeInternalRoute(returnUrl) || this.reAuthenticationReturnUrl;
-    this.sessionRecoveryService.setOwnerId(this.loggedUser?.sub || this.keycloakIdentity);
+    const recoveryOwnerId = this.loggedUser?.sub || this.keycloakIdentity;
+    if (recoveryOwnerId) {
+      this.sessionRecoveryService.setOwnerId(recoveryOwnerId);
+    }
     this.sessionRecoveryService.captureRegisteredDrafts();
     this.clearAuthState({
       clearReAuthentication: false,

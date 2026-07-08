@@ -325,6 +325,26 @@ describe('AppService', () => {
       expect(sessionRecoveryService.consumeDraft('late-active-form')).toEqual({ field: 'late-value' });
     });
 
+    it('should keep recovery drafts scoped when reauthentication is requested repeatedly', () => {
+      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      let fieldValue = 'first-value';
+      const unregister = sessionRecoveryService.registerProvider({
+        key: 'active-form',
+        capture: () => ({ field: fieldValue })
+      });
+
+      service.requireReAuthentication('/coding');
+      fieldValue = 'second-value';
+      service.requireReAuthentication('/workspace-admin/1');
+
+      expect(sessionRecoveryService.peekDraft('active-form')).toEqual({ field: 'second-value' });
+      sessionRecoveryService.setOwnerId(undefined);
+      expect(sessionRecoveryService.peekDraft('active-form')).toBeNull();
+      sessionRecoveryService.setOwnerId('user1');
+      expect(sessionRecoveryService.consumeDraft('active-form')).toEqual({ field: 'second-value' });
+      unregister();
+    });
+
     it('should clear the return URL when reauthentication is dismissed', () => {
       service.requireReAuthentication('/workspace-admin/1');
 
