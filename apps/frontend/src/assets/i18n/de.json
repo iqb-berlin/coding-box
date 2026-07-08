@@ -1932,6 +1932,11 @@
       "show-more-manual-code-warnings": "+{{count}} weitere anzeigen",
       "show-fewer-manual-code-warnings": "Weniger anzeigen"
     },
+    "manual-load-hint": {
+      "title": "Daten manuell laden",
+      "training": "Die Schulungsdaten wurden noch nicht geladen. Klicken Sie auf Aktualisieren, um Schulungen und Kodierjobs zu laden.",
+      "execution": "Die Durchführungsdaten wurden noch nicht geladen. Klicken Sie auf Aktualisieren, um Kodierjobs und Statusdaten zu laden."
+    },
     "table": {
       "headers": {
         "unit-key": "Unit-Schlüssel",
