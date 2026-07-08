@@ -198,7 +198,7 @@ export class ReplayCodingService {
 
     await Promise.all([...progressSaves, ...noteSaves]);
     if (this.codingJobComment.trim()) {
-      await this.saveCodingJobComment(workspaceId, this.codingJobComment);
+      await this.saveCodingJobComment(workspaceId, this.codingJobComment, { throwOnError: true });
     }
     this.checkCodingJobCompletion(unitsData);
     return true;
@@ -717,7 +717,11 @@ export class ReplayCodingService {
     }
   }
 
-  async saveCodingJobComment(workspaceId: number, comment: string): Promise<void> {
+  async saveCodingJobComment(
+    workspaceId: number,
+    comment: string,
+    options: { throwOnError?: boolean } = {}
+  ): Promise<void> {
     if (!this.codingJobId || !workspaceId) return;
     if (this.isReviewMode) return;
 
@@ -727,6 +731,9 @@ export class ReplayCodingService {
         this.codingJobBackendService.updateCodingJob(workspaceId, this.codingJobId, { comment }, ...this.authTokenArg)
       );
     } catch (error) {
+      if (options.throwOnError) {
+        throw error;
+      }
       // Ignore errors when saving comment
     }
   }

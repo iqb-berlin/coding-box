@@ -1177,6 +1177,14 @@ describe('ReplayCodingService', () => {
       expect(codingJobBackendServiceMock.saveCodingNotes).not.toHaveBeenCalled();
       expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
     });
+
+    it('rejects recovered coding state when the recovered job comment cannot be saved', async () => {
+      service.codingJobId = 100;
+      service.codingJobComment = 'comment';
+      codingJobBackendServiceMock.updateCodingJob.mockReturnValue(throwError(() => new Error('save failed')));
+
+      await expect(service.saveRecoveredCodingState(1, null)).rejects.toThrow('save failed');
+    });
   });
 
   describe('read-only review mode', () => {

@@ -39,7 +39,7 @@ import { UnitsReplayComponent } from '../units-replay/units-replay.component';
 import { CodeSelectorComponent } from '../../../coding/components/code-selector/code-selector.component';
 import { CodingJobCommentDialogComponent } from '../../../coding/components/coding-job-comment-dialog/coding-job-comment-dialog.component';
 import { NavigateCodingCasesDialogComponent, NavigateCodingCasesDialogData } from '../navigate-coding-cases-dialog/navigate-coding-cases-dialog.component';
-import { ReplayCodingRecoverySnapshot, ReplayCodingService } from '../../services/replay-coding.service';
+import { ReplayCodingRecoverySnapshot, ReplayCodingService, SavedCode } from '../../services/replay-coding.service';
 import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { hasManualInstruction } from '../../../coding/utils/manual-coding.util';
@@ -69,9 +69,12 @@ interface PendingReplayNotesCommit {
   notes: string;
 }
 
+type ReplayRecoveryMode = 'coding' | 'coding-decision';
+
 interface ReplayRecoveryDraft {
   workspaceId: number;
   codingJobId: number | null;
+  mode?: ReplayRecoveryMode;
   currentUnitIndex: number;
   testPerson: string;
   unitId: string;
@@ -1109,6 +1112,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return {
       workspaceId: this.workspaceId,
       codingJobId: this.codingService.codingJobId,
+      mode: this.getReplayRecoveryMode(),
       currentUnitIndex: this.unitsData?.currentUnitIndex ?? this.currentUnitIndex,
       testPerson: this.testPerson,
       unitId: this.unitId,
@@ -1155,6 +1159,14 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       return false;
     }
 
+    if (this.isCodingDecisionMode) {
+      const notifiedOpener = this.notifyDecisionReplayRecovery(draft);
+      if (notifiedOpener) {
+        this.sessionRecoveryService.clearDraft(this.replayRecoveryKey);
+      }
+      return notifiedOpener;
+    }
+
     try {
       const saved = await this.codingService.saveRecoveredCodingState(this.workspaceId, this.unitsData);
       if (!saved) {
@@ -1173,15 +1185,104 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       return false;
     }
 
+    const draftMode = draft.mode ?? 'coding';
+    if (draftMode !== this.getReplayRecoveryMode()) {
+      return false;
+    }
+
+    if (draftMode === 'coding-decision') {
+      return !!draft.originResponseId &&
+        !!this.originResponseId &&
+        draft.originResponseId === this.originResponseId;
+    }
+
     const currentJobId = this.codingService.codingJobId || this.unitsData?.id || null;
     return !draft.codingJobId || (!!currentJobId && draft.codingJobId === currentJobId);
+  }
+
+  private getReplayRecoveryMode(): ReplayRecoveryMode {
+    return this.isCodingDecisionMode ? 'coding-decision' : 'coding';
   }
 
   private canUseReplayRecovery(): boolean {
     return this.isCodingMode &&
       !this.isReviewMode &&
-      !this.isCodingIssueReviewMode &&
-      !this.isCodingDecisionMode;
+      !this.isCodingIssueReviewMode;
+  }
+
+  private notifyDecisionReplayRecovery(draft: ReplayRecoveryDraft): boolean {
+    if (!window.opener || !draft.originResponseId) {
+      return false;
+    }
+
+    const selectedCodes = this.getEffectiveRecoverySelectedCodes(draft.coding);
+    const notesByCompositeKey = new Map(draft.coding.notes || []);
+    let notified = false;
+
+    selectedCodes.forEach((selectedCode, compositeKey) => {
+      const keyParts = this.parseRecoveryCompositeKey(compositeKey);
+      if (!keyParts) {
+        return;
+      }
+
+      const notes = notesByCompositeKey.get(compositeKey) || '';
+      window.opener.postMessage({
+        type: 'replayCodeSelected',
+        testPerson: keyParts.testPerson,
+        unitId: keyParts.unitId,
+        variableId: keyParts.variableId,
+        code: selectedCode.code ?? String(selectedCode.id),
+        score: selectedCode.score ?? null,
+        notes,
+        responseId: draft.originResponseId
+      }, '*');
+      notesByCompositeKey.delete(compositeKey);
+      notified = true;
+    });
+
+    notesByCompositeKey.forEach((notes, compositeKey) => {
+      const keyParts = this.parseRecoveryCompositeKey(compositeKey);
+      if (!keyParts) {
+        return;
+      }
+
+      window.opener.postMessage({
+        type: 'replayNotesCommitted',
+        testPerson: keyParts.testPerson,
+        unitId: keyParts.unitId,
+        variableId: keyParts.variableId,
+        notes,
+        responseId: draft.originResponseId
+      }, '*');
+      notified = true;
+    });
+
+    return notified;
+  }
+
+  private getEffectiveRecoverySelectedCodes(snapshot: ReplayCodingRecoverySnapshot): Map<string, SavedCode> {
+    const selectedCodes = new Map<string, SavedCode>(snapshot.selectedCodes || []);
+    (snapshot.pendingSelections || []).forEach(([compositeKey, selectedCode]) => {
+      if (selectedCode === null) {
+        selectedCodes.delete(compositeKey);
+      } else {
+        selectedCodes.set(compositeKey, selectedCode);
+      }
+    });
+    return selectedCodes;
+  }
+
+  private parseRecoveryCompositeKey(compositeKey: string): { testPerson: string; unitId: string; variableId: string } | null {
+    const parts = compositeKey.split('::');
+    if (parts.length < 4) {
+      return null;
+    }
+
+    return {
+      testPerson: parts[0],
+      unitId: parts[2],
+      variableId: parts[3]
+    };
   }
 
   ngOnDestroy(): void {
