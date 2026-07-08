@@ -1143,8 +1143,26 @@
     "access-token": "Zugangstoken",
     "generate-token": "Token generieren",
     "generate-token-description": "Generieren Sie ein Zugangstoken für externe Replay-Links in diesem Arbeitsbereich.",
+    "replay-url-export-mode": "Exportierte Replay-Links",
+    "replay-url-export-mode-heading": "Replay-URLs in Exporten",
+    "replay-url-export-mode-description": "Legt nur für Exportdateien fest, ob Replay-Links ein zeitlich begrenztes auth-Token enthalten oder eine Anmeldung im Arbeitsbereich voraussetzen. Der Button zum Generieren eines Zugangstokens bleibt davon unabhängig.",
+    "replay-url-export-mode-auth": "auth-Token",
+    "replay-url-export-mode-workspace": "Workspace-Anmeldung",
+    "replay-url-export-mode-saved": "Replay-URL-Modus gespeichert",
+    "replay-url-export-token-duration-heading": "Gültigkeit externer Replay-Links",
+    "replay-url-export-token-duration-description": "Legt fest, wie lange auth-Links in Exportdateien gültig bleiben. Erlaubt sind maximal {{max}} Tage.",
+    "replay-url-export-token-duration-saved": "Gültigkeit externer Replay-Links gespeichert",
+    "save-replay-url-export-token-duration": "Gültigkeit speichern",
+    "auth-session-heading": "Sitzung",
+    "auth-session-idle-timeout-heading": "Abmeldung nach Inaktivität",
+    "auth-session-idle-timeout-description": "Legt fest, nach wie vielen Minuten ohne Aktivität eine erneute Anmeldung erforderlich ist. Erlaubt sind {{min}} bis {{max}} Minuten.",
+    "auth-session-idle-timeout-saved": "Sitzungsdauer gespeichert",
+    "save-auth-session-idle-timeout": "Sitzungsdauer speichern",
+    "auth-session-idle-timeout-invalid": "Bitte geben Sie eine gültige Dauer in Minuten ein.",
     "validity-days": "Laufzeit in Tagen",
     "enter-validity-days": "Geben Sie 1 bis {{max}} Tage ein, für die das Token gültig sein soll",
+    "validity-minutes": "Laufzeit in Minuten",
+    "enter-validity-minutes": "Geben Sie {{min}} bis {{max}} Minuten ein",
     "generate-access-token": "Zugangstoken generieren",
     "generated-token": "Generiertes Token",
     "authorization-token": "Autorisierungs Token",
@@ -1157,7 +1175,7 @@
     "show-replay-statistics": "Replay-Statistiken anzeigen",
     "coding": "Kodierung",
     "evaluation-mode": "Auswertungsmodus",
-    "evaluation-mode-description": "Wenn aktiviert, werden teure automatische Aktualisierungen in der Kodierungsverwaltung ausgeschaltet. Statistiken und Übersichten werden dann gezielt per Aktualisieren-Button geladen.",
+    "evaluation-mode-description": "Wenn aktiviert, arbeitet die Kodierungsverwaltung im Manuell-laden-Modus: teure automatische Aktualisierungen werden ausgeschaltet und Statistiken, Übersichten sowie Kodierjob-Tabellen werden gezielt per Aktualisieren-Button geladen.",
     "evaluation-mode-enabled": "Auswertungsmodus aktiviert",
     "evaluation-mode-disabled": "Auswertungsmodus deaktiviert",
     "auto-fetch-coding-statistics": "Automatisches Laden der Kodierstatistiken",
@@ -1914,6 +1932,12 @@
       "show-more-manual-code-warnings": "+{{count}} weitere anzeigen",
       "show-fewer-manual-code-warnings": "Weniger anzeigen"
     },
+    "manual-load-hint": {
+      "title": "Daten manuell laden",
+      "preparation": "Die Vorbereitungsdaten wurden noch nicht geladen. Klicken Sie auf Aktualisieren, um Variablenbündel und Vorbereitungsdaten zu laden.",
+      "training": "Die Schulungsdaten wurden noch nicht geladen. Klicken Sie auf Aktualisieren, um Schulungen und Kodierjobs zu laden.",
+      "execution": "Die Durchführungsdaten wurden noch nicht geladen. Klicken Sie auf Aktualisieren, um Kodierjobs und Statusdaten zu laden."
+    },
     "table": {
       "headers": {
         "unit-key": "Unit-Schlüssel",
@@ -2094,6 +2118,13 @@
       "validation-running": "Validierung wird durchgeführt...",
       "validation-page-progress": "Validierung wird durchgeführt (Seite {{page}})...",
       "view-results-button": "Validierungs Ergebnisse anzeigen"
+    }
+  },
+  "test-results-page": {
+    "coding-status": {
+      "manual-title": "Kodierstatus wird manuell aktualisiert",
+      "manual-text": "Automatische Statusprüfungen sind für diesen Arbeitsbereich deaktiviert. Aktualisieren Sie den Kodierstatus in der Kodierungsverwaltung bei Bedarf manuell.",
+      "refresh": "Kodierstatus aktualisieren"
     }
   },
   "coding-variables-dialog": {

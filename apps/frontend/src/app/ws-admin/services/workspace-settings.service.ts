@@ -1,10 +1,18 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, Subject } from 'rxjs';
 import { finalize, shareReplay, tap } from 'rxjs/operators';
 import { SERVER_URL } from '../../injection-tokens';
 import { WorkspaceSettings } from '../models/workspace-settings.model';
 import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
+import {
+  DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
+  DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
+  DEFAULT_REPLAY_URL_EXPORT_MODE,
+  MAX_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
+  MIN_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
+  type ReplayUrlExportMode
+} from '../../core/services/auth-session.config';
 
 export enum ResponseMatchingFlag {
   NO_AGGREGATION = 'NO_AGGREGATION',
@@ -20,12 +28,28 @@ export const DEFAULT_RESPONSE_MATCHING_MODE: ResponseMatchingModeDto = {
   flags: []
 };
 
+export interface AuthSessionIdleTimeoutChange {
+  workspaceId: number;
+  timeoutMinutes: number;
+}
+
+const REPLAY_URL_EXPORT_MODE_SETTING_KEY = 'replay-url-export-mode';
+const REPLAY_URL_EXPORT_TOKEN_DURATION_DAYS_SETTING_KEY = 'replay-url-export-token-duration-days';
+const AUTH_SESSION_IDLE_TIMEOUT_MINUTES_SETTING_KEY = 'auth-session-idle-timeout-minutes';
+
 @Injectable({
   providedIn: 'root'
 })
 export class WorkspaceSettingsService {
   private http = inject(HttpClient);
   private rawServerUrl = inject(SERVER_URL);
+
+  private readonly authSessionIdleTimeoutChangedSubject =
+    new Subject<AuthSessionIdleTimeoutChange>();
+
+  readonly authSessionIdleTimeoutChanged$ =
+    this.authSessionIdleTimeoutChangedSubject.asObservable();
+
   private readonly settingsCacheTtlMs = 10_000;
   private readonly settingsCache = new Map<
   string,
@@ -393,6 +417,120 @@ export class WorkspaceSettingsService {
     );
   }
 
+  getReplayUrlExportMode(workspaceId: number): Observable<ReplayUrlExportMode> {
+    return new Observable(observer => {
+      this.getWorkspaceSetting(
+        workspaceId,
+        REPLAY_URL_EXPORT_MODE_SETTING_KEY,
+        true
+      ).subscribe({
+        next: setting => {
+          observer.next(this.parseReplayUrlExportMode(setting.value));
+          observer.complete();
+        },
+        error: () => {
+          observer.next(DEFAULT_REPLAY_URL_EXPORT_MODE);
+          observer.complete();
+        }
+      });
+    });
+  }
+
+  setReplayUrlExportMode(
+    workspaceId: number,
+    mode: ReplayUrlExportMode
+  ): Observable<WorkspaceSettings> {
+    const value = JSON.stringify({ mode });
+    return this.setWorkspaceSetting(
+      workspaceId,
+      REPLAY_URL_EXPORT_MODE_SETTING_KEY,
+      value,
+      'Controls whether exported replay URLs use temporary auth tokens or workspace login links'
+    );
+  }
+
+  getReplayUrlExportTokenDurationDays(
+    workspaceId: number,
+    maxDurationDays = DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS
+  ): Observable<number> {
+    return new Observable(observer => {
+      this.getWorkspaceSetting(
+        workspaceId,
+        REPLAY_URL_EXPORT_TOKEN_DURATION_DAYS_SETTING_KEY,
+        true
+      ).subscribe({
+        next: setting => {
+          observer.next(
+            this.parseReplayUrlExportTokenDurationDays(setting.value, maxDurationDays)
+          );
+          observer.complete();
+        },
+        error: () => {
+          observer.next(
+            this.normalizeReplayUrlExportTokenDurationDays(undefined, maxDurationDays)
+          );
+          observer.complete();
+        }
+      });
+    });
+  }
+
+  setReplayUrlExportTokenDurationDays(
+    workspaceId: number,
+    durationDays: number,
+    maxDurationDays = DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS
+  ): Observable<WorkspaceSettings> {
+    const normalizedDurationDays = this.normalizeReplayUrlExportTokenDurationDays(
+      durationDays,
+      maxDurationDays
+    );
+    return this.setWorkspaceSetting(
+      workspaceId,
+      REPLAY_URL_EXPORT_TOKEN_DURATION_DAYS_SETTING_KEY,
+      JSON.stringify({ durationDays: normalizedDurationDays }),
+      'Controls how many days exported auth replay URLs stay valid'
+    );
+  }
+
+  getAuthSessionIdleTimeoutMinutes(workspaceId: number): Observable<number> {
+    return new Observable(observer => {
+      this.getWorkspaceSetting(
+        workspaceId,
+        AUTH_SESSION_IDLE_TIMEOUT_MINUTES_SETTING_KEY,
+        true
+      ).subscribe({
+        next: setting => {
+          observer.next(this.parseAuthSessionIdleTimeoutMinutes(setting.value));
+          observer.complete();
+        },
+        error: () => {
+          observer.next(this.normalizeAuthSessionIdleTimeoutMinutes(undefined));
+          observer.complete();
+        }
+      });
+    });
+  }
+
+  setAuthSessionIdleTimeoutMinutes(
+    workspaceId: number,
+    timeoutMinutes: number
+  ): Observable<WorkspaceSettings> {
+    const normalizedTimeoutMinutes = this.normalizeAuthSessionIdleTimeoutMinutes(timeoutMinutes);
+    return this.setWorkspaceSetting(
+      workspaceId,
+      AUTH_SESSION_IDLE_TIMEOUT_MINUTES_SETTING_KEY,
+      JSON.stringify({ timeoutMinutes: normalizedTimeoutMinutes }),
+      'Controls after how many inactive minutes users must reauthenticate'
+    ).pipe(
+      tap(() => {
+        this.authSessionIdleTimeoutChangedSubject.next({
+          workspaceId,
+          timeoutMinutes: normalizedTimeoutMinutes
+        });
+      })
+    );
+  }
+
   getResponseMatchingMode(
     workspaceId: number
   ): Observable<ResponseMatchingFlag[]> {
@@ -485,6 +623,121 @@ export class WorkspaceSettingsService {
       return 2;
     }
     return Math.min(100, Math.max(2, Math.round(numericValue)));
+  }
+
+  private parseReplayUrlExportMode(value: string): ReplayUrlExportMode {
+    if (this.isReplayUrlExportMode(value)) {
+      return value;
+    }
+
+    try {
+      const parsed = JSON.parse(value) as {
+        mode?: unknown;
+      } | string;
+      if (typeof parsed === 'string' && this.isReplayUrlExportMode(parsed)) {
+        return parsed;
+      }
+      if (
+        typeof parsed === 'object' &&
+        parsed !== null &&
+        this.isReplayUrlExportMode(parsed.mode)
+      ) {
+        return parsed.mode;
+      }
+    } catch {
+      return DEFAULT_REPLAY_URL_EXPORT_MODE;
+    }
+
+    return DEFAULT_REPLAY_URL_EXPORT_MODE;
+  }
+
+  private isReplayUrlExportMode(value: unknown): value is ReplayUrlExportMode {
+    return value === 'auth' || value === 'workspaceId';
+  }
+
+  private parseReplayUrlExportTokenDurationDays(value: string, maxDurationDays: number): number {
+    const directValue = Number(value);
+    if (Number.isFinite(directValue)) {
+      return this.normalizeReplayUrlExportTokenDurationDays(directValue, maxDurationDays);
+    }
+
+    try {
+      const parsed = JSON.parse(value) as {
+        durationDays?: unknown;
+      } | number;
+      if (typeof parsed === 'number') {
+        return this.normalizeReplayUrlExportTokenDurationDays(parsed, maxDurationDays);
+      }
+      if (typeof parsed === 'object' && parsed !== null) {
+        return this.normalizeReplayUrlExportTokenDurationDays(
+          Number(parsed.durationDays),
+          maxDurationDays
+        );
+      }
+    } catch {
+      return this.normalizeReplayUrlExportTokenDurationDays(undefined, maxDurationDays);
+    }
+
+    return this.normalizeReplayUrlExportTokenDurationDays(undefined, maxDurationDays);
+  }
+
+  private normalizeReplayUrlExportTokenDurationDays(
+    durationDays: number | undefined,
+    maxDurationDays: number
+  ): number {
+    const normalizedMaxDurationDays = Number.isInteger(maxDurationDays) && maxDurationDays >= 1 ?
+      maxDurationDays :
+      DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
+    const fallbackDurationDays = Math.min(
+      DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
+      normalizedMaxDurationDays
+    );
+
+    if (
+      durationDays === undefined ||
+      !Number.isInteger(durationDays) ||
+      durationDays < 1
+    ) {
+      return fallbackDurationDays;
+    }
+
+    return Math.min(durationDays, normalizedMaxDurationDays);
+  }
+
+  private parseAuthSessionIdleTimeoutMinutes(value: string): number {
+    const directValue = Number(value);
+    if (Number.isFinite(directValue)) {
+      return this.normalizeAuthSessionIdleTimeoutMinutes(directValue);
+    }
+
+    try {
+      const parsed = JSON.parse(value) as {
+        timeoutMinutes?: unknown;
+      } | number;
+      if (typeof parsed === 'number') {
+        return this.normalizeAuthSessionIdleTimeoutMinutes(parsed);
+      }
+      if (typeof parsed === 'object' && parsed !== null) {
+        return this.normalizeAuthSessionIdleTimeoutMinutes(Number(parsed.timeoutMinutes));
+      }
+    } catch {
+      return this.normalizeAuthSessionIdleTimeoutMinutes(undefined);
+    }
+
+    return this.normalizeAuthSessionIdleTimeoutMinutes(undefined);
+  }
+
+  private normalizeAuthSessionIdleTimeoutMinutes(
+    timeoutMinutes: number | undefined
+  ): number {
+    if (typeof timeoutMinutes !== 'number' || !Number.isInteger(timeoutMinutes)) {
+      return DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES;
+    }
+
+    return Math.min(
+      MAX_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
+      Math.max(MIN_AUTH_SESSION_IDLE_TIMEOUT_MINUTES, timeoutMinutes)
+    );
   }
 
   private getSettingCacheKey(workspaceId: number, key: string): string {

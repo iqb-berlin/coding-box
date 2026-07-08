@@ -218,7 +218,8 @@ export class CodingListQueryService {
           unitId: unitKey,
           variablePage,
           variableAnchor,
-          authToken
+          authToken,
+          workspaceId: authToken ? undefined : workspace_id
         });
 
         return {

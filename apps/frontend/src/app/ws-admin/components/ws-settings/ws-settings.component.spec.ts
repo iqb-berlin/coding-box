@@ -71,7 +71,13 @@ describe('WsSettingsComponent', () => {
       getShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of(false)),
       setShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of({})),
       getEnableRegexSearch: jest.fn().mockReturnValue(of(false)),
-      setEnableRegexSearch: jest.fn().mockReturnValue(of({}))
+      setEnableRegexSearch: jest.fn().mockReturnValue(of({})),
+      getReplayUrlExportMode: jest.fn().mockReturnValue(of('auth')),
+      setReplayUrlExportMode: jest.fn().mockReturnValue(of({})),
+      getReplayUrlExportTokenDurationDays: jest.fn((_: number, maxDurationDays: number) => of(maxDurationDays)),
+      setReplayUrlExportTokenDurationDays: jest.fn().mockReturnValue(of({})),
+      getAuthSessionIdleTimeoutMinutes: jest.fn().mockReturnValue(of(45)),
+      setAuthSessionIdleTimeoutMinutes: jest.fn().mockReturnValue(of({}))
     } as unknown as jest.Mocked<WorkspaceSettingsService>;
 
     mockClipboard = {
@@ -142,6 +148,12 @@ describe('WsSettingsComponent', () => {
       expect(component.showTestResultsLogAnomalies).toBe(false);
       expect(mockWorkspaceSettingsService.getEnableRegexSearch).toHaveBeenCalledWith(1);
       expect(component.enableRegexSearch).toBe(false);
+      expect(mockWorkspaceSettingsService.getReplayUrlExportMode).toHaveBeenCalledWith(1);
+      expect(component.replayUrlExportMode).toBe('auth');
+      expect(mockWorkspaceSettingsService.getReplayUrlExportTokenDurationDays).toHaveBeenCalledWith(1, 90);
+      expect(component.replayUrlExportTokenDurationDays).toBe(90);
+      expect(mockWorkspaceSettingsService.getAuthSessionIdleTimeoutMinutes).toHaveBeenCalledWith(1);
+      expect(component.authSessionIdleTimeoutMinutes).toBe(45);
     });
   });
 
@@ -214,6 +226,96 @@ describe('WsSettingsComponent', () => {
       component.authToken = null;
       component.copyToken();
       expect(mockClipboard.copy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('toggleReplayUrlExportMode', () => {
+    it('should persist auth mode', () => {
+      component.toggleReplayUrlExportMode({ checked: true });
+
+      expect(component.replayUrlExportMode).toBe('auth');
+      expect(mockWorkspaceSettingsService.setReplayUrlExportMode).toHaveBeenCalledWith(1, 'auth');
+    });
+
+    it('should persist workspaceId mode', () => {
+      component.toggleReplayUrlExportMode({ checked: false });
+
+      expect(component.replayUrlExportMode).toBe('workspaceId');
+      expect(mockWorkspaceSettingsService.setReplayUrlExportMode).toHaveBeenCalledWith(1, 'workspaceId');
+    });
+
+    it('should revert replay URL export mode on error', () => {
+      component.replayUrlExportMode = 'auth';
+      mockWorkspaceSettingsService.setReplayUrlExportMode.mockReturnValue(
+        throwError(() => new Error('error'))
+      );
+
+      component.toggleReplayUrlExportMode({ checked: false });
+
+      expect(component.replayUrlExportMode).toBe('auth');
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+  });
+
+  describe('saveReplayUrlExportTokenDuration', () => {
+    it('should persist replay URL export token duration', () => {
+      component.replayUrlExportTokenDurationDays = 45;
+
+      component.saveReplayUrlExportTokenDuration();
+
+      expect(mockWorkspaceSettingsService.setReplayUrlExportTokenDurationDays).toHaveBeenCalledWith(1, 45, 90);
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+
+    it('should reject invalid replay URL export token durations before saving', () => {
+      component.replayUrlExportTokenDurationDays = 91;
+
+      component.saveReplayUrlExportTokenDuration();
+
+      expect(mockWorkspaceSettingsService.setReplayUrlExportTokenDurationDays).not.toHaveBeenCalled();
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+
+    it('should show an error when replay URL export token duration cannot be saved', () => {
+      mockWorkspaceSettingsService.setReplayUrlExportTokenDurationDays.mockReturnValue(
+        throwError(() => new Error('error'))
+      );
+      component.replayUrlExportTokenDurationDays = 45;
+
+      component.saveReplayUrlExportTokenDuration();
+
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+  });
+
+  describe('saveAuthSessionIdleTimeout', () => {
+    it('should persist auth session idle timeout minutes', () => {
+      component.authSessionIdleTimeoutMinutes = 60;
+
+      component.saveAuthSessionIdleTimeout();
+
+      expect(mockWorkspaceSettingsService.setAuthSessionIdleTimeoutMinutes).toHaveBeenCalledWith(1, 60);
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+
+    it('should reject invalid auth session idle timeout minutes before saving', () => {
+      component.authSessionIdleTimeoutMinutes = 481;
+
+      component.saveAuthSessionIdleTimeout();
+
+      expect(mockWorkspaceSettingsService.setAuthSessionIdleTimeoutMinutes).not.toHaveBeenCalled();
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+
+    it('should show an error when auth session idle timeout cannot be saved', () => {
+      mockWorkspaceSettingsService.setAuthSessionIdleTimeoutMinutes.mockReturnValue(
+        throwError(() => new Error('error'))
+      );
+      component.authSessionIdleTimeoutMinutes = 60;
+
+      component.saveAuthSessionIdleTimeout();
+
+      expect(mockSnackBar.open).toHaveBeenCalled();
     });
   });
 

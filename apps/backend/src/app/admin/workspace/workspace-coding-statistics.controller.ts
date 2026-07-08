@@ -686,7 +686,8 @@ export class WorkspaceCodingStatisticsController {
   private async createCohensKappaReplayUrlMap(
     workspaceId: number,
     sourceItems: KappaSourceItem[],
-    req?: Request
+    req?: Request,
+    authToken = ''
   ): Promise<Map<string, string>> {
     const serverUrl = this.getServerUrlFromRequest(req);
     if (!serverUrl || sourceItems.length === 0) {
@@ -707,7 +708,8 @@ export class WorkspaceCodingStatisticsController {
     const replayRows = await this.codingReplayService.generateReplayUrlsForItemsBulk(
       workspaceId,
       replayItems,
-      serverUrl
+      serverUrl,
+      authToken
     );
 
     return new Map(replayRows.map(row => [
@@ -720,7 +722,8 @@ export class WorkspaceCodingStatisticsController {
     workspaceId: number,
     statistics: KappaStatisticsResponse,
     sourceItems: KappaSourceItem[],
-    req?: Request
+    req?: Request,
+    authToken = ''
   ): Promise<Buffer> {
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'Kodierbox';
@@ -728,7 +731,8 @@ export class WorkspaceCodingStatisticsController {
     const replayUrlByItemKey = await this.createCohensKappaReplayUrlMap(
       workspaceId,
       sourceItems,
-      req
+      req,
+      authToken
     );
 
     this.addRowsWorksheet(
@@ -2349,6 +2353,12 @@ export class WorkspaceCodingStatisticsController {
     description: 'Limit export to one or more coder IDs (comma-separated or repeated query parameters)',
     type: String
   })
+  @ApiQuery({
+    name: 'authToken',
+    required: false,
+    description: 'Temporary workspace auth token for replay URLs in the workbook',
+    type: String
+  })
   @ApiOkResponse({
     description:
       "Cohen's Kappa workbook exported as XLSX with summary, pairwise details and coding results sheets.",
@@ -2370,6 +2380,7 @@ export class WorkspaceCodingStatisticsController {
       @Query('jobDefinitionIds') jobDefinitionIds: string | string[] | undefined,
       @Query('coderTrainingIds') coderTrainingIds: string | string[] | undefined,
       @Query('coderIds') coderIds: string | string[] | undefined,
+      @Query('authToken') authToken: string | undefined,
       @Query('level') level: string | string[] | undefined,
       @Req() req: Request,
       @Res() res: Response
@@ -2390,7 +2401,8 @@ export class WorkspaceCodingStatisticsController {
         workspace_id,
         statistics,
         statistics.sourceItems,
-        req
+        req,
+        authToken || ''
       );
       const exportDate = new Date().toISOString().slice(0, 10);
 

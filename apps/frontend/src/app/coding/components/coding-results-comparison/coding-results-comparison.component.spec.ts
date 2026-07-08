@@ -20,6 +20,7 @@ import { AppService } from '../../../core/services/app.service';
 import { CoderTraining } from '../../models/coder-training.model';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
+import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 
 describe('CodingResultsComparisonComponent', () => {
   const comparisonSummary = (visibleRows: number) => ({
@@ -93,6 +94,7 @@ describe('CodingResultsComparisonComponent', () => {
     authData: { userName: string };
     loggedUser: { preferred_username?: string } | undefined;
     createOwnToken: jest.Mock;
+    needsReAuthentication: boolean;
   };
   let snackBar: {
     open: jest.Mock;
@@ -132,7 +134,8 @@ describe('CodingResultsComparisonComponent', () => {
     appService = {
       authData: { userName: 'Test User' },
       loggedUser: undefined,
-      createOwnToken: jest.fn()
+      createOwnToken: jest.fn(),
+      needsReAuthentication: false
     };
     snackBar = {
       open: jest.fn()
@@ -202,7 +205,9 @@ describe('CodingResultsComparisonComponent', () => {
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
+    sessionStorage.clear();
   });
 
   it('should create', () => {
@@ -262,6 +267,79 @@ describe('CodingResultsComparisonComponent', () => {
     expect(codingTrainingBackendService.getTrainingCohensKappa).not.toHaveBeenCalled();
     expect(component.withinTrainingData).toHaveLength(1);
     expect(component.isLoading).toBe(false);
+  });
+
+  it('should keep filter controls visible while comparison data reloads', () => {
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.availableCoders = [
+      { jobId: 1, coderName: 'Coder 1' },
+      { jobId: 2, coderName: 'Coder 2' }
+    ];
+    component.codersFormControl.setValue([1, 2]);
+    component.totalItems = 1;
+    component.withinTrainingData = [
+      {
+        responseId: 1,
+        unitName: 'Unit1',
+        variableId: 'Var1',
+        testperson: 'Test1',
+        personLogin: 'login',
+        personCode: 'code',
+        personGroup: 'group',
+        bookletName: 'booklet',
+        givenAnswer: 'answer',
+        replayCode: null,
+        replayScore: null,
+        discussionCode: null,
+        discussionScore: null,
+        discussionNotes: null,
+        discussionManagerUserId: null,
+        discussionManagerName: null,
+        discussionSource: null,
+        coders: [
+          {
+            jobId: 1,
+            coderName: 'Coder 1',
+            code: '7',
+            score: 2,
+            notes: null,
+            codingIssueOption: null
+          },
+          {
+            jobId: 2,
+            coderName: 'Coder 2',
+            code: '7',
+            score: 2,
+            notes: null,
+            codingIssueOption: null
+          }
+        ]
+      }
+    ];
+    component.dataSource.data = component.withinTrainingData;
+    component.isLoading = true;
+
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.table-filters input')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.comparison-refresh-indicator')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.comparison-container > .loading-container')).toBeNull();
+  });
+
+  it('should show refresh indicator while reloading from an empty filter state', () => {
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.codersFormControl.setValue([1, 2]);
+    component.tableFilters.unitName = 'MDV001';
+    component.totalItems = 0;
+    component.isLoading = true;
+
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.comparison-refresh-indicator')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.comparison-empty-state')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.comparison-container > .loading-container')).toBeNull();
   });
 
   it('should ignore stale within-training comparison responses after a training switch', () => {
@@ -828,6 +906,37 @@ describe('CodingResultsComparisonComponent', () => {
     }));
     expect(component.totalComparisons).toBe(1);
     expect(component.matchingComparisons).toBe(0);
+  });
+
+  it('should debounce text table filter changes before reloading comparison data', () => {
+    jest.useFakeTimers();
+    component.comparisonMode = 'between-trainings';
+    component.selectedTrainings.select(1, 2);
+    component.codersFromTrainingsFormControl.setValue(['1_101', '2_201']);
+    component.selectedCodersFromTrainings = new Set(['1_101', '2_201']);
+    (component as unknown as { hasInitializedBetweenCoderSelection: boolean }).hasInitializedBetweenCoderSelection = true;
+    codingTrainingBackendService.compareTrainingCodingResults.mockReturnValue(of(betweenComparisonPage([])));
+
+    component.tableFilters.unitName = 'M';
+    component.onTextTableFilterChange();
+    component.tableFilters.unitName = 'MD';
+    component.onTextTableFilterChange();
+
+    jest.advanceTimersByTime(399);
+    expect(codingTrainingBackendService.compareTrainingCodingResults).not.toHaveBeenCalled();
+
+    jest.advanceTimersByTime(1);
+
+    expect(codingTrainingBackendService.compareTrainingCodingResults).toHaveBeenCalledTimes(1);
+    expect(codingTrainingBackendService.compareTrainingCodingResults).toHaveBeenCalledWith(
+      1,
+      '1,2',
+      expect.objectContaining({
+        filters: expect.objectContaining({
+          unitName: 'MD'
+        })
+      })
+    );
   });
 
   it('should apply regex filters when workspace regex search is enabled', () => {
@@ -1679,6 +1788,128 @@ describe('CodingResultsComparisonComponent', () => {
       'common.close',
       { duration: 4000 }
     );
+  });
+
+  it('should keep a discussion result as recovery draft when saving fails because authentication expired', () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    const row = {
+      responseId: 1,
+      unitName: 'Unit1',
+      variableId: 'Var1',
+      testperson: 'Test1',
+      discussionCode: null,
+      discussionScore: null,
+      discussionNotes: null,
+      discussionSource: null as 'manual' | 'auto_agreement' | null,
+      coders: []
+    };
+    codingTrainingBackendService.saveDiscussionResult.mockReturnValue(throwError(() => new HttpErrorResponse({
+      status: 401
+    })));
+    appService.needsReAuthentication = true;
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.withinTrainingData = [row];
+    component.discussionCodeByResponseId[1] = '7';
+    component.discussionScoreByResponseId[1] = 2;
+    component.discussionNotesByResponseId[1] = 'Replay note';
+
+    component.onDiscussionCodeBlur(row, 2);
+
+    expect(component.discussionErrorByResponseId[1]).toBe('Diskussionsergebnis wird nach erneuter Anmeldung gespeichert.');
+    expect(sessionRecoveryService.peekDraft('training-discussion-active-state')).toEqual({
+      workspaceId: 1,
+      trainingId: 5,
+      entries: [
+        {
+          responseId: 1,
+          codeValue: '7',
+          score: 2,
+          notes: 'Replay note'
+        }
+      ]
+    });
+  });
+
+  it('should restore a discussion recovery draft after authentication is ready again', () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    const row = {
+      responseId: 1,
+      unitName: 'Unit1',
+      variableId: 'Var1',
+      testperson: 'Test1',
+      discussionCode: null,
+      discussionScore: null,
+      discussionNotes: null,
+      discussionSource: null as 'manual' | 'auto_agreement' | null,
+      coders: []
+    };
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.withinTrainingData = [row];
+    sessionRecoveryService.saveDraft('training-discussion-active-state', {
+      workspaceId: 1,
+      trainingId: 5,
+      entries: [
+        {
+          responseId: 1,
+          codeValue: '7',
+          score: 2,
+          notes: 'Replay note'
+        }
+      ]
+    });
+
+    sessionRecoveryService.notifyRestoredAuthentication();
+
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, 7, 2, 'Replay note');
+    expect(sessionRecoveryService.peekDraft('training-discussion-active-state')).toBeNull();
+  });
+
+  it('should keep discussion recovery entries that are not loaded on the current page', () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    const row = {
+      responseId: 1,
+      unitName: 'Unit1',
+      variableId: 'Var1',
+      testperson: 'Test1',
+      discussionCode: null,
+      discussionScore: null,
+      discussionNotes: null,
+      discussionSource: null as 'manual' | 'auto_agreement' | null,
+      coders: []
+    };
+    const missingPageEntry = {
+      responseId: 2,
+      codeValue: '9',
+      score: 1,
+      notes: 'Still pending'
+    };
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.withinTrainingData = [row];
+    sessionRecoveryService.saveDraft('training-discussion-active-state', {
+      workspaceId: 1,
+      trainingId: 5,
+      entries: [
+        {
+          responseId: 1,
+          codeValue: '7',
+          score: 2,
+          notes: 'Replay note'
+        },
+        missingPageEntry
+      ]
+    });
+
+    sessionRecoveryService.notifyRestoredAuthentication();
+
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, 7, 2, 'Replay note');
+    expect(sessionRecoveryService.peekDraft('training-discussion-active-state')).toEqual({
+      workspaceId: 1,
+      trainingId: 5,
+      entries: [missingPageEntry]
+    });
   });
 
   describe('calculateStatistics', () => {

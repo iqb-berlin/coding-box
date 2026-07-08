@@ -355,6 +355,24 @@ describe('AccessLevelGuard (Backend)', () => {
       expect(usersService.getUserAccessLevel).toHaveBeenCalledWith(42, 123);
     });
 
+    it('should parse workspaceId route params', async () => {
+      reflector.get.mockReturnValue(2);
+      const context = {
+        switchToHttp: () => ({
+          getRequest: () => ({
+            user: { id: 42 },
+            params: { workspaceId: '123' }
+          })
+        }),
+        getHandler: () => ({}),
+        getClass: () => ({})
+      } as unknown as ExecutionContext;
+
+      await guard.canActivate(context);
+
+      expect(usersService.getUserAccessLevel).toHaveBeenCalledWith(42, 123);
+    });
+
     it('should handle zero workspace ID', async () => {
       reflector.get.mockReturnValue(2);
       const context = createMockExecutionContext(42, '0', 2);

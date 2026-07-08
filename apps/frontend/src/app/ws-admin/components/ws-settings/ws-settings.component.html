@@ -46,6 +46,93 @@
     </mat-card-content>
   </mat-card>
 
+  <mat-card class="replay-url-export-mode-card">
+    <mat-card-header>
+      <mat-card-title>{{ 'ws-settings.replay-url-export-mode' | translate }}</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="replay-url-export-mode-container">
+        <div class="setting-item replay-url-export-mode">
+          <div class="setting-info">
+            <h4>{{ 'ws-settings.replay-url-export-mode-heading' | translate }}</h4>
+            <p>{{ 'ws-settings.replay-url-export-mode-description' | translate }}</p>
+          </div>
+          <div class="setting-control">
+            <mat-slide-toggle
+              [checked]="replayUrlExportMode === 'auth'"
+              (change)="toggleReplayUrlExportMode($event)">
+              {{replayUrlExportMode === 'auth' ? ('ws-settings.replay-url-export-mode-auth' | translate) : ('ws-settings.replay-url-export-mode-workspace' | translate)}}
+            </mat-slide-toggle>
+          </div>
+        </div>
+      </div>
+      @if (replayUrlExportMode === 'auth') {
+        <div class="setting-item replay-url-export-token-duration">
+          <div class="setting-info">
+            <h4>{{ 'ws-settings.replay-url-export-token-duration-heading' | translate }}</h4>
+            <p>{{ 'ws-settings.replay-url-export-token-duration-description' | translate:{ max: maxTokenDurationDays } }}</p>
+          </div>
+          <div class="setting-control replay-url-export-token-duration-control">
+            <mat-form-field>
+              <mat-label>{{ 'ws-settings.validity-days' | translate }}</mat-label>
+              <input
+                matInput
+                [(ngModel)]="replayUrlExportTokenDurationDays"
+                type="number"
+                [min]="minTokenDurationDays"
+                [max]="maxTokenDurationDays"
+                step="1"/>
+              <mat-hint>{{ 'ws-settings.enter-validity-days' | translate:{ max: maxTokenDurationDays } }}</mat-hint>
+            </mat-form-field>
+            <button
+              mat-raised-button
+              color="primary"
+              [disabled]="!isReplayUrlExportTokenDurationValid()"
+              (click)="saveReplayUrlExportTokenDuration()">
+              <mat-icon>save</mat-icon> {{ 'ws-settings.save-replay-url-export-token-duration' | translate }}
+            </button>
+          </div>
+        </div>
+      }
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="auth-session-card">
+    <mat-card-header>
+      <mat-card-title>{{ 'ws-settings.auth-session-heading' | translate }}</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="auth-session-container">
+        <div class="setting-item auth-session-timeout">
+          <div class="setting-info">
+            <h4>{{ 'ws-settings.auth-session-idle-timeout-heading' | translate }}</h4>
+            <p>{{ 'ws-settings.auth-session-idle-timeout-description' | translate:{ min: minAuthSessionIdleTimeoutMinutes, max: maxAuthSessionIdleTimeoutMinutes } }}</p>
+          </div>
+          <div class="setting-control auth-session-timeout-control">
+            <mat-form-field>
+              <mat-label>{{ 'ws-settings.validity-minutes' | translate }}</mat-label>
+              <input
+                matInput
+                [(ngModel)]="authSessionIdleTimeoutMinutes"
+                type="number"
+                [min]="minAuthSessionIdleTimeoutMinutes"
+                [max]="maxAuthSessionIdleTimeoutMinutes"
+                step="1"/>
+              <mat-hint>{{ 'ws-settings.enter-validity-minutes' | translate:{ min: minAuthSessionIdleTimeoutMinutes, max: maxAuthSessionIdleTimeoutMinutes } }}</mat-hint>
+            </mat-form-field>
+            <button
+              mat-raised-button
+              color="primary"
+              [disabled]="!isAuthSessionIdleTimeoutValid()"
+              (click)="saveAuthSessionIdleTimeout()">
+              <mat-icon>save</mat-icon> {{ 'ws-settings.save-auth-session-idle-timeout' | translate }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
   <mat-card class="missings-profiles-card">
     <mat-card-header>
       <mat-card-title>{{ 'workspace.coding-missing-profiles' | translate }}</mat-card-title>

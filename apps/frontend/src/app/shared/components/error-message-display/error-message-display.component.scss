@@ -17,6 +17,10 @@
 
 .priority-errors {
   top: 80px;
+
+  &.re-authentication-active {
+    z-index: 1200;
+  }
 }
 
 .transient-errors {

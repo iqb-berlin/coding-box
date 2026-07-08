@@ -1512,6 +1512,22 @@
             </button>
           </div>
 
+          <div
+            *ngIf="shouldShowManualTabLoadHint('execution')"
+            class="info-alert manual-refresh-hint"
+          >
+            <mat-icon class="info-alert-icon">refresh</mat-icon>
+            <div class="info-alert-content">
+              <strong>{{
+                'coding-management-manual.manual-load-hint.title' | translate
+              }}</strong>
+              <span>{{
+                'coding-management-manual.manual-load-hint.execution'
+                  | translate
+              }}</span>
+            </div>
+          </div>
+
           <coding-box-coding-jobs
             *ngIf="shouldRenderManualTabData('execution')"
             #productiveCodingJobs
@@ -2027,6 +2043,21 @@
               {{ 'coding-management-manual.buttons.refresh' | translate }}
             </button>
           </div>
+          <div
+            *ngIf="shouldShowManualTabLoadHint('training')"
+            class="info-alert manual-refresh-hint"
+          >
+            <mat-icon class="info-alert-icon">refresh</mat-icon>
+            <div class="info-alert-content">
+              <strong>{{
+                'coding-management-manual.manual-load-hint.title' | translate
+              }}</strong>
+              <span>{{
+                'coding-management-manual.manual-load-hint.training'
+                  | translate
+              }}</span>
+            </div>
+          </div>
           <coding-box-coder-trainings-list
             *ngIf="shouldRenderManualTabData('training')"
             [showCreateButton]="false"
@@ -2086,6 +2117,22 @@
               }}</strong>
               <span>{{
                 'coding-management-manual.variable-bundles.info-desc'
+                  | translate
+              }}</span>
+            </div>
+          </div>
+
+          <div
+            *ngIf="shouldShowManualTabLoadHint('preparation')"
+            class="info-alert manual-refresh-hint"
+          >
+            <mat-icon class="info-alert-icon">refresh</mat-icon>
+            <div class="info-alert-content">
+              <strong>{{
+                'coding-management-manual.manual-load-hint.title' | translate
+              }}</strong>
+              <span>{{
+                'coding-management-manual.manual-load-hint.preparation'
                   | translate
               }}</span>
             </div>
