@@ -165,6 +165,11 @@ type NormalizedDistributionCoder = {
   tieBreaker: number;
 };
 
+type DistributionCoderLoad = {
+  tasks: number;
+  doubleTasks: number;
+};
+
 type DistributionDoubleCodingInfo = {
   totalCases: number;
   distinctCases: number;
@@ -6545,21 +6550,28 @@ export class CodingJobService {
 
   private chooseSingleCoder(
     coders: NormalizedDistributionCoder[],
-    coderLoads: Map<number, { tasks: number; doubleTasks: number }>,
+    itemCoderLoads: Map<number, DistributionCoderLoad>,
+    coderLoads: Map<number, DistributionCoderLoad>,
     seed: string,
     response: SlimResponse,
     taskCount = 1
   ): NormalizedDistributionCoder {
     return [...coders].sort((a, b) => {
+      const itemLoadA = itemCoderLoads.get(a.id) || { tasks: 0, doubleTasks: 0 };
+      const itemLoadB = itemCoderLoads.get(b.id) || { tasks: 0, doubleTasks: 0 };
       const loadA = coderLoads.get(a.id) || { tasks: 0, doubleTasks: 0 };
       const loadB = coderLoads.get(b.id) || { tasks: 0, doubleTasks: 0 };
-      const ratioA = (loadA.tasks + taskCount) / a.weight;
-      const ratioB = (loadB.tasks + taskCount) / b.weight;
+      const itemRatioA = (itemLoadA.tasks + taskCount) / a.weight;
+      const itemRatioB = (itemLoadB.tasks + taskCount) / b.weight;
+      const globalRatioA = (loadA.tasks + taskCount) / a.weight;
+      const globalRatioB = (loadB.tasks + taskCount) / b.weight;
       const tieA = this.stableHash(`${seed}:single:${response.id}:${a.id}`);
       const tieB = this.stableHash(`${seed}:single:${response.id}:${b.id}`);
 
       return (
-        ratioA - ratioB ||
+        itemRatioA - itemRatioB ||
+        itemLoadA.tasks - itemLoadB.tasks ||
+        globalRatioA - globalRatioB ||
         loadA.tasks - loadB.tasks ||
         tieA - tieB ||
         a.tieBreaker - b.tieBreaker
@@ -6591,9 +6603,132 @@ export class CodingJobService {
     return combinations;
   }
 
+  private getDistributionPairKey(
+    coders: NormalizedDistributionCoder[]
+  ): string {
+    return coders
+      .map(coder => coder.id)
+      .sort((a, b) => a - b)
+      .join('-');
+  }
+
+  private buildBalancedDoubleCodingPairQuotas(
+    coders: NormalizedDistributionCoder[],
+    coderCombinations: NormalizedDistributionCoder[][],
+    doubleCodingCount: number,
+    seed: string,
+    itemKey: string
+  ): Map<string, number> {
+    const pairQuotas = new Map<string, number>();
+    if (coderCombinations.length === 0) {
+      return pairQuotas;
+    }
+
+    const basePairQuota = Math.floor(
+      doubleCodingCount / coderCombinations.length
+    );
+    coderCombinations.forEach(combination => {
+      pairQuotas.set(
+        this.getDistributionPairKey(combination),
+        basePairQuota
+      );
+    });
+
+    const remainingPairs =
+      doubleCodingCount % coderCombinations.length;
+    if (remainingPairs === 0) {
+      return pairQuotas;
+    }
+
+    const totalRemainingCoderAssignments = remainingPairs * 2;
+    const baseRemainingCoderDegree = Math.floor(
+      totalRemainingCoderAssignments / coders.length
+    );
+    const higherDegreeCoderCount =
+      totalRemainingCoderAssignments % coders.length;
+    const degreeOrder = [...coders].sort((a, b) => (
+      this.stableHash(`${seed}:${itemKey}:pair-plan:coder:${a.id}`) -
+      this.stableHash(`${seed}:${itemKey}:pair-plan:coder:${b.id}`) ||
+      a.id - b.id
+    ));
+    const higherDegreeCoderIds = new Set(
+      degreeOrder
+        .slice(0, higherDegreeCoderCount)
+        .map(coder => coder.id)
+    );
+    const remainingDegrees = coders.map(coder => ({
+      coder,
+      degree:
+        baseRemainingCoderDegree +
+        (higherDegreeCoderIds.has(coder.id) ? 1 : 0),
+      tieBreaker: this.stableHash(
+        `${seed}:${itemKey}:pair-plan:node:${coder.id}`
+      )
+    }));
+    const extraPairs = new Set<string>();
+
+    while (remainingDegrees.some(node => node.degree > 0)) {
+      remainingDegrees.sort((a, b) => (
+        b.degree - a.degree ||
+        a.tieBreaker - b.tieBreaker ||
+        a.coder.id - b.coder.id
+      ));
+      const node = remainingDegrees[0];
+      const requiredDegree = node.degree;
+      if (requiredDegree === 0) {
+        break;
+      }
+
+      const candidates = remainingDegrees
+        .slice(1)
+        .filter(candidate => (
+          candidate.degree > 0 &&
+          !extraPairs.has(this.getDistributionPairKey([
+            node.coder,
+            candidate.coder
+          ]))
+        ))
+        .sort((a, b) => (
+          b.degree - a.degree ||
+          this.stableHash(
+            `${seed}:${itemKey}:pair-plan:edge:${this.getDistributionPairKey([
+              node.coder,
+              a.coder
+            ])}`
+          ) -
+          this.stableHash(
+            `${seed}:${itemKey}:pair-plan:edge:${this.getDistributionPairKey([
+              node.coder,
+              b.coder
+            ])}`
+          ) ||
+          a.coder.id - b.coder.id
+        ));
+
+      if (candidates.length < requiredDegree) {
+        throw new Error('Could not build balanced double-coding pair quotas.');
+      }
+
+      node.degree = 0;
+      candidates.slice(0, requiredDegree).forEach(candidate => {
+        const pairKey = this.getDistributionPairKey([
+          node.coder,
+          candidate.coder
+        ]);
+        extraPairs.add(pairKey);
+        candidate.degree -= 1;
+        pairQuotas.set(pairKey, (pairQuotas.get(pairKey) || 0) + 1);
+      });
+    }
+
+    return pairQuotas;
+  }
+
   private chooseDoubleCodingCoders(
     coderCombinations: NormalizedDistributionCoder[][],
-    coderLoads: Map<number, { tasks: number; doubleTasks: number }>,
+    itemCoderLoads: Map<number, DistributionCoderLoad>,
+    coderLoads: Map<number, DistributionCoderLoad>,
+    itemPairCounts: Map<string, number>,
     pairCounts: Map<string, number>,
     seed: string,
     response: SlimResponse,
@@ -6601,24 +6736,33 @@ export class CodingJobService {
   ): NormalizedDistributionCoder[] {
     return [...coderCombinations].sort((a, b) => {
       const score = (combination: NormalizedDistributionCoder[]) => {
-        const projectedRatios = combination.map(coder => {
+        const projectedItemRatios = combination.map(coder => {
+          const load = itemCoderLoads.get(coder.id) || { tasks: 0, doubleTasks: 0 };
+          return (load.tasks + taskCount) / coder.weight;
+        });
+        const projectedItemDoubleRatios = combination.map(coder => {
+          const load = itemCoderLoads.get(coder.id) || { tasks: 0, doubleTasks: 0 };
+          return (load.doubleTasks + taskCount) / coder.weight;
+        });
+        const projectedGlobalRatios = combination.map(coder => {
           const load = coderLoads.get(coder.id) || { tasks: 0, doubleTasks: 0 };
           return (load.tasks + taskCount) / coder.weight;
         });
-        const projectedDoubleRatios = combination.map(coder => {
+        const projectedGlobalDoubleRatios = combination.map(coder => {
           const load = coderLoads.get(coder.id) || { tasks: 0, doubleTasks: 0 };
           return (load.doubleTasks + taskCount) / coder.weight;
         });
-        const pairKey = combination
-          .map(coder => coder.id)
-          .sort((x, y) => x - y)
-          .join('-');
+        const pairKey = this.getDistributionPairKey(combination);
 
         return {
-          maxLoad: Math.max(...projectedRatios),
-          totalLoad: projectedRatios.reduce((sum, value) => sum + value, 0),
-          maxDoubleLoad: Math.max(...projectedDoubleRatios),
-          pairCount: pairCounts.get(pairKey) || 0,
+          maxItemLoad: Math.max(...projectedItemRatios),
+          itemPairCount: itemPairCounts.get(pairKey) || 0,
+          maxItemDoubleLoad: Math.max(...projectedItemDoubleRatios),
+          totalItemLoad: projectedItemRatios.reduce((sum, value) => sum + value, 0),
+          maxGlobalLoad: Math.max(...projectedGlobalRatios),
+          globalPairCount: pairCounts.get(pairKey) || 0,
+          maxGlobalDoubleLoad: Math.max(...projectedGlobalDoubleRatios),
+          totalGlobalLoad: projectedGlobalRatios.reduce((sum, value) => sum + value, 0),
           tie: this.stableHash(`${seed}:double:${response.id}:${pairKey}`)
         };
       };
@@ -6626,10 +6770,14 @@ export class CodingJobService {
       const scoreB = score(b);
 
       return (
-        scoreA.maxLoad - scoreB.maxLoad ||
-        scoreA.pairCount - scoreB.pairCount ||
-        scoreA.maxDoubleLoad - scoreB.maxDoubleLoad ||
-        scoreA.totalLoad - scoreB.totalLoad ||
+        scoreA.maxItemLoad - scoreB.maxItemLoad ||
+        scoreA.itemPairCount - scoreB.itemPairCount ||
+        scoreA.maxItemDoubleLoad - scoreB.maxItemDoubleLoad ||
+        scoreA.totalItemLoad - scoreB.totalItemLoad ||
+        scoreA.maxGlobalLoad - scoreB.maxGlobalLoad ||
+        scoreA.globalPairCount - scoreB.globalPairCount ||
+        scoreA.maxGlobalDoubleLoad - scoreB.maxGlobalDoubleLoad ||
+        scoreA.totalGlobalLoad - scoreB.totalGlobalLoad ||
         scoreA.tie - scoreB.tie
       );
     })[0];
@@ -6857,10 +7005,22 @@ export class CodingJobService {
       );
     }
 
-    const coderLoads = new Map<number, { tasks: number; doubleTasks: number }>(
+    const coderLoads = new Map<number, DistributionCoderLoad>(
       coders.map(coder => [coder.id, { tasks: 0, doubleTasks: 0 }])
     );
+    const coderLoadsByItemKey = new Map<
+    string,
+    Map<number, DistributionCoderLoad>
+    >(
+      planItems.map(item => [
+        item.itemKey,
+        new Map(coders.map(coder => [coder.id, { tasks: 0, doubleTasks: 0 }]))
+      ])
+    );
     const pairCounts = new Map<string, number>();
+    const pairCountsByItemKey = new Map<string, Map<string, number>>(
+      planItems.map(item => [item.itemKey, new Map<string, number>()])
+    );
     const coderById = new Map(coders.map(coder => [coder.id, coder]));
     const jobsByItemAndCoder = new Map<string, Map<number, SlimResponse[]>>();
     const plannedCases: DistributionPlanCase[] = [];
@@ -6868,52 +7028,149 @@ export class CodingJobService {
       totalDoubleCodingCount > 0 ?
         this.getCoderCombinations(coders, codersPerDoubleCodedCase) :
         [];
+    const codersHaveEqualWeights = coders.every(
+      coder => coder.weight === coders[0]?.weight
+    );
+    const doubleCodingPairQuotasByItemKey = new Map<
+    string,
+    Map<string, number>
+    >();
+    if (codersHaveEqualWeights) {
+      doubleCodingCountsByItemKey.forEach((doubleCodingCount, itemKey) => {
+        doubleCodingPairQuotasByItemKey.set(
+          itemKey,
+          this.buildBalancedDoubleCodingPairQuotas(
+            coders,
+            doubleCodingCoderCombinations,
+            doubleCodingCount,
+            distributionSeed,
+            itemKey
+          )
+        );
+      });
+    }
     const assignedDoubleCodingCountsByItemKey = new Map<string, number>();
-
-    selectedCases.forEach(selectedCase => {
-      const taskCount = selectedCase.caseGroup.responses.length;
+    const selectedCaseAssignments = selectedCases.map(selectedCase => {
+      const itemKey = selectedCase.item.itemKey;
       const assignedDoubleCodingCount =
-        assignedDoubleCodingCountsByItemKey.get(selectedCase.item.itemKey) || 0;
+        assignedDoubleCodingCountsByItemKey.get(itemKey) || 0;
       const isDoubleCoded =
         assignedDoubleCodingCount <
-        (doubleCodingCountsByItemKey.get(selectedCase.item.itemKey) || 0);
-      const assignedCoders = isDoubleCoded ?
-        this.chooseDoubleCodingCoders(
-          doubleCodingCoderCombinations,
-          coderLoads,
-          pairCounts,
-          distributionSeed,
-          selectedCase.caseGroup.representativeResponse,
-          taskCount
-        ) :
-        [
-          this.chooseSingleCoder(
-            coders,
-            coderLoads,
-            distributionSeed,
-            selectedCase.caseGroup.representativeResponse,
-            taskCount
-          )
-        ];
-      const assignedCoderIds = assignedCoders.map(coder => coder.id);
+        (doubleCodingCountsByItemKey.get(itemKey) || 0);
 
       if (isDoubleCoded) {
         assignedDoubleCodingCountsByItemKey.set(
-          selectedCase.item.itemKey,
+          itemKey,
           assignedDoubleCodingCount + 1
         );
-        const pairKey = [...assignedCoderIds].sort((a, b) => a - b).join('-');
-        pairCounts.set(pairKey, (pairCounts.get(pairKey) || 0) + 1);
       }
 
-      assignedCoders.forEach(coder => {
-        const load = coderLoads.get(coder.id) || { tasks: 0, doubleTasks: 0 };
-        load.tasks += taskCount;
-        if (isDoubleCoded) {
-          load.doubleTasks += taskCount;
-        }
-        coderLoads.set(coder.id, load);
+      return { selectedCase, isDoubleCoded };
+    });
+    const assignmentsByCaseGroup = new Map<
+    DistributionPlanCaseGroup,
+    {
+      isDoubleCoded: boolean;
+      assignedCoders: NormalizedDistributionCoder[];
+    }
+    >();
 
+    [true, false].forEach(assignDoubleCodedCases => {
+      selectedCaseAssignments
+        .filter(({ isDoubleCoded }) => isDoubleCoded === assignDoubleCodedCases)
+        .forEach(({ selectedCase, isDoubleCoded }) => {
+          const itemKey = selectedCase.item.itemKey;
+          const itemCoderLoads = coderLoadsByItemKey.get(itemKey) ||
+            new Map<number, DistributionCoderLoad>();
+          const itemPairCounts = pairCountsByItemKey.get(itemKey) ||
+            new Map<string, number>();
+          const taskCount = selectedCase.caseGroup.responses.length;
+          const pairQuotas = doubleCodingPairQuotasByItemKey.get(itemKey);
+          const availableDoubleCodingCombinations = pairQuotas ?
+            doubleCodingCoderCombinations.filter(combination => {
+              const pairKey = this.getDistributionPairKey(combination);
+              return (
+                (itemPairCounts.get(pairKey) || 0) <
+                (pairQuotas.get(pairKey) || 0)
+              );
+            }) :
+            doubleCodingCoderCombinations;
+          if (
+            isDoubleCoded &&
+            availableDoubleCodingCombinations.length === 0
+          ) {
+            throw new Error('No planned double-coding pair is available.');
+          }
+          const assignedCoders = isDoubleCoded ?
+            this.chooseDoubleCodingCoders(
+              availableDoubleCodingCombinations,
+              itemCoderLoads,
+              coderLoads,
+              itemPairCounts,
+              pairCounts,
+              distributionSeed,
+              selectedCase.caseGroup.representativeResponse,
+              taskCount
+            ) :
+            [
+              this.chooseSingleCoder(
+                coders,
+                itemCoderLoads,
+                coderLoads,
+                distributionSeed,
+                selectedCase.caseGroup.representativeResponse,
+                taskCount
+              )
+            ];
+
+          if (isDoubleCoded) {
+            const pairKey = this.getDistributionPairKey(assignedCoders);
+            itemPairCounts.set(
+              pairKey,
+              (itemPairCounts.get(pairKey) || 0) + 1
+            );
+            pairCounts.set(pairKey, (pairCounts.get(pairKey) || 0) + 1);
+          }
+
+          assignedCoders.forEach(coder => {
+            const itemLoad = itemCoderLoads.get(coder.id) || {
+              tasks: 0,
+              doubleTasks: 0
+            };
+            const load = coderLoads.get(coder.id) || {
+              tasks: 0,
+              doubleTasks: 0
+            };
+
+            itemLoad.tasks += taskCount;
+            load.tasks += taskCount;
+            if (isDoubleCoded) {
+              itemLoad.doubleTasks += taskCount;
+              load.doubleTasks += taskCount;
+            }
+            itemCoderLoads.set(coder.id, itemLoad);
+            coderLoads.set(coder.id, load);
+          });
+
+          coderLoadsByItemKey.set(itemKey, itemCoderLoads);
+          pairCountsByItemKey.set(itemKey, itemPairCounts);
+          assignmentsByCaseGroup.set(selectedCase.caseGroup, {
+            isDoubleCoded,
+            assignedCoders
+          });
+        });
+    });
+
+    selectedCases.forEach(selectedCase => {
+      const assignment = assignmentsByCaseGroup.get(selectedCase.caseGroup);
+      if (!assignment) {
+        throw new Error('Missing distribution assignment.');
+      }
+
+      const { isDoubleCoded, assignedCoders } = assignment;
+      const assignedCoderIds = assignedCoders.map(coder => coder.id);
+
+      assignedCoders.forEach(coder => {
         if (isSafeKey(coder.displayKey)) {
           distribution[selectedCase.item.itemKey][coder.displayKey] += 1;
         }
