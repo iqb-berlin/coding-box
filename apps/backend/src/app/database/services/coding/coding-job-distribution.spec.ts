@@ -635,6 +635,50 @@ describe('CodingJobService distribution from job definitions', () => {
     expect(plan.tasksPerCoder).toEqual({ 1: 36, 2: 36, 3: 36 });
   });
 
+  it('balances unavoidable double-coding remainders across variables', async () => {
+    const variables = [
+      { unitName: 'Unit 1', variableId: 'Var 1' },
+      { unitName: 'Unit 2', variableId: 'Var 2' },
+      { unitName: 'Unit 3', variableId: 'Var 3' }
+    ];
+    const responses = variables.map((variable, index) => makeResponse(
+      index + 1,
+      variable.unitName,
+      variable.variableId
+    ));
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+
+    const plan = await buildDistributionPlanForTest({
+      selectedVariables: variables,
+      selectedCoders: [
+        { id: 1, name: 'Ada', username: 'ada' },
+        { id: 2, name: 'Bea', username: 'bea' },
+        { id: 3, name: 'Chris', username: 'chris' }
+      ],
+      doubleCodingAbsolute: 1,
+      caseOrderingMode: 'continuous',
+      distributionSeed: 'small-items'
+    });
+
+    variables.forEach(variable => {
+      const itemKey = `${variable.unitName}::${variable.variableId}`;
+      expect(
+        Object.values(plan.distributionByCoderId[itemKey]).sort((a, b) => a - b)
+      ).toEqual([0, 1, 1]);
+    });
+    expect(plan.tasksPerCoder).toEqual({ 1: 2, 2: 2, 3: 2 });
+    expect(
+      plan.plannedCases
+        .map(plannedCase => [...plannedCase.assignedCoderIds]
+          .sort((a, b) => a - b)
+          .join('-'))
+        .sort()
+    ).toEqual(['1-2', '1-3', '2-3']);
+  });
+
   it.each([
     [
       '300 cases, three coders and 10 percent double coding',
