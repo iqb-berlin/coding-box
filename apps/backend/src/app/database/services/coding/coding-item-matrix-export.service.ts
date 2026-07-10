@@ -1,15 +1,18 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import * as cheerio from 'cheerio';
 import * as ExcelJS from 'exceljs';
 import * as fastCsv from 'fast-csv';
 import * as fs from 'fs';
 import { PassThrough } from 'stream';
 import { Repository } from 'typeorm';
 import { Booklet } from '../../entities/booklet.entity';
+import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { Unit } from '../../entities/unit.entity';
 import {
   isExcludedByResolvedExclusions,
+  normalizeExclusionBookletId,
   normalizeExclusionUnitId,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
@@ -80,7 +83,10 @@ export class CodingItemMatrixExportService {
     private readonly workspaceFilesService: WorkspaceFilesService,
     private readonly workspaceExclusionService: WorkspaceExclusionService,
     @Optional()
-    private readonly missingsProfilesService?: MissingsProfilesService
+    private readonly missingsProfilesService?: MissingsProfilesService,
+    @Optional()
+    @InjectRepository(FileUpload)
+    private readonly fileUploadRepository?: Repository<FileUpload>
   ) {}
 
   private async yieldToEventLoop(): Promise<void> {
@@ -129,6 +135,8 @@ export class CodingItemMatrixExportService {
           workspaceId,
           context.rows,
           context.columns,
+          context.bookletUnits,
+          context.mbdMissing,
           value,
           version,
           async row => {
@@ -190,6 +198,8 @@ export class CodingItemMatrixExportService {
       workspaceId,
       context.rows,
       context.columns,
+      context.bookletUnits,
+      context.mbdMissing,
       value,
       version,
       async row => {
@@ -239,6 +249,8 @@ export class CodingItemMatrixExportService {
         workspaceId,
         context.rows,
         context.columns,
+        context.bookletUnits,
+        context.mbdMissing,
         value,
         version,
         async row => {
@@ -269,20 +281,91 @@ export class CodingItemMatrixExportService {
   ): Promise<{
       rows: MatrixRow[];
       columns: MatrixColumn[];
+      bookletUnits: Map<string, Set<string>>;
+      mbdMissing: ResolvedMissingValue;
     }> {
     this.missingValueCache.clear();
     await checkCancellation?.();
-    const [rows, columns] = await Promise.all([
+    const [rows, columns, bookletUnits, mbdMissing] = await Promise.all([
       this.getRows(workspaceId, checkCancellation),
-      this.getColumns(workspaceId, checkCancellation)
+      this.getColumns(workspaceId, checkCancellation),
+      this.getBookletUnits(workspaceId, checkCancellation),
+      this.resolveMbdMissing(workspaceId)
     ]);
     await checkCancellation?.();
+
+    const missingBookletStructures = Array.from(new Set(rows
+      .map(row => row.bookletName)
+      .filter(bookletName => !bookletUnits.has(normalizeExclusionBookletId(bookletName)))));
+    if (missingBookletStructures.length > 0) {
+      throw new Error(
+        `Booklet structure not found for item-matrix export: ${missingBookletStructures.join(', ')}`
+      );
+    }
 
     this.logger.log(
       `Prepared item matrix context for workspace ${workspaceId}: ${rows.length} rows, ${columns.length} columns`
     );
 
-    return { rows, columns };
+    return {
+      rows, columns, bookletUnits, mbdMissing
+    };
+  }
+
+  private async getBookletUnits(
+    workspaceId: number,
+    checkCancellation?: () => Promise<void>
+  ): Promise<Map<string, Set<string>>> {
+    if (!this.fileUploadRepository) {
+      throw new Error('Booklet file repository is unavailable for item-matrix export');
+    }
+
+    await checkCancellation?.();
+    const bookletFiles = await this.fileUploadRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'Booklet' },
+      select: ['file_id', 'data']
+    });
+    await checkCancellation?.();
+
+    const bookletUnits = new Map<string, Set<string>>();
+    for (let index = 0; index < bookletFiles.length; index += 1) {
+      if (this.shouldYieldExportItem(index)) {
+        await checkCancellation?.();
+        await this.yieldToEventLoop();
+      }
+
+      const bookletFile = bookletFiles[index];
+      const bookletId = normalizeExclusionBookletId(bookletFile.file_id);
+      try {
+        const $ = cheerio.load(bookletFile.data, { xmlMode: true });
+        const units = new Set<string>();
+        $('Unit, unit').each((_, element) => {
+          const unitId = normalizeExclusionUnitId($(element).attr('id'));
+          if (unitId) {
+            units.add(unitId);
+          }
+        });
+        bookletUnits.set(bookletId, units);
+      } catch (error) {
+        throw new Error(
+          `Could not parse booklet structure '${bookletFile.file_id}' for item-matrix export: ${error.message}`
+        );
+      }
+    }
+
+    return bookletUnits;
+  }
+
+  private async resolveMbdMissing(workspaceId: number): Promise<ResolvedMissingValue> {
+    if (!this.missingsProfilesService) {
+      throw new Error("Missing profile service is unavailable; cannot resolve 'mbd'");
+    }
+
+    return this.missingsProfilesService.getMissingByIdForProfileOrDefault(
+      workspaceId,
+      null,
+      'mbd'
+    );
   }
 
   private getHeaders(columns: MatrixColumn[]): string[] {
@@ -443,6 +526,8 @@ export class CodingItemMatrixExportService {
     workspaceId: number,
     rows: MatrixRow[],
     columns: MatrixColumn[],
+    bookletUnits: Map<string, Set<string>>,
+    mbdMissing: ResolvedMissingValue,
     value: ItemMatrixValue,
     version: ItemMatrixVersion,
     writeRow: (row: Record<string, string | number>) => Promise<void>,
@@ -478,6 +563,10 @@ export class CodingItemMatrixExportService {
           booklet_name: row.bookletName
         };
         const rowValues = responseValues.get(row.bookletId) || new Map<string, ResponseValue>();
+        const expectedUnits = bookletUnits.get(normalizeExclusionBookletId(row.bookletName));
+        if (!expectedUnits) {
+          throw new Error(`Booklet structure not found for item-matrix export: ${row.bookletName}`);
+        }
 
         for (let columnIndex = 0; columnIndex < columns.length; columnIndex += 1) {
           if (this.shouldYieldExportItem(columnIndex)) {
@@ -487,9 +576,13 @@ export class CodingItemMatrixExportService {
 
           const column = columns[columnIndex];
           const cellValue = rowValues.get(column.key);
-          exportRow[column.header] = cellValue ?
-            await this.resolveExportCellValue(workspaceId, cellValue, value) :
-            '';
+          if (!expectedUnits.has(normalizeExclusionUnitId(column.unitName))) {
+            exportRow[column.header] = this.getResolvedMissingExportValue(mbdMissing, value);
+          } else if (cellValue) {
+            exportRow[column.header] = await this.resolveExportCellValue(workspaceId, cellValue, value);
+          } else {
+            exportRow[column.header] = '';
+          }
         }
 
         await writeRow(exportRow);
@@ -626,6 +719,16 @@ export class CodingItemMatrixExportService {
     }
 
     return missing?.code ?? mapCodeForExport(value.code) ?? '';
+  }
+
+  private getResolvedMissingExportValue(
+    missing: ResolvedMissingValue,
+    requestedValue: ItemMatrixValue
+  ): string | number {
+    if (requestedValue === 'score') {
+      return missing.score === null ? 'NA' : missing.score;
+    }
+    return missing.code;
   }
 
   private async resolveMissingValue(
