@@ -10,7 +10,7 @@ import { ActivatedRoute } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { OverlayContainer } from '@angular/cdk/overlay';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { CodingJobsComponent } from './coding-jobs.component';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
@@ -397,6 +397,86 @@ describe('CodingJobsComponent', () => {
       expect.objectContaining({ status: 'active' })
     );
   }));
+
+  it('keeps filters and table mounted while coding jobs refresh', () => {
+    const response$ = new Subject<{
+      data: CodingJob[];
+      total: number;
+      page: number;
+      limit: number;
+    }>();
+    (codingJobBackendServiceMock.getCodingJobs as jest.Mock)
+      .mockReturnValueOnce(response$);
+    const filterInput = fixture.nativeElement.querySelector(
+      '.filters-row input'
+    ) as HTMLInputElement;
+    const table = fixture.nativeElement.querySelector('.coding-jobs-table');
+    filterInput.focus();
+
+    component.loadCodingJobs();
+    fixture.detectChanges();
+
+    expect(component.isLoading).toBe(true);
+    expect(fixture.nativeElement.querySelector('.filters-row input')).toBe(
+      filterInput
+    );
+    expect(fixture.nativeElement.querySelector('.coding-jobs-table')).toBe(
+      table
+    );
+    expect(
+      fixture.nativeElement.querySelector('.coding-jobs-refresh-indicator')
+    ).not.toBeNull();
+    expect(document.activeElement).toBe(filterInput);
+
+    response$.next({
+      data: mockCodingJobs as CodingJob[],
+      total: mockCodingJobs.length,
+      page: 1,
+      limit: 50
+    });
+    fixture.detectChanges();
+
+    expect(component.isLoading).toBe(false);
+    expect(
+      fixture.nativeElement.querySelector('.coding-jobs-refresh-indicator')
+    ).toBeNull();
+  });
+
+  it('uses the full spinner only for the initial coding jobs load', () => {
+    const initialResponse$ = new Subject<{
+      data: CodingJob[];
+      total: number;
+      page: number;
+      limit: number;
+    }>();
+    (codingJobBackendServiceMock.getCodingJobs as jest.Mock)
+      .mockReturnValueOnce(initialResponse$);
+    const initialFixture = TestBed.createComponent(CodingJobsComponent);
+
+    initialFixture.detectChanges();
+
+    expect(initialFixture.componentInstance.hasLoadedJobs).toBe(false);
+    expect(
+      initialFixture.nativeElement.querySelector('mat-spinner')
+    ).not.toBeNull();
+    expect(
+      initialFixture.nativeElement.querySelector('.filters-row')
+    ).toBeNull();
+
+    initialResponse$.next({
+      data: [],
+      total: 0,
+      page: 1,
+      limit: 50
+    });
+    initialFixture.detectChanges();
+
+    expect(initialFixture.componentInstance.hasLoadedJobs).toBe(true);
+    expect(
+      initialFixture.nativeElement.querySelector('.filters-row')
+    ).not.toBeNull();
+    initialFixture.destroy();
+  });
 
   it('should handle loading coding jobs failure', fakeAsync(() => {
     (

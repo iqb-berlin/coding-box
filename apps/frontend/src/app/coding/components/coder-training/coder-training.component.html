@@ -237,7 +237,8 @@
         </div>
 
         <div class="bundle-variable-config" style="margin-top: 24px;">
-          <div *ngFor="let bundleGroup of groupedVariables.bundles" class="bundle-variable-group">
+          <div *ngFor="let bundleGroup of groupedVariables.bundles; trackBy: trackBundleGroupById"
+            class="bundle-variable-group">
             <div class="bundle-header">
               <h4 class="bundle-title">
                 <mat-icon>inventory_2</mat-icon>

@@ -923,6 +923,7 @@
         "status": "Status",
         "units": "Aufgaben"
       },
+      "refreshing": "Kodierjobs werden aktualisiert...",
       "issue-tooltip": {
         "no-review-issues": "Keine prüfpflichtigen Kodierungsprobleme",
         "open-no-review-issues-singular": "{{count}} offene Aufgabe, keine prüfpflichtigen Kodierungsprobleme",
