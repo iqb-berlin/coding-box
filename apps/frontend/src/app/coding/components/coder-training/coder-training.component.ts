@@ -1388,6 +1388,13 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     this.changeDetectorRef.markForCheck();
   }
 
+  trackBundleGroupById(
+    _index: number,
+    bundleGroup: VariableGrouping['bundles'][number]
+  ): number {
+    return bundleGroup.bundle.id;
+  }
+
   updateBundleSampleCount(bundleId: number, newSampleCount: number | string): void {
     const parsedSampleCount = Number(newSampleCount);
     if (Number.isNaN(parsedSampleCount) || parsedSampleCount < 1 || parsedSampleCount > 1000) {
@@ -1397,11 +1404,13 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     this.variablesFormArray.controls.forEach(control => {
       if (control.get('bundleId')?.value === bundleId) {
-        control.get('sampleCount')?.setValue(parsedSampleCount);
+        control.get('sampleCount')?.setValue(parsedSampleCount, {
+          emitEvent: false
+        });
       }
     });
 
-    this.updateGroupedVariables();
+    this.variablesFormArray.updateValueAndValidity();
     this.changeDetectorRef.markForCheck();
   }
 

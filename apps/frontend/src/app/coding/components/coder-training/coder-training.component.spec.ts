@@ -191,6 +191,31 @@ describe('CoderTrainingComponent', () => {
     expect(codingTrainingBackendService.createCoderTrainingJobs).toHaveBeenCalled();
   });
 
+  it('keeps the bundle sample input mounted while updating its value', () => {
+    component.onBundleSelectionChange([5]);
+    fixture.detectChanges();
+    const bundleGroup = component.groupedVariables.bundles[0];
+    const sampleInput = fixture.nativeElement.querySelector(
+      '.bundle-sample-field input'
+    ) as HTMLInputElement;
+    sampleInput.focus();
+    sampleInput.value = '3';
+
+    sampleInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(component.groupedVariables.bundles[0]).toBe(bundleGroup);
+    expect(
+      fixture.nativeElement.querySelector('.bundle-sample-field input')
+    ).toBe(sampleInput);
+    expect(document.activeElement).toBe(sampleInput);
+    expect(
+      component.variablesFormArray.controls
+        .filter(control => control.get('bundleId')?.value === 5)
+        .map(control => control.get('sampleCount')?.value)
+    ).toEqual([3, 3]);
+  });
+
   it('renders coder selection as toggle cards without checkboxes', () => {
     fixture.detectChanges();
 
