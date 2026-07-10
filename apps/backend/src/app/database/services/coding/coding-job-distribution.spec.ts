@@ -22,6 +22,19 @@ type SlimResponseForTest = {
   variableBundleId?: number;
 };
 
+type DistributionPlanForTest = {
+  distributionByCoderId: Record<string, Record<string, number>>;
+  doubleCodingInfo: Record<string, {
+    doubleCodedCasesPerCoderId: Record<string, number>;
+  }>;
+  plannedCases: Array<{
+    item: { itemKey: string };
+    isDoubleCoded: boolean;
+    assignedCoderIds: number[];
+  }>;
+  tasksPerCoder: Record<string, number>;
+};
+
 const createRepo = () => ({
   count: jest.fn().mockResolvedValue(0),
   find: jest.fn(),
@@ -172,6 +185,38 @@ describe('CodingJobService distribution from job definitions', () => {
       service as unknown as { getAssignedResponseIdsForVariables: () => Promise<Set<number>> },
       'getAssignedResponseIdsForVariables'
     ).mockResolvedValue(new Set());
+  }
+
+  function buildDistributionPlanForTest(
+    request: unknown
+  ): Promise<DistributionPlanForTest> {
+    return (
+      service as unknown as {
+        buildDistributionPlan: (
+          workspaceId: number,
+          planRequest: unknown
+        ) => Promise<DistributionPlanForTest>;
+      }
+    ).buildDistributionPlan(5, request);
+  }
+
+  function getDoubleCodingPairCounts(
+    plan: DistributionPlanForTest,
+    itemKey: string
+  ): Record<string, number> {
+    const pairCounts = new Map<string, number>();
+    plan.plannedCases
+      .filter(plannedCase => (
+        plannedCase.item.itemKey === itemKey && plannedCase.isDoubleCoded
+      ))
+      .forEach(plannedCase => {
+        const pairKey = [...plannedCase.assignedCoderIds]
+          .sort((a, b) => a - b)
+          .join('-');
+        pairCounts.set(pairKey, (pairCounts.get(pairKey) || 0) + 1);
+      });
+
+    return Object.fromEntries(pairCounts);
   }
 
   it('keeps preview distribution and created jobs aligned for capped double-coded mixed definitions', async () => {
@@ -535,6 +580,164 @@ describe('CodingJobService distribution from job definitions', () => {
     ).toBe(35);
   });
 
+  it('balances coder loads and double-coding pairs within every variable', async () => {
+    const variables = [
+      { unitName: 'Unit 1', variableId: 'Var 1' },
+      { unitName: 'Unit 2', variableId: 'Var 2' },
+      { unitName: 'Unit 3', variableId: 'Var 3' }
+    ];
+    const responses = variables.flatMap((variable, variableIndex) => Array.from(
+      { length: 30 },
+      (_, caseIndex) => makeResponse(
+        variableIndex * 100 + caseIndex + 1,
+        variable.unitName,
+        variable.variableId
+      )
+    ));
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+
+    const plan = await buildDistributionPlanForTest({
+      selectedVariables: variables,
+      selectedCoders: [
+        { id: 1, name: 'Ada', username: 'ada' },
+        { id: 2, name: 'Bea', username: 'bea' },
+        { id: 3, name: 'Chris', username: 'chris' }
+      ],
+      doubleCodingPercentage: 20,
+      caseOrderingMode: 'continuous',
+      distributionSeed: 'job-definition:1'
+    });
+
+    variables.forEach(variable => {
+      const itemKey = `${variable.unitName}::${variable.variableId}`;
+      expect(plan.distributionByCoderId[itemKey]).toEqual({
+        1: 12,
+        2: 12,
+        3: 12
+      });
+      expect(
+        plan.doubleCodingInfo[itemKey].doubleCodedCasesPerCoderId
+      ).toEqual({
+        1: 4,
+        2: 4,
+        3: 4
+      });
+
+      expect(getDoubleCodingPairCounts(plan, itemKey)).toEqual({
+        '1-2': 2,
+        '1-3': 2,
+        '2-3': 2
+      });
+    });
+    expect(plan.tasksPerCoder).toEqual({ 1: 36, 2: 36, 3: 36 });
+  });
+
+  it.each([
+    [
+      '300 cases, three coders and 10 percent double coding',
+      300,
+      3,
+      { doubleCodingPercentage: 10 },
+      [110, 110, 110],
+      [10, 10, 10]
+    ],
+    [
+      '30 cases, three coders and 20 percent double coding',
+      30,
+      3,
+      { doubleCodingPercentage: 20 },
+      [12, 12, 12],
+      [2, 2, 2]
+    ],
+    [
+      '300 cases, four coders and 50 double-coded cases',
+      300,
+      4,
+      { doubleCodingAbsolute: 50 },
+      [87, 87, 88, 88],
+      [8, 8, 8, 8, 9, 9]
+    ]
+  ])('matches the issue distribution example: %s', async (
+    _label,
+    caseCount,
+    coderCount,
+    doubleCoding,
+    expectedCoderLoads,
+    expectedPairCounts
+  ) => {
+    const itemKey = 'Unit 1::Var 1';
+    const responses = Array.from(
+      { length: caseCount as number },
+      (_, index) => makeResponse(index + 1, 'Unit 1', 'Var 1')
+    );
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+
+    const plan = await buildDistributionPlanForTest({
+      selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      selectedCoders: Array.from(
+        { length: coderCount as number },
+        (_, index) => ({
+          id: index + 1,
+          name: `Coder ${index + 1}`,
+          username: `coder-${index + 1}`
+        })
+      ),
+      ...(doubleCoding as Record<string, number>),
+      caseOrderingMode: 'continuous',
+      distributionSeed: 'issue-896-examples'
+    });
+
+    expect(
+      Object.values(plan.distributionByCoderId[itemKey]).sort((a, b) => a - b)
+    ).toEqual(expectedCoderLoads);
+    expect(
+      Object.values(getDoubleCodingPairCounts(plan, itemKey))
+        .sort((a, b) => a - b)
+    ).toEqual(expectedPairCounts);
+  });
+
+  it('balances pair quotas when six coders double-code six cases', async () => {
+    const itemKey = 'Unit 1::Var 1';
+    const responses = Array.from(
+      { length: 6 },
+      (_, index) => makeResponse(index + 1, 'Unit 1', 'Var 1')
+    );
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+
+    const plan = await buildDistributionPlanForTest({
+      selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      selectedCoders: Array.from({ length: 6 }, (_, index) => ({
+        id: index + 1,
+        name: `Coder ${index + 1}`,
+        username: `coder-${index + 1}`
+      })),
+      doubleCodingAbsolute: 6,
+      caseOrderingMode: 'continuous',
+      distributionSeed: 'six-coder-pair-balance'
+    });
+    const pairCounts = getDoubleCodingPairCounts(plan, itemKey);
+
+    expect(plan.distributionByCoderId[itemKey]).toEqual({
+      1: 2,
+      2: 2,
+      3: 2,
+      4: 2,
+      5: 2,
+      6: 2
+    });
+    expect(Object.keys(pairCounts)).toHaveLength(6);
+    expect(Object.values(pairCounts)).toEqual([1, 1, 1, 1, 1, 1]);
+  });
+
   it('ignores unsupported requests for more than two coders per double-coded case', async () => {
     const responses = Array.from({ length: 4 }, (_, index) => makeResponse(index + 1, 'Unit 1', 'Var 1'));
     const createdJobCalls: Array<{ subset: SlimResponseForTest[] }> = [];
@@ -639,6 +842,40 @@ describe('CodingJobService distribution from job definitions', () => {
     expect(preview.tasksPerCoder['1'] + preview.tasksPerCoder['2']).toBe(8);
     expect(preview.tasksPerCoder['2']).toBeGreaterThan(preview.tasksPerCoder['1']);
     expect(preview.coderWeights).toEqual({ 1: 1, 2: 3 });
+  });
+
+  it('applies coder weights within each selected variable', async () => {
+    const responses = [
+      ...Array.from({ length: 8 }, (_, index) => makeResponse(index + 1, 'Unit 1', 'Var 1')),
+      ...Array.from({ length: 8 }, (_, index) => makeResponse(index + 101, 'Unit 2', 'Var 2'))
+    ];
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+
+    const preview = await service.calculateDistribution(5, {
+      selectedVariables: [
+        { unitName: 'Unit 1', variableId: 'Var 1' },
+        { unitName: 'Unit 2', variableId: 'Var 2' }
+      ],
+      selectedCoders: [
+        {
+          id: 1, name: 'Ada', username: 'ada', weight: 1
+        },
+        {
+          id: 2, name: 'Bea', username: 'bea', weight: 3
+        }
+      ],
+      caseOrderingMode: 'continuous',
+      distributionSeed: 'weighted-per-variable'
+    });
+
+    expect(preview.distributionByCoderId).toEqual({
+      'Unit 1::Var 1': { 1: 2, 2: 6 },
+      'Unit 2::Var 2': { 1: 2, 2: 6 }
+    });
+    expect(preview.tasksPerCoder).toEqual({ 1: 4, 2: 12 });
   });
 
   it.each([
