@@ -1,3 +1,4 @@
+import * as ExcelJS from 'exceljs';
 import { CodingItemMatrixExportService } from './coding-item-matrix-export.service';
 
 const collectStream = (stream: NodeJS.ReadableStream): Promise<string> => (
@@ -44,7 +45,11 @@ describe('CodingItemMatrixExportService', () => {
         header: 'Alias1__VAR1',
         unitName: 'UNIT1',
         variableId: 'VAR1'
-      }]
+      }],
+      bookletUnits: new Map([['BOOKLET-1', new Set(['UNIT1'])]]),
+      mbdMissing: {
+        id: 'mbd', label: 'missing by design', code: -94, score: null
+      }
     });
     (service as never as { getResponseValuesForRows: jest.Mock }).getResponseValuesForRows =
       jest.fn().mockResolvedValue(new Map([
@@ -55,6 +60,105 @@ describe('CodingItemMatrixExportService', () => {
 
     expect(output).toContain('person_login;person_code;person_group;booklet_name;Alias1__VAR1');
     expect(output).toContain('login-1;code-1;group-1;BOOKLET-1;2');
+  });
+
+  it('exports mbd only for units outside the row booklet in code and score matrices', async () => {
+    const service = createService();
+    (service as never as {
+      buildMatrixContext: jest.Mock;
+      getResponseValuesForRows: jest.Mock;
+    }).buildMatrixContext = jest.fn().mockResolvedValue({
+      rows: [{
+        bookletId: 10,
+        bookletName: 'BOOKLET-1',
+        personLogin: 'login-1',
+        personCode: 'code-1',
+        personGroup: 'group-1'
+      }],
+      columns: [
+        {
+          key: 'UNIT1\u001FVAR1',
+          header: 'UNIT1__VAR1',
+          unitName: 'UNIT1',
+          variableId: 'VAR1'
+        },
+        {
+          key: 'UNIT2\u001FVAR1',
+          header: 'UNIT2__VAR1',
+          unitName: 'UNIT2',
+          variableId: 'VAR1'
+        }
+      ],
+      bookletUnits: new Map([['BOOKLET-1', new Set(['UNIT1'])]]),
+      mbdMissing: {
+        id: 'mbd', label: 'missing by design', code: -94, score: null
+      }
+    });
+    (service as never as { getResponseValuesForRows: jest.Mock }).getResponseValuesForRows =
+      jest.fn().mockResolvedValue(new Map());
+
+    const codeOutput = await collectStream(service.exportItemMatrixAsCsvStream(7, 'code'));
+    const scoreOutput = await collectStream(service.exportItemMatrixAsCsvStream(7, 'score'));
+    const excelBuffer = await service.exportItemMatrixAsExcel(7, 'score');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(excelBuffer);
+    const excelRow = workbook.getWorksheet('Itemmatrix')!.getRow(2);
+
+    expect(codeOutput).toContain('login-1;code-1;group-1;BOOKLET-1;;-94');
+    expect(scoreOutput).toContain('login-1;code-1;group-1;BOOKLET-1;;NA');
+    expect(excelRow.getCell(5).value).toBeNull();
+    expect(excelRow.getCell(6).value).toBe('NA');
+  });
+
+  it('loads and normalizes expected units from booklet XML', async () => {
+    const fileUploadRepository = {
+      find: jest.fn().mockResolvedValue([{
+        file_id: 'Booklet-1',
+        data: '<Booklet><Testlet><Unit id="unit1.xml"/><Unit id="UNIT2"/></Testlet></Booklet>'
+      }])
+    };
+    const service = new CodingItemMatrixExportService(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      fileUploadRepository as never
+    );
+
+    const bookletUnits = await (service as never as {
+      getBookletUnits: (workspaceId: number) => Promise<Map<string, Set<string>>>;
+    }).getBookletUnits(7);
+
+    expect(fileUploadRepository.find).toHaveBeenCalledWith({
+      where: { workspace_id: 7, file_type: 'Booklet' },
+      select: ['file_id', 'data']
+    });
+    expect(bookletUnits.get('BOOKLET-1')).toEqual(new Set(['UNIT1', 'UNIT2']));
+  });
+
+  it('fails before matrix creation when mbd is missing from the profile', async () => {
+    const missingsProfilesService = {
+      getMissingByIdForProfileOrDefault: jest.fn().mockRejectedValue(
+        new Error("Missing 'mbd' not found in profile 3")
+      )
+    };
+    const service = createService(missingsProfilesService);
+    (service as never as {
+      getRows: jest.Mock;
+      getColumns: jest.Mock;
+      getBookletUnits: jest.Mock;
+    }).getRows = jest.fn().mockResolvedValue([]);
+    (service as never as { getColumns: jest.Mock }).getColumns = jest.fn().mockResolvedValue([]);
+    (service as never as { getBookletUnits: jest.Mock }).getBookletUnits =
+      jest.fn().mockResolvedValue(new Map());
+
+    await expect((service as never as {
+      buildMatrixContext: (workspaceId: number) => Promise<unknown>;
+    }).buildMatrixContext(7)).rejects.toThrow("Missing 'mbd' not found in profile 3");
+    expect(missingsProfilesService.getMissingByIdForProfileOrDefault)
+      .toHaveBeenCalledWith(7, null, 'mbd');
   });
 
   it('checks cancellation before writing item matrix rows', async () => {
@@ -125,7 +229,11 @@ describe('CodingItemMatrixExportService', () => {
         header: 'UNIT1__VAR1',
         unitName: 'UNIT1',
         variableId: 'VAR1'
-      }]
+      }],
+      bookletUnits: new Map([['BOOKLET-1', new Set(['UNIT1'])]]),
+      mbdMissing: {
+        id: 'mbd', label: 'missing by design', code: -94, score: null
+      }
     });
     (service as never as { getResponseValuesForRows: jest.Mock }).getResponseValuesForRows =
       jest.fn().mockResolvedValue(new Map([
@@ -163,7 +271,11 @@ describe('CodingItemMatrixExportService', () => {
         header: 'UNIT1__VAR1',
         unitName: 'UNIT1',
         variableId: 'VAR1'
-      }]
+      }],
+      bookletUnits: new Map([['BOOKLET-1', new Set(['UNIT1'])]]),
+      mbdMissing: {
+        id: 'mbd', label: 'missing by design', code: -94, score: null
+      }
     });
     (service as never as { getResponseValuesForRows: jest.Mock }).getResponseValuesForRows =
       jest.fn().mockResolvedValue(new Map([
