@@ -1703,8 +1703,24 @@ export class CodingReviewService {
         `Calculated workspace-wide Cohen's Kappa: ${coderPairs.length} coder pairs, ${uniqueVariables.size} variables, ${uniqueCoders.size} coders, average kappa: ${averageKappa}`
       );
 
+      const publicCoderPairs = coderPairs.map(result => {
+        const roundedResult = this.codingStatisticsService
+          .roundKappaCalculationResult(result);
+        return {
+          coder1Id: roundedResult.coder1Id,
+          coder1Name: roundedResult.coder1Name,
+          coder2Id: roundedResult.coder2Id,
+          coder2Name: roundedResult.coder2Name,
+          kappa: roundedResult.kappa,
+          agreement: roundedResult.agreement,
+          totalSharedResponses: roundedResult.totalItems,
+          validPairs: roundedResult.validPairs,
+          interpretation: roundedResult.interpretation
+        };
+      });
+
       return {
-        coderPairs,
+        coderPairs: publicCoderPairs,
         workspaceSummary
       };
     } catch (error) {

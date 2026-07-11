@@ -36,6 +36,10 @@ import {
 import { normalizeTestperson } from '../../../replay/utils/token-utils';
 import { PostMessage, PostMessageService } from '../../../core/services/post-message.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
+import type {
+  TrainingKappaStatisticsDto,
+  TrainingKappaVariableDto as KappaVariable
+} from '../../../../../../../api-dto/coding/training-kappa-statistics.dto';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { CoderTraining } from '../../models/coder-training.model';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
@@ -163,48 +167,20 @@ interface ComparisonFilters {
 
 type RegexComparisonFilterField = 'unitName' | 'variableId' | 'personLogin' | 'personGroup' | 'bookletName';
 
-interface KappaCoderPair {
-  coder1Id: number;
-  coder1Name: string;
-  coder2Id: number;
-  coder2Name: string;
-  kappa: number | null;
-  agreement: number;
-  totalItems: number;
-  validPairs: number;
-  interpretation: string;
-}
-
-interface KappaVariable {
-  unitName: string;
-  variableId: string;
-  meanKappa?: number | null;
-  meanAgreement?: number | null;
-  caseCount?: number;
-  validPairCount?: number;
-  coderPairCount?: number;
-  coderPairs: KappaCoderPair[];
-}
-
-interface KappaStatistics {
-  variables: KappaVariable[];
-  workspaceSummary: {
-    totalDoubleCodedResponses: number;
-    totalCoderPairs: number;
-    averageKappa: number | null;
+type KappaStatistics = Omit<TrainingKappaStatisticsDto, 'workspaceSummary'> & {
+  workspaceSummary: TrainingKappaStatisticsDto['workspaceSummary'] & {
     meanAgreement?: number | null;
-    variablesIncluded: number;
-    codersIncluded: number;
-    weightingMethod: 'weighted' | 'unweighted';
-    calculationLevel?: 'code' | 'score';
   };
-}
+};
 
 interface VariableKappaSummary {
   key: string;
   unitName: string;
   variableId: string;
   meanKappa: number | null;
+  meanBrennanPredigerKappa: number | null;
+  fleissKappa: number | null;
+  fleissCaseCount: number;
   meanAgreement: number | null;
   caseCount: number;
   validPairCount: number;
@@ -2173,22 +2149,10 @@ export class CodingResultsComparisonComponent implements OnInit {
       return;
     }
 
-    const selectedCoderIds = this.codersFormControl.value || [];
-
-    // Deep copy
-    const filteredStats = JSON.parse(JSON.stringify(this.originalKappaStatistics));
-
-    // Filter coder pairs for each variable
-    filteredStats.variables = filteredStats.variables.map((variable: KappaVariable) => {
-      variable.coderPairs = variable.coderPairs.filter((pair: KappaCoderPair) => selectedCoderIds.includes(pair.coder1Id) && selectedCoderIds.includes(pair.coder2Id)
-      );
-      return variable;
-    }).filter((variable: KappaVariable) => variable.coderPairs.length > 0);
-
-    this.kappaStatistics = filteredStats;
+    // The backend response is already scoped to the selected job IDs.
+    this.kappaStatistics = JSON.parse(JSON.stringify(this.originalKappaStatistics));
     this.buildVariableKappaSummaries();
     this.calculateMeanAgreement();
-    this.updateSummaryFromFiltered();
   }
 
   private buildVariableSummaryKey(unitName: string, variableId: string): string {
@@ -2206,6 +2170,9 @@ export class CodingResultsComparisonComponent implements OnInit {
       unitName: variable.unitName,
       variableId: variable.variableId,
       meanKappa: variable.meanKappa ?? null,
+      meanBrennanPredigerKappa: variable.meanBrennanPredigerKappa ?? null,
+      fleissKappa: variable.fleissKappa ?? null,
+      fleissCaseCount: variable.fleissCaseCount ?? 0,
       meanAgreement: variable.meanAgreement ?? null,
       caseCount: variable.caseCount ?? 0,
       validPairCount: variable.validPairCount ?? 0
@@ -2238,44 +2205,6 @@ export class CodingResultsComparisonComponent implements OnInit {
       return 'kappa-good';
     }
     return 'kappa-perfect';
-  }
-
-  updateSummaryFromFiltered(): void {
-    if (!this.kappaStatistics) return;
-
-    let pairCount = 0;
-    let totalKappaWeight = 0;
-    let kappaPairCount = 0;
-    let totalKappaWeighted = 0;
-    let totalKappaSum = 0;
-    let totalDoubleCodedResponses = 0;
-
-    this.kappaStatistics.variables.forEach(variable => {
-      totalDoubleCodedResponses += variable.caseCount ?? 0;
-      variable.coderPairs.forEach(pair => {
-        if (pair.validPairs > 0) {
-          pairCount += 1;
-        }
-
-        if (pair.validPairs > 0 && pair.kappa !== null && !Number.isNaN(pair.kappa)) {
-          totalKappaWeighted += pair.kappa * pair.validPairs;
-          totalKappaWeight += pair.validPairs;
-          totalKappaSum += pair.kappa;
-          kappaPairCount += 1;
-        }
-      });
-    });
-
-    const meanKappaWeighted = totalKappaWeight > 0 ? totalKappaWeighted / totalKappaWeight : null;
-    const meanKappaArithmetic = kappaPairCount > 0 ? totalKappaSum / kappaPairCount : null;
-
-    this.kappaStatistics.workspaceSummary.averageKappa = this.useWeightedMean ?
-      meanKappaWeighted : meanKappaArithmetic;
-
-    this.kappaStatistics.workspaceSummary.totalDoubleCodedResponses = totalDoubleCodedResponses;
-    this.kappaStatistics.workspaceSummary.totalCoderPairs = pairCount;
-    this.kappaStatistics.workspaceSummary.codersIncluded = this.codersFormControl.value?.length || 0;
-    this.kappaStatistics.workspaceSummary.variablesIncluded = this.kappaStatistics.variables.length;
   }
 
   calculateMeanAgreement(): void {
