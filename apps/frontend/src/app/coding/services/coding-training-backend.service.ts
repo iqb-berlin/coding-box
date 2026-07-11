@@ -27,6 +27,7 @@ import {
   WithinTrainingCodingComparisonPageDto,
   WithinTrainingCodingComparisonRowDto
 } from '../../../../../../api-dto/coding/training-comparison.dto';
+import { TrainingKappaStatisticsDto } from '../../../../../../api-dto/coding/training-kappa-statistics.dto';
 
 export interface CoderTrainingJob {
   coderId: number;
@@ -464,74 +465,14 @@ export class CodingTrainingBackendService {
     weightedMean: boolean = true,
     level: 'code' | 'score' = 'code',
     selectedJobIds?: number[]
-  ): Observable<{
-      variables: Array<{
-        unitName: string;
-        variableId: string;
-        meanKappa: number | null;
-        meanAgreement: number | null;
-        caseCount: number;
-        validPairCount: number;
-        coderPairCount: number;
-        coderPairs: Array<{
-          coder1Id: number;
-          coder1Name: string;
-          coder2Id: number;
-          coder2Name: string;
-          kappa: number | null;
-          agreement: number;
-          totalItems: number;
-          validPairs: number;
-          interpretation: string;
-        }>;
-      }>;
-      workspaceSummary: {
-        totalDoubleCodedResponses: number;
-        totalCoderPairs: number;
-        averageKappa: number | null;
-        variablesIncluded: number;
-        codersIncluded: number;
-        weightingMethod: 'weighted' | 'unweighted';
-        calculationLevel: 'code' | 'score';
-      };
-    }> {
-    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/cohens-kappa`;
+  ): Observable<TrainingKappaStatisticsDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/interrater-reliability`;
     let params = new HttpParams()
       .set('weightedMean', weightedMean.toString())
       .set('level', level);
     if (selectedJobIds !== undefined) {
       params = params.set('jobIds', selectedJobIds.join(','));
     }
-    return this.http.get<{
-      variables: Array<{
-        unitName: string;
-        variableId: string;
-        meanKappa: number | null;
-        meanAgreement: number | null;
-        caseCount: number;
-        validPairCount: number;
-        coderPairCount: number;
-        coderPairs: Array<{
-          coder1Id: number;
-          coder1Name: string;
-          coder2Id: number;
-          coder2Name: string;
-          kappa: number | null;
-          agreement: number;
-          totalItems: number;
-          validPairs: number;
-          interpretation: string;
-        }>;
-      }>;
-      workspaceSummary: {
-        totalDoubleCodedResponses: number;
-        totalCoderPairs: number;
-        averageKappa: number | null;
-        variablesIncluded: number;
-        codersIncluded: number;
-        weightingMethod: 'weighted' | 'unweighted';
-        calculationLevel: 'code' | 'score';
-      };
-    }>(url, { headers: this.authHeader, params });
+    return this.http.get<TrainingKappaStatisticsDto>(url, { headers: this.authHeader, params });
   }
 }

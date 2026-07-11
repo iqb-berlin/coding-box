@@ -24,7 +24,8 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import {
   CoderTrainingResultsApplyService,
-  CoderTrainingService
+  CoderTrainingService,
+  TrainingCohensKappaStatistics
 } from '../../database/services/coding';
 import { JobDefinitionVariable, JobDefinitionVariableBundle } from '../../database/entities/job-definition.entity';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
@@ -1261,7 +1262,10 @@ export class WorkspaceCoderTrainingController {
     );
   }
 
-  @Get(':workspace_id/coding/coder-trainings/:trainingId/cohens-kappa')
+  @Get([
+    ':workspace_id/coding/coder-trainings/:trainingId/cohens-kappa',
+    ':workspace_id/coding/coder-trainings/:trainingId/interrater-reliability'
+  ])
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
@@ -1284,7 +1288,7 @@ export class WorkspaceCoderTrainingController {
     type: String
   })
   @ApiOkResponse({
-    description: 'Cohen\'s Kappa inter-rater reliability statistics for the coder training',
+    description: 'Cohen, Brennan-Prediger and Fleiss inter-rater reliability statistics for the coder training',
     schema: {
       type: 'object',
       properties: {
@@ -1296,6 +1300,9 @@ export class WorkspaceCoderTrainingController {
               unitName: { type: 'string', description: 'Name of the unit' },
               variableId: { type: 'string', description: 'Variable ID' },
               meanKappa: { type: 'number', nullable: true },
+              meanBrennanPredigerKappa: { type: 'number', nullable: true },
+              fleissKappa: { type: 'number', nullable: true },
+              fleissCaseCount: { type: 'number' },
               meanAgreement: { type: 'number', nullable: true },
               caseCount: { type: 'number', description: 'Distinct valid cases for this variable' },
               validPairCount: { type: 'number', description: 'Sum of valid pair values across coder pairs' },
@@ -1310,6 +1317,7 @@ export class WorkspaceCoderTrainingController {
                     coder2Id: { type: 'number' },
                     coder2Name: { type: 'string' },
                     kappa: { type: 'number', nullable: true },
+                    brennanPredigerKappa: { type: 'number', nullable: true },
                     agreement: { type: 'number' },
                     totalItems: { type: 'number' },
                     validPairs: { type: 'number' },
@@ -1326,6 +1334,7 @@ export class WorkspaceCoderTrainingController {
             totalDoubleCodedResponses: { type: 'number' },
             totalCoderPairs: { type: 'number' },
             averageKappa: { type: 'number', nullable: true },
+            averageBrennanPredigerKappa: { type: 'number', nullable: true },
             variablesIncluded: { type: 'number' },
             codersIncluded: { type: 'number' },
             weightingMethod: {
@@ -1349,37 +1358,7 @@ export class WorkspaceCoderTrainingController {
       @Query('weightedMean') weightedMean?: string,
       @Query('level') level?: 'code' | 'score',
       @Query('jobIds') jobIds?: string
-  ): Promise<{
-        variables: Array<{
-          unitName: string;
-          variableId: string;
-          meanKappa: number | null;
-          meanAgreement: number | null;
-          caseCount: number;
-          validPairCount: number;
-          coderPairCount: number;
-          coderPairs: Array<{
-            coder1Id: number;
-            coder1Name: string;
-            coder2Id: number;
-            coder2Name: string;
-            kappa: number | null;
-            agreement: number;
-            totalItems: number;
-            validPairs: number;
-            interpretation: string;
-          }>;
-        }>;
-        workspaceSummary: {
-          totalDoubleCodedResponses: number;
-          totalCoderPairs: number;
-          averageKappa: number | null;
-          variablesIncluded: number;
-          codersIncluded: number;
-          weightingMethod: 'weighted' | 'unweighted';
-          calculationLevel: 'code' | 'score';
-        };
-      }> {
+  ): Promise<TrainingCohensKappaStatistics> {
     if (!trainingId || trainingId <= 0) {
       throw new Error('Valid training ID must be provided');
     }
