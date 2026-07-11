@@ -2289,9 +2289,11 @@ describe('CodingResultsComparisonComponent', () => {
         totalDoubleCodedResponses: 10,
         totalCoderPairs: 1,
         averageKappa: 1,
+        averageBrennanPredigerKappa: null,
         variablesIncluded: 1,
         codersIncluded: 2,
-        weightingMethod: 'weighted'
+        weightingMethod: 'weighted',
+        calculationLevel: 'code'
       }
     };
     component.originalKappaStatistics = component.kappaStatistics;
@@ -2338,6 +2340,9 @@ describe('CodingResultsComparisonComponent', () => {
           unitName: 'U1',
           variableId: 'V1',
           meanKappa: 0.84,
+          meanBrennanPredigerKappa: 0.9,
+          fleissKappa: 0.75,
+          fleissCaseCount: 8,
           meanAgreement: 0.866666,
           caseCount: 1,
           validPairCount: 15,
@@ -2349,6 +2354,7 @@ describe('CodingResultsComparisonComponent', () => {
               coder2Id: 2,
               coder2Name: 'C2',
               kappa: 0.82,
+              brennanPredigerKappa: 0.88,
               agreement: 0.9,
               totalItems: 10,
               validPairs: 10,
@@ -2360,6 +2366,7 @@ describe('CodingResultsComparisonComponent', () => {
               coder2Id: 3,
               coder2Name: 'C3',
               kappa: 0.88,
+              brennanPredigerKappa: 0.94,
               agreement: 0.8,
               totalItems: 5,
               validPairs: 5,
@@ -2372,9 +2379,11 @@ describe('CodingResultsComparisonComponent', () => {
         totalDoubleCodedResponses: 1,
         totalCoderPairs: 2,
         averageKappa: 0.84,
+        averageBrennanPredigerKappa: 0.9,
         variablesIncluded: 1,
         codersIncluded: 3,
-        weightingMethod: 'weighted'
+        weightingMethod: 'weighted',
+        calculationLevel: 'code'
       }
     };
 
@@ -2396,15 +2405,23 @@ describe('CodingResultsComparisonComponent', () => {
       validPairCount: 15
     });
     expect(component.variableKappaSummaries[0].meanKappa).toBeCloseTo(0.84, 10);
+    expect(component.variableKappaSummaries[0].meanBrennanPredigerKappa).toBeCloseTo(0.9, 10);
+    expect(component.variableKappaSummaries[0].fleissKappa).toBeCloseTo(0.75, 10);
     expect(component.variableKappaSummaries[0].meanAgreement).toBeCloseTo(0.866666, 5);
     expect(tableText).toContain('Mittelwerte je Variable');
     expect(tableText).toContain('Gültige Paarwerte');
     expect(tableText).toContain('U1 - V1');
     expect(tableText).toContain('0.840');
+    expect(tableText).toContain('0.900');
+    expect(tableText).toContain('0.750');
+    expect(tableText).toContain('(n=8)');
     expect(tableText).toContain('86.7%');
     expect(tableText).toContain('15');
     expect(inlineSummaryText).toContain('Mittelwert U1 - V1');
     expect(inlineSummaryText).toContain('Kappa 0.840');
+    expect(inlineSummaryText).toContain('coding.trainings.compare.metric-brennan-prediger-kappa 0.900');
+    expect(inlineSummaryText).toContain('coding.trainings.compare.metric-fleiss-kappa 0.750');
+    expect(inlineSummaryText).toContain('coding.trainings.compare.complete-cases');
     expect(inlineSummaryText).toContain('Übereinstimmung 86.7%');
     expect(inlineSummaryText).toContain('Fälle 1');
     expect(inlineSummaryText).toContain('Gültige Paarwerte 15');
@@ -2450,6 +2467,9 @@ describe('CodingResultsComparisonComponent', () => {
         unitName: 'U1',
         variableId: 'V1',
         meanKappa: 0.85,
+        meanBrennanPredigerKappa: null,
+        fleissKappa: null,
+        fleissCaseCount: 0,
         meanAgreement: 0.85,
         caseCount: 1,
         validPairCount: 15,
@@ -2461,6 +2481,7 @@ describe('CodingResultsComparisonComponent', () => {
             coder2Id: 2,
             coder2Name: 'C2',
             kappa: 0.82,
+            brennanPredigerKappa: null,
             agreement: 0.9,
             totalItems: 10,
             validPairs: 10,
@@ -2472,6 +2493,7 @@ describe('CodingResultsComparisonComponent', () => {
             coder2Id: 3,
             coder2Name: 'C3',
             kappa: 0.88,
+            brennanPredigerKappa: null,
             agreement: 0.8,
             totalItems: 5,
             validPairs: 5,
@@ -2483,9 +2505,11 @@ describe('CodingResultsComparisonComponent', () => {
         totalDoubleCodedResponses: 1,
         totalCoderPairs: 2,
         averageKappa: 0.85,
+        averageBrennanPredigerKappa: null,
         variablesIncluded: 1,
         codersIncluded: 3,
-        weightingMethod: 'unweighted'
+        weightingMethod: 'unweighted',
+        calculationLevel: 'code'
       }
     };
 
@@ -2504,6 +2528,14 @@ describe('CodingResultsComparisonComponent', () => {
       variables: [{
         unitName: 'U1',
         variableId: 'V1',
+        meanKappa: null,
+        meanBrennanPredigerKappa: null,
+        fleissKappa: null,
+        fleissCaseCount: 0,
+        meanAgreement: null,
+        caseCount: 0,
+        validPairCount: 0,
+        coderPairCount: 2,
         coderPairs: [
           {
             coder1Id: 1,
@@ -2511,6 +2543,7 @@ describe('CodingResultsComparisonComponent', () => {
             coder2Id: 2,
             coder2Name: 'C2',
             kappa: 0.8,
+            brennanPredigerKappa: null,
             agreement: 0.9,
             totalItems: 10,
             validPairs: 10,
@@ -2522,6 +2555,7 @@ describe('CodingResultsComparisonComponent', () => {
             coder2Id: 3,
             coder2Name: 'C3',
             kappa: null,
+            brennanPredigerKappa: null,
             agreement: 0.5,
             totalItems: 100,
             validPairs: 100,
@@ -2533,9 +2567,11 @@ describe('CodingResultsComparisonComponent', () => {
         totalDoubleCodedResponses: 0,
         totalCoderPairs: 2,
         averageKappa: 0.8,
+        averageBrennanPredigerKappa: null,
         variablesIncluded: 1,
         codersIncluded: 3,
-        weightingMethod: 'weighted'
+        weightingMethod: 'weighted',
+        calculationLevel: 'code'
       }
     };
 
@@ -2545,6 +2581,68 @@ describe('CodingResultsComparisonComponent', () => {
     expect(component.kappaStatistics?.workspaceSummary.totalCoderPairs).toBe(2);
   });
 
+  it('should preserve precise workspace kappa averages returned by the backend', () => {
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.useWeightedMean = true;
+    component.codersFormControl.setValue([1, 2, 3]);
+    component.originalKappaStatistics = {
+      variables: [{
+        unitName: 'U1',
+        variableId: 'V1',
+        meanKappa: 0.300502,
+        meanBrennanPredigerKappa: 0.400502,
+        fleissKappa: 0.5,
+        fleissCaseCount: 100,
+        meanAgreement: 0.8,
+        caseCount: 100,
+        validPairCount: 100,
+        coderPairCount: 2,
+        coderPairs: [
+          {
+            coder1Id: 1,
+            coder1Name: 'C1',
+            coder2Id: 2,
+            coder2Name: 'C2',
+            kappa: 0.3,
+            brennanPredigerKappa: 0.4,
+            agreement: 0.8,
+            totalItems: 97,
+            validPairs: 97,
+            interpretation: 'kappa.fair'
+          },
+          {
+            coder1Id: 1,
+            coder1Name: 'C1',
+            coder2Id: 3,
+            coder2Name: 'C3',
+            kappa: 0.302,
+            brennanPredigerKappa: 0.402,
+            agreement: 0.8,
+            totalItems: 3,
+            validPairs: 3,
+            interpretation: 'kappa.fair'
+          }
+        ]
+      }],
+      workspaceSummary: {
+        totalDoubleCodedResponses: 100,
+        totalCoderPairs: 2,
+        averageKappa: 0.300502,
+        averageBrennanPredigerKappa: 0.400502,
+        variablesIncluded: 1,
+        codersIncluded: 3,
+        weightingMethod: 'weighted',
+        calculationLevel: 'code'
+      }
+    };
+
+    component.filterKappaStatistics();
+
+    expect(component.kappaStatistics?.workspaceSummary.averageKappa).toBe(0.300502);
+    expect(component.kappaStatistics?.workspaceSummary.averageBrennanPredigerKappa).toBe(0.400502);
+  });
+
   describe('calculateMeanAgreement', () => {
     it('should calculate weighted mean agreement correctly', () => {
       component.kappaStatistics = {
@@ -2552,6 +2650,14 @@ describe('CodingResultsComparisonComponent', () => {
           {
             unitName: 'U1',
             variableId: 'V1',
+            meanKappa: null,
+            meanBrennanPredigerKappa: null,
+            fleissKappa: null,
+            fleissCaseCount: 0,
+            meanAgreement: null,
+            caseCount: 0,
+            validPairCount: 0,
+            coderPairCount: 2,
             coderPairs: [
               {
                 coder1Id: 1,
@@ -2559,6 +2665,7 @@ describe('CodingResultsComparisonComponent', () => {
                 coder2Id: 2,
                 coder2Name: 'C2',
                 kappa: 0.5,
+                brennanPredigerKappa: null,
                 agreement: 0.8,
                 totalItems: 10,
                 validPairs: 10,
@@ -2570,6 +2677,7 @@ describe('CodingResultsComparisonComponent', () => {
                 coder2Id: 3,
                 coder2Name: 'C3',
                 kappa: 0.6,
+                brennanPredigerKappa: null,
                 agreement: 0.9,
                 totalItems: 10,
                 validPairs: 5,
@@ -2582,9 +2690,11 @@ describe('CodingResultsComparisonComponent', () => {
           totalDoubleCodedResponses: 0,
           totalCoderPairs: 0,
           averageKappa: 0,
+          averageBrennanPredigerKappa: null,
           variablesIncluded: 0,
           codersIncluded: 0,
-          weightingMethod: 'weighted'
+          weightingMethod: 'weighted',
+          calculationLevel: 'code'
         }
       };
       component.useWeightedMean = true;
@@ -2600,6 +2710,14 @@ describe('CodingResultsComparisonComponent', () => {
           {
             unitName: 'U1',
             variableId: 'V1',
+            meanKappa: null,
+            meanBrennanPredigerKappa: null,
+            fleissKappa: null,
+            fleissCaseCount: 0,
+            meanAgreement: null,
+            caseCount: 0,
+            validPairCount: 0,
+            coderPairCount: 2,
             coderPairs: [
               {
                 coder1Id: 1,
@@ -2607,6 +2725,7 @@ describe('CodingResultsComparisonComponent', () => {
                 coder2Id: 2,
                 coder2Name: 'C2',
                 kappa: 0.5,
+                brennanPredigerKappa: null,
                 agreement: 0.8,
                 totalItems: 10,
                 validPairs: 10,
@@ -2618,6 +2737,7 @@ describe('CodingResultsComparisonComponent', () => {
                 coder2Id: 3,
                 coder2Name: 'C3',
                 kappa: 0.6,
+                brennanPredigerKappa: null,
                 agreement: 0.9,
                 totalItems: 10,
                 validPairs: 5,
@@ -2630,9 +2750,11 @@ describe('CodingResultsComparisonComponent', () => {
           totalDoubleCodedResponses: 0,
           totalCoderPairs: 0,
           averageKappa: 0,
+          averageBrennanPredigerKappa: null,
           variablesIncluded: 0,
           codersIncluded: 0,
-          weightingMethod: 'unweighted'
+          weightingMethod: 'unweighted',
+          calculationLevel: 'code'
         }
       };
       component.useWeightedMean = false;

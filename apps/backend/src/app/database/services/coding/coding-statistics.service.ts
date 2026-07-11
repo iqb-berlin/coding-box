@@ -32,27 +32,16 @@ import {
   getCodingIncompleteVariablesCacheVersionKey
 } from './coding-incomplete-variables-cache-key.util';
 import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
+import {
+  FleissKappaResult,
+  InterraterReliabilityCalculator,
+  KappaPairInput,
+  KappaVariableSummary,
+  RawKappaResult
+} from './interrater-reliability.calculator';
 
-export interface KappaCalculationResult {
-  coder1Id: number;
-  coder1Name: string;
-  coder2Id: number;
-  coder2Name: string;
-  unitName?: string;
-  variableId?: string;
-  kappa: number | null;
-  agreement: number;
-  totalItems: number;
-  validPairs: number;
-  interpretation: string;
-}
-
-export interface KappaVariableSummary {
-  meanKappa: number | null;
-  meanAgreement: number | null;
-  validPairCount: number;
-  coderPairCount: number;
-}
+export type KappaCalculationResult = RawKappaResult;
+export type { FleissKappaResult, KappaVariableSummary };
 
 @Injectable()
 export class CodingStatisticsService implements OnApplicationBootstrap {
@@ -592,167 +581,39 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
    * @returns Cohen's Kappa coefficient and related statistics
    */
   calculateCohensKappa(
-    coderPairs: Array<{
-      coder1Id: number;
-      coder1Name: string;
-      coder2Id: number;
-      coder2Name: string;
-      unitName?: string;
-      variableId?: string;
-      codes: Array<{ code1: number | null; code2: number | null }>;
-      scores?: Array<{ score1: number | null; score2: number | null }>;
-    }>,
+    coderPairs: KappaPairInput[],
     level: 'code' | 'score' = 'code'
   ): KappaCalculationResult[] {
-    const results = [];
+    return InterraterReliabilityCalculator.calculatePairwise(coderPairs, level);
+  }
 
-    for (const pair of coderPairs) {
-      // Select data based on calculation level
-      const dataToUse = level === 'score' && pair.scores ?
-        pair.scores.map(s => ({ code1: s.score1, code2: s.score2 })) :
-        pair.codes;
+  roundKappaCalculationResult(result: KappaCalculationResult): KappaCalculationResult {
+    return InterraterReliabilityCalculator.toPublicResult(result);
+  }
 
-      // Filter out pairs where either coder has null value
-      const validCodes = dataToUse.filter(c => c.code1 !== null && c.code2 !== null);
-
-      if (validCodes.length === 0) {
-        results.push({
-          coder1Id: pair.coder1Id,
-          coder1Name: pair.coder1Name,
-          coder2Id: pair.coder2Id,
-          coder2Name: pair.coder2Name,
-          unitName: pair.unitName,
-          variableId: pair.variableId,
-          kappa: null,
-          agreement: 0,
-          totalItems: dataToUse.length,
-          validPairs: 0,
-          interpretation: 'No valid coding pairs'
-        });
-        continue;
-      }
-
-      // Create confusion matrix
-      const codeSet = new Set<number>();
-      validCodes.forEach(c => {
-        codeSet.add(c.code1!);
-        codeSet.add(c.code2!);
-      });
-      const uniqueCodesArr = Array.from(codeSet).sort((a, b) => a - b);
-
-      const matrix: number[][] = [];
-      for (let i = 0; i < uniqueCodesArr.length; i++) {
-        matrix[i] = new Array(uniqueCodesArr.length).fill(0);
-      }
-
-      // Fill confusion matrix
-      validCodes.forEach(c => {
-        const rowIndex = uniqueCodesArr.indexOf(c.code1!);
-        const colIndex = uniqueCodesArr.indexOf(c.code2!);
-        matrix[rowIndex][colIndex] += 1;
-      });
-
-      // Calculate observed agreement (Po)
-      let observedAgreement = 0;
-      for (let i = 0; i < uniqueCodesArr.length; i++) {
-        observedAgreement += matrix[i][i];
-      }
-      observedAgreement /= validCodes.length;
-
-      // Calculate expected agreement by chance (Pe)
-      let expectedAgreement = 0;
-      const rowTotals = matrix.map(row => row.reduce((sum, val) => sum + val, 0));
-      const colTotals = matrix[0].map((_, colIndex) => matrix.reduce((sum, row) => sum + row[colIndex], 0)
-      );
-
-      for (let i = 0; i < uniqueCodesArr.length; i++) {
-        expectedAgreement += (rowTotals[i] * colTotals[i]) / (validCodes.length * validCodes.length);
-      }
-
-      // Calculate Cohen's Kappa
-      // Reference: R eatPrep meanKappa function
-      // https://github.com/sachseka/eatPrep/blob/8dc0b54748c095508c20fde07843e61b73a42141/R/rater_functions.R#L98
-      // R implementation sets kappa = 1 when coders agree perfectly:
-      // if(is.na(kap[["value"]])) { if(identical(dat.ij[,1],dat.ij[,2])) { kap[["value"]] <- 1 } }
-      let kappa: number;
-      if (observedAgreement === 1) {
-        // Perfect observed agreement - coders agree on all items
-        kappa = 1;
-      } else if (expectedAgreement === 1) {
-        // Perfect expected agreement
-        kappa = 1;
-      } else {
-        // Standard Cohen's Kappa formula: κ = (Po - Pe) / (1 - Pe)
-        kappa = (observedAgreement - expectedAgreement) / (1 - expectedAgreement);
-      }
-
-      // Handle edge cases (fallback for NaN/Infinite values)
-      if (Number.isNaN(kappa) || !Number.isFinite(kappa)) {
-        kappa = 0;
-      }
-
-      // Interpret Kappa value
-      let interpretation: string;
-      if (kappa < 0) {
-        interpretation = 'kappa.poor';
-      } else if (kappa < 0.2) {
-        interpretation = 'kappa.slight';
-      } else if (kappa < 0.4) {
-        interpretation = 'kappa.fair';
-      } else if (kappa < 0.6) {
-        interpretation = 'kappa.moderate';
-      } else if (kappa < 0.81) {
-        interpretation = 'kappa.substantial';
-      } else if (kappa <= 0.95) {
-        interpretation = 'kappa.good';
-      } else {
-        interpretation = 'kappa.almost_perfect';
-      }
-
-      results.push({
-        coder1Id: pair.coder1Id,
-        coder1Name: pair.coder1Name,
-        coder2Id: pair.coder2Id,
-        coder2Name: pair.coder2Name,
-        unitName: pair.unitName,
-        variableId: pair.variableId,
-        kappa: Math.round(kappa * 1000) / 1000, // Round to 3 decimal places
-        agreement: Math.round(observedAgreement * 1000) / 1000,
-        totalItems: dataToUse.length,
-        validPairs: validCodes.length,
-        interpretation
-      });
-    }
-    return results;
+  /**
+   * Calculate Fleiss' Kappa as implemented by irr::kappam.fleiss(exact = FALSE).
+   * Incomplete cases are omitted listwise, matching the R reference implementation.
+   */
+  calculateFleissKappa(ratings: Array<Array<number | null>>): FleissKappaResult {
+    return InterraterReliabilityCalculator.calculateFleiss(ratings);
   }
 
   calculateKappaVariableSummary(
-    kappaResults: Array<Pick<KappaCalculationResult, 'kappa' | 'agreement' | 'validPairs'>>
+    kappaResults: Array<{
+      kappa: number | null;
+      brennanPredigerKappa?: number | null;
+      agreement: number;
+      validPairs: number;
+    }>,
+    weightedMean = false
   ): KappaVariableSummary {
-    let kappaSum = 0;
-    let kappaCount = 0;
-    let agreementSum = 0;
-    let agreementCount = 0;
-    let validPairCount = 0;
-
-    kappaResults.forEach(result => {
-      if (result.validPairs <= 0) return;
-
-      agreementSum += result.agreement;
-      agreementCount += 1;
-      validPairCount += result.validPairs;
-
-      if (result.kappa !== null && !Number.isNaN(result.kappa)) {
-        kappaSum += result.kappa;
-        kappaCount += 1;
-      }
-    });
-
-    return {
-      meanKappa: kappaCount > 0 ? kappaSum / kappaCount : null,
-      meanAgreement: agreementCount > 0 ? agreementSum / agreementCount : null,
-      validPairCount,
-      coderPairCount: agreementCount
-    };
+    return InterraterReliabilityCalculator.summarize(
+      kappaResults.map(result => ({
+        ...result,
+        brennanPredigerKappa: result.brennanPredigerKappa ?? null
+      })),
+      weightedMean
+    );
   }
 }
