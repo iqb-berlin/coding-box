@@ -104,7 +104,8 @@
         </mat-autocomplete>
         <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-lg">
           <mat-label>Antwortwert</mat-label>
-          <input matInput [(ngModel)]="flatFilters.responseValue" (ngModelChange)="onFlatFilterChanged()" />
+          <input matInput [(ngModel)]="flatFilters.responseValue" (ngModelChange)="onFlatFilterChanged()"
+            [matTooltip]="'search-filter.response-value-prefix-hint' | translate" />
         </mat-form-field>
         <mat-form-field appearance="outline" class="flat-filter-field">
           <mat-label>Tags</mat-label>

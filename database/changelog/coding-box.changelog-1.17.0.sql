@@ -41,3 +41,17 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_response_value_search_trgm"
     AND LENGTH("value") <= 2000;
 
 -- rollback DROP INDEX CONCURRENTLY IF EXISTS "public"."idx_response_value_search_trgm";
+
+-- changeset iqb:910-response-value-prefix-trigram-index runInTransaction:false
+-- comment: Accelerate substring searches over the first 2000 response value characters
+DROP INDEX CONCURRENTLY IF EXISTS "public"."idx_response_value_prefix_search_trgm";
+
+CREATE INDEX CONCURRENTLY "idx_response_value_prefix_search_trgm"
+  ON "public"."response" USING GIN ((LEFT("value", 2000)) gin_trgm_ops)
+  WHERE "is_autocoder_generated" IS NOT TRUE;
+
+DROP INDEX CONCURRENTLY IF EXISTS "public"."idx_response_value_search_trgm";
+
+-- rollback DROP INDEX CONCURRENTLY IF EXISTS "public"."idx_response_value_search_trgm";
+-- rollback CREATE INDEX CONCURRENTLY "idx_response_value_search_trgm" ON "public"."response" USING GIN ("value" gin_trgm_ops) WHERE "is_autocoder_generated" IS NOT TRUE AND LENGTH("value") <= 2000;
+-- rollback DROP INDEX CONCURRENTLY IF EXISTS "public"."idx_response_value_prefix_search_trgm";

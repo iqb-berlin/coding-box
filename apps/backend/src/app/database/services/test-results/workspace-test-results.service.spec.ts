@@ -718,7 +718,9 @@ describe('WorkspaceTestResultsService', () => {
         .mockResolvedValueOnce([{ v: 'Kurz' }, { v: 'Lang' }])
         .mockResolvedValueOnce([{ v: 'complete' }, { v: 'incomplete' }]);
 
-      const result = await service.findFlatResponseFilterOptions(1, {});
+      const result = await service.findFlatResponseFilterOptions(1, {
+        responseValue: 'needle'
+      });
 
       expect(qb.where).toHaveBeenCalledWith(
         'person.workspace_id = :workspaceId',
@@ -734,6 +736,10 @@ describe('WorkspaceTestResultsService', () => {
       expect(qb.andWhere).toHaveBeenCalledWith('session.os IS NOT NULL');
       expect(qb.andWhere).toHaveBeenCalledWith('session.screen IS NOT NULL');
       expect(qb.andWhere).toHaveBeenCalledWith('session.id IS NOT NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'LEFT(response.value, 2000) ILIKE :responseValue',
+        { responseValue: '%needle%' }
+      );
 
       expect(dataSource.query).toHaveBeenCalledTimes(2);
       expect((dataSource.query as jest.Mock).mock.calls[0][0]).toContain(
@@ -1617,7 +1623,7 @@ describe('WorkspaceTestResultsService', () => {
       );
     });
 
-    it('should apply a dedicated timeout to response value searches', async () => {
+    it('should apply a timeout and search the displayed response value prefix', async () => {
       const dataQb = mockQueryBuilder();
       const countQb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock)
@@ -1642,8 +1648,12 @@ describe('WorkspaceTestResultsService', () => {
       );
       [dataQb, countQb].forEach(qb => {
         expect(qb.andWhere).toHaveBeenCalledWith(
-          'LENGTH(response.value) <= :responseValueSearchMaxLength',
-          { responseValueSearchMaxLength: 2000 }
+          'LEFT(response.value, 2000) ILIKE :responseValue',
+          { responseValue: '%needle%' }
+        );
+        expect(qb.andWhere).not.toHaveBeenCalledWith(
+          expect.stringContaining('LENGTH(response.value)'),
+          expect.anything()
         );
       });
       expect(countQb.select).toHaveBeenCalledWith(

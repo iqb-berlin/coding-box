@@ -312,6 +312,7 @@ type LogAnomalySessionRow = {
 export class WorkspaceTestResultsService {
   private readonly logger = new Logger(WorkspaceTestResultsService.name);
   private static readonly logAnomalyQueryBatchSize = 1000;
+  private static readonly responseValueSearchPrefixLength = 2000;
   private static readonly codingResponseStatuses = [
     statusStringToNumber('NOT_REACHED') || 1,
     statusStringToNumber('DISPLAYED') || 2,
@@ -2698,7 +2699,6 @@ export class WorkspaceTestResultsService {
     }
 
     const MAX_LIMIT = 200;
-    const MAX_RESPONSE_VALUE_LEN = 2000;
     const validPage = Math.max(1, Number(options.page || 1));
     const validLimit = Math.min(
       Math.max(1, Number(options.limit || 50)),
@@ -2897,12 +2897,10 @@ export class WorkspaceTestResultsService {
       }
     }
     if (responseValue) {
-      qb.andWhere('response.value ILIKE :responseValue', {
-        responseValue: `%${responseValue}%`
-      });
-      qb.andWhere('LENGTH(response.value) <= :responseValueSearchMaxLength', {
-        responseValueSearchMaxLength: MAX_RESPONSE_VALUE_LEN
-      });
+      qb.andWhere(
+        `LEFT(response.value, ${WorkspaceTestResultsService.responseValueSearchPrefixLength}) ILIKE :responseValue`,
+        { responseValue: `%${responseValue}%` }
+      );
     }
     if (tags) {
       qb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
@@ -3136,12 +3134,9 @@ export class WorkspaceTestResultsService {
       }
     }
     if (responseValue) {
-      countQb.andWhere('response.value ILIKE :responseValue', {
-        responseValue: `%${responseValue}%`
-      });
       countQb.andWhere(
-        'LENGTH(response.value) <= :responseValueSearchMaxLength',
-        { responseValueSearchMaxLength: MAX_RESPONSE_VALUE_LEN }
+        `LEFT(response.value, ${WorkspaceTestResultsService.responseValueSearchPrefixLength}) ILIKE :responseValue`,
+        { responseValue: `%${responseValue}%` }
       );
     }
     if (tags) {
@@ -3338,7 +3333,10 @@ export class WorkspaceTestResultsService {
         'SUBSTRING(response.value, 1, :maxResponseValueLen) AS "responseValue"',
         "COALESCE(string_agg(DISTINCT unitTag.tag, ','), '') AS \"tags\""
       ])
-      .setParameter('maxResponseValueLen', MAX_RESPONSE_VALUE_LEN)
+      .setParameter(
+        'maxResponseValueLen',
+        WorkspaceTestResultsService.responseValueSearchPrefixLength
+      )
       .groupBy('response.id')
       .addGroupBy('unit.id')
       .addGroupBy('bookletEntity.id')
@@ -3858,9 +3856,10 @@ export class WorkspaceTestResultsService {
       }
     }
     if (responseValue) {
-      baseQb.andWhere('response.value ILIKE :responseValue', {
-        responseValue: `%${responseValue}%`
-      });
+      baseQb.andWhere(
+        `LEFT(response.value, ${WorkspaceTestResultsService.responseValueSearchPrefixLength}) ILIKE :responseValue`,
+        { responseValue: `%${responseValue}%` }
+      );
     }
     if (tags) {
       baseQb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
