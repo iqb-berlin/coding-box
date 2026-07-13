@@ -1071,6 +1071,16 @@ describe('CodingResultsComparisonComponent', () => {
     }));
   });
 
+  it('should reject invalid regex filters before reloading comparison data', () => {
+    component.enableRegexSearch = true;
+    component.tableFilters.variableId = '[';
+
+    component.applyTableFilters();
+
+    expect(component.isTableRegexFilterInvalid('variableId')).toBe(true);
+    expect(codingTrainingBackendService.compareTrainingCodingResults).not.toHaveBeenCalled();
+  });
+
   it('should distinguish rows without visible coder notes from rows with visible coder notes', () => {
     component.comparisonMode = 'between-trainings';
     component.codersFromTrainingsFormControl.setValue(['1_101', '2_201']);

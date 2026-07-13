@@ -1,9 +1,13 @@
 import { SimpleChange } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import {
+  ComponentFixture, fakeAsync, TestBed, tick
+} from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Subject, of } from 'rxjs';
+import { TranslateModule } from '@ngx-translate/core';
+import { Subject, of, throwError } from 'rxjs';
 import { FileService } from '../../../shared/services/file/file.service';
 import { UnitNoteService } from '../../../shared/services/unit/unit-note.service';
 import { CodingStatisticsService } from '../../../coding/services/coding-statistics.service';
@@ -18,6 +22,7 @@ import { TestResultsFlatTableComponent } from './test-results-flat-table.compone
 describe('TestResultsFlatTableComponent', () => {
   let fixture: ComponentFixture<TestResultsFlatTableComponent>;
   let component: TestResultsFlatTableComponent;
+  let snackBar: { open: jest.Mock };
   let testResultService: {
     getFlatResponses: jest.Mock;
     getFlatResponseFilterOptions: jest.Mock;
@@ -42,6 +47,9 @@ describe('TestResultsFlatTableComponent', () => {
   };
 
   beforeEach(async () => {
+    snackBar = {
+      open: jest.fn().mockReturnValue({ dismiss: jest.fn() })
+    };
     testResultService = {
       getFlatResponses: jest.fn().mockReturnValue(of({
         data: [],
@@ -57,7 +65,8 @@ describe('TestResultsFlatTableComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         TestResultsFlatTableComponent,
-        NoopAnimationsModule
+        NoopAnimationsModule,
+        TranslateModule.forRoot()
       ],
       providers: [
         { provide: FileService, useValue: {} },
@@ -86,7 +95,7 @@ describe('TestResultsFlatTableComponent', () => {
         { provide: TestResultService, useValue: testResultService },
         {
           provide: MatSnackBar,
-          useValue: { open: jest.fn().mockReturnValue({ dismiss: jest.fn() }) }
+          useValue: snackBar
         },
         { provide: MatDialog, useValue: { open: jest.fn() } }
       ]
@@ -111,7 +120,8 @@ describe('TestResultsFlatTableComponent', () => {
     expect(component.flatDisplayedColumns).not.toContain('logStatus');
     expect(testResultService.getFlatResponses).toHaveBeenCalledWith(
       1,
-      expect.objectContaining({ includeLogAnomalies: '' })
+      expect.objectContaining({ includeLogAnomalies: '' }),
+      expect.objectContaining({ suppressGlobalHttpError: true })
     );
   });
 
@@ -123,7 +133,8 @@ describe('TestResultsFlatTableComponent', () => {
     expect(component.flatDisplayedColumns).toContain('logStatus');
     expect(testResultService.getFlatResponses).toHaveBeenCalledWith(
       1,
-      expect.objectContaining({ includeLogAnomalies: 'true' })
+      expect.objectContaining({ includeLogAnomalies: 'true' }),
+      expect.objectContaining({ suppressGlobalHttpError: true })
     );
   });
 
@@ -168,6 +179,173 @@ describe('TestResultsFlatTableComponent', () => {
     expect(component.flatFilters.logAnomalies).toBe('');
     expect(component.mediaFilters).not.toContain('logAny');
   });
+
+  it('should send the regex flag when the workspace setting is enabled', () => {
+    component.enableRegexSearch = true;
+
+    component.ngOnInit();
+
+    expect(testResultService.getFlatResponses).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ regexSearch: true }),
+      expect.objectContaining({ suppressGlobalHttpError: true })
+    );
+  });
+
+  it('should pass quoted exact filters unchanged in normal mode', () => {
+    component.flatFilters.response = '"01"';
+
+    component.ngOnInit();
+
+    expect(testResultService.getFlatResponses).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        response: '"01"',
+        regexSearch: false
+      }),
+      expect.objectContaining({ suppressGlobalHttpError: true })
+    );
+  });
+
+  it('should not request data while a regex filter exceeds the limit', fakeAsync(() => {
+    component.enableRegexSearch = true;
+    component.ngOnInit();
+    testResultService.getFlatResponses.mockClear();
+    component.flatFilters.response = 'a'.repeat(257);
+
+    component.onFlatFilterChanged();
+    tick(401);
+
+    expect(component.isRegexFilterInvalid('response')).toBe(true);
+    expect(testResultService.getFlatResponses).not.toHaveBeenCalled();
+  }));
+
+  it('should send PostgreSQL ARE syntax unsupported by JavaScript', fakeAsync(() => {
+    component.enableRegexSearch = true;
+    component.ngOnInit();
+    testResultService.getFlatResponses.mockClear();
+    component.flatFilters.response = '(?i)^var$';
+
+    component.onFlatFilterChanged();
+    tick(401);
+
+    expect(component.isRegexFilterInvalid('response')).toBe(false);
+    expect(testResultService.getFlatResponses).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ response: '(?i)^var$' }),
+      expect.objectContaining({ suppressGlobalHttpError: true })
+    );
+  }));
+
+  it('should disable autocomplete suggestions in regex mode', () => {
+    component.enableRegexSearch = true;
+    component.flatFilterOptions.codes = ['P-01'];
+    component.flatFilters.code = '^P-';
+
+    expect(component.filteredCodes()).toEqual([]);
+  });
+
+  it('should show a specific message when a regex query times out', () => {
+    component.enableRegexSearch = true;
+    testResultService.getFlatResponses.mockReturnValue(throwError(() => (
+      new HttpErrorResponse({
+        status: 400,
+        error: {
+          code: 'REGEX_TIMEOUT',
+          message: 'Regular expression search timed out after 3000 ms.'
+        }
+      })
+    )));
+
+    component.ngOnInit();
+
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'search-filter.regex-timeout',
+      'close',
+      expect.objectContaining({ duration: 5000 })
+    );
+  });
+
+  it('should show a specific message when a response value search times out', () => {
+    component.flatFilters.responseValue = 'needle';
+    testResultService.getFlatResponses.mockReturnValue(throwError(() => (
+      new HttpErrorResponse({
+        status: 400,
+        error: {
+          code: 'SEARCH_TIMEOUT',
+          field: 'responseValue',
+          message: 'Response value search timed out after 15000 ms.'
+        }
+      })
+    )));
+
+    component.ngOnInit();
+
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'search-filter.response-value-timeout',
+      'close',
+      expect.objectContaining({ duration: 5000 })
+    );
+  });
+
+  it('should use the structured invalid regex error code', () => {
+    component.enableRegexSearch = true;
+    component.flatFilters.response = '[';
+    testResultService.getFlatResponses.mockReturnValue(throwError(() => (
+      new HttpErrorResponse({
+        status: 400,
+        error: {
+          code: 'INVALID_REGEX',
+          field: 'response',
+          message: 'Invalid regular expression for response'
+        }
+      })
+    )));
+
+    component.ngOnInit();
+
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'search-filter.invalid-postgres-regex',
+      'close',
+      expect.objectContaining({ duration: 5000 })
+    );
+    expect(component.isRegexFilterInvalid('response')).toBe(true);
+  });
+
+  it('should ignore an invalid-regex error for an edited filter', fakeAsync(() => {
+    const staleResponse = new Subject<FlatTestResultResponsesResponse>();
+    component.enableRegexSearch = true;
+    component.flatFilters.response = '[';
+    testResultService.getFlatResponses
+      .mockReturnValueOnce(staleResponse.asObservable())
+      .mockReturnValueOnce(of({
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 100
+      }));
+    component.ngOnInit();
+
+    component.flatFilters.response = '[a]';
+    component.onFlatFilterChanged();
+    staleResponse.error(new HttpErrorResponse({
+      status: 400,
+      error: {
+        code: 'INVALID_REGEX',
+        field: 'response',
+        message: 'Invalid regular expression for response'
+      }
+    }));
+    tick(401);
+
+    expect(component.isRegexFilterInvalid('response')).toBe(false);
+    expect(testResultService.getFlatResponses).toHaveBeenCalledTimes(2);
+    expect(testResultService.getFlatResponses).toHaveBeenLastCalledWith(
+      1,
+      expect.objectContaining({ response: '[a]' }),
+      expect.objectContaining({ suppressGlobalHttpError: true })
+    );
+  }));
 
   it('should ignore stale flat-response requests', () => {
     const firstResponse = new Subject<FlatTestResultResponsesResponse>();

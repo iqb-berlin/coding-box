@@ -718,7 +718,9 @@ describe('WorkspaceTestResultsService', () => {
         .mockResolvedValueOnce([{ v: 'Kurz' }, { v: 'Lang' }])
         .mockResolvedValueOnce([{ v: 'complete' }, { v: 'incomplete' }]);
 
-      const result = await service.findFlatResponseFilterOptions(1, {});
+      const result = await service.findFlatResponseFilterOptions(1, {
+        responseValue: 'needle'
+      });
 
       expect(qb.where).toHaveBeenCalledWith(
         'person.workspace_id = :workspaceId',
@@ -734,6 +736,10 @@ describe('WorkspaceTestResultsService', () => {
       expect(qb.andWhere).toHaveBeenCalledWith('session.os IS NOT NULL');
       expect(qb.andWhere).toHaveBeenCalledWith('session.screen IS NOT NULL');
       expect(qb.andWhere).toHaveBeenCalledWith('session.id IS NOT NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'LEFT(response.value, 2000) ILIKE :responseValue',
+        { responseValue: '%needle%' }
+      );
 
       expect(dataSource.query).toHaveBeenCalledTimes(2);
       expect((dataSource.query as jest.Mock).mock.calls[0][0]).toContain(
@@ -1443,6 +1449,269 @@ describe('WorkspaceTestResultsService', () => {
 
       expect(qb.where).toHaveBeenCalledWith('person.workspace_id = :workspaceId', { workspaceId });
       expect(qb.andWhere).toHaveBeenCalledWith('person.code ILIKE :code', { code: '%abc%' });
+    });
+
+    it('should filter variable IDs exactly when wrapped in double quotes', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        response: ' "01_unique" '
+      });
+
+      [dataQb, countQb].forEach(qb => {
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'LOWER(response.variableid) = LOWER(:responseExact)',
+          { responseExact: '01_unique' }
+        );
+        expect(qb.andWhere).not.toHaveBeenCalledWith(
+          'response.variableid ILIKE :response',
+          expect.anything()
+        );
+      });
+    });
+
+    it('should keep the default variable ID contains search', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        response: '01'
+      });
+
+      [dataQb, countQb].forEach(qb => {
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'response.variableid ILIKE :response',
+          { response: '%01%' }
+        );
+      });
+    });
+
+    it('should apply regex filters identically to data and count queries', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        code: '^P-',
+        group: '^G[12]$',
+        login: 'user-[0-9]+',
+        booklet: 'Booklet-[AB]',
+        unit: '^Unit',
+        response: '^VAR_\\d+$',
+        regexSearch: true
+      });
+
+      [dataQb, countQb].forEach(qb => {
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'person.code ~ :codeRegex',
+          { codeRegex: '^P-' }
+        );
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'person.group ~ :groupRegex',
+          { groupRegex: '^G[12]$' }
+        );
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'person.login ~ :loginRegex',
+          { loginRegex: 'user-[0-9]+' }
+        );
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'bookletinfo.name ~ :bookletRegex',
+          { bookletRegex: 'Booklet-[AB]' }
+        );
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          '(unit.alias ~ :unitRegex OR unit.name ~ :unitRegex)',
+          { unitRegex: '^Unit' }
+        );
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'response.variableid ~ :responseRegex',
+          { responseRegex: '^VAR_\\d+$' }
+        );
+      });
+
+      const queryRunner = (dataSource.createQueryRunner as jest.Mock).mock.results[0].value;
+      expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
+        1,
+        'response',
+        queryRunner
+      );
+      expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
+        2,
+        'response',
+        queryRunner
+      );
+      expect(queryRunner.query).toHaveBeenCalledWith(
+        "SET LOCAL statement_timeout = '3000ms'"
+      );
+      expect(queryRunner.query).toHaveBeenCalledWith(
+        'SELECT \'\'::text ~ $1::text AS "isValid"',
+        ['^P-']
+      );
+      expect(queryRunner.query).toHaveBeenCalledWith(
+        'SELECT \'\'::text ~ $1::text AS "isValid"',
+        ['^VAR_\\d+$']
+      );
+    });
+
+    it('rejects a PostgreSQL-invalid pattern during preflight', async () => {
+      const queryRunner = (dataSource.createQueryRunner as jest.Mock)();
+      queryRunner.query.mockImplementation((sql: string) => {
+        if (sql.startsWith('SELECT')) {
+          return Promise.reject(Object.assign(
+            new Error('invalid regular expression: quantifier operand invalid'),
+            { code: '2201B' }
+          ));
+        }
+        return Promise.resolve([]);
+      });
+      (dataSource.createQueryRunner as jest.Mock).mockReturnValue(queryRunner);
+
+      await expect(service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        response: '(?<name>a)',
+        regexSearch: true
+      })).rejects.toMatchObject({
+        response: expect.objectContaining({
+          code: 'INVALID_REGEX',
+          field: 'response'
+        })
+      });
+
+      expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
+      expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
+    });
+
+    it('should not apply the regex timeout without a regex text filter', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        regexSearch: true,
+        responseStatus: 'VALUE_CHANGED'
+      });
+
+      expect(dataSource.createQueryRunner).not.toHaveBeenCalled();
+      expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
+        1,
+        'response',
+        undefined
+      );
+      expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
+        2,
+        'response',
+        undefined
+      );
+    });
+
+    it('should apply a timeout and search the displayed response value prefix', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        responseValue: 'needle'
+      });
+
+      const queryRunner = (dataSource.createQueryRunner as jest.Mock)
+        .mock.results[0].value;
+      expect(queryRunner.query).toHaveBeenCalledWith(
+        "SET LOCAL statement_timeout = '15000ms'"
+      );
+      expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
+        1,
+        'response',
+        queryRunner
+      );
+      [dataQb, countQb].forEach(qb => {
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'LEFT(response.value, 2000) ILIKE :responseValue',
+          { responseValue: '%needle%' }
+        );
+        expect(qb.andWhere).not.toHaveBeenCalledWith(
+          expect.stringContaining('LENGTH(response.value)'),
+          expect.anything()
+        );
+      });
+      expect(countQb.select).toHaveBeenCalledWith(
+        'COUNT(response.id)',
+        'cnt'
+      );
+    });
+
+    it('should filter tags in the count query without multiplying rows', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        tags: 'review'
+      });
+
+      expect(countQb.leftJoin).not.toHaveBeenCalledWith('unit.tags', 'unitTag');
+      expect(countQb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('FROM unit_tag count_unit_tag'),
+        { tags: '%review%' }
+      );
+      expect(countQb.select).toHaveBeenCalledWith(
+        'COUNT(response.id)',
+        'cnt'
+      );
+    });
+
+    it('should reject overlong regex filters as bad requests', async () => {
+      await expect(service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        response: 'a'.repeat(257),
+        regexSearch: true
+      })).rejects.toThrow('pattern must not exceed 256 characters');
+    });
+
+    it('should convert PostgreSQL regex timeouts into bad request errors', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      countQb.getRawOne.mockRejectedValue({
+        code: '57014',
+        message: 'canceling statement due to statement timeout'
+      });
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await expect(service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        response: '(a+)+$',
+        regexSearch: true
+      })).rejects.toThrow('Regular expression search timed out');
     });
 
     it('should not calculate log anomaly summaries for rows by default', async () => {

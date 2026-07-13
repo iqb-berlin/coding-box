@@ -615,7 +615,12 @@
     "filter-test-persons": "Suche nach Testpersonen",
     "filter-test-groups": "Suche nach Testgruppen",
     "filter-test-files": "Suche nach Testdateien",
-    "invalid-regex": "Ungültiger regulärer Ausdruck"
+    "invalid-regex": "Ungültiger regulärer Ausdruck",
+    "invalid-postgres-regex": "Der reguläre Ausdruck ist für die Datenbanksuche ungültig.",
+    "regex-timeout": "Die Regex-Suche hat zu lange gedauert. Bitte verwenden Sie ein spezifischeres Muster.",
+    "response-value-timeout": "Die Suche im Antwortwert hat zu lange gedauert. Bitte verwenden Sie einen spezifischeren Suchbegriff.",
+    "response-value-prefix-hint": "Die Suche berücksichtigt die ersten 2.000 Zeichen jedes Antwortwerts.",
+    "test-results-load-error": "Testergebnisse konnten nicht geladen werden."
   },
   "access-rights": {
     "hint": "Zugriffsrechte: Bitte links Nutzer:in wählen",

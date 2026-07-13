@@ -81,8 +81,11 @@ import {
 } from '../coding/coding-readiness-cache-key.util';
 import {
   assertValidRegexSearchPattern,
+  toResponseValueSearchException,
   toRegexSearchException,
-  withRegexSearchStatementTimeout
+  validatePostgresRegexSearchPatterns,
+  withRegexSearchStatementTimeout,
+  withResponseValueSearchStatementTimeout
 } from '../../../utils/regex-search.util';
 
 interface PersonWhere {
@@ -309,6 +312,7 @@ type LogAnomalySessionRow = {
 export class WorkspaceTestResultsService {
   private readonly logger = new Logger(WorkspaceTestResultsService.name);
   private static readonly logAnomalyQueryBatchSize = 1000;
+  private static readonly responseValueSearchPrefixLength = 2000;
   private static readonly codingResponseStatuses = [
     statusStringToNumber('NOT_REACHED') || 1,
     statusStringToNumber('DISPLAYED') || 2,
@@ -343,6 +347,101 @@ export class WorkspaceTestResultsService {
       value: filter,
       exact: false
     };
+  }
+
+  private static applyFlatResponseTextFilters(
+    query: SelectQueryBuilder<ResponseEntity>,
+    filters: {
+      code: string;
+      group: string;
+      login: string;
+      booklet: string;
+      unit: string;
+      response: string;
+      regexSearch: boolean;
+    }
+  ): void {
+    const {
+      code,
+      group,
+      login,
+      booklet,
+      unit,
+      response,
+      regexSearch
+    } = filters;
+
+    if (regexSearch) {
+      const codeRegex = assertValidRegexSearchPattern(code, 'code');
+      if (codeRegex) {
+        query.andWhere('person.code ~ :codeRegex', { codeRegex });
+      }
+
+      const groupRegex = assertValidRegexSearchPattern(group, 'group');
+      if (groupRegex) {
+        query.andWhere('person.group ~ :groupRegex', { groupRegex });
+      }
+
+      const loginRegex = assertValidRegexSearchPattern(login, 'login');
+      if (loginRegex) {
+        query.andWhere('person.login ~ :loginRegex', { loginRegex });
+      }
+
+      const bookletRegex = assertValidRegexSearchPattern(booklet, 'booklet');
+      if (bookletRegex) {
+        query.andWhere('bookletinfo.name ~ :bookletRegex', { bookletRegex });
+      }
+
+      const unitRegex = assertValidRegexSearchPattern(unit, 'unit');
+      if (unitRegex) {
+        query.andWhere(
+          '(unit.alias ~ :unitRegex OR unit.name ~ :unitRegex)',
+          { unitRegex }
+        );
+      }
+
+      const responseRegex = assertValidRegexSearchPattern(response, 'response');
+      if (responseRegex) {
+        query.andWhere('response.variableid ~ :responseRegex', {
+          responseRegex
+        });
+      }
+      return;
+    }
+
+    if (code) {
+      query.andWhere('person.code ILIKE :code', { code: `%${code}%` });
+    }
+    if (group) {
+      query.andWhere('person.group ILIKE :group', { group: `%${group}%` });
+    }
+    if (login) {
+      query.andWhere('person.login ILIKE :login', { login: `%${login}%` });
+    }
+    if (booklet) {
+      query.andWhere('bookletinfo.name ILIKE :booklet', {
+        booklet: `%${booklet}%`
+      });
+    }
+    if (unit) {
+      query.andWhere('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', {
+        unit: `%${unit}%`
+      });
+    }
+    if (response) {
+      const responseFilter =
+        WorkspaceTestResultsService.parseQuotedExactSearchFilter(response);
+      if (responseFilter.exact) {
+        query.andWhere(
+          'LOWER(response.variableid) = LOWER(:responseExact)',
+          { responseExact: responseFilter.value }
+        );
+      } else {
+        query.andWhere('response.variableid ILIKE :response', {
+          response: `%${responseFilter.value}%`
+        });
+      }
+    }
   }
 
   private static parseStoredResponseValue(value: string | null, variableId?: string): unknown {
@@ -2520,7 +2619,9 @@ export class WorkspaceTestResultsService {
       focusLostThresholdMs?: number | string;
       sessionSpanThresholdMs?: number | string;
       repeatedStartThreshold?: number | string;
-    }
+      regexSearch?: boolean;
+    },
+    queryRunner?: QueryRunner
   ): Promise<
     [
       Array<{
@@ -2546,8 +2647,58 @@ export class WorkspaceTestResultsService {
       throw new Error('Invalid workspaceId provided');
     }
 
+    const hasRegexTextFilter = options.regexSearch === true && [
+      options.code,
+      options.group,
+      options.login,
+      options.booklet,
+      options.unit,
+      options.response
+    ].some(value => String(value || '').trim().length > 0);
+    const hasResponseValueFilter = String(options.responseValue || '')
+      .trim().length > 0;
+
+    if (hasRegexTextFilter && !queryRunner) {
+      try {
+        return await withRegexSearchStatementTimeout(
+          this.connection,
+          async runner => {
+            await validatePostgresRegexSearchPatterns(runner, [
+              { fieldName: 'code', pattern: options.code },
+              { fieldName: 'group', pattern: options.group },
+              { fieldName: 'login', pattern: options.login },
+              { fieldName: 'booklet', pattern: options.booklet },
+              { fieldName: 'unit', pattern: options.unit },
+              { fieldName: 'response', pattern: options.response }
+            ]);
+            return this.findFlatResponses(workspaceId, options, runner);
+          }
+        );
+      } catch (error) {
+        const regexError = toRegexSearchException(error);
+        if (regexError) {
+          throw regexError;
+        }
+        throw error;
+      }
+    }
+
+    if (hasResponseValueFilter && !queryRunner) {
+      try {
+        return await withResponseValueSearchStatementTimeout(
+          this.connection,
+          runner => this.findFlatResponses(workspaceId, options, runner)
+        );
+      } catch (error) {
+        const searchError = toResponseValueSearchException(error);
+        if (searchError) {
+          throw searchError;
+        }
+        throw error;
+      }
+    }
+
     const MAX_LIMIT = 200;
-    const MAX_RESPONSE_VALUE_LEN = 2000;
     const validPage = Math.max(1, Number(options.page || 1));
     const validLimit = Math.min(
       Math.max(1, Number(options.limit || 50)),
@@ -2563,6 +2714,7 @@ export class WorkspaceTestResultsService {
     const responseStatus = (options.responseStatus || '').trim();
     const responseValue = (options.responseValue || '').trim();
     const tags = (options.tags || '').trim();
+    const regexSearch = options.regexSearch === true;
     const geogebra = String(options.geogebra || '')
       .trim()
       .toLowerCase();
@@ -2713,7 +2865,7 @@ export class WorkspaceTestResultsService {
     const responseStatusNum = parseResponseStatus(responseStatus);
 
     const qb = this.responseRepository
-      .createQueryBuilder('response')
+      .createQueryBuilder('response', queryRunner)
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'bookletEntity')
       .innerJoin('bookletEntity.person', 'person')
@@ -2726,30 +2878,15 @@ export class WorkspaceTestResultsService {
     this.applyExclusionsToQuery(qb, exclusions);
     this.excludeAutocoderGeneratedResponses(qb);
 
-    if (code) {
-      qb.andWhere('person.code ILIKE :code', { code: `%${code}%` });
-    }
-    if (group) {
-      qb.andWhere('person.group ILIKE :group', { group: `%${group}%` });
-    }
-    if (login) {
-      qb.andWhere('person.login ILIKE :login', { login: `%${login}%` });
-    }
-    if (booklet) {
-      qb.andWhere('bookletinfo.name ILIKE :booklet', {
-        booklet: `%${booklet}%`
-      });
-    }
-    if (unit) {
-      qb.andWhere('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', {
-        unit: `%${unit}%`
-      });
-    }
-    if (response) {
-      qb.andWhere('response.variableid ILIKE :response', {
-        response: `%${response}%`
-      });
-    }
+    WorkspaceTestResultsService.applyFlatResponseTextFilters(qb, {
+      code,
+      group,
+      login,
+      booklet,
+      unit,
+      response,
+      regexSearch
+    });
     if (responseStatus) {
       if (responseStatusNum === null) {
         qb.andWhere('1=0');
@@ -2760,9 +2897,10 @@ export class WorkspaceTestResultsService {
       }
     }
     if (responseValue) {
-      qb.andWhere('response.value ILIKE :responseValue', {
-        responseValue: `%${responseValue}%`
-      });
+      qb.andWhere(
+        `LEFT(response.value, ${WorkspaceTestResultsService.responseValueSearchPrefixLength}) ILIKE :responseValue`,
+        { responseValue: `%${responseValue}%` }
+      );
     }
     if (tags) {
       qb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
@@ -2964,7 +3102,7 @@ export class WorkspaceTestResultsService {
     );
 
     const countQb = this.responseRepository
-      .createQueryBuilder('response')
+      .createQueryBuilder('response', queryRunner)
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'bookletEntity')
       .innerJoin('bookletEntity.person', 'person')
@@ -2977,30 +3115,15 @@ export class WorkspaceTestResultsService {
     });
     this.excludeAutocoderGeneratedResponses(countQb);
 
-    if (code) {
-      countQb.andWhere('person.code ILIKE :code', { code: `%${code}%` });
-    }
-    if (group) {
-      countQb.andWhere('person.group ILIKE :group', { group: `%${group}%` });
-    }
-    if (login) {
-      countQb.andWhere('person.login ILIKE :login', { login: `%${login}%` });
-    }
-    if (booklet) {
-      countQb.andWhere('bookletinfo.name ILIKE :booklet', {
-        booklet: `%${booklet}%`
-      });
-    }
-    if (unit) {
-      countQb.andWhere('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', {
-        unit: `%${unit}%`
-      });
-    }
-    if (response) {
-      countQb.andWhere('response.variableid ILIKE :response', {
-        response: `%${response}%`
-      });
-    }
+    WorkspaceTestResultsService.applyFlatResponseTextFilters(countQb, {
+      code,
+      group,
+      login,
+      booklet,
+      unit,
+      response,
+      regexSearch
+    });
     if (responseStatus) {
       if (responseStatusNum === null) {
         countQb.andWhere('1=0');
@@ -3011,13 +3134,21 @@ export class WorkspaceTestResultsService {
       }
     }
     if (responseValue) {
-      countQb.andWhere('response.value ILIKE :responseValue', {
-        responseValue: `%${responseValue}%`
-      });
+      countQb.andWhere(
+        `LEFT(response.value, ${WorkspaceTestResultsService.responseValueSearchPrefixLength}) ILIKE :responseValue`,
+        { responseValue: `%${responseValue}%` }
+      );
     }
     if (tags) {
-      countQb.leftJoin('unit.tags', 'unitTag');
-      countQb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
+      countQb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM unit_tag count_unit_tag
+          WHERE count_unit_tag."unitId" = unit.id
+            AND count_unit_tag.tag ILIKE :tags
+        )`,
+        { tags: `%${tags}%` }
+      );
     }
 
     if (geogebraOnly) {
@@ -3182,7 +3313,7 @@ export class WorkspaceTestResultsService {
     // Note: Session filters above are applied as separate EXISTS per dimension.
 
     const total = await countQb
-      .select('COUNT(DISTINCT response.id)', 'cnt')
+      .select('COUNT(response.id)', 'cnt')
       .getRawOne()
       .then(r => Number(r?.cnt || 0));
 
@@ -3202,7 +3333,10 @@ export class WorkspaceTestResultsService {
         'SUBSTRING(response.value, 1, :maxResponseValueLen) AS "responseValue"',
         "COALESCE(string_agg(DISTINCT unitTag.tag, ','), '') AS \"tags\""
       ])
-      .setParameter('maxResponseValueLen', MAX_RESPONSE_VALUE_LEN)
+      .setParameter(
+        'maxResponseValueLen',
+        WorkspaceTestResultsService.responseValueSearchPrefixLength
+      )
       .groupBy('response.id')
       .addGroupBy('unit.id')
       .addGroupBy('bookletEntity.id')
@@ -3722,9 +3856,10 @@ export class WorkspaceTestResultsService {
       }
     }
     if (responseValue) {
-      baseQb.andWhere('response.value ILIKE :responseValue', {
-        responseValue: `%${responseValue}%`
-      });
+      baseQb.andWhere(
+        `LEFT(response.value, ${WorkspaceTestResultsService.responseValueSearchPrefixLength}) ILIKE :responseValue`,
+        { responseValue: `%${responseValue}%` }
+      );
     }
     if (tags) {
       baseQb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });

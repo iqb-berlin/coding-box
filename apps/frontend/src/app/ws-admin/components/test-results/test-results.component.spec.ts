@@ -153,6 +153,7 @@ describe('TestResultsComponent', () => {
           provide: WorkspaceSettingsService,
           useValue: {
             getShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of(false)),
+            getEnableRegexSearch: jest.fn().mockReturnValue(of(true)),
             getAutoRefreshManualCodingJobs: jest.fn().mockReturnValue(of(true))
           }
         },
@@ -249,6 +250,10 @@ describe('TestResultsComponent', () => {
 
     expect(testResultService.getLogAnomalySummary).not.toHaveBeenCalled();
     expect(component.logAnomalySummaryRequested).toBe(false);
+  });
+
+  it('should load the workspace regex setting for the flat table', () => {
+    expect(component.enableRegexSearch).toBe(true);
   });
 
   it('should not show manual coding status controls on the test results page', () => {
