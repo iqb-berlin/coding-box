@@ -41,6 +41,8 @@ describe('CoderTrainingService', () => {
   let codingStatisticsService: {
     calculateCohensKappa: jest.Mock;
     calculateKappaVariableSummary: jest.Mock;
+    calculateFleissKappa: jest.Mock;
+    roundKappaCalculationResult: jest.Mock;
   };
   let missingsProfilesService: {
     getMissingsProfileDetails: jest.Mock;
@@ -78,7 +80,13 @@ describe('CoderTrainingService', () => {
     mockRepository.count.mockResolvedValue(0);
     codingStatisticsService = {
       calculateCohensKappa: jest.fn(),
-      calculateKappaVariableSummary: jest.fn()
+      calculateKappaVariableSummary: jest.fn(),
+      roundKappaCalculationResult: jest.fn(result => result),
+      calculateFleissKappa: jest.fn().mockReturnValue({
+        fleissKappa: null,
+        completeCaseCount: 0,
+        raterCount: 0
+      })
     };
     missingsProfilesService = {
       getMissingsProfileDetails: jest.fn(),
@@ -3246,6 +3254,7 @@ describe('CoderTrainingService', () => {
           unitName: 'U1',
           variableId: 'V1',
           kappa: 0.5,
+          brennanPredigerKappa: 0.6,
           agreement: 0.8,
           totalItems: 2,
           validPairs: 1,
@@ -3259,6 +3268,7 @@ describe('CoderTrainingService', () => {
           unitName: 'U1',
           variableId: 'V1',
           kappa: 0.7,
+          brennanPredigerKappa: 0.9,
           agreement: 0.9,
           totalItems: 2,
           validPairs: 2,
@@ -3272,6 +3282,7 @@ describe('CoderTrainingService', () => {
           unitName: 'U2',
           variableId: 'V2',
           kappa: null,
+          brennanPredigerKappa: null,
           agreement: 0,
           totalItems: 1,
           validPairs: 0,
@@ -3281,16 +3292,21 @@ describe('CoderTrainingService', () => {
       codingStatisticsService.calculateKappaVariableSummary
         .mockReturnValueOnce({
           meanKappa: 0.6,
+          meanBrennanPredigerKappa: 0.7,
           meanAgreement: 0.85,
           validPairCount: 3,
           coderPairCount: 2
         })
         .mockReturnValueOnce({
           meanKappa: null,
+          meanBrennanPredigerKappa: null,
           meanAgreement: null,
           validPairCount: 0,
           coderPairCount: 0
         });
+      codingStatisticsService.calculateFleissKappa
+        .mockReturnValueOnce({ fleissKappa: 1, completeCaseCount: 1, raterCount: 3 })
+        .mockReturnValueOnce({ fleissKappa: null, completeCaseCount: 0, raterCount: 3 });
 
       const result = await service.getWithinTrainingCohensKappa(1, 5, {
         weightedMean: false,
@@ -3336,11 +3352,27 @@ describe('CoderTrainingService', () => {
         ]),
         'code'
       );
+      expect(codingStatisticsService.calculateFleissKappa).toHaveBeenNthCalledWith(1, [
+        [1, 1, 1],
+        [1, null, 2]
+      ]);
+      expect(codingStatisticsService.calculateFleissKappa).toHaveBeenNthCalledWith(2, [
+        [2, 2, null],
+        [1, null, null]
+      ]);
+      expect(codingStatisticsService.calculateKappaVariableSummary)
+        .toHaveBeenNthCalledWith(1, expect.any(Array), false);
+      expect(codingStatisticsService.calculateKappaVariableSummary)
+        .toHaveBeenNthCalledWith(2, expect.any(Array), false);
       expect(result.variables).toEqual([
         expect.objectContaining({
           unitName: 'U1',
           variableId: 'V1',
           meanKappa: 0.6,
+          meanBrennanPredigerKappa: 0.7,
+          fleissKappa: 1,
+          fleissCaseCount: 1,
+          fleissPossibleCaseCount: 2,
           caseCount: 2,
           validPairCount: 3,
           coderPairCount: 2
@@ -3349,6 +3381,10 @@ describe('CoderTrainingService', () => {
           unitName: 'U2',
           variableId: 'V2',
           meanKappa: null,
+          meanBrennanPredigerKappa: null,
+          fleissKappa: null,
+          fleissCaseCount: 0,
+          fleissPossibleCaseCount: 2,
           caseCount: 1,
           validPairCount: 0,
           coderPairCount: 0
@@ -3358,6 +3394,7 @@ describe('CoderTrainingService', () => {
         totalDoubleCodedResponses: 3,
         totalCoderPairs: 3,
         averageKappa: 0.6,
+        averageBrennanPredigerKappa: 0.75,
         variablesIncluded: 2,
         codersIncluded: 3,
         weightingMethod: 'unweighted',
@@ -3450,6 +3487,7 @@ describe('CoderTrainingService', () => {
       ]);
       codingStatisticsService.calculateKappaVariableSummary.mockReturnValue({
         meanKappa: 1,
+        meanBrennanPredigerKappa: null,
         meanAgreement: 1,
         validPairCount: 1,
         coderPairCount: 1
@@ -3487,6 +3525,8 @@ describe('CoderTrainingService', () => {
         ]),
         'score'
       );
+      expect(codingStatisticsService.calculateKappaVariableSummary)
+        .toHaveBeenCalledWith(expect.any(Array), true);
     });
 
     it('rejects automatic missing agreement when raw comparison jobs use different missing profiles', async () => {

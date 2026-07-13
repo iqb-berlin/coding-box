@@ -657,7 +657,9 @@ describe('CodingStatisticsService', () => {
       expect(result[0].validPairs).toBe(8);
       expect(result[0].totalItems).toBe(9);
       expect(result[0].agreement).toBe(0.625);
-      expect(result[0].kappa).toBe(0.489);
+      expect(result[0].kappa).toBeCloseTo(0.489362, 6);
+      expect(result[0].brennanPredigerKappa).toBe(0.5);
+      expect(service.roundKappaCalculationResult(result[0]).kappa).toBe(0.489);
     });
 
     it('should match the REQ-002 score-level perfect agreement convention', () => {
@@ -718,6 +720,7 @@ describe('CodingStatisticsService', () => {
       expect(result[0].validPairs).toBe(8);
       expect(result[0].agreement).toBe(0.75);
       expect(result[0].kappa).toBe(0.5);
+      expect(result[0].brennanPredigerKappa).toBe(0.5);
     });
 
     it('should handle no valid coding pairs', () => {
@@ -819,22 +822,26 @@ describe('CodingStatisticsService', () => {
       const summary = service.calculateKappaVariableSummary([
         {
           kappa: 0.5,
+          brennanPredigerKappa: 0.6,
           agreement: 0.8,
           validPairs: 10
         },
         {
           kappa: 0.7,
+          brennanPredigerKappa: 0.8,
           agreement: 0.9,
           validPairs: 5
         },
         {
           kappa: null,
+          brennanPredigerKappa: null,
           agreement: 0,
           validPairs: 0
         }
       ]);
 
       expect(summary.meanKappa).toBeCloseTo(0.6, 10);
+      expect(summary.meanBrennanPredigerKappa).toBeCloseTo(0.7, 10);
       expect(summary.meanAgreement).toBeCloseTo(0.85, 10);
       expect(summary.validPairCount).toBe(15);
       expect(summary.coderPairCount).toBe(2);
@@ -851,9 +858,87 @@ describe('CodingStatisticsService', () => {
 
       expect(summary).toEqual({
         meanKappa: null,
+        meanBrennanPredigerKappa: null,
         meanAgreement: null,
         validPairCount: 0,
         coderPairCount: 0
+      });
+    });
+
+    it('should weight variable summaries by valid pairs when requested', () => {
+      const summary = service.calculateKappaVariableSummary([
+        {
+          kappa: 0.5,
+          brennanPredigerKappa: 0.6,
+          agreement: 0.8,
+          validPairs: 10
+        },
+        {
+          kappa: 0.7,
+          brennanPredigerKappa: 0.8,
+          agreement: 0.9,
+          validPairs: 5
+        }
+      ], true);
+
+      expect(summary.meanKappa).toBeCloseTo(0.566667, 6);
+      expect(summary.meanBrennanPredigerKappa).toBeCloseTo(0.666667, 6);
+      expect(summary.meanAgreement).toBeCloseTo(0.833333, 6);
+    });
+
+    it('should match REQ-002 reference dataset C against irr::kappam.fleiss', () => {
+      const result = service.calculateFleissKappa([
+        [0, 0, 0],
+        [0, 0, 1],
+        [0, 1, 1],
+        [1, 1, 1],
+        [1, 2, 2],
+        [2, 2, 2]
+      ]);
+
+      expect(result).toEqual({
+        fleissKappa: 0.495,
+        completeCaseCount: 6,
+        raterCount: 3
+      });
+    });
+
+    it('should match irr::kappam.fleiss and omit incomplete cases listwise', () => {
+      const result = service.calculateFleissKappa([
+        [1, 1, 1],
+        [1, 1, 2],
+        [1, 2, 2],
+        [2, 2, 2],
+        [1, null, 2]
+      ]);
+
+      expect(result).toEqual({
+        fleissKappa: 0.333,
+        completeCaseCount: 4,
+        raterCount: 3
+      });
+    });
+
+    it('should return N/A for Fleiss kappa when no case is complete', () => {
+      expect(service.calculateFleissKappa([
+        [1, null, 1],
+        [null, 2, 2]
+      ])).toEqual({
+        fleissKappa: null,
+        completeCaseCount: 0,
+        raterCount: 3
+      });
+    });
+
+    it('should return N/A for Fleiss kappa with fewer than three raters', () => {
+      expect(service.calculateFleissKappa([
+        [1, 1],
+        [1, 2],
+        [null, 2]
+      ])).toEqual({
+        fleissKappa: null,
+        completeCaseCount: 2,
+        raterCount: 2
       });
     });
   });
