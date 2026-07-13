@@ -8,60 +8,84 @@
 
     <div class="table-section">
       <div class="flat-filter-bar">
-        <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-sm">
+        <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-sm"
+          [class.regex-filter-invalid]="isRegexFilterInvalid('code')">
           <mat-label>Code</mat-label>
           <input matInput [(ngModel)]="flatFilters.code" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="codeAuto" />
+          @if (isRegexFilterInvalid('code')) {
+          <mat-hint class="regex-filter-error">{{ 'search-filter.invalid-regex' | translate }}</mat-hint>
+          }
         </mat-form-field>
         <mat-autocomplete #codeAuto="matAutocomplete" (optionSelected)="onFlatFilterOptionSelected()">
           @for (opt of filteredCodes(); track opt) {
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-sm">
+        <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-sm"
+          [class.regex-filter-invalid]="isRegexFilterInvalid('group')">
           <mat-label>Gruppe</mat-label>
           <input matInput [(ngModel)]="flatFilters.group" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="groupAuto" />
+          @if (isRegexFilterInvalid('group')) {
+          <mat-hint class="regex-filter-error">{{ 'search-filter.invalid-regex' | translate }}</mat-hint>
+          }
         </mat-form-field>
         <mat-autocomplete #groupAuto="matAutocomplete" (optionSelected)="onFlatFilterOptionSelected()">
           @for (opt of filteredGroups(); track opt) {
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-sm">
+        <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-sm"
+          [class.regex-filter-invalid]="isRegexFilterInvalid('login')">
           <mat-label>Login</mat-label>
           <input matInput [(ngModel)]="flatFilters.login" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="loginAuto" />
+          @if (isRegexFilterInvalid('login')) {
+          <mat-hint class="regex-filter-error">{{ 'search-filter.invalid-regex' | translate }}</mat-hint>
+          }
         </mat-form-field>
         <mat-autocomplete #loginAuto="matAutocomplete" (optionSelected)="onFlatFilterOptionSelected()">
           @for (opt of filteredLogins(); track opt) {
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" class="flat-filter-field">
+        <mat-form-field appearance="outline" class="flat-filter-field"
+          [class.regex-filter-invalid]="isRegexFilterInvalid('booklet')">
           <mat-label>Testheft</mat-label>
           <input matInput [(ngModel)]="flatFilters.booklet" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="bookletAuto" />
+          @if (isRegexFilterInvalid('booklet')) {
+          <mat-hint class="regex-filter-error">{{ 'search-filter.invalid-regex' | translate }}</mat-hint>
+          }
         </mat-form-field>
         <mat-autocomplete #bookletAuto="matAutocomplete" (optionSelected)="onFlatFilterOptionSelected()">
           @for (opt of filteredBooklets(); track opt) {
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" class="flat-filter-field">
+        <mat-form-field appearance="outline" class="flat-filter-field"
+          [class.regex-filter-invalid]="isRegexFilterInvalid('unit')">
           <mat-label>Aufgabe</mat-label>
           <input matInput [(ngModel)]="flatFilters.unit" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="unitAuto" />
+          @if (isRegexFilterInvalid('unit')) {
+          <mat-hint class="regex-filter-error">{{ 'search-filter.invalid-regex' | translate }}</mat-hint>
+          }
         </mat-form-field>
         <mat-autocomplete #unitAuto="matAutocomplete" (optionSelected)="onFlatFilterOptionSelected()">
           @for (opt of filteredUnits(); track opt) {
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" class="flat-filter-field">
+        <mat-form-field appearance="outline" class="flat-filter-field"
+          [class.regex-filter-invalid]="isRegexFilterInvalid('response')">
           <mat-label>Variable</mat-label>
           <input matInput [(ngModel)]="flatFilters.response" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="responseAuto" />
+          @if (isRegexFilterInvalid('response')) {
+          <mat-hint class="regex-filter-error">{{ 'search-filter.invalid-regex' | translate }}</mat-hint>
+          }
         </mat-form-field>
         <mat-autocomplete #responseAuto="matAutocomplete" (optionSelected)="onFlatFilterOptionSelected()">
           @for (opt of filteredResponses(); track opt + '@@' + $index) {

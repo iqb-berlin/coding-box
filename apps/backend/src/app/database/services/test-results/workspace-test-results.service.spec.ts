@@ -1445,6 +1445,142 @@ describe('WorkspaceTestResultsService', () => {
       expect(qb.andWhere).toHaveBeenCalledWith('person.code ILIKE :code', { code: '%abc%' });
     });
 
+    it('should filter variable IDs exactly when wrapped in double quotes', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        response: ' "01_unique" '
+      });
+
+      [dataQb, countQb].forEach(qb => {
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'LOWER(response.variableid) = LOWER(:responseExact)',
+          { responseExact: '01_unique' }
+        );
+        expect(qb.andWhere).not.toHaveBeenCalledWith(
+          'response.variableid ILIKE :response',
+          expect.anything()
+        );
+      });
+    });
+
+    it('should keep the default variable ID contains search', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        response: '01'
+      });
+
+      [dataQb, countQb].forEach(qb => {
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'response.variableid ILIKE :response',
+          { response: '%01%' }
+        );
+      });
+    });
+
+    it('should apply regex filters identically to data and count queries', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        code: '^P-',
+        group: '^G[12]$',
+        login: 'user-[0-9]+',
+        booklet: 'Booklet-[AB]',
+        unit: '^Unit',
+        response: '^VAR_\\d+$',
+        regexSearch: true
+      });
+
+      [dataQb, countQb].forEach(qb => {
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'person.code ~ :codeRegex',
+          { codeRegex: '^P-' }
+        );
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'person.group ~ :groupRegex',
+          { groupRegex: '^G[12]$' }
+        );
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'person.login ~ :loginRegex',
+          { loginRegex: 'user-[0-9]+' }
+        );
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'bookletinfo.name ~ :bookletRegex',
+          { bookletRegex: 'Booklet-[AB]' }
+        );
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          '(unit.alias ~ :unitRegex OR unit.name ~ :unitRegex)',
+          { unitRegex: '^Unit' }
+        );
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'response.variableid ~ :responseRegex',
+          { responseRegex: '^VAR_\\d+$' }
+        );
+      });
+
+      const queryRunner = (dataSource.createQueryRunner as jest.Mock).mock.results[0].value;
+      expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
+        1,
+        'response',
+        queryRunner
+      );
+      expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
+        2,
+        'response',
+        queryRunner
+      );
+      expect(queryRunner.query).toHaveBeenCalledWith(
+        "SET LOCAL statement_timeout = '3000ms'"
+      );
+    });
+
+    it('should reject overlong regex filters as bad requests', async () => {
+      await expect(service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        response: 'a'.repeat(257),
+        regexSearch: true
+      })).rejects.toThrow('pattern must not exceed 256 characters');
+    });
+
+    it('should convert PostgreSQL regex timeouts into bad request errors', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      countQb.getRawOne.mockRejectedValue({
+        code: '57014',
+        message: 'canceling statement due to statement timeout'
+      });
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await expect(service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        response: '(a+)+$',
+        regexSearch: true
+      })).rejects.toThrow('Regular expression search timed out');
+    });
+
     it('should not calculate log anomaly summaries for rows by default', async () => {
       const workspaceId = 1;
       const qb = mockQueryBuilder();

@@ -345,6 +345,101 @@ export class WorkspaceTestResultsService {
     };
   }
 
+  private static applyFlatResponseTextFilters(
+    query: SelectQueryBuilder<ResponseEntity>,
+    filters: {
+      code: string;
+      group: string;
+      login: string;
+      booklet: string;
+      unit: string;
+      response: string;
+      regexSearch: boolean;
+    }
+  ): void {
+    const {
+      code,
+      group,
+      login,
+      booklet,
+      unit,
+      response,
+      regexSearch
+    } = filters;
+
+    if (regexSearch) {
+      const codeRegex = assertValidRegexSearchPattern(code, 'code');
+      if (codeRegex) {
+        query.andWhere('person.code ~ :codeRegex', { codeRegex });
+      }
+
+      const groupRegex = assertValidRegexSearchPattern(group, 'group');
+      if (groupRegex) {
+        query.andWhere('person.group ~ :groupRegex', { groupRegex });
+      }
+
+      const loginRegex = assertValidRegexSearchPattern(login, 'login');
+      if (loginRegex) {
+        query.andWhere('person.login ~ :loginRegex', { loginRegex });
+      }
+
+      const bookletRegex = assertValidRegexSearchPattern(booklet, 'booklet');
+      if (bookletRegex) {
+        query.andWhere('bookletinfo.name ~ :bookletRegex', { bookletRegex });
+      }
+
+      const unitRegex = assertValidRegexSearchPattern(unit, 'unit');
+      if (unitRegex) {
+        query.andWhere(
+          '(unit.alias ~ :unitRegex OR unit.name ~ :unitRegex)',
+          { unitRegex }
+        );
+      }
+
+      const responseRegex = assertValidRegexSearchPattern(response, 'response');
+      if (responseRegex) {
+        query.andWhere('response.variableid ~ :responseRegex', {
+          responseRegex
+        });
+      }
+      return;
+    }
+
+    if (code) {
+      query.andWhere('person.code ILIKE :code', { code: `%${code}%` });
+    }
+    if (group) {
+      query.andWhere('person.group ILIKE :group', { group: `%${group}%` });
+    }
+    if (login) {
+      query.andWhere('person.login ILIKE :login', { login: `%${login}%` });
+    }
+    if (booklet) {
+      query.andWhere('bookletinfo.name ILIKE :booklet', {
+        booklet: `%${booklet}%`
+      });
+    }
+    if (unit) {
+      query.andWhere('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', {
+        unit: `%${unit}%`
+      });
+    }
+    if (response) {
+      const responseFilter =
+        WorkspaceTestResultsService.parseQuotedExactSearchFilter(response);
+      if (responseFilter.exact) {
+        query.andWhere(
+          'LOWER(response.variableid) = LOWER(:responseExact)',
+          { responseExact: responseFilter.value }
+        );
+      } else {
+        query.andWhere('response.variableid ILIKE :response', {
+          response: `%${responseFilter.value}%`
+        });
+      }
+    }
+  }
+
   private static parseStoredResponseValue(value: string | null, variableId?: string): unknown {
     const normalizedVariableId = String(variableId || '').trim();
     const isMarkingPanel = normalizedVariableId.startsWith('marking-panel_');
@@ -2520,7 +2615,9 @@ export class WorkspaceTestResultsService {
       focusLostThresholdMs?: number | string;
       sessionSpanThresholdMs?: number | string;
       repeatedStartThreshold?: number | string;
-    }
+      regexSearch?: boolean;
+    },
+    queryRunner?: QueryRunner
   ): Promise<
     [
       Array<{
@@ -2546,6 +2643,21 @@ export class WorkspaceTestResultsService {
       throw new Error('Invalid workspaceId provided');
     }
 
+    if (options.regexSearch && !queryRunner) {
+      try {
+        return await withRegexSearchStatementTimeout(
+          this.connection,
+          runner => this.findFlatResponses(workspaceId, options, runner)
+        );
+      } catch (error) {
+        const regexError = toRegexSearchException(error);
+        if (regexError) {
+          throw regexError;
+        }
+        throw error;
+      }
+    }
+
     const MAX_LIMIT = 200;
     const MAX_RESPONSE_VALUE_LEN = 2000;
     const validPage = Math.max(1, Number(options.page || 1));
@@ -2563,6 +2675,7 @@ export class WorkspaceTestResultsService {
     const responseStatus = (options.responseStatus || '').trim();
     const responseValue = (options.responseValue || '').trim();
     const tags = (options.tags || '').trim();
+    const regexSearch = options.regexSearch === true;
     const geogebra = String(options.geogebra || '')
       .trim()
       .toLowerCase();
@@ -2713,7 +2826,7 @@ export class WorkspaceTestResultsService {
     const responseStatusNum = parseResponseStatus(responseStatus);
 
     const qb = this.responseRepository
-      .createQueryBuilder('response')
+      .createQueryBuilder('response', queryRunner)
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'bookletEntity')
       .innerJoin('bookletEntity.person', 'person')
@@ -2726,30 +2839,15 @@ export class WorkspaceTestResultsService {
     this.applyExclusionsToQuery(qb, exclusions);
     this.excludeAutocoderGeneratedResponses(qb);
 
-    if (code) {
-      qb.andWhere('person.code ILIKE :code', { code: `%${code}%` });
-    }
-    if (group) {
-      qb.andWhere('person.group ILIKE :group', { group: `%${group}%` });
-    }
-    if (login) {
-      qb.andWhere('person.login ILIKE :login', { login: `%${login}%` });
-    }
-    if (booklet) {
-      qb.andWhere('bookletinfo.name ILIKE :booklet', {
-        booklet: `%${booklet}%`
-      });
-    }
-    if (unit) {
-      qb.andWhere('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', {
-        unit: `%${unit}%`
-      });
-    }
-    if (response) {
-      qb.andWhere('response.variableid ILIKE :response', {
-        response: `%${response}%`
-      });
-    }
+    WorkspaceTestResultsService.applyFlatResponseTextFilters(qb, {
+      code,
+      group,
+      login,
+      booklet,
+      unit,
+      response,
+      regexSearch
+    });
     if (responseStatus) {
       if (responseStatusNum === null) {
         qb.andWhere('1=0');
@@ -2964,7 +3062,7 @@ export class WorkspaceTestResultsService {
     );
 
     const countQb = this.responseRepository
-      .createQueryBuilder('response')
+      .createQueryBuilder('response', queryRunner)
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'bookletEntity')
       .innerJoin('bookletEntity.person', 'person')
@@ -2977,30 +3075,15 @@ export class WorkspaceTestResultsService {
     });
     this.excludeAutocoderGeneratedResponses(countQb);
 
-    if (code) {
-      countQb.andWhere('person.code ILIKE :code', { code: `%${code}%` });
-    }
-    if (group) {
-      countQb.andWhere('person.group ILIKE :group', { group: `%${group}%` });
-    }
-    if (login) {
-      countQb.andWhere('person.login ILIKE :login', { login: `%${login}%` });
-    }
-    if (booklet) {
-      countQb.andWhere('bookletinfo.name ILIKE :booklet', {
-        booklet: `%${booklet}%`
-      });
-    }
-    if (unit) {
-      countQb.andWhere('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', {
-        unit: `%${unit}%`
-      });
-    }
-    if (response) {
-      countQb.andWhere('response.variableid ILIKE :response', {
-        response: `%${response}%`
-      });
-    }
+    WorkspaceTestResultsService.applyFlatResponseTextFilters(countQb, {
+      code,
+      group,
+      login,
+      booklet,
+      unit,
+      response,
+      regexSearch
+    });
     if (responseStatus) {
       if (responseStatusNum === null) {
         countQb.andWhere('1=0');
