@@ -475,4 +475,25 @@ export class CodingTrainingBackendService {
     }
     return this.http.get<TrainingKappaStatisticsDto>(url, { headers: this.authHeader, params });
   }
+
+  exportTrainingReliabilityAsCsv(
+    workspaceId: number,
+    trainingId: number,
+    weightedMean: boolean = true,
+    level: 'code' | 'score' = 'code',
+    selectedJobIds?: number[]
+  ): Observable<Blob> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/interrater-reliability/export/csv`;
+    let params = new HttpParams()
+      .set('weightedMean', weightedMean.toString())
+      .set('level', level);
+    if (selectedJobIds !== undefined) {
+      params = params.set('jobIds', selectedJobIds.join(','));
+    }
+    return this.http.get(url, {
+      headers: this.authHeader,
+      params,
+      responseType: 'blob'
+    });
+  }
 }

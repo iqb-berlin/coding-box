@@ -440,4 +440,20 @@ describe('CodingTrainingBackendService', () => {
       req.flush({});
     });
   });
+
+  describe('training reliability', () => {
+    it('should export the selected training cohort as CSV', () => {
+      service.exportTrainingReliabilityAsCsv(1, 5, false, 'score', [11, 12, 13]).subscribe();
+
+      const req = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/1/coding/coder-trainings/5/interrater-reliability/export/csv` &&
+        request.params.get('weightedMean') === 'false' &&
+        request.params.get('level') === 'score' &&
+        request.params.get('jobIds') === '11,12,13'
+      ));
+      expect(req.request.method).toBe('GET');
+      expect(req.request.responseType).toBe('blob');
+      req.flush(new Blob(['csv']));
+    });
+  });
 });

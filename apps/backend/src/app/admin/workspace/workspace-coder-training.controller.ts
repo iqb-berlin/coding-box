@@ -9,7 +9,8 @@ import {
   UseGuards,
   Body,
   Delete,
-  Req
+  Req,
+  Res
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -18,7 +19,8 @@ import {
   ApiTags,
   ApiBody
 } from '@nestjs/swagger';
-import { Request } from 'express';
+import { Request, Response } from 'express';
+import * as fastCsv from 'fast-csv';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
@@ -45,6 +47,22 @@ import {
   TrainingComparisonSortDirection,
   WithinTrainingCodingComparisonPageDto
 } from '../../../../../../api-dto/coding/training-comparison.dto';
+import { sanitizeCsvText } from '../../utils/csv.util';
+
+const TRAINING_RELIABILITY_EXPORT_HEADERS = [
+  'Unit',
+  'Variablen-ID',
+  'Kennwert',
+  'Wert',
+  'Berechnungsebene',
+  'Gewichtungsmethode',
+  'Umgang mit fehlenden Werten',
+  'Vollstaendige Faelle',
+  'Moegliche Faelle',
+  'Gueltige Paarwerte',
+  'Kodiererpaare',
+  'Referenzimplementierung'
+] as const;
 
 const trainingComparisonSummarySchema = {
   type: 'object',
@@ -1303,6 +1321,7 @@ export class WorkspaceCoderTrainingController {
               meanBrennanPredigerKappa: { type: 'number', nullable: true },
               fleissKappa: { type: 'number', nullable: true },
               fleissCaseCount: { type: 'number' },
+              fleissPossibleCaseCount: { type: 'number' },
               meanAgreement: { type: 'number', nullable: true },
               caseCount: { type: 'number', description: 'Distinct valid cases for this variable' },
               validPairCount: { type: 'number', description: 'Sum of valid pair values across coder pairs' },
@@ -1372,5 +1391,129 @@ export class WorkspaceCoderTrainingController {
       level: calculationLevel,
       selectedJobIds
     });
+  }
+
+  private createTrainingReliabilityExportRows(
+    statistics: TrainingCohensKappaStatistics
+  ): Record<string, string | number>[] {
+    const level = statistics.workspaceSummary.calculationLevel === 'score' ?
+      'Score-Ebene' :
+      'Code-Ebene';
+    const meanWeighting = statistics.workspaceSummary.weightingMethod === 'weighted' ?
+      'Gewichtet nach gueltigen Paarwerten' :
+      'Ungewichtet';
+
+    return statistics.variables.flatMap(variable => {
+      const common = {
+        Unit: sanitizeCsvText(variable.unitName),
+        'Variablen-ID': sanitizeCsvText(variable.variableId),
+        Berechnungsebene: level,
+        'Moegliche Faelle': variable.fleissPossibleCaseCount,
+        'Gueltige Paarwerte': variable.validPairCount,
+        Kodiererpaare: variable.coderPairCount
+      };
+
+      return [
+        {
+          ...common,
+          Kennwert: "Cohen's Kappa (Mittelwert)",
+          Wert: variable.meanKappa ?? '',
+          Gewichtungsmethode: meanWeighting,
+          'Umgang mit fehlenden Werten': 'Pairwise-Ausschluss unvollstaendiger Werte',
+          'Vollstaendige Faelle': '',
+          Referenzimplementierung: 'eatPrep::meanKappa'
+        },
+        {
+          ...common,
+          Kennwert: 'Brennan-Prediger-Kappa (Mittelwert)',
+          Wert: variable.meanBrennanPredigerKappa ?? '',
+          Gewichtungsmethode: meanWeighting,
+          'Umgang mit fehlenden Werten': 'Pairwise-Ausschluss unvollstaendiger Werte',
+          'Vollstaendige Faelle': '',
+          Referenzimplementierung: 'eatPrep::meanKappa(type="BrennanPrediger")'
+        },
+        {
+          ...common,
+          Kennwert: "Fleiss' Kappa",
+          Wert: variable.fleissKappa ?? '',
+          Gewichtungsmethode: 'Nicht anwendbar',
+          'Umgang mit fehlenden Werten': 'Listwise-Ausschluss unvollstaendiger Faelle',
+          'Vollstaendige Faelle': variable.fleissCaseCount,
+          Referenzimplementierung: 'irr::kappam.fleiss(exact=FALSE)'
+        }
+      ];
+    });
+  }
+
+  @Get(':workspace_id/coding/coder-trainings/:trainingId/interrater-reliability/export/csv')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'trainingId', type: Number, description: 'ID of the coder training' })
+  @ApiQuery({
+    name: 'weightedMean',
+    required: false,
+    description: 'Use weighted mean (default: true, matching R eatPrep implementation)',
+    type: Boolean
+  })
+  @ApiQuery({
+    name: 'level',
+    required: false,
+    enum: ['code', 'score'],
+    description: 'Calculation level: code for code-level kappa (default), score for score-level kappa',
+    type: String
+  })
+  @ApiQuery({
+    name: 'jobIds',
+    required: false,
+    description: 'Selected training job IDs as comma-separated positive integers',
+    type: String
+  })
+  @ApiOkResponse({
+    description: 'Training inter-rater reliability metrics exported as CSV.',
+    content: {
+      'text/csv': {
+        schema: { type: 'string', format: 'binary' }
+      }
+    }
+  })
+  async exportTrainingReliabilityAsCsv(
+    @WorkspaceId() workspace_id: number,
+      @Param('trainingId') trainingId: number,
+      @Query('weightedMean') weightedMean: string | undefined,
+      @Query('level') level: 'code' | 'score' | undefined,
+      @Query('jobIds') jobIds: string | undefined,
+      @Res() res: Response
+  ): Promise<void> {
+    if (!trainingId || trainingId <= 0) {
+      throw new Error('Valid training ID must be provided');
+    }
+
+    const statistics = await this.coderTrainingService.getWithinTrainingCohensKappa(
+      workspace_id,
+      trainingId,
+      {
+        weightedMean: weightedMean !== 'false',
+        level: level || 'code',
+        selectedJobIds: this.parsePositiveIntCsv(jobIds, 'jobIds')
+      }
+    );
+    const csvContent = await fastCsv.writeToString(
+      this.createTrainingReliabilityExportRows(statistics),
+      {
+        headers: [...TRAINING_RELIABILITY_EXPORT_HEADERS],
+        alwaysWriteHeaders: true,
+        delimiter: ';',
+        quote: '"'
+      }
+    );
+    const exportDate = new Date().toISOString().slice(0, 10);
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="interrater-reliability-training-${trainingId}-${exportDate}.csv"`
+    );
+    res.send(`\uFEFF${csvContent}`);
   }
 }

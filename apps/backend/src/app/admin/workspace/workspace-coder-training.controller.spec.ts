@@ -203,6 +203,61 @@ describe('WorkspaceCoderTrainingController', () => {
     expect(coderTrainingService.transformToCoderPairs).not.toHaveBeenCalled();
   });
 
+  it('exports all training reliability metrics with calculation metadata', async () => {
+    coderTrainingService.getWithinTrainingCohensKappa.mockResolvedValue({
+      variables: [{
+        unitName: 'U1',
+        variableId: 'V1',
+        meanKappa: 0.4,
+        meanBrennanPredigerKappa: 0.5,
+        fleissKappa: 0.495,
+        fleissCaseCount: 6,
+        fleissPossibleCaseCount: 8,
+        meanAgreement: 0.75,
+        caseCount: 8,
+        validPairCount: 18,
+        coderPairCount: 3,
+        coderPairs: []
+      }],
+      workspaceSummary: {
+        totalDoubleCodedResponses: 8,
+        totalCoderPairs: 3,
+        averageKappa: 0.4,
+        averageBrennanPredigerKappa: 0.5,
+        variablesIncluded: 1,
+        codersIncluded: 3,
+        weightingMethod: 'weighted',
+        calculationLevel: 'code'
+      }
+    });
+    const response = {
+      setHeader: jest.fn(),
+      send: jest.fn()
+    };
+
+    await controller.exportTrainingReliabilityAsCsv(
+      12,
+      5,
+      'true',
+      'code',
+      '11,12,13',
+      response as never
+    );
+
+    expect(coderTrainingService.getWithinTrainingCohensKappa).toHaveBeenCalledWith(12, 5, {
+      weightedMean: true,
+      level: 'code',
+      selectedJobIds: [11, 12, 13]
+    });
+    expect(response.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv; charset=utf-8');
+    const csv = response.send.mock.calls[0][0] as string;
+    expect(csv).toContain('Kennwert;Wert;Berechnungsebene;Gewichtungsmethode');
+    expect(csv).toContain("Cohen's Kappa (Mittelwert);0.4;Code-Ebene");
+    expect(csv).toContain('Brennan-Prediger-Kappa (Mittelwert);0.5;Code-Ebene');
+    expect(csv).toContain("Fleiss' Kappa;0.495;Code-Ebene;Nicht anwendbar;Listwise-Ausschluss unvollstaendiger Faelle;6;8");
+    expect(csv).toContain('irr::kappam.fleiss(exact=FALSE)');
+  });
+
   it('forwards comparison freshness requests to the service', async () => {
     coderTrainingService.getWithinTrainingComparisonFreshness.mockResolvedValue({
       workspaceId: 12,
