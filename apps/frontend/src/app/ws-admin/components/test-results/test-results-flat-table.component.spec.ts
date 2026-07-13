@@ -120,7 +120,8 @@ describe('TestResultsFlatTableComponent', () => {
     expect(component.flatDisplayedColumns).not.toContain('logStatus');
     expect(testResultService.getFlatResponses).toHaveBeenCalledWith(
       1,
-      expect.objectContaining({ includeLogAnomalies: '' })
+      expect.objectContaining({ includeLogAnomalies: '' }),
+      expect.objectContaining({ suppressGlobalHttpError: true })
     );
   });
 
@@ -132,7 +133,8 @@ describe('TestResultsFlatTableComponent', () => {
     expect(component.flatDisplayedColumns).toContain('logStatus');
     expect(testResultService.getFlatResponses).toHaveBeenCalledWith(
       1,
-      expect.objectContaining({ includeLogAnomalies: 'true' })
+      expect.objectContaining({ includeLogAnomalies: 'true' }),
+      expect.objectContaining({ suppressGlobalHttpError: true })
     );
   });
 
@@ -185,7 +187,8 @@ describe('TestResultsFlatTableComponent', () => {
 
     expect(testResultService.getFlatResponses).toHaveBeenCalledWith(
       1,
-      expect.objectContaining({ regexSearch: true })
+      expect.objectContaining({ regexSearch: true }),
+      expect.objectContaining({ suppressGlobalHttpError: true })
     );
   });
 
@@ -199,7 +202,8 @@ describe('TestResultsFlatTableComponent', () => {
       expect.objectContaining({
         response: '"01"',
         regexSearch: false
-      })
+      }),
+      expect.objectContaining({ suppressGlobalHttpError: true })
     );
   });
 

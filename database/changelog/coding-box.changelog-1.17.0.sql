@@ -31,27 +31,16 @@ CREATE INDEX "idx_system_notification_visibility"
 
 -- rollback DROP TABLE "public"."system_notification";
 
--- changeset iqb:910-response-value-trigram-index runInTransaction:false
--- comment: Accelerate response value substring searches while excluding large GeoGebra payloads
+-- changeset iqb:910-response-value-prefix-trigram-index runInTransaction:false
+--validCheckSum: 9:24df5085f5581c17d5730dc56c66d2eb
+-- comment: Accelerate substring searches over the first 2000 response value characters
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_response_value_search_trgm"
-  ON "public"."response" USING GIN ("value" gin_trgm_ops)
-  WHERE "is_autocoder_generated" IS NOT TRUE
-    AND LENGTH("value") <= 2000;
-
--- rollback DROP INDEX CONCURRENTLY IF EXISTS "public"."idx_response_value_search_trgm";
-
--- changeset iqb:910-response-value-prefix-trigram-index runInTransaction:false
--- comment: Accelerate substring searches over the first 2000 response value characters
 DROP INDEX CONCURRENTLY IF EXISTS "public"."idx_response_value_prefix_search_trgm";
+DROP INDEX CONCURRENTLY IF EXISTS "public"."idx_response_value_search_trgm";
 
 CREATE INDEX CONCURRENTLY "idx_response_value_prefix_search_trgm"
   ON "public"."response" USING GIN ((LEFT("value", 2000)) gin_trgm_ops)
   WHERE "is_autocoder_generated" IS NOT TRUE;
 
-DROP INDEX CONCURRENTLY IF EXISTS "public"."idx_response_value_search_trgm";
-
--- rollback DROP INDEX CONCURRENTLY IF EXISTS "public"."idx_response_value_search_trgm";
--- rollback CREATE INDEX CONCURRENTLY "idx_response_value_search_trgm" ON "public"."response" USING GIN ("value" gin_trgm_ops) WHERE "is_autocoder_generated" IS NOT TRUE AND LENGTH("value") <= 2000;
 -- rollback DROP INDEX CONCURRENTLY IF EXISTS "public"."idx_response_value_prefix_search_trgm";
