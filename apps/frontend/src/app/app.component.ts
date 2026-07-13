@@ -25,10 +25,12 @@ import { ErrorMessageDisplayComponent } from './shared/components/error-message-
 import { handleKeycloakSessionEvent } from './core/services/keycloak-session-events';
 import { hasAdminBypass } from './core/guards/admin-access';
 import { AuthSessionActivityService } from './core/services/auth-session-activity.service';
+import { SystemNotificationBannerComponent } from './components/system-notification-banner/system-notification-banner.component';
+import { SystemNotificationService } from './core/services/system-notification.service';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, MatSlideToggleModule, MatProgressSpinner, RouterLink, TranslateModule, MatTooltip, MatButton, UserMenuComponent, WrappedIconComponent, ExportToastComponent, ErrorMessageDisplayComponent],
+  imports: [RouterOutlet, MatSlideToggleModule, MatProgressSpinner, RouterLink, TranslateModule, MatTooltip, MatButton, UserMenuComponent, WrappedIconComponent, ExportToastComponent, ErrorMessageDisplayComponent, SystemNotificationBannerComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
   providers: [AuthService]
@@ -42,6 +44,7 @@ export class AppComponent implements OnInit, OnDestroy {
   private keycloakEvent = inject(KEYCLOAK_EVENT_SIGNAL);
   private snackBar = inject(MatSnackBar);
   private authSessionActivity = inject(AuthSessionActivityService);
+  private systemNotifications = inject(SystemNotificationService);
 
   title = 'IQB-Kodierbox';
   loggedInKeycloak: boolean = false;
@@ -91,6 +94,7 @@ export class AppComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.routerSubscription?.unsubscribe();
     this.authSessionActivity.stop();
+    this.systemNotifications.stopPolling();
   }
 
   async loadAuthData(identity: string): Promise<boolean> {
@@ -118,6 +122,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
+    this.systemNotifications.startPolling();
     if (this.authService.isLoggedIn()) {
       this.setAuthState();
 
