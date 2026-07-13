@@ -30,3 +30,14 @@ CREATE INDEX "idx_system_notification_visibility"
   ON "public"."system_notification" ("enabled", "visible_from", "visible_until");
 
 -- rollback DROP TABLE "public"."system_notification";
+
+-- changeset iqb:910-response-value-trigram-index runInTransaction:false
+-- comment: Accelerate response value substring searches while excluding large GeoGebra payloads
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_response_value_search_trgm"
+  ON "public"."response" USING GIN ("value" gin_trgm_ops)
+  WHERE "is_autocoder_generated" IS NOT TRUE
+    AND LENGTH("value") <= 2000;
+
+-- rollback DROP INDEX CONCURRENTLY IF EXISTS "public"."idx_response_value_search_trgm";

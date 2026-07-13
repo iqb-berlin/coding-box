@@ -2,8 +2,11 @@ import {
   assertValidRegexSearchPattern,
   InvalidRegexSearchPatternException,
   REGEX_SEARCH_PATTERN_MAX_LENGTH,
+  SEARCH_ERROR_CODES,
   toInvalidRegexSearchPatternException,
+  toResponseValueSearchException,
   toRegexSearchException,
+  validatePostgresRegexSearchPatterns,
   withRegexSearchStatementTimeout
 } from './regex-search.util';
 
@@ -35,6 +38,10 @@ describe('regex-search.util', () => {
     expect(error).toBeInstanceOf(InvalidRegexSearchPatternException);
     expect(error?.getStatus()).toBe(400);
     expect(error?.message).toContain('variableId');
+    expect(error?.getResponse()).toEqual(expect.objectContaining({
+      code: SEARCH_ERROR_CODES.invalidRegex,
+      field: 'variableId'
+    }));
   });
 
   it('converts PostgreSQL statement timeouts into bad request exceptions', () => {
@@ -45,6 +52,45 @@ describe('regex-search.util', () => {
 
     expect(error?.getStatus()).toBe(400);
     expect(error?.message).toContain('timed out');
+    expect(error?.getResponse()).toEqual(expect.objectContaining({
+      code: SEARCH_ERROR_CODES.regexTimeout
+    }));
+  });
+
+  it('converts response value timeouts into structured bad requests', () => {
+    const error = toResponseValueSearchException({
+      driverError: {
+        code: '57014',
+        message: 'canceling statement due to statement timeout'
+      }
+    });
+
+    expect(error?.getStatus()).toBe(400);
+    expect(error?.getResponse()).toEqual(expect.objectContaining({
+      code: SEARCH_ERROR_CODES.searchTimeout,
+      field: 'responseValue'
+    }));
+  });
+
+  it('preflights every non-empty pattern with PostgreSQL parameters', async () => {
+    const queryRunner = { query: jest.fn().mockResolvedValue([{ isValid: false }]) };
+
+    await validatePostgresRegexSearchPatterns(queryRunner, [
+      { fieldName: 'code', pattern: ' ^P-' },
+      { fieldName: 'group', pattern: '  ' },
+      { fieldName: 'response', pattern: '(a+)' }
+    ]);
+
+    expect(queryRunner.query).toHaveBeenNthCalledWith(
+      1,
+      'SELECT \'\'::text ~ $1::text AS "isValid"',
+      ['^P-']
+    );
+    expect(queryRunner.query).toHaveBeenNthCalledWith(
+      2,
+      'SELECT \'\'::text ~ $1::text AS "isValid"',
+      ['(a+)']
+    );
   });
 
   it('runs work inside a transaction with a local statement timeout', async () => {

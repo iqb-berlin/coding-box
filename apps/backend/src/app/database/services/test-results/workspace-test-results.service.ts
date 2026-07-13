@@ -81,8 +81,11 @@ import {
 } from '../coding/coding-readiness-cache-key.util';
 import {
   assertValidRegexSearchPattern,
+  toResponseValueSearchException,
   toRegexSearchException,
-  withRegexSearchStatementTimeout
+  validatePostgresRegexSearchPatterns,
+  withRegexSearchStatementTimeout,
+  withResponseValueSearchStatementTimeout
 } from '../../../utils/regex-search.util';
 
 interface PersonWhere {
@@ -2643,16 +2646,52 @@ export class WorkspaceTestResultsService {
       throw new Error('Invalid workspaceId provided');
     }
 
-    if (options.regexSearch && !queryRunner) {
+    const hasRegexTextFilter = options.regexSearch === true && [
+      options.code,
+      options.group,
+      options.login,
+      options.booklet,
+      options.unit,
+      options.response
+    ].some(value => String(value || '').trim().length > 0);
+    const hasResponseValueFilter = String(options.responseValue || '')
+      .trim().length > 0;
+
+    if (hasRegexTextFilter && !queryRunner) {
       try {
         return await withRegexSearchStatementTimeout(
           this.connection,
-          runner => this.findFlatResponses(workspaceId, options, runner)
+          async runner => {
+            await validatePostgresRegexSearchPatterns(runner, [
+              { fieldName: 'code', pattern: options.code },
+              { fieldName: 'group', pattern: options.group },
+              { fieldName: 'login', pattern: options.login },
+              { fieldName: 'booklet', pattern: options.booklet },
+              { fieldName: 'unit', pattern: options.unit },
+              { fieldName: 'response', pattern: options.response }
+            ]);
+            return this.findFlatResponses(workspaceId, options, runner);
+          }
         );
       } catch (error) {
         const regexError = toRegexSearchException(error);
         if (regexError) {
           throw regexError;
+        }
+        throw error;
+      }
+    }
+
+    if (hasResponseValueFilter && !queryRunner) {
+      try {
+        return await withResponseValueSearchStatementTimeout(
+          this.connection,
+          runner => this.findFlatResponses(workspaceId, options, runner)
+        );
+      } catch (error) {
+        const searchError = toResponseValueSearchException(error);
+        if (searchError) {
+          throw searchError;
         }
         throw error;
       }
@@ -2860,6 +2899,9 @@ export class WorkspaceTestResultsService {
     if (responseValue) {
       qb.andWhere('response.value ILIKE :responseValue', {
         responseValue: `%${responseValue}%`
+      });
+      qb.andWhere('LENGTH(response.value) <= :responseValueSearchMaxLength', {
+        responseValueSearchMaxLength: MAX_RESPONSE_VALUE_LEN
       });
     }
     if (tags) {
@@ -3097,10 +3139,21 @@ export class WorkspaceTestResultsService {
       countQb.andWhere('response.value ILIKE :responseValue', {
         responseValue: `%${responseValue}%`
       });
+      countQb.andWhere(
+        'LENGTH(response.value) <= :responseValueSearchMaxLength',
+        { responseValueSearchMaxLength: MAX_RESPONSE_VALUE_LEN }
+      );
     }
     if (tags) {
-      countQb.leftJoin('unit.tags', 'unitTag');
-      countQb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
+      countQb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM unit_tag count_unit_tag
+          WHERE count_unit_tag."unitId" = unit.id
+            AND count_unit_tag.tag ILIKE :tags
+        )`,
+        { tags: `%${tags}%` }
+      );
     }
 
     if (geogebraOnly) {
@@ -3265,7 +3318,7 @@ export class WorkspaceTestResultsService {
     // Note: Session filters above are applied as separate EXISTS per dimension.
 
     const total = await countQb
-      .select('COUNT(DISTINCT response.id)', 'cnt')
+      .select('COUNT(response.id)', 'cnt')
       .getRawOne()
       .then(r => Number(r?.cnt || 0));
 
