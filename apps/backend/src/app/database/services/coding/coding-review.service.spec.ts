@@ -1655,11 +1655,12 @@ describe('CodingReviewService', () => {
           coder2Name: 'Coder 32',
           kappa: 1,
           agreement: 1,
-          totalSharedResponses: 1,
+          totalItems: 1,
           validPairs: 1,
           interpretation: 'Sehr gut'
         }
-      ])
+      ]),
+      roundKappaCalculationResult: jest.fn(result => result)
     };
     service = new CodingReviewService(
       {} as never,

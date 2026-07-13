@@ -460,6 +460,24 @@
             }
           }
 
+          .kappa-export-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 20px;
+          }
+
+          .fleiss-minimum-hint {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            padding: 12px;
+            border: 1px solid #ffe082;
+            border-radius: 6px;
+            background-color: #fff8e1;
+            color: #6d4c41;
+          }
+
           .summary-stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -1039,6 +1057,35 @@
 
 // Responsive adjustments
 @media (max-width: 768px) {
+  .dialog-layout {
+    min-width: 0;
+
+    [mat-dialog-title] {
+      min-width: 0;
+      padding-right: 16px;
+      padding-left: 16px;
+
+      .dialog-header {
+        min-width: 0;
+
+        span {
+          display: block;
+          overflow-wrap: anywhere;
+        }
+      }
+
+      .mode-selection {
+        min-width: 0;
+
+        mat-radio-group {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+        }
+      }
+    }
+  }
+
   .comparison-container {
     padding: 16px;
 
@@ -1062,6 +1109,28 @@
         th {
           padding: 8px 4px;
         }
+      }
+    }
+
+    .kappa-export-actions button {
+      width: 100%;
+    }
+
+    .weighting-toggle-container,
+    .level-toggle-container {
+      min-width: 0;
+
+      mat-slide-toggle {
+        min-width: 0;
+      }
+    }
+
+    .level-toggle-container {
+      flex-wrap: wrap;
+
+      .level-indicator {
+        flex: 0 0 auto;
+        white-space: nowrap;
       }
     }
   }

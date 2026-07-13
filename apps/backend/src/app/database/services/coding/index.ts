@@ -26,7 +26,10 @@ export { CodingListExportService } from './coding-list-export.service';
 export { CodingResultsExportService } from './coding-results-export.service';
 export { CodingTimesExportService } from './coding-times-export.service';
 export { CodebookGenerationService } from './codebook-generation.service';
-export { CoderTrainingService } from './coder-training.service';
+export {
+  CoderTrainingService,
+  type TrainingCohensKappaStatistics
+} from './coder-training.service';
 export { CoderTrainingResultsApplyService } from './coder-training-results-apply.service';
 export { ExternalCodingImportService } from './external-coding-import.service';
 export { MissingsProfilesService } from './missings-profiles.service';
