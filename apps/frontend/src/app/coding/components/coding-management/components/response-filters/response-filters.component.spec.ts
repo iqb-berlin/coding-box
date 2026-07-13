@@ -80,7 +80,7 @@ describe('ResponseFiltersComponent', () => {
     expect(emittedFilterParams).not.toBe(component.filterParams);
   });
 
-  it('should not mutate input filter params when a regex filter becomes invalid', () => {
+  it('should not mutate input filter params when a regex filter exceeds the limit', () => {
     jest.spyOn(component.filterChange, 'emit');
     const parentFilterParams = {
       ...component.filterParams,
@@ -89,11 +89,23 @@ describe('ResponseFiltersComponent', () => {
     component.filterParams = parentFilterParams;
     component.enableRegexSearch = true;
 
-    component.filterParams.variableId = '[';
+    component.filterParams.variableId = 'a'.repeat(257);
     component.onTextFilterChange();
 
     expect(parentFilterParams.variableId).toBe('VAR_01');
     expect(component.filterChange.emit).not.toHaveBeenCalled();
+  });
+
+  it('should allow PostgreSQL ARE syntax unsupported by JavaScript', () => {
+    jest.spyOn(component.filterChange, 'emit');
+    component.enableRegexSearch = true;
+    component.filterParams.variableId = '(?i)^var_01$';
+
+    component.onInstantFilterChange();
+
+    expect(component.filterChange.emit).toHaveBeenCalledWith(
+      expect.objectContaining({ variableId: '(?i)^var_01$' })
+    );
   });
 
   it('should keep DERIVE_ERROR as the visible status label', () => {

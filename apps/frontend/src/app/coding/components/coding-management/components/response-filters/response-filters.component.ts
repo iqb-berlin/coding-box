@@ -17,7 +17,7 @@ import { MatIcon } from '@angular/material/icon';
 import { TranslateModule } from '@ngx-translate/core';
 import { FilterParams } from '../../../../services/coding-management.service';
 import { getResponseStatusLabel } from '../../../../../shared/utils/response-status-metadata.util';
-import { hasInvalidRegexFilter } from '../../../../../shared/utils/regex-filter.util';
+import { hasInvalidPostgresRegexFilter } from '../../../../../shared/utils/regex-filter.util';
 
 type RegexFilterField = 'unitName' | 'code' | 'personLogin' | 'group' | 'bookletName' | 'variableId';
 
@@ -139,7 +139,10 @@ export class ResponseFiltersComponent implements OnDestroy {
   }
 
   isRegexFilterInvalid(field: RegexFilterField): boolean {
-    return hasInvalidRegexFilter(this.filterParams[field], this.enableRegexSearch);
+    return hasInvalidPostgresRegexFilter(
+      this.filterParams[field],
+      this.enableRegexSearch
+    );
   }
 
   private hasInvalidRegexFilters(): boolean {

@@ -207,17 +207,34 @@ describe('TestResultsFlatTableComponent', () => {
     );
   });
 
-  it('should not request data while a regex filter is invalid', fakeAsync(() => {
+  it('should not request data while a regex filter exceeds the limit', fakeAsync(() => {
     component.enableRegexSearch = true;
     component.ngOnInit();
     testResultService.getFlatResponses.mockClear();
-    component.flatFilters.response = '[';
+    component.flatFilters.response = 'a'.repeat(257);
 
     component.onFlatFilterChanged();
     tick(401);
 
     expect(component.isRegexFilterInvalid('response')).toBe(true);
     expect(testResultService.getFlatResponses).not.toHaveBeenCalled();
+  }));
+
+  it('should send PostgreSQL ARE syntax unsupported by JavaScript', fakeAsync(() => {
+    component.enableRegexSearch = true;
+    component.ngOnInit();
+    testResultService.getFlatResponses.mockClear();
+    component.flatFilters.response = '(?i)^var$';
+
+    component.onFlatFilterChanged();
+    tick(401);
+
+    expect(component.isRegexFilterInvalid('response')).toBe(false);
+    expect(testResultService.getFlatResponses).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ response: '(?i)^var$' }),
+      expect.objectContaining({ suppressGlobalHttpError: true })
+    );
   }));
 
   it('should disable autocomplete suggestions in regex mode', () => {
@@ -273,6 +290,7 @@ describe('TestResultsFlatTableComponent', () => {
 
   it('should use the structured invalid regex error code', () => {
     component.enableRegexSearch = true;
+    component.flatFilters.response = '[';
     testResultService.getFlatResponses.mockReturnValue(throwError(() => (
       new HttpErrorResponse({
         status: 400,
@@ -291,7 +309,43 @@ describe('TestResultsFlatTableComponent', () => {
       'close',
       expect.objectContaining({ duration: 5000 })
     );
+    expect(component.isRegexFilterInvalid('response')).toBe(true);
   });
+
+  it('should ignore an invalid-regex error for an edited filter', fakeAsync(() => {
+    const staleResponse = new Subject<FlatTestResultResponsesResponse>();
+    component.enableRegexSearch = true;
+    component.flatFilters.response = '[';
+    testResultService.getFlatResponses
+      .mockReturnValueOnce(staleResponse.asObservable())
+      .mockReturnValueOnce(of({
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 100
+      }));
+    component.ngOnInit();
+
+    component.flatFilters.response = '[a]';
+    component.onFlatFilterChanged();
+    staleResponse.error(new HttpErrorResponse({
+      status: 400,
+      error: {
+        code: 'INVALID_REGEX',
+        field: 'response',
+        message: 'Invalid regular expression for response'
+      }
+    }));
+    tick(401);
+
+    expect(component.isRegexFilterInvalid('response')).toBe(false);
+    expect(testResultService.getFlatResponses).toHaveBeenCalledTimes(2);
+    expect(testResultService.getFlatResponses).toHaveBeenLastCalledWith(
+      1,
+      expect.objectContaining({ response: '[a]' }),
+      expect.objectContaining({ suppressGlobalHttpError: true })
+    );
+  }));
 
   it('should ignore stale flat-response requests', () => {
     const firstResponse = new Subject<FlatTestResultResponsesResponse>();
