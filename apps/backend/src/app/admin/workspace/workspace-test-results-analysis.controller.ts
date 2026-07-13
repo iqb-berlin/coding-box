@@ -60,7 +60,7 @@ export class WorkspaceTestResultsAnalysisController {
     required: false,
     description:
       'Interpret selected text filters as case-sensitive regular expressions. ' +
-      'Defaults to the workspace setting; pass false to disable it for this request.',
+      'Requires both regexSearch=true and the workspace setting to be enabled.',
     type: Boolean
   })
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
@@ -103,7 +103,7 @@ export class WorkspaceTestResultsAnalysisController {
                                          @Query('sessionSpanThresholdMs', new DefaultValuePipe(86400000), ParseIntPipe) sessionSpanThresholdMs?: number,
                                          @Query('repeatedStartThreshold', new DefaultValuePipe(2), ParseIntPipe) repeatedStartThreshold?: number
   ): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
-    const effectiveRegexSearch = regexSearch !== 'false' &&
+    const effectiveRegexSearch = regexSearch === 'true' &&
       await getWorkspaceRegexSearchEnabled(this.settingRepository, workspace_id);
     const [data, total] =
       await this.workspaceTestResultsService.findFlatResponses(workspace_id, {

@@ -76,17 +76,17 @@ describe('WorkspaceTestResultsAnalysisController', () => {
     );
   });
 
-  it('uses the workspace regex setting when the query flag is omitted', async () => {
+  it('does not enable regex search when the query flag is omitted', async () => {
     settingRepository.findOne.mockResolvedValue({
       content: JSON.stringify({ enabled: true })
     });
 
     await controller.findFlatResponses(1, 1, 50);
 
-    expect(settingRepository.findOne).toHaveBeenCalled();
+    expect(settingRepository.findOne).not.toHaveBeenCalled();
     expect(workspaceTestResultsService.findFlatResponses).toHaveBeenCalledWith(
       1,
-      expect.objectContaining({ regexSearch: true })
+      expect.objectContaining({ regexSearch: false })
     );
   });
 
