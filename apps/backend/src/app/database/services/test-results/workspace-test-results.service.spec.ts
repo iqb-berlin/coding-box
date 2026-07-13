@@ -1551,6 +1551,129 @@ describe('WorkspaceTestResultsService', () => {
       expect(queryRunner.query).toHaveBeenCalledWith(
         "SET LOCAL statement_timeout = '3000ms'"
       );
+      expect(queryRunner.query).toHaveBeenCalledWith(
+        'SELECT \'\'::text ~ $1::text AS "isValid"',
+        ['^P-']
+      );
+      expect(queryRunner.query).toHaveBeenCalledWith(
+        'SELECT \'\'::text ~ $1::text AS "isValid"',
+        ['^VAR_\\d+$']
+      );
+    });
+
+    it('rejects a PostgreSQL-invalid pattern during preflight', async () => {
+      const queryRunner = (dataSource.createQueryRunner as jest.Mock)();
+      queryRunner.query.mockImplementation((sql: string) => {
+        if (sql.startsWith('SELECT')) {
+          return Promise.reject(Object.assign(
+            new Error('invalid regular expression: quantifier operand invalid'),
+            { code: '2201B' }
+          ));
+        }
+        return Promise.resolve([]);
+      });
+      (dataSource.createQueryRunner as jest.Mock).mockReturnValue(queryRunner);
+
+      await expect(service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        response: '(?<name>a)',
+        regexSearch: true
+      })).rejects.toMatchObject({
+        response: expect.objectContaining({
+          code: 'INVALID_REGEX',
+          field: 'response'
+        })
+      });
+
+      expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
+      expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
+    });
+
+    it('should not apply the regex timeout without a regex text filter', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        regexSearch: true,
+        responseStatus: 'VALUE_CHANGED'
+      });
+
+      expect(dataSource.createQueryRunner).not.toHaveBeenCalled();
+      expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
+        1,
+        'response',
+        undefined
+      );
+      expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
+        2,
+        'response',
+        undefined
+      );
+    });
+
+    it('should apply a dedicated timeout to response value searches', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        responseValue: 'needle'
+      });
+
+      const queryRunner = (dataSource.createQueryRunner as jest.Mock)
+        .mock.results[0].value;
+      expect(queryRunner.query).toHaveBeenCalledWith(
+        "SET LOCAL statement_timeout = '15000ms'"
+      );
+      expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
+        1,
+        'response',
+        queryRunner
+      );
+      [dataQb, countQb].forEach(qb => {
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'LENGTH(response.value) <= :responseValueSearchMaxLength',
+          { responseValueSearchMaxLength: 2000 }
+        );
+      });
+      expect(countQb.select).toHaveBeenCalledWith(
+        'COUNT(response.id)',
+        'cnt'
+      );
+    });
+
+    it('should filter tags in the count query without multiplying rows', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        tags: 'review'
+      });
+
+      expect(countQb.leftJoin).not.toHaveBeenCalledWith('unit.tags', 'unitTag');
+      expect(countQb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('FROM unit_tag count_unit_tag'),
+        { tags: '%review%' }
+      );
+      expect(countQb.select).toHaveBeenCalledWith(
+        'COUNT(response.id)',
+        'cnt'
+      );
     });
 
     it('should reject overlong regex filters as bad requests', async () => {

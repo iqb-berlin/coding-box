@@ -1577,10 +1577,21 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     const backendMessage = typeof error.error?.message === 'string' ?
       error.error.message :
       '';
+    const errorCode = typeof error.error?.code === 'string' ?
+      error.error.code :
+      '';
     let messageKey = 'search-filter.test-results-load-error';
 
-    if (error.status === 400 && /timed out/i.test(backendMessage)) {
+    if (error.status === 400 && errorCode === 'SEARCH_TIMEOUT') {
+      messageKey = 'search-filter.response-value-timeout';
+    } else if (error.status === 400 && errorCode === 'REGEX_TIMEOUT') {
       messageKey = 'search-filter.regex-timeout';
+    } else if (error.status === 400 && errorCode === 'INVALID_REGEX') {
+      messageKey = 'search-filter.invalid-postgres-regex';
+    } else if (error.status === 400 && /timed out/i.test(backendMessage)) {
+      messageKey = this.flatFilters.responseValue.trim() ?
+        'search-filter.response-value-timeout' :
+        'search-filter.regex-timeout';
     } else if (error.status === 400 && this.enableRegexSearch) {
       messageKey = 'search-filter.invalid-postgres-regex';
     }

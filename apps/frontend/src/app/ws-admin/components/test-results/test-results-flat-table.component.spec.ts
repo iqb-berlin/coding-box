@@ -229,7 +229,10 @@ describe('TestResultsFlatTableComponent', () => {
     testResultService.getFlatResponses.mockReturnValue(throwError(() => (
       new HttpErrorResponse({
         status: 400,
-        error: { message: 'Regular expression search timed out after 3000 ms.' }
+        error: {
+          code: 'REGEX_TIMEOUT',
+          message: 'Regular expression search timed out after 3000 ms.'
+        }
       })
     )));
 
@@ -237,6 +240,50 @@ describe('TestResultsFlatTableComponent', () => {
 
     expect(snackBar.open).toHaveBeenCalledWith(
       'search-filter.regex-timeout',
+      'close',
+      expect.objectContaining({ duration: 5000 })
+    );
+  });
+
+  it('should show a specific message when a response value search times out', () => {
+    component.flatFilters.responseValue = 'needle';
+    testResultService.getFlatResponses.mockReturnValue(throwError(() => (
+      new HttpErrorResponse({
+        status: 400,
+        error: {
+          code: 'SEARCH_TIMEOUT',
+          field: 'responseValue',
+          message: 'Response value search timed out after 15000 ms.'
+        }
+      })
+    )));
+
+    component.ngOnInit();
+
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'search-filter.response-value-timeout',
+      'close',
+      expect.objectContaining({ duration: 5000 })
+    );
+  });
+
+  it('should use the structured invalid regex error code', () => {
+    component.enableRegexSearch = true;
+    testResultService.getFlatResponses.mockReturnValue(throwError(() => (
+      new HttpErrorResponse({
+        status: 400,
+        error: {
+          code: 'INVALID_REGEX',
+          field: 'response',
+          message: 'Invalid regular expression for response'
+        }
+      })
+    )));
+
+    component.ngOnInit();
+
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'search-filter.invalid-postgres-regex',
       'close',
       expect.objectContaining({ duration: 5000 })
     );
