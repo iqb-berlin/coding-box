@@ -7,6 +7,7 @@ import { SERVER_URL } from '../../../injection-tokens';
 import { TestResultCacheService } from './test-result-cache.service';
 import { ValidationTaskStateService } from '../validation/validation-task-state.service';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
+import { suppressGlobalHttpErrorContext } from '../../../core/interceptors/http-error-context';
 import {
   TestResultsDeletePreviewDto,
   TestResultsDeleteRequestDto,
@@ -527,7 +528,8 @@ export class TestResultService {
       focusLostThresholdMs?: string;
       sessionSpanThresholdMs?: string;
       repeatedStartThreshold?: string;
-    }
+    },
+    requestOptions: { suppressGlobalHttpError?: boolean } = {}
   ): Observable<FlatTestResultResponsesResponse> {
     let params = new HttpParams()
       .set('page', String(options.page))
@@ -580,7 +582,9 @@ export class TestResultService {
 
     return this.http.get<FlatTestResultResponsesResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses`,
-      { params }
+      requestOptions.suppressGlobalHttpError ?
+        { params, context: suppressGlobalHttpErrorContext() } :
+        { params }
     );
   }
 

@@ -63,4 +63,18 @@ describePostgres('PostgreSQL regex search validation', () => {
         }));
     }
   });
+
+  it('searches long response values within the first 2000 characters', async () => {
+    const earlyMatchValue = `needle${'x'.repeat(2494)}`;
+    const lateMatchValue = `${'x'.repeat(2100)}needle`;
+
+    const [result] = await dataSource.query(
+      `SELECT
+        LEFT($1::text, 2000) ILIKE $3::text AS "earlyMatch",
+        LEFT($2::text, 2000) ILIKE $3::text AS "lateMatch"`,
+      [earlyMatchValue, lateMatchValue, '%needle%']
+    );
+
+    expect(result).toEqual({ earlyMatch: true, lateMatch: false });
+  });
 });

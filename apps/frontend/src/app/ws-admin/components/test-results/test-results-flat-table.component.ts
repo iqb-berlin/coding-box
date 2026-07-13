@@ -1536,6 +1536,8 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
           '',
         logAnomalies: this.flatFilters.logAnomalies,
         includeLogAnomalies: this.showLogAnomaliesInTable ? 'true' : ''
+      }, {
+        suppressGlobalHttpError: true
       })
       .subscribe({
         next: resp => {
