@@ -119,11 +119,11 @@ describe('TestFilesComponent', () => {
   });
 
   describe('regex filter validation', () => {
-    it('should allow PostgreSQL ARE syntax unsupported by JavaScript', () => {
+    it('should reject invalid regex syntax before requesting files', () => {
       component.enableRegexSearch = true;
-      component.textFilterValue = '(?i)^unit';
+      component.textFilterValue = '[';
 
-      expect(component.isTextFilterRegexInvalid()).toBe(false);
+      expect(component.isTextFilterRegexInvalid()).toBe(true);
     });
   });
 
