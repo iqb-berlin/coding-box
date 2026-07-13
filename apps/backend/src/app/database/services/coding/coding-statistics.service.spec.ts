@@ -886,6 +886,23 @@ describe('CodingStatisticsService', () => {
       expect(summary.meanAgreement).toBeCloseTo(0.833333, 6);
     });
 
+    it('should match REQ-002 reference dataset C against irr::kappam.fleiss', () => {
+      const result = service.calculateFleissKappa([
+        [0, 0, 0],
+        [0, 0, 1],
+        [0, 1, 1],
+        [1, 1, 1],
+        [1, 2, 2],
+        [2, 2, 2]
+      ]);
+
+      expect(result).toEqual({
+        fleissKappa: 0.495,
+        completeCaseCount: 6,
+        raterCount: 3
+      });
+    });
+
     it('should match irr::kappam.fleiss and omit incomplete cases listwise', () => {
       const result = service.calculateFleissKappa([
         [1, 1, 1],
@@ -910,6 +927,18 @@ describe('CodingStatisticsService', () => {
         fleissKappa: null,
         completeCaseCount: 0,
         raterCount: 3
+      });
+    });
+
+    it('should return N/A for Fleiss kappa with fewer than three raters', () => {
+      expect(service.calculateFleissKappa([
+        [1, 1],
+        [1, 2],
+        [null, 2]
+      ])).toEqual({
+        fleissKappa: null,
+        completeCaseCount: 2,
+        raterCount: 2
       });
     });
   });

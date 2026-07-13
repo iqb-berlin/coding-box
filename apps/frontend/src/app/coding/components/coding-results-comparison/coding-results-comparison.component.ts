@@ -31,7 +31,7 @@ import { SelectionModel } from '@angular/cdk/collections';
 
 import { MatSnackBar } from '@angular/material/snack-bar';
 import {
-  debounceTime, distinctUntilChanged, Subject, takeUntil
+  debounceTime, distinctUntilChanged, finalize, Subject, takeUntil
 } from 'rxjs';
 import { normalizeTestperson } from '../../../replay/utils/token-utils';
 import { PostMessage, PostMessageService } from '../../../core/services/post-message.service';
@@ -181,6 +181,7 @@ interface VariableKappaSummary {
   meanBrennanPredigerKappa: number | null;
   fleissKappa: number | null;
   fleissCaseCount: number;
+  fleissPossibleCaseCount: number;
   meanAgreement: number | null;
   caseCount: number;
   validPairCount: number;
@@ -335,6 +336,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   showKappaStatistics = false;
   useWeightedMean = true;
   useCodeLevel = true; // true = code level, false = score level
+  isExportingReliability = false;
 
   originalKappaStatistics: KappaStatistics | null = null; // Store original for filtering
   variableKappaSummaries: VariableKappaSummary[] = [];
@@ -2142,6 +2144,49 @@ export class CodingResultsComparisonComponent implements OnInit {
       });
   }
 
+  exportTrainingReliability(): void {
+    if (
+      this.comparisonMode !== 'within-training' ||
+      !this.selectedTrainingForWithin ||
+      !this.kappaStatistics ||
+      this.isExportingReliability
+    ) {
+      return;
+    }
+
+    const trainingId = this.selectedTrainingForWithin;
+    const level = this.useCodeLevel ? 'code' : 'score';
+    this.isExportingReliability = true;
+    this.codingTrainingBackendService.exportTrainingReliabilityAsCsv(
+      this.data.workspaceId,
+      trainingId,
+      this.useWeightedMean,
+      level,
+      this.codersFormControl.value || []
+    ).pipe(
+      finalize(() => { this.isExportingReliability = false; }),
+      takeUntil(this.ngUnsubscribe)
+    ).subscribe({
+      next: blob => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `interrater-reliability-training-${trainingId}-${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      },
+      error: () => {
+        this.snackBar.open(
+          this.translate.instant('coding.trainings.compare.reliability-export-error'),
+          this.translate.instant('common.close'),
+          { duration: 3000 }
+        );
+      }
+    });
+  }
+
   filterKappaStatistics(): void {
     if (!this.originalKappaStatistics) {
       this.kappaStatistics = null;
@@ -2173,6 +2218,7 @@ export class CodingResultsComparisonComponent implements OnInit {
       meanBrennanPredigerKappa: variable.meanBrennanPredigerKappa ?? null,
       fleissKappa: variable.fleissKappa ?? null,
       fleissCaseCount: variable.fleissCaseCount ?? 0,
+      fleissPossibleCaseCount: variable.fleissPossibleCaseCount ?? 0,
       meanAgreement: variable.meanAgreement ?? null,
       caseCount: variable.caseCount ?? 0,
       validPairCount: variable.validPairCount ?? 0

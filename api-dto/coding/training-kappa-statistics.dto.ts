@@ -21,6 +21,7 @@ export interface TrainingKappaVariableDto {
   meanBrennanPredigerKappa: number | null;
   fleissKappa: number | null;
   fleissCaseCount: number;
+  fleissPossibleCaseCount: number;
   meanAgreement: number | null;
   caseCount: number;
   validPairCount: number;

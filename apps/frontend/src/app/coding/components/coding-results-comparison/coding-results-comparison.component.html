@@ -380,6 +380,27 @@
               ></mat-progress-spinner>
             </div>
 
+            <div class="kappa-export-actions">
+              <button
+                mat-stroked-button
+                color="primary"
+                type="button"
+                (click)="exportTrainingReliability()"
+                [disabled]="isLoadingKappa || isExportingReliability || !kappaStatistics.variables.length"
+              >
+                <mat-icon>{{ isExportingReliability ? 'hourglass_empty' : 'download' }}</mat-icon>
+                {{ 'coding.trainings.compare.reliability-export-csv' | translate }}
+              </button>
+            </div>
+
+            <div
+              class="fleiss-minimum-hint"
+              *ngIf="(codersFormControl.value?.length || 0) < 3"
+            >
+              <mat-icon>info</mat-icon>
+              <span>{{ 'coding.trainings.compare.fleiss-minimum-raters' | translate }}</span>
+            </div>
+
             <!-- Summary Statistics -->
             <div class="summary-stats">
               <div class="stat-card">
@@ -577,7 +598,7 @@
                                     : 'N/A'
                                 }}
                               </strong>
-                              ({{ 'coding.trainings.compare.complete-cases' | translate:{count: summary.fleissCaseCount} }})
+                              ({{ 'coding.trainings.compare.complete-of-possible-cases' | translate:{complete: summary.fleissCaseCount, possible: summary.fleissPossibleCaseCount} }})
                             </span>
                             <span>
                               Übereinstimmung
@@ -663,7 +684,9 @@
                                 : 'N/A'
                             }}
                           </span>
-                          <small> (n={{ summary.fleissCaseCount }})</small>
+                          <small>
+                            ({{ summary.fleissCaseCount }} / {{ summary.fleissPossibleCaseCount }})
+                          </small>
                         </td>
                         <td>
                           {{

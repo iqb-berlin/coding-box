@@ -151,10 +151,15 @@ export class InterraterReliabilityCalculator {
 
   static calculateFleiss(ratings: Array<Array<number | null>>): FleissKappaResult {
     const raterCount = ratings[0]?.length ?? 0;
-    if (raterCount < 2 || ratings.some(row => row.length !== raterCount)) {
+    const hasConsistentRaterCount = raterCount > 0 &&
+      ratings.every(row => row.length === raterCount);
+    if (!hasConsistentRaterCount) {
       return { fleissKappa: null, completeCaseCount: 0, raterCount };
     }
     const complete = ratings.filter((row): row is number[] => row.every(value => value !== null));
+    if (raterCount < 3) {
+      return { fleissKappa: null, completeCaseCount: complete.length, raterCount };
+    }
     if (complete.length === 0) return { fleissKappa: null, completeCaseCount: 0, raterCount };
     const totals = new Map<number, number>();
     let observedSum = 0;

@@ -3372,6 +3372,7 @@ describe('CoderTrainingService', () => {
           meanBrennanPredigerKappa: 0.7,
           fleissKappa: 1,
           fleissCaseCount: 1,
+          fleissPossibleCaseCount: 2,
           caseCount: 2,
           validPairCount: 3,
           coderPairCount: 2
@@ -3383,6 +3384,7 @@ describe('CoderTrainingService', () => {
           meanBrennanPredigerKappa: null,
           fleissKappa: null,
           fleissCaseCount: 0,
+          fleissPossibleCaseCount: 2,
           caseCount: 1,
           validPairCount: 0,
           coderPairCount: 0

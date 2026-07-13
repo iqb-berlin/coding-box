@@ -83,6 +83,7 @@ describe('CodingResultsComparisonComponent', () => {
     previewApplyDiscussionResults: jest.Mock;
     applyDiscussionResults: jest.Mock;
     getTrainingCohensKappa: jest.Mock;
+    exportTrainingReliabilityAsCsv: jest.Mock;
   };
   let codingStatisticsService: {
     getReplayUrl: jest.Mock;
@@ -123,7 +124,8 @@ describe('CodingResultsComparisonComponent', () => {
       })),
       previewApplyDiscussionResults: jest.fn(),
       applyDiscussionResults: jest.fn(),
-      getTrainingCohensKappa: jest.fn()
+      getTrainingCohensKappa: jest.fn(),
+      exportTrainingReliabilityAsCsv: jest.fn().mockReturnValue(of(new Blob(['csv'])))
     };
     codingStatisticsService = {
       getReplayUrl: jest.fn()
@@ -267,6 +269,48 @@ describe('CodingResultsComparisonComponent', () => {
     expect(codingTrainingBackendService.getTrainingCohensKappa).not.toHaveBeenCalled();
     expect(component.withinTrainingData).toHaveLength(1);
     expect(component.isLoading).toBe(false);
+  });
+
+  it('should export training reliability with the selected cohort and calculation options', () => {
+    Object.defineProperty(window.URL, 'createObjectURL', {
+      configurable: true,
+      value: jest.fn().mockReturnValue('blob:reliability')
+    });
+    Object.defineProperty(window.URL, 'revokeObjectURL', {
+      configurable: true,
+      value: jest.fn()
+    });
+    jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation();
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.useWeightedMean = false;
+    component.useCodeLevel = false;
+    component.codersFormControl.setValue([11, 12, 13]);
+    component.kappaStatistics = {
+      variables: [],
+      workspaceSummary: {
+        totalDoubleCodedResponses: 0,
+        totalCoderPairs: 0,
+        averageKappa: null,
+        averageBrennanPredigerKappa: null,
+        variablesIncluded: 0,
+        codersIncluded: 3,
+        weightingMethod: 'unweighted',
+        calculationLevel: 'score'
+      }
+    };
+
+    component.exportTrainingReliability();
+
+    expect(codingTrainingBackendService.exportTrainingReliabilityAsCsv).toHaveBeenCalledWith(
+      1,
+      5,
+      false,
+      'score',
+      [11, 12, 13]
+    );
+    expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
+    expect(component.isExportingReliability).toBe(false);
   });
 
   it('should keep filter controls visible while comparison data reloads', () => {
@@ -2343,6 +2387,7 @@ describe('CodingResultsComparisonComponent', () => {
           meanBrennanPredigerKappa: 0.9,
           fleissKappa: 0.75,
           fleissCaseCount: 8,
+          fleissPossibleCaseCount: 10,
           meanAgreement: 0.866666,
           caseCount: 1,
           validPairCount: 15,
@@ -2414,17 +2459,43 @@ describe('CodingResultsComparisonComponent', () => {
     expect(tableText).toContain('0.840');
     expect(tableText).toContain('0.900');
     expect(tableText).toContain('0.750');
-    expect(tableText).toContain('(n=8)');
+    expect(tableText).toContain('(8 / 10)');
     expect(tableText).toContain('86.7%');
     expect(tableText).toContain('15');
     expect(inlineSummaryText).toContain('Mittelwert U1 - V1');
     expect(inlineSummaryText).toContain('Kappa 0.840');
     expect(inlineSummaryText).toContain('coding.trainings.compare.metric-brennan-prediger-kappa 0.900');
     expect(inlineSummaryText).toContain('coding.trainings.compare.metric-fleiss-kappa 0.750');
-    expect(inlineSummaryText).toContain('coding.trainings.compare.complete-cases');
+    expect(inlineSummaryText).toContain('coding.trainings.compare.complete-of-possible-cases');
     expect(inlineSummaryText).toContain('Übereinstimmung 86.7%');
     expect(inlineSummaryText).toContain('Fälle 1');
     expect(inlineSummaryText).toContain('Gültige Paarwerte 15');
+  });
+
+  it('should explain that Fleiss kappa requires at least three selected coders', () => {
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.showKappaStatistics = true;
+    component.codersFormControl.setValue([1, 2]);
+    component.totalItems = 1;
+    component.kappaStatistics = {
+      variables: [],
+      workspaceSummary: {
+        totalDoubleCodedResponses: 1,
+        totalCoderPairs: 1,
+        averageKappa: 0.5,
+        averageBrennanPredigerKappa: 0.5,
+        variablesIncluded: 1,
+        codersIncluded: 2,
+        weightingMethod: 'weighted',
+        calculationLevel: 'code'
+      }
+    };
+
+    fixture.detectChanges();
+
+    const hint = fixture.nativeElement.querySelector('.fleiss-minimum-hint') as HTMLElement;
+    expect(hint.textContent).toContain('coding.trainings.compare.fleiss-minimum-raters');
   });
 
   it('should render unweighted mean kappa summaries when weighting is disabled', () => {
@@ -2470,6 +2541,7 @@ describe('CodingResultsComparisonComponent', () => {
         meanBrennanPredigerKappa: null,
         fleissKappa: null,
         fleissCaseCount: 0,
+        fleissPossibleCaseCount: 0,
         meanAgreement: 0.85,
         caseCount: 1,
         validPairCount: 15,
@@ -2532,6 +2604,7 @@ describe('CodingResultsComparisonComponent', () => {
         meanBrennanPredigerKappa: null,
         fleissKappa: null,
         fleissCaseCount: 0,
+        fleissPossibleCaseCount: 0,
         meanAgreement: null,
         caseCount: 0,
         validPairCount: 0,
@@ -2594,6 +2667,7 @@ describe('CodingResultsComparisonComponent', () => {
         meanBrennanPredigerKappa: 0.400502,
         fleissKappa: 0.5,
         fleissCaseCount: 100,
+        fleissPossibleCaseCount: 100,
         meanAgreement: 0.8,
         caseCount: 100,
         validPairCount: 100,
@@ -2654,6 +2728,7 @@ describe('CodingResultsComparisonComponent', () => {
             meanBrennanPredigerKappa: null,
             fleissKappa: null,
             fleissCaseCount: 0,
+            fleissPossibleCaseCount: 0,
             meanAgreement: null,
             caseCount: 0,
             validPairCount: 0,
@@ -2714,6 +2789,7 @@ describe('CodingResultsComparisonComponent', () => {
             meanBrennanPredigerKappa: null,
             fleissKappa: null,
             fleissCaseCount: 0,
+            fleissPossibleCaseCount: 0,
             meanAgreement: null,
             caseCount: 0,
             validPairCount: 0,

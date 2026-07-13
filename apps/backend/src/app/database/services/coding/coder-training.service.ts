@@ -303,6 +303,7 @@ type KappaCoderValue = {
 type TrainingFleissKappaByVariable = Map<string, {
   fleissKappa: number | null;
   completeCaseCount: number;
+  possibleCaseCount: number;
 }>;
 
 type TrainingKappaCoderPairInput = {
@@ -2085,7 +2086,8 @@ export class CoderTrainingService {
       const result = this.codingStatisticsService.calculateFleissKappa(ratings);
       return [key, {
         fleissKappa: result.fleissKappa,
-        completeCaseCount: result.completeCaseCount
+        completeCaseCount: result.completeCaseCount,
+        possibleCaseCount: ratings.length
       }];
     }));
   }
@@ -4381,6 +4383,7 @@ export class CoderTrainingService {
         caseCount: caseCountsByVariable.get(key) ?? 0,
         fleissKappa: fleissKappaByVariable.get(key)?.fleissKappa ?? null,
         fleissCaseCount: fleissKappaByVariable.get(key)?.completeCaseCount ?? 0,
+        fleissPossibleCaseCount: fleissKappaByVariable.get(key)?.possibleCaseCount ?? 0,
         ...this.codingStatisticsService.calculateKappaVariableSummary(
           variable.coderPairs,
           useWeightedMean
