@@ -1950,6 +1950,185 @@ describe('JobDefinitionService', () => {
     );
   });
 
+  it('allows update refresh previews when validation omits reusable current cases', async () => {
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'seed-2'
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValueOnce([]);
+    codingJobService.calculateDistributionVariableUsageByStatusBatch.mockResolvedValueOnce(new Map([
+      ['requested', new Map([['Unit 1::Var 1', { regular: 4, deriveError: 0, total: 4 }]])],
+      ['available', new Map([['Unit 1::Var 1', { regular: 5, deriveError: 0, total: 5 }]])]
+    ]));
+
+    await expect(service.previewJobDefinitionUpdateRefresh(2, 7, {
+      maxCodingCases: 4
+    })).resolves.toMatchObject({
+      canApply: true
+    });
+
+    expect(codingValidationService.getCodingIncompleteVariables).toHaveBeenCalledWith(
+      7,
+      undefined,
+      undefined,
+      false,
+      2
+    );
+    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, expect.arrayContaining([
+      expect.objectContaining({
+        key: 'requested',
+        excludeJobDefinitionId: 2,
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        maxCodingCases: 4
+      }),
+      expect.objectContaining({
+        key: 'available',
+        excludeJobDefinitionId: 2,
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        maxCodingCases: null
+      })
+    ]));
+    expect(codingJobService.previewJobDefinitionRefresh).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        jobDefinitionId: 2,
+        maxCodingCases: 4,
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }]
+      })
+    );
+  });
+
+  it('rejects update refresh previews when another unstarted definition reserves the remaining cases', async () => {
+    const selectedVariable = { unitName: 'Unit 1', variableId: 'Var 1' };
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [selectedVariable],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'seed-2'
+    };
+    const otherDefinition = {
+      id: 3,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [selectedVariable],
+      assigned_variable_bundles: [],
+      assigned_coders: [2],
+      duration_seconds: 1,
+      max_coding_cases: 2,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'seed-3'
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition, otherDefinition]);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([
+      [2, 1],
+      [3, 0]
+    ]));
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValueOnce([]);
+    codingJobService.calculateDistributionVariableUsageByStatusBatch.mockResolvedValueOnce(
+      new Map<string | number, Map<string, DistributionVariableUsageByStatus>>([
+        ['requested', new Map([['Unit 1::Var 1', { regular: 4, deriveError: 0, total: 4 }]])],
+        [3, new Map([['Unit 1::Var 1', { regular: 2, deriveError: 0, total: 2 }]])],
+        ['available', new Map([['Unit 1::Var 1', { regular: 5, deriveError: 0, total: 5 }]])]
+      ])
+    );
+
+    await expect(service.previewJobDefinitionUpdateRefresh(2, 7, {
+      maxCodingCases: 4
+    })).rejects.toThrow(/Unit 1:Var 1/);
+
+    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, expect.arrayContaining([
+      expect.objectContaining({
+        key: 3,
+        jobDefinitionId: 3,
+        selectedVariables: [selectedVariable],
+        maxCodingCases: 2
+      })
+    ]));
+    expect(codingJobService.previewJobDefinitionRefresh).not.toHaveBeenCalled();
+  });
+
+  it('rejects update refresh previews when added variables are missing from validation availability', async () => {
+    const existingVariable = { unitName: 'Unit 1', variableId: 'Var 1' };
+    const addedVariable = { unitName: 'Unit 2', variableId: 'Var 2' };
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [existingVariable],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'seed-2'
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValueOnce([]);
+    codingJobService.calculateDistributionVariableUsageByStatusBatch.mockResolvedValueOnce(new Map([
+      ['requested', new Map([
+        ['Unit 1::Var 1', { regular: 4, deriveError: 0, total: 4 }],
+        ['Unit 2::Var 2', { regular: 1, deriveError: 0, total: 1 }]
+      ])],
+      ['available', new Map([
+        ['Unit 1::Var 1', { regular: 4, deriveError: 0, total: 4 }],
+        ['Unit 2::Var 2', { regular: 1, deriveError: 0, total: 1 }]
+      ])]
+    ]));
+
+    await expect(service.previewJobDefinitionUpdateRefresh(2, 7, {
+      assignedVariables: [existingVariable, addedVariable]
+    })).rejects.toThrow(/Unit 2:Var 2/);
+
+    expect(codingJobService.previewJobDefinitionRefresh).not.toHaveBeenCalled();
+  });
+
+  it('rejects unknown bundle ids before update refresh previews', async () => {
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'seed-2'
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    variableBundleRepository.find.mockResolvedValue([]);
+
+    await expect(service.previewJobDefinitionUpdateRefresh(2, 7, {
+      assignedVariableBundles: [{ id: 99, name: 'Missing Bundle' }]
+    })).rejects.toThrow(/Unknown variable bundle IDs: 99/);
+
+    expect(codingJobService.previewJobDefinitionRefresh).not.toHaveBeenCalled();
+  });
+
   it('keeps bundle order while applying proposed bundle mode changes in update refresh previews', async () => {
     const existingDefinition = {
       id: 2,
@@ -2098,6 +2277,206 @@ describe('JobDefinitionService', () => {
         })
       ]
     }));
+  });
+
+  it('allows applying update refreshes when validation omits reusable current cases', async () => {
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      assigned_coder_configs: [{ coderId: 1, capacityPercent: 100 }],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'seed-2',
+      show_score: false,
+      allow_comments: true,
+      suppress_general_instructions: false
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValueOnce([]);
+    codingJobService.calculateDistributionVariableUsageByStatusBatch.mockResolvedValueOnce(new Map([
+      ['requested', new Map([['Unit 1::Var 1', { regular: 4, deriveError: 0, total: 4 }]])],
+      ['available', new Map([['Unit 1::Var 1', { regular: 5, deriveError: 0, total: 5 }]])]
+    ]));
+
+    await expect(service.refreshCodingJobFromUpdatedDefinition(2, 7, {
+      maxCodingCases: 4
+    })).resolves.toMatchObject({
+      success: true
+    });
+
+    expect(codingValidationService.getCodingIncompleteVariables).toHaveBeenCalledWith(
+      7,
+      undefined,
+      undefined,
+      false,
+      2
+    );
+    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, expect.arrayContaining([
+      expect.objectContaining({
+        key: 'requested',
+        excludeJobDefinitionId: 2,
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        maxCodingCases: 4
+      }),
+      expect.objectContaining({
+        key: 'available',
+        excludeJobDefinitionId: 2,
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        maxCodingCases: null
+      })
+    ]));
+    expect(codingJobService.refreshDistributedCodingJobs).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        jobDefinitionId: 2,
+        maxCodingCases: 4,
+        distributionSeed: 'seed-2'
+      }),
+      expect.any(Function)
+    );
+  });
+
+  it('rejects applying update refreshes when another unstarted definition reserves the remaining cases', async () => {
+    const selectedVariable = { unitName: 'Unit 1', variableId: 'Var 1' };
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [selectedVariable],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      assigned_coder_configs: [{ coderId: 1, capacityPercent: 100 }],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'seed-2',
+      show_score: false,
+      allow_comments: true,
+      suppress_general_instructions: false
+    };
+    const otherDefinition = {
+      id: 3,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [selectedVariable],
+      assigned_variable_bundles: [],
+      assigned_coders: [2],
+      assigned_coder_configs: [{ coderId: 2, capacityPercent: 100 }],
+      duration_seconds: 1,
+      max_coding_cases: 2,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'seed-3'
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition, otherDefinition]);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([
+      [2, 1],
+      [3, 0]
+    ]));
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValueOnce([]);
+    codingJobService.calculateDistributionVariableUsageByStatusBatch.mockResolvedValueOnce(
+      new Map<string | number, Map<string, DistributionVariableUsageByStatus>>([
+        ['requested', new Map([['Unit 1::Var 1', { regular: 4, deriveError: 0, total: 4 }]])],
+        [3, new Map([['Unit 1::Var 1', { regular: 2, deriveError: 0, total: 2 }]])],
+        ['available', new Map([['Unit 1::Var 1', { regular: 5, deriveError: 0, total: 5 }]])]
+      ])
+    );
+
+    await expect(service.refreshCodingJobFromUpdatedDefinition(2, 7, {
+      maxCodingCases: 4
+    })).rejects.toThrow(/Unit 1:Var 1/);
+
+    expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, expect.arrayContaining([
+      expect.objectContaining({
+        key: 3,
+        jobDefinitionId: 3,
+        selectedVariables: [selectedVariable],
+        maxCodingCases: 2
+      })
+    ]));
+    expect(codingJobService.refreshDistributedCodingJobs).not.toHaveBeenCalled();
+    expect(jobDefinitionRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects applying update refreshes when added variables are missing from validation availability', async () => {
+    const existingVariable = { unitName: 'Unit 1', variableId: 'Var 1' };
+    const addedVariable = { unitName: 'Unit 2', variableId: 'Var 2' };
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [existingVariable],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      assigned_coder_configs: [{ coderId: 1, capacityPercent: 100 }],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'seed-2',
+      show_score: false,
+      allow_comments: true,
+      suppress_general_instructions: false
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValueOnce([]);
+    codingJobService.calculateDistributionVariableUsageByStatusBatch.mockResolvedValueOnce(new Map([
+      ['requested', new Map([
+        ['Unit 1::Var 1', { regular: 4, deriveError: 0, total: 4 }],
+        ['Unit 2::Var 2', { regular: 1, deriveError: 0, total: 1 }]
+      ])],
+      ['available', new Map([
+        ['Unit 1::Var 1', { regular: 4, deriveError: 0, total: 4 }],
+        ['Unit 2::Var 2', { regular: 1, deriveError: 0, total: 1 }]
+      ])]
+    ]));
+
+    await expect(service.refreshCodingJobFromUpdatedDefinition(2, 7, {
+      assignedVariables: [existingVariable, addedVariable]
+    })).rejects.toThrow(/Unit 2:Var 2/);
+
+    expect(codingJobService.refreshDistributedCodingJobs).not.toHaveBeenCalled();
+    expect(jobDefinitionRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects unknown bundle ids before applying update refreshes', async () => {
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      assigned_coder_configs: [{ coderId: 1, capacityPercent: 100 }],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'seed-2',
+      show_score: false,
+      allow_comments: true,
+      suppress_general_instructions: false
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    variableBundleRepository.find.mockResolvedValue([]);
+
+    await expect(service.refreshCodingJobFromUpdatedDefinition(2, 7, {
+      assignedVariableBundles: [{ id: 99, name: 'Missing Bundle' }]
+    })).rejects.toThrow(/Unknown variable bundle IDs: 99/);
+
+    expect(codingJobService.refreshDistributedCodingJobs).not.toHaveBeenCalled();
+    expect(jobDefinitionRepository.save).not.toHaveBeenCalled();
   });
 
   it('allows saving an unchanged existing definition with created jobs without rechecking availability', async () => {
