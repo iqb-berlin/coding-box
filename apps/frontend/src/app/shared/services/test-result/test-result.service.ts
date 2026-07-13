@@ -7,6 +7,7 @@ import { SERVER_URL } from '../../../injection-tokens';
 import { TestResultCacheService } from './test-result-cache.service';
 import { ValidationTaskStateService } from '../validation/validation-task-state.service';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
+import { suppressGlobalHttpErrorContext } from '../../../core/interceptors/http-error-context';
 import {
   TestResultsDeletePreviewDto,
   TestResultsDeleteRequestDto,
@@ -504,6 +505,7 @@ export class TestResultService {
       responseStatus?: string;
       responseValue?: string;
       tags?: string;
+      regexSearch?: boolean;
       geogebra?: string;
       audioLow?: string;
       hasValue?: string;
@@ -526,7 +528,8 @@ export class TestResultService {
       focusLostThresholdMs?: string;
       sessionSpanThresholdMs?: string;
       repeatedStartThreshold?: string;
-    }
+    },
+    requestOptions: { suppressGlobalHttpError?: boolean } = {}
   ): Observable<FlatTestResultResponsesResponse> {
     let params = new HttpParams()
       .set('page', String(options.page))
@@ -548,6 +551,9 @@ export class TestResultService {
     addIf('responseStatus', options.responseStatus);
     addIf('responseValue', options.responseValue);
     addIf('tags', options.tags);
+    if (options.regexSearch) {
+      params = params.set('regexSearch', 'true');
+    }
     addIf('geogebra', options.geogebra);
     addIf('audioLow', options.audioLow);
     addIf('hasValue', options.hasValue);
@@ -574,20 +580,12 @@ export class TestResultService {
     addIf('sessionSpanThresholdMs', options.sessionSpanThresholdMs);
     addIf('repeatedStartThreshold', options.repeatedStartThreshold);
 
-    return this.http
-      .get<FlatTestResultResponsesResponse>(
+    return this.http.get<FlatTestResultResponsesResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses`,
-      { params }
-    )
-      .pipe(
-        catchError(() => of({
-          data: [],
-          total: 0,
-          page: options.page,
-          limit: options.limit
-        })
-        )
-      );
+      requestOptions.suppressGlobalHttpError ?
+        { params, context: suppressGlobalHttpErrorContext() } :
+        { params }
+    );
   }
 
   getFlatResponseFilterOptions(

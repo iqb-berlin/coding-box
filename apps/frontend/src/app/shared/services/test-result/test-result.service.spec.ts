@@ -6,6 +6,7 @@ import { TestResultService } from './test-result.service';
 import { TestResultCacheService } from './test-result-cache.service';
 import { SERVER_URL } from '../../../injection-tokens';
 import { ValidationTaskStateService } from '../validation/validation-task-state.service';
+import { SUPPRESS_GLOBAL_HTTP_ERROR } from '../../../core/interceptors/http-error-context';
 
 describe('TestResultService', () => {
   let service: TestResultService;
@@ -83,34 +84,48 @@ describe('TestResultService', () => {
         limit: 10,
         code: 'code1',
         group: 'group1',
+        regexSearch: true,
         logAnomalies: 'critical',
         includeLogAnomalies: 'true'
       };
 
-      service.getFlatResponses(mockWorkspaceId, options).subscribe(res => {
-        expect(res).toEqual(mockResponse);
-      });
+      service
+        .getFlatResponses(
+          mockWorkspaceId,
+          options,
+          { suppressGlobalHttpError: true }
+        )
+        .subscribe(res => {
+          expect(res).toEqual(mockResponse);
+        });
 
       const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/test-results/flat-responses` &&
         request.params.get('page') === '1' &&
         request.params.get('code') === 'code1' &&
+        request.params.get('regexSearch') === 'true' &&
         request.params.get('logAnomalies') === 'critical' &&
         request.params.get('includeLogAnomalies') === 'true'
       );
       expect(req.request.method).toBe('GET');
+      expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
       req.flush(mockResponse);
     });
 
-    it('should handle errors', () => {
+    it('should propagate errors', done => {
       const options = { page: 1, limit: 10 };
 
-      service.getFlatResponses(mockWorkspaceId, options).subscribe(res => {
-        expect(res).toEqual({
-          data: [], total: 0, page: 1, limit: 10
-        });
+      service.getFlatResponses(mockWorkspaceId, options).subscribe({
+        next: () => {
+          done.fail('Expected flat response loading to fail');
+        },
+        error: error => {
+          expect(error.status).toBe(500);
+          done();
+        }
       });
 
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/test-results/flat-responses?page=1&limit=10`);
+      expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(false);
       req.flush('Error', { status: 500, statusText: 'Server Error' });
     });
   });

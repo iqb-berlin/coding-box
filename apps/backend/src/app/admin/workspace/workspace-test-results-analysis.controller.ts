@@ -11,26 +11,33 @@ import {
   ParseFloatPipe,
   DefaultValuePipe
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiTags,
   ApiBadRequestResponse
 } from '@nestjs/swagger';
+import { Repository } from 'typeorm';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
 import { FlatResponseFrequenciesRequest, FlatResponseFilterOptions } from './dto/workspace-test-results.interfaces';
 import { CacheService } from '../../cache/cache.service';
+import { Setting } from '../../database/entities/setting.entity';
+import { getWorkspaceRegexSearchEnabled } from '../../utils/regex-search.util';
 
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')
 export class WorkspaceTestResultsAnalysisController {
   constructor(
     private workspaceTestResultsService: WorkspaceTestResultsService,
-    private cacheService: CacheService
+    private cacheService: CacheService,
+    @InjectRepository(Setting)
+    private readonly settingRepository: Repository<Setting>
   ) { }
 
   @Get(':workspace_id/test-results/flat-responses')
@@ -48,6 +55,14 @@ export class WorkspaceTestResultsAnalysisController {
     description: 'Flat responses retrieved successfully.'
   })
   @ApiBadRequestResponse({ description: 'Failed to retrieve flat responses' })
+  @ApiQuery({
+    name: 'regexSearch',
+    required: false,
+    description:
+      'Interpret selected text filters as case-sensitive regular expressions. ' +
+      'Requires both regexSearch=true and the workspace setting to be enabled.',
+    type: Boolean
+  })
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   async findFlatResponses(
@@ -60,6 +75,7 @@ export class WorkspaceTestResultsAnalysisController {
                                          @Query('booklet') booklet?: string,
                                          @Query('unit') unit?: string,
                                          @Query('response') response?: string,
+                                         @Query('regexSearch') regexSearch?: string,
                                          @Query('responseStatus') responseStatus?: string,
                                          @Query('responseValue') responseValue?: string,
                                          @Query('tags') tags?: string,
@@ -87,6 +103,8 @@ export class WorkspaceTestResultsAnalysisController {
                                          @Query('sessionSpanThresholdMs', new DefaultValuePipe(86400000), ParseIntPipe) sessionSpanThresholdMs?: number,
                                          @Query('repeatedStartThreshold', new DefaultValuePipe(2), ParseIntPipe) repeatedStartThreshold?: number
   ): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
+    const effectiveRegexSearch = regexSearch === 'true' &&
+      await getWorkspaceRegexSearchEnabled(this.settingRepository, workspace_id);
     const [data, total] =
       await this.workspaceTestResultsService.findFlatResponses(workspace_id, {
         page,
@@ -97,6 +115,7 @@ export class WorkspaceTestResultsAnalysisController {
         booklet,
         unit,
         response,
+        regexSearch: effectiveRegexSearch,
         responseStatus,
         responseValue,
         tags,

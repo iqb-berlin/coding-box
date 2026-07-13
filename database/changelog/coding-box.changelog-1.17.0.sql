@@ -30,3 +30,17 @@ CREATE INDEX "idx_system_notification_visibility"
   ON "public"."system_notification" ("enabled", "visible_from", "visible_until");
 
 -- rollback DROP TABLE "public"."system_notification";
+
+-- changeset iqb:910-response-value-prefix-trigram-index runInTransaction:false
+--validCheckSum: 9:24df5085f5581c17d5730dc56c66d2eb
+-- comment: Accelerate substring searches over the first 2000 response value characters
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+
+DROP INDEX CONCURRENTLY IF EXISTS "public"."idx_response_value_prefix_search_trgm";
+DROP INDEX CONCURRENTLY IF EXISTS "public"."idx_response_value_search_trgm";
+
+CREATE INDEX CONCURRENTLY "idx_response_value_prefix_search_trgm"
+  ON "public"."response" USING GIN ((LEFT("value", 2000)) gin_trgm_ops)
+  WHERE "is_autocoder_generated" IS NOT TRUE;
+
+-- rollback DROP INDEX CONCURRENTLY IF EXISTS "public"."idx_response_value_prefix_search_trgm";
