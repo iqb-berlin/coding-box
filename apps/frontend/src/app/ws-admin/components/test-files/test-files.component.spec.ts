@@ -118,6 +118,15 @@ describe('TestFilesComponent', () => {
     });
   });
 
+  describe('regex filter validation', () => {
+    it('should allow PostgreSQL ARE syntax unsupported by JavaScript', () => {
+      component.enableRegexSearch = true;
+      component.textFilterValue = '(?i)^unit';
+
+      expect(component.isTextFilterRegexInvalid()).toBe(false);
+    });
+  });
+
   describe('showFileContent', () => {
     it('should open XML files with XML formatting enabled', () => {
       fileService.downloadFile.mockReturnValue(of({

@@ -94,7 +94,7 @@ import { ContentPoolSettings } from '../../models/content-pool.model';
 import { ValidationService } from '../../../shared/services/validation/validation.service';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
 import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
-import { hasInvalidRegexFilter } from '../../../shared/utils/regex-filter.util';
+import { hasInvalidPostgresRegexFilter } from '../../../shared/utils/regex-filter.util';
 import {
   ContentPoolImportDialogComponent,
   ContentPoolImportDialogResult
@@ -394,7 +394,10 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   isTextFilterRegexInvalid(): boolean {
-    return hasInvalidRegexFilter(this.textFilterValue, this.enableRegexSearch);
+    return hasInvalidPostgresRegexFilter(
+      this.textFilterValue,
+      this.enableRegexSearch
+    );
   }
 
   private loadContentPoolSettings(): void {

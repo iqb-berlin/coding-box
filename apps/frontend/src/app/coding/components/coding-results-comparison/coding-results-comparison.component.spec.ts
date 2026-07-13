@@ -1051,7 +1051,7 @@ describe('CodingResultsComparisonComponent', () => {
       }
     ];
     component.dataSource.data = component.comparisonData;
-    component.tableFilters.variableId = '^VAR_1';
+    component.tableFilters.variableId = '(?i)^var_1';
     component.tableFilters.bookletName = 'Booklet-\\d+$';
     component.selectedTrainings.select(1, 2);
     (component as unknown as { hasInitializedBetweenCoderSelection: boolean }).hasInitializedBetweenCoderSelection = true;
@@ -1064,7 +1064,7 @@ describe('CodingResultsComparisonComponent', () => {
     expect(component.dataSource.data.map(row => row.responseId)).toEqual([1]);
     expect(codingTrainingBackendService.compareTrainingCodingResults).toHaveBeenCalledWith(1, '1,2', expect.objectContaining({
       filters: expect.objectContaining({
-        variableId: '^VAR_1',
+        variableId: '(?i)^var_1',
         bookletName: 'Booklet-\\d+$',
         regexSearch: true
       })

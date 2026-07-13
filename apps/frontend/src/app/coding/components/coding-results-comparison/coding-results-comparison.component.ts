@@ -48,7 +48,7 @@ import { SessionRecoveryService } from '../../../core/services/session-recovery.
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import type { ReviewCodeSelection } from '../../../replay/services/units-replay.service';
 import {
-  hasInvalidRegexFilter,
+  hasInvalidPostgresRegexFilter,
   matchesTextFilter
 } from '../../../shared/utils/regex-filter.util';
 import {
@@ -613,7 +613,10 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   isTableRegexFilterInvalid(field: RegexComparisonFilterField): boolean {
-    return hasInvalidRegexFilter(this.tableFilters[field], this.enableRegexSearch);
+    return hasInvalidPostgresRegexFilter(
+      this.tableFilters[field],
+      this.enableRegexSearch
+    );
   }
 
   private hasInvalidTableRegexFilters(): boolean {

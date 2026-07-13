@@ -63,7 +63,7 @@ import {
   TestResultsFlatTableSettingsDialogComponent,
   TestResultsFlatTableSettingsDialogResult
 } from './test-results-flat-table-settings-dialog.component';
-import { hasInvalidRegexFilter } from '../../../shared/utils/regex-filter.util';
+import { hasInvalidPostgresRegexFilter } from '../../../shared/utils/regex-filter.util';
 
 interface FlatResponseRow {
   bookletId: number;
@@ -167,6 +167,15 @@ type RegexFlatResponseFilterField =
   | 'booklet'
   | 'unit'
   | 'response';
+
+const REGEX_FLAT_RESPONSE_FILTER_FIELDS: RegexFlatResponseFilterField[] = [
+  'code',
+  'group',
+  'login',
+  'booklet',
+  'unit',
+  'response'
+];
 
 const SPECIFIC_LOG_MEDIA_FILTERS: FlatTableMediaFilter[] = [
   'logCritical',
@@ -337,6 +346,8 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   private flatResponsesSubscription?: Subscription;
   private workspaceCacheInvalidatedSubscription: Subscription;
   private readonly FLAT_FILTER_DEBOUNCE_TIME = 400;
+  private readonly backendInvalidRegexFields =
+    new Set<RegexFlatResponseFilterField>();
 
   private refreshFilterOptionsTimeoutIds: number[] = [];
 
@@ -506,11 +517,13 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     }
 
     if (changes.enableRegexSearch) {
+      this.backendInvalidRegexFields.clear();
       this.flatPageIndex = 0;
       shouldFetch = true;
     }
 
     if (changes.initialFilters) {
+      this.backendInvalidRegexFields.clear();
       this.flatFilters = {
         ...this.createDefaultFlatFilters(),
         ...(this.initialFilters || {})
@@ -885,22 +898,19 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   }
 
   isRegexFilterInvalid(field: RegexFlatResponseFilterField): boolean {
-    return hasInvalidRegexFilter(
-      this.flatFilters[field],
-      this.enableRegexSearch
+    return this.enableRegexSearch && (
+      this.backendInvalidRegexFields.has(field) ||
+      hasInvalidPostgresRegexFilter(
+        this.flatFilters[field],
+        this.enableRegexSearch
+      )
     );
   }
 
   private hasInvalidRegexFilters(): boolean {
-    const fields: RegexFlatResponseFilterField[] = [
-      'code',
-      'group',
-      'login',
-      'booklet',
-      'unit',
-      'response'
-    ];
-    return fields.some(field => this.isRegexFilterInvalid(field));
+    return REGEX_FLAT_RESPONSE_FILTER_FIELDS.some(
+      field => this.isRegexFilterInvalid(field)
+    );
   }
 
   openBookletInfoFromFlatRow(row: FlatResponseRow): void {
@@ -1184,11 +1194,17 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       this.suppressNextFlatFilterChange = false;
       return;
     }
+    this.backendInvalidRegexFields.clear();
+    this.flatResponsesRequestSequence += 1;
+    this.flatResponsesSubscription?.unsubscribe();
+    this.flatResponsesSubscription = undefined;
+    this.isLoadingFlat = false;
     this.flatPageIndex = 0;
     this.flatSearchSubject.next();
   }
 
   clearFlatFilters(): void {
+    this.backendInvalidRegexFields.clear();
     this.flatFilters = this.createDefaultFlatFilters();
     this.syncMediaFiltersFromFlatFilters();
 
@@ -1582,6 +1598,9 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     const errorCode = typeof error.error?.code === 'string' ?
       error.error.code :
       '';
+    const errorField = typeof error.error?.field === 'string' ?
+      error.error.field :
+      '';
     let messageKey = 'search-filter.test-results-load-error';
 
     if (error.status === 400 && errorCode === 'SEARCH_TIMEOUT') {
@@ -1590,6 +1609,9 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       messageKey = 'search-filter.regex-timeout';
     } else if (error.status === 400 && errorCode === 'INVALID_REGEX') {
       messageKey = 'search-filter.invalid-postgres-regex';
+      if (this.isRegexFilterField(errorField)) {
+        this.backendInvalidRegexFields.add(errorField);
+      }
     } else if (error.status === 400 && /timed out/i.test(backendMessage)) {
       messageKey = this.flatFilters.responseValue.trim() ?
         'search-filter.response-value-timeout' :
@@ -1602,6 +1624,14 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       this.translateService.instant(messageKey),
       this.translateService.instant('close'),
       { duration: 5000, panelClass: ['error-snackbar'] }
+    );
+  }
+
+  private isRegexFilterField(
+    field: string
+  ): field is RegexFlatResponseFilterField {
+    return REGEX_FLAT_RESPONSE_FILTER_FIELDS.includes(
+      field as RegexFlatResponseFilterField
     );
   }
 

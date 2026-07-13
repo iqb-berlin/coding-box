@@ -28,7 +28,7 @@ import { CodingStatisticsService } from '../../services/coding-statistics.servic
 import { AppService } from '../../../core/services/app.service';
 import { VariableAnalysisItemDto } from '../../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
-import { hasInvalidRegexFilter } from '../../../shared/utils/regex-filter.util';
+import { hasInvalidPostgresRegexFilter } from '../../../shared/utils/regex-filter.util';
 
 export interface VariableAnalysisDialogData {
   workspaceId: number;
@@ -223,7 +223,10 @@ export class VariableAnalysisDialogComponent implements OnInit {
   }
 
   isVariableIdRegexInvalid(): boolean {
-    return hasInvalidRegexFilter(this.variableIdFilter, this.enableRegexSearch);
+    return hasInvalidPostgresRegexFilter(
+      this.variableIdFilter,
+      this.enableRegexSearch
+    );
   }
 
   close(): void {
