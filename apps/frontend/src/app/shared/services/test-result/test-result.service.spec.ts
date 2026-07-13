@@ -83,6 +83,7 @@ describe('TestResultService', () => {
         limit: 10,
         code: 'code1',
         group: 'group1',
+        regexSearch: true,
         logAnomalies: 'critical',
         includeLogAnomalies: 'true'
       };
@@ -94,6 +95,7 @@ describe('TestResultService', () => {
       const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/test-results/flat-responses` &&
         request.params.get('page') === '1' &&
         request.params.get('code') === 'code1' &&
+        request.params.get('regexSearch') === 'true' &&
         request.params.get('logAnomalies') === 'critical' &&
         request.params.get('includeLogAnomalies') === 'true'
       );
@@ -101,13 +103,17 @@ describe('TestResultService', () => {
       req.flush(mockResponse);
     });
 
-    it('should handle errors', () => {
+    it('should propagate errors', done => {
       const options = { page: 1, limit: 10 };
 
-      service.getFlatResponses(mockWorkspaceId, options).subscribe(res => {
-        expect(res).toEqual({
-          data: [], total: 0, page: 1, limit: 10
-        });
+      service.getFlatResponses(mockWorkspaceId, options).subscribe({
+        next: () => {
+          done.fail('Expected flat response loading to fail');
+        },
+        error: error => {
+          expect(error.status).toBe(500);
+          done();
+        }
       });
 
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/test-results/flat-responses?page=1&limit=10`);

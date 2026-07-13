@@ -504,6 +504,7 @@ export class TestResultService {
       responseStatus?: string;
       responseValue?: string;
       tags?: string;
+      regexSearch?: boolean;
       geogebra?: string;
       audioLow?: string;
       hasValue?: string;
@@ -548,6 +549,9 @@ export class TestResultService {
     addIf('responseStatus', options.responseStatus);
     addIf('responseValue', options.responseValue);
     addIf('tags', options.tags);
+    if (options.regexSearch) {
+      params = params.set('regexSearch', 'true');
+    }
     addIf('geogebra', options.geogebra);
     addIf('audioLow', options.audioLow);
     addIf('hasValue', options.hasValue);
@@ -574,20 +578,10 @@ export class TestResultService {
     addIf('sessionSpanThresholdMs', options.sessionSpanThresholdMs);
     addIf('repeatedStartThreshold', options.repeatedStartThreshold);
 
-    return this.http
-      .get<FlatTestResultResponsesResponse>(
+    return this.http.get<FlatTestResultResponsesResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses`,
       { params }
-    )
-      .pipe(
-        catchError(() => of({
-          data: [],
-          total: 0,
-          page: options.page,
-          limit: options.limit
-        })
-        )
-      );
+    );
   }
 
   getFlatResponseFilterOptions(
