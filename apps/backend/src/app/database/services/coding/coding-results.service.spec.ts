@@ -41,9 +41,11 @@ describe('CodingResultsService', () => {
     leftJoinAndSelect: jest.fn().mockReturnThis(),
     leftJoin: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
-    getMany: jest.fn().mockResolvedValue(rows)
+    getMany: jest.fn().mockResolvedValue(rows),
+    getRawMany: jest.fn().mockResolvedValue(rows)
   });
 
   beforeEach(() => {
@@ -739,6 +741,33 @@ describe('CodingResultsService', () => {
       fromJobSnapshot: true
     });
 
+    const unitNameQuery = createQueryBuilderMock([
+      { unitName: 'UNIT', variableId: 'VAR' },
+      { unitName: 'unit', variableId: 'VAR' }
+    ]);
+    const candidateQuery = createQueryBuilderMock([
+      {
+        id: 99,
+        value: ' A ',
+        variableid: 'VAR',
+        status_v2: 3,
+        unit: { id: 1, name: 'UNIT' }
+      },
+      {
+        id: 100,
+        value: 'a',
+        variableid: 'VAR',
+        status_v2: null,
+        unit: { id: 2, name: 'unit' }
+      },
+      {
+        id: 101,
+        value: 'A',
+        variableid: 'VAR',
+        status_v2: 5,
+        unit: { id: 3, name: 'UNIT' }
+      }
+    ]);
     (responseRepository.createQueryBuilder as jest.Mock)
       .mockReturnValueOnce(createQueryBuilderMock([
         {
@@ -749,29 +778,8 @@ describe('CodingResultsService', () => {
           unit: { id: 1, name: 'UNIT' }
         }
       ]))
-      .mockReturnValueOnce(createQueryBuilderMock([
-        {
-          id: 99,
-          value: ' A ',
-          variableid: 'VAR',
-          status_v2: 3,
-          unit: { id: 1, name: 'UNIT' }
-        },
-        {
-          id: 100,
-          value: 'a',
-          variableid: 'VAR',
-          status_v2: null,
-          unit: { id: 2, name: 'UNIT' }
-        },
-        {
-          id: 101,
-          value: 'A',
-          variableid: 'VAR',
-          status_v2: 5,
-          unit: { id: 3, name: 'UNIT' }
-        }
-      ]));
+      .mockReturnValueOnce(unitNameQuery)
+      .mockReturnValueOnce(candidateQuery);
 
     const result = await service.applyCodingResults(17, 10);
 
@@ -779,6 +787,10 @@ describe('CodingResultsService', () => {
     expect(result.updatedResponsesCount).toBe(2);
     expect(result.skippedAlreadyCodedCount).toBe(1);
     expect(result.overwrittenExistingCount).toBe(0);
+    expect(candidateQuery.andWhere).toHaveBeenCalledWith(
+      'unit.name IN (:...unitNames)',
+      { unitNames: ['UNIT', 'unit'] }
+    );
     expect(queryRunner.manager.update).toHaveBeenCalledWith(
       ResponseEntity,
       100,
@@ -846,6 +858,9 @@ describe('CodingResultsService', () => {
         }
       ]))
       .mockReturnValueOnce(createQueryBuilderMock([
+        { unitName: 'UNIT', variableId: 'VAR' }
+      ]))
+      .mockReturnValueOnce(createQueryBuilderMock([
         {
           id: 99,
           value: ' A ',
@@ -908,6 +923,9 @@ describe('CodingResultsService', () => {
         }
       ]))
       .mockReturnValueOnce(createQueryBuilderMock([
+        { unitName: 'UNIT', variableId: 'VAR' }
+      ]))
+      .mockReturnValueOnce(createQueryBuilderMock([
         {
           id: 99,
           value: ' A ',
@@ -964,6 +982,9 @@ describe('CodingResultsService', () => {
         }
       ]))
       .mockReturnValueOnce(createQueryBuilderMock([
+        { unitName: 'UNIT', variableId: 'VAR' }
+      ]))
+      .mockReturnValueOnce(createQueryBuilderMock([
         {
           id: 99,
           value: ' A ',
@@ -1016,6 +1037,9 @@ describe('CodingResultsService', () => {
           status_v2: 3,
           unit: { id: 1, name: 'UNIT' }
         }
+      ]))
+      .mockReturnValueOnce(createQueryBuilderMock([
+        { unitName: 'UNIT', variableId: 'VAR' }
       ]))
       .mockReturnValueOnce(createQueryBuilderMock([
         {

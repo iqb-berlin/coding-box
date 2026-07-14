@@ -6,7 +6,10 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { CodingAnalysisService } from './coding-analysis.service';
-import { buildAggregationGroups } from './aggregation-metrics.util';
+import {
+  buildAggregationGroups,
+  getAggregationVariableKey
+} from './aggregation-metrics.util';
 import {
   formatCodingTestPerson,
   generateCodingProgressKey
@@ -272,6 +275,58 @@ export class CodingResultsService {
               .where('response.id IN (:...ids)', { ids: codedResponseIds })
               .getMany();
 
+            const codedVariableIds = Array.from(new Set(
+              codedResponses
+                .map(response => response.variableid)
+                .filter((variableId): variableId is string => Boolean(variableId))
+            ));
+            const unitNamesByVariable = new Map<string, Set<string>>();
+            codedResponses.forEach(response => {
+              if (!response.unit?.name || !response.variableid) {
+                return;
+              }
+              const variableKey = getAggregationVariableKey(
+                response.unit.name,
+                response.variableid
+              );
+              const unitNames = unitNamesByVariable.get(variableKey) || new Set<string>();
+              unitNames.add(response.unit.name);
+              unitNamesByVariable.set(variableKey, unitNames);
+            });
+
+            if (codedVariableIds.length > 0) {
+              const unitNameRows: Array<{ unitName: string; variableId: string }> =
+                await this.responseRepository
+                  .createQueryBuilder('response')
+                  .select('DISTINCT unit.name', 'unitName')
+                  .addSelect('response.variableid', 'variableId')
+                  .leftJoin('response.unit', 'unit')
+                  .leftJoin('unit.booklet', 'booklet')
+                  .leftJoin('booklet.person', 'person')
+                  .where('person.workspace_id = :workspaceId', { workspaceId })
+                  .andWhere('person.consider = :consider', { consider: true })
+                  .andWhere('response.status_v1 IN (:...statuses)', {
+                    statuses: [
+                      statusStringToNumber('CODING_INCOMPLETE'),
+                      statusStringToNumber('INTENDED_INCOMPLETE')
+                    ]
+                  })
+                  .andWhere('response.variableid IN (:...codedVariableIds)', {
+                    codedVariableIds
+                  })
+                  .getRawMany();
+              unitNameRows.forEach(row => {
+                const variableKey = getAggregationVariableKey(
+                  row.unitName,
+                  row.variableId
+                );
+                if (!unitNamesByVariable.has(variableKey)) {
+                  return;
+                }
+                unitNamesByVariable.get(variableKey)?.add(row.unitName);
+              });
+            }
+
             for (const codedResponse of codedResponses) {
               const update = completedUpdates.find(u => u.responseId === codedResponse.id);
               if (!update) continue;
@@ -280,6 +335,13 @@ export class CodingResultsService {
               const variableId = codedResponse.variableid;
 
               if (!unitName || !variableId) continue;
+
+              const unitNames = Array.from(
+                unitNamesByVariable.get(getAggregationVariableKey(
+                  unitName,
+                  variableId
+                )) || [unitName]
+              );
 
               // Find all sibling responses for the same workspace + unit + variable.
               // Existing v2 codings are either reported as skipped or overwritten only when explicitly requested.
@@ -304,7 +366,7 @@ export class CodingResultsService {
                     statusStringToNumber('INTENDED_INCOMPLETE')
                   ]
                 })
-                .andWhere('unit.name = :unitName', { unitName })
+                .andWhere('unit.name IN (:...unitNames)', { unitNames })
                 .andWhere('response.variableid = :variableId', { variableId })
                 .getMany();
 
