@@ -8,6 +8,7 @@ import { CodingFreshnessService } from './coding-freshness.service';
 import { CodingValidationService } from './coding-validation.service';
 import { MissingsProfilesService } from './missings-profiles.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
 jest.mock('../workspace/workspace-files.service', () => ({
   WorkspaceFilesService: jest.fn()
@@ -36,6 +37,10 @@ describe('CodingResultsService', () => {
   'getMissingByIdForProfileOrDefault' | 'getMissingByCodeForProfileOrDefault'
   >>;
   let codingFreshnessService: jest.Mocked<Pick<CodingFreshnessService, 'markManualCodingCurrent'>>;
+  let workspaceExclusionService: jest.Mocked<Pick<
+  WorkspaceExclusionService,
+  'resolveExclusionsForQueries'
+  >>;
 
   const createQueryBuilderMock = (rows: unknown[]) => ({
     leftJoinAndSelect: jest.fn().mockReturnThis(),
@@ -140,6 +145,14 @@ describe('CodingResultsService', () => {
       markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
     };
 
+    workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
+
     service = new CodingResultsService(
       responseRepository,
       codingStatisticsService,
@@ -147,6 +160,7 @@ describe('CodingResultsService', () => {
       codingValidationService as unknown as CodingValidationService,
       codingAnalysisService as unknown as CodingAnalysisService,
       missingsProfilesService as unknown as MissingsProfilesService,
+      workspaceExclusionService as unknown as WorkspaceExclusionService,
       codingFreshnessService as unknown as CodingFreshnessService
     );
   });
@@ -793,7 +807,12 @@ describe('CodingResultsService', () => {
     );
     expect(queryRunner.manager.update).toHaveBeenCalledWith(
       ResponseEntity,
-      100,
+      expect.objectContaining({
+        id: 100,
+        status_v2: expect.anything(),
+        code_v2: expect.anything(),
+        score_v2: expect.anything()
+      }),
       {
         code_v2: 0,
         score_v2: 0,
@@ -804,6 +823,195 @@ describe('CodingResultsService', () => {
       ResponseEntity,
       101,
       expect.any(Object)
+    );
+  });
+
+  it('does not propagate over a sibling with partial existing v2 data', async () => {
+    codingJobService.getAggregationSettingsForCodingJob.mockResolvedValue({
+      aggregationEnabled: true,
+      aggregationThreshold: 2,
+      responseMatchingFlags: [ResponseMatchingFlag.IGNORE_CASE],
+      aggregationSettingsVersion: 1,
+      fromJobSnapshot: true
+    });
+
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(createQueryBuilderMock([{
+        id: 99,
+        value: 'A',
+        variableid: 'VAR',
+        status_v2: 3,
+        unit: { id: 1, name: 'UNIT' }
+      }]))
+      .mockReturnValueOnce(createQueryBuilderMock([{
+        unitName: 'UNIT', variableId: 'VAR'
+      }]))
+      .mockReturnValueOnce(createQueryBuilderMock([
+        {
+          id: 99,
+          value: 'A',
+          variableid: 'VAR',
+          status_v2: 3,
+          code_v2: null,
+          score_v2: null,
+          unit: { id: 1, name: 'UNIT' }
+        },
+        {
+          id: 100,
+          value: 'a',
+          variableid: 'VAR',
+          status_v2: null,
+          code_v2: 7,
+          score_v2: null,
+          unit: { id: 2, name: 'UNIT' }
+        }
+      ]));
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.updatedResponsesCount).toBe(1);
+    expect(result.skippedAlreadyCodedCount).toBe(1);
+    expect(queryRunner.manager.update).not.toHaveBeenCalledWith(
+      ResponseEntity,
+      expect.objectContaining({ id: 100 }),
+      expect.any(Object)
+    );
+  });
+
+  it('atomically skips a sibling coded after candidate discovery', async () => {
+    codingJobService.getAggregationSettingsForCodingJob.mockResolvedValue({
+      aggregationEnabled: true,
+      aggregationThreshold: 2,
+      responseMatchingFlags: [ResponseMatchingFlag.IGNORE_CASE],
+      aggregationSettingsVersion: 1,
+      fromJobSnapshot: true
+    });
+
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(createQueryBuilderMock([{
+        id: 99,
+        value: 'A',
+        variableid: 'VAR',
+        status_v2: 3,
+        unit: { id: 1, name: 'UNIT' }
+      }]))
+      .mockReturnValueOnce(createQueryBuilderMock([{
+        unitName: 'UNIT', variableId: 'VAR'
+      }]))
+      .mockReturnValueOnce(createQueryBuilderMock([
+        {
+          id: 99,
+          value: 'A',
+          variableid: 'VAR',
+          status_v2: 3,
+          unit: { id: 1, name: 'UNIT' }
+        },
+        {
+          id: 100,
+          value: 'a',
+          variableid: 'VAR',
+          status_v2: null,
+          code_v2: null,
+          score_v2: null,
+          unit: { id: 2, name: 'UNIT' }
+        }
+      ]));
+    queryRunner.manager.update.mockImplementation(
+      async (_entity, criteria) => ({
+        affected: typeof criteria === 'object' && criteria.id === 100 ? 0 : 1
+      })
+    );
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.updatedResponsesCount).toBe(1);
+    expect(result.skippedAlreadyCodedCount).toBe(1);
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      expect.objectContaining({
+        id: 100,
+        status_v2: expect.anything(),
+        code_v2: expect.anything(),
+        score_v2: expect.anything()
+      }),
+      {
+        code_v2: 0,
+        score_v2: 0,
+        status_v2: 5
+      }
+    );
+  });
+
+  it('applies workspace exclusions to aggregation sibling discovery and candidates', async () => {
+    codingJobService.getAggregationSettingsForCodingJob.mockResolvedValue({
+      aggregationEnabled: true,
+      aggregationThreshold: 2,
+      responseMatchingFlags: [ResponseMatchingFlag.IGNORE_CASE],
+      aggregationSettingsVersion: 1,
+      fromJobSnapshot: true
+    });
+    workspaceExclusionService.resolveExclusionsForQueries.mockResolvedValue({
+      globalIgnoredUnits: [],
+      ignoredBooklets: ['blocked_booklet'],
+      testletIgnoredUnits: [{ bookletId: 'booklet_a', unitId: 'unit.xml' }]
+    });
+
+    const unitNameQuery = createQueryBuilderMock([
+      { unitName: 'UNIT', variableId: 'VAR' }
+    ]);
+    const candidateQuery = createQueryBuilderMock([
+      {
+        id: 99,
+        value: 'A',
+        variableid: 'VAR',
+        status_v2: 3,
+        unit: { id: 1, name: 'UNIT' }
+      }
+    ]);
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(createQueryBuilderMock([
+        {
+          id: 99,
+          value: 'A',
+          variableid: 'VAR',
+          status_v2: 3,
+          unit: { id: 1, name: 'UNIT' }
+        }
+      ]))
+      .mockReturnValueOnce(unitNameQuery)
+      .mockReturnValueOnce(candidateQuery);
+
+    await service.applyCodingResults(17, 10);
+
+    expect(workspaceExclusionService.resolveExclusionsForQueries)
+      .toHaveBeenCalledWith(17);
+    [unitNameQuery, candidateQuery].forEach(query => {
+      expect(query.leftJoin).toHaveBeenCalledWith(
+        'booklet.bookletinfo',
+        'bookletinfo'
+      );
+    });
+    expect(unitNameQuery.andWhere).toHaveBeenCalledWith(
+      'UPPER(bookletinfo.name) NOT IN (:...aggregationSiblingUnitsIgnoredBooklets)',
+      { aggregationSiblingUnitsIgnoredBooklets: ['BLOCKED_BOOKLET'] }
+    );
+    expect(unitNameQuery.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('aggregationSiblingUnitsBooklet0'),
+      {
+        aggregationSiblingUnitsBooklet0: 'BOOKLET_A',
+        aggregationSiblingUnitsUnit0: 'UNIT'
+      }
+    );
+    expect(candidateQuery.andWhere).toHaveBeenCalledWith(
+      'UPPER(bookletinfo.name) NOT IN (:...aggregationSiblingCandidatesIgnoredBooklets)',
+      { aggregationSiblingCandidatesIgnoredBooklets: ['BLOCKED_BOOKLET'] }
+    );
+    expect(candidateQuery.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('aggregationSiblingCandidatesBooklet0'),
+      {
+        aggregationSiblingCandidatesBooklet0: 'BOOKLET_A',
+        aggregationSiblingCandidatesUnit0: 'UNIT'
+      }
     );
   });
 
