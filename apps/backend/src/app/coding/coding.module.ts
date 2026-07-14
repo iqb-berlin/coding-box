@@ -133,6 +133,7 @@ import { UserModule } from '../user/user.module';
     }
   ],
   exports: [
+    CodingAggregationPeerService,
     CodingJobService,
     JobDefinitionService,
     CodingStatisticsService,
