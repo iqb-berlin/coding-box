@@ -50,10 +50,16 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import {
+  buildAggregationPeerLookupKeys,
+  buildAggregationPeerKeys,
+  buildAggregationPeerUnitKeys,
   buildAggregationGroups,
   deduplicateManualCodingResponses,
+  getAggregationPeerKey,
   getManualCodingDeduplicationKey,
-  ManualCodingDeduplicationResponse
+  isAggregatableValue,
+  ManualCodingDeduplicationResponse,
+  serializeAggregationPeerKey
 } from './aggregation-metrics.util';
 import {
   formatCodingTestPersonFromUnit,
@@ -87,6 +93,7 @@ import {
 import {
   applyNonCodingIssueReviewJobFilter,
   CODING_JOB_TYPE_CODING_ISSUE_REVIEW,
+  getNonCodingIssueReviewJobSqlCondition,
   isCodingIssueReviewJobType
 } from './coding-job-type.util';
 import { statusStringToNumber } from '../../utils/response-status-converter';
@@ -399,6 +406,7 @@ interface SlimResponse {
   variableid: string;
   value: string | null;
   statusV1?: number | null;
+  statusV2?: number | null;
   unitName: string;
   unitAlias: string | null;
   bookletName: string;
@@ -5753,6 +5761,7 @@ export class CodingJobService {
       .addSelect('response.variableid', 'variableid')
       .addSelect('response.value', 'value')
       .addSelect('response.status_v1', 'statusV1')
+      .addSelect('response.status_v2', 'statusV2')
       .addSelect('unit.name', 'unitName')
       .addSelect('unit.alias', 'unitAlias')
       .addSelect("COALESCE(bookletinfo.name, '')", 'bookletName')
@@ -5809,6 +5818,10 @@ export class CodingJobService {
         r.statusV1 !== undefined && r.statusV1 !== null ?
           Number(r.statusV1) :
           null,
+      statusV2:
+        r.statusV2 !== undefined && r.statusV2 !== null ?
+          Number(r.statusV2) :
+          null,
       unitName: r.unitName ?? '',
       unitAlias: r.unitAlias ?? null,
       bookletName: r.bookletName ?? '',
@@ -5816,6 +5829,192 @@ export class CodingJobService {
       personCode: r.personCode ?? '',
       personGroup: r.personGroup ?? ''
     }));
+  }
+
+  async getSlimResponsesForVariableCoverage(
+    workspaceId: number,
+    variables: VariableReference[],
+    matchingFlags: ResponseMatchingFlag[],
+    aggregationThreshold: number | null,
+    derivedVariableMap: Map<string, Set<string>>
+  ): Promise<SlimResponse[]> {
+    const activeResponses = await this.getSlimResponsesForVariables(
+      workspaceId,
+      variables
+    );
+    const aggregationActive = aggregationThreshold !== null &&
+      !matchingFlags.includes(ResponseMatchingFlag.NO_AGGREGATION);
+
+    if (!aggregationActive || activeResponses.length === 0) {
+      return activeResponses;
+    }
+
+    const peerKeys = buildAggregationPeerKeys(
+      activeResponses.map(response => ({
+        responseId: response.id,
+        unitName: response.unitName,
+        variableId: response.variableid,
+        value: response.value
+      })),
+      matchingFlags,
+      derivedVariableMap
+    );
+
+    if (peerKeys.length === 0) {
+      return activeResponses;
+    }
+
+    const completedStatus = statusStringToNumber('CODING_COMPLETE');
+    const defaultMirCode = await this.getDefaultMirCode(workspaceId);
+    const exclusions =
+      await this.workspaceExclusionService.resolveExclusionsForQueries(
+        workspaceId
+      );
+    const peerKeySet = new Set(
+      peerKeys.map(peerKey => serializeAggregationPeerKey(peerKey))
+    );
+    const exactValueMatching =
+      !matchingFlags.includes(ResponseMatchingFlag.IGNORE_CASE) &&
+      !matchingFlags.includes(ResponseMatchingFlag.IGNORE_WHITESPACE);
+    const createCompletedPeerQuery = (): SelectQueryBuilder<ResponseEntity> => {
+      const query = this.responseRepository
+        .createQueryBuilder('response')
+        .innerJoin('response.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .leftJoin('booklet.bookletinfo', 'bookletinfo')
+        .innerJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('response.status_v2 = :completedStatus', { completedStatus })
+        .andWhere(
+          '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
+          { aggregatedCode: -111, defaultMirCode }
+        )
+        .andWhere(new Brackets(qb => {
+          qb.where('response.code_v2 IS NULL')
+            .orWhere(subQuery => {
+              const exists = subQuery
+                .subQuery()
+                .select('1')
+                .from('coding_job_unit', 'manual_cju')
+                .innerJoin('coding_job', 'manual_cj', 'manual_cj.id = manual_cju.coding_job_id')
+                .where('manual_cju.response_id = response.id')
+                .andWhere('manual_cj.training_id IS NULL')
+                .andWhere(getNonCodingIssueReviewJobSqlCondition('manual_cj'))
+                .getQuery();
+              return `EXISTS (${exists})`;
+            });
+        }));
+      this.applyManualCodingCandidateStatusFilter(query, variables);
+      applyResolvedExclusionsToQuery(query, exclusions);
+      return query;
+    };
+
+    const peerVariableIds = Array.from(new Set(
+      peerKeys.map(peerKey => peerKey.variableId)
+    ));
+    const peerUnitQuery = createCompletedPeerQuery()
+      .select('DISTINCT unit.name', 'unitName')
+      .addSelect('response.variableid', 'variableId')
+      .andWhere('response.variableid IN (:...peerVariableIds)', {
+        peerVariableIds
+      });
+    const peerUnitKeys = buildAggregationPeerUnitKeys(
+      peerKeys,
+      await peerUnitQuery.getRawMany()
+    );
+    if (peerUnitKeys.length === 0) {
+      return activeResponses;
+    }
+
+    const peerValueQuery = createCompletedPeerQuery()
+      .select('DISTINCT unit.name', 'unitName')
+      .addSelect('response.variableid', 'variableId')
+      .addSelect('response.value', 'value')
+      .andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM jsonb_to_recordset(CAST(:aggregationPeerUnits AS jsonb))
+            AS aggregation_peer_unit("unitName" text, "variableId" text)
+          WHERE aggregation_peer_unit."unitName" = unit.name
+            AND aggregation_peer_unit."variableId" = response.variableid
+        )`,
+        { aggregationPeerUnits: JSON.stringify(peerUnitKeys) }
+      );
+    if (exactValueMatching) {
+      peerValueQuery.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM jsonb_to_recordset(CAST(:aggregationPeerValues AS jsonb))
+            AS aggregation_peer_value("variableId" text, "normalizedValue" text)
+          WHERE aggregation_peer_value."variableId" = response.variableid
+            AND aggregation_peer_value."normalizedValue" = response.value
+        )`,
+        { aggregationPeerValues: JSON.stringify(peerKeys) }
+      );
+    }
+    const peerLookupKeys = buildAggregationPeerLookupKeys(
+      peerKeys,
+      await peerValueQuery.getRawMany(),
+      matchingFlags
+    );
+    if (peerLookupKeys.length === 0) {
+      return activeResponses;
+    }
+
+    const queryBuilder = createCompletedPeerQuery()
+      .select('response.id', 'id')
+      .addSelect('response.variableid', 'variableid')
+      .addSelect('response.value', 'value')
+      .addSelect('response.status_v1', 'statusV1')
+      .addSelect('response.status_v2', 'statusV2')
+      .addSelect('unit.name', 'unitName')
+      .addSelect('unit.alias', 'unitAlias')
+      .addSelect("COALESCE(bookletinfo.name, '')", 'bookletName')
+      .addSelect("COALESCE(person.login, '')", 'personLogin')
+      .addSelect("COALESCE(person.code, '')", 'personCode')
+      .addSelect("COALESCE(person.group, '')", 'personGroup')
+      .andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM jsonb_to_recordset(CAST(:aggregationPeerKeys AS jsonb))
+            AS aggregation_peer("unitName" text, "variableId" text, "value" text)
+          WHERE aggregation_peer."unitName" = unit.name
+            AND aggregation_peer."variableId" = response.variableid
+            AND aggregation_peer."value" = response.value
+        )`,
+        { aggregationPeerKeys: JSON.stringify(peerLookupKeys) }
+      );
+    const raw = await queryBuilder.orderBy('response.id', 'ASC').getRawMany();
+    const completedPeers: SlimResponse[] = raw.map(r => ({
+      id: Number(r.id),
+      variableid: r.variableid,
+      value: r.value ?? null,
+      statusV1:
+        r.statusV1 !== undefined && r.statusV1 !== null ?
+          Number(r.statusV1) :
+          null,
+      statusV2:
+        r.statusV2 !== undefined && r.statusV2 !== null ?
+          Number(r.statusV2) :
+          null,
+      unitName: r.unitName ?? '',
+      unitAlias: r.unitAlias ?? null,
+      bookletName: r.bookletName ?? '',
+      personLogin: r.personLogin ?? '',
+      personCode: r.personCode ?? '',
+      personGroup: r.personGroup ?? ''
+    })).filter(response => (
+      isAggregatableValue(response.value) &&
+      peerKeySet.has(serializeAggregationPeerKey(getAggregationPeerKey(
+        response.unitName,
+        response.variableid,
+        response.value,
+        matchingFlags
+      )))
+    ));
+
+    return [...activeResponses, ...completedPeers];
   }
 
   private async getAssignedResponseIdsForVariables(
