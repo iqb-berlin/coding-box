@@ -8,6 +8,7 @@ import {
   UseGuards,
   Body,
   ValidationPipe,
+  ParseIntPipe,
   Res,
   Query
 } from '@nestjs/common';
@@ -359,7 +360,7 @@ export class WorkspaceCodingJobDefinitionController {
   })
   async updateJobDefinition(
     @WorkspaceId() workspace_id: number,
-      @Param('id') id: number,
+      @Param('id', ParseIntPipe) id: number,
       @Body(new ValidationPipe({ transform: true, whitelist: true })) updateDto: UpdateJobDefinitionDto
   ): Promise<JobDefinition> {
     return this.jobDefinitionService.updateJobDefinition(id, workspace_id, updateDto);
