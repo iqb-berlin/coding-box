@@ -594,6 +594,60 @@ describe('CodingProgressService variable coverage conflicts', () => {
     ]);
   });
 
+  it('merges unit-name case variants into one covered variable', async () => {
+    const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+    responseRepository.createQueryBuilder.mockReturnValue(createQueryBuilder([
+      {
+        unitName: 'UnitA',
+        variableId: 'manual-var',
+        statusV1: String(codingIncompleteStatus),
+        caseCount: '2'
+      },
+      {
+        unitName: 'UNITA',
+        variableId: 'manual-var',
+        statusV1: String(codingIncompleteStatus),
+        caseCount: '1'
+      }
+    ]));
+    workspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
+      ['UNITA', new Set(['manual-var'])]
+    ]));
+    jobDefinitionRepository.find.mockResolvedValue([{
+      id: 10,
+      status: 'approved',
+      assigned_variables: [{ unitName: 'unita', variableId: 'manual-var' }]
+    }]);
+    const casesInJobsQuery = createQueryBuilder([
+      { unitName: 'UnitA', variableId: 'manual-var', casesInJobs: '2' },
+      { unitName: 'UNITA', variableId: 'manual-var', casesInJobs: '1' }
+    ]);
+    codingJobUnitRepository.createQueryBuilder
+      .mockReturnValueOnce(casesInJobsQuery)
+      .mockReturnValueOnce(createQueryBuilder([]));
+
+    const result = await service.getVariableCoverageOverview(5);
+
+    expect(result).toMatchObject({
+      totalVariables: 1,
+      coveredVariables: 1,
+      fullyAbgedeckteVariablen: 1,
+      statusTotalVariables: 1
+    });
+    expect(result.variableCaseCounts).toEqual([{
+      unitName: 'UnitA',
+      variableId: 'manual-var',
+      caseCount: 3
+    }]);
+    expect(casesInJobsQuery.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('variableCasesInJobsUnitName1'),
+      expect.objectContaining({
+        variableCasesInJobsUnitName0: 'UnitA',
+        variableCasesInJobsUnitName1: 'UNITA'
+      })
+    );
+  });
+
   it('excludes intended-incomplete variables without manual instructions from case coverage', async () => {
     const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
     const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
@@ -779,9 +833,8 @@ describe('CodingProgressService variable coverage conflicts', () => {
     expect(result.coverageByStatus.conflicted).toEqual([]);
   });
 
-  it('classifies duplicate-aggregated variable coverage on effective cases', async () => {
+  it('classifies active duplicate-aggregated variable coverage on effective cases', async () => {
     const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
-    const codingCompleteStatus = statusStringToNumber('CODING_COMPLETE');
 
     settingRepository.findOne.mockImplementation(async ({ where }: { where: { key: string } }) => {
       if (where.key === 'workspace-5-duplicate-aggregation-threshold') {
@@ -802,7 +855,7 @@ describe('CodingProgressService variable coverage conflicts', () => {
         caseCount: '3'
       }
     ]);
-    const variableResponsesQuery = createQueryBuilder([
+    const activeResponsesQuery = createQueryBuilder([
       {
         responseId: '100',
         unitName: 'AGG_UNIT',
@@ -841,24 +894,17 @@ describe('CodingProgressService variable coverage conflicts', () => {
         personLogin: 'login-3',
         personCode: 'code-3',
         personGroup: 'group-1'
-      },
-      {
-        responseId: '103',
-        unitName: 'AGG_UNIT',
-        variableId: '01',
-        value: 'already applied answer',
-        codeV2: null,
-        statusV2: String(codingCompleteStatus),
-        statusV1: String(codingIncompleteStatus),
-        bookletName: 'BookletA',
-        personLogin: 'login-4',
-        personCode: 'code-4',
-        personGroup: 'group-1'
       }
     ]);
+    const unitNamesQuery = createQueryBuilder([
+      { unitName: 'AGG_UNIT', variableId: '01' }
+    ]);
+    const completedPeersQuery = createQueryBuilder([]);
     responseRepository.createQueryBuilder
       .mockReturnValueOnce(incompleteVariablesQuery)
-      .mockReturnValueOnce(variableResponsesQuery);
+      .mockReturnValueOnce(activeResponsesQuery)
+      .mockReturnValueOnce(unitNamesQuery)
+      .mockReturnValueOnce(completedPeersQuery);
     workspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
       ['AGG_UNIT', new Set(['01'])]
     ]));
@@ -883,6 +929,104 @@ describe('CodingProgressService variable coverage conflicts', () => {
     expect(result.variableCaseCounts).toEqual([
       { unitName: 'AGG_UNIT', variableId: '01', caseCount: 3 }
     ]);
+    expect(assignedResponseIdsQuery.andWhere).toHaveBeenCalledWith(
+      'cju.response_id IN (:...responseIds)',
+      { responseIds: [100, 101, 102] }
+    );
+  });
+
+  it('keeps an open response covered after its assigned aggregation sibling completed', async () => {
+    const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+    const codingCompleteStatus = statusStringToNumber('CODING_COMPLETE');
+
+    settingRepository.findOne.mockImplementation(async ({ where }: { where: { key: string } }) => {
+      if (where.key === 'workspace-5-duplicate-aggregation-threshold') {
+        return { content: '2' };
+      }
+
+      if (where.key === 'workspace-5-response-matching-mode') {
+        return { content: JSON.stringify({ flags: ['IGNORE_CASE', 'IGNORE_WHITESPACE'] }) };
+      }
+
+      return null;
+    });
+    const incompleteVariablesQuery = createQueryBuilder([
+      {
+        unitName: 'AGG_UNIT',
+        variableId: '01',
+        statusV1: String(codingIncompleteStatus),
+        caseCount: '1'
+      }
+    ]);
+    const variableResponsesQuery = createQueryBuilder([
+      {
+        responseId: '100',
+        unitName: 'AGG_UNIT',
+        variableId: '01',
+        value: 'Same answer',
+        codeV2: null,
+        statusV2: null,
+        statusV1: String(codingIncompleteStatus),
+        bookletName: 'BookletA',
+        personLogin: 'login-1',
+        personCode: 'code-1',
+        personGroup: 'group-1'
+      }
+    ]);
+    const completedPeersQuery = createQueryBuilder([
+      {
+        responseId: '103',
+        unitName: 'agg_unit',
+        variableId: '01',
+        value: ' sameanswer ',
+        codeV2: '1',
+        statusV2: String(codingCompleteStatus),
+        statusV1: String(codingIncompleteStatus),
+        bookletName: 'BookletA',
+        personLogin: 'login-4',
+        personCode: 'code-4',
+        personGroup: 'group-1'
+      }
+    ]);
+    const peerValueQuery = createQueryBuilder([
+      { unitName: 'AGG_UNIT', variableId: '01', value: 'Same answer' },
+      { unitName: 'agg_unit', variableId: '01', value: ' sameanswer ' }
+    ]);
+    const peerUnitQuery = createQueryBuilder([
+      { unitName: 'AGG_UNIT', variableId: '01' },
+      { unitName: 'agg_unit', variableId: '01' },
+      { unitName: 'OTHER_UNIT', variableId: '01' }
+    ]);
+    responseRepository.createQueryBuilder
+      .mockReturnValueOnce(incompleteVariablesQuery)
+      .mockReturnValueOnce(variableResponsesQuery)
+      .mockReturnValueOnce(peerUnitQuery)
+      .mockReturnValueOnce(peerValueQuery)
+      .mockReturnValueOnce(completedPeersQuery);
+    workspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
+      ['AGG_UNIT', new Set(['01'])]
+    ]));
+    jobDefinitionRepository.find.mockResolvedValue([
+      {
+        id: 40,
+        status: 'approved',
+        assigned_variables: [{ unitName: 'AGG_UNIT', variableId: '01' }]
+      }
+    ]);
+    const assignedResponseIdsQuery = createQueryBuilder([{ responseId: '103' }]);
+    codingJobUnitRepository.createQueryBuilder
+      .mockReturnValueOnce(assignedResponseIdsQuery)
+      .mockReturnValueOnce(createQueryBuilder([]));
+
+    const result = await service.getVariableCoverageOverview(5);
+
+    expect(result.totalVariables).toBe(1);
+    expect(result.coveredVariables).toBe(1);
+    expect(result.fullyAbgedeckteVariablen).toBe(1);
+    expect(result.partiallyAbgedeckteVariablen).toBe(0);
+    expect(result.variableCaseCounts).toEqual([
+      { unitName: 'AGG_UNIT', variableId: '01', caseCount: 1 }
+    ]);
     expect(variableResponsesQuery.andWhere).toHaveBeenCalledWith(
       expect.stringContaining('unit.name = :variableCoverageResponsesUnitName0'),
       expect.objectContaining({
@@ -890,12 +1034,44 @@ describe('CodingProgressService variable coverage conflicts', () => {
         variableCoverageResponsesVariableId0: '01'
       })
     );
+    expect(variableResponsesQuery.andWhere).toHaveBeenCalledWith(
+      '(response.status_v2 IS NULL OR response.status_v2 != :completedV2Status)',
+      { completedV2Status: codingCompleteStatus }
+    );
+    expect(completedPeersQuery.andWhere).toHaveBeenCalledWith(
+      'response.status_v2 = :completedV2Status',
+      { completedV2Status: codingCompleteStatus }
+    );
+    expect(completedPeersQuery.andWhere).toHaveBeenCalledWith(
+      '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
+      {
+        aggregatedCode: -111,
+        defaultMirCode: expect.any(Number)
+      }
+    );
+    const peerLookupCondition = completedPeersQuery.andWhere.mock.calls.find(
+      ([condition]) => typeof condition === 'string' &&
+        condition.includes('jsonb_to_recordset')
+    )?.[0] as string;
+    expect(peerLookupCondition).toContain(
+      'aggregation_peer."value" = response.value'
+    );
+    expect(peerLookupCondition).not.toContain('UPPER(unit.name)');
+    expect(peerLookupCondition).toContain(
+      'aggregation_peer."unitName" = unit.name'
+    );
+    expect(peerValueQuery.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('aggregation_peer_unit'),
+      {
+        aggregationPeerUnits: JSON.stringify([
+          { unitName: 'AGG_UNIT', variableId: '01' },
+          { unitName: 'agg_unit', variableId: '01' }
+        ])
+      }
+    );
     expect(assignedResponseIdsQuery.andWhere).toHaveBeenCalledWith(
-      expect.stringContaining('cju.unit_name = :assignedVariableCoverageUnitName0'),
-      expect.objectContaining({
-        assignedVariableCoverageUnitName0: 'AGG_UNIT',
-        assignedVariableCoverageVariableId0: '01'
-      })
+      'cju.response_id IN (:...responseIds)',
+      { responseIds: [100, 103] }
     );
   });
 
