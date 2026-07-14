@@ -22,12 +22,15 @@ import { VariableDetailDto } from '../../../models/unit-variable-details.dto';
 import { WorkspacePlayerService } from '../workspace/workspace-player.service';
 import {
   applyResolvedExclusionsToQuery,
+  ResolvedWorkspaceExclusions,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
-import { CodingJobService } from './coding-job.service';
+import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import {
   countEffectiveManualCodingCases,
-  ManualCodingDeduplicationResponse
+  getAggregationVariableKey,
+  ManualCodingDeduplicationResponse,
+  partitionResponsesByAggregationVariable
 } from './aggregation-metrics.util';
 import {
   getCodingIncompleteVariablesCacheKey,
@@ -65,6 +68,7 @@ interface NormalizedExpectedCombination {
 
 type ManualCodingVariableCaseCounts = {
   unitName: string;
+  unitNameAliases?: string[];
   variableId: string;
   responseCount: number;
   deriveErrorResponseCount: number;
@@ -78,6 +82,7 @@ type SlimCodingResponse = {
   variableid: string;
   value: string | null;
   statusV1?: number | null;
+  statusV2?: number | null;
   personLogin?: string | null;
   personCode?: string | null;
   personGroup?: string | null;
@@ -948,8 +953,9 @@ export class CodingValidationService {
     unitName?: string,
     trainingRequired?: boolean
   ): T[] {
+    const normalizedUnitName = unitName ? String(unitName).toUpperCase() : undefined;
     return variables.filter(variable => (
-      (!unitName || variable.unitName === unitName) &&
+      (!normalizedUnitName || variable.unitName.toUpperCase() === normalizedUnitName) &&
       (
         trainingRequired === undefined ||
         variable.coderTrainingRequired === trainingRequired
@@ -1060,7 +1066,10 @@ export class CodingValidationService {
     );
 
     return variables.map(variable => {
-      const key = `${variable.unitName}::${variable.variableId}`;
+      const key = getAggregationVariableKey(
+        variable.unitName,
+        variable.variableId
+      );
       const caseInfo = caseInfoMap.get(key) || {
         casesInJobs: 0,
         availableCases: variable.responseCount,
@@ -1068,7 +1077,12 @@ export class CodingValidationService {
       };
 
       return {
-        ...variable,
+        unitName: variable.unitName,
+        variableId: variable.variableId,
+        responseCount: variable.responseCount,
+        deriveErrorResponseCount: variable.deriveErrorResponseCount,
+        isDerived: variable.isDerived,
+        coderTrainingRequired: variable.coderTrainingRequired,
         ...caseInfo
       };
     });
@@ -1094,25 +1108,26 @@ export class CodingValidationService {
     const aggregationThreshold = await this.codingJobService.getAggregationThreshold(workspaceId);
 
     const matchingFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
-    const variableReferences = variables.map(v => ({
-      unitName: v.unitName,
-      variableId: v.variableId,
-      ...(includeDeriveErrorInCaseInfo && v.deriveErrorResponseCount > 0 ?
-        { includeDeriveError: true } :
-        {})
-    }));
-    const [slimResponses, assignedResponseIdsByVariable] = await Promise.all([
-      this.codingJobService.getSlimResponsesForVariables(
-        workspaceId,
-        variableReferences
-      ) as Promise<SlimCodingResponse[]>,
-      this.getAssignedResponseIdsByVariable(
-        workspaceId,
-        variableReferences,
-        excludeJobDefinitionId
-      )
-    ]);
-
+    const variableReferences = Array.from(variables.reduce((references, variable) => {
+      const unitNames = variable.unitNameAliases?.length ?
+        variable.unitNameAliases :
+        [variable.unitName];
+      unitNames.forEach(unitName => {
+        const key = `${unitName}::${variable.variableId}`;
+        references.set(key, {
+          unitName,
+          variableId: variable.variableId,
+          ...(includeDeriveErrorInCaseInfo && variable.deriveErrorResponseCount > 0 ?
+            { includeDeriveError: true } :
+            {})
+        });
+      });
+      return references;
+    }, new Map<string, {
+      unitName: string;
+      variableId: string;
+      includeDeriveError?: boolean;
+    }>()).values());
     const derivedVariableMap = new Map<string, Set<string>>();
     variables
       .filter(variable => variable.isDerived)
@@ -1122,13 +1137,50 @@ export class CodingValidationService {
         derivedVariables.add(variable.variableId);
         derivedVariableMap.set(unitKey, derivedVariables);
       });
+    const aggregationActive = aggregationThreshold !== null &&
+      !matchingFlags.includes(ResponseMatchingFlag.NO_AGGREGATION);
+    const slimResponses = aggregationActive ?
+      await this.codingJobService.getSlimResponsesForVariableCoverage(
+        workspaceId,
+        variableReferences,
+        matchingFlags,
+        aggregationThreshold,
+        derivedVariableMap
+      ) as SlimCodingResponse[] :
+      await this.codingJobService.getSlimResponsesForVariables(
+        workspaceId,
+        variableReferences
+      ) as SlimCodingResponse[];
+    const activeResponseIds = new Set(
+      slimResponses
+        .filter(response => (
+          response.statusV2 !== statusStringToNumber('CODING_COMPLETE')
+        ))
+        .map(response => response.id)
+    );
+    const assignedResponseIds =
+      await this.getAssignedResponseIds(
+        workspaceId,
+        slimResponses.map(response => response.id),
+        excludeJobDefinitionId
+      );
+
+    const responsesByVariable = partitionResponsesByAggregationVariable(
+      slimResponses,
+      variables,
+      response => ({
+        unitName: response.unitName,
+        variableId: response.variableid
+      })
+    );
 
     for (const variable of variables) {
-      const key = `${variable.unitName}::${variable.variableId}`;
-
-      const varResponsesWithRequestedStatuses = slimResponses.filter(
-        r => r.unitName === variable.unitName && r.variableid === variable.variableId
+      const key = getAggregationVariableKey(
+        variable.unitName,
+        variable.variableId
       );
+      const varResponsesWithRequestedStatuses =
+        responsesByVariable.get(key) || [];
 
       const countAggregatedCases = (responses: SlimCodingResponse[]) => {
         const responsesWithCaseFields: ManualCodingDeduplicationResponse[] =
@@ -1137,14 +1189,13 @@ export class CodingValidationService {
             responseId: response.id,
             variableId: response.variableid
           }));
-        const assignedResponseIds = assignedResponseIdsByVariable.get(key) || new Set<number>();
-
         return countEffectiveManualCodingCases(
           responsesWithCaseFields,
           assignedResponseIds,
           matchingFlags,
           aggregationThreshold,
-          derivedVariableMap
+          derivedVariableMap,
+          activeResponseIds
         );
       };
 
@@ -1242,73 +1293,65 @@ export class CodingValidationService {
     return `${String(unitName || '').trim().toUpperCase()}::${String(variableId || '').trim()}`;
   }
 
-  private async getAssignedResponseIdsByVariable(
+  private async getAssignedResponseIds(
     workspaceId: number,
-    variables: { unitName: string; variableId: string }[],
+    responseIds: number[],
     excludeJobDefinitionId?: number
-  ): Promise<Map<string, Set<number>>> {
-    const result = new Map<string, Set<number>>();
+  ): Promise<Set<number>> {
+    const result = new Set<number>();
 
-    if (variables.length === 0) {
+    const uniqueResponseIds = Array.from(new Set(responseIds));
+    if (uniqueResponseIds.length === 0) {
       return result;
     }
 
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    const query = this.codingJobUnitRepository
-      .createQueryBuilder('cju')
-      .select('cju.unit_name', 'unitName')
-      .addSelect('cju.variable_id', 'variableId')
-      .addSelect('cju.response_id', 'responseId')
-      .leftJoin('cju.coding_job', 'coding_job')
-      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('coding_job.training_id IS NULL');
+    const chunkSize = 5000;
 
-    if (
-      excludeJobDefinitionId !== undefined &&
-      excludeJobDefinitionId !== null
-    ) {
-      query.andWhere(
-        '(coding_job.job_definition_id IS NULL OR coding_job.job_definition_id != :excludeJobDefinitionId)',
-        { excludeJobDefinitionId }
-      );
-    }
+    for (let offset = 0; offset < uniqueResponseIds.length; offset += chunkSize) {
+      const responseIdChunk = uniqueResponseIds.slice(offset, offset + chunkSize);
+      const query = this.codingJobUnitRepository
+        .createQueryBuilder('cju')
+        .select('DISTINCT cju.response_id', 'responseId')
+        .leftJoin('cju.coding_job', 'coding_job')
+        .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('coding_job.training_id IS NULL')
+        .andWhere('cju.response_id IN (:...responseIds)', {
+          responseIds: responseIdChunk
+        });
 
-    const conditions: string[] = [];
-    const parameters: Record<string, string> = {};
-
-    variables.forEach((variable, index) => {
-      const unitParam = `assignedUnitName${index}`;
-      const variableParam = `assignedVariableId${index}`;
-      conditions.push(`(cju.unit_name = :${unitParam} AND cju.variable_id = :${variableParam})`);
-      parameters[unitParam] = variable.unitName;
-      parameters[variableParam] = variable.variableId;
-    });
-
-    query.andWhere(`(${conditions.join(' OR ')})`, parameters);
-    applyNonCodingIssueReviewJobFilter(
-      query,
-      'coding_job',
-      'codingValidationAssignedResponsesReviewJobType'
-    );
-    applyResolvedExclusionsToQuery(query, exclusions, {
-      unitNameExpression: 'cju.unit_name',
-      bookletNameExpression: 'cju.booklet_name',
-      parameterPrefix: 'codingValidationAssignedResponses'
-    });
-
-    const rawResults = await query.getRawMany();
-
-    rawResults.forEach(row => {
-      const responseId = Number(row.responseId);
-      if (!Number.isFinite(responseId)) {
-        return;
+      if (
+        excludeJobDefinitionId !== undefined &&
+        excludeJobDefinitionId !== null
+      ) {
+        query.andWhere(
+          '(coding_job.job_definition_id IS NULL OR coding_job.job_definition_id != :excludeJobDefinitionId)',
+          { excludeJobDefinitionId }
+        );
       }
 
-      const key = `${row.unitName}::${row.variableId}`;
-      const responseIds = result.get(key) || new Set<number>();
-      responseIds.add(responseId);
-      result.set(key, responseIds);
-    });
+      applyNonCodingIssueReviewJobFilter(
+        query,
+        'coding_job',
+        'codingValidationAssignedResponsesReviewJobType'
+      );
+      applyResolvedExclusionsToQuery(query, exclusions, {
+        unitNameExpression: 'cju.unit_name',
+        bookletNameExpression: 'cju.booklet_name',
+        parameterPrefix: `codingValidationAssignedResponses${offset}`
+      });
+
+      const rawResults = await query.getRawMany();
+
+      rawResults.forEach(row => {
+        const responseId = Number(row.responseId);
+        if (!Number.isFinite(responseId)) {
+          return;
+        }
+
+        result.add(responseId);
+      });
+    }
 
     return result;
   }
@@ -1318,9 +1361,7 @@ export class CodingValidationService {
     unitName?: string,
     trainingRequired?: boolean,
     includeDeriveErrorOnly = false
-  ): Promise<
-    { unitName: string; variableId: string; responseCount: number; deriveErrorResponseCount: number; isDerived: boolean; coderTrainingRequired: boolean }[]
-    > {
+  ): Promise<ManualCodingVariableCaseCounts[]> {
     const scope = await this.fetchManualCodingScopeFromDb(
       workspaceId,
       unitName,
@@ -1337,6 +1378,13 @@ export class CodingValidationService {
     includeDeriveErrorOnly = false
   ): Promise<ManualCodingScopeFromDb> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const scopedUnitNames = unitName ?
+      await this.resolveUnitNameCaseAliases(
+        workspaceId,
+        unitName,
+        exclusions
+      ) :
+      [];
     // Helper to build the base query for a given status
     const buildQuery = (status: number) => {
       const qb = this.responseRepository
@@ -1356,8 +1404,10 @@ export class CodingValidationService {
         .groupBy('unit.name')
         .addGroupBy('response.variableid');
 
-      if (unitName) {
-        qb.andWhere('unit.name = :unitName', { unitName });
+      if (scopedUnitNames.length > 0) {
+        qb.andWhere('unit.name IN (:...scopedUnitNames)', {
+          scopedUnitNames
+        });
       }
       applyResolvedExclusionsToQuery(qb, exclusions);
       return qb;
@@ -1367,7 +1417,10 @@ export class CodingValidationService {
     const [codingIncompleteRaw, intendedIncompleteRaw, deriveErrorCountsByKey] = await Promise.all([
       buildQuery(statusStringToNumber('CODING_INCOMPLETE')).getRawMany(),
       buildQuery(statusStringToNumber('INTENDED_INCOMPLETE')).getRawMany(),
-      this.getDeriveErrorResponseCountsByVariable(workspaceId, unitName)
+      this.getDeriveErrorResponseCountsByVariable(
+        workspaceId,
+        scopedUnitNames
+      )
     ]);
 
     this.logger.debug(
@@ -1474,6 +1527,21 @@ export class CodingValidationService {
         derivedVariablesBySourceMap
       ) :
       new Set<string>();
+    const normalizedDeriveErrorCounts = new Map<string, number>();
+    const deriveErrorUnitNames = new Map<string, string[]>();
+    deriveErrorCountsByKey.forEach((count, exactKey) => {
+      const [deriveUnitName, variableId] = exactKey.split('::');
+      const key = getAggregationVariableKey(deriveUnitName, variableId);
+      normalizedDeriveErrorCounts.set(
+        key,
+        (normalizedDeriveErrorCounts.get(key) || 0) + count
+      );
+      const aliases = deriveErrorUnitNames.get(key) || [];
+      if (!aliases.includes(deriveUnitName)) {
+        aliases.push(deriveUnitName);
+      }
+      deriveErrorUnitNames.set(key, aliases);
+    });
     const getScopedDeriveErrorResponseCount = (
       responseUnitName: string,
       variableId: string
@@ -1484,12 +1552,15 @@ export class CodingValidationService {
         deriveErrorCoveredSourceKeys
       ) ?
         0 :
-        deriveErrorCountsByKey.get(`${responseUnitName}::${variableId}`) || 0
+        normalizedDeriveErrorCounts.get(
+          getAggregationVariableKey(responseUnitName, variableId)
+        ) || 0
     );
 
     // Merge results, summing response counts for variables that appear in both
     const mergedMap = new Map<string, {
       unitName: string;
+      unitNameAliases: string[];
       variableId: string;
       responseCount: number;
       deriveErrorResponseCount: number;
@@ -1498,7 +1569,7 @@ export class CodingValidationService {
     }>();
 
     for (const row of [...filteredCodingIncomplete, ...filteredIntendedIncomplete]) {
-      const key = `${row.unitName}::${row.variableId}`;
+      const key = getAggregationVariableKey(row.unitName, row.variableId);
       const existing = mergedMap.get(key);
       const count = parseInt(row.responseCount, 10);
       const deriveErrorResponseCount =
@@ -1508,9 +1579,13 @@ export class CodingValidationService {
 
       if (existing) {
         existing.responseCount += count;
+        if (!existing.unitNameAliases.includes(row.unitName)) {
+          existing.unitNameAliases.push(row.unitName);
+        }
       } else {
         mergedMap.set(key, {
           unitName: row.unitName,
+          unitNameAliases: [row.unitName],
           variableId: row.variableId,
           responseCount: count,
           deriveErrorResponseCount,
@@ -1521,12 +1596,23 @@ export class CodingValidationService {
     }
 
     if (includeDeriveErrorOnly) {
-      deriveErrorCountsByKey.forEach((deriveErrorResponseCount, key) => {
-        if (mergedMap.has(key)) {
+      normalizedDeriveErrorCounts.forEach((deriveErrorResponseCount, key) => {
+        const existing = mergedMap.get(key);
+        const aliases = deriveErrorUnitNames.get(key) || [];
+        if (existing) {
+          aliases.forEach(alias => {
+            if (!existing.unitNameAliases.includes(alias)) {
+              existing.unitNameAliases.push(alias);
+            }
+          });
           return;
         }
 
-        const [deriveUnitName, variableId] = key.split('::');
+        const [, variableId] = key.split('::');
+        const deriveUnitName = aliases[0];
+        if (!deriveUnitName) {
+          return;
+        }
         if (
           isCoveredSourceVariable(
             { unitName: deriveUnitName, variableId },
@@ -1545,6 +1631,7 @@ export class CodingValidationService {
 
         mergedMap.set(key, {
           unitName: deriveUnitName,
+          unitNameAliases: aliases,
           variableId,
           responseCount: 0,
           deriveErrorResponseCount,
@@ -1569,7 +1656,7 @@ export class CodingValidationService {
 
   private async getDeriveErrorResponseCountsByVariable(
     workspaceId: number,
-    unitName?: string
+    scopedUnitNames: string[] = []
   ): Promise<Map<string, number>> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const query = this.responseRepository
@@ -1590,8 +1677,10 @@ export class CodingValidationService {
       .groupBy('unit.name')
       .addGroupBy('response.variableid');
 
-    if (unitName) {
-      query.andWhere('unit.name = :unitName', { unitName });
+    if (scopedUnitNames.length > 0) {
+      query.andWhere('unit.name IN (:...scopedUnitNames)', {
+        scopedUnitNames
+      });
     }
 
     applyResolvedExclusionsToQuery(query, exclusions, {
@@ -1610,6 +1699,31 @@ export class CodingValidationService {
       }
       return counts;
     }, new Map<string, number>());
+  }
+
+  private async resolveUnitNameCaseAliases(
+    workspaceId: number,
+    unitName: string,
+    exclusions: ResolvedWorkspaceExclusions
+  ): Promise<string[]> {
+    const query = this.responseRepository
+      .createQueryBuilder('response')
+      .select('DISTINCT unit.name', 'unitName')
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.bookletinfo', 'bookletinfo')
+      .leftJoin('booklet.person', 'person')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true });
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      parameterPrefix: 'unitNameCaseAliases'
+    });
+    const normalizedUnitName = String(unitName).toUpperCase();
+    const aliases = (await query.getRawMany<{ unitName: string }>())
+      .map(row => row.unitName)
+      .filter(candidate => candidate?.toUpperCase() === normalizedUnitName);
+
+    return aliases.length > 0 ? Array.from(new Set(aliases)) : [unitName];
   }
 
   generateIncompleteVariablesCacheKey(workspaceId: number): string {
