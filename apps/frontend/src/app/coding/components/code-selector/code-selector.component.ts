@@ -829,12 +829,16 @@ export class CodeSelectorComponent implements OnChanges {
     if (!this.unitsData?.units) return undefined;
     const currentUnit = this.unitsData.units[this.unitsData.currentUnitIndex];
 
-    return this.unitsData.units.find(unit => (
-      this.isUnitInBundle(unit, context.bundleId) &&
-      unit.variableId === variable.variableId &&
-      unit.name === variable.unitName &&
-      this.isUnitInCurrentBundleCase(unit, currentUnit, context)
-    ));
+    return this.unitsData.units.find(unit => {
+      const matchesVariable = variable.responseId !== null ?
+        unit.id === variable.responseId :
+        unit.variableId === variable.variableId &&
+          unit.name.toUpperCase() === variable.unitName.toUpperCase();
+
+      return this.isUnitInBundle(unit, context.bundleId) &&
+        matchesVariable &&
+        this.isUnitInCurrentBundleCase(unit, currentUnit, context);
+    });
   }
 
   private isUnitInBundle(unit: UnitsReplayUnit, bundleId: number): boolean {
