@@ -4861,6 +4861,78 @@ describe('CodingJobService', () => {
     });
   });
 
+  it('prefers a prepared response result over an open bundle job unit', () => {
+    const resolveStatus = (
+      service as unknown as {
+        getCodingJobBundleVariableStatus: (
+          response: ResponseEntity,
+          manualUnit: CodingJobUnit
+        ) => {
+          status: string;
+          code: number | null;
+          score: number | null;
+          source: string;
+        };
+      }
+    ).getCodingJobBundleVariableStatus.bind(service);
+    const response = {
+      code_v1: null,
+      score_v1: null,
+      code_v2: -98,
+      score_v2: 0,
+      code_v3: null,
+      score_v3: null,
+      is_autocoder_generated: false
+    } as ResponseEntity;
+
+    expect(resolveStatus(response, {
+      code: null,
+      score: null,
+      is_open: true
+    } as CodingJobUnit)).toEqual({
+      status: 'auto-coded',
+      code: -98,
+      score: 0,
+      source: 'auto'
+    });
+  });
+
+  it('keeps a manual bundle decision authoritative over a response result', () => {
+    const resolveStatus = (
+      service as unknown as {
+        getCodingJobBundleVariableStatus: (
+          response: ResponseEntity,
+          manualUnit: CodingJobUnit
+        ) => {
+          status: string;
+          code: number | null;
+          score: number | null;
+          source: string;
+        };
+      }
+    ).getCodingJobBundleVariableStatus.bind(service);
+    const response = {
+      code_v1: null,
+      score_v1: null,
+      code_v2: -98,
+      score_v2: 0,
+      code_v3: null,
+      score_v3: null,
+      is_autocoder_generated: false
+    } as ResponseEntity;
+
+    expect(resolveStatus(response, {
+      code: 7,
+      score: 2,
+      is_open: false
+    } as CodingJobUnit)).toEqual({
+      status: 'manual-coded',
+      code: 7,
+      score: 2,
+      source: 'manual'
+    });
+  });
+
   it('uses all visible bundle units for bundle context when only open units are returned', async () => {
     const openUnit = {
       response_id: 99,
