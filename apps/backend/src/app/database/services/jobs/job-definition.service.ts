@@ -1837,8 +1837,9 @@ export class JobDefinitionService {
   }
 
   async updateJobDefinition(id: number, workspaceId: number, updateDto: UpdateJobDefinitionDto): Promise<JobDefinition> {
+    const normalizedId = Number(id);
     const preparedUpdate = await this.prepareJobDefinitionUpdate(
-      id,
+      normalizedId,
       workspaceId,
       updateDto
     );
@@ -1847,7 +1848,7 @@ export class JobDefinitionService {
       preparedUpdate.changedExistingJobBoundFields.length > 0
     ) {
       throw new BadRequestException(
-        `Cannot update job definition ${id} because existing coding jobs must be refreshed for changes to: ${preparedUpdate.changedExistingJobBoundFields.join(', ')}`
+        `Cannot update job definition ${normalizedId} because existing coding jobs must be refreshed for changes to: ${preparedUpdate.changedExistingJobBoundFields.join(', ')}`
       );
     }
 
@@ -1866,7 +1867,7 @@ export class JobDefinitionService {
 
         await this.codingJobService.updateCodingJobDisplayOptionsByDefinitionId(
           workspaceId,
-          id,
+          normalizedId,
           {
             showScore: updateDto.showScore,
             allowComments: updateDto.allowComments,

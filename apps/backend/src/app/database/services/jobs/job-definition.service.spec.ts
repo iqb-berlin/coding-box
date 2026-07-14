@@ -912,7 +912,7 @@ describe('JobDefinitionService', () => {
     });
   });
 
-  it('allows updating a pending definition when its own retained cases are excluded from reservations', async () => {
+  it('allows updating a pending definition when its route id arrives as a string', async () => {
     const retainedVariable = { unitName: 'Unit 1', variableId: 'Var 1' };
     const addedVariable = { unitName: 'Unit 2', variableId: 'Var 2' };
     const existingDefinition = {
@@ -935,7 +935,7 @@ describe('JobDefinitionService', () => {
       { unitName: 'Unit 2', variableId: 'Var 2', availableCases: 1 }
     ]);
 
-    await expect(service.updateJobDefinition(74, 7, {
+    await expect(service.updateJobDefinition('74' as unknown as number, 7, {
       assignedVariables: [retainedVariable, addedVariable],
       assignedVariableBundles: [],
       maxCodingCases: null,
