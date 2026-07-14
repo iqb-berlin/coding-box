@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { CodingJobService } from '../coding/coding-job.service';
+import { CodingAggregationPeerService } from '../coding/coding-aggregation-peer.service';
 import {
   JobDefinition,
   JobDefinitionVariable
@@ -161,10 +162,17 @@ describe('JobDefinitionService realistic manual-coding edit scenarios', () => {
       cacheService as never,
       workspaceFilesService as never,
       workspaceExclusionService as never,
-      usersService as never
+      usersService as never,
+      new CodingAggregationPeerService(responseRepository as never)
     );
 
     jest.spyOn(codingJobService, 'getSlimResponsesForVariables').mockImplementation(
+      async (_workspaceId, variables) => scenarioResponses.filter(response => variables.some(
+        variable => variable.unitName === response.unitName &&
+          variable.variableId === response.variableid
+      )) as never
+    );
+    jest.spyOn(codingJobService, 'getSlimResponsesForVariableCoverage').mockImplementation(
       async (_workspaceId, variables) => scenarioResponses.filter(response => variables.some(
         variable => variable.unitName === response.unitName &&
           variable.variableId === response.variableid

@@ -50,16 +50,11 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import {
-  buildAggregationPeerLookupKeys,
-  buildAggregationPeerKeys,
-  buildAggregationPeerUnitKeys,
   buildAggregationGroups,
   deduplicateManualCodingResponses,
-  getAggregationPeerKey,
+  getAggregationVariableKey,
   getManualCodingDeduplicationKey,
-  isAggregatableValue,
-  ManualCodingDeduplicationResponse,
-  serializeAggregationPeerKey
+  ManualCodingDeduplicationResponse
 } from './aggregation-metrics.util';
 import {
   formatCodingTestPersonFromUnit,
@@ -93,7 +88,6 @@ import {
 import {
   applyNonCodingIssueReviewJobFilter,
   CODING_JOB_TYPE_CODING_ISSUE_REVIEW,
-  getNonCodingIssueReviewJobSqlCondition,
   isCodingIssueReviewJobType
 } from './coding-job-type.util';
 import { statusStringToNumber } from '../../utils/response-status-converter';
@@ -102,6 +96,7 @@ import {
   CodingJobDistributionPlanner,
   DistributionCoderLoad
 } from './coding-job-distribution-planner';
+import { CodingAggregationPeerService } from './coding-aggregation-peer.service';
 
 function isSafeKey(key: string): boolean {
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
@@ -484,6 +479,7 @@ export class CodingJobService {
     private workspaceFilesService: WorkspaceFilesService,
     private workspaceExclusionService: WorkspaceExclusionService,
     private usersService: UsersService,
+    private codingAggregationPeerService: CodingAggregationPeerService,
     @Optional()
     private codingFreshnessService?: CodingFreshnessService,
     @Optional()
@@ -624,7 +620,7 @@ export class CodingJobService {
           statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
         }).orWhere(
           `response.status_v1 = :deriveErrorStatus
-          AND CONCAT(unit.name, CHR(31), response.variableid) IN (:...deriveErrorManualCodingPairKeys)`,
+          AND CONCAT(UPPER(unit.name), CHR(31), response.variableid) IN (:...deriveErrorManualCodingPairKeys)`,
           {
             deriveErrorStatus: DERIVE_ERROR_STATUS,
             deriveErrorManualCodingPairKeys
@@ -639,8 +635,8 @@ export class CodingJobService {
     variable: VariableReference
   ): boolean {
     if (
-      response.unitName !== variable.unitName ||
-      response.variableid !== variable.variableId
+      getAggregationVariableKey(response.unitName, response.variableid) !==
+        getAggregationVariableKey(variable.unitName, variable.variableId)
     ) {
       return false;
     }
@@ -3296,7 +3292,7 @@ export class CodingJobService {
       const unitParam = `unitName${index}`;
       const variableParam = `variableId${index}`;
       conditions.push(
-        `(unit.name = :${unitParam} AND response.variableid = :${variableParam})`
+        `(UPPER(unit.name) = UPPER(:${unitParam}) AND response.variableid = :${variableParam})`
       );
       parameters[unitParam] = variable.unit_name;
       parameters[variableParam] = variable.variable_id;
@@ -4680,6 +4676,9 @@ export class CodingJobService {
     const personCodes = Array.from(new Set(bundledUnits.map(unit => unit.person_code)));
     const personGroups = Array.from(new Set(bundledUnits.map(unit => unit.person_group)));
     const bookletNames = Array.from(new Set(bundledUnits.map(unit => unit.booklet_name)));
+    const manualUnitByResponseId = new Map(
+      contextBundledUnits.map(unit => [unit.response_id, unit])
+    );
     const responses = await this.responseRepository
       .createQueryBuilder('response')
       .leftJoinAndSelect('response.unit', 'unit')
@@ -4688,7 +4687,9 @@ export class CodingJobService {
       .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('response.variableid IN (:...variableIds)', { variableIds })
-      .andWhere('unit.name IN (:...unitNames)', { unitNames })
+      .andWhere('UPPER(unit.name) IN (:...unitNames)', {
+        unitNames: unitNames.map(unitName => unitName.toUpperCase())
+      })
       .andWhere('person.login IN (:...personLogins)', { personLogins })
       .andWhere('person.code IN (:...personCodes)', { personCodes })
       .andWhere('person.group IN (:...personGroups)', { personGroups })
@@ -4704,15 +4705,24 @@ export class CodingJobService {
         return;
       }
 
-      responseByCaseAndVariable.set(
-        `${caseKey}\u0000${response.unit?.name || ''}::${response.variableid}`,
-        response
-      );
+      const responseKey = `${caseKey}\u0000${getAggregationVariableKey(
+        response.unit?.name || '',
+        response.variableid
+      )}`;
+      const existing = responseByCaseAndVariable.get(responseKey);
+      const responseIsManual = manualUnitByResponseId.has(response.id);
+      const existingIsManual = existing ?
+        manualUnitByResponseId.has(existing.id) :
+        false;
+      if (
+        !existing ||
+        (responseIsManual && !existingIsManual) ||
+        (responseIsManual === existingIsManual && response.id < existing.id)
+      ) {
+        responseByCaseAndVariable.set(responseKey, response);
+      }
     });
 
-    const manualUnitByResponseId = new Map(
-      contextBundledUnits.map(unit => [unit.response_id, unit])
-    );
     const bundleContextByResponseId = new Map<number, CodingJobBundleContext>();
     const configuredBundleIds = new Set(
       codingJobBundles.map(bundle => bundle.variable_bundle_id)
@@ -4733,11 +4743,15 @@ export class CodingJobService {
       const contextVariables = (variableBundle.variables || [])
         .map(variable => {
           const response = responseByCaseAndVariable.get(
-            `${caseKey}\u0000${variable.unitName}::${variable.variableId}`
+            `${caseKey}\u0000${getAggregationVariableKey(
+              variable.unitName,
+              variable.variableId
+            )}`
           );
           const manualUnit = response ?
             manualUnitByResponseId.get(response.id) :
             undefined;
+          const resolvedUnitName = response?.unit?.name || variable.unitName;
           const status = this.getCodingJobBundleVariableStatus(
             response,
             manualUnit
@@ -4745,13 +4759,13 @@ export class CodingJobService {
 
           return {
             responseId: response?.id ?? null,
-            unitName: variable.unitName,
+            unitName: resolvedUnitName,
             variableId: variable.variableId,
             variableAnchor:
-              variableAnchorMaps.get(variable.unitName)?.get(variable.variableId) ||
+              variableAnchorMaps.get(resolvedUnitName)?.get(variable.variableId) ||
               variable.variableId,
             variablePage:
-              variablePageMaps.get(variable.unitName)?.get(variable.variableId) ||
+              variablePageMaps.get(resolvedUnitName)?.get(variable.variableId) ||
               '0',
             ...status
           };
@@ -4902,7 +4916,7 @@ export class CodingJobService {
             variable_id: variable.variableId
           });
           variableBundleMap.set(
-            `${variable.unitName}::${variable.variableId}`,
+            getAggregationVariableKey(variable.unitName, variable.variableId),
             bundle.variable_bundle_id
           );
         });
@@ -4943,7 +4957,7 @@ export class CodingJobService {
       const unitParam = `cjUnitName${index}`;
       const variableParam = `cjVariableId${index}`;
       conditions.push(
-        `(unit.name = :${unitParam} AND response.variableid = :${variableParam})`
+        `(UPPER(unit.name) = UPPER(:${unitParam}) AND response.variableid = :${variableParam})`
       );
       parameters[unitParam] = variable.unit_name;
       parameters[variableParam] = variable.variable_id;
@@ -4986,7 +5000,9 @@ export class CodingJobService {
         personLogin: r.personLogin ?? '',
         personCode: r.personCode ?? '',
         personGroup: r.personGroup ?? '',
-        variableBundleId: variableBundleMap.get(`${unitName}::${variableid}`)
+        variableBundleId: variableBundleMap.get(
+          getAggregationVariableKey(unitName, variableid)
+        )
       };
     });
   }
@@ -5315,7 +5331,7 @@ export class CodingJobService {
       }
 
       const variableBundleId = variableBundleIdByVariable.get(
-        `${response.unitName}::${response.variableid}`
+        getAggregationVariableKey(response.unitName, response.variableid)
       );
       return variableBundleId ? { ...response, variableBundleId } : response;
     });
@@ -5365,7 +5381,7 @@ export class CodingJobService {
     bundleVariablesById.forEach((variables, bundleId) => {
       variables.forEach(variable => {
         variableBundleIdByVariable.set(
-          `${variable.unitName}::${variable.variableId}`,
+          getAggregationVariableKey(variable.unitName, variable.variableId),
           bundleId
         );
       });
@@ -5730,7 +5746,7 @@ export class CodingJobService {
       const unitParam = `unitName${index}`;
       const variableParam = `variableId${index}`;
       conditions.push(
-        `(unit.name = :${unitParam} AND response.variableid = :${variableParam})`
+        `(UPPER(unit.name) = UPPER(:${unitParam}) AND response.variableid = :${variableParam})`
       );
       parameters[unitParam] = variable.unitName;
       parameters[variableParam] = variable.variableId;
@@ -5798,7 +5814,7 @@ export class CodingJobService {
       const unitParam = `slimUnitName${index}`;
       const variableParam = `slimVariableId${index}`;
       conditions.push(
-        `(unit.name = :${unitParam} AND response.variableid = :${variableParam})`
+        `(UPPER(unit.name) = UPPER(:${unitParam}) AND response.variableid = :${variableParam})`
       );
       parameters[unitParam] = variable.unitName;
       parameters[variableParam] = variable.variableId;
@@ -5836,11 +5852,13 @@ export class CodingJobService {
     variables: VariableReference[],
     matchingFlags: ResponseMatchingFlag[],
     aggregationThreshold: number | null,
-    derivedVariableMap: Map<string, Set<string>>
+    derivedVariableMap: Map<string, Set<string>>,
+    manager?: EntityManager
   ): Promise<SlimResponse[]> {
     const activeResponses = await this.getSlimResponsesForVariables(
       workspaceId,
-      variables
+      variables,
+      manager
     );
     const aggregationActive = aggregationThreshold !== null &&
       !matchingFlags.includes(ResponseMatchingFlag.NO_AGGREGATION);
@@ -5849,172 +5867,46 @@ export class CodingJobService {
       return activeResponses;
     }
 
-    const peerKeys = buildAggregationPeerKeys(
-      activeResponses.map(response => ({
-        responseId: response.id,
-        unitName: response.unitName,
-        variableId: response.variableid,
-        value: response.value
-      })),
-      matchingFlags,
-      derivedVariableMap
-    );
-
-    if (peerKeys.length === 0) {
-      return activeResponses;
-    }
-
-    const completedStatus = statusStringToNumber('CODING_COMPLETE');
-    const defaultMirCode = await this.getDefaultMirCode(workspaceId);
-    const exclusions =
-      await this.workspaceExclusionService.resolveExclusionsForQueries(
-        workspaceId
-      );
-    const peerKeySet = new Set(
-      peerKeys.map(peerKey => serializeAggregationPeerKey(peerKey))
-    );
-    const exactValueMatching =
-      !matchingFlags.includes(ResponseMatchingFlag.IGNORE_CASE) &&
-      !matchingFlags.includes(ResponseMatchingFlag.IGNORE_WHITESPACE);
-    const createCompletedPeerQuery = (): SelectQueryBuilder<ResponseEntity> => {
-      const query = this.responseRepository
-        .createQueryBuilder('response')
-        .innerJoin('response.unit', 'unit')
-        .innerJoin('unit.booklet', 'booklet')
-        .leftJoin('booklet.bookletinfo', 'bookletinfo')
-        .innerJoin('booklet.person', 'person')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true })
-        .andWhere('response.status_v2 = :completedStatus', { completedStatus })
-        .andWhere(
-          '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
-          { aggregatedCode: -111, defaultMirCode }
-        )
-        .andWhere(new Brackets(qb => {
-          qb.where('response.code_v2 IS NULL')
-            .orWhere(subQuery => {
-              const exists = subQuery
-                .subQuery()
-                .select('1')
-                .from('coding_job_unit', 'manual_cju')
-                .innerJoin('coding_job', 'manual_cj', 'manual_cj.id = manual_cju.coding_job_id')
-                .where('manual_cju.response_id = response.id')
-                .andWhere('manual_cj.training_id IS NULL')
-                .andWhere(getNonCodingIssueReviewJobSqlCondition('manual_cj'))
-                .getQuery();
-              return `EXISTS (${exists})`;
-            });
-        }));
-      this.applyManualCodingCandidateStatusFilter(query, variables);
-      applyResolvedExclusionsToQuery(query, exclusions);
-      return query;
-    };
-
-    const peerVariableIds = Array.from(new Set(
-      peerKeys.map(peerKey => peerKey.variableId)
-    ));
-    const peerUnitQuery = createCompletedPeerQuery()
-      .select('DISTINCT unit.name', 'unitName')
-      .addSelect('response.variableid', 'variableId')
-      .andWhere('response.variableid IN (:...peerVariableIds)', {
-        peerVariableIds
+    const completedPeers = await this.codingAggregationPeerService
+      .findCompletedPeers({
+        workspaceId,
+        sourceResponses: activeResponses.map(response => ({
+          responseId: response.id,
+          unitName: response.unitName,
+          variableId: response.variableid,
+          value: response.value
+        })),
+        matchingFlags,
+        derivedVariableMap,
+        variables,
+        manager,
+        loadQueryContext: async () => {
+          const [defaultMirCode, exclusions] = await Promise.all([
+            this.getDefaultMirCode(workspaceId),
+            this.workspaceExclusionService.resolveExclusionsForQueries(
+              workspaceId
+            )
+          ]);
+          return { defaultMirCode, exclusions };
+        }
       });
-    const peerUnitKeys = buildAggregationPeerUnitKeys(
-      peerKeys,
-      await peerUnitQuery.getRawMany()
-    );
-    if (peerUnitKeys.length === 0) {
-      return activeResponses;
-    }
 
-    const peerValueQuery = createCompletedPeerQuery()
-      .select('DISTINCT unit.name', 'unitName')
-      .addSelect('response.variableid', 'variableId')
-      .addSelect('response.value', 'value')
-      .andWhere(
-        `EXISTS (
-          SELECT 1
-          FROM jsonb_to_recordset(CAST(:aggregationPeerUnits AS jsonb))
-            AS aggregation_peer_unit("unitName" text, "variableId" text)
-          WHERE aggregation_peer_unit."unitName" = unit.name
-            AND aggregation_peer_unit."variableId" = response.variableid
-        )`,
-        { aggregationPeerUnits: JSON.stringify(peerUnitKeys) }
-      );
-    if (exactValueMatching) {
-      peerValueQuery.andWhere(
-        `EXISTS (
-          SELECT 1
-          FROM jsonb_to_recordset(CAST(:aggregationPeerValues AS jsonb))
-            AS aggregation_peer_value("variableId" text, "normalizedValue" text)
-          WHERE aggregation_peer_value."variableId" = response.variableid
-            AND aggregation_peer_value."normalizedValue" = response.value
-        )`,
-        { aggregationPeerValues: JSON.stringify(peerKeys) }
-      );
-    }
-    const peerLookupKeys = buildAggregationPeerLookupKeys(
-      peerKeys,
-      await peerValueQuery.getRawMany(),
-      matchingFlags
-    );
-    if (peerLookupKeys.length === 0) {
-      return activeResponses;
-    }
-
-    const queryBuilder = createCompletedPeerQuery()
-      .select('response.id', 'id')
-      .addSelect('response.variableid', 'variableid')
-      .addSelect('response.value', 'value')
-      .addSelect('response.status_v1', 'statusV1')
-      .addSelect('response.status_v2', 'statusV2')
-      .addSelect('unit.name', 'unitName')
-      .addSelect('unit.alias', 'unitAlias')
-      .addSelect("COALESCE(bookletinfo.name, '')", 'bookletName')
-      .addSelect("COALESCE(person.login, '')", 'personLogin')
-      .addSelect("COALESCE(person.code, '')", 'personCode')
-      .addSelect("COALESCE(person.group, '')", 'personGroup')
-      .andWhere(
-        `EXISTS (
-          SELECT 1
-          FROM jsonb_to_recordset(CAST(:aggregationPeerKeys AS jsonb))
-            AS aggregation_peer("unitName" text, "variableId" text, "value" text)
-          WHERE aggregation_peer."unitName" = unit.name
-            AND aggregation_peer."variableId" = response.variableid
-            AND aggregation_peer."value" = response.value
-        )`,
-        { aggregationPeerKeys: JSON.stringify(peerLookupKeys) }
-      );
-    const raw = await queryBuilder.orderBy('response.id', 'ASC').getRawMany();
-    const completedPeers: SlimResponse[] = raw.map(r => ({
-      id: Number(r.id),
-      variableid: r.variableid,
-      value: r.value ?? null,
-      statusV1:
-        r.statusV1 !== undefined && r.statusV1 !== null ?
-          Number(r.statusV1) :
-          null,
-      statusV2:
-        r.statusV2 !== undefined && r.statusV2 !== null ?
-          Number(r.statusV2) :
-          null,
-      unitName: r.unitName ?? '',
-      unitAlias: r.unitAlias ?? null,
-      bookletName: r.bookletName ?? '',
-      personLogin: r.personLogin ?? '',
-      personCode: r.personCode ?? '',
-      personGroup: r.personGroup ?? ''
-    })).filter(response => (
-      isAggregatableValue(response.value) &&
-      peerKeySet.has(serializeAggregationPeerKey(getAggregationPeerKey(
-        response.unitName,
-        response.variableid,
-        response.value,
-        matchingFlags
-      )))
-    ));
-
-    return [...activeResponses, ...completedPeers];
+    return [
+      ...activeResponses,
+      ...completedPeers.map(response => ({
+        id: response.responseId,
+        variableid: response.variableId,
+        value: response.value,
+        statusV1: response.statusV1,
+        statusV2: response.statusV2,
+        unitName: response.unitName,
+        unitAlias: response.unitAlias,
+        bookletName: response.bookletName,
+        personLogin: response.personLogin,
+        personCode: response.personCode,
+        personGroup: response.personGroup
+      }))
+    ];
   }
 
   private async getAssignedResponseIdsForVariables(
@@ -6059,7 +5951,7 @@ export class CodingJobService {
       const unitParam = `assignedUnitName${index}`;
       const variableParam = `assignedVariableId${index}`;
       conditions.push(
-        `(cju.unit_name = :${unitParam} AND cju.variable_id = :${variableParam})`
+        `(UPPER(cju.unit_name) = UPPER(:${unitParam}) AND cju.variable_id = :${variableParam})`
       );
       parameters[unitParam] = variable.unitName;
       parameters[variableParam] = variable.variableId;
@@ -6163,6 +6055,20 @@ export class CodingJobService {
       totalResponses: unassignedResponses.length,
       caseStatusesByResponseId
     };
+  }
+
+  private addCompletedResponsesToAssignedSets(
+    responses: SlimResponse[],
+    assignedResponseIdSets: Set<number>[]
+  ): void {
+    const completedStatus = statusStringToNumber('CODING_COMPLETE');
+    responses
+      .filter(response => response.statusV2 === completedStatus)
+      .forEach(response => {
+        assignedResponseIdSets.forEach(assignedResponseIds => {
+          assignedResponseIds.add(response.id);
+        });
+      });
   }
 
   private getAggregatedCaseUsageStatus(
@@ -6606,7 +6512,10 @@ export class CodingJobService {
     const uniqueVariables = new Map<string, VariableReference>();
 
     variables.forEach(variable => {
-      const key = `${variable.unitName}::${variable.variableId}`;
+      const key = getAggregationVariableKey(
+        variable.unitName,
+        variable.variableId
+      );
       const existing = uniqueVariables.get(key);
       uniqueVariables.set(key, {
         ...variable,
@@ -6824,9 +6733,12 @@ export class CodingJobService {
           .itemVariables
       )
     );
-    const allResponses = await this.getSlimResponsesForVariables(
+    const allResponses = await this.getSlimResponsesForVariableCoverage(
       workspaceId,
       allVariables,
+      matchingFlags,
+      aggregationThreshold,
+      derivedVariableMap,
       manager
     );
     const assignedResponseIds = await this.getAssignedResponseIdsForVariables(
@@ -6835,6 +6747,9 @@ export class CodingJobService {
       request.jobDefinitionId,
       manager
     );
+    this.addCompletedResponsesToAssignedSets(allResponses, [
+      assignedResponseIds
+    ]);
     const warnings: JobCreationWarning[] = [];
     const warnedVariables = new Set<string>();
 
@@ -7359,15 +7274,24 @@ export class CodingJobService {
     const [
       matchingFlags,
       aggregationThreshold,
-      derivedVariableMap,
+      derivedVariableMap
+    ] = await Promise.all([
+      this.getResponseMatchingMode(workspaceId),
+      this.getAggregationThreshold(workspaceId),
+      this.workspaceFilesService.getDerivedVariableMap(workspaceId)
+    ]);
+    const [
       allResponses,
       assignedResponseIds,
       assignedResponseIdsByExcludedJobDefinitionIdEntries
     ] = await Promise.all([
-      this.getResponseMatchingMode(workspaceId),
-      this.getAggregationThreshold(workspaceId),
-      this.workspaceFilesService.getDerivedVariableMap(workspaceId),
-      this.getSlimResponsesForVariables(workspaceId, allVariables),
+      this.getSlimResponsesForVariableCoverage(
+        workspaceId,
+        allVariables,
+        matchingFlags,
+        aggregationThreshold,
+        derivedVariableMap
+      ),
       this.getAssignedResponseIdsForVariables(workspaceId, allVariables),
       Promise.all(
         excludedJobDefinitionIds.map(async jobDefinitionId => [
@@ -7379,6 +7303,10 @@ export class CodingJobService {
           )
         ] as const)
       )
+    ]);
+    this.addCompletedResponsesToAssignedSets(allResponses, [
+      assignedResponseIds,
+      ...assignedResponseIdsByExcludedJobDefinitionIdEntries.map(([, ids]) => ids)
     ]);
 
     return {
@@ -7477,11 +7405,15 @@ export class CodingJobService {
 
     selectedCases.forEach(({ item, caseGroup }) => {
       caseGroup.responses.forEach(response => {
+        const selectedVariable = item.itemVariables.find(variable => (
+          this.responseMatchesVariableReference(response, variable)
+        ));
         this.addResponseToVariableUsageByStatus(
           usageByVariable,
           response,
           item.caseStatusesByResponseId.get(response.id) ||
-            this.getResponseUsageStatus(response)
+            this.getResponseUsageStatus(response),
+          selectedVariable
         );
       });
     });
@@ -7492,9 +7424,12 @@ export class CodingJobService {
   private addResponseToVariableUsageByStatus(
     usageByVariable: Map<string, DistributionVariableUsageByStatus>,
     response: SlimResponse,
-    caseStatus: DistributionVariableUsageCaseStatus
+    caseStatus: DistributionVariableUsageCaseStatus,
+    selectedVariable?: VariableReference
   ): void {
-    const variableKey = `${response.unitName}::${response.variableid}`;
+    const variableKey = selectedVariable ?
+      `${selectedVariable.unitName}::${selectedVariable.variableId}` :
+      `${response.unitName}::${response.variableid}`;
     const usage = usageByVariable.get(variableKey) || {
       regular: 0,
       deriveError: 0,

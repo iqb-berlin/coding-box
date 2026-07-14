@@ -70,7 +70,7 @@ export function getDeriveErrorManualCodingPairKeys(
     variables
       .filter(variable => variable.includeDeriveError === true)
       .map(variable => toManualCodingVariablePairKey(
-        variable.unitName,
+        variable.unitName.toUpperCase(),
         variable.variableId
       ))
   ));

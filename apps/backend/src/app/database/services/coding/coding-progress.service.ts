@@ -1,7 +1,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  Brackets, In, Repository, SelectQueryBuilder
+  Brackets, In, Repository
 } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -16,17 +16,11 @@ import {
 } from '../workspace/workspace-exclusion.service';
 import { CacheService } from '../../../cache/cache.service';
 import {
-  buildAggregationPeerLookupKeys,
-  buildAggregationPeerKeys,
-  buildAggregationPeerUnitKeys,
   buildAggregationGroups,
   countEffectiveManualCodingCases,
-  getAggregationPeerKey,
   getAggregationVariableKey,
-  isAggregatableValue,
   ManualCodingDeduplicationResponse,
   partitionResponsesByAggregationVariable,
-  serializeAggregationPeerKey,
   summarizeAggregationGroups
 } from './aggregation-metrics.util';
 import { IQB_STANDARD_MISSING_CODES, MissingsProfilesService } from './missings-profiles.service';
@@ -42,6 +36,7 @@ import {
   getNonCodingIssueReviewJobSqlCondition
 } from './coding-job-type.util';
 import { getCodingIncompleteVariablesCacheVersionKey } from './coding-incomplete-variables-cache-key.util';
+import { CodingAggregationPeerService } from './coding-aggregation-peer.service';
 
 type ResponseMatchingFlag =
   | 'NO_AGGREGATION'
@@ -206,6 +201,7 @@ export class CodingProgressService {
     private workspaceFilesService: WorkspaceFilesService,
     private workspaceExclusionService: WorkspaceExclusionService,
     private cacheService: CacheService,
+    private codingAggregationPeerService: CodingAggregationPeerService,
     @Optional()
     private missingsProfilesService?: MissingsProfilesService
   ) { }
@@ -1518,172 +1514,36 @@ export class CodingProgressService {
     matchingFlags: ResponseMatchingFlag[],
     derivedVariableMap: Map<string, Set<string>>
   ): Promise<CoverageResponse[]> {
-    const peerKeys = buildAggregationPeerKeys(
-      activeResponses,
-      matchingFlags,
-      derivedVariableMap
-    );
-
-    if (peerKeys.length === 0) {
-      return [];
-    }
-
-    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    const defaultMirCode = await this.getDefaultMirCode(workspaceId);
-    const peerKeySet = new Set(
-      peerKeys.map(peerKey => serializeAggregationPeerKey(peerKey))
-    );
-    const exactValueMatching =
-      !matchingFlags.includes('IGNORE_CASE') &&
-      !matchingFlags.includes('IGNORE_WHITESPACE');
-    const completedV2Status = statusStringToNumber('CODING_COMPLETE');
-    const createCompletedPeerQuery = (): SelectQueryBuilder<ResponseEntity> => (
-      this.responseRepository
-        .createQueryBuilder('response')
-        .leftJoin('response.unit', 'unit')
-        .leftJoin('unit.booklet', 'booklet')
-        .leftJoin('booklet.bookletinfo', 'bookletinfo')
-        .leftJoin('booklet.person', 'person')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true })
-        .andWhere('response.status_v1 IN (:...statuses)', {
-          statuses: [
-            statusStringToNumber('CODING_INCOMPLETE'),
-            statusStringToNumber('INTENDED_INCOMPLETE')
-          ]
-        })
-        .andWhere('response.status_v2 = :completedV2Status', {
-          completedV2Status
-        })
-        .andWhere(
-          '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
-          { aggregatedCode: -111, defaultMirCode }
-        )
-        .andWhere(new Brackets(qb => {
-          qb.where('response.code_v2 IS NULL')
-            .orWhere(subQuery => {
-              const exists = subQuery
-                .subQuery()
-                .select('1')
-                .from('coding_job_unit', 'manual_cju')
-                .innerJoin('coding_job', 'manual_cj', 'manual_cj.id = manual_cju.coding_job_id')
-                .where('manual_cju.response_id = response.id')
-                .andWhere('manual_cj.training_id IS NULL')
-                .andWhere(getNonCodingIssueReviewJobSqlCondition('manual_cj'))
-                .getQuery();
-              return `EXISTS (${exists})`;
-            });
-        }))
-    );
-
-    const peerVariableIds = Array.from(new Set(
-      peerKeys.map(peerKey => peerKey.variableId)
-    ));
-    const peerUnitQuery = createCompletedPeerQuery()
-      .select('DISTINCT unit.name', 'unitName')
-      .addSelect('response.variableid', 'variableId')
-      .andWhere('response.variableid IN (:...peerVariableIds)', {
-        peerVariableIds
+    const completedPeers = await this.codingAggregationPeerService
+      .findCompletedPeers({
+        workspaceId,
+        sourceResponses: activeResponses,
+        matchingFlags,
+        derivedVariableMap,
+        loadQueryContext: async () => {
+          const [defaultMirCode, exclusions] = await Promise.all([
+            this.getDefaultMirCode(workspaceId),
+            this.workspaceExclusionService.resolveExclusionsForQueries(
+              workspaceId
+            )
+          ]);
+          return { defaultMirCode, exclusions };
+        }
       });
-    applyResolvedExclusionsToQuery(peerUnitQuery, exclusions, {
-      parameterPrefix: 'completedVariableCoveragePeerUnits'
-    });
-    const peerUnitKeys = buildAggregationPeerUnitKeys(
-      peerKeys,
-      await peerUnitQuery.getRawMany()
-    );
-    if (peerUnitKeys.length === 0) {
-      return [];
-    }
 
-    const peerValueQuery = createCompletedPeerQuery()
-      .select('DISTINCT unit.name', 'unitName')
-      .addSelect('response.variableid', 'variableId')
-      .addSelect('response.value', 'value')
-      .andWhere(
-        `EXISTS (
-          SELECT 1
-          FROM jsonb_to_recordset(CAST(:aggregationPeerUnits AS jsonb))
-            AS aggregation_peer_unit("unitName" text, "variableId" text)
-          WHERE aggregation_peer_unit."unitName" = unit.name
-            AND aggregation_peer_unit."variableId" = response.variableid
-        )`,
-        { aggregationPeerUnits: JSON.stringify(peerUnitKeys) }
-      );
-    applyResolvedExclusionsToQuery(peerValueQuery, exclusions, {
-      parameterPrefix: 'completedVariableCoveragePeerValues'
-    });
-    if (exactValueMatching) {
-      peerValueQuery.andWhere(
-        `EXISTS (
-          SELECT 1
-          FROM jsonb_to_recordset(CAST(:aggregationPeerValues AS jsonb))
-            AS aggregation_peer_value("variableId" text, "normalizedValue" text)
-          WHERE aggregation_peer_value."variableId" = response.variableid
-            AND aggregation_peer_value."normalizedValue" = response.value
-        )`,
-        { aggregationPeerValues: JSON.stringify(peerKeys) }
-      );
-    }
-    const peerLookupKeys = buildAggregationPeerLookupKeys(
-      peerKeys,
-      await peerValueQuery.getRawMany(),
-      matchingFlags
-    );
-    if (peerLookupKeys.length === 0) {
-      return [];
-    }
-
-    const query = createCompletedPeerQuery()
-      .select('response.id', 'responseId')
-      .addSelect('response.value', 'value')
-      .addSelect('response.code_v2', 'codeV2')
-      .addSelect('response.status_v2', 'statusV2')
-      .addSelect('response.status_v1', 'statusV1')
-      .addSelect('response.variableid', 'variableId')
-      .addSelect('unit.name', 'unitName')
-      .addSelect("COALESCE(bookletinfo.name, '')", 'bookletName')
-      .addSelect("COALESCE(person.login, '')", 'personLogin')
-      .addSelect("COALESCE(person.code, '')", 'personCode')
-      .addSelect("COALESCE(person.group, '')", 'personGroup')
-      .andWhere(
-        `EXISTS (
-          SELECT 1
-          FROM jsonb_to_recordset(CAST(:aggregationPeerKeys AS jsonb))
-            AS aggregation_peer("unitName" text, "variableId" text, "value" text)
-          WHERE aggregation_peer."unitName" = unit.name
-            AND aggregation_peer."variableId" = response.variableid
-            AND aggregation_peer."value" = response.value
-        )`,
-        { aggregationPeerKeys: JSON.stringify(peerLookupKeys) }
-      )
-      .orderBy('response.id', 'ASC');
-    applyResolvedExclusionsToQuery(query, exclusions, {
-      parameterPrefix: 'completedVariableCoveragePeers'
-    });
-    const raw = await query.getRawMany();
-
-    return raw.map(row => ({
-      responseId: Number(row.responseId),
-      value: row.value ?? null,
-      codeV2: row.codeV2 === null || row.codeV2 === undefined ? null : Number(row.codeV2),
-      statusV2: row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2),
-      statusV1: row.statusV1 === null || row.statusV1 === undefined ? null : Number(row.statusV1),
-      variableId: row.variableId,
-      unitName: row.unitName,
-      bookletName: row.bookletName ?? '',
-      personLogin: row.personLogin ?? '',
-      personCode: row.personCode ?? '',
-      personGroup: row.personGroup ?? ''
-    })).filter(response => (
-      isAggregatableValue(response.value) &&
-      peerKeySet.has(serializeAggregationPeerKey(getAggregationPeerKey(
-        response.unitName,
-        response.variableId,
-        response.value,
-        matchingFlags
-      )))
-    ));
+    return completedPeers.map(response => ({
+      responseId: response.responseId,
+      value: response.value,
+      codeV2: response.codeV2,
+      statusV2: response.statusV2,
+      statusV1: response.statusV1,
+      variableId: response.variableId,
+      unitName: response.unitName,
+      bookletName: response.bookletName,
+      personLogin: response.personLogin,
+      personCode: response.personCode,
+      personGroup: response.personGroup
+    }));
   }
 
   private async getAssignedVariableCoverageResponseIds(

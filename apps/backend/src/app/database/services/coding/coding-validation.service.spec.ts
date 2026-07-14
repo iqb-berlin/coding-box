@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 import { CodingValidationService } from './coding-validation.service';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -575,8 +575,7 @@ describe('CodingValidationService', () => {
     it('should include all unit-name case aliases in a scoped database query', async () => {
       const unitAliasesQb = createQueryBuilderMock([
         { unitName: 'UNIT1' },
-        { unitName: 'unit1' },
-        { unitName: 'OTHER' }
+        { unitName: 'unit1' }
       ]);
       const codingIncompleteQb = createQueryBuilderMock([
         { unitName: 'UNIT1', variableId: 'var1', responseCount: '2' },
@@ -621,6 +620,10 @@ describe('CodingValidationService', () => {
           uniqueCasesAfterAggregation: 5
         })
       ]);
+      expect(unitAliasesQb.andWhere).toHaveBeenCalledWith(
+        'UPPER(unit.name) = UPPER(:unitName)',
+        { unitName: 'Unit1' }
+      );
       [codingIncompleteQb, intendedIncompleteQb, deriveErrorQb]
         .forEach(query => {
           expect(query.andWhere).toHaveBeenCalledWith(
@@ -2080,6 +2083,31 @@ describe('CodingValidationService', () => {
         'response'
       );
       expect(mockQueryBuilder.getCount).toHaveBeenCalled();
+    });
+
+    it('should match applied-result unit names case-insensitively', async () => {
+      mockQueryBuilder.getCount.mockResolvedValueOnce(1);
+
+      await service.getAppliedResultsCount(1, [
+        { unitName: 'UNIT_A', variableId: 'VAR' }
+      ]);
+
+      const bracketCalls = mockQueryBuilder.andWhere.mock.calls
+        .filter(([condition]) => condition instanceof Brackets);
+      const variableFilter = bracketCalls[bracketCalls.length - 1]?.[0] as Brackets;
+      const bracketBuilder = {
+        where: jest.fn().mockReturnThis(),
+        orWhere: jest.fn().mockReturnThis()
+      };
+      variableFilter.whereFactory(bracketBuilder as never);
+
+      expect(bracketBuilder.where).toHaveBeenCalledWith(
+        '(UPPER(unit.name) = UPPER(:appliedUnitName0) AND response.variableid = :appliedVariableId0)',
+        {
+          appliedUnitName0: 'UNIT_A',
+          appliedVariableId0: 'VAR'
+        }
+      );
     });
 
     it('should count applied DERIVE_ERROR job variables even without incomplete variables', async () => {

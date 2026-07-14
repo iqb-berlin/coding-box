@@ -1,5 +1,6 @@
 import { Brackets } from 'typeorm';
 import { CodingProgressService } from './coding-progress.service';
+import { CodingAggregationPeerService } from './coding-aggregation-peer.service';
 import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 
@@ -145,7 +146,8 @@ describe('CodingProgressService variable coverage conflicts', () => {
       settingRepository as never,
       workspaceFilesService as never,
       workspaceExclusionService as never,
-      cacheService as never
+      cacheService as never,
+      new CodingAggregationPeerService(responseRepository as never)
     );
   });
 
@@ -992,15 +994,9 @@ describe('CodingProgressService variable coverage conflicts', () => {
       { unitName: 'AGG_UNIT', variableId: '01', value: 'Same answer' },
       { unitName: 'agg_unit', variableId: '01', value: ' sameanswer ' }
     ]);
-    const peerUnitQuery = createQueryBuilder([
-      { unitName: 'AGG_UNIT', variableId: '01' },
-      { unitName: 'agg_unit', variableId: '01' },
-      { unitName: 'OTHER_UNIT', variableId: '01' }
-    ]);
     responseRepository.createQueryBuilder
       .mockReturnValueOnce(incompleteVariablesQuery)
       .mockReturnValueOnce(variableResponsesQuery)
-      .mockReturnValueOnce(peerUnitQuery)
       .mockReturnValueOnce(peerValueQuery)
       .mockReturnValueOnce(completedPeersQuery);
     workspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
@@ -1061,11 +1057,10 @@ describe('CodingProgressService variable coverage conflicts', () => {
       'aggregation_peer."unitName" = unit.name'
     );
     expect(peerValueQuery.andWhere).toHaveBeenCalledWith(
-      expect.stringContaining('aggregation_peer_unit'),
+      expect.stringContaining('aggregation_peer_variable'),
       {
-        aggregationPeerUnits: JSON.stringify([
-          { unitName: 'AGG_UNIT', variableId: '01' },
-          { unitName: 'agg_unit', variableId: '01' }
+        aggregationPeerVariables: JSON.stringify([
+          { unitName: 'AGG_UNIT', variableId: '01' }
         ])
       }
     );

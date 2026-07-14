@@ -3,6 +3,8 @@ import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
 import { DERIVE_ERROR_STATUS } from '../../utils/manual-coding-candidate.util';
+import { CodingAggregationPeerService } from './coding-aggregation-peer.service';
+import { statusStringToNumber } from '../../utils/response-status-converter';
 
 jest.mock('../workspace/workspace-files.service', () => ({
   WorkspaceFilesService: class {}
@@ -13,6 +15,7 @@ type SlimResponseForTest = {
   variableid: string;
   value: string | null;
   statusV1?: number | null;
+  statusV2?: number | null;
   unitName: string;
   unitAlias: string | null;
   bookletName: string;
@@ -155,7 +158,8 @@ describe('CodingJobService distribution from job definitions', () => {
       cacheService as never,
       workspaceFilesService as never,
       workspaceExclusionService as never,
-      usersService as never
+      usersService as never,
+      new CodingAggregationPeerService(responseRepository as never)
     );
 
     jest.spyOn(
@@ -173,10 +177,20 @@ describe('CodingJobService distribution from job definitions', () => {
   });
 
   function mockResponses(responses: SlimResponseForTest[]): void {
-    jest.spyOn(service, 'getSlimResponsesForVariables').mockImplementation(async (_workspaceId, variables) => responses.filter(response => variables.some(variable => variable.unitName === response.unitName &&
+    const responsesForVariables = (
+      variables: Array<{ unitName: string; variableId: string }>
+    ) => responses.filter(response => variables.some(variable => (
+      variable.unitName.toUpperCase() === response.unitName.toUpperCase() &&
       variable.variableId === response.variableid
-    ))
-    );
+    )));
+    jest.spyOn(service, 'getSlimResponsesForVariables')
+      .mockImplementation(async (_workspaceId, variables) => (
+        responsesForVariables(variables)
+      ));
+    jest.spyOn(service, 'getSlimResponsesForVariableCoverage')
+      .mockImplementation(async (_workspaceId, variables) => (
+        responsesForVariables(variables)
+      ));
     jest.spyOn(
       service as unknown as { getVariableCasesInJobs: () => Promise<Map<string, number>> },
       'getVariableCasesInJobs'
@@ -325,6 +339,86 @@ describe('CodingJobService distribution from job definitions', () => {
     });
     expect([...assignedResponseCounts.values()].filter(count => count === 2)).toHaveLength(2);
     expect(Math.max(...assignedResponseCounts.values())).toBe(2);
+  });
+
+  it('uses all unit-name case variants in preview, usage and created jobs', async () => {
+    const responses = [
+      makeResponse(1, 'Unit A', 'Var 1'),
+      makeResponse(2, 'Unit A', 'Var 1'),
+      makeResponse(3, 'UNIT A', 'Var 1'),
+      makeResponse(4, 'UNIT A', 'Var 1')
+    ];
+    const createdSubsets: SlimResponseForTest[][] = [];
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode')
+      .mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+    jest.spyOn(
+      service as unknown as {
+        createCodingJobWithUnitSubsetInManager: (
+          workspaceId: number,
+          dto: unknown,
+          subset: SlimResponseForTest[]
+        ) => Promise<CodingJob>
+      },
+      'createCodingJobWithUnitSubsetInManager'
+    ).mockImplementation(async (_workspaceId, _dto, subset) => {
+      createdSubsets.push(subset as SlimResponseForTest[]);
+      return { id: 900 + createdSubsets.length } as CodingJob;
+    });
+
+    const request = {
+      selectedVariables: [{ unitName: 'Unit A', variableId: 'Var 1' }],
+      selectedCoders: [{ id: 1, name: 'Ada', username: 'ada' }],
+      caseOrderingMode: 'continuous' as const,
+      distributionSeed: 'unit-case-variants'
+    };
+    const preview = await service.calculateDistribution(5, request);
+    const usage = await service.calculateDistributionVariableUsage(5, request);
+    const result = await service.createDistributedCodingJobs(5, {
+      ...request,
+      jobDefinitionId: 91
+    });
+
+    expect(preview.distribution['Unit A::Var 1']).toEqual({ Ada: 4 });
+    expect(Object.fromEntries(usage)).toEqual({ 'Unit A::Var 1': 4 });
+    expect(result.distribution).toEqual(preview.distribution);
+    expect(createdSubsets.flat().map(response => response.id).sort())
+      .toEqual([1, 2, 3, 4]);
+  });
+
+  it('does not redistribute an open sibling covered by a completed aggregation peer', async () => {
+    const completedResponse = {
+      ...makeResponse(1, 'Unit A', 'Var 1', 'same answer'),
+      statusV2: statusStringToNumber('CODING_COMPLETE')
+    };
+    const activeResponse = {
+      ...makeResponse(2, 'UNIT A', 'Var 1', 'same answer'),
+      statusV2: null
+    };
+    mockResponses([completedResponse, activeResponse]);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(2);
+
+    const request = {
+      selectedVariables: [{ unitName: 'Unit A', variableId: 'Var 1' }],
+      selectedCoders: [{ id: 1, name: 'Ada', username: 'ada' }],
+      distributionSeed: 'completed-peer-coverage'
+    };
+
+    const preview = await service.calculateDistribution(5, request);
+    const usage = await service.calculateDistributionVariableUsage(5, request);
+    const result = await service.createDistributedCodingJobs(5, request);
+
+    expect(preview.distribution['Unit A::Var 1']).toEqual({ Ada: 0 });
+    expect(preview.aggregationInfo['Unit A::Var 1']).toEqual({
+      uniqueCases: 0,
+      totalResponses: 0
+    });
+    expect(usage).toEqual(new Map());
+    expect(result.jobsCreated).toBe(0);
+    expect(result.jobs).toEqual([]);
   });
 
   it('skips cases already assigned by an earlier definition when creating later jobs', async () => {
@@ -1357,7 +1451,7 @@ describe('CodingJobService distribution from job definitions', () => {
     const matchingSpy = jest.spyOn(service, 'getResponseMatchingMode')
       .mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
     const thresholdSpy = jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
-    const slimResponsesSpy = service.getSlimResponsesForVariables as jest.Mock;
+    const slimResponsesSpy = service.getSlimResponsesForVariableCoverage as jest.Mock;
     const assignedResponseIdsSpy = (
       service as unknown as { getAssignedResponseIdsForVariables: jest.Mock }
     ).getAssignedResponseIdsForVariables;
@@ -1393,7 +1487,7 @@ describe('CodingJobService distribution from job definitions', () => {
     expect(slimResponsesSpy).toHaveBeenCalledWith(5, [
       { unitName: 'Unit 1', variableId: 'Var 1' },
       { unitName: 'Unit 2', variableId: 'Var 2' }
-    ]);
+    ], [ResponseMatchingFlag.NO_AGGREGATION], null, expect.any(Map));
   });
 
   it('calculates batched variable usage split by regular and DERIVE_ERROR cases', async () => {

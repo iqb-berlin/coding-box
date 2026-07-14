@@ -14,6 +14,7 @@ import { JobDefinition } from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
+import { CodingAggregationPeerService } from './coding-aggregation-peer.service';
 
 jest.mock('../workspace/workspace-files.service', () => ({
   WorkspaceFilesService: class {}
@@ -259,6 +260,7 @@ describe('CodingJobService', () => {
       workspaceFilesService as never,
       workspaceExclusionService as never,
       usersService as never,
+      new CodingAggregationPeerService(responseRepository as never),
       codingFreshnessService as never,
       codingFileCacheService as never,
       missingsProfilesService as never,
@@ -528,7 +530,7 @@ describe('CodingJobService', () => {
         {
           id: 123,
           variableid: 'VAR',
-          unitName: 'UNIT',
+          unitName: 'unit',
           unitAlias: 'ALIAS',
           bookletName: 'BOOKLET',
           personLogin: 'coder-login',
@@ -2280,6 +2282,38 @@ describe('CodingJobService', () => {
       'response.status_v2',
       'statusV2'
     );
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      '((UPPER(unit.name) = UPPER(:slimUnitName0) AND response.variableid = :slimVariableId0))',
+      {
+        slimUnitName0: 'UNIT',
+        slimVariableId0: 'VAR'
+      }
+    );
+  });
+
+  it('matches assigned responses across unit-name case variants', async () => {
+    const qb = createQueryBuilder([{ responseId: '42' }]);
+    codingJobUnitRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await (
+      service as unknown as {
+        getAssignedResponseIdsForVariables: (
+          workspaceId: number,
+          variables: Array<{ unitName: string; variableId: string }>
+        ) => Promise<Set<number>>;
+      }
+    ).getAssignedResponseIdsForVariables(3, [
+      { unitName: 'Unit', variableId: 'VAR' }
+    ]);
+
+    expect(result).toEqual(new Set([42]));
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      '((UPPER(cju.unit_name) = UPPER(:assignedUnitName0) AND cju.variable_id = :assignedVariableId0))',
+      {
+        assignedUnitName0: 'Unit',
+        assignedVariableId0: 'VAR'
+      }
+    );
   });
 
   it('loads completed aggregation peers only for normalized active response values', async () => {
@@ -2330,14 +2364,8 @@ describe('CodingJobService', () => {
       { unitName: 'UNIT', variableId: 'VAR', value: ' sameanswer ' },
       { unitName: 'Unit', variableId: 'VAR', value: 'Same answer' }
     ]);
-    const peerUnitQuery = createQueryBuilder([
-      { unitName: 'UNIT', variableId: 'VAR' },
-      { unitName: 'Unit', variableId: 'VAR' },
-      { unitName: 'OTHER_UNIT', variableId: 'VAR' }
-    ]);
     responseRepository.createQueryBuilder
       .mockReturnValueOnce(activeQuery)
-      .mockReturnValueOnce(peerUnitQuery)
       .mockReturnValueOnce(peerValueQuery)
       .mockReturnValueOnce(peerQuery);
 
@@ -2357,17 +2385,16 @@ describe('CodingJobService', () => {
       })
     );
     expect(peerValueQuery.andWhere).toHaveBeenCalledWith(
-      expect.stringContaining('aggregation_peer_unit'),
+      expect.stringContaining('aggregation_peer_variable'),
       {
-        aggregationPeerUnits: JSON.stringify([
-          { unitName: 'UNIT', variableId: 'VAR' },
-          { unitName: 'Unit', variableId: 'VAR' }
+        aggregationPeerVariables: JSON.stringify([
+          { unitName: 'UNIT', variableId: 'VAR' }
         ])
       }
     );
     expect(peerQuery.andWhere).toHaveBeenCalledWith(
-      'response.status_v2 = :completedStatus',
-      { completedStatus: statusStringToNumber('CODING_COMPLETE') }
+      'response.status_v2 = :completedV2Status',
+      { completedV2Status: statusStringToNumber('CODING_COMPLETE') }
     );
     expect(peerQuery.andWhere).toHaveBeenCalledWith(
       '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
@@ -2409,13 +2436,9 @@ describe('CodingJobService', () => {
     const peerValueQuery = createQueryBuilder([
       { unitName: 'UNIT', variableId: 'VAR', value: 'exact answer' }
     ]);
-    const peerUnitQuery = createQueryBuilder([
-      { unitName: 'UNIT', variableId: 'VAR' }
-    ]);
     const peerQuery = createQueryBuilder([]);
     responseRepository.createQueryBuilder
       .mockReturnValueOnce(activeQuery)
-      .mockReturnValueOnce(peerUnitQuery)
       .mockReturnValueOnce(peerValueQuery)
       .mockReturnValueOnce(peerQuery);
 
@@ -2450,7 +2473,7 @@ describe('CodingJobService', () => {
     await expect(
       service.getResponsesForVariables(3, [
         {
-          unitName: 'UNIT',
+          unitName: 'Unit',
           variableId: 'VAR',
           includeDeriveError: true
         }
@@ -2478,7 +2501,7 @@ describe('CodingJobService', () => {
       }
     );
     expect(bracketBuilder.orWhere).toHaveBeenCalledWith(
-      expect.stringContaining('response.status_v1 = :deriveErrorStatus'),
+      expect.stringContaining('CONCAT(UPPER(unit.name), CHR(31), response.variableid)'),
       {
         deriveErrorStatus: statusStringToNumber('DERIVE_ERROR'),
         deriveErrorManualCodingPairKeys: ['UNIT\u001FVAR']
@@ -4917,6 +4940,25 @@ describe('CodingJobService', () => {
             person: { login: 'login', code: 'code', group: 'group' }
           }
         }
+      },
+      {
+        id: 101,
+        variableid: 'VAR_A',
+        is_autocoder_generated: false,
+        status_v1: null,
+        code_v1: null,
+        score_v1: null,
+        code_v2: null,
+        score_v2: null,
+        code_v3: null,
+        score_v3: null,
+        unit: {
+          name: 'unit_a',
+          booklet: {
+            bookletinfo: { name: 'BOOKLET' },
+            person: { login: 'login', code: 'code', group: 'group' }
+          }
+        }
       }
     ]);
 
@@ -4940,7 +4982,7 @@ describe('CodingJobService', () => {
         workspace_id: 3,
         name: 'Bundle',
         variables: [
-          { unitName: 'UNIT_A', variableId: 'VAR_A' },
+          { unitName: 'unit_a', variableId: 'VAR_A' },
           { unitName: 'UNIT_B', variableId: 'VAR_B' }
         ]
       }
