@@ -1761,10 +1761,10 @@ describe('CodingJobService', () => {
       'coding_incomplete_variables_version:7'
     );
     expect(cacheService.delete).toHaveBeenCalledWith(
-      'coding_incomplete_variables_v8:7'
+      'coding_incomplete_variables_v9:7'
     );
     expect(cacheService.delete).toHaveBeenCalledWith(
-      'coding_incomplete_variables_scope_v1:7'
+      'coding_incomplete_variables_scope_v2:7'
     );
   });
 
@@ -2276,6 +2276,171 @@ describe('CodingJobService', () => {
     ).resolves.toEqual([]);
 
     expectManualCodingCandidateStatusFilter(qb);
+    expect(qb.addSelect).toHaveBeenCalledWith(
+      'response.status_v2',
+      'statusV2'
+    );
+  });
+
+  it('loads completed aggregation peers only for normalized active response values', async () => {
+    const activeQuery = createQueryBuilder([
+      {
+        id: '2',
+        variableid: 'VAR',
+        value: 'Same\u00a0answer',
+        statusV1: statusStringToNumber('CODING_INCOMPLETE'),
+        statusV2: null,
+        unitName: 'UNIT',
+        unitAlias: null,
+        bookletName: 'BOOKLET',
+        personLogin: 'person-2',
+        personCode: 'code-2',
+        personGroup: 'group'
+      }
+    ]);
+    const peerQuery = createQueryBuilder([
+      {
+        id: '1',
+        variableid: 'VAR',
+        value: ' sameanswer ',
+        statusV1: statusStringToNumber('CODING_INCOMPLETE'),
+        statusV2: statusStringToNumber('CODING_COMPLETE'),
+        unitName: 'UNIT',
+        unitAlias: null,
+        bookletName: 'BOOKLET',
+        personLogin: 'person-1',
+        personCode: 'code-1',
+        personGroup: 'group'
+      },
+      {
+        id: '3',
+        variableid: 'VAR',
+        value: 'Different answer',
+        statusV1: statusStringToNumber('CODING_INCOMPLETE'),
+        statusV2: statusStringToNumber('CODING_COMPLETE'),
+        unitName: 'UNIT',
+        unitAlias: null,
+        bookletName: 'BOOKLET',
+        personLogin: 'person-3',
+        personCode: 'code-3',
+        personGroup: 'group'
+      }
+    ]);
+    const peerValueQuery = createQueryBuilder([
+      { unitName: 'UNIT', variableId: 'VAR', value: ' sameanswer ' },
+      { unitName: 'Unit', variableId: 'VAR', value: 'Same answer' }
+    ]);
+    const peerUnitQuery = createQueryBuilder([
+      { unitName: 'UNIT', variableId: 'VAR' },
+      { unitName: 'Unit', variableId: 'VAR' },
+      { unitName: 'OTHER_UNIT', variableId: 'VAR' }
+    ]);
+    responseRepository.createQueryBuilder
+      .mockReturnValueOnce(activeQuery)
+      .mockReturnValueOnce(peerUnitQuery)
+      .mockReturnValueOnce(peerValueQuery)
+      .mockReturnValueOnce(peerQuery);
+
+    const result = await service.getSlimResponsesForVariableCoverage(
+      3,
+      [{ unitName: 'UNIT', variableId: 'VAR' }],
+      [ResponseMatchingFlag.IGNORE_CASE, ResponseMatchingFlag.IGNORE_WHITESPACE],
+      2,
+      new Map()
+    );
+
+    expect(result.map(response => response.id)).toEqual([2, 1]);
+    expect(peerQuery.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('jsonb_to_recordset'),
+      expect.objectContaining({
+        aggregationPeerKeys: expect.stringContaining('sameanswer')
+      })
+    );
+    expect(peerValueQuery.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('aggregation_peer_unit'),
+      {
+        aggregationPeerUnits: JSON.stringify([
+          { unitName: 'UNIT', variableId: 'VAR' },
+          { unitName: 'Unit', variableId: 'VAR' }
+        ])
+      }
+    );
+    expect(peerQuery.andWhere).toHaveBeenCalledWith(
+      'response.status_v2 = :completedStatus',
+      { completedStatus: statusStringToNumber('CODING_COMPLETE') }
+    );
+    expect(peerQuery.andWhere).toHaveBeenCalledWith(
+      '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
+      { aggregatedCode: -111, defaultMirCode: 99 }
+    );
+    const peerLookupCondition = peerQuery.andWhere.mock.calls.find(
+      ([condition]) => typeof condition === 'string' &&
+        condition.includes('jsonb_to_recordset')
+    )?.[0] as string;
+    expect(peerLookupCondition).toContain(
+      'aggregation_peer."value" = response.value'
+    );
+    expect(peerLookupCondition).not.toContain('UPPER(unit.name)');
+    expect(peerLookupCondition).toContain(
+      'aggregation_peer."unitName" = unit.name'
+    );
+    expect(peerQuery.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('jsonb_to_recordset'),
+      expect.objectContaining({
+        aggregationPeerKeys: expect.stringContaining('"unitName":"Unit"')
+      })
+    );
+  });
+
+  it('filters completed aggregation peers by value in SQL for exact matching', async () => {
+    const activeQuery = createQueryBuilder([{
+      id: '2',
+      variableid: 'VAR',
+      value: 'exact answer',
+      statusV1: statusStringToNumber('CODING_INCOMPLETE'),
+      statusV2: null,
+      unitName: 'UNIT',
+      unitAlias: null,
+      bookletName: 'BOOKLET',
+      personLogin: 'person-2',
+      personCode: 'code-2',
+      personGroup: 'group'
+    }]);
+    const peerValueQuery = createQueryBuilder([
+      { unitName: 'UNIT', variableId: 'VAR', value: 'exact answer' }
+    ]);
+    const peerUnitQuery = createQueryBuilder([
+      { unitName: 'UNIT', variableId: 'VAR' }
+    ]);
+    const peerQuery = createQueryBuilder([]);
+    responseRepository.createQueryBuilder
+      .mockReturnValueOnce(activeQuery)
+      .mockReturnValueOnce(peerUnitQuery)
+      .mockReturnValueOnce(peerValueQuery)
+      .mockReturnValueOnce(peerQuery);
+
+    await service.getSlimResponsesForVariableCoverage(
+      3,
+      [{ unitName: 'UNIT', variableId: 'VAR' }],
+      [],
+      2,
+      new Map()
+    );
+
+    const peerLookupCondition = peerQuery.andWhere.mock.calls.find(
+      ([condition]) => typeof condition === 'string' &&
+        condition.includes('jsonb_to_recordset')
+    )?.[0] as string;
+    expect(peerLookupCondition).toContain(
+      'aggregation_peer."value" = response.value'
+    );
+    const peerValueCondition = peerValueQuery.andWhere.mock.calls.find(
+      ([condition]) => typeof condition === 'string' &&
+        condition.includes('aggregation_peer_value')
+    )?.[0] as string;
+    expect(peerValueCondition).toContain(
+      'aggregation_peer_value."normalizedValue" = response.value'
+    );
   });
 
   it('includes DERIVE_ERROR responses for job-definition variables that opt into manual coding', async () => {
