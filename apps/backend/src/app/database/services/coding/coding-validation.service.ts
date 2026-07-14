@@ -1714,14 +1714,13 @@ export class CodingValidationService {
       .leftJoin('booklet.bookletinfo', 'bookletinfo')
       .leftJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true });
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('UPPER(unit.name) = UPPER(:unitName)', { unitName });
     applyResolvedExclusionsToQuery(query, exclusions, {
       parameterPrefix: 'unitNameCaseAliases'
     });
-    const normalizedUnitName = String(unitName).toUpperCase();
     const aliases = (await query.getRawMany<{ unitName: string }>())
-      .map(row => row.unitName)
-      .filter(candidate => candidate?.toUpperCase() === normalizedUnitName);
+      .map(row => row.unitName);
 
     return aliases.length > 0 ? Array.from(new Set(aliases)) : [unitName];
   }
@@ -1926,7 +1925,7 @@ export class CodingValidationService {
                 [`appliedUnitName${index}`]: variable.unitName,
                 [`appliedVariableId${index}`]: variable.variableId
               };
-              const condition = `(unit.name = :appliedUnitName${index} AND response.variableid = :appliedVariableId${index})`;
+              const condition = `(UPPER(unit.name) = UPPER(:appliedUnitName${index}) AND response.variableid = :appliedVariableId${index})`;
               if (index === 0) {
                 qb.where(condition, parameters);
               } else {

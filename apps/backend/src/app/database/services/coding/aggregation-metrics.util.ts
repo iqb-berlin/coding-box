@@ -43,41 +43,10 @@ export interface AggregationPeerValueCandidate {
   value: string | null;
 }
 
-export interface AggregationPeerUnitKey {
-  unitName: string;
-  variableId: string;
-}
-
 export interface AggregationPeerLookupKey {
   unitName: string;
   variableId: string;
   value: string;
-}
-
-export function buildAggregationPeerUnitKeys(
-  peerKeys: readonly AggregationPeerKey[],
-  candidates: readonly AggregationPeerUnitKey[]
-): AggregationPeerUnitKey[] {
-  const peerVariableKeys = new Set(peerKeys.map(peerKey => (
-    getAggregationVariableKey(peerKey.unitName, peerKey.variableId)
-  )));
-  const unitKeys = new Map<string, AggregationPeerUnitKey>();
-
-  candidates.forEach(candidate => {
-    if (!peerVariableKeys.has(getAggregationVariableKey(
-      candidate.unitName,
-      candidate.variableId
-    ))) {
-      return;
-    }
-
-    unitKeys.set(
-      JSON.stringify([candidate.unitName, candidate.variableId]),
-      candidate
-    );
-  });
-
-  return Array.from(unitKeys.values());
 }
 
 export function buildAggregationPeerLookupKeys(

@@ -332,18 +332,22 @@ export class JobDefinitionService {
       workspaceId,
       usageRequests
     );
-    const requestedUsage =
+    const requestedUsage = this.normalizeVariableUsageByKey(
       usageByRequestKey.get(requestedUsageKey) ||
-      new Map<string, DistributionVariableUsageByStatus>();
+        new Map<string, DistributionVariableUsageByStatus>()
+    );
     const plannerAvailableUsage = availableUsageRequest ?
-      usageByRequestKey.get(availableUsageKey) ||
-        new Map<string, DistributionVariableUsageByStatus>() :
+      this.normalizeVariableUsageByKey(
+        usageByRequestKey.get(availableUsageKey) ||
+          new Map<string, DistributionVariableUsageByStatus>()
+      ) :
       requestedUsage;
 
     existingUsageRequests.forEach(usageRequest => {
-      const usage =
+      const usage = this.normalizeVariableUsageByKey(
         usageByRequestKey.get(usageRequest.key) ||
-        new Map<string, DistributionVariableUsageByStatus>();
+          new Map<string, DistributionVariableUsageByStatus>()
+      );
       usage.forEach((usageCount, variableKey) => {
         this.addVariableUsageByStatus(reservedCasesByVariable, variableKey, usageCount);
       });
@@ -438,6 +442,28 @@ export class JobDefinitionService {
     usageByVariable.set(variableKey, currentUsage);
   }
 
+  private normalizeVariableUsageByKey(
+    usageByVariable: Map<string, DistributionVariableUsageByStatus>
+  ): Map<string, DistributionVariableUsageByStatus> {
+    const normalizedUsage = new Map<
+    string,
+    DistributionVariableUsageByStatus
+    >();
+
+    usageByVariable.forEach((usage, variableKey) => {
+      const separatorIndex = variableKey.indexOf('::');
+      const normalizedKey = separatorIndex < 0 ?
+        variableKey :
+        this.makeVariableKey(
+          variableKey.slice(0, separatorIndex),
+          variableKey.slice(separatorIndex + 2)
+        );
+      this.addVariableUsageByStatus(normalizedUsage, normalizedKey, usage);
+    });
+
+    return normalizedUsage;
+  }
+
   private getVariableUsageCountForConflict(
     usage: DistributionVariableUsageByStatus | undefined,
     includeDeriveError: boolean
@@ -450,7 +476,7 @@ export class JobDefinitionService {
   }
 
   private makeVariableKey(unitName: string, variableId: string): string {
-    return `${unitName}::${variableId}`;
+    return `${unitName.toUpperCase()}::${variableId}`;
   }
 
   private buildDistributionVariableSelection(

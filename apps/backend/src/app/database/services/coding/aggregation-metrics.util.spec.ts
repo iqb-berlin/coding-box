@@ -1,7 +1,6 @@
 import {
   buildAggregationPeerLookupKeys,
   buildAggregationPeerKeys,
-  buildAggregationPeerUnitKeys,
   buildAggregationGroups,
   countEffectiveManualCodingCases,
   partitionResponsesByAggregationVariable,
@@ -161,25 +160,6 @@ describe('aggregation metrics', () => {
       variableId: 'answer',
       value: ' sameanswer '
     }]);
-  });
-
-  it('keeps only exact unit aliases for requested canonical peer variables', () => {
-    expect(buildAggregationPeerUnitKeys(
-      [{
-        unitName: 'UNIT_BASE',
-        variableId: 'answer',
-        normalizedValue: 'same'
-      }],
-      [
-        { unitName: 'unit_base', variableId: 'answer' },
-        { unitName: 'UNIT_BASE', variableId: 'answer' },
-        { unitName: 'OTHER_UNIT', variableId: 'answer' },
-        { unitName: 'UNIT_BASE', variableId: 'other' }
-      ]
-    )).toEqual([
-      { unitName: 'unit_base', variableId: 'answer' },
-      { unitName: 'UNIT_BASE', variableId: 'answer' }
-    ]);
   });
 
   it('assigns all unit-name case variants to one canonical variable partition', () => {
