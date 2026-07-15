@@ -46,6 +46,31 @@ export function parsePostgresPoolMax(value: string | number | undefined, fallbac
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+export function parsePostgresIdleInTransactionTimeout(
+  value: string | number | undefined,
+  fallback = 15 * 60_000
+): number {
+  const normalizedValue = String(value ?? '').trim();
+  if (!/^\d+$/.test(normalizedValue)) {
+    return fallback;
+  }
+
+  const parsed = Number(normalizedValue);
+  return Number.isSafeInteger(parsed) ? parsed : fallback;
+}
+
+export function buildPostgresConnectionOptions(
+  options: string | undefined,
+  idleInTransactionTimeout: string | number | undefined
+): string {
+  const existingOptions = options?.trim();
+  const timeout = parsePostgresIdleInTransactionTimeout(idleInTransactionTimeout);
+  return [
+    existingOptions,
+    `-c idle_in_transaction_session_timeout=${timeout}`
+  ].filter(Boolean).join(' ');
+}
+
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({
@@ -100,7 +125,11 @@ export function parsePostgresPoolMax(value: string | number | undefined, fallbac
         ],
         synchronize: false,
         extra: {
-          max: parsePostgresPoolMax(configService.get<string>('POSTGRES_POOL_MAX'))
+          max: parsePostgresPoolMax(configService.get<string>('POSTGRES_POOL_MAX')),
+          options: buildPostgresConnectionOptions(
+            configService.get<string>('PGOPTIONS'),
+            configService.get<string>('POSTGRES_IDLE_IN_TRANSACTION_TIMEOUT_MS')
+          )
         }
       }),
       inject: [ConfigService]
