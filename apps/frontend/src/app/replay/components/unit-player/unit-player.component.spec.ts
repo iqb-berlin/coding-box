@@ -109,7 +109,12 @@ describe('UnitPlayerComponent', () => {
   });
 
   it('should clean up iframe listeners and the pending height timeout on destroy', () => {
+    fixture.destroy();
     jest.useFakeTimers();
+    fixture = TestBed.createComponent(UnitPlayerComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
     const iframe = component.hostingIframe.nativeElement as HTMLIFrameElement;
     const contentWindow = iframe.contentWindow as Window;
     const dispatchSpy = jest.spyOn(window, 'dispatchEvent');
