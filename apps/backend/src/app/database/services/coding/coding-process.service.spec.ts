@@ -161,6 +161,19 @@ describe('CodingProcessService', () => {
 
   let mockQueryBuilder: MockQueryBuilder;
   let mockUnitQueryBuilder: Partial<MockQueryBuilder>;
+  let mockQueryRunner: {
+    connect: jest.Mock;
+    startTransaction: jest.Mock;
+    commitTransaction: jest.Mock;
+    rollbackTransaction: jest.Mock;
+    release: jest.Mock;
+    isTransactionActive: boolean;
+    isReleased: boolean;
+    manager: {
+      update: jest.Mock;
+      getRepository: jest.Mock;
+    };
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -192,12 +205,20 @@ describe('CodingProcessService', () => {
       getMany: jest.fn().mockResolvedValue([])
     };
 
-    const mockQueryRunner = {
+    mockQueryRunner = {
       connect: jest.fn(),
-      startTransaction: jest.fn(),
+      startTransaction: jest.fn().mockImplementation(async () => {
+        mockQueryRunner.isTransactionActive = true;
+      }),
       commitTransaction: jest.fn(),
-      rollbackTransaction: jest.fn(),
-      release: jest.fn(),
+      rollbackTransaction: jest.fn().mockImplementation(async () => {
+        mockQueryRunner.isTransactionActive = false;
+      }),
+      release: jest.fn().mockImplementation(async () => {
+        mockQueryRunner.isReleased = true;
+      }),
+      isTransactionActive: false,
+      isReleased: false,
       manager: {
         update: jest.fn().mockResolvedValue({ affected: 1 }),
         getRepository: jest.fn().mockReturnValue({
@@ -223,6 +244,7 @@ describe('CodingProcessService', () => {
           provide: getRepositoryToken(ResponseEntity),
           useValue: {
             find: jest.fn().mockResolvedValue([]),
+            createQueryBuilder: jest.fn().mockImplementation(() => mockQueryBuilder),
             manager: {
               connection: {
                 createQueryRunner: jest.fn().mockReturnValue(mockQueryRunner)
@@ -295,6 +317,15 @@ describe('CodingProcessService', () => {
     const jobId = 'test-job-id';
 
     beforeEach(() => {
+      mockJobQueueService.getTestPersonCodingJob = jest.fn().mockResolvedValue(undefined);
+      mockResponseManagementService.updateResponsesInDatabase.mockImplementation(
+        async () => {
+          mockQueryRunner.isTransactionActive = false;
+          mockQueryRunner.isReleased = true;
+          return true;
+        }
+      );
+
       personsRepository.find = jest.fn().mockResolvedValue([
         createMockPerson(1),
         createMockPerson(2)
@@ -379,6 +410,117 @@ describe('CodingProcessService', () => {
 
       expect(result.totalResponses).toBe(0);
       expect(result.statusCounts).toEqual({});
+      expect(mockQueryRunner.connect).not.toHaveBeenCalled();
+      expect(mockQueryRunner.startTransaction).not.toHaveBeenCalled();
+    });
+
+    it('releases the connection even when rollback fails', async () => {
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockUnits)
+        .mockResolvedValueOnce(mockResponses);
+      mockResponseManagementService.updateResponsesInDatabase
+        .mockRejectedValueOnce(new Error('update failed'));
+      mockQueryRunner.rollbackTransaction.mockRejectedValueOnce(
+        new Error('rollback failed')
+      );
+
+      await expect(
+        service.processTestPersonsBatch(workspaceId, personIds, autoCoderRun)
+      ).rejects.toThrow('rollback failed');
+
+      expect(mockQueryRunner.release).toHaveBeenCalledTimes(1);
+    });
+
+    it.each<[string, number]>([
+      ['coding scheme extraction', 10],
+      ['coding scheme loading', 12],
+      ['response processing', 14]
+    ])('does not open a transaction when cancelled during %s', async (
+      _stage,
+      pauseOnCheck
+    ) => {
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockUnits)
+        .mockResolvedValueOnce(mockResponses);
+
+      let cancellationChecks = 0;
+      mockJobQueueService.getTestPersonCodingJob = jest.fn().mockImplementation(
+        async () => ({
+          data: { isPaused: false },
+          getState: jest.fn().mockImplementation(async () => {
+            cancellationChecks += 1;
+            return cancellationChecks >= pauseOnCheck ? 'paused' : 'active';
+          })
+        })
+      );
+
+      await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        autoCoderRun,
+        undefined,
+        jobId
+      );
+
+      expect(cancellationChecks).toBeGreaterThanOrEqual(pauseOnCheck);
+      expect(mockQueryRunner.connect).not.toHaveBeenCalled();
+      expect(mockQueryRunner.startTransaction).not.toHaveBeenCalled();
+      expect(mockQueryRunner.release).not.toHaveBeenCalled();
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .not.toHaveBeenCalled();
+    });
+
+    it('propagates persistence errors so the job fails', async () => {
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockUnits)
+        .mockResolvedValueOnce(mockResponses);
+      const persistenceError = new Error('update failed');
+      mockResponseManagementService.updateResponsesInDatabase
+        .mockRejectedValueOnce(persistenceError);
+
+      await expect(service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        autoCoderRun
+      )).rejects.toBe(persistenceError);
+
+      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalledTimes(1);
+      expect(mockQueryRunner.release).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns without rechecking mutable job state when persistence reports cancellation', async () => {
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockUnits)
+        .mockResolvedValueOnce(mockResponses);
+      mockJobQueueService.getTestPersonCodingJob = jest.fn().mockResolvedValue({
+        data: { isPaused: false },
+        getState: jest.fn().mockResolvedValue('active')
+      });
+
+      let cancellationChecksAtPersistence = 0;
+      mockResponseManagementService.updateResponsesInDatabase
+        .mockImplementationOnce(async () => {
+          cancellationChecksAtPersistence =
+            mockJobQueueService.getTestPersonCodingJob.mock.calls.length;
+          await mockQueryRunner.rollbackTransaction();
+          await mockQueryRunner.release();
+          return false;
+        });
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        autoCoderRun,
+        undefined,
+        jobId
+      );
+
+      expect(cancellationChecksAtPersistence).toBeGreaterThan(0);
+      expect(mockJobQueueService.getTestPersonCodingJob)
+        .toHaveBeenCalledTimes(cancellationChecksAtPersistence);
+      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalledTimes(1);
+      expect(mockQueryRunner.release).toHaveBeenCalledTimes(1);
+      expect(result.totalResponses).toBe(2);
     });
 
     it('should handle no booklets found', async () => {
