@@ -12,7 +12,7 @@
   <div class="replay-content">
     <div class="unit-player-container">
       @if (!!player && unitDef) {
-      @for (key of [reloadKey]; track $index) {
+      @for (key of [reloadKey]; track key.toString()) {
       <coding-box-unit-player [unitDef]="unitDef" [unitPlayer]="player" [unitResponses]="responses" [pageId]="page"
         [printMode]="isPrintMode" (invalidPage)="checkPageError($event)" (playerReady)="onPlayerReady()"
         (responseVisible)="onResponseVisible()">
@@ -64,7 +64,7 @@
   </div>
   } @else {
   @if (!!player && unitDef) {
-  @for (key of [reloadKey]; track $index) {
+  @for (key of [reloadKey]; track key.toString()) {
   <coding-box-unit-player [unitDef]="unitDef" [unitPlayer]="player" [unitResponses]="responses" [pageId]="page"
     [printMode]="isPrintMode" (invalidPage)="checkPageError($event)" (playerReady)="onPlayerReady()"
     (responseVisible)="onResponseVisible()">

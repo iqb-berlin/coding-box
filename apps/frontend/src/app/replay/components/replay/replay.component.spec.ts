@@ -5,6 +5,7 @@ import {
   BehaviorSubject, of, Subject
 } from 'rxjs';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideHttpClient, HttpErrorResponse } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import * as jwtDecodeModule from 'jwt-decode';
@@ -23,6 +24,7 @@ import { CodingJobBackendService } from '../../../coding/services/coding-job-bac
 import { utf8ToBase64 } from '../../../shared/utils/common-utils';
 import { CodingScheme } from '../../../models/coding-interfaces';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
+import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 
 function createUnsignedJwt(payload: Record<string, unknown>): string {
   const encode = (value: Record<string, unknown>) => btoa(JSON.stringify(value))
@@ -219,6 +221,30 @@ describe('ReplayComponent', () => {
     expect(component.player).toBe('player data');
     expect(component.unitDef).toBe('unitDef data');
     expect(component.responses).toBeDefined();
+  });
+
+  it('should recreate the unit player when a new replay payload is applied', () => {
+    fixture.detectChanges();
+    const initialPlayer = fixture.debugElement.query(By.directive(UnitPlayerComponent)).componentInstance;
+    const replayComponent = component as unknown as {
+      setUnitProperties: (unitData: {
+        player: { data: string }[];
+        unitDef: { data: string }[];
+        response: { responses: { id: string; content: string }[] };
+        vocs: { data: string }[];
+      }, unitPayloadRunId: number) => void;
+    };
+
+    replayComponent.setUnitProperties({
+      player: [{ data: '<html>replacement player</html>' }],
+      unitDef: [{ data: JSON.stringify({}) }],
+      response: { responses: [] },
+      vocs: []
+    }, 1);
+    fixture.detectChanges();
+
+    const replacementPlayer = fixture.debugElement.query(By.directive(UnitPlayerComponent)).componentInstance;
+    expect(replacementPlayer).not.toBe(initialPlayer);
   });
 
   it('should apply display options from query params', async () => {

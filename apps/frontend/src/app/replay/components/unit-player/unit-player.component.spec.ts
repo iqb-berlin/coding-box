@@ -82,6 +82,27 @@ describe('UnitPlayerComponent', () => {
     expect(emitSpy).toHaveBeenCalledTimes(2);
   });
 
+  it('should forward key events only once after repeated iframe loads', () => {
+    const iframe = component.hostingIframe.nativeElement as HTMLIFrameElement;
+    const contentWindow = iframe.contentWindow as Window;
+    const dispatchSpy = jest.spyOn(window, 'dispatchEvent');
+    const updateIframeContent = component as unknown as {
+      updateIframeContent: (content: string) => void;
+    };
+
+    updateIframeContent.updateIframeContent('<html>first player</html>');
+    iframe.dispatchEvent(new Event('load'));
+    contentWindow.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+
+    expect(dispatchSpy).toHaveBeenCalledTimes(1);
+
+    updateIframeContent.updateIframeContent('<html>second player</html>');
+    iframe.dispatchEvent(new Event('load'));
+    contentWindow.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }));
+
+    expect(dispatchSpy).toHaveBeenCalledTimes(2);
+  });
+
   it('should normalize math text array values in replay data parts', () => {
     component.ngOnChanges({
       unitDef: new SimpleChange(undefined, JSON.stringify({
