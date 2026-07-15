@@ -52,6 +52,9 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   postMessageTarget: Window | undefined;
   private ngUnsubscribe = new Subject<void>();
   private validPagesSubscription: Subscription | null = null;
+  private iframeLoadSubscription: Subscription | null = null;
+  private keyDownSubscription: Subscription | null = null;
+  private iframeHeightTimeout: ReturnType<typeof setTimeout> | null = null;
   playerApiVersion = 3;
   private sessionId = '';
   pageList: PageData[] = [];
@@ -90,18 +93,30 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   private updateIframeContent(content: string): void {
     if (this.iFrameElement && this.iFrameElement.srcdoc !== content) {
       this.iFrameElement.srcdoc = content;
-
-      // Add an event listener to recalculate height after content is loaded
-      fromEvent(this.iFrameElement, 'load')
-        .pipe(takeUntil(this.ngUnsubscribe))
-        .subscribe(() => {
-          this.forwardKeyEvents();
-          // Wait a bit for the content to render properly
-          setTimeout(() => {
-            this.calculateIFrameHeight();
-          }, 500);
-        });
     }
+  }
+
+  private subscribeForIframeLoad(): void {
+    this.iframeLoadSubscription?.unsubscribe();
+    this.iframeLoadSubscription = null;
+
+    if (!this.iFrameElement) {
+      return;
+    }
+
+    this.iframeLoadSubscription = fromEvent(this.iFrameElement, 'load')
+      .pipe(takeUntil(this.ngUnsubscribe))
+      .subscribe(() => {
+        this.forwardKeyEvents();
+
+        if (this.iframeHeightTimeout !== null) {
+          clearTimeout(this.iframeHeightTimeout);
+        }
+        this.iframeHeightTimeout = setTimeout(() => {
+          this.iframeHeightTimeout = null;
+          this.calculateIFrameHeight();
+        }, 500);
+      });
   }
 
   private resetIframeContent(): void {
@@ -160,6 +175,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
 
   ngAfterViewInit(): void {
     this.iFrameElement = this.hostingIframe?.nativeElement;
+    this.subscribeForIframeLoad();
     const unitPlayer = this.unitPlayer();
     if (this.iFrameElement && unitPlayer) {
       this.updateIframeContent(unitPlayer.replace('&quot;', ''));
@@ -167,8 +183,11 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   }
 
   private forwardKeyEvents(): void {
+    this.keyDownSubscription?.unsubscribe();
+    this.keyDownSubscription = null;
+
     if (this.iFrameElement?.contentWindow) {
-      fromEvent(this.iFrameElement.contentWindow, 'keydown')
+      this.keyDownSubscription = fromEvent(this.iFrameElement.contentWindow, 'keydown')
         .pipe(takeUntil(this.ngUnsubscribe))
         .subscribe((event: Event) => {
           const keyboardEvent = event as KeyboardEvent;
@@ -604,6 +623,15 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   }
 
   ngOnDestroy(): void {
+    this.iframeLoadSubscription?.unsubscribe();
+    this.iframeLoadSubscription = null;
+    this.keyDownSubscription?.unsubscribe();
+    this.keyDownSubscription = null;
+    if (this.iframeHeightTimeout !== null) {
+      clearTimeout(this.iframeHeightTimeout);
+      this.iframeHeightTimeout = null;
+    }
+
     this.ngUnsubscribe.next();
     this.ngUnsubscribe.complete();
 
