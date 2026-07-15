@@ -36,6 +36,11 @@ describe('UnitPlayerComponent', () => {
     fixture.detectChanges();
   });
 
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
   it('should create', () => {
     expect(component).toBeTruthy();
   });
@@ -101,6 +106,25 @@ describe('UnitPlayerComponent', () => {
     contentWindow.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }));
 
     expect(dispatchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('should clean up iframe listeners and the pending height timeout on destroy', () => {
+    jest.useFakeTimers();
+    const iframe = component.hostingIframe.nativeElement as HTMLIFrameElement;
+    const contentWindow = iframe.contentWindow as Window;
+    const dispatchSpy = jest.spyOn(window, 'dispatchEvent');
+    const componentWithPrivateMethods = component as unknown as {
+      calculateIFrameHeight: () => number | undefined;
+    };
+    const calculateHeightSpy = jest.spyOn(componentWithPrivateMethods, 'calculateIFrameHeight');
+
+    iframe.dispatchEvent(new Event('load'));
+    fixture.destroy();
+    contentWindow.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+    jest.advanceTimersByTime(500);
+
+    expect(dispatchSpy).not.toHaveBeenCalled();
+    expect(calculateHeightSpy).not.toHaveBeenCalled();
   });
 
   it('should normalize math text array values in replay data parts', () => {
