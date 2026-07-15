@@ -12,6 +12,7 @@
   <div class="replay-content">
     <div class="unit-player-container">
       @if (!!player && unitDef) {
+      <!-- The changing key intentionally recreates the Verona player and its iframe for every replay payload. -->
       @for (key of [reloadKey]; track key.toString()) {
       <coding-box-unit-player [unitDef]="unitDef" [unitPlayer]="player" [unitResponses]="responses" [pageId]="page"
         [printMode]="isPrintMode" (invalidPage)="checkPageError($event)" (playerReady)="onPlayerReady()"
@@ -64,6 +65,7 @@
   </div>
   } @else {
   @if (!!player && unitDef) {
+  <!-- The changing key intentionally recreates the Verona player and its iframe for every replay payload. -->
   @for (key of [reloadKey]; track key.toString()) {
   <coding-box-unit-player [unitDef]="unitDef" [unitPlayer]="player" [unitResponses]="responses" [pageId]="page"
     [printMode]="isPrintMode" (invalidPage)="checkPageError($event)" (playerReady)="onPlayerReady()"
