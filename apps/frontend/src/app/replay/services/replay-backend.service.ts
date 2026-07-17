@@ -1,9 +1,15 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, forkJoin, map } from 'rxjs';
+import {
+  Observable, catchError, forkJoin, map, shareReplay, throwError, timeout
+} from 'rxjs';
+import Keycloak from 'keycloak-js';
 import { SERVER_URL } from '../../injection-tokens';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { suppressGlobalAndAuthRedirectHttpErrorContext } from '../../core/interceptors/http-error-context';
+import { CodingScheme } from '../../models/coding-interfaces';
+
+const REPLAY_ASSETS_REQUEST_TIMEOUT_MS = 120_000;
 
 export type ReplayUnitResponse = {
   responses: {
@@ -37,6 +43,7 @@ export type ReplayResponsePayload = {
 };
 
 export type ReplayPayload = ReplayAssetsPayload & ReplayResponsePayload & {
+  codingScheme?: CodingScheme | null;
   serverTimings?: ReplayServerTimings;
 };
 
@@ -63,12 +70,26 @@ export type ReplaySourceSummaryResponse = {
   total: number;
 };
 
+type ReplayAssetsCacheEntry = {
+  identity: object;
+  request$: Observable<ReplayAssetsCacheValue>;
+  expiresAt: number | null;
+  expirationTimer: ReturnType<typeof setTimeout> | null;
+};
+
+type ReplayAssetsCacheValue = {
+  assets: ReplayAssetsPayload;
+  getCodingScheme: () => CodingScheme | null | undefined;
+};
+
 @Injectable({
   providedIn: 'root'
 })
 export class ReplayBackendService {
   private readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
+  private readonly keycloak = inject(Keycloak, { optional: true });
+  private readonly replayAssetsCache = new Map<string, ReplayAssetsCacheEntry>();
 
   private get authHeader() {
     return {};
@@ -104,14 +125,18 @@ export class ReplayBackendService {
     workspaceId: number,
     testPerson: string,
     unitId: string,
-    authToken?: string
+    authToken?: string,
+    includeCodingScheme = false
   ): Observable<ReplayPayload> {
     return forkJoin({
-      assets: this.getReplayAssets(workspaceId, unitId, authToken),
+      assetsEntry: this.getReplayAssetsCacheValue(workspaceId, unitId, authToken),
       responsePayload: this.getReplayResponse(workspaceId, testPerson, unitId, authToken)
     }).pipe(
-      map(({ assets, responsePayload }) => ({
-        ...assets,
+      map(({ assetsEntry, responsePayload }) => ({
+        ...assetsEntry.assets,
+        ...(includeCodingScheme ?
+          { codingScheme: assetsEntry.getCodingScheme() } :
+          {}),
         response: responsePayload.response,
         serverTimings: this.prefixServerTimings(
           'response',
@@ -142,12 +167,127 @@ export class ReplayBackendService {
     unitId: string,
     authToken?: string
   ): Observable<ReplayAssetsPayload> {
+    return this.getReplayAssetsCacheValue(workspaceId, unitId, authToken)
+      .pipe(map(entry => entry.assets));
+  }
+
+  private getReplayAssetsCacheValue(
+    workspaceId: number,
+    unitId: string,
+    authToken?: string
+  ): Observable<ReplayAssetsCacheValue> {
+    const now = Date.now();
+    this.removeExpiredReplayAssets(now);
+    const authContext = authToken ??
+      this.keycloak?.tokenParsed?.sub ??
+      this.keycloak?.idTokenParsed?.sub ??
+      null;
+    const cacheKey = JSON.stringify([workspaceId, unitId, authContext]);
+    const cached = this.replayAssetsCache.get(cacheKey);
+    if (cached && (cached.expiresAt === null || cached.expiresAt > now)) {
+      return cached.request$;
+    }
+
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-assets/${encodeURIComponent(unitId)}`;
     const headers = authToken ?
       { Authorization: `Bearer ${authToken}` } :
       this.authHeader;
     const params = new HttpParams().set('replayPart', 'assets');
-    return this.http.get<ReplayAssetsPayload>(url, { headers, params });
+    const identity = {};
+    const request$ = this.http.get<ReplayAssetsPayload>(url, {
+      headers,
+      params,
+      observe: 'response'
+    }).pipe(
+      timeout({ first: REPLAY_ASSETS_REQUEST_TIMEOUT_MS }),
+      map(response => {
+        const maxAgeSeconds = ReplayBackendService.getCacheMaxAgeSeconds(
+          response.headers.get('Cache-Control')
+        );
+        const current = this.replayAssetsCache.get(cacheKey);
+        if (current?.identity === identity) {
+          if (maxAgeSeconds > 0) {
+            current.expiresAt = Date.now() + maxAgeSeconds * 1000;
+            current.expirationTimer = setTimeout(() => {
+              this.deleteReplayAssetsCacheEntry(cacheKey, identity);
+            }, maxAgeSeconds * 1000);
+          } else {
+            this.deleteReplayAssetsCacheEntry(cacheKey, identity);
+          }
+        }
+        if (!response.body) {
+          throw new Error('Replay assets response body is empty.');
+        }
+        return ReplayBackendService.createAssetsCacheValue(response.body);
+      }),
+      catchError(error => {
+        this.deleteReplayAssetsCacheEntry(cacheKey, identity);
+        return throwError(() => error);
+      }),
+      shareReplay({ bufferSize: 1, refCount: false })
+    );
+
+    this.replayAssetsCache.set(cacheKey, {
+      identity,
+      request$,
+      expiresAt: null,
+      expirationTimer: null
+    });
+    return request$;
+  }
+
+  private removeExpiredReplayAssets(now: number): void {
+    this.replayAssetsCache.forEach((entry, key) => {
+      if (entry.expiresAt !== null && entry.expiresAt <= now) {
+        this.deleteReplayAssetsCacheEntry(key, entry.identity);
+      }
+    });
+  }
+
+  private deleteReplayAssetsCacheEntry(key: string, identity: object): void {
+    const entry = this.replayAssetsCache.get(key);
+    if (entry?.identity !== identity) {
+      return;
+    }
+    if (entry.expirationTimer !== null) {
+      clearTimeout(entry.expirationTimer);
+    }
+    this.replayAssetsCache.delete(key);
+  }
+
+  private static getCacheMaxAgeSeconds(cacheControl: string | null): number {
+    if (!cacheControl || /(?:^|,)\s*(?:no-store|no-cache)\s*(?:,|$)/i.test(cacheControl)) {
+      return 0;
+    }
+    const maxAgeMatch = cacheControl.match(/(?:^|,)\s*max-age\s*=\s*(\d+)\s*(?:,|$)/i);
+    return maxAgeMatch ? Number(maxAgeMatch[1]) : 0;
+  }
+
+  private static parseCodingScheme(vocs: FilesDto[]): CodingScheme | null | undefined {
+    const vocsData = vocs[0]?.data;
+    if (!vocsData) {
+      return undefined;
+    }
+    try {
+      return JSON.parse(vocsData) as CodingScheme;
+    } catch {
+      return null;
+    }
+  }
+
+  private static createAssetsCacheValue(assets: ReplayAssetsPayload): ReplayAssetsCacheValue {
+    let codingSchemeParsed = false;
+    let codingScheme: CodingScheme | null | undefined;
+    return {
+      assets,
+      getCodingScheme: () => {
+        if (!codingSchemeParsed) {
+          codingScheme = ReplayBackendService.parseCodingScheme(assets.vocs);
+          codingSchemeParsed = true;
+        }
+        return codingScheme;
+      }
+    };
   }
 
   getReplayResponse(

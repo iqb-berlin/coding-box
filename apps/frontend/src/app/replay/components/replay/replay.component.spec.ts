@@ -2,7 +2,7 @@
 import { ActivatedRoute } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import {
-  BehaviorSubject, of, Subject
+  BehaviorSubject, finalize, of, Subject
 } from 'rxjs';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
@@ -245,6 +245,78 @@ describe('ReplayComponent', () => {
 
     const replacementPlayer = fixture.debugElement.query(By.directive(UnitPlayerComponent)).componentInstance;
     expect(replacementPlayer).not.toBe(initialPlayer);
+  });
+
+  it('should cancel the previous payload request and only apply the latest result', async () => {
+    const firstRequest = new Subject<{
+      unitDef: { data: string; file_id: string }[];
+      response: { responses: { id: string; content: string }[] };
+      vocs: { data: string; file_id: string }[];
+      player: { data: string; file_id: string }[];
+    }>();
+    const secondRequest = new Subject<{
+      unitDef: { data: string; file_id: string }[];
+      response: { responses: { id: string; content: string }[] };
+      vocs: { data: string; file_id: string }[];
+      player: { data: string; file_id: string }[];
+    }>();
+    const firstRequestFinalized = jest.fn();
+    replayBackendService.getReplayPayload
+      .mockReset()
+      .mockReturnValueOnce(firstRequest.pipe(finalize(firstRequestFinalized)))
+      .mockReturnValueOnce(secondRequest);
+    const replayComponent = component as unknown as {
+      loadAndApplyUnitData: (workspace: number, authToken?: string) => Promise<boolean>;
+    };
+    component.testPerson = 'person-1@code@booklet';
+    component.unitId = 'unit-1';
+
+    const firstLoad = replayComponent.loadAndApplyUnitData(47, 'token');
+    component.testPerson = 'person-2@code@booklet';
+    const secondLoad = replayComponent.loadAndApplyUnitData(47, 'token');
+
+    expect(firstRequestFinalized).toHaveBeenCalledTimes(1);
+    secondRequest.next({
+      unitDef: [{ data: 'latest unitDef', file_id: 'UNIT-1.VOUD' }],
+      response: { responses: [{ id: 'chunk', content: 'latest response' }] },
+      vocs: [],
+      player: [{ data: 'latest player', file_id: 'PLAYER-1.0' }]
+    });
+    secondRequest.complete();
+
+    await expect(firstLoad).resolves.toBe(false);
+    await expect(secondLoad).resolves.toBe(true);
+    expect(component.unitDef).toBe('latest unitDef');
+    expect(component.responses).toEqual({
+      responses: [{ id: 'chunk', content: 'latest response' }]
+    });
+  });
+
+  it('should apply the coding scheme already parsed by the asset cache', async () => {
+    const parsedCodingScheme: CodingScheme = {
+      version: '1.0',
+      variableCodings: []
+    };
+    replayBackendService.getReplayPayload.mockReset().mockReturnValue(of({
+      unitDef: [{ data: 'unitDef data', file_id: 'UNIT-1.VOUD' }],
+      response: { responses: [{ id: 'chunk', content: 'response' }] },
+      vocs: [{
+        data: '{"version":"1.0","variableCodings":[]}',
+        file_id: 'UNIT-1.VOCS'
+      }],
+      player: [{ data: 'player data', file_id: 'PLAYER-1.0' }],
+      codingScheme: parsedCodingScheme
+    }));
+    const replayComponent = component as unknown as {
+      loadAndApplyUnitData: (workspace: number, authToken?: string) => Promise<boolean>;
+    };
+    component.isCodingMode = true;
+    component.testPerson = 'person-1@code@booklet';
+    component.unitId = 'unit-1';
+
+    await expect(replayComponent.loadAndApplyUnitData(47, 'token')).resolves.toBe(true);
+
+    expect(component.codingService.codingScheme).toBe(parsedCodingScheme);
   });
 
   it('should apply display options from query params', async () => {
@@ -992,13 +1064,15 @@ describe('ReplayComponent', () => {
       47,
       'valid@test@person',
       'unit-new',
-      'valid-token'
+      'valid-token',
+      true
     );
     expect(replayBackendService.getReplayPayload).not.toHaveBeenCalledWith(
       47,
       'valid@test@person',
       'unit-old',
-      'valid-token'
+      'valid-token',
+      true
     );
     expect(component.unitId).toBe('unit-new');
     expect(component.codingService.currentVariableId).toBe('NEW_VAR');

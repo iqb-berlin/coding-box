@@ -71,6 +71,7 @@ export class ReplayCodingService {
   private latestRequestedSelectionByKey = new Map<string, SavedCode | null>();
   private selectionRevision = 0;
   private codingDataRunId = 0;
+  private codingSchemeSource: string | null = null;
   currentCodingJobStatus: string | null = null;
   showScore = false;
   allowComments = true;
@@ -82,6 +83,7 @@ export class ReplayCodingService {
   resetCodingData() {
     this.codingDataRunId += 1;
     this.codingScheme = null;
+    this.codingSchemeSource = null;
     this.currentVariableId = '';
     this.codingJobId = null;
     this.authToken = undefined;
@@ -262,11 +264,20 @@ export class ReplayCodingService {
   }
 
   setCodingSchemeFromVocsData(vocsData: string) {
+    if (this.codingSchemeSource === vocsData) {
+      return;
+    }
+    this.codingSchemeSource = vocsData;
     try {
       this.codingScheme = JSON.parse(vocsData);
     } catch (error) {
       this.codingScheme = null;
     }
+  }
+
+  setParsedCodingScheme(codingScheme: CodingScheme | null, source?: string): void {
+    this.codingScheme = codingScheme;
+    this.codingSchemeSource = source ?? null;
   }
 
   setCodingJobMetadata(codingJob: {
