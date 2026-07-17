@@ -82,7 +82,9 @@ type KappaCodedVariableRow = {
   jobDefinitionId: number | string | null;
   trainingId: number | string | null;
   trainingLabel: string | null;
+  missingsProfileId: number | string | null;
   code: number | string | null;
+  codingIssueOption: number | string | null;
   score: number | string | null;
   notes: string | null;
   supervisorComment: string | null;
@@ -146,6 +148,57 @@ export class CodingReviewService {
       code: missing.code,
       score: missing.score
     };
+  }
+
+  private async resolveKappaCodeAndScore(
+    workspaceId: number,
+    code: number | null,
+    score: number | null,
+    codingIssueOption: number | null,
+    missingsProfileId: number | null,
+    cache: Map<string, ResolvedMissingValue>
+  ): Promise<{ code: number | null; score: number | null }> {
+    if (code === -1 || code === -2) {
+      return { code: null, score: null };
+    }
+
+    const missingId = this.manualMissingIdsByIssueOptionId.get(code ?? 0) ??
+      this.manualMissingIdsByIssueOptionId.get(codingIssueOption ?? 0);
+    if (missingId && this.missingsProfilesService) {
+      const cacheKey = `${missingsProfileId ?? 'default'}:id:${missingId}`;
+      let missing = cache.get(cacheKey);
+      if (!missing) {
+        missing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
+          workspaceId,
+          missingsProfileId,
+          missingId
+        );
+        cache.set(cacheKey, missing);
+      }
+      return {
+        code: missing.code,
+        score: missing.score
+      };
+    }
+
+    if (code !== null && code < 0 && this.missingsProfilesService) {
+      const cacheKey = `${missingsProfileId ?? 'default'}:code:${code}`;
+      let missing = cache.get(cacheKey);
+      if (!missing) {
+        missing = await this.missingsProfilesService.getMissingByCodeForProfileOrDefault(
+          workspaceId,
+          missingsProfileId,
+          code
+        );
+        cache.set(cacheKey, missing);
+      }
+      return {
+        code: missing.code,
+        score: missing.score
+      };
+    }
+
+    return { code, score };
   }
 
   async getDoubleCodedVariablesForReview(
@@ -677,7 +730,9 @@ export class CodingReviewService {
       .addSelect('cj.job_definition_id', 'jobDefinitionId')
       .addSelect('cj.training_id', 'trainingId')
       .addSelect('training.label', 'trainingLabel')
+      .addSelect('cj.missings_profile_id', 'missingsProfileId')
       .addSelect('cju.code', 'code')
+      .addSelect('cju.coding_issue_option', 'codingIssueOption')
       .addSelect('cju.score', 'score')
       .addSelect('cju.notes', 'notes')
       .addSelect('cju.supervisor_comment', 'supervisorComment')
@@ -685,8 +740,8 @@ export class CodingReviewService {
       .where('cj.workspace_id = :workspaceId', { workspaceId })
       .andWhere(
         calculationLevel === 'score' ?
-          'cju.score IS NOT NULL' :
-          'cju.code IS NOT NULL'
+          '(cju.score IS NOT NULL OR cju.code < 0 OR cju.coding_issue_option IN (-3, -4))' :
+          '(cju.code IS NOT NULL OR cju.coding_issue_option IN (-3, -4))'
       )
       .orderBy('cju.unit_name', 'ASC')
       .addOrderBy('cju.variable_id', 'ASC')
@@ -752,6 +807,7 @@ export class CodingReviewService {
       coderResults: ReviewCoderResult[];
     }>();
     const coderResultIndexByItemKey = new Map<string, Map<number, number>>();
+    const missingValueCache = new Map<string, ResolvedMissingValue>();
     let offset = 0;
     let hasMoreRows = true;
 
@@ -761,9 +817,24 @@ export class CodingReviewService {
         .limit(batchSize)
         .getRawMany<KappaCodedVariableRow>();
 
-      rows.forEach(row => {
+      for (const row of rows) {
         const responseId = Number(row.responseId);
         const coderId = Number(row.coderId);
+        const codeAndScore = await this.resolveKappaCodeAndScore(
+          workspaceId,
+          this.toNullableNumber(row.code),
+          this.toNullableNumber(row.score),
+          this.toNullableNumber(row.codingIssueOption),
+          this.toNullableNumber(row.missingsProfileId),
+          missingValueCache
+        );
+        const hasCalculationLevelValue = calculationLevel === 'score' ?
+          codeAndScore.score !== null :
+          codeAndScore.code !== null;
+        if (!hasCalculationLevelValue) {
+          continue;
+        }
+
         const itemKey = JSON.stringify([responseId, row.unitName, row.variableId]);
         if (!groups.has(itemKey)) {
           groups.set(itemKey, {
@@ -788,8 +859,8 @@ export class CodingReviewService {
           jobDefinitionId: row.jobDefinitionId === null ? null : Number(row.jobDefinitionId),
           trainingId: row.trainingId === null ? null : Number(row.trainingId),
           trainingLabel: row.trainingLabel,
-          code: row.code === null ? null : Number(row.code),
-          score: row.score === null ? null : Number(row.score),
+          code: codeAndScore.code,
+          score: codeAndScore.score,
           notes: row.notes,
           supervisorComment: row.supervisorComment || null,
           codedAt: new Date(row.codedAt)
@@ -810,7 +881,7 @@ export class CodingReviewService {
         )) {
           group.coderResults[existingResultIndex] = coderResult;
         }
-      });
+      }
 
       offset += batchSize;
       hasMoreRows = rows.length === batchSize;
