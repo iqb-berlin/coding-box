@@ -39,6 +39,7 @@ export interface DetailedCodingResultsExportOptions {
   workspaceId: number;
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
+  includeResponseValues?: boolean;
   anonymizeCoders?: boolean;
   usePseudoCoders?: boolean;
   authToken?: string;
@@ -157,7 +158,8 @@ export class CodingExportOrchestratorService {
       options.jobDefinitionIds,
       options.coderTrainingIds,
       options.coderIds,
-      options.serverUrl || ''
+      options.serverUrl || '',
+      options.includeResponseValues || false
     );
   }
 
@@ -179,7 +181,8 @@ export class CodingExportOrchestratorService {
       options.jobDefinitionIds,
       options.coderTrainingIds,
       options.coderIds,
-      options.serverUrl || ''
+      options.serverUrl || '',
+      options.includeResponseValues || false
     );
   }
 
