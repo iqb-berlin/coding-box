@@ -287,10 +287,7 @@ export class CodingProcessService {
       return statistics;
     }
 
-    const queryRunner =
-      this.responseRepository.manager.connection.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction('READ COMMITTED');
+    let queryRunner: QueryRunner | undefined;
 
     try {
       // Step 1: Get persons - 10% progress
@@ -300,7 +297,6 @@ export class CodingProcessService {
 
       if (!persons || persons.length === 0) {
         this.logger.warn('Keine Personen gefunden mit den angegebenen IDs.');
-        await queryRunner.release();
         return statistics;
       }
 
@@ -316,7 +312,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after getting persons`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -329,7 +324,6 @@ export class CodingProcessService {
         this.logger.log(
           'Keine Booklets für die angegebenen Personen gefunden.'
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -345,7 +339,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after getting booklets`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -358,7 +351,6 @@ export class CodingProcessService {
         this.logger.log(
           'Keine Aufgaben für die angegebenen Testhefte gefunden.'
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -372,7 +364,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after getting units`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -401,7 +392,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after processing units`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -409,14 +399,12 @@ export class CodingProcessService {
       const responseQueryStart = Date.now();
       const allResponses = await this.fetchResponses(
         unitIdsArray,
-        queryRunner,
         resolvedAutoCoderRun
       );
       metrics.responseQuery = Date.now() - responseQueryStart;
 
       if (!allResponses || allResponses.length === 0) {
         this.logger.log('Keine zu kodierenden Antworten gefunden.');
-        await queryRunner.release();
         return statistics;
       }
 
@@ -430,7 +418,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after getting responses`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -449,7 +436,6 @@ export class CodingProcessService {
 
       if (filteredResponses.length === 0) {
         this.logger.log('Keine kodierbaren Antworten nach Readiness-Filter gefunden.');
-        await queryRunner.release();
         return statistics;
       }
 
@@ -457,7 +443,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after filtering responses`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -480,7 +465,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after processing responses`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -503,7 +487,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after getting test files`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -516,8 +499,7 @@ export class CodingProcessService {
         await this.extractCodingSchemeReferences(
           units,
           fileIdToTestFileMap,
-          jobId,
-          queryRunner
+          jobId
         );
       metrics.schemeExtract = Date.now() - schemeExtractStart;
 
@@ -531,7 +513,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after extracting scheme references`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -540,8 +521,7 @@ export class CodingProcessService {
       const fileIdToCodingSchemeMap = await this.getCodingSchemeFiles(
         workspace_id,
         codingSchemeRefs,
-        jobId,
-        queryRunner
+        jobId
       );
       metrics.schemeQuery = Date.now() - schemeQueryStart;
       // No separate parsing step needed as it's handled by the cache helper
@@ -562,7 +542,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after parsing coding schemes`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -578,7 +557,6 @@ export class CodingProcessService {
         statistics,
         resolvedAutoCoderRun,
         jobId,
-        queryRunner,
         progressCallback
       );
 
@@ -589,11 +567,15 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after coding responses`
         );
-        await queryRunner.release();
         return statistics;
       }
 
       // Step 12: Update responses in database - 100% progress
+      queryRunner =
+        this.responseRepository.manager.connection.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction('READ COMMITTED');
+
       const updateSuccess =
         await this.responseManagementService.updateResponsesInDatabase(
           workspace_id,
@@ -643,11 +625,18 @@ export class CodingProcessService {
       this.logger.error(
         `Error while processing test persons in batch: ${error.message} \n ${error.stack}`
       );
-      await queryRunner.rollbackTransaction();
-      return statistics;
+      throw error;
     } finally {
-      if (!queryRunner.isReleased) {
-        await queryRunner.release();
+      if (queryRunner && !queryRunner.isReleased) {
+        try {
+          if (queryRunner.isTransactionActive) {
+            await queryRunner.rollbackTransaction();
+          }
+        } finally {
+          if (!queryRunner.isReleased) {
+            await queryRunner.release();
+          }
+        }
       }
     }
   }
@@ -693,11 +682,9 @@ export class CodingProcessService {
 
   private async fetchResponses(
     unitIds: number[],
-    queryRunner: QueryRunner,
     autoCoderRun: number
   ): Promise<ResponseEntity[]> {
-    const responseRepo = queryRunner.manager.getRepository(ResponseEntity);
-    const query = responseRepo
+    const query = this.responseRepository
       .createQueryBuilder('ResponseEntity')
       .select([
         'ResponseEntity.id',
@@ -931,7 +918,6 @@ export class CodingProcessService {
     statistics: CodingStatistics,
     autoCoderRun: number = 1,
     jobId?: string,
-    queryRunner?: import('typeorm').QueryRunner,
     progressCallback?: (progress: number) => void
   ): Promise<{
       allCodedResponses: CodedResponse[];
@@ -1076,9 +1062,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused during response processing`
         );
-        if (queryRunner) {
-          await queryRunner.release();
-        }
         return { allCodedResponses, statistics };
       }
     }
@@ -1095,8 +1078,7 @@ export class CodingProcessService {
   private async getCodingSchemeFiles(
     workspaceId: number,
     codingSchemeRefs: Set<string>,
-    jobId?: string,
-    queryRunner?: import('typeorm').QueryRunner
+    jobId?: string
   ): Promise<Map<string, CodingScheme>> {
     const fileIdToCodingSchemeMap = await this.getCodingSchemesWithCache(
       workspaceId,
@@ -1106,9 +1088,6 @@ export class CodingProcessService {
       this.logger.log(
         `Job ${jobId} was cancelled or paused after getting coding scheme files`
       );
-      if (queryRunner) {
-        await queryRunner.release();
-      }
       return fileIdToCodingSchemeMap;
     }
 
@@ -1118,8 +1097,7 @@ export class CodingProcessService {
   private async extractCodingSchemeReferences(
     units: Unit[],
     fileIdToTestFileMap: Map<string, FileUpload>,
-    jobId?: string,
-    queryRunner?: import('typeorm').QueryRunner
+    jobId?: string
   ): Promise<{
       codingSchemeRefs: Set<string>;
       unitToCodingSchemeRefMap: Map<number, string>;
@@ -1165,9 +1143,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused during scheme extraction`
         );
-        if (queryRunner) {
-          await queryRunner.release();
-        }
         return {
           codingSchemeRefs,
           unitToCodingSchemeRefMap
