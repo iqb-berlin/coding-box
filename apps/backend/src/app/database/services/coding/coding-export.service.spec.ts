@@ -44,13 +44,14 @@ function createServiceWithDetailedMocks(
     discussionResults?: Record<string, unknown>[],
     users?: Record<string, unknown>[],
     totalCount?: number,
+    notes?: string,
     missingsProfilesService?: { getMissingByIdForProfileOrDefault: jest.Mock }
   } = {}
 ) {
   const defaultUnit = {
     code: 7,
     coding_issue_option: codingIssueOption,
-    notes: '',
+    notes: overrides.notes ?? '',
     updated_at: new Date('2026-04-14T10:00:00.000Z'),
     response_id: 123,
     unit_name: 'U1',
@@ -356,14 +357,20 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     expect(manualJobVariablesQuery.andWhere).not.toHaveBeenCalledWith('cj.training_id IS NULL');
   });
 
-  it('keeps code value and writes code hint when coding_issue_option is set', async () => {
-    const { service, totalCountQueryBuilder, unitsBatchQueryBuilder } = createServiceWithDetailedMocks(1);
+  it('keeps comment and code value and writes code hint when coding_issue_option is set', async () => {
+    const { service, totalCountQueryBuilder, unitsBatchQueryBuilder } = createServiceWithDetailedMocks(
+      1,
+      { notes: 'Coder comment' }
+    );
 
     const buffer = await service.exportCodingResultsDetailed(1, false, false, false, false);
     const csv = buffer.toString('utf-8');
+    const rowFields = csv.trim().split('\n')[1].split(';');
 
     expect(csv).toContain('"Code";"Code-Hinweis"');
     expect(csv).toContain('"7";"Code-Vergabe unsicher"');
+    expect(rowFields[6]).toBe('"Coder comment"');
+    expect(rowFields[9]).toBe('"Code-Vergabe unsicher"');
     expect(totalCountQueryBuilder.leftJoin).toHaveBeenCalledWith('cju.response', 'countResp');
     expect(totalCountQueryBuilder.andWhere).toHaveBeenCalledWith(
       '(countResp.status_v1 IS NULL OR countResp.status_v1 NOT IN (:...excludedStatuses))',
