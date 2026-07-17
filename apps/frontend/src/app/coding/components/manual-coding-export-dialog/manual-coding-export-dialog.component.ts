@@ -26,8 +26,6 @@ export interface ManualCodingExportDialogData {
   coders: Coder[];
   jobDefinitions?: ManualCodingJobDefinitionOption[];
   coderTrainings?: CoderTraining[];
-  defaultJobDefinitionIds?: number[];
-  defaultCoderTrainingIds?: number[];
 }
 
 export interface ManualCodingExportDialogResult {
@@ -37,6 +35,7 @@ export interface ManualCodingExportDialogResult {
   includeComments?: boolean;
   includeModalValue?: boolean;
   includeReplayUrl?: boolean;
+  includeResponseValues?: boolean;
   anonymizeCoders?: boolean;
   usePseudoCoders?: boolean;
   jobDefinitionIds?: number[];
@@ -63,6 +62,8 @@ export interface ManualCodingExportDialogResult {
   ]
 })
 export class ManualCodingExportDialogComponent {
+  readonly selectAllOptionId = -1;
+
   exportMode: ManualCodingExportMode = 'review';
   reportExportType: Exclude<ManualCodingExportType, 'aggregated'> = 'detailed';
   doubleCodingMethod: 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent' = 'most-frequent';
@@ -70,6 +71,7 @@ export class ManualCodingExportDialogComponent {
   includeComments = true;
   includeModalValue = true;
   includeReplayUrl = false;
+  includeResponseValues = false;
   anonymizeCoders = false;
   usePseudoCoders = false;
   selectedJobDefinitionIds: number[] = [];
@@ -79,14 +81,7 @@ export class ManualCodingExportDialogComponent {
   constructor(
     public dialogRef: MatDialogRef<ManualCodingExportDialogComponent, ManualCodingExportDialogResult>,
     @Inject(MAT_DIALOG_DATA) public data: ManualCodingExportDialogData
-  ) {
-    this.selectedJobDefinitionIds = data.defaultJobDefinitionIds?.length ?
-      data.defaultJobDefinitionIds :
-      data.jobDefinitions?.map(jobDefinition => jobDefinition.id) ?? [];
-    this.selectedCoderTrainingIds = data.defaultCoderTrainingIds?.length ?
-      data.defaultCoderTrainingIds :
-      data.coderTrainings?.map(training => training.id) ?? [];
-  }
+  ) { }
 
   get contextSubtitleKey(): string {
     return this.data.context === 'training' ?
@@ -106,8 +101,47 @@ export class ManualCodingExportDialogComponent {
     return true;
   }
 
-  get canIncludeReplayUrl(): boolean {
-    return this.exportMode === 'review' || this.reportExportType === 'detailed';
+  get canIncludeResponseData(): boolean {
+    return (this.exportMode === 'review' && this.doubleCodingMethod === 'new-row-per-variable') ||
+      (this.exportMode === 'report' && this.reportExportType === 'detailed');
+  }
+
+  get areAllJobDefinitionsSelected(): boolean {
+    return !!this.data.jobDefinitions?.length &&
+      this.data.jobDefinitions.every(
+        jobDefinition => this.selectedJobDefinitionIds.includes(jobDefinition.id)
+      );
+  }
+
+  get areAllCoderTrainingsSelected(): boolean {
+    return !!this.data.coderTrainings?.length &&
+      this.data.coderTrainings.every(
+        training => this.selectedCoderTrainingIds.includes(training.id)
+      );
+  }
+
+  toggleAllJobDefinitions(): void {
+    this.selectedJobDefinitionIds = this.areAllJobDefinitionsSelected ?
+      [] :
+      this.data.jobDefinitions?.map(jobDefinition => jobDefinition.id) ?? [];
+  }
+
+  removeJobDefinitionToggleOption(): void {
+    this.selectedJobDefinitionIds = this.selectedJobDefinitionIds.filter(
+      id => id !== this.selectAllOptionId
+    );
+  }
+
+  toggleAllCoderTrainings(): void {
+    this.selectedCoderTrainingIds = this.areAllCoderTrainingsSelected ?
+      [] :
+      this.data.coderTrainings?.map(training => training.id) ?? [];
+  }
+
+  removeCoderTrainingToggleOption(): void {
+    this.selectedCoderTrainingIds = this.selectedCoderTrainingIds.filter(
+      id => id !== this.selectAllOptionId
+    );
   }
 
   confirm(): void {
@@ -126,7 +160,8 @@ export class ManualCodingExportDialogComponent {
         doubleCodingMethod: this.doubleCodingMethod,
         includeComments: this.includeComments,
         includeModalValue: this.includeModalValue,
-        includeReplayUrl: this.canIncludeReplayUrl && this.includeReplayUrl,
+        includeReplayUrl: this.canIncludeResponseData && this.includeReplayUrl,
+        includeResponseValues: this.canIncludeResponseData && this.includeResponseValues,
         anonymizeCoders: this.anonymizeCoders,
         usePseudoCoders: this.anonymizeCoders && this.usePseudoCoders,
         jobDefinitionIds,
@@ -139,7 +174,8 @@ export class ManualCodingExportDialogComponent {
     this.dialogRef.close({
       exportType: this.reportExportType,
       outputCommentsInsteadOfCodes: this.outputCommentsInsteadOfCodes,
-      includeReplayUrl: this.canIncludeReplayUrl && this.includeReplayUrl,
+      includeReplayUrl: this.canIncludeResponseData && this.includeReplayUrl,
+      includeResponseValues: this.canIncludeResponseData && this.includeResponseValues,
       anonymizeCoders: this.anonymizeCoders,
       usePseudoCoders: this.anonymizeCoders && this.usePseudoCoders,
       jobDefinitionIds,

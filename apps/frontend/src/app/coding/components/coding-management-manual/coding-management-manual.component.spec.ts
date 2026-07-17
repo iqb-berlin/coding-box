@@ -2354,11 +2354,15 @@ describe('CodingManagementManualComponent', () => {
     );
   });
 
-  it('should start execution exports with cached job definition scope when the dialog keeps defaults', () => {
+  it('should start execution exports with cached job definition scope when no explicit result scope is provided', () => {
     const exportJobService = TestBed.inject(ExportJobService);
     const dialog = {
       open: jest.fn().mockReturnValue({
-        afterClosed: () => of({ exportType: 'detailed', includeReplayUrl: true })
+        afterClosed: () => of({
+          exportType: 'detailed',
+          includeReplayUrl: true,
+          includeResponseValues: true
+        })
       })
     };
     const componentInternals = component as unknown as {
@@ -2401,7 +2405,6 @@ describe('CodingManagementManualComponent', () => {
       ManualCodingExportDialogComponent,
       expect.objectContaining({
         data: expect.objectContaining({
-          defaultJobDefinitionIds: [11],
           jobDefinitions: [
             expect.objectContaining({
               id: 11
@@ -2416,6 +2419,7 @@ describe('CodingManagementManualComponent', () => {
         exportType: 'detailed',
         userId: 9,
         includeReplayUrl: true,
+        includeResponseValues: true,
         excludeAutoCoded: true,
         jobDefinitionIds: [11]
       })
