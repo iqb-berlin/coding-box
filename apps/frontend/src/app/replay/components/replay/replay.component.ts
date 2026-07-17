@@ -12,7 +12,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ActivatedRoute, Params, Router } from '@angular/router';
 import {
-  firstValueFrom, of, Subject, Subscription, catchError, debounceTime
+  firstValueFrom, of, Subject, Subscription, catchError, debounceTime, takeUntil
 } from 'rxjs';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
 import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
@@ -50,6 +50,7 @@ import {
   WorkspaceTokenScope
 } from '../../../core/services/auth-session.config';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
+import { CodingScheme } from '../../../models/coding-interfaces';
 
 interface ReplayUnitPayload {
   unitDef: FilesDto[];
@@ -61,6 +62,7 @@ interface ReplayUnitPayload {
   };
   player: FilesDto[];
   vocs: FilesDto[];
+  codingScheme?: CodingScheme | null;
   serverTimings?: ReplayServerTimings;
 }
 
@@ -181,6 +183,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private anchorHighlightTimeout: ReturnType<typeof setTimeout> | null = null;
   private anchorHighlightRunId = 0;
   private unitPayloadRunId = 0;
+  private unitPayloadCancellation: Subject<void> | undefined = new Subject<void>();
   private readonly ANCHOR_HIGHLIGHT_RETRY_DELAY_MS = 100;
   private readonly ANCHOR_HIGHLIGHT_MAX_ATTEMPTS = 40;
   private readonly REPLAY_NOTES_COMMIT_DEBOUNCE_MS = 750;
@@ -764,20 +767,34 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.responses = unitData.response;
     this.serverTimings = unitData.serverTimings ?? null;
 
-    if (this.isCodingMode && unitData.vocs && unitData.vocs[0] && unitData.vocs[0].data) {
-      this.codingService.setCodingSchemeFromVocsData(unitData.vocs[0].data);
+    const vocsData = unitData.vocs[0]?.data;
+    if (this.isCodingMode && unitData.codingScheme !== undefined) {
+      this.codingService.setParsedCodingScheme(unitData.codingScheme, vocsData);
+    } else if (this.isCodingMode && vocsData) {
+      this.codingService.setCodingSchemeFromVocsData(vocsData);
     } else if (this.isCodingMode && !this.codingService.codingScheme) {
       this.loadCodingSchemeForCodingJob(unitPayloadRunId);
     }
   }
 
   private nextUnitPayloadRunId(): number {
+    this.cancelActiveUnitPayloadRequest();
     this.unitPayloadRunId += 1;
     return this.unitPayloadRunId;
   }
 
   private invalidateUnitPayloadRequests(): void {
+    this.cancelActiveUnitPayloadRequest();
     this.unitPayloadRunId += 1;
+  }
+
+  private cancelActiveUnitPayloadRequest(): void {
+    this.unitPayloadCancellation?.next();
+  }
+
+  private getUnitPayloadCancellation(): Subject<void> {
+    this.unitPayloadCancellation ??= new Subject<void>();
+    return this.unitPayloadCancellation;
   }
 
   private isCurrentUnitPayloadRun(runId: number): boolean {
@@ -789,7 +806,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
     try {
       const unitData = await this.getUnitData(workspace, authToken, runId);
-      if (!this.isCurrentUnitPayloadRun(runId)) {
+      if (!unitData || !this.isCurrentUnitPayloadRun(runId)) {
         return false;
       }
 
@@ -823,7 +840,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     workspace: number,
     authToken?: string,
     unitPayloadRunId?: number
-  ): Promise<ReplayUnitPayload> {
+  ): Promise<ReplayUnitPayload | null> {
     this.replayStartTime = performance.now();
     this.loadStartTime = this.replayStartTime;
     this.payloadRequestStartTime = this.replayStartTime;
@@ -837,9 +854,14 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         workspace,
         this.testPerson,
         this.unitId,
-        authToken
-      )
+        authToken,
+        this.isCodingMode
+      ).pipe(takeUntil(this.getUnitPayloadCancellation())),
+      { defaultValue: null }
     );
+    if (!unitData) {
+      return null;
+    }
     if (!unitPayloadRunId || this.isCurrentUnitPayloadRun(unitPayloadRunId)) {
       this.payloadResponseTime = performance.now();
       this.setIsLoaded();
@@ -849,6 +871,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       response: unitData.response,
       vocs: unitData.vocs,
       player: unitData.player,
+      codingScheme: unitData.codingScheme,
       serverTimings: unitData.serverTimings
     };
   }
@@ -1312,6 +1335,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   ngOnDestroy(): void {
+    this.invalidateUnitPayloadRequests();
+    this.unitPayloadCancellation?.complete();
+    this.unitPayloadCancellation = undefined;
     this.routerSubscription?.unsubscribe();
     this.authBootstrapSubscription?.unsubscribe();
     this.sessionRecoverySubscription?.unsubscribe();
