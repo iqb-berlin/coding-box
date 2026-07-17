@@ -5,6 +5,7 @@ import { of, Subject, throwError } from 'rxjs';
 import { CodingJobBackendService } from '../../coding/services/coding-job-backend.service';
 import { ReplayCodingService } from './replay-coding.service';
 import { CodingJob } from '../../coding/models/coding-job.model';
+import { CodingScheme } from '../../models/coding-interfaces';
 
 describe('ReplayCodingService', () => {
   let service: ReplayCodingService;
@@ -49,6 +50,40 @@ describe('ReplayCodingService', () => {
 
   it('should be created', () => {
     expect(service).toBeTruthy();
+  });
+
+  it('should reuse consecutively parsed standalone VOCS data', () => {
+    const vocsData = JSON.stringify({
+      id: 'scheme-1',
+      label: 'Scheme',
+      variableCodings: []
+    });
+
+    service.setCodingSchemeFromVocsData(vocsData);
+    const parsedCodingScheme = service.codingScheme;
+    service.setCodingSchemeFromVocsData(vocsData);
+
+    expect(service.codingScheme).toBe(parsedCodingScheme);
+
+    service.resetCodingData();
+    service.setCodingSchemeFromVocsData(vocsData);
+    expect(service.codingScheme).not.toBe(parsedCodingScheme);
+  });
+
+  it('should accept an asset-cache coding scheme without parsing its raw source', () => {
+    const parsedCodingScheme: CodingScheme = {
+      version: '1.0',
+      variableCodings: []
+    };
+    const parseSpy = jest.spyOn(JSON, 'parse');
+
+    service.setParsedCodingScheme(
+      parsedCodingScheme,
+      '{"version":"1.0","variableCodings":[]}'
+    );
+
+    expect(service.codingScheme).toBe(parsedCodingScheme);
+    expect(parseSpy).not.toHaveBeenCalled();
   });
 
   describe('updateCodingJobStatus', () => {
