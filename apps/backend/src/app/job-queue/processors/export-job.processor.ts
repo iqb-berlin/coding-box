@@ -453,7 +453,8 @@ export class ExportJobProcessor {
             job.data.jobDefinitionIds,
             job.data.coderTrainingIds,
             job.data.coderIds,
-            job.data.serverUrl || ''
+            job.data.serverUrl || '',
+            job.data.includeResponseValues || false
           );
           break;
 
@@ -542,7 +543,8 @@ export class ExportJobProcessor {
               jobDefinitionIds: job.data.jobDefinitionIds,
               coderTrainingIds: job.data.coderTrainingIds,
               coderIds: job.data.coderIds,
-              serverUrl: job.data.serverUrl || ''
+              serverUrl: job.data.serverUrl || '',
+              includeResponseValues: job.data.includeResponseValues || false
             }
           );
           break;

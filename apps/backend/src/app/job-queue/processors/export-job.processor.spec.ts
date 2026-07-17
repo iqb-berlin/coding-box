@@ -503,6 +503,7 @@ describe('ExportJobProcessor', () => {
         exportType: 'detailed',
         outputCommentsInsteadOfCodes: true,
         includeReplayUrl: true,
+        includeResponseValues: true,
         anonymizeCoders: true,
         usePseudoCoders: false,
         excludeAutoCoded: true,
@@ -520,6 +521,7 @@ describe('ExportJobProcessor', () => {
           workspaceId: 7,
           outputCommentsInsteadOfCodes: true,
           includeReplayUrl: true,
+          includeResponseValues: true,
           anonymizeCoders: true,
           usePseudoCoders: false,
           authToken: 'auth-token',
@@ -548,6 +550,7 @@ describe('ExportJobProcessor', () => {
         exportType: 'aggregated',
         outputCommentsInsteadOfCodes: true,
         includeReplayUrl: true,
+        includeResponseValues: true,
         anonymizeCoders: true,
         usePseudoCoders: true,
         doubleCodingMethod: 'new-row-per-variable',
@@ -579,7 +582,8 @@ describe('ExportJobProcessor', () => {
         [1],
         [2],
         [3],
-        'http://app.example'
+        'http://app.example',
+        true
       );
       expect(result.fileName).toMatch(/\.xlsx$/);
       expect(fs.readFileSync(filePath as string).toString('utf-8')).toBe('aggregated');
