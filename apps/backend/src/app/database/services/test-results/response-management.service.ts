@@ -247,9 +247,7 @@ export class ResponseManagementService {
             }):`,
             error.message
           );
-          await queryRunner.rollbackTransaction();
-          await queryRunner.release();
-          return false;
+          throw error;
         }
       }
 
@@ -309,7 +307,7 @@ export class ResponseManagementService {
         );
       }
       await queryRunner.release();
-      return false;
+      throw error;
     }
   }
 

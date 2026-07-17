@@ -384,6 +384,60 @@ describe('ResponseManagementService', () => {
     expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
   });
 
+  it('throws database update errors after rolling back and releasing', async () => {
+    const persistenceError = new Error('database update failed');
+    const manager = {
+      query: jest.fn().mockResolvedValue([]),
+      update: jest.fn().mockRejectedValue(persistenceError)
+    };
+    const queryRunner = {
+      manager,
+      commitTransaction: jest.fn().mockResolvedValue(undefined),
+      rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+      release: jest.fn().mockResolvedValue(undefined)
+    } as unknown as QueryRunner;
+    const service = createService();
+
+    await expect(service.updateResponsesInDatabase(
+      1,
+      [{ id: 42, code_v1: 1 }],
+      queryRunner
+    )).rejects.toBe(persistenceError);
+
+    expect(queryRunner.rollbackTransaction).toHaveBeenCalledTimes(1);
+    expect(queryRunner.release).toHaveBeenCalledTimes(1);
+    expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
+  });
+
+  it('returns false only when cancellation is detected before a batch update', async () => {
+    const manager = {
+      query: jest.fn().mockResolvedValue([]),
+      update: jest.fn().mockResolvedValue({ affected: 1 })
+    };
+    const queryRunner = {
+      manager,
+      commitTransaction: jest.fn().mockResolvedValue(undefined),
+      rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+      release: jest.fn().mockResolvedValue(undefined)
+    } as unknown as QueryRunner;
+    const isJobCancelled = jest.fn().mockResolvedValue(true);
+    const service = createService();
+
+    await expect(service.updateResponsesInDatabase(
+      1,
+      [{ id: 42, code_v1: 1 }],
+      queryRunner,
+      'job-1',
+      isJobCancelled
+    )).resolves.toBe(false);
+
+    expect(isJobCancelled).toHaveBeenCalledWith('job-1');
+    expect(manager.update).not.toHaveBeenCalled();
+    expect(queryRunner.rollbackTransaction).toHaveBeenCalledTimes(1);
+    expect(queryRunner.release).toHaveBeenCalledTimes(1);
+    expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
+  });
+
   it('moves applied jobs back to completed/stale-source after auto-coding run 1 clears manual results', async () => {
     const cleanupSelectQueryBuilder = {
       select: jest.fn().mockReturnThis(),
