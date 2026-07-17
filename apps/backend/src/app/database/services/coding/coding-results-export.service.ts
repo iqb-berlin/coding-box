@@ -2078,10 +2078,7 @@ export class CodingResultsExportService {
           const timestamp = unit.updated_at ?
             new Date(unit.updated_at).toLocaleString('de-DE').replace(',', '') : '';
 
-          let commentValue = unit.notes || '';
-          if (!outputCommentsInsteadOfCodes && unit.coding_issue_option) {
-            commentValue = this.getCodingIssueText(unit.coding_issue_option) || commentValue;
-          }
+          const commentValue = unit.notes || '';
 
           const mapped = await this.mapCodeAndScoreForExport(
             workspaceId,
