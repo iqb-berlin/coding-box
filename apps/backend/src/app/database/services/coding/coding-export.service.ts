@@ -3987,11 +3987,8 @@ export class CodingExportService {
           );
           const codeValue = mapped.code === null ? '' : mapped.code.toString();
 
-          let commentValue = unit.notes || '';
+          const commentValue = unit.notes || '';
           const codingIssueOption = this.toIntegerOrNull(unit.codingIssueOption);
-          if (!outputCommentsInsteadOfCodes && codingIssueOption) {
-            commentValue = this.getCodingIssueText(codingIssueOption) || commentValue;
-          }
           const codeIssueValue = this.getCodingIssueText(codingIssueOption);
 
           const rowFields = [
