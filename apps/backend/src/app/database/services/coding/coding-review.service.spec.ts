@@ -1232,7 +1232,9 @@ describe('CodingReviewService', () => {
     expect(queryBuilder.leftJoin).toHaveBeenCalledWith('cj.training', 'training');
     expect(queryBuilder.select).toHaveBeenCalledWith('cju.response_id', 'responseId');
     expect(queryBuilder.addSelect).toHaveBeenCalledWith('cju.variable_anchor', 'variableAnchor');
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith('cju.code IS NOT NULL');
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(cju.code IS NOT NULL OR cju.coding_issue_option IN (-3, -4))'
+    );
     expect(queryBuilder.andWhere).toHaveBeenCalledWith('cj.training_id IS NULL');
     expect(queryBuilder.addOrderBy).toHaveBeenCalledWith('cju.id', 'ASC');
     expect(queryBuilder.addOrderBy).toHaveBeenCalledWith('cjc.id', 'ASC');
@@ -1288,17 +1290,223 @@ describe('CodingReviewService', () => {
 
     await service.getCodedVariablesForKappa(workspaceId, false);
 
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith('cju.code IS NOT NULL');
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(cju.code IS NOT NULL OR cju.coding_issue_option IN (-3, -4))'
+    );
     expect(queryBuilder.andWhere).not.toHaveBeenCalledWith('cj.training_id IS NULL');
   });
 
-  it('uses score values as the database filter for score-level kappa data', async () => {
+  it('loads raw missing values for profile-aware score-level kappa normalization', async () => {
     queryBuilder.getRawMany.mockResolvedValueOnce([]);
 
     await service.getCodedVariablesForKappa(workspaceId, true, [], [], [], 'score');
 
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith('cju.score IS NOT NULL');
-    expect(queryBuilder.andWhere).not.toHaveBeenCalledWith('cju.code IS NOT NULL');
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(cju.score IS NOT NULL OR cju.code < 0 OR cju.coding_issue_option IN (-3, -4))'
+    );
+  });
+
+  it('normalizes general missing codes before filtering score-level kappa data', async () => {
+    const missingsProfilesService = {
+      getMissingByIdForProfileOrDefault: jest.fn()
+        .mockImplementation(async (_workspaceId: number, _profileId: number | null, missingId: string) => (
+          missingId === 'mir' ?
+            {
+              id: 'mir', label: 'Missing invalid response', code: -98, score: 0
+            } :
+            {
+              id: 'mci', label: 'Missing coding impossible', code: -97, score: null
+            }
+        )),
+      getMissingByCodeForProfileOrDefault: jest.fn()
+        .mockResolvedValue({
+          id: 'mbi_mbo', label: 'Missing by omission', code: -99, score: 0
+        })
+    };
+    service = new CodingReviewService(
+      {} as never,
+      codingJobUnitRepository as never,
+      jobDefinitionRepository as never,
+      variableBundleRepository as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {
+        resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
+      } as never,
+      codingJobService as never,
+      missingsProfilesService as never
+    );
+    queryBuilder.getRawMany.mockResolvedValueOnce([
+      {
+        responseId: 10,
+        unitName: 'UNIT_1',
+        variableId: 'VAR_1',
+        variableAnchor: 'ANCHOR_1',
+        personLogin: 'person-1',
+        personCode: 'P001',
+        personGroup: 'GROUP_1',
+        bookletName: 'BOOKLET_1',
+        coderId: 1,
+        coderName: 'Coder 1',
+        jobId: 100,
+        jobName: 'Training job 1',
+        jobDefinitionId: null,
+        trainingId: 60,
+        trainingLabel: 'Training A',
+        missingsProfileId: 77,
+        code: -3,
+        codingIssueOption: -3,
+        score: null,
+        notes: null,
+        supervisorComment: null,
+        codedAt: new Date('2026-05-18T00:00:00.000Z')
+      },
+      {
+        responseId: 10,
+        unitName: 'UNIT_1',
+        variableId: 'VAR_1',
+        variableAnchor: 'ANCHOR_1',
+        personLogin: 'person-1',
+        personCode: 'P001',
+        personGroup: 'GROUP_1',
+        bookletName: 'BOOKLET_1',
+        coderId: 2,
+        coderName: 'Coder 2',
+        jobId: 101,
+        jobName: 'Training job 2',
+        jobDefinitionId: null,
+        trainingId: 60,
+        trainingLabel: 'Training A',
+        missingsProfileId: 77,
+        code: -99,
+        codingIssueOption: null,
+        score: null,
+        notes: null,
+        supervisorComment: null,
+        codedAt: new Date('2026-05-18T00:00:00.000Z')
+      },
+      {
+        responseId: 11,
+        unitName: 'UNIT_1',
+        variableId: 'VAR_1',
+        variableAnchor: 'ANCHOR_1',
+        personLogin: 'person-2',
+        personCode: 'P002',
+        personGroup: 'GROUP_1',
+        bookletName: 'BOOKLET_1',
+        coderId: 1,
+        coderName: 'Coder 1',
+        jobId: 100,
+        jobName: 'Training job 1',
+        jobDefinitionId: null,
+        trainingId: 60,
+        trainingLabel: 'Training A',
+        missingsProfileId: 77,
+        code: -4,
+        codingIssueOption: -4,
+        score: null,
+        notes: null,
+        supervisorComment: null,
+        codedAt: new Date('2026-05-18T00:00:00.000Z')
+      }
+    ]);
+
+    const result = await service.getCodedVariablesForKappa(
+      workspaceId,
+      false,
+      [],
+      [60],
+      [],
+      'score'
+    );
+
+    expect(missingsProfilesService.getMissingByIdForProfileOrDefault)
+      .toHaveBeenCalledWith(workspaceId, 77, 'mir');
+    expect(missingsProfilesService.getMissingByIdForProfileOrDefault)
+      .toHaveBeenCalledWith(workspaceId, 77, 'mci');
+    expect(missingsProfilesService.getMissingByCodeForProfileOrDefault)
+      .toHaveBeenCalledWith(workspaceId, 77, -99);
+    expect(result).toEqual([
+      expect.objectContaining({
+        responseId: 10,
+        coderResults: [
+          expect.objectContaining({ coderId: 1, code: -98, score: 0 }),
+          expect.objectContaining({ coderId: 2, code: -99, score: 0 })
+        ]
+      })
+    ]);
+  });
+
+  it('excludes internal issue marker codes from code-level kappa data', async () => {
+    queryBuilder.getRawMany.mockResolvedValueOnce([
+      {
+        responseId: 10,
+        unitName: 'UNIT_1',
+        variableId: 'VAR_1',
+        variableAnchor: 'ANCHOR_1',
+        personLogin: 'person-1',
+        personCode: 'P001',
+        personGroup: 'GROUP_1',
+        bookletName: 'BOOKLET_1',
+        coderId: 1,
+        coderName: 'Coder 1',
+        jobId: 100,
+        jobName: 'Issue marker job',
+        jobDefinitionId: null,
+        trainingId: 60,
+        trainingLabel: 'Training A',
+        missingsProfileId: 77,
+        code: -1,
+        codingIssueOption: -1,
+        score: null,
+        notes: null,
+        supervisorComment: null,
+        codedAt: new Date('2026-05-18T00:00:00.000Z')
+      },
+      {
+        responseId: 11,
+        unitName: 'UNIT_1',
+        variableId: 'VAR_1',
+        variableAnchor: 'ANCHOR_1',
+        personLogin: 'person-2',
+        personCode: 'P002',
+        personGroup: 'GROUP_1',
+        bookletName: 'BOOKLET_1',
+        coderId: 1,
+        coderName: 'Coder 1',
+        jobId: 100,
+        jobName: 'Provisional regular code',
+        jobDefinitionId: null,
+        trainingId: 60,
+        trainingLabel: 'Training A',
+        missingsProfileId: 77,
+        code: 1,
+        codingIssueOption: -1,
+        score: 1,
+        notes: null,
+        supervisorComment: null,
+        codedAt: new Date('2026-05-18T00:00:00.000Z')
+      }
+    ]);
+
+    const result = await service.getCodedVariablesForKappa(
+      workspaceId,
+      false,
+      [],
+      [60],
+      [],
+      'code'
+    );
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        responseId: 11,
+        coderResults: [
+          expect.objectContaining({ coderId: 1, code: 1, score: 1 })
+        ]
+      })
+    ]);
   });
 
   it('deduplicates kappa rows by score availability when score-level kappa data is loaded', async () => {
