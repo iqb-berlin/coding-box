@@ -369,9 +369,12 @@ describe('CodingResultsExportService', () => {
     });
 
     const csv = (await service.exportCodingResultsDetailed(1)).toString('utf-8');
+    const firstRowFields = csv.trim().split('\n')[1].split(';');
 
     expect(csv).toContain('"Code";"Code-Hinweis"');
     expect(csv).toContain('"7";"Code-Vergabe unsicher"');
+    expect(firstRowFields[6]).toBe('"needs review"');
+    expect(firstRowFields[9]).toBe('"Code-Vergabe unsicher"');
     expect(csv).toContain('"0";""');
     expect(csv).toContain('"zero-code note"');
     expect(csv).not.toContain('skipped');
