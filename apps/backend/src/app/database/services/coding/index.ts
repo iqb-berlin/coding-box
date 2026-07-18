@@ -26,6 +26,10 @@ export {
   CodingPsychometricExportService,
   type PsychometricExportServiceOptions
 } from './coding-psychometric-export.service';
+export { PsychometricMetadataResolver } from './psychometric-metadata-resolver.service';
+export { PsychometricResponseReader } from './psychometric-response-reader.service';
+export { PsychometricAnalysisEngine } from './psychometric-analysis-engine';
+export { PsychometricExportWriter } from './psychometric-export-writer.service';
 export { CodingListExportService } from './coding-list-export.service';
 export { CodingResultsExportService } from './coding-results-export.service';
 export { CodingTimesExportService } from './coding-times-export.service';
