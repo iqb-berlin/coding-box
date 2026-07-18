@@ -42,6 +42,21 @@ describe('MissingsProfileService', () => {
     req.flush(mockRes);
   });
 
+  it('should expose missing-profile request errors to strict callers', () => {
+    const onError = jest.fn();
+    service.getMissingsProfilesOrThrow(1).subscribe({ error: onError });
+
+    const req = httpMock.expectOne(
+      `${mockServerUrl}admin/workspace/1/coding/missings-profiles`
+    );
+    req.flush('failed', {
+      status: 500,
+      statusText: 'Server Error'
+    });
+
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
   it('should delete missings profile', () => {
     service.deleteMissingsProfile(1, 'test label').subscribe(res => {
       expect(res).toBe(true);

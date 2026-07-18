@@ -39,7 +39,8 @@ export class ExportToastComponent implements OnInit, OnDestroy {
     detailed: 'export-toast.types.detailed',
     'coding-times': 'export-toast.types.coding-times',
     'results-by-version': 'export-toast.types.results-by-version',
-    'item-matrix': 'export-toast.types.item-matrix'
+    'item-matrix': 'export-toast.types.item-matrix',
+    psychometrics: 'export-toast.types.psychometrics'
   };
 
   jobs: ExportJob[] = [];
@@ -102,10 +103,19 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   }
 
   getExportTypeLabel(jobOrExportType: ExportJob | string): string {
-    const exportType = typeof jobOrExportType === 'string' ? jobOrExportType : jobOrExportType.exportType;
-    const displayLabelKey = typeof jobOrExportType === 'string' ? undefined : jobOrExportType.displayLabelKey;
-    const translationKey = displayLabelKey || this.exportTypeLabelKeys[exportType];
-    return translationKey ? this.translateService.instant(translationKey) : exportType;
+    const exportType =
+      typeof jobOrExportType === 'string' ?
+        jobOrExportType :
+        jobOrExportType.exportType;
+    const displayLabelKey =
+      typeof jobOrExportType === 'string' ?
+        undefined :
+        jobOrExportType.displayLabelKey;
+    const translationKey =
+      displayLabelKey || this.exportTypeLabelKeys[exportType];
+    return translationKey ?
+      this.translateService.instant(translationKey) :
+      exportType;
   }
 
   getProgressMode(job: ExportJob): 'determinate' | 'indeterminate' {
@@ -139,10 +149,13 @@ export class ExportToastComponent implements OnInit, OnDestroy {
       typeof job.totalRows === 'number' &&
       job.totalRows > 0
     ) {
-      return this.translateService.instant('export-toast.progress.writing-rows', {
-        processed: this.formatNumber(job.processedRows),
-        total: this.formatNumber(job.totalRows)
-      });
+      return this.translateService.instant(
+        'export-toast.progress.writing-rows',
+        {
+          processed: this.formatNumber(job.processedRows),
+          total: this.formatNumber(job.totalRows)
+        }
+      );
     }
 
     const phaseKey = job.progressPhase || 'active';
@@ -155,7 +168,9 @@ export class ExportToastComponent implements OnInit, OnDestroy {
 
   getErrorTitle(job: ExportJob): string {
     if (this.getWorksheetLimitError(job)) {
-      return this.translateService.instant('export-toast.errors.too-many-worksheets-title');
+      return this.translateService.instant(
+        'export-toast.errors.too-many-worksheets-title'
+      );
     }
     return this.translateService.instant('export-toast.errors.generic-title');
   }
@@ -163,7 +178,10 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   getErrorMessage(job: ExportJob): string {
     const worksheetLimitError = this.getWorksheetLimitError(job);
     if (worksheetLimitError) {
-      return this.translateService.instant('export-toast.errors.too-many-worksheets-message', worksheetLimitError);
+      return this.translateService.instant(
+        'export-toast.errors.too-many-worksheets-message',
+        worksheetLimitError
+      );
     }
     return job.error || '';
   }
@@ -191,11 +209,17 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   }
 
   clearCompleted(): void {
-    const completedJobs = this.jobs.filter(j => j.status === 'completed' || j.status === 'failed' || j.status === 'cancelled');
+    const completedJobs = this.jobs.filter(
+      j => j.status === 'completed' ||
+        j.status === 'failed' ||
+        j.status === 'cancelled'
+    );
     completedJobs.forEach(job => this.exportJobService.removeJob(job.jobId));
   }
 
-  private getWorksheetLimitError(job: ExportJob): { actual: number; max: number } | null {
+  private getWorksheetLimitError(
+    job: ExportJob
+  ): { actual: number; max: number } | null {
     if (job.errorCode === 'EXPORT_TOO_MANY_WORKSHEETS') {
       const actual = Number(job.errorDetails?.actual);
       const max = Number(job.errorDetails?.max);
@@ -204,7 +228,9 @@ export class ExportToastComponent implements OnInit, OnDestroy {
       }
     }
 
-    const match = job.error?.match(/enthaelt\s+(\d+)\s+Unit-Variable-Kombinationen[\s\S]*Limit von\s+(\d+)\s+Tabellenblaettern/i);
+    const match = job.error?.match(
+      /enthaelt\s+(\d+)\s+Unit-Variable-Kombinationen[\s\S]*Limit von\s+(\d+)\s+Tabellenblaettern/i
+    );
     if (!match) return null;
     return {
       actual: Number(match[1]),
