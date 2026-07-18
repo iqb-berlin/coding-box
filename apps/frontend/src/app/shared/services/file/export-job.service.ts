@@ -10,25 +10,34 @@ import {
   throwError
 } from 'rxjs';
 import {
-  map,
-  switchMap,
-  takeUntil,
-  tap
+  map, switchMap, takeUntil, tap
 } from 'rxjs/operators';
-import { CodingExportEstimate, CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
-import { AppService, WorkspaceTokenPolicy } from '../../../core/services/app.service';
+import {
+  CodingExportEstimate,
+  CodingJobBackendService
+} from '../../../coding/services/coding-job-backend.service';
+import {
+  AppService,
+  WorkspaceTokenPolicy
+} from '../../../core/services/app.service';
 import {
   DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
   EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
 } from '../../../core/services/auth-session.config';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import type {
+  PsychometricDomainCandidatesDto,
+  PsychometricDomainSelection
+} from '../../../../../../../api-dto/coding/psychometric-discrimination.dto';
 
 export interface ExportJob {
   jobId: string;
   workspaceId: number;
-  status: 'waiting' | 'active' | 'downloading' | 'completed' | 'failed' | 'cancelled';
+  status:
+  'waiting' | 'active' | 'downloading' | 'completed' | 'failed' | 'cancelled';
   progress: number;
-  progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
+  progressPhase?:
+  'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
   processedRows?: number;
   totalRows?: number;
   progressMessage?: string;
@@ -54,11 +63,16 @@ export interface ExportJobConfig {
   | 'detailed'
   | 'coding-times'
   | 'results-by-version'
-  | 'item-matrix';
+  | 'item-matrix'
+  | 'psychometrics';
   userId?: number;
   version?: 'v1' | 'v2' | 'v3';
   format?: 'csv' | 'excel';
   matrixValue?: 'code' | 'score';
+  partWholeCorrection?: boolean;
+  missingsProfileId?: number;
+  domain?: PsychometricDomainSelection;
+  maxCategoryCount?: number;
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
   includeResponseValues?: boolean;
@@ -67,9 +81,7 @@ export interface ExportJobConfig {
   anonymizeCoders?: boolean;
   usePseudoCoders?: boolean;
   doubleCodingMethod?:
-  | 'new-row-per-variable'
-  | 'new-column-per-coder'
-  | 'most-frequent';
+  'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent';
   includeComments?: boolean;
   includeModalValue?: boolean;
   includeDoubleCoded?: boolean;
@@ -90,17 +102,26 @@ export type ReplayAuthTokenError = Error & {
   originalError?: unknown;
 };
 
-export function createReplayAuthTokenError(originalError?: unknown): ReplayAuthTokenError {
-  const error = new Error('Replay auth token could not be created.') as ReplayAuthTokenError;
+export function createReplayAuthTokenError(
+  originalError?: unknown
+): ReplayAuthTokenError {
+  const error = new Error(
+    'Replay auth token could not be created.'
+  ) as ReplayAuthTokenError;
   error.name = 'ReplayAuthTokenError';
   error.code = REPLAY_AUTH_TOKEN_ERROR_CODE;
   error.originalError = originalError;
   return error;
 }
 
-export function isReplayAuthTokenError(error: unknown): error is ReplayAuthTokenError {
-  return error instanceof Error &&
-    (error as Partial<ReplayAuthTokenError>).code === REPLAY_AUTH_TOKEN_ERROR_CODE;
+export function isReplayAuthTokenError(
+  error: unknown
+): error is ReplayAuthTokenError {
+  return (
+    error instanceof Error &&
+    (error as Partial<ReplayAuthTokenError>).code ===
+      REPLAY_AUTH_TOKEN_ERROR_CODE
+  );
 }
 
 @Injectable({
@@ -118,11 +139,13 @@ export class ExportJobService implements OnDestroy {
     private codingJobBackendService: CodingJobBackendService,
     private appService: AppService,
     private workspaceSettingsService: WorkspaceSettingsService
-  ) { }
+  ) {}
 
   get activeJobs(): ExportJob[] {
     return this.jobsSubject.value.filter(
-      job => job.status === 'waiting' || job.status === 'active' || job.status === 'downloading'
+      job => job.status === 'waiting' ||
+        job.status === 'active' ||
+        job.status === 'downloading'
     );
   }
 
@@ -138,13 +161,19 @@ export class ExportJobService implements OnDestroy {
     return this.jobsSubject.value.filter(job => job.status === 'cancelled');
   }
 
-  startJob(workspaceId: number, config: ExportJobConfig): Observable<ExportJob> {
+  startJob(
+    workspaceId: number,
+    config: ExportJobConfig
+  ): Observable<ExportJob> {
     return this.withReplayAuthToken(workspaceId, config).pipe(
       switchMap(preparedConfig => {
         const requestConfig = { ...preparedConfig };
         delete requestConfig.displayLabelKey;
         delete requestConfig.downloadFilePrefix;
-        return this.codingJobBackendService.startExportJob(workspaceId, requestConfig);
+        return this.codingJobBackendService.startExportJob(
+          workspaceId,
+          requestConfig
+        );
       }),
       map((response: { jobId: string }) => ({
         jobId: response.jobId,
@@ -163,8 +192,19 @@ export class ExportJobService implements OnDestroy {
     );
   }
 
-  estimateJob(workspaceId: number, config: ExportJobConfig): Observable<CodingExportEstimate> {
+  estimateJob(
+    workspaceId: number,
+    config: ExportJobConfig
+  ): Observable<CodingExportEstimate> {
     return this.codingJobBackendService.estimateExportJob(workspaceId, config);
+  }
+
+  getPsychometricDomainCandidates(
+    workspaceId: number
+  ): Observable<PsychometricDomainCandidatesDto> {
+    return this.codingJobBackendService.getPsychometricDomainCandidates(
+      workspaceId
+    );
   }
 
   private withReplayAuthToken(
@@ -175,7 +215,8 @@ export class ExportJobService implements OnDestroy {
       return of(config);
     }
 
-    return this.workspaceSettingsService.getReplayUrlExportMode(workspaceId)
+    return this.workspaceSettingsService
+      .getReplayUrlExportMode(workspaceId)
       .pipe(
         switchMap(mode => {
           if (mode === 'workspaceId') {
@@ -191,7 +232,8 @@ export class ExportJobService implements OnDestroy {
               authToken,
               serverUrl: config.serverUrl || window.location.origin
             })),
-            catchError(error => throwError(() => createReplayAuthTokenError(error)))
+            catchError(error => throwError(() => createReplayAuthTokenError(error))
+            )
           );
         })
       );
@@ -203,19 +245,25 @@ export class ExportJobService implements OnDestroy {
       switchMap(maxDurationDays => this.workspaceSettingsService.getReplayUrlExportTokenDurationDays(
         workspaceId,
         maxDurationDays
-      )),
+      )
+      ),
       switchMap(durationDays => this.appService.createOwnToken(
         workspaceId,
         durationDays,
         EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
-      ))
+      )
+      )
     );
   }
 
-  private getExternalReplayTokenMaxDurationDays(policy: WorkspaceTokenPolicy): number {
-    const maxDurations = EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
-      .map(scope => policy.scopes[scope]?.maxDurationDays)
-      .filter((duration): duration is number => Number.isInteger(duration) && duration >= 1);
+  private getExternalReplayTokenMaxDurationDays(
+    policy: WorkspaceTokenPolicy
+  ): number {
+    const maxDurations = EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES.map(
+      scope => policy.scopes[scope]?.maxDurationDays
+    ).filter(
+      (duration): duration is number => Number.isInteger(duration) && duration >= 1
+    );
 
     return maxDurations.length ?
       Math.min(...maxDurations) :
@@ -360,20 +408,22 @@ export class ExportJobService implements OnDestroy {
       return;
     }
 
-    this.codingJobBackendService.cancelExportJob(job.workspaceId, job.jobId).subscribe({
-      next: (response: { success: boolean }) => {
-        if (response.success) {
-          // Stop polling for this job
+    this.codingJobBackendService
+      .cancelExportJob(job.workspaceId, job.jobId)
+      .subscribe({
+        next: (response: { success: boolean }) => {
+          if (response.success) {
+            // Stop polling for this job
+            this.stopPollingForJob(job.jobId);
+            // Update job status to cancelled
+            this.updateJob(job.jobId, { status: 'cancelled' });
+          }
+        },
+        error: () => {
+          // On error, still try to stop polling
           this.stopPollingForJob(job.jobId);
-          // Update job status to cancelled
-          this.updateJob(job.jobId, { status: 'cancelled' });
         }
-      },
-      error: () => {
-        // On error, still try to stop polling
-        this.stopPollingForJob(job.jobId);
-      }
-    });
+      });
   }
 
   downloadFile(
@@ -388,26 +438,28 @@ export class ExportJobService implements OnDestroy {
     }
 
     this.updateJob(jobId, { status: 'downloading', progress: 0 });
-    const subscription = this.codingJobBackendService.downloadExportFile(workspaceId, jobId).subscribe({
-      next: (blob: Blob) => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const ext = this.getDownloadExtension(exportType, fileName);
-        const date = new Date().toISOString().slice(0, 10);
-        a.download = `export-${downloadFilePrefix || exportType}-${date}.${ext}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-        this.downloadSubscriptions.delete(jobId);
-        this.updateJob(jobId, { status: 'completed', progress: 100 });
-      },
-      error: () => {
-        this.downloadSubscriptions.delete(jobId);
-        this.updateJob(jobId, { status: 'completed', progress: 100 });
-      }
-    });
+    const subscription = this.codingJobBackendService
+      .downloadExportFile(workspaceId, jobId)
+      .subscribe({
+        next: (blob: Blob) => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          const ext = this.getDownloadExtension(exportType, fileName);
+          const date = new Date().toISOString().slice(0, 10);
+          a.download = `export-${downloadFilePrefix || exportType}-${date}.${ext}`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+          this.downloadSubscriptions.delete(jobId);
+          this.updateJob(jobId, { status: 'completed', progress: 100 });
+        },
+        error: () => {
+          this.downloadSubscriptions.delete(jobId);
+          this.updateJob(jobId, { status: 'completed', progress: 100 });
+        }
+      });
     this.downloadSubscriptions.set(jobId, subscription);
     if (subscription.closed) {
       this.downloadSubscriptions.delete(jobId);
@@ -424,10 +476,15 @@ export class ExportJobService implements OnDestroy {
 
   private getDownloadExtension(exportType: string, fileName?: string): string {
     const fileExtension = fileName?.split('.').pop()?.toLowerCase();
-    if (fileExtension && ['csv', 'xlsx', 'json', 'zip'].includes(fileExtension)) {
+    if (
+      fileExtension &&
+      ['csv', 'xlsx', 'json', 'zip'].includes(fileExtension)
+    ) {
       return fileExtension;
     }
-    return exportType === 'detailed' || exportType === 'by-variable-compact' ? 'csv' : 'xlsx';
+    return exportType === 'detailed' || exportType === 'by-variable-compact' ?
+      'csv' :
+      'xlsx';
   }
 
   ngOnDestroy(): void {
