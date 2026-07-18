@@ -282,7 +282,8 @@ describe('CodingExportOrchestratorService', () => {
       undefined,
       undefined,
       undefined,
-      ''
+      '',
+      false
     );
   });
 
@@ -296,6 +297,7 @@ describe('CodingExportOrchestratorService', () => {
       workspaceId: 5,
       outputCommentsInsteadOfCodes: true,
       includeReplayUrl: true,
+      includeResponseValues: true,
       anonymizeCoders: true,
       usePseudoCoders: false,
       authToken: 'token',
@@ -320,7 +322,8 @@ describe('CodingExportOrchestratorService', () => {
       [1],
       [2],
       [3],
-      'http://app.example'
+      'http://app.example',
+      true
     );
   });
 
@@ -348,7 +351,8 @@ describe('CodingExportOrchestratorService', () => {
       undefined,
       undefined,
       undefined,
-      'http://app.example'
+      'http://app.example',
+      false
     );
   });
 
@@ -385,7 +389,8 @@ describe('CodingExportOrchestratorService', () => {
       [1],
       [2],
       [3],
-      'http://app.example'
+      'http://app.example',
+      false
     );
   });
 });
