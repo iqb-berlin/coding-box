@@ -40,14 +40,26 @@ const createWritableResponse = () => {
     originalEnd(JSON.stringify(body));
     return res;
   });
-  res.write = jest.fn((chunk: unknown, encoding?: BufferEncoding | ((error?: Error | null) => void), callback?: (error?: Error | null) => void) => {
-    headersSent = true;
-    return originalWrite(chunk, encoding as BufferEncoding, callback);
-  }) as never;
-  res.end = jest.fn((chunk?: unknown, encoding?: BufferEncoding | (() => void), callback?: () => void) => {
-    headersSent = true;
-    return originalEnd(chunk, encoding as BufferEncoding, callback);
-  }) as never;
+  res.write = jest.fn(
+    (
+      chunk: unknown,
+      encoding?: BufferEncoding | ((error?: Error | null) => void),
+      callback?: (error?: Error | null) => void
+    ) => {
+      headersSent = true;
+      return originalWrite(chunk, encoding as BufferEncoding, callback);
+    }
+  ) as never;
+  res.end = jest.fn(
+    (
+      chunk?: unknown,
+      encoding?: BufferEncoding | (() => void),
+      callback?: () => void
+    ) => {
+      headersSent = true;
+      return originalEnd(chunk, encoding as BufferEncoding, callback);
+    }
+  ) as never;
   Object.defineProperty(res, 'headersSent', {
     get: () => headersSent
   });
@@ -87,22 +99,28 @@ describe('WorkspaceCodingExportController', () => {
     csvStream.emit('error', new Error('Connection terminated unexpectedly'));
     await exportPromise;
 
-    expect(codingExportOrchestratorService.exportResultsByVersionAsCsv)
-      .toHaveBeenCalledWith({
-        workspaceId: 5,
-        version: 'v2',
-        authToken: 'token',
-        serverUrl: 'http://server',
-        includeReplayUrl: false,
-        includeResponseValues: false,
-        includeGeoGebraResponseValues: false
-      });
-    expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv; charset=utf-8');
+    expect(
+      codingExportOrchestratorService.exportResultsByVersionAsCsv
+    ).toHaveBeenCalledWith({
+      workspaceId: 5,
+      version: 'v2',
+      authToken: 'token',
+      serverUrl: 'http://server',
+      includeReplayUrl: false,
+      includeResponseValues: false,
+      includeGeoGebraResponseValues: false
+    });
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Content-Type',
+      'text/csv; charset=utf-8'
+    );
     expect(res.end).toHaveBeenCalled();
   });
 
   it('returns application/json for downloaded JSON export jobs', async () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'coding-export-json-'));
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'coding-export-json-')
+    );
     const filePath = path.join(tempDir, 'export_1.json');
     fs.writeFileSync(filePath, '[]');
 
@@ -132,9 +150,9 @@ describe('WorkspaceCodingExportController', () => {
         callback();
       }
     }) as Writable & {
-      setHeader: jest.Mock,
-      status: jest.Mock,
-      json: jest.Mock
+      setHeader: jest.Mock;
+      status: jest.Mock;
+      json: jest.Mock;
     };
     res.setHeader = jest.fn();
     res.status = jest.fn().mockReturnValue(res);
@@ -152,29 +170,30 @@ describe('WorkspaceCodingExportController', () => {
     }
   });
 
-  it.each(['json', 'xlsx'])('rejects %s format for background final result exports', async format => {
-    const jobQueueService = {
-      addExportJob: jest.fn()
-    };
-    const controller = new WorkspaceCodingExportController(
-      {} as CodingListExportService,
-      {} as CodingExportService,
-      {} as CodingExportOrchestratorService,
-      jobQueueService as unknown as JobQueueService,
-      {} as CacheService
-    );
+  it.each(['json', 'xlsx'])(
+    'rejects %s format for background final result exports',
+    async format => {
+      const jobQueueService = {
+        addExportJob: jest.fn()
+      };
+      const controller = new WorkspaceCodingExportController(
+        {} as CodingListExportService,
+        {} as CodingExportService,
+        {} as CodingExportOrchestratorService,
+        jobQueueService as unknown as JobQueueService,
+        {} as CacheService
+      );
 
-    await expect(controller.startExportJob(
-      5,
-      { user: { id: 2 } } as never,
-      {
-        exportType: 'results-by-version',
-        format: format as never
-      }
-    )).rejects.toThrow(BadRequestException);
+      await expect(
+        controller.startExportJob(5, { user: { id: 2 } } as never, {
+          exportType: 'results-by-version',
+          format: format as never
+        })
+      ).rejects.toThrow(BadRequestException);
 
-    expect(jobQueueService.addExportJob).not.toHaveBeenCalled();
-  });
+      expect(jobQueueService.addExportJob).not.toHaveBeenCalled();
+    }
+  );
 
   it('rejects invalid item matrix versions before starting a background export job', async () => {
     const jobQueueService = {
@@ -188,16 +207,96 @@ describe('WorkspaceCodingExportController', () => {
       {} as CacheService
     );
 
-    await expect(controller.startExportJob(
-      5,
-      { user: { id: 2 } } as never,
-      {
+    await expect(
+      controller.startExportJob(5, { user: { id: 2 } } as never, {
         exportType: 'item-matrix',
         version: 'v4' as never
-      }
-    )).rejects.toThrow(BadRequestException);
+      })
+    ).rejects.toThrow(BadRequestException);
 
     expect(jobQueueService.addExportJob).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid psychometric category limits before starting a job', async () => {
+    const jobQueueService = {
+      addExportJob: jest.fn()
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService
+    );
+
+    await expect(
+      controller.startExportJob(5, { user: { id: 2 } } as never, {
+        exportType: 'psychometrics',
+        maxCategoryCount: 0
+      })
+    ).rejects.toThrow(BadRequestException);
+
+    expect(jobQueueService.addExportJob).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-boolean psychometric part-whole options before starting a job', async () => {
+    const jobQueueService = {
+      addExportJob: jest.fn()
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService
+    );
+
+    await expect(
+      controller.startExportJob(5, { user: { id: 2 } } as never, {
+        exportType: 'psychometrics',
+        partWholeCorrection: 'false' as never
+      })
+    ).rejects.toThrow(BadRequestException);
+
+    expect(jobQueueService.addExportJob).not.toHaveBeenCalled();
+  });
+
+  it('returns selectable VOMD domain candidates', async () => {
+    const psychometricService = {
+      getDomainCandidates: jest.fn().mockResolvedValue({
+        candidates: [
+          {
+            scope: 'ITEM',
+            profileId: 'profile',
+            entryId: 'domain',
+            label: 'Domäne',
+            coverage: 2,
+            itemCount: 2,
+            singleValued: true,
+            selectable: true
+          }
+        ],
+        mappingIssueCount: 0
+      })
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      {} as JobQueueService,
+      {} as CacheService,
+      psychometricService as never
+    );
+
+    await expect(
+      controller.getPsychometricDomainCandidates(5)
+    ).resolves.toEqual({
+      candidates: [
+        expect.objectContaining({ entryId: 'domain', selectable: true })
+      ],
+      mappingIssueCount: 0
+    });
+    expect(psychometricService.getDomainCandidates).toHaveBeenCalledWith(5);
   });
 
   it('normalizes authenticated user IDs before starting background export jobs', async () => {
@@ -212,13 +311,11 @@ describe('WorkspaceCodingExportController', () => {
       {} as CacheService
     );
 
-    await expect(controller.startExportJob(
-      5,
-      { user: { id: '2' } } as never,
-      {
+    await expect(
+      controller.startExportJob(5, { user: { id: '2' } } as never, {
         exportType: 'detailed'
-      }
-    )).resolves.toEqual({
+      })
+    ).resolves.toEqual({
       jobId: 'job-1',
       message: 'Export job created successfully. Job ID: job-1'
     });
@@ -232,7 +329,9 @@ describe('WorkspaceCodingExportController', () => {
 
   it('uses the streaming-capable export service for direct by-coder exports', async () => {
     const codingExportService = {
-      exportCodingResultsByCoder: jest.fn().mockResolvedValue(Buffer.from('xlsx'))
+      exportCodingResultsByCoder: jest
+        .fn()
+        .mockResolvedValue(Buffer.from('xlsx'))
     };
     const controller = new WorkspaceCodingExportController(
       {} as CodingListExportService,
@@ -324,30 +423,24 @@ describe('WorkspaceCodingExportController', () => {
       {} as CacheService
     );
 
-    await expect(controller.estimateExportJob(
-      5,
-      {
+    await expect(
+      controller.estimateExportJob(5, {
         exportType: 'by-variable',
         excludeAutoCoded: true,
         jobDefinitionIds: [1],
         coderTrainingIds: [2],
         coderIds: [3]
-      }
-    )).resolves.toEqual({
+      })
+    ).resolves.toEqual({
       exportType: 'by-variable',
       unitVariableCount: 2578,
       worksheetLimit: 1000,
       exceedsWorksheetLimit: true
     });
 
-    expect(codingExportService.estimateCodingResultsByVariableExport).toHaveBeenCalledWith(
-      5,
-      'by-variable',
-      true,
-      [1],
-      [2],
-      [3]
-    );
+    expect(
+      codingExportService.estimateCodingResultsByVariableExport
+    ).toHaveBeenCalledWith(5, 'by-variable', true, [1], [2], [3]);
   });
 
   it('does not apply the worksheet limit flag to compact by-variable estimates', async () => {
@@ -367,19 +460,20 @@ describe('WorkspaceCodingExportController', () => {
       {} as CacheService
     );
 
-    await expect(controller.estimateExportJob(
-      5,
-      {
+    await expect(
+      controller.estimateExportJob(5, {
         exportType: 'by-variable-compact'
-      }
-    )).resolves.toEqual({
+      })
+    ).resolves.toEqual({
       exportType: 'by-variable-compact',
       unitVariableCount: 2578,
       worksheetLimit: null,
       exceedsWorksheetLimit: false
     });
 
-    expect(codingExportService.estimateCodingResultsByVariableExport).toHaveBeenCalledWith(
+    expect(
+      codingExportService.estimateCodingResultsByVariableExport
+    ).toHaveBeenCalledWith(
       5,
       'by-variable-compact',
       false,
@@ -401,14 +495,15 @@ describe('WorkspaceCodingExportController', () => {
       {} as CacheService
     );
 
-    await expect(controller.estimateExportJob(
-      5,
-      {
+    await expect(
+      controller.estimateExportJob(5, {
         exportType: 'detailed'
-      }
-    )).rejects.toThrow(BadRequestException);
+      })
+    ).rejects.toThrow(BadRequestException);
 
-    expect(codingExportService.estimateCodingResultsByVariableExport).not.toHaveBeenCalled();
+    expect(
+      codingExportService.estimateCodingResultsByVariableExport
+    ).not.toHaveBeenCalled();
   });
 
   it('does not expose internal file paths in export job status results', async () => {
@@ -456,7 +551,8 @@ describe('WorkspaceCodingExportController', () => {
   });
 
   it('adds structured details for worksheet limit failures in export job status', async () => {
-    const failedReason = 'Der Export enthaelt 2578 Unit-Variable-Kombinationen und ueberschreitet das konfigurierte Limit von 1000 Tabellenblaettern.';
+    const failedReason =
+      'Der Export enthaelt 2578 Unit-Variable-Kombinationen und ueberschreitet das konfigurierte Limit von 1000 Tabellenblaettern.';
     const jobQueueService = {
       getExportJob: jest.fn().mockResolvedValue({
         data: { workspaceId: 5 },
@@ -599,7 +695,11 @@ describe('WorkspaceCodingExportController', () => {
       getExportJobs: jest.fn().mockResolvedValue([
         {
           id: 'active-cancelled',
-          data: { workspaceId: 5, exportType: 'coding-list', isCancelled: true },
+          data: {
+            workspaceId: 5,
+            exportType: 'coding-list',
+            isCancelled: true
+          },
           timestamp: 100,
           getState: jest.fn().mockResolvedValue('active'),
           progress: jest.fn().mockResolvedValue(55)
@@ -678,9 +778,12 @@ describe('WorkspaceCodingExportController', () => {
 
     await expect(controller.cancelExportJob(5, 'job-1')).resolves.toEqual({
       success: true,
-      message: 'Export job cancellation requested (job will stop at next checkpoint)'
+      message:
+        'Export job cancellation requested (job will stop at next checkpoint)'
     });
-    expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith('job-1');
+    expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith(
+      'job-1'
+    );
     expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1');
     expect(cacheService.get).not.toHaveBeenCalled();
     expect(cacheService.delete).not.toHaveBeenCalled();
@@ -708,7 +811,9 @@ describe('WorkspaceCodingExportController', () => {
       success: true,
       message: 'Export job cancelled successfully'
     });
-    expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith('job-1');
+    expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith(
+      'job-1'
+    );
     expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1');
   });
 
@@ -734,14 +839,17 @@ describe('WorkspaceCodingExportController', () => {
       success: false,
       message: 'Export job cancellation could not be requested'
     });
-    expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith('job-1');
+    expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith(
+      'job-1'
+    );
     expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1');
   });
 
   it('reports coding export cancellation as successful when cancellation completes during the request', async () => {
     const job = {
       data: { workspaceId: 5 },
-      getState: jest.fn()
+      getState: jest
+        .fn()
         .mockResolvedValueOnce('active')
         .mockResolvedValueOnce('completed')
     };
@@ -760,9 +868,12 @@ describe('WorkspaceCodingExportController', () => {
 
     await expect(controller.cancelExportJob(5, 'job-1')).resolves.toEqual({
       success: true,
-      message: 'Export job cancellation requested (job will stop at next checkpoint)'
+      message:
+        'Export job cancellation requested (job will stop at next checkpoint)'
     });
-    expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith('job-1');
+    expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith(
+      'job-1'
+    );
     expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1');
   });
 
@@ -786,10 +897,9 @@ describe('WorkspaceCodingExportController', () => {
   });
 
   it('requires coding-manager access at controller level', () => {
-    expect(Reflect.getMetadata(
-      'accessLevel',
-      WorkspaceCodingExportController
-    )).toBe(2);
+    expect(
+      Reflect.getMetadata('accessLevel', WorkspaceCodingExportController)
+    ).toBe(2);
   });
 
   it.each([
@@ -805,6 +915,7 @@ describe('WorkspaceCodingExportController', () => {
     'exportCodingTimesReport',
     'estimateExportJob',
     'startExportJob',
+    'getPsychometricDomainCandidates',
     'getExportJobStatus',
     'downloadExport',
     'getExportJobs',

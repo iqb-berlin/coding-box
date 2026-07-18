@@ -14,9 +14,11 @@ import {
   CodebookExportFormat,
   CodebookTrainingRequirementFilter
 } from '../../../../../api-dto/coding/codebook-content-setting';
+import { PsychometricDomainSelection } from '../../../../../api-dto/coding/psychometric-discrimination.dto';
 
 type ProcessOverviewValidationTask = Pick<
 ValidationTask,
+|
 'id' | 'workspace_id' | 'validation_type' | 'status' | 'progress' | 'progress_message' | 'error'
 >;
 
@@ -28,7 +30,7 @@ export interface TestResultsUploadJobData {
   personMatchMode?: 'strict' | 'loose';
   overwriteMode?: 'skip' | 'merge' | 'replace';
   scope?: 'person' | 'workspace' | 'group' | 'booklet' | 'unit' | 'response';
-  scopeFilters?: { groupName?: string; bookletName?: string; unitNameOrAlias?: string; variableId?: string; subform?: string };
+  scopeFilters?: { groupName?: string; bookletName?: string; unitNameOrAlias?: string; variableId?: string; subform?: string; };
 }
 
 export interface TestPersonCodingJobData {
@@ -161,10 +163,15 @@ export interface ExportJobData {
   | 'test-logs'
   | 'results-by-version'
   | 'coding-list'
-  | 'item-matrix';
+  | 'item-matrix'
+  | 'psychometrics';
   version?: 'v1' | 'v2' | 'v3';
   format?: 'csv' | 'json' | 'excel';
   matrixValue?: 'code' | 'score';
+  partWholeCorrection?: boolean;
+  missingsProfileId?: number;
+  domain?: PsychometricDomainSelection;
+  maxCategoryCount?: number;
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
   includeResponseValues?: boolean;
@@ -172,8 +179,7 @@ export interface ExportJobData {
   includeGeoGebraFiles?: boolean;
   anonymizeCoders?: boolean;
   usePseudoCoders?: boolean;
-  doubleCodingMethod?:
-  | 'new-row-per-variable'
+  doubleCodingMethod?: 'new-row-per-variable'
   | 'new-column-per-coder'
   | 'most-frequent';
   includeComments?: boolean;
@@ -196,12 +202,11 @@ export interface ExportJobData {
   coderIds?: number[];
 }
 
-export type ExportJobProgressPhase =
-  | 'preparing'
-  | 'counting'
-  | 'writing'
-  | 'finalizing'
-  | 'completed';
+export type ExportJobProgressPhase = 'preparing'
+| 'counting'
+| 'writing'
+| 'finalizing'
+| 'completed';
 
 export interface ExportJobProgress {
   percentage: number;
@@ -319,7 +324,8 @@ export class JobQueueService {
     const jobWorkspaceId = Number(
       (job?.data as { workspaceId?: unknown } | undefined)?.workspaceId
     );
-    return Number.isFinite(jobWorkspaceId) && jobWorkspaceId === Number(workspaceId);
+    return (Number.isFinite(jobWorkspaceId) && jobWorkspaceId === Number(workspaceId)
+    );
   }
 
   private normalizeCodingStatisticsVersion(
@@ -492,7 +498,7 @@ export class JobQueueService {
           if (queueName === 'validation-task') {
             const taskIds = existingJobs.map(j => j.data?.taskId as number).filter(Boolean);
             if (taskIds.length === 0) return [];
-            const tasks = await this.validationTaskRepository.find({
+            const tasks = (await this.validationTaskRepository.find({
               where: { id: In(taskIds) },
               select: [
                 'id',
@@ -503,11 +509,10 @@ export class JobQueueService {
                 'progress_message',
                 'error'
               ]
-            }) as ProcessOverviewValidationTask[];
+            })) as ProcessOverviewValidationTask[];
             validationTaskMap = new Map(tasks.map(t => [Number(t.id), t]));
-            matchedJobs = existingJobs.filter(j => (
-              Number(validationTaskMap.get(Number(j.data?.taskId))?.workspace_id) === Number(workspaceId)
-            ));
+            matchedJobs = existingJobs.filter(j => Number(validationTaskMap.get(Number(j.data?.taskId))?.workspace_id) === Number(workspaceId)
+            );
           } else {
             matchedJobs = existingJobs.filter(j => this.jobMatchesWorkspace(j, workspaceId));
           }
@@ -669,7 +674,9 @@ export class JobQueueService {
     queue: Queue,
     matchFn: (data: T) => boolean
   ): Promise<Job<T> | undefined> {
-    const jobs = (await queue.getJobs(['active', 'waiting', 'delayed'])).filter(Boolean);
+    const jobs = (await queue.getJobs(['active', 'waiting', 'delayed'])).filter(
+      Boolean
+    );
     return jobs.find(job => job.data && matchFn(job.data));
   }
 
@@ -1063,7 +1070,9 @@ export class JobQueueService {
     return this.codebookGenerationQueue.add(data, options);
   }
 
-  async getCodebookGenerationJob(jobId: string): Promise<Job<CodebookGenerationJobData>> {
+  async getCodebookGenerationJob(
+    jobId: string
+  ): Promise<Job<CodebookGenerationJobData>> {
     return this.codebookGenerationQueue.getJob(jobId);
   }
 
@@ -1121,7 +1130,9 @@ export class JobQueueService {
     data: CodingAnalysisJobData,
     options?: JobOptions
   ): Promise<Job<CodingAnalysisJobData>> {
-    this.logger.log(`Adding coding analysis job for workspace ${data.workspaceId}`);
+    this.logger.log(
+      `Adding coding analysis job for workspace ${data.workspaceId}`
+    );
     return this.responseAnalysisQueue.add(data, options);
   }
 
@@ -1139,14 +1150,18 @@ export class JobQueueService {
       'waiting',
       'delayed'
     ]);
-    return jobs.find(job => this.jobMatchesWorkspace(job, workspaceId)) || null;
+    return (
+      jobs.find(job => this.jobMatchesWorkspace(job, workspaceId)) || null
+    );
   }
 
   async addVariableAnalysisJob(
     data: VariableAnalysisJobData,
     options?: JobOptions
   ): Promise<Job<VariableAnalysisJobData>> {
-    this.logger.log(`Adding variable analysis job for workspace ${data.workspaceId}`);
+    this.logger.log(
+      `Adding variable analysis job for workspace ${data.workspaceId}`
+    );
     return this.variableAnalysisQueue.add(data, {
       removeOnComplete: { age: 86400 },
       removeOnFail: { age: 604800 },
@@ -1163,7 +1178,9 @@ export class JobQueueService {
   async getVariableAnalysisJobs(
     workspaceId: number
   ): Promise<Job<VariableAnalysisJobData>[]> {
-    this.logger.log(`Fetching all variable analysis jobs for workspace ${workspaceId}`);
+    this.logger.log(
+      `Fetching all variable analysis jobs for workspace ${workspaceId}`
+    );
     const jobs = await this.variableAnalysisQueue.getJobs([
       'completed',
       'failed',
@@ -1185,14 +1202,19 @@ export class JobQueueService {
       this.logger.log(`Variable analysis job ${jobId} has been deleted`);
       return true;
     } catch (error) {
-      this.logger.error(`Error deleting variable analysis job: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error deleting variable analysis job: ${error.message}`,
+        error.stack
+      );
       return false;
     }
   }
 
   async deleteVariableAnalysisJobs(workspaceId: number): Promise<void> {
     const jobs = await this.getVariableAnalysisJobs(workspaceId);
-    this.logger.log(`Deleting all ${jobs.length} variable analysis jobs for workspace ${workspaceId}`);
+    this.logger.log(
+      `Deleting all ${jobs.length} variable analysis jobs for workspace ${workspaceId}`
+    );
 
     for (const job of jobs) {
       try {
@@ -1205,7 +1227,9 @@ export class JobQueueService {
           await job.remove();
         }
       } catch (error) {
-        this.logger.warn(`Failed to remove variable analysis job ${job.id}: ${error.message}`);
+        this.logger.warn(
+          `Failed to remove variable analysis job ${job.id}: ${error.message}`
+        );
       }
     }
   }
@@ -1222,19 +1246,26 @@ export class JobQueueService {
 
       if (state === 'waiting' || state === 'delayed') {
         await job.remove();
-        this.logger.log(`Variable analysis job ${jobId} has been cancelled and removed from queue`);
+        this.logger.log(
+          `Variable analysis job ${jobId} has been cancelled and removed from queue`
+        );
         return true;
       }
 
       if (state === 'active') {
         await job.discard();
-        this.logger.log(`Variable analysis job ${jobId} is active, marked for discard`);
+        this.logger.log(
+          `Variable analysis job ${jobId} is active, marked for discard`
+        );
         return true;
       }
 
       return true; // Already finished or failed
     } catch (error) {
-      this.logger.error(`Error cancelling variable analysis job: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error cancelling variable analysis job: ${error.message}`,
+        error.stack
+      );
       return false;
     }
   }
@@ -1247,7 +1278,9 @@ export class JobQueueService {
       'waiting',
       'delayed'
     ]);
-    return jobs.find(job => this.jobMatchesWorkspace(job, workspaceId)) || null;
+    return (
+      jobs.find(job => this.jobMatchesWorkspace(job, workspaceId)) || null
+    );
   }
 
   async checkRedisConnection(): Promise<RedisConnectionStatus> {
