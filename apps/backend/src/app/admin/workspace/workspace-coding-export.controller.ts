@@ -10,7 +10,8 @@ import {
   Param,
   Delete,
   Logger,
-  BadRequestException
+  BadRequestException,
+  Optional
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -36,8 +37,10 @@ import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import {
   CodingExportService,
   CodingExportOrchestratorService,
-  CodingListExportService
+  CodingListExportService,
+  CodingPsychometricExportService
 } from '../../database/services/coding';
+import { PsychometricDomainCandidatesDto } from '../../../../../../api-dto/coding/psychometric-discrimination.dto';
 
 type PublicExportJobResult = Omit<ExportJobResult, 'filePath'>;
 type PublicExportJobStatus =
@@ -73,29 +76,28 @@ export class WorkspaceCodingExportController {
     private codingExportService: CodingExportService,
     private codingExportOrchestratorService: CodingExportOrchestratorService,
     private jobQueueService: JobQueueService,
-    private cacheService: CacheService
-  ) { }
+    private cacheService: CacheService,
+    @Optional()
+    private codingPsychometricExportService?: CodingPsychometricExportService
+  ) {}
 
   private mapExportJobState(
     state: string,
     job: { data?: { isCancelled?: boolean }; failedReason?: string }
   ): string {
     const failedReason = job.failedReason;
-    const failedBecauseCancelled = typeof failedReason === 'string' &&
-      (
-        failedReason.includes('ExportJobCancelledException') ||
-        /^Export job .* was cancelled$/.test(failedReason)
-      );
+    const failedBecauseCancelled =
+      typeof failedReason === 'string' &&
+      (failedReason.includes('ExportJobCancelledException') ||
+        /^Export job .* was cancelled$/.test(failedReason));
 
     if (
       job.data?.isCancelled === true &&
-      (
-        state === 'waiting' ||
+      (state === 'waiting' ||
         state === 'delayed' ||
         state === 'active' ||
         state === 'completed' ||
-        state === 'failed'
-      )
+        state === 'failed')
     ) {
       return 'cancelled';
     }
@@ -186,6 +188,77 @@ export class WorkspaceCodingExportController {
         'item-matrix exports support only "v1", "v2" or "v3" versions'
       );
     }
+
+    if (
+      body.exportType === 'psychometrics' &&
+      body.format !== undefined &&
+      body.format !== 'csv' &&
+      body.format !== 'excel'
+    ) {
+      throw new BadRequestException(
+        'psychometrics exports support only "csv" or "excel" format'
+      );
+    }
+
+    if (
+      body.exportType === 'psychometrics' &&
+      body.version !== undefined &&
+      body.version !== 'v1' &&
+      body.version !== 'v2' &&
+      body.version !== 'v3'
+    ) {
+      throw new BadRequestException(
+        'psychometrics exports support only "v1", "v2" or "v3" versions'
+      );
+    }
+
+    if (
+      body.exportType === 'psychometrics' &&
+      body.partWholeCorrection !== undefined &&
+      typeof body.partWholeCorrection !== 'boolean'
+    ) {
+      throw new BadRequestException(
+        'psychometrics partWholeCorrection must be a boolean'
+      );
+    }
+
+    if (
+      body.exportType === 'psychometrics' &&
+      body.maxCategoryCount !== undefined &&
+      (!Number.isSafeInteger(body.maxCategoryCount) ||
+        body.maxCategoryCount < 1 ||
+        body.maxCategoryCount > 100)
+    ) {
+      throw new BadRequestException(
+        'psychometrics maxCategoryCount must be an integer between 1 and 100'
+      );
+    }
+
+    if (
+      body.exportType === 'psychometrics' &&
+      body.missingsProfileId !== undefined &&
+      (!Number.isSafeInteger(body.missingsProfileId) ||
+        body.missingsProfileId <= 0)
+    ) {
+      throw new BadRequestException(
+        'psychometrics missingsProfileId must be a positive integer'
+      );
+    }
+
+    if (
+      body.exportType === 'psychometrics' &&
+      body.domain !== undefined &&
+      (!body.domain ||
+        (body.domain.mode !== 'workspace' &&
+          (body.domain.mode !== 'vomd-field' ||
+            !['UNIT', 'ITEM'].includes(body.domain.scope) ||
+            !body.domain.profileId ||
+            !body.domain.entryId)))
+    ) {
+      throw new BadRequestException(
+        'psychometrics domain must select the workspace or a valid VOMD field'
+      );
+    }
   }
 
   private getRequestUserId(req: Request): number {
@@ -203,7 +276,9 @@ export class WorkspaceCodingExportController {
     errorCode?: string;
     errorDetails?: Record<string, number | string | boolean>;
   } {
-    const worksheetLimitMatch = error?.match(/enthaelt\s+(\d+)\s+Unit-Variable-Kombinationen[\s\S]*Limit von\s+(\d+)\s+Tabellenblaettern/i);
+    const worksheetLimitMatch = error?.match(
+      /enthaelt\s+(\d+)\s+Unit-Variable-Kombinationen[\s\S]*Limit von\s+(\d+)\s+Tabellenblaettern/i
+    );
     if (!worksheetLimitMatch) {
       return {};
     }
@@ -217,15 +292,13 @@ export class WorkspaceCodingExportController {
     };
   }
 
-  private toPublicExportProgress(
-    progress: unknown
-  ): {
-      progress: number;
-      progressPhase?: string;
-      processedRows?: number;
-      totalRows?: number;
-      progressMessage?: string;
-    } {
+  private toPublicExportProgress(progress: unknown): {
+    progress: number;
+    progressPhase?: string;
+    processedRows?: number;
+    totalRows?: number;
+    progressMessage?: string;
+  } {
     if (typeof progress === 'number') {
       return {
         progress: Math.max(0, Math.min(100, Math.round(progress)))
@@ -248,7 +321,9 @@ export class WorkspaceCodingExportController {
       ...(progressObject.phase ? { progressPhase: progressObject.phase } : {}),
       ...(Number.isFinite(processedRows) ? { processedRows } : {}),
       ...(Number.isFinite(totalRows) ? { totalRows } : {}),
-      ...(progressObject.message ? { progressMessage: progressObject.message } : {})
+      ...(progressObject.message ?
+        { progressMessage: progressObject.message } :
+        {})
     };
   }
 
@@ -498,7 +573,8 @@ export class WorkspaceCodingExportController {
   @ApiQuery({
     name: 'includeGeoGebraResponseValues',
     required: false,
-    description: 'Include GeoGebra response values as raw strings instead of placeholders',
+    description:
+      'Include GeoGebra response values as raw strings instead of placeholders',
     type: Boolean
   })
   @ApiOkResponse({
@@ -521,20 +597,23 @@ export class WorkspaceCodingExportController {
                    includeReplayUrls: boolean,
       @Query('includeResponseValues', { transform: value => value !== 'false' })
                    includeResponseValues: boolean,
-      @Query('includeGeoGebraResponseValues', { transform: value => value === 'true' })
+      @Query('includeGeoGebraResponseValues', {
+        transform: value => value === 'true'
+      })
                    includeGeoGebraResponseValues: boolean,
                    @Res() res: Response
   ): Promise<void> {
     try {
-      const csvStream = await this.codingExportOrchestratorService.exportResultsByVersionAsCsv({
-        workspaceId: workspace_id,
-        version,
-        authToken: authToken || '',
-        serverUrl,
-        includeReplayUrl: includeReplayUrls,
-        includeResponseValues,
-        includeGeoGebraResponseValues
-      });
+      const csvStream =
+        await this.codingExportOrchestratorService.exportResultsByVersionAsCsv({
+          workspaceId: workspace_id,
+          version,
+          authToken: authToken || '',
+          serverUrl,
+          includeReplayUrl: includeReplayUrls,
+          includeResponseValues,
+          includeGeoGebraResponseValues
+        });
 
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader(
@@ -602,17 +681,20 @@ export class WorkspaceCodingExportController {
   @ApiQuery({
     name: 'includeGeoGebraResponseValues',
     required: false,
-    description: 'Include GeoGebra response values as raw strings instead of placeholders',
+    description:
+      'Include GeoGebra response values as raw strings instead of placeholders',
     type: Boolean
   })
   @ApiQuery({
     name: 'includeGeoGebraFiles',
     required: false,
-    description: 'Return a ZIP package with GeoGebra responses as .ggb files and Excel hyperlinks',
+    description:
+      'Return a ZIP package with GeoGebra responses as .ggb files and Excel hyperlinks',
     type: Boolean
   })
   @ApiOkResponse({
-    description: 'Coding results for specified version exported as Excel or as ZIP when GeoGebra files are included',
+    description:
+      'Coding results for specified version exported as Excel or as ZIP when GeoGebra files are included',
     content: {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
         schema: {
@@ -637,7 +719,9 @@ export class WorkspaceCodingExportController {
                    includeReplayUrls: boolean,
       @Query('includeResponseValues', { transform: value => value !== 'false' })
                    includeResponseValues: boolean,
-      @Query('includeGeoGebraResponseValues', { transform: value => value === 'true' })
+      @Query('includeGeoGebraResponseValues', {
+        transform: value => value === 'true'
+      })
                    includeGeoGebraResponseValues: boolean,
       @Query('includeGeoGebraFiles', { transform: value => value === 'true' })
                    includeGeoGebraFiles: boolean,
@@ -649,16 +733,17 @@ export class WorkspaceCodingExportController {
       );
     }
 
-    const buffer = await this.codingExportOrchestratorService.exportResultsByVersionAsExcel({
-      workspaceId: workspace_id,
-      version,
-      authToken: authToken || '',
-      serverUrl,
-      includeReplayUrl: includeReplayUrls,
-      includeResponseValues,
-      includeGeoGebraResponseValues,
-      includeGeoGebraFiles
-    });
+    const buffer =
+      await this.codingExportOrchestratorService.exportResultsByVersionAsExcel({
+        workspaceId: workspace_id,
+        version,
+        authToken: authToken || '',
+        serverUrl,
+        includeReplayUrl: includeReplayUrls,
+        includeResponseValues,
+        includeGeoGebraResponseValues,
+        includeGeoGebraFiles
+      });
 
     res.setHeader(
       'Content-Type',
@@ -727,7 +812,8 @@ export class WorkspaceCodingExportController {
     name: 'includeModalValue',
     required: false,
     type: Boolean,
-    description: 'Include modal value, deviation count, modal tie and modal candidate columns'
+    description:
+      'Include modal value, deviation count, modal tie and modal candidate columns'
   })
   @ApiQuery({
     name: 'excludeAutoCoded',
@@ -769,9 +855,8 @@ export class WorkspaceCodingExportController {
       const usePseudoCodersParam = usePseudoCoders === 'true';
       const doubleCodingMethodParam =
         (doubleCodingMethod as
-          | 'new-row-per-variable'
-          | 'new-column-per-coder'
-          | 'most-frequent') || 'most-frequent';
+          'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent') ||
+        'most-frequent';
       const includeCommentsParam = includeComments === 'true';
       const includeModalValueParam = includeModalValue === 'true';
       const excludeAutoCodedParam = excludeAutoCoded === 'true'; // Default false
@@ -913,7 +998,8 @@ export class WorkspaceCodingExportController {
     name: 'includeModalValue',
     required: false,
     type: Boolean,
-    description: 'Include modal value, deviation count, modal tie and modal candidate columns'
+    description:
+      'Include modal value, deviation count, modal tie and modal candidate columns'
   })
   @ApiQuery({
     name: 'includeDoubleCoded',
@@ -1198,7 +1284,10 @@ export class WorkspaceCodingExportController {
     @WorkspaceId() workspace_id: number,
       @Body() body: Omit<ExportJobData, 'workspaceId' | 'userId'>
   ): Promise<ByVariableExportEstimateResponse> {
-    if (body.exportType !== 'by-variable' && body.exportType !== 'by-variable-compact') {
+    if (
+      body.exportType !== 'by-variable' &&
+      body.exportType !== 'by-variable-compact'
+    ) {
       throw new BadRequestException(
         'Export estimates are only supported for by-variable exports'
       );
@@ -1236,7 +1325,8 @@ export class WorkspaceCodingExportController {
             'coding-times',
             'coding-list',
             'results-by-version',
-            'item-matrix'
+            'item-matrix',
+            'psychometrics'
           ],
           description: 'Type of export to generate'
         },
@@ -1255,6 +1345,26 @@ export class WorkspaceCodingExportController {
           type: 'string',
           enum: ['code', 'score'],
           description: 'Cell value for item-matrix exports'
+        },
+        partWholeCorrection: {
+          type: 'boolean',
+          description:
+            'Subtract the current item score from its domain score. Defaults to true.'
+        },
+        missingsProfileId: {
+          type: 'number',
+          description:
+            'Missing profile used for codes and numeric missing scores'
+        },
+        domain: {
+          type: 'object',
+          description:
+            'Psychometric domain selection: the whole workspace or one complete, single-valued VOMD field'
+        },
+        maxCategoryCount: {
+          type: 'number',
+          description:
+            'Maximum number of raw categories per item. Defaults to 10.'
         },
         outputCommentsInsteadOfCodes: { type: 'boolean' },
         includeReplayUrl: { type: 'boolean' },
@@ -1323,6 +1433,27 @@ export class WorkspaceCodingExportController {
       );
       throw error;
     }
+  }
+
+  @Get(':workspace_id/coding/export/psychometric-domain-candidates')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description:
+      'Complete and incomplete VOMD fields that can be considered for psychometric domain grouping'
+  })
+  async getPsychometricDomainCandidates(
+    @WorkspaceId() workspace_id: number
+  ): Promise<PsychometricDomainCandidatesDto> {
+    if (!this.codingPsychometricExportService) {
+      throw new BadRequestException(
+        'Psychometric export service is unavailable'
+      );
+    }
+    return this.codingPsychometricExportService.getDomainCandidates(
+      workspace_id
+    );
   }
 
   @Get(':workspace_id/coding/export/job/:jobId')
@@ -1399,12 +1530,18 @@ export class WorkspaceCodingExportController {
         status,
         ...progress,
         ...(status === 'completed' && job.returnvalue ?
-          { result: this.toPublicExportJobResult(job.returnvalue as ExportJobResult) } :
+          {
+            result: this.toPublicExportJobResult(
+              job.returnvalue as ExportJobResult
+            )
+          } :
           {}),
-        ...(status === 'failed' && failedReason ? {
-          error: failedReason,
-          ...this.getPublicExportErrorDetails(failedReason)
-        } : {})
+        ...(status === 'failed' && failedReason ?
+          {
+            error: failedReason,
+            ...this.getPublicExportErrorDetails(failedReason)
+          } :
+          {})
       };
     } catch (error) {
       this.logger.error(
@@ -1415,7 +1552,9 @@ export class WorkspaceCodingExportController {
     }
   }
 
-  private toPublicExportJobResult(result: ExportJobResult): PublicExportJobResult {
+  private toPublicExportJobResult(
+    result: ExportJobResult
+  ): PublicExportJobResult {
     return {
       fileId: result.fileId,
       fileName: result.fileName,
@@ -1481,7 +1620,8 @@ export class WorkspaceCodingExportController {
         metadata.exportType === 'detailed';
       const isJson = normalizedFileName.endsWith('.json');
       const isZip = normalizedFileName.endsWith('.zip');
-      let contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      let contentType =
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       if (isCsv) {
         contentType = 'text/csv; charset=utf-8';
       } else if (isJson) {
@@ -1527,7 +1667,13 @@ export class WorkspaceCodingExportController {
           progress: { type: 'number' },
           progressPhase: {
             type: 'string',
-            enum: ['preparing', 'counting', 'writing', 'finalizing', 'completed']
+            enum: [
+              'preparing',
+              'counting',
+              'writing',
+              'finalizing',
+              'completed'
+            ]
           },
           processedRows: { type: 'number' },
           totalRows: { type: 'number' },
@@ -1718,7 +1864,8 @@ export class WorkspaceCodingExportController {
         if (marked || job.data.isCancelled) {
           return {
             success: true,
-            message: 'Export job cancellation requested (job will stop at next checkpoint)'
+            message:
+              'Export job cancellation requested (job will stop at next checkpoint)'
           };
         }
         return {
