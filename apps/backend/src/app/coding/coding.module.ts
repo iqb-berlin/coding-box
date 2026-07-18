@@ -44,7 +44,8 @@ import {
   CodingAnalysisService,
   CodingFreshnessService,
   CodingReadinessService,
-  CodingItemMatrixExportService
+  CodingItemMatrixExportService,
+  CodingPsychometricExportService
 } from '../database/services/coding';
 import { CODING_PROCESS_CACHE_INVALIDATOR } from '../database/services/coding/coding-process-cache-invalidator.token';
 import { CODING_READINESS_CACHE_INVALIDATOR } from '../database/services/coding/coding-readiness-cache-invalidator.token';
@@ -111,6 +112,7 @@ import { UserModule } from '../user/user.module';
     CodingFreshnessService,
     CodingReadinessService,
     CodingItemMatrixExportService,
+    CodingPsychometricExportService,
     {
       provide: CODING_PROCESS_CACHE_INVALIDATOR,
       useExisting: CodingProcessService
@@ -143,6 +145,7 @@ import { UserModule } from '../user/user.module';
     CodingFreshnessService,
     CodingReadinessService,
     CodingItemMatrixExportService,
+    CodingPsychometricExportService,
     CODING_PROCESS_CACHE_INVALIDATOR,
     CODING_READINESS_CACHE_INVALIDATOR
   ]
