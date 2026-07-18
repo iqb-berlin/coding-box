@@ -22,6 +22,10 @@ export { CodingExportService } from './coding-export.service';
 export { CodingExportOrchestratorService } from './coding-export-orchestrator.service';
 export { CodingFreshnessService } from './coding-freshness.service';
 export { CodingItemMatrixExportService } from './coding-item-matrix-export.service';
+export {
+  CodingPsychometricExportService,
+  type PsychometricExportServiceOptions
+} from './coding-psychometric-export.service';
 export { CodingListExportService } from './coding-list-export.service';
 export { CodingResultsExportService } from './coding-results-export.service';
 export { CodingTimesExportService } from './coding-times-export.service';

@@ -3669,6 +3669,10 @@ ${bookletRefs}
       string,
       Map<string, boolean>
       >();
+      const codingSchemeProcessingMap = new Map<
+      string,
+      Map<string, string[]>
+      >();
 
       for (const scheme of codingSchemes) {
         try {
@@ -3712,6 +3716,7 @@ ${bookletRefs}
             const variableManualInstructions = new Map<string, boolean>();
             const variableClosedCoding = new Map<string, boolean>();
             const variableTrainingRequired = new Map<string, boolean>();
+            const variableProcessing = new Map<string, string[]>();
 
             for (const vc of parsedScheme.variableCodings) {
               if (vc.id && vc.sourceType) {
@@ -3725,6 +3730,7 @@ ${bookletRefs}
                 variableTypes.set(vc.id, vc.type);
               }
               if (vc.id && vc.processing && Array.isArray(vc.processing)) {
+                variableProcessing.set(vc.id, [...vc.processing]);
                 if (vc.processing.includes('CODER_TRAINING_REQUIRED')) {
                   variableTrainingRequired.set(vc.id, true);
                 }
@@ -3776,6 +3782,7 @@ ${bookletRefs}
               unitId,
               variableTrainingRequired
             );
+            codingSchemeProcessingMap.set(unitId, variableProcessing);
           }
         } catch (error) {
           this.logger.error(
@@ -3852,6 +3859,8 @@ ${bookletRefs}
                     codingSchemeTrainingRequiredMap.get(unitName);
                   const coderTrainingRequired =
                     unitTrainingRequired?.get(variableId) || false;
+                  const processing =
+                    codingSchemeProcessingMap.get(unitName)?.get(variableId);
                   const isDerived = this.isDerivedSourceType(sourceType);
                   const variableMetadata = this.extractVariableMetadata(
                     variable
@@ -3867,6 +3876,7 @@ ${bookletRefs}
                       codingSchemeMap.get(unitName) :
                       undefined,
                     sourceType,
+                    processing,
                     codes: variableCodes,
                     values: variableMetadata.values,
                     valuesComplete: variableMetadata.valuesComplete,
@@ -3927,6 +3937,8 @@ ${bookletRefs}
                     codingSchemeTrainingRequiredMap.get(unitName);
                   const coderTrainingRequired =
                     unitTrainingRequired?.get(variableId) || false;
+                  const processing =
+                    codingSchemeProcessingMap.get(unitName)?.get(variableId);
                   const variableMetadata = this.extractVariableMetadata(
                     variable
                   );
@@ -3941,6 +3953,7 @@ ${bookletRefs}
                       codingSchemeMap.get(unitName) :
                       undefined,
                     sourceType,
+                    processing,
                     codes: variableCodes,
                     values: variableMetadata.values,
                     valuesComplete: variableMetadata.valuesComplete,
@@ -3987,6 +4000,8 @@ ${bookletRefs}
                   codingSchemeTrainingRequiredMap.get(unitName);
                 const coderTrainingRequired =
                   unitTrainingRequired?.get(schemeId) || false;
+                const processing =
+                  codingSchemeProcessingMap.get(unitName)?.get(schemeId);
 
                 variables.push({
                   id: schemeId,
@@ -3995,6 +4010,7 @@ ${bookletRefs}
                   hasCodingScheme: true,
                   codingSchemeRef: codingSchemeMap.get(unitName),
                   sourceType,
+                  processing,
                   codes: variableCodes,
                   isDerived: true,
                   hasManualInstruction,
@@ -4068,7 +4084,7 @@ ${bookletRefs}
         const rawValue = this.readXmlText(valueRecord?.value);
         const label = this.readXmlText(valueRecord?.label) || rawValue;
 
-        if (rawValue === undefined || rawValue === '') {
+        if (rawValue === undefined) {
           return undefined;
         }
 
