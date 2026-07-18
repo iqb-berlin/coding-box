@@ -1373,9 +1373,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         context,
         coders: this.coders,
         jobDefinitions: context === 'execution' ? this.getJobDefinitionExportOptions() : undefined,
-        coderTrainings: context === 'training' ? this.getCoderTrainingsForExport() : undefined,
-        defaultJobDefinitionIds: context === 'execution' ? this.getJobDefinitionIds() : undefined,
-        defaultCoderTrainingIds: context === 'training' ? this.getCoderTrainingIds() : undefined
+        coderTrainings: context === 'training' ? this.getCoderTrainingsForExport() : undefined
       }
     }).afterClosed()
       .pipe(takeUntil(this.destroy$))
@@ -1404,6 +1402,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       userId: this.appService.userId,
       ...this.getManualCodingExportDisplayMetadata(result),
       includeReplayUrl: result.includeReplayUrl ?? false,
+      includeResponseValues: result.includeResponseValues ?? false,
       outputCommentsInsteadOfCodes: result.outputCommentsInsteadOfCodes,
       anonymizeCoders: result.anonymizeCoders,
       usePseudoCoders: result.usePseudoCoders,
