@@ -1,4 +1,5 @@
-import { Component, inject } from '@angular/core';
+import { Component, DestroyRef, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -64,6 +65,7 @@ export class ExportComponent {
   private snackBar = inject(MatSnackBar);
   private responseService = inject(ResponseService);
   private missingsProfileService = inject(MissingsProfileService);
+  private destroyRef = inject(DestroyRef);
 
   selectedFormat: ExportFormat = 'results-by-version';
   isStartingExport = false;
@@ -85,10 +87,20 @@ export class ExportComponent {
   maxCategoryCount = 10;
   isLoadingPsychometricOptions = false;
   psychometricOptionsLoadFailed = false;
-  private psychometricOptionsLoaded = false;
+  private psychometricOptionsWorkspaceId: number | null = null;
+  private loadingPsychometricOptionsWorkspaceId: number | null = null;
 
   constructor() {
     this.loadGeneralOptions();
+    this.appService.selectedWorkspaceId$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.resetWorkspaceOptions();
+        this.loadGeneralOptions();
+        if (this.selectedFormat === 'psychometrics') {
+          this.loadPsychometricOptions();
+        }
+      });
   }
 
   private loadGeneralOptions(): void {
@@ -98,6 +110,7 @@ export class ExportComponent {
     this.responseService
       .hasGeogebraResponses(workspaceId)
       .subscribe(hasGeoGebraResponses => {
+        if (workspaceId !== this.appService.selectedWorkspaceId) return;
         this.hasGeoGebraResponses = hasGeoGebraResponses;
         this.clearUnsupportedResultsOptions();
       });
@@ -107,14 +120,15 @@ export class ExportComponent {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (
       !workspaceId ||
-      this.psychometricOptionsLoaded ||
-      this.isLoadingPsychometricOptions
+      this.psychometricOptionsWorkspaceId === workspaceId ||
+      this.loadingPsychometricOptionsWorkspaceId === workspaceId
     ) {
       return;
     }
 
     this.psychometricOptionsLoadFailed = false;
     this.isLoadingPsychometricOptions = true;
+    this.loadingPsychometricOptionsWorkspaceId = workspaceId;
     forkJoin({
       profiles: this.asOptionLoadResult(
         this.missingsProfileService.getMissingsProfilesOrThrow(workspaceId)
@@ -123,14 +137,32 @@ export class ExportComponent {
         this.exportJobService.getPsychometricDomainCandidates(workspaceId)
       )
     }).subscribe(result => {
+      if (workspaceId !== this.appService.selectedWorkspaceId) return;
       this.applyMissingsProfileResult(result.profiles);
       this.applyDomainCandidateResult(result.domains);
       this.psychometricOptionsLoadFailed =
         !result.profiles.ok || !result.domains.ok;
-      this.psychometricOptionsLoaded =
-        !this.psychometricOptionsLoadFailed;
+      this.psychometricOptionsWorkspaceId =
+        this.psychometricOptionsLoadFailed ? null : workspaceId;
+      this.loadingPsychometricOptionsWorkspaceId = null;
       this.isLoadingPsychometricOptions = false;
     });
+  }
+
+  private resetWorkspaceOptions(): void {
+    this.hasGeoGebraResponses = false;
+    this.psychometricDomainCandidates = [];
+    this.psychometricItemCount = 0;
+    this.psychometricMappingIssueCount = 0;
+    this.psychometricMappingIssueDetails = '';
+    this.missingsProfiles = [];
+    this.selectedPsychometricDomain = 'workspace';
+    this.selectedMissingsProfileId = null;
+    this.isLoadingPsychometricOptions = false;
+    this.psychometricOptionsLoadFailed = false;
+    this.psychometricOptionsWorkspaceId = null;
+    this.loadingPsychometricOptionsWorkspaceId = null;
+    this.clearUnsupportedResultsOptions();
   }
 
   onResultsFormatChange(): void {
