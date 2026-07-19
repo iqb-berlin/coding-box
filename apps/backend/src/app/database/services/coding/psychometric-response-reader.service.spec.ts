@@ -1,4 +1,5 @@
 import { PsychometricResponseReader } from './psychometric-response-reader.service';
+import { getPsychometricLogicalKey } from './psychometric-key.util';
 
 describe('PsychometricResponseReader', () => {
   it('reuses one read-only repeatable-read snapshot for multiple passes', async () => {
@@ -9,14 +10,11 @@ describe('PsychometricResponseReader', () => {
         unitName: 'UNIT_A',
         variableId: 'V1',
         value: 'A',
-        codeV1: 1,
-        scoreV1: 1,
-        codeV2: 1,
-        scoreV2: 1,
-        codeV3: 1,
-        scoreV3: 1
+        code: 1,
+        score: 1
       }
     ];
+    const queryBuilders: Array<Record<string, jest.Mock>> = [];
     const responseRepository = {
       createQueryBuilder: jest.fn(() => {
         let grouped = false;
@@ -37,6 +35,7 @@ describe('PsychometricResponseReader', () => {
           getCount: jest.fn().mockResolvedValue(rows.length),
           getRawMany: jest.fn(async () => (grouped ? [] : rows))
         };
+        queryBuilders.push(queryBuilder);
         return queryBuilder;
       })
     };
@@ -68,7 +67,9 @@ describe('PsychometricResponseReader', () => {
     );
     const mapping = {
       items: [],
-      byLogicalKey: new Map(),
+      byLogicalKey: new Map([
+        [getPsychometricLogicalKey('UNIT_A', 'V1'), {} as never]
+      ]),
       issues: []
     };
     const firstPass = jest.fn().mockResolvedValue(undefined);
@@ -95,11 +96,45 @@ describe('PsychometricResponseReader', () => {
     expect(queryRunner.startTransaction).toHaveBeenCalledWith(
       'REPEATABLE READ'
     );
-    expect(queryRunner.query).toHaveBeenCalledWith(
-      'SET TRANSACTION READ ONLY'
-    );
+    expect(queryRunner.query).toHaveBeenCalledWith('SET TRANSACTION READ ONLY');
     expect(queryRunner.commitTransaction).toHaveBeenCalledTimes(1);
     expect(queryRunner.rollbackTransaction).not.toHaveBeenCalled();
     expect(queryRunner.release).toHaveBeenCalledTimes(1);
+    queryBuilders.forEach(queryBuilder => {
+      expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+        'CONCAT(TRIM(REGEXP_REPLACE(' +
+          "REGEXP_REPLACE(UPPER(TRIM(unit.name)), '^.*[\\\\/]', ''), " +
+          "'\\.(VOMD|VOCS|XML)$', '')), CHR(31), " +
+          'UPPER(TRIM(response.variableid))) ' +
+          'IN (:...psychometricVariablePairKeys)',
+        {
+          psychometricVariablePairKeys: [
+            getPsychometricLogicalKey('UNIT_A', 'V1')
+          ]
+        }
+      );
+    });
+    const batchQueries = queryBuilders.filter(
+      queryBuilder => queryBuilder.orderBy.mock.calls.length > 0
+    );
+    expect(batchQueries).toHaveLength(2);
+    batchQueries.forEach(queryBuilder => {
+      expect(queryBuilder.addSelect).toHaveBeenCalledWith(
+        'response.code_v2',
+        'code'
+      );
+      expect(queryBuilder.addSelect).toHaveBeenCalledWith(
+        'response.score_v2',
+        'score'
+      );
+      expect(queryBuilder.addSelect).not.toHaveBeenCalledWith(
+        'response.code_v1',
+        expect.anything()
+      );
+      expect(queryBuilder.addSelect).not.toHaveBeenCalledWith(
+        'response.code_v3',
+        expect.anything()
+      );
+    });
   });
 });

@@ -37,7 +37,7 @@ interface AnalysisMapping {
   byLogicalKey: Map<string, AnalysisItem>;
 }
 
-interface VersionedResponseValue {
+interface ResponseValue {
   code: number | null;
   score: number | null;
 }
@@ -139,7 +139,7 @@ export class PsychometricAnalysisEngine {
   }
 
   private normalizeScore(
-    value: VersionedResponseValue,
+    value: ResponseValue,
     normalizedCode: number | null,
     missingDefinitions: PsychometricMissingDefinition[]
   ): number | null {
@@ -296,7 +296,7 @@ export class PsychometricAnalysisEngine {
         if (!item) {
           return;
         }
-        const value = this.getVersionedValue(row, options.version);
+        const value = this.getResponseValue(row);
         const normalizedCode = this.normalizeCode(
           value.code,
           missingDefinitions
@@ -379,7 +379,7 @@ export class PsychometricAnalysisEngine {
         if (!item) {
           return;
         }
-        const value = this.getVersionedValue(row, options.version);
+        const value = this.getResponseValue(row);
         const normalizedCode = this.normalizeCode(
           value.code,
           missingDefinitions
@@ -547,18 +547,10 @@ export class PsychometricAnalysisEngine {
     );
   }
 
-  private getVersionedValue(
-    row: PsychometricRawResponseRow,
-    version: NormalizedPsychometricExportServiceOptions['version']
-  ): VersionedResponseValue {
-    const suffix = version.substring(1);
+  private getResponseValue(row: PsychometricRawResponseRow): ResponseValue {
     return {
-      code: this.toNullableNumber(
-        row[`codeV${suffix}` as keyof PsychometricRawResponseRow]
-      ),
-      score: this.toNullableNumber(
-        row[`scoreV${suffix}` as keyof PsychometricRawResponseRow]
-      )
+      code: this.toNullableNumber(row.code),
+      score: this.toNullableNumber(row.score)
     };
   }
 
