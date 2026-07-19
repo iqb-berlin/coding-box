@@ -1,0 +1,6 @@
+type;domain;domain_label;unit;item;variable;item_label;code;category;label;score;source;n;positive_n;positive_share;correlation;status;note
+CATEGORY;WORKSPACE;Gesamter Workspace;UNIT_A;ITEM_1;V1;'=Item label;;A;Option A;;UNIT_DEFINITION;2;1;0.5;1;OK;
+CATEGORY;WORKSPACE;Gesamter Workspace;UNIT_A;ITEM_1;V1;'=Item label;;B;'=Formula label;;UNIT_DEFINITION;2;1;0.5;-1;OK;
+CODE;WORKSPACE;Gesamter Workspace;UNIT_A;ITEM_1;V1;'=Item label;0;;incorrect;0;VOCS;2;1;0.5;-1;OK;
+CODE;WORKSPACE;Gesamter Workspace;UNIT_A;ITEM_1;V1;'=Item label;1;;correct;1;VOCS;2;1;0.5;1;OK;
+SCORE;WORKSPACE;Gesamter Workspace;UNIT_A;ITEM_1;V1;'=Item label;;;;;;2;;;1;OK;

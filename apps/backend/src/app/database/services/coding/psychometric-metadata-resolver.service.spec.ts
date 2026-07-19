@@ -224,4 +224,70 @@ describe('PsychometricMetadataResolver', () => {
       mappingIssueCount: 1
     });
   });
+
+  it('assigns the selected VOMD item field to every mapped item', async () => {
+    const resolver = createResolver(
+      {
+        items: [
+          {
+            id: 'I1',
+            variableId: 'V1',
+            profiles: [
+              {
+                profileId: 'profile',
+                entries: [
+                  {
+                    id: 'domain',
+                    value: [{ id: 'D1', label: [{ value: 'Domäne 1' }] }]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            id: 'I2',
+            variableId: 'V2',
+            profiles: [
+              {
+                profileId: 'profile',
+                entries: [
+                  {
+                    id: 'domain',
+                    value: [{ id: 'D2', label: [{ value: 'Domäne 2' }] }]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      [
+        {
+          id: 'V1',
+          alias: 'V1',
+          type: 'string',
+          hasCodingScheme: true
+        },
+        {
+          id: 'V2',
+          alias: 'V2',
+          type: 'string',
+          hasCodingScheme: true
+        }
+      ]
+    );
+    const mapping = await resolver.buildItemMapping(7);
+
+    resolver.assignDomains(mapping, {
+      mode: 'vomd-field',
+      scope: 'ITEM',
+      profileId: 'profile',
+      entryId: 'domain'
+    });
+
+    expect(mapping.items.map(item => item.domain)).toEqual([
+      { id: 'D1', label: 'Domäne 1' },
+      { id: 'D2', label: 'Domäne 2' }
+    ]);
+  });
 });

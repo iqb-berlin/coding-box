@@ -322,4 +322,56 @@ describe('PsychometricAnalysisEngine', () => {
       })
     );
   });
+
+  it('exports zero dummies for empty multiple responses', async () => {
+    const engine = new PsychometricAnalysisEngine();
+    const mapping = createMapping();
+    mapping.items = [mapping.items[0]];
+    mapping.byLogicalKey = new Map([[mapping.items[0].key, mapping.items[0]]]);
+    mapping.items[0].variable.multiple = true;
+    mapping.items[0].variable.values = [
+      { value: 'A', label: 'Option A' },
+      { value: 'B', label: 'Option B' },
+      { value: 'C', label: 'Unused option' }
+    ];
+    const rows = [
+      createRow(1, 1, 'V1', '[true,false,false]', 1, 1),
+      createRow(2, 2, 'V1', '[false,false,false]', 0, 0)
+    ];
+
+    const analysis = await engine.analyze({
+      options: {
+        workspaceId: 7,
+        version: 'v2',
+        partWholeCorrection: false,
+        domain: { mode: 'workspace' },
+        maxCategoryCount: 10
+      },
+      mapping,
+      missingDefinitions: [],
+      snapshot: {
+        duplicatePersonIds: new Set(),
+        totalRows: rows.length,
+        forEachBatch: async callback => callback(rows, rows.length)
+      }
+    });
+
+    expect(analysis.rows).toContainEqual(
+      expect.objectContaining({
+        type: 'CATEGORY',
+        category: 'A',
+        n: 2,
+        positiveN: 1
+      })
+    );
+    expect(analysis.rows).toContainEqual(
+      expect.objectContaining({
+        type: 'CATEGORY',
+        category: 'C',
+        n: 2,
+        positiveN: 0,
+        status: 'CONSTANT_ITEM'
+      })
+    );
+  });
 });
