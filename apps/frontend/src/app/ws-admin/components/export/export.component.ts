@@ -85,6 +85,7 @@ export class ExportComponent {
   selectedMissingsProfileId: number | null = null;
   partWholeCorrection = true;
   maxCategoryCount = 10;
+  isPsychometricInfoExpanded = false;
   isLoadingPsychometricOptions = false;
   psychometricOptionsLoadFailed = false;
   private psychometricOptionsWorkspaceId: number | null = null;

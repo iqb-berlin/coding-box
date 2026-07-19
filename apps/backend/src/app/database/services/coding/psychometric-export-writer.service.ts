@@ -224,7 +224,7 @@ export class PsychometricExportWriter {
       { header: 'Label', key: 'label', width: 32 },
       { header: 'Score', key: 'score', width: 12 },
       { header: 'Quelle', key: 'source', width: 20 },
-      { header: 'N', key: 'n', width: 12 },
+      { header: 'n (paarweise vollständige Fälle)', key: 'n', width: 34 },
       { header: 'N positiv', key: 'positiveN', width: 14 },
       { header: 'Anteil positiv', key: 'positiveShare', width: 16 },
       { header: 'Korrelation', key: 'correlation', width: 16 },

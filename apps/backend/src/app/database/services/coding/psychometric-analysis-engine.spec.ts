@@ -1,7 +1,11 @@
-import { PsychometricAnalysisEngine } from './psychometric-analysis-engine';
+import {
+  createPsychometricScoreSummary,
+  PsychometricAnalysisEngine
+} from './psychometric-analysis-engine';
 import {
   NormalizedPsychometricExportServiceOptions,
   PsychometricItemMapping,
+  PsychometricMetricRow,
   PsychometricRawResponseRow,
   PsychometricResponseSnapshot
 } from './psychometric-export.types';
@@ -106,6 +110,111 @@ describe('PsychometricAnalysisEngine', () => {
     score
   });
 
+  const createScoreRow = (
+    n: number,
+    status: PsychometricMetricRow['status']
+  ): PsychometricMetricRow => ({
+    type: 'SCORE',
+    domain: 'WORKSPACE',
+    domainLabel: 'Gesamter Workspace',
+    unit: 'UNIT_A',
+    item: `ITEM_${n}`,
+    variable: `V${n}`,
+    itemLabel: `Item ${n}`,
+    code: '',
+    category: '',
+    label: '',
+    score: '',
+    source: '',
+    n,
+    positiveN: '',
+    positiveShare: '',
+    correlation: status === 'OK' ? 0.5 : '',
+    status,
+    note: ''
+  });
+
+  const getSummaryValue = (
+    summary: Array<{ key: string; value: string | number | boolean }>,
+    key: string
+  ): string | number | boolean | undefined => summary
+    .find(row => row.key === key)?.value;
+
+  it('summarizes SCORE rows by pairwise complete cases and status', () => {
+    const summary = createPsychometricScoreSummary([
+      createScoreRow(0, 'INSUFFICIENT_CASES'),
+      createScoreRow(1, 'INSUFFICIENT_CASES'),
+      createScoreRow(29, 'CONSTANT_ITEM'),
+      createScoreRow(30, 'OK'),
+      createScoreRow(40, 'CONSTANT_DOMAIN')
+    ]);
+
+    expect(getSummaryValue(summary, 'Items insgesamt')).toBe(5);
+    expect(getSummaryValue(summary, 'Items mit n = 0')).toBe(1);
+    expect(getSummaryValue(summary, 'Items mit 1 <= n < 30')).toBe(2);
+    expect(getSummaryValue(summary, 'Items mit n >= 30')).toBe(2);
+    expect(
+      getSummaryValue(
+        summary,
+        'Items mit berechneter Score-Trennschärfe (Status OK)'
+      )
+    ).toBe(1);
+    expect(getSummaryValue(summary, 'Status INSUFFICIENT_CASES')).toBe(2);
+    expect(getSummaryValue(summary, 'Status CONSTANT_ITEM')).toBe(1);
+    expect(getSummaryValue(summary, 'Status CONSTANT_DOMAIN')).toBe(1);
+    expect(
+      getSummaryValue(summary, 'Minimum paarweise vollständige Fälle (n)')
+    ).toBe(0);
+    expect(
+      getSummaryValue(summary, 'Median paarweise vollständige Fälle (n)')
+    ).toBe(29);
+    expect(
+      getSummaryValue(summary, 'Maximum paarweise vollständige Fälle (n)')
+    ).toBe(40);
+  });
+
+  it('uses zero for the case-count range when there are no SCORE rows', () => {
+    const summary = createPsychometricScoreSummary([]);
+
+    expect(getSummaryValue(summary, 'Items insgesamt')).toBe(0);
+    expect(
+      getSummaryValue(summary, 'Minimum paarweise vollständige Fälle (n)')
+    ).toBe(0);
+    expect(
+      getSummaryValue(summary, 'Median paarweise vollständige Fälle (n)')
+    ).toBe(0);
+    expect(
+      getSummaryValue(summary, 'Maximum paarweise vollständige Fälle (n)')
+    ).toBe(0);
+  });
+
+  it('calculates medians for even and odd SCORE row counts', () => {
+    const evenSummary = createPsychometricScoreSummary([
+      createScoreRow(2, 'OK'),
+      createScoreRow(8, 'OK'),
+      createScoreRow(4, 'OK'),
+      createScoreRow(6, 'OK')
+    ]);
+    const oddSummary = createPsychometricScoreSummary([
+      createScoreRow(9, 'OK'),
+      createScoreRow(3, 'OK'),
+      createScoreRow(6, 'OK')
+    ]);
+
+    expect(
+      getSummaryValue(
+        evenSummary,
+        'Median paarweise vollständige Fälle (n)'
+      )
+    ).toBe(5);
+    expect(
+      getSummaryValue(
+        oddSummary,
+        'Median paarweise vollständige Fälle (n)'
+      )
+    ).toBe(6);
+  });
+
   it('calculates deterministically without mutating metadata or using I/O mocks', async () => {
     const engine = new PsychometricAnalysisEngine();
     const mapping = createMapping();
@@ -145,6 +254,10 @@ describe('PsychometricAnalysisEngine', () => {
     expect(first.summary).toContainEqual({
       key: 'Legacy-VOMD-Fallbacks',
       value: 1
+    });
+    expect(first.summary).toContainEqual({
+      key: 'Items insgesamt',
+      value: 2
     });
     expect(first.rows).toContainEqual(
       expect.objectContaining({
