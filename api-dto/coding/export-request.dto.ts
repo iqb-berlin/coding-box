@@ -67,6 +67,7 @@ export interface OtherBackgroundExportRequest extends ExportRequestTransportOpti
   includeComments?: boolean;
   includeModalValue?: boolean;
   includeDoubleCoded?: boolean;
+  includeResponseValues?: boolean;
   excludeAutoCoded?: boolean;
   trainingRequired?: boolean;
   testResultFilters?: {
