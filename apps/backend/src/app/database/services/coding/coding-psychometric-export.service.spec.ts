@@ -12,7 +12,8 @@ describe('CodingPsychometricExportService', () => {
     const mapping = {
       items: [item],
       byLogicalKey: new Map([[item.key, item]]),
-      issues: []
+      issues: [],
+      fallbacks: []
     };
     const snapshot = {
       duplicatePersonIds: new Set<number>(),
@@ -26,7 +27,11 @@ describe('CodingPsychometricExportService', () => {
     const metadataResolver = {
       getDomainCandidates: jest.fn().mockResolvedValue({
         candidates: [],
-        mappingIssueCount: 0
+        itemCount: 0,
+        mappingIssueCount: 0,
+        mappingFallbackCount: 0,
+        mappingIssuePreview: [],
+        mappingFallbackPreview: []
       }),
       buildItemMapping: jest.fn().mockResolvedValue(mapping),
       assignDomains: jest.fn(),
@@ -71,7 +76,11 @@ describe('CodingPsychometricExportService', () => {
 
     await expect(service.getDomainCandidates(7)).resolves.toEqual({
       candidates: [],
-      mappingIssueCount: 0
+      itemCount: 0,
+      mappingIssueCount: 0,
+      mappingFallbackCount: 0,
+      mappingIssuePreview: [],
+      mappingFallbackPreview: []
     });
     expect(metadataResolver.getDomainCandidates).toHaveBeenCalledWith(7);
   });
@@ -97,10 +106,9 @@ describe('CodingPsychometricExportService', () => {
     });
 
     expect(metadataResolver.buildItemMapping).toHaveBeenCalledWith(7);
-    expect(metadataResolver.assignDomains).toHaveBeenCalledWith(
-      mapping,
-      { mode: 'workspace' }
-    );
+    expect(metadataResolver.assignDomains).toHaveBeenCalledWith(mapping, {
+      mode: 'workspace'
+    });
     expect(metadataResolver.loadMissingDefinitions).toHaveBeenCalledWith(
       7,
       undefined
@@ -134,10 +142,7 @@ describe('CodingPsychometricExportService', () => {
 
   it('passes CSV output cancellation into the analysis pipeline', async () => {
     const {
-      service,
-      analysis,
-      analysisEngine,
-      exportWriter
+      service, analysis, analysisEngine, exportWriter
     } = createService();
     const jobCancellation = jest.fn().mockResolvedValue(undefined);
     const outputCancellation = jest.fn().mockResolvedValue(undefined);

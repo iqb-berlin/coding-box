@@ -29,7 +29,11 @@ export interface PsychometricDomainCandidateDto {
 
 export interface PsychometricDomainCandidatesDto {
   candidates: PsychometricDomainCandidateDto[];
+  itemCount: number;
   mappingIssueCount: number;
+  mappingFallbackCount: number;
+  mappingIssuePreview: string[];
+  mappingFallbackPreview: string[];
 }
 
 export interface PsychometricExportOptions {

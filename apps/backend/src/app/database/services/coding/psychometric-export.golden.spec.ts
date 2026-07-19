@@ -64,7 +64,8 @@ describe('Psychometric CSV golden master', () => {
         }
       ],
       byLogicalKey: new Map(),
-      issues: []
+      issues: [],
+      fallbacks: []
     };
     mapping.byLogicalKey.set(itemKey, mapping.items[0]);
 

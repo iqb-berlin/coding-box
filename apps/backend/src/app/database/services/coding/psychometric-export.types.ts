@@ -77,6 +77,7 @@ export interface PsychometricItemMapping {
   items: PsychometricMappedItem[];
   byLogicalKey: Map<string, PsychometricMappedItem>;
   issues: string[];
+  fallbacks: string[];
 }
 
 export interface PsychometricMetricDefinition {
