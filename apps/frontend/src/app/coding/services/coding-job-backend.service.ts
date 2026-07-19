@@ -15,10 +15,8 @@ import type {
   JobDefinitionRefreshPreviewDto
 } from '../../../../../../api-dto/coding/job-refresh.dto';
 import type { ManualCodeAvailabilityValidationDto } from '../../../../../../api-dto/coding/manual-code-availability.dto';
-import type {
-  PsychometricDomainCandidatesDto,
-  PsychometricDomainSelection
-} from '../../../../../../api-dto/coding/psychometric-discrimination.dto';
+import type { PsychometricDomainCandidatesDto } from '../../../../../../api-dto/coding/psychometric-discrimination.dto';
+import type { BackgroundExportRequest } from '../../../../../../api-dto/coding/export-request.dto';
 import {
   CodingJob,
   DistributionVariableUsageByStatus,
@@ -45,45 +43,9 @@ export interface CodingJobUnitDto {
   otherCoders: string[];
 }
 
-export interface CodingExportConfig {
-  exportType:
-  | 'aggregated'
-  | 'by-coder'
-  | 'by-variable'
-  | 'by-variable-compact'
-  | 'detailed'
-  | 'coding-times'
-  | 'results-by-version'
-  | 'item-matrix'
-  | 'psychometrics';
+export type CodingExportConfig = BackgroundExportRequest & {
   userId?: number;
-  version?: 'v1' | 'v2' | 'v3';
-  format?: 'csv' | 'excel';
-  matrixValue?: 'code' | 'score';
-  partWholeCorrection?: boolean;
-  missingsProfileId?: number;
-  domain?: PsychometricDomainSelection;
-  maxCategoryCount?: number;
-  outputCommentsInsteadOfCodes?: boolean;
-  includeReplayUrl?: boolean;
-  includeResponseValues?: boolean;
-  includeGeoGebraResponseValues?: boolean;
-  includeGeoGebraFiles?: boolean;
-  anonymizeCoders?: boolean;
-  usePseudoCoders?: boolean;
-  doubleCodingMethod?:
-  'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent';
-  includeComments?: boolean;
-  includeModalValue?: boolean;
-  includeDoubleCoded?: boolean;
-  excludeAutoCoded?: boolean;
-  trainingRequired?: boolean;
-  jobDefinitionIds?: number[];
-  coderTrainingIds?: number[];
-  coderIds?: number[];
-  authToken?: string;
-  serverUrl?: string;
-}
+};
 
 export interface CodingExportEstimate {
   exportType: 'by-variable' | 'by-variable-compact';

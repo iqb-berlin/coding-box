@@ -14,7 +14,7 @@ import {
   CodebookExportFormat,
   CodebookTrainingRequirementFilter
 } from '../../../../../api-dto/coding/codebook-content-setting';
-import { PsychometricDomainSelection } from '../../../../../api-dto/coding/psychometric-discrimination.dto';
+import { BackgroundExportRequest } from '../../../../../api-dto/coding/export-request.dto';
 
 type ProcessOverviewValidationTask = Pick<
 ValidationTask,
@@ -149,58 +149,11 @@ export interface DatabaseExportJobData {
   isCancelled?: boolean;
 }
 
-export interface ExportJobData {
+export type ExportJobData = BackgroundExportRequest & {
   workspaceId: number;
   userId: number;
-  exportType:
-  | 'aggregated'
-  | 'by-coder'
-  | 'by-variable'
-  | 'by-variable-compact'
-  | 'detailed'
-  | 'coding-times'
-  | 'test-results'
-  | 'test-logs'
-  | 'results-by-version'
-  | 'coding-list'
-  | 'item-matrix'
-  | 'psychometrics';
-  version?: 'v1' | 'v2' | 'v3';
-  format?: 'csv' | 'json' | 'excel';
-  matrixValue?: 'code' | 'score';
-  partWholeCorrection?: boolean;
-  missingsProfileId?: number;
-  domain?: PsychometricDomainSelection;
-  maxCategoryCount?: number;
-  outputCommentsInsteadOfCodes?: boolean;
-  includeReplayUrl?: boolean;
-  includeResponseValues?: boolean;
-  includeGeoGebraResponseValues?: boolean;
-  includeGeoGebraFiles?: boolean;
-  anonymizeCoders?: boolean;
-  usePseudoCoders?: boolean;
-  doubleCodingMethod?: 'new-row-per-variable'
-  | 'new-column-per-coder'
-  | 'most-frequent';
-  includeComments?: boolean;
-  includeModalValue?: boolean;
-  includeDoubleCoded?: boolean;
-  excludeAutoCoded?: boolean;
-  trainingRequired?: boolean;
-  authToken?: string;
-  serverUrl?: string;
   isCancelled?: boolean;
-  testResultFilters?: {
-    groupNames?: string[];
-    bookletNames?: string[];
-    unitNames?: string[];
-    personIds?: number[];
-    includeLogAnomalies?: boolean;
-  };
-  jobDefinitionIds?: number[];
-  coderTrainingIds?: number[];
-  coderIds?: number[];
-}
+};
 
 export type ExportJobProgressPhase = 'preparing'
 | 'counting'

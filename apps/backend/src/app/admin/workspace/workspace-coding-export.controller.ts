@@ -10,8 +10,7 @@ import {
   Param,
   Delete,
   Logger,
-  BadRequestException,
-  Optional
+  BadRequestException
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -25,7 +24,6 @@ import { Response, Request } from 'express';
 import { Readable } from 'stream';
 import {
   JobQueueService,
-  ExportJobData,
   ExportJobProgress,
   ExportJobResult
 } from '../../job-queue/job-queue.service';
@@ -41,6 +39,11 @@ import {
   CodingPsychometricExportService
 } from '../../database/services/coding';
 import { PsychometricDomainCandidatesDto } from '../../../../../../api-dto/coding/psychometric-discrimination.dto';
+import {
+  BackgroundExportRequest,
+  ExportRequestValidationError,
+  parseExportRequest
+} from '../../../../../../api-dto/coding/export-request.dto';
 
 type PublicExportJobResult = Omit<ExportJobResult, 'filePath'>;
 type PublicExportJobStatus =
@@ -77,8 +80,7 @@ export class WorkspaceCodingExportController {
     private codingExportOrchestratorService: CodingExportOrchestratorService,
     private jobQueueService: JobQueueService,
     private cacheService: CacheService,
-    @Optional()
-    private codingPsychometricExportService?: CodingPsychometricExportService
+    private codingPsychometricExportService: CodingPsychometricExportService
   ) {}
 
   private mapExportJobState(
@@ -118,146 +120,6 @@ export class WorkspaceCodingExportController {
         return 'paused';
       default:
         return state;
-    }
-  }
-
-  private validateBackgroundExportRequest(
-    body: Omit<ExportJobData, 'workspaceId' | 'userId'>
-  ): void {
-    if (
-      body.exportType === 'results-by-version' &&
-      body.format !== undefined &&
-      body.format !== 'csv' &&
-      body.format !== 'excel'
-    ) {
-      throw new BadRequestException(
-        'results-by-version exports support only "csv" or "excel" format'
-      );
-    }
-
-    if (
-      body.exportType === 'results-by-version' &&
-      body.includeGeoGebraFiles &&
-      body.format !== 'excel'
-    ) {
-      throw new BadRequestException(
-        'GeoGebra file packages are supported only for Excel result exports'
-      );
-    }
-
-    if (
-      body.exportType === 'results-by-version' &&
-      body.includeGeoGebraFiles &&
-      body.includeResponseValues === false
-    ) {
-      throw new BadRequestException(
-        'GeoGebra file packages require response values because links are written to the value column'
-      );
-    }
-
-    if (
-      body.exportType === 'item-matrix' &&
-      body.format !== undefined &&
-      body.format !== 'csv' &&
-      body.format !== 'excel'
-    ) {
-      throw new BadRequestException(
-        'item-matrix exports support only "csv" or "excel" format'
-      );
-    }
-
-    if (
-      body.exportType === 'item-matrix' &&
-      body.matrixValue !== undefined &&
-      body.matrixValue !== 'code' &&
-      body.matrixValue !== 'score'
-    ) {
-      throw new BadRequestException(
-        'item-matrix exports support only "code" or "score" matrix values'
-      );
-    }
-
-    if (
-      body.exportType === 'item-matrix' &&
-      body.version !== undefined &&
-      body.version !== 'v1' &&
-      body.version !== 'v2' &&
-      body.version !== 'v3'
-    ) {
-      throw new BadRequestException(
-        'item-matrix exports support only "v1", "v2" or "v3" versions'
-      );
-    }
-
-    if (
-      body.exportType === 'psychometrics' &&
-      body.format !== undefined &&
-      body.format !== 'csv' &&
-      body.format !== 'excel'
-    ) {
-      throw new BadRequestException(
-        'psychometrics exports support only "csv" or "excel" format'
-      );
-    }
-
-    if (
-      body.exportType === 'psychometrics' &&
-      body.version !== undefined &&
-      body.version !== 'v1' &&
-      body.version !== 'v2' &&
-      body.version !== 'v3'
-    ) {
-      throw new BadRequestException(
-        'psychometrics exports support only "v1", "v2" or "v3" versions'
-      );
-    }
-
-    if (
-      body.exportType === 'psychometrics' &&
-      body.partWholeCorrection !== undefined &&
-      typeof body.partWholeCorrection !== 'boolean'
-    ) {
-      throw new BadRequestException(
-        'psychometrics partWholeCorrection must be a boolean'
-      );
-    }
-
-    if (
-      body.exportType === 'psychometrics' &&
-      body.maxCategoryCount !== undefined &&
-      (!Number.isSafeInteger(body.maxCategoryCount) ||
-        body.maxCategoryCount < 1 ||
-        body.maxCategoryCount > 100)
-    ) {
-      throw new BadRequestException(
-        'psychometrics maxCategoryCount must be an integer between 1 and 100'
-      );
-    }
-
-    if (
-      body.exportType === 'psychometrics' &&
-      body.missingsProfileId !== undefined &&
-      (!Number.isSafeInteger(body.missingsProfileId) ||
-        body.missingsProfileId <= 0)
-    ) {
-      throw new BadRequestException(
-        'psychometrics missingsProfileId must be a positive integer'
-      );
-    }
-
-    if (
-      body.exportType === 'psychometrics' &&
-      body.domain !== undefined &&
-      (!body.domain ||
-        (body.domain.mode !== 'workspace' &&
-          (body.domain.mode !== 'vomd-field' ||
-            !['UNIT', 'ITEM'].includes(body.domain.scope) ||
-            !body.domain.profileId ||
-            !body.domain.entryId)))
-    ) {
-      throw new BadRequestException(
-        'psychometrics domain must select the workspace or a valid VOMD field'
-      );
     }
   }
 
@@ -1282,7 +1144,7 @@ export class WorkspaceCodingExportController {
   @ApiParam({ name: 'workspace_id', type: Number })
   async estimateExportJob(
     @WorkspaceId() workspace_id: number,
-      @Body() body: Omit<ExportJobData, 'workspaceId' | 'userId'>
+      @Body() body: BackgroundExportRequest
   ): Promise<ByVariableExportEstimateResponse> {
     if (
       body.exportType !== 'by-variable' &&
@@ -1406,20 +1268,28 @@ export class WorkspaceCodingExportController {
   async startExportJob(
     @WorkspaceId() workspace_id: number,
       @Req() req: Request,
-      @Body() body: Omit<ExportJobData, 'workspaceId' | 'userId'>
+      @Body() body: unknown
   ): Promise<{ jobId: string; message: string }> {
-    this.validateBackgroundExportRequest(body);
+    let request: BackgroundExportRequest;
+    try {
+      request = parseExportRequest(body);
+    } catch (error) {
+      if (error instanceof ExportRequestValidationError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
 
     try {
       const userId = this.getRequestUserId(req);
       const job = await this.jobQueueService.addExportJob({
-        ...body,
+        ...request,
         workspaceId: workspace_id,
         userId
       });
 
       this.logger.log(
-        `Export job ${job.id} created for workspace ${workspace_id}, type: ${body.exportType}`
+        `Export job ${job.id} created for workspace ${workspace_id}, type: ${request.exportType}`
       );
 
       return {
@@ -1446,11 +1316,6 @@ export class WorkspaceCodingExportController {
   async getPsychometricDomainCandidates(
     @WorkspaceId() workspace_id: number
   ): Promise<PsychometricDomainCandidatesDto> {
-    if (!this.codingPsychometricExportService) {
-      throw new BadRequestException(
-        'Psychometric export service is unavailable'
-      );
-    }
     return this.codingPsychometricExportService.getDomainCandidates(
       workspace_id
     );
