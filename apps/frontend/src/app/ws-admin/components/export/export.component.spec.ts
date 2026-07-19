@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ExportComponent } from './export.component';
 import { AppService } from '../../../core/services/app.service';
@@ -329,6 +329,36 @@ describe('ExportComponent', () => {
     component.onExport();
 
     expect(startJob).not.toHaveBeenCalled();
+  });
+
+  it('keeps the combined option load pending until both requests complete', () => {
+    fixture.destroy();
+    const profiles = new Subject<Array<{ id: number; label: string }>>();
+    const domains = new Subject<{
+      candidates: [];
+      mappingIssueCount: number;
+    }>();
+    getMissingsProfiles.mockReturnValueOnce(profiles);
+    getPsychometricDomainCandidates.mockReturnValueOnce(domains);
+
+    fixture = TestBed.createComponent(ExportComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    expect(component.isLoadingPsychometricOptions).toBe(true);
+
+    profiles.next([{ id: 7, label: 'Profil 7' }]);
+    profiles.complete();
+
+    expect(component.isLoadingPsychometricOptions).toBe(true);
+
+    domains.next({ candidates: [], mappingIssueCount: 0 });
+    domains.complete();
+
+    expect(component.isLoadingPsychometricOptions).toBe(false);
+    expect(component.psychometricOptionsLoadFailed).toBe(false);
+    expect(component.missingsProfiles).toEqual([{ id: 7, label: 'Profil 7' }]);
+    expect(component.selectedMissingsProfileId).toBe(7);
   });
 
   it('shows an error when the export job cannot be started', () => {
