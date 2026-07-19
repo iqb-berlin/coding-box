@@ -37,7 +37,11 @@ describe('ExportComponent', () => {
             selectable: true
           }
         ],
-        mappingIssueCount: 0
+        itemCount: 2,
+        mappingIssueCount: 0,
+        mappingFallbackCount: 0,
+        mappingIssuePreview: [],
+        mappingFallbackPreview: []
       })
     );
 
@@ -87,7 +91,8 @@ describe('ExportComponent', () => {
       close: 'Schließen',
       'ws-admin': {
         'export-options': {
-          'psychometric-mapping-issues': 'Zuordnungsprobleme: {{count}}'
+          'psychometric-no-items': 'Keine auswertbaren VOMD-Items gefunden',
+          'psychometric-mapping-issues': 'Fatale Zuordnungsprobleme: {{count}}'
         },
         export: {
           'job-started': 'Datenexport gestartet',
@@ -266,7 +271,7 @@ describe('ExportComponent', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain(
-      'Zuordnungsprobleme: 3'
+      'Fatale Zuordnungsprobleme: 3'
     );
     expect(component.psychometricMappingIssueCount).toBe(3);
   });
@@ -282,6 +287,36 @@ describe('ExportComponent', () => {
     component.onExport();
 
     expect(startJob).not.toHaveBeenCalled();
+  });
+
+  it('disables psychometric exports when no VOMD items are mapped', () => {
+    component.selectedFormat = 'psychometrics';
+    component.selectedPsychometricDomain = 'workspace';
+    component.selectedMissingsProfileId = 4;
+    component.psychometricItemCount = 0;
+    component.psychometricMappingIssueCount = 0;
+
+    fixture.detectChanges();
+
+    expect(component.isExportDisabled).toBe(true);
+    expect(fixture.nativeElement.textContent).toContain(
+      'Keine auswertbaren VOMD-Items gefunden'
+    );
+  });
+
+  it('allows unambiguous legacy mappings without presenting a warning', () => {
+    component.selectedFormat = 'psychometrics';
+    component.selectedPsychometricDomain = 'workspace';
+    component.selectedMissingsProfileId = 4;
+    component.psychometricItemCount = 23;
+    component.psychometricMappingIssueCount = 0;
+
+    fixture.detectChanges();
+
+    expect(component.isExportDisabled).toBe(false);
+    expect(fixture.nativeElement.textContent).not.toContain(
+      'Legacy-Zuordnungen'
+    );
   });
 
   it('finishes loading and reports an error when missing profiles cannot be loaded', () => {
@@ -336,7 +371,11 @@ describe('ExportComponent', () => {
     const profiles = new Subject<Array<{ id: number; label: string }>>();
     const domains = new Subject<{
       candidates: [];
+      itemCount: number;
       mappingIssueCount: number;
+      mappingFallbackCount: number;
+      mappingIssuePreview: string[];
+      mappingFallbackPreview: string[];
     }>();
     getMissingsProfiles.mockReturnValueOnce(profiles);
     getPsychometricDomainCandidates.mockReturnValueOnce(domains);
@@ -352,13 +391,22 @@ describe('ExportComponent', () => {
 
     expect(component.isLoadingPsychometricOptions).toBe(true);
 
-    domains.next({ candidates: [], mappingIssueCount: 0 });
+    domains.next({
+      candidates: [],
+      itemCount: 7,
+      mappingIssueCount: 0,
+      mappingFallbackCount: 1,
+      mappingIssuePreview: [],
+      mappingFallbackPreview: ['Legacy-Fallback']
+    });
     domains.complete();
 
     expect(component.isLoadingPsychometricOptions).toBe(false);
     expect(component.psychometricOptionsLoadFailed).toBe(false);
     expect(component.missingsProfiles).toEqual([{ id: 7, label: 'Profil 7' }]);
     expect(component.selectedMissingsProfileId).toBe(7);
+    expect(component.psychometricItemCount).toBe(7);
+    expect(component.psychometricMappingIssueDetails).toBe('');
   });
 
   it('shows an error when the export job cannot be started', () => {

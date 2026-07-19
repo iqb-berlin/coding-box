@@ -126,10 +126,19 @@
                   {{ candidate.coverage }}/{{ candidate.itemCount }})
                 </mat-option>
               </mat-select>
-              <mat-hint>
+              <mat-hint
+                [matTooltip]="psychometricMappingIssueDetails"
+                matTooltipClass="psychometric-mapping-tooltip"
+              >
                 {{
                   'ws-admin.export-options.psychometric-domain-hint' | translate
                 }}
+                <ng-container *ngIf="psychometricItemCount === 0">
+                  ·
+                  {{
+                    'ws-admin.export-options.psychometric-no-items' | translate
+                  }}
+                </ng-container>
                 <ng-container *ngIf="psychometricMappingIssueCount > 0">
                   ·
                   {{
