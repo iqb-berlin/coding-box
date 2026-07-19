@@ -12,6 +12,9 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
+import {
+  catchError, forkJoin, map, Observable, of
+} from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
 import {
   ExportJobConfig,
@@ -20,6 +23,7 @@ import {
 import { ResponseService } from '../../../shared/services/response/response.service';
 import { MissingsProfileService } from '../../../coding/services/missings-profile.service';
 import type {
+  PsychometricDomainCandidatesDto,
   PsychometricDomainCandidateDto,
   PsychometricDomainSelection
 } from '../../../../../../../api-dto/coding/psychometric-discrimination.dto';
@@ -29,6 +33,8 @@ export type ExportFormat =
 type ResultsVersion = 'v1' | 'v2' | 'v3';
 type ResultsExportFormat = 'csv' | 'excel';
 type MatrixValue = 'code' | 'score';
+type MissingsProfileOption = { label: string; id: number };
+type OptionLoadResult<T> = { ok: true; value: T } | { ok: false };
 
 @Component({
   selector: 'coding-box-export',
@@ -70,7 +76,7 @@ export class ExportComponent {
   matrixValue: MatrixValue = 'score';
   psychometricDomainCandidates: PsychometricDomainCandidateDto[] = [];
   psychometricMappingIssueCount = 0;
-  missingsProfiles: Array<{ label: string; id: number }> = [];
+  missingsProfiles: MissingsProfileOption[] = [];
   selectedPsychometricDomain = 'workspace';
   selectedMissingsProfileId: number | null = null;
   partWholeCorrection = true;
@@ -94,54 +100,20 @@ export class ExportComponent {
       });
 
     this.isLoadingPsychometricOptions = true;
-    this.missingsProfileService
-      .getMissingsProfilesOrThrow(workspaceId)
-      .subscribe({
-        next: profiles => {
-          this.missingsProfiles = profiles;
-          if (this.selectedMissingsProfileId === null && profiles.length > 0) {
-            const standardProfile = profiles.find(profile => /iqb[\s-]*standard/i.test(profile.label)
-            );
-            this.selectedMissingsProfileId =
-              standardProfile?.id || profiles[0].id;
-          }
-          this.finishLoadingPsychometricOptions();
-        },
-        error: () => {
-          this.missingsProfiles = [];
-          this.selectedMissingsProfileId = null;
-          this.psychometricOptionsLoadFailed = true;
-          this.snackBar.open(
-            this.translateService.instant(
-              'ws-admin.export.errors.psychometric-options-failed'
-            ),
-            this.translateService.instant('close'),
-            { duration: 5000 }
-          );
-          this.finishLoadingPsychometricOptions();
-        }
-      });
-    this.exportJobService
-      .getPsychometricDomainCandidates(workspaceId)
-      .subscribe({
-        next: result => {
-          this.psychometricDomainCandidates = result.candidates;
-          this.psychometricMappingIssueCount = result.mappingIssueCount;
-          this.finishLoadingPsychometricOptions();
-        },
-        error: () => {
-          this.psychometricDomainCandidates = [];
-          this.psychometricOptionsLoadFailed = true;
-          this.snackBar.open(
-            this.translateService.instant(
-              'ws-admin.export.errors.psychometric-domain-options-failed'
-            ),
-            this.translateService.instant('close'),
-            { duration: 5000 }
-          );
-          this.finishLoadingPsychometricOptions();
-        }
-      });
+    forkJoin({
+      profiles: this.asOptionLoadResult(
+        this.missingsProfileService.getMissingsProfilesOrThrow(workspaceId)
+      ),
+      domains: this.asOptionLoadResult(
+        this.exportJobService.getPsychometricDomainCandidates(workspaceId)
+      )
+    }).subscribe(result => {
+      this.applyMissingsProfileResult(result.profiles);
+      this.applyDomainCandidateResult(result.domains);
+      this.psychometricOptionsLoadFailed =
+        !result.profiles.ok || !result.domains.ok;
+      this.isLoadingPsychometricOptions = false;
+    });
   }
 
   onResultsFormatChange(): void {
@@ -310,12 +282,60 @@ export class ExportComponent {
     };
   }
 
-  private psychometricOptionLoadsRemaining = 2;
-
-  private finishLoadingPsychometricOptions(): void {
-    this.psychometricOptionLoadsRemaining -= 1;
-    if (this.psychometricOptionLoadsRemaining <= 0) {
-      this.isLoadingPsychometricOptions = false;
+  private applyMissingsProfileResult(
+    result: OptionLoadResult<MissingsProfileOption[]>
+  ): void {
+    if (result.ok) {
+      this.missingsProfiles = result.value;
+      if (this.selectedMissingsProfileId === null && result.value.length > 0) {
+        const isStandardProfile = (profile: MissingsProfileOption) => /iqb[\s-]*standard/i.test(profile.label);
+        const standardProfile = result.value.find(isStandardProfile);
+        this.selectedMissingsProfileId =
+          standardProfile?.id || result.value[0].id;
+      }
+      return;
     }
+
+    this.missingsProfiles = [];
+    this.selectedMissingsProfileId = null;
+    this.showPsychometricOptionsError(
+      'ws-admin.export.errors.psychometric-options-failed'
+    );
+  }
+
+  private applyDomainCandidateResult(
+    result: OptionLoadResult<PsychometricDomainCandidatesDto>
+  ): void {
+    if (result.ok) {
+      this.psychometricDomainCandidates = result.value.candidates;
+      this.psychometricMappingIssueCount = result.value.mappingIssueCount;
+      return;
+    }
+
+    this.psychometricDomainCandidates = [];
+    this.psychometricMappingIssueCount = 0;
+    this.showPsychometricOptionsError(
+      'ws-admin.export.errors.psychometric-domain-options-failed'
+    );
+  }
+
+  private asOptionLoadResult<T>(
+    request: Observable<T>
+  ): Observable<OptionLoadResult<T>> {
+    return request.pipe(
+      map((value): OptionLoadResult<T> => ({
+        ok: true,
+        value
+      })),
+      catchError(() => of<OptionLoadResult<T>>({ ok: false }))
+    );
+  }
+
+  private showPsychometricOptionsError(messageKey: string): void {
+    this.snackBar.open(
+      this.translateService.instant(messageKey),
+      this.translateService.instant('close'),
+      { duration: 5000 }
+    );
   }
 }
