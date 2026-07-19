@@ -16,8 +16,22 @@ describe('ExportComponent', () => {
   let snackOpen: jest.Mock;
   let getMissingsProfiles: jest.Mock;
   let getPsychometricDomainCandidates: jest.Mock;
+  let selectedWorkspaceIdSubject: Subject<number>;
+  let appService: {
+    selectedWorkspaceId: number;
+    selectedWorkspaceId$: Subject<number>;
+    userId: number;
+    loggedUser: undefined;
+  };
 
   beforeEach(async () => {
+    selectedWorkspaceIdSubject = new Subject<number>();
+    appService = {
+      selectedWorkspaceId: 5,
+      selectedWorkspaceId$: selectedWorkspaceIdSubject,
+      userId: 2,
+      loggedUser: undefined
+    };
     startJob = jest.fn().mockReturnValue(of({ jobId: 'job-1' }));
     snackOpen = jest.fn();
     getMissingsProfiles = jest
@@ -54,11 +68,7 @@ describe('ExportComponent', () => {
       providers: [
         {
           provide: AppService,
-          useValue: {
-            selectedWorkspaceId: 5,
-            userId: 2,
-            loggedUser: undefined
-          }
+          useValue: appService
         },
         {
           provide: ExportJobService,
@@ -134,6 +144,19 @@ describe('ExportComponent', () => {
 
     expect(getMissingsProfiles).toHaveBeenCalledTimes(1);
     expect(getPsychometricDomainCandidates).toHaveBeenCalledTimes(1);
+  });
+
+  it('reloads cached psychometric options when the workspace changes', () => {
+    component.selectedFormat = 'psychometrics';
+    component.onSelectedFormatChange();
+
+    appService.selectedWorkspaceId = 6;
+    selectedWorkspaceIdSubject.next(6);
+
+    expect(getMissingsProfiles).toHaveBeenCalledTimes(2);
+    expect(getMissingsProfiles).toHaveBeenLastCalledWith(6);
+    expect(getPsychometricDomainCandidates).toHaveBeenCalledTimes(2);
+    expect(getPsychometricDomainCandidates).toHaveBeenLastCalledWith(6);
   });
 
   it('starts final result exports without manual coding filters', () => {
