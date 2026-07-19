@@ -115,6 +115,25 @@ describe('ExportComponent', () => {
 
   it('defaults to final result exports', () => {
     expect(component.selectedFormat).toBe('results-by-version');
+    expect(getMissingsProfiles).not.toHaveBeenCalled();
+    expect(getPsychometricDomainCandidates).not.toHaveBeenCalled();
+  });
+
+  it('loads psychometric options lazily and caches successful results', () => {
+    component.selectedFormat = 'psychometrics';
+    component.onSelectedFormatChange();
+
+    expect(getMissingsProfiles).toHaveBeenCalledTimes(1);
+    expect(getPsychometricDomainCandidates).toHaveBeenCalledTimes(1);
+    expect(component.psychometricItemCount).toBe(2);
+
+    component.selectedFormat = 'results-by-version';
+    component.onSelectedFormatChange();
+    component.selectedFormat = 'psychometrics';
+    component.onSelectedFormatChange();
+
+    expect(getMissingsProfiles).toHaveBeenCalledTimes(1);
+    expect(getPsychometricDomainCandidates).toHaveBeenCalledTimes(1);
   });
 
   it('starts final result exports without manual coding filters', () => {
@@ -235,6 +254,7 @@ describe('ExportComponent', () => {
 
   it('starts psychometric exports with domain and missing-profile options', () => {
     component.selectedFormat = 'psychometrics';
+    component.onSelectedFormatChange();
     component.resultsVersion = 'v2';
     component.resultsFormat = 'excel';
     component.partWholeCorrection = true;
@@ -328,6 +348,8 @@ describe('ExportComponent', () => {
     fixture = TestBed.createComponent(ExportComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+    component.selectedFormat = 'psychometrics';
+    component.onSelectedFormatChange();
 
     expect(component.isLoadingPsychometricOptions).toBe(false);
     expect(component.missingsProfiles).toEqual([]);
@@ -350,6 +372,7 @@ describe('ExportComponent', () => {
     component = fixture.componentInstance;
     fixture.detectChanges();
     component.selectedFormat = 'psychometrics';
+    component.onSelectedFormatChange();
     component.selectedMissingsProfileId = 4;
 
     expect(component.isLoadingPsychometricOptions).toBe(false);
@@ -383,6 +406,8 @@ describe('ExportComponent', () => {
     fixture = TestBed.createComponent(ExportComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+    component.selectedFormat = 'psychometrics';
+    component.onSelectedFormatChange();
 
     expect(component.isLoadingPsychometricOptions).toBe(true);
 

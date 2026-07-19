@@ -2,7 +2,12 @@ import { PsychometricResponseReader } from './psychometric-response-reader.servi
 import { getPsychometricLogicalKey } from './psychometric-key.util';
 
 describe('PsychometricResponseReader', () => {
-  it('reuses one read-only repeatable-read snapshot for multiple passes', async () => {
+  it('groups aliases, source IDs and unit variants by canonical item key', async () => {
+    const itemKey = getPsychometricLogicalKey('UNIT_A', 'V1');
+    const sourceLogicalKey = getPsychometricLogicalKey(
+      'folder/UNIT_A.XML',
+      'source-v1'
+    );
     const rows = [
       {
         responseId: 1,
@@ -33,7 +38,11 @@ describe('PsychometricResponseReader', () => {
           orderBy: jest.fn().mockReturnThis(),
           limit: jest.fn().mockReturnThis(),
           getCount: jest.fn().mockResolvedValue(rows.length),
-          getRawMany: jest.fn(async () => (grouped ? [] : rows))
+          getRawMany: jest.fn(async () => (
+            grouped ?
+              [{ personId: '9', itemKey }] :
+              rows
+          ))
         };
         queryBuilders.push(queryBuilder);
         return queryBuilder;
@@ -65,10 +74,12 @@ describe('PsychometricResponseReader', () => {
         createQueryRunner: jest.fn().mockReturnValue(queryRunner)
       } as never
     );
+    const item = { key: itemKey } as never;
     const mapping = {
-      items: [],
+      items: [item],
       byLogicalKey: new Map([
-        [getPsychometricLogicalKey('UNIT_A', 'V1'), {} as never]
+        [itemKey, item],
+        [sourceLogicalKey, item]
       ]),
       issues: [],
       fallbacks: []
@@ -84,6 +95,7 @@ describe('PsychometricResponseReader', () => {
       },
       async snapshot => {
         expect(snapshot.totalRows).toBe(1);
+        expect(snapshot.duplicatePersonIds).toEqual(new Set([9]));
         await snapshot.forEachBatch(firstPass);
         await snapshot.forEachBatch(secondPass);
       }
@@ -110,11 +122,35 @@ describe('PsychometricResponseReader', () => {
           'IN (:...psychometricVariablePairKeys)',
         {
           psychometricVariablePairKeys: [
-            getPsychometricLogicalKey('UNIT_A', 'V1')
+            itemKey,
+            sourceLogicalKey
           ]
         }
       );
     });
+    const duplicateQuery = queryBuilders.find(queryBuilder => queryBuilder
+      .addGroupBy
+      .mock.calls
+      .some(call => call[0] === 'psychometric_mapping.value'));
+    expect(duplicateQuery?.innerJoin).toHaveBeenCalledWith(
+      '(SELECT * FROM jsonb_each_text(' +
+        'CAST(:psychometricCanonicalItemMapping AS jsonb)))',
+      'psychometric_mapping',
+      'psychometric_mapping.key = ' +
+        'CONCAT(TRIM(REGEXP_REPLACE(' +
+        "REGEXP_REPLACE(UPPER(TRIM(unit.name)), '^.*[\\\\/]', ''), " +
+        "'\\.(VOMD|VOCS|XML)$', '')), CHR(31), " +
+        'UPPER(TRIM(response.variableid)))',
+      {
+        psychometricCanonicalItemMapping: JSON.stringify({
+          [itemKey]: itemKey,
+          [sourceLogicalKey]: itemKey
+        })
+      }
+    );
+    expect(duplicateQuery?.addGroupBy).not.toHaveBeenCalledWith(
+      'UPPER(TRIM(response.variableid))'
+    );
     const batchQueries = queryBuilders.filter(
       queryBuilder => queryBuilder.orderBy.mock.calls.length > 0
     );
