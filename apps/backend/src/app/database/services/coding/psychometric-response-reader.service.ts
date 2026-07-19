@@ -8,7 +8,6 @@ import {
   ResolvedWorkspaceExclusions,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
-import { getPsychometricLogicalKey } from './psychometric-key.util';
 import {
   PsychometricRawResponseRow,
   PsychometricResponseReaderInput,
@@ -19,6 +18,12 @@ const NORMALIZED_PSYCHOMETRIC_UNIT_SQL =
   'TRIM(REGEXP_REPLACE(' +
   "REGEXP_REPLACE(UPPER(TRIM(unit.name)), '^.*[\\\\/]', ''), " +
   "'\\.(VOMD|VOCS|XML)$', ''))";
+const PSYCHOMETRIC_LOGICAL_KEY_SQL =
+  `CONCAT(${NORMALIZED_PSYCHOMETRIC_UNIT_SQL}, CHR(31), ` +
+  'UPPER(TRIM(response.variableid)))';
+const PSYCHOMETRIC_CANONICAL_MAPPING_SQL =
+  '(SELECT * FROM jsonb_each_text(' +
+  'CAST(:psychometricCanonicalItemMapping AS jsonb)))';
 
 @Injectable()
 export class PsychometricResponseReader {
@@ -91,28 +96,33 @@ export class PsychometricResponseReader {
   ): Promise<Set<number>> {
     await checkCancellation?.();
     const query = this.createResponseQuery(input, manager, exclusions);
+    const canonicalItemMapping = Object.fromEntries(
+      Array.from(
+        input.mapping.byLogicalKey,
+        ([logicalKey, item]) => [logicalKey, item.key]
+      )
+    );
     const rows = await query
+      .innerJoin(
+        PSYCHOMETRIC_CANONICAL_MAPPING_SQL,
+        'psychometric_mapping',
+        `psychometric_mapping.key = ${PSYCHOMETRIC_LOGICAL_KEY_SQL}`,
+        {
+          psychometricCanonicalItemMapping:
+            JSON.stringify(canonicalItemMapping)
+        }
+      )
       .select('person.id', 'personId')
-      .addSelect('UPPER(TRIM(unit.name))', 'unitName')
-      .addSelect('UPPER(TRIM(response.variableid))', 'variableId')
+      .addSelect('psychometric_mapping.value', 'itemKey')
       .groupBy('person.id')
-      .addGroupBy('UPPER(TRIM(unit.name))')
-      .addGroupBy('UPPER(TRIM(response.variableid))')
+      .addGroupBy('psychometric_mapping.value')
       .having('COUNT(*) > 1')
       .getRawMany<{
       personId: number | string;
-      unitName: string;
-      variableId: string;
+      itemKey: string;
     }>();
     await checkCancellation?.();
-    return new Set(
-      rows
-        .filter(row => input.mapping.byLogicalKey.has(
-          getPsychometricLogicalKey(row.unitName, row.variableId)
-        )
-        )
-        .map(row => Number(row.personId))
-    );
+    return new Set(rows.map(row => Number(row.personId)));
   }
 
   private async countResponseRows(
@@ -223,9 +233,8 @@ export class PsychometricResponseReader {
       return;
     }
     query.andWhere(
-      `CONCAT(${NORMALIZED_PSYCHOMETRIC_UNIT_SQL}, CHR(31), ` +
-        'UPPER(TRIM(response.variableid))) ' +
-        'IN (:...psychometricVariablePairKeys)',
+      `${PSYCHOMETRIC_LOGICAL_KEY_SQL} IN ` +
+        '(:...psychometricVariablePairKeys)',
       { psychometricVariablePairKeys: variablePairKeys }
     );
   }

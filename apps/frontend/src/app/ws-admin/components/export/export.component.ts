@@ -85,12 +85,13 @@ export class ExportComponent {
   maxCategoryCount = 10;
   isLoadingPsychometricOptions = false;
   psychometricOptionsLoadFailed = false;
+  private psychometricOptionsLoaded = false;
 
   constructor() {
-    this.loadOptions();
+    this.loadGeneralOptions();
   }
 
-  private loadOptions(): void {
+  private loadGeneralOptions(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return;
 
@@ -100,7 +101,19 @@ export class ExportComponent {
         this.hasGeoGebraResponses = hasGeoGebraResponses;
         this.clearUnsupportedResultsOptions();
       });
+  }
 
+  private loadPsychometricOptions(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (
+      !workspaceId ||
+      this.psychometricOptionsLoaded ||
+      this.isLoadingPsychometricOptions
+    ) {
+      return;
+    }
+
+    this.psychometricOptionsLoadFailed = false;
     this.isLoadingPsychometricOptions = true;
     forkJoin({
       profiles: this.asOptionLoadResult(
@@ -114,6 +127,8 @@ export class ExportComponent {
       this.applyDomainCandidateResult(result.domains);
       this.psychometricOptionsLoadFailed =
         !result.profiles.ok || !result.domains.ok;
+      this.psychometricOptionsLoaded =
+        !this.psychometricOptionsLoadFailed;
       this.isLoadingPsychometricOptions = false;
     });
   }
@@ -124,6 +139,9 @@ export class ExportComponent {
 
   onSelectedFormatChange(): void {
     this.clearUnsupportedResultsOptions();
+    if (this.selectedFormat === 'psychometrics') {
+      this.loadPsychometricOptions();
+    }
   }
 
   onIncludeResponseValuesChange(): void {
