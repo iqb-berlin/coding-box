@@ -25,10 +25,8 @@ import {
   EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
 } from '../../../core/services/auth-session.config';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
-import type {
-  PsychometricDomainCandidatesDto,
-  PsychometricDomainSelection
-} from '../../../../../../../api-dto/coding/psychometric-discrimination.dto';
+import type { PsychometricDomainCandidatesDto } from '../../../../../../../api-dto/coding/psychometric-discrimination.dto';
+import type { BackgroundExportRequest } from '../../../../../../../api-dto/coding/export-request.dto';
 
 export interface ExportJob {
   jobId: string;
@@ -54,46 +52,11 @@ export interface ExportJob {
   createdAt?: number;
 }
 
-export interface ExportJobConfig {
-  exportType:
-  | 'aggregated'
-  | 'by-coder'
-  | 'by-variable'
-  | 'by-variable-compact'
-  | 'detailed'
-  | 'coding-times'
-  | 'results-by-version'
-  | 'item-matrix'
-  | 'psychometrics';
+export type ExportJobConfig = BackgroundExportRequest & {
   userId?: number;
-  version?: 'v1' | 'v2' | 'v3';
-  format?: 'csv' | 'excel';
-  matrixValue?: 'code' | 'score';
-  partWholeCorrection?: boolean;
-  missingsProfileId?: number;
-  domain?: PsychometricDomainSelection;
-  maxCategoryCount?: number;
-  outputCommentsInsteadOfCodes?: boolean;
-  includeReplayUrl?: boolean;
-  includeResponseValues?: boolean;
-  includeGeoGebraResponseValues?: boolean;
-  includeGeoGebraFiles?: boolean;
-  anonymizeCoders?: boolean;
-  usePseudoCoders?: boolean;
-  doubleCodingMethod?:
-  'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent';
-  includeComments?: boolean;
-  includeModalValue?: boolean;
-  includeDoubleCoded?: boolean;
-  excludeAutoCoded?: boolean;
-  jobDefinitionIds?: number[];
-  coderTrainingIds?: number[];
-  coderIds?: number[];
-  authToken?: string;
-  serverUrl?: string;
   displayLabelKey?: string;
   downloadFilePrefix?: string;
-}
+};
 
 export const REPLAY_AUTH_TOKEN_ERROR_CODE = 'replay-auth-token-failed';
 

@@ -1,7 +1,6 @@
 import { Processor, Process } from '@nestjs/bull';
 import {
-  Injectable, Logger, Inject, forwardRef,
-  Optional
+  Injectable, Logger, Inject, forwardRef
 } from '@nestjs/common';
 import { Job } from 'bull';
 import * as path from 'path';
@@ -21,6 +20,7 @@ import {
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
 import { CacheService } from '../../cache/cache.service';
 import { ExportJobCancelledException } from '../exceptions/export-job-cancelled.exception';
+import { parseExportRequest } from '../../../../../../api-dto/coding/export-request.dto';
 
 @Injectable()
 @Processor('data-export')
@@ -36,127 +36,8 @@ export class ExportJobProcessor {
     private workspaceTestResultsService: WorkspaceTestResultsService,
     private cacheService: CacheService,
     private jobQueueService: JobQueueService,
-    @Optional(
-    )
-    private codingPsychometricExportService?: CodingPsychometricExportService
+    private codingPsychometricExportService: CodingPsychometricExportService
   ) { }
-
-  private validateExportJobData(job: Job<ExportJobData>): void {
-    if (
-      job.data.exportType === 'results-by-version' &&
-      job.data.format !== undefined &&
-      job.data.format !== 'csv' &&
-      job.data.format !== 'excel'
-    ) {
-      throw new Error(
-        'results-by-version exports support only "csv" or "excel" format'
-      );
-    }
-
-    if (
-      job.data.exportType === 'results-by-version' &&
-      job.data.includeGeoGebraFiles &&
-      job.data.format !== 'excel'
-    ) {
-      throw new Error(
-        'GeoGebra file packages are supported only for results-by-version Excel exports'
-      );
-    }
-
-    if (
-      job.data.exportType === 'results-by-version' &&
-      job.data.includeGeoGebraFiles &&
-      job.data.includeResponseValues === false
-    ) {
-      throw new Error(
-        'GeoGebra file packages require response values because links are written to the value column'
-      );
-    }
-
-    if (
-      job.data.exportType === 'item-matrix' &&
-      job.data.format !== undefined &&
-      job.data.format !== 'csv' &&
-      job.data.format !== 'excel'
-    ) {
-      throw new Error('item-matrix exports support only "csv" or "excel" format');
-    }
-
-    if (
-      job.data.exportType === 'item-matrix' &&
-      job.data.matrixValue !== undefined &&
-      job.data.matrixValue !== 'code' &&
-      job.data.matrixValue !== 'score'
-    ) {
-      throw new Error('item-matrix exports support only "code" or "score" matrix values');
-    }
-
-    if (
-      job.data.exportType === 'item-matrix' &&
-      job.data.version !== undefined &&
-      job.data.version !== 'v1' &&
-      job.data.version !== 'v2' &&
-      job.data.version !== 'v3'
-    ) {
-      throw new Error('item-matrix exports support only "v1", "v2" or "v3" versions');
-    }
-
-    if (
-      job.data.exportType === 'psychometrics' &&
-      job.data.format !== undefined &&
-      job.data.format !== 'csv' &&
-      job.data.format !== 'excel'
-    ) {
-      throw new Error(
-        'psychometrics exports support only "csv" or "excel" format'
-      );
-    }
-
-    if (
-      job.data.exportType === 'psychometrics' &&
-      job.data.version !== undefined &&
-      job.data.version !== 'v1' &&
-      job.data.version !== 'v2' &&
-      job.data.version !== 'v3'
-    ) {
-      throw new Error(
-        'psychometrics exports support only "v1", "v2" or "v3" versions'
-      );
-    }
-
-    if (
-      job.data.exportType === 'psychometrics' &&
-      job.data.partWholeCorrection !== undefined &&
-      typeof job.data.partWholeCorrection !== 'boolean'
-    ) {
-      throw new Error(
-        'psychometrics partWholeCorrection must be a boolean'
-      );
-    }
-
-    if (
-      job.data.exportType === 'psychometrics' &&
-      job.data.maxCategoryCount !== undefined &&
-      (!Number.isSafeInteger(job.data.maxCategoryCount) ||
-        job.data.maxCategoryCount < 1 ||
-        job.data.maxCategoryCount > 100)
-    ) {
-      throw new Error(
-        'psychometrics maxCategoryCount must be an integer between 1 and 100'
-      );
-    }
-
-    if (
-      job.data.exportType === 'psychometrics' &&
-      job.data.missingsProfileId !== undefined &&
-      (!Number.isSafeInteger(job.data.missingsProfileId) ||
-        job.data.missingsProfileId <= 0)
-    ) {
-      throw new Error(
-        'psychometrics missingsProfileId must be a positive integer'
-      );
-    }
-  }
 
   private async checkCancellation(
     job: Job<ExportJobData>,
@@ -287,29 +168,7 @@ export class ExportJobProcessor {
     );
     const startedAt = Date.now();
 
-    const validExportTypes = [
-      'aggregated',
-      'by-coder',
-      'by-variable',
-      'by-variable-compact',
-      'detailed',
-      'coding-times',
-      'test-results',
-      'test-logs',
-      'results-by-version',
-      'coding-list',
-      'item-matrix',
-      'psychometrics'
-    ];
-    if (!validExportTypes.includes(job.data.exportType)) {
-      const errorMessage = `Unknown export type: ${job.data.exportType}`;
-      this.logger.error(
-        `Error processing export job ${job.id}: ${errorMessage}`
-      );
-      throw new Error(errorMessage);
-    }
-
-    this.validateExportJobData(job);
+    parseExportRequest(job.data);
 
     const jobId = job.id.toString();
     const cancellationSignal =
@@ -521,9 +380,6 @@ export class ExportJobProcessor {
         }
 
         case 'psychometrics': {
-          if (!this.codingPsychometricExportService) {
-            throw new Error('Psychometric export service is unavailable');
-          }
           const onProgress = async (
             percentage: number,
             details?: {

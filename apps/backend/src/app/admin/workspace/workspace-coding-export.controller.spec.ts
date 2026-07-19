@@ -12,7 +12,8 @@ import { AccessLevelGuard } from './access-level.guard';
 import {
   CodingExportService,
   CodingExportOrchestratorService,
-  CodingListExportService
+  CodingListExportService,
+  CodingPsychometricExportService
 } from '../../database/services/coding';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
@@ -68,6 +69,9 @@ const createWritableResponse = () => {
 };
 
 describe('WorkspaceCodingExportController', () => {
+  const codingPsychometricExportServiceMock =
+    {} as CodingPsychometricExportService;
+
   it('ends the response instead of crashing when versioned CSV streaming fails', async () => {
     const csvStream = new PassThrough();
     const codingExportOrchestratorService = {
@@ -78,7 +82,8 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingExportService,
       codingExportOrchestratorService as unknown as CodingExportOrchestratorService,
       {} as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
     const res = createWritableResponse();
 
@@ -142,7 +147,8 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
       {} as JobQueueService,
-      cacheService as unknown as CacheService
+      cacheService as unknown as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     const res = new Writable({
@@ -181,7 +187,8 @@ describe('WorkspaceCodingExportController', () => {
         {} as CodingExportService,
         {} as CodingExportOrchestratorService,
         jobQueueService as unknown as JobQueueService,
-        {} as CacheService
+        {} as CacheService,
+        codingPsychometricExportServiceMock
       );
 
       await expect(
@@ -204,7 +211,8 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     await expect(
@@ -226,7 +234,8 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     await expect(
@@ -248,7 +257,8 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     await expect(
@@ -308,7 +318,8 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     await expect(
@@ -338,7 +349,8 @@ describe('WorkspaceCodingExportController', () => {
       codingExportService as unknown as CodingExportService,
       {} as CodingExportOrchestratorService,
       {} as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
     const response = {
       setHeader: jest.fn(),
@@ -382,7 +394,8 @@ describe('WorkspaceCodingExportController', () => {
       codingExportService as unknown as CodingExportService,
       {} as CodingExportOrchestratorService,
       {} as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
     const response = {
       setHeader: jest.fn(),
@@ -420,7 +433,8 @@ describe('WorkspaceCodingExportController', () => {
       codingExportService as unknown as CodingExportService,
       {} as CodingExportOrchestratorService,
       {} as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     await expect(
@@ -457,7 +471,8 @@ describe('WorkspaceCodingExportController', () => {
       codingExportService as unknown as CodingExportService,
       {} as CodingExportOrchestratorService,
       {} as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     await expect(
@@ -492,7 +507,8 @@ describe('WorkspaceCodingExportController', () => {
       codingExportService as unknown as CodingExportService,
       {} as CodingExportOrchestratorService,
       {} as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     await expect(
@@ -529,7 +545,8 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     const status = await controller.getExportJobStatus(5, 'job-1');
@@ -566,7 +583,8 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
@@ -600,7 +618,8 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
@@ -626,7 +645,8 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
@@ -658,7 +678,8 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
@@ -681,7 +702,8 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
@@ -726,7 +748,8 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     await expect(controller.getExportJobs(5)).resolves.toEqual([
@@ -773,7 +796,8 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
-      cacheService as unknown as CacheService
+      cacheService as unknown as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     await expect(controller.cancelExportJob(5, 'job-1')).resolves.toEqual({
@@ -804,7 +828,8 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     await expect(controller.cancelExportJob(5, 'job-1')).resolves.toEqual({
@@ -832,7 +857,8 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     await expect(controller.cancelExportJob(5, 'job-1')).resolves.toEqual({
@@ -863,7 +889,8 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     await expect(controller.cancelExportJob(5, 'job-1')).resolves.toEqual({
@@ -888,7 +915,8 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
-      {} as CacheService
+      {} as CacheService,
+      codingPsychometricExportServiceMock
     );
 
     await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
