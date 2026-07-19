@@ -1,4 +1,7 @@
 import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import * as ExcelJS from 'exceljs';
 import { PassThrough } from 'stream';
 import { PsychometricExportWriter } from './psychometric-export-writer.service';
 
@@ -121,6 +124,88 @@ describe('PsychometricExportWriter', () => {
     expect(observedCancellationError).toBe(destinationError);
     if (timeout) {
       clearTimeout(timeout);
+    }
+  });
+
+  it('keeps the CSV header unchanged and does not mix in summary rows', async () => {
+    const writer = new PsychometricExportWriter();
+    const csv = await collectStream(
+      writer.createCsvStream(async () => ({
+        rows: [],
+        summary: [{ key: 'Items insgesamt', value: 0 }]
+      }))
+    );
+
+    expect(csv.split(/\r?\n/)[0]).toBe(
+      [
+        'type',
+        'domain',
+        'domain_label',
+        'unit',
+        'item',
+        'variable',
+        'item_label',
+        'code',
+        'category',
+        'label',
+        'score',
+        'source',
+        'n',
+        'positive_n',
+        'positive_share',
+        'correlation',
+        'status',
+        'note'
+      ].join(';')
+    );
+    expect(csv).not.toContain('Items insgesamt');
+  });
+
+  it('writes score-summary metrics to the Excel overview worksheet', async () => {
+    const writer = new PsychometricExportWriter();
+    const temporaryDirectory = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'psychometric-export-')
+    );
+    const outputPath = path.join(temporaryDirectory, 'psychometrics.xlsx');
+
+    try {
+      await writer.writeExcelToFile(outputPath, {
+        rows: [],
+        summary: [
+          { key: 'Items insgesamt', value: 5 },
+          { key: 'Items mit n = 0', value: 1 },
+          {
+            key: 'Median paarweise vollständige Fälle (n)',
+            value: 29
+          }
+        ]
+      });
+
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.readFile(outputPath);
+      const overview = workbook.getWorksheet('Übersicht');
+      const metrics = new Map(
+        overview
+          ?.getRows(2, Math.max(0, (overview?.rowCount || 1) - 1))
+          ?.map(row => [
+            String(row.getCell(1).value),
+            row.getCell(2).value
+          ]) || []
+      );
+
+      expect(metrics.get('Items insgesamt')).toBe(5);
+      expect(metrics.get('Items mit n = 0')).toBe(1);
+      expect(
+        metrics.get('Median paarweise vollständige Fälle (n)')
+      ).toBe(29);
+      expect(
+        workbook
+          .getWorksheet('Score-Trennschärfen')
+          ?.getRow(1)
+          .getCell(12).value
+      ).toBe('n (paarweise vollständige Fälle)');
+    } finally {
+      fs.rmSync(temporaryDirectory, { recursive: true, force: true });
     }
   });
 

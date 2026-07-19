@@ -102,7 +102,27 @@ describe('ExportComponent', () => {
       'ws-admin': {
         'export-options': {
           'psychometric-no-items': 'Keine auswertbaren VOMD-Items gefunden',
-          'psychometric-mapping-issues': 'Fatale Zuordnungsprobleme: {{count}}'
+          'psychometric-mapping-issues': 'Fatale Zuordnungsprobleme: {{count}}',
+          'psychometric-info-summary':
+            'Der Export enthält aggregierte Trennschärfen, keine personenbezogenen Daten. Ein Item ist eine in der VOMD ausgewiesene Testaufgabe bzw. Ergebnisvariable.',
+          'psychometric-items-detected': 'Erkannte VOMD-Items: {{count}}',
+          'psychometric-info-show-details':
+            'Kennwerte und Status erläutern',
+          'psychometric-info-hide-details': 'Erläuterungen ausblenden',
+          'psychometric-info-score-title': 'Score-Trennschärfe',
+          'psychometric-info-score-description':
+            'Zusammenhang zwischen Item-Score und Domänenscore.',
+          'psychometric-info-code-category-title':
+            'Code-/Kategorientrennschärfe',
+          'psychometric-info-code-category-description':
+            'Zusammenhang einer 0/1-Markierung mit dem Domänenscore.',
+          'psychometric-info-status-title':
+            'Paarweise vollständige Fälle und Status',
+          'psychometric-info-status-description':
+            'n bezeichnet paarweise vollständige Fälle. Weniger als 30 Fälle verhindern den Export nicht.',
+          'psychometric-info-part-whole-title': 'Part-Whole-Korrektur',
+          'psychometric-info-part-whole-description':
+            'Zieht den aktuellen Item-Score aus dem Domänenscore ab.'
         },
         export: {
           'job-started': 'Datenexport gestartet',
@@ -144,6 +164,96 @@ describe('ExportComponent', () => {
 
     expect(getMissingsProfiles).toHaveBeenCalledTimes(1);
     expect(getPsychometricDomainCandidates).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the explanatory block only for psychometric exports', () => {
+    expect(
+      fixture.nativeElement.querySelector('.psychometric-info-block')
+    ).toBeNull();
+
+    component.selectedFormat = 'psychometrics';
+    component.onSelectedFormatChange();
+    fixture.detectChanges();
+
+    const infoBlock = fixture.nativeElement.querySelector(
+      '.psychometric-info-block'
+    );
+    expect(infoBlock).not.toBeNull();
+    expect(infoBlock.textContent).toContain(
+      'Der Export enthält aggregierte Trennschärfen, keine personenbezogenen Daten.'
+    );
+    expect(infoBlock.textContent).toContain(
+      'Ein Item ist eine in der VOMD ausgewiesene Testaufgabe bzw. Ergebnisvariable.'
+    );
+  });
+
+  it('expands and collapses the psychometric explanations', () => {
+    component.selectedFormat = 'psychometrics';
+    component.onSelectedFormatChange();
+    fixture.detectChanges();
+
+    const toggle = fixture.nativeElement.querySelector(
+      '.psychometric-info-toggle'
+    ) as HTMLButtonElement;
+    expect(
+      fixture.nativeElement.querySelector('.psychometric-info-grid')
+    ).toBeNull();
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+
+    toggle.click();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('.psychometric-info-grid').textContent
+    ).toContain('Score-Trennschärfe');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+
+    toggle.click();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('.psychometric-info-grid')
+    ).toBeNull();
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('shows the detected VOMD item count', () => {
+    component.selectedFormat = 'psychometrics';
+    component.onSelectedFormatChange();
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('.psychometric-item-count')
+        .textContent
+    ).toContain('Erkannte VOMD-Items: 2');
+  });
+
+  it('does not require case-count data before starting a psychometric export', () => {
+    component.selectedFormat = 'psychometrics';
+    component.onSelectedFormatChange();
+    fixture.detectChanges();
+
+    expect(component.isExportDisabled).toBe(false);
+    expect(getPsychometricDomainCandidates).toHaveBeenCalledTimes(1);
+
+    fixture.nativeElement
+      .querySelector('.psychometric-info-toggle')
+      .click();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain(
+      'Weniger als 30 Fälle verhindern den Export nicht.'
+    );
+
+    component.onExport();
+
+    expect(startJob).toHaveBeenCalledWith(
+      5,
+      expect.objectContaining({
+        exportType: 'psychometrics',
+        missingsProfileId: 4,
+        domain: { mode: 'workspace' }
+      })
+    );
   });
 
   it('reloads cached psychometric options when the workspace changes', () => {

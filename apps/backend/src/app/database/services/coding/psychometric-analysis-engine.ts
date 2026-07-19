@@ -59,6 +59,70 @@ interface ResponseAnalysisSummary {
   includedResponseCount: number;
 }
 
+export function createPsychometricScoreSummary(
+  scoreRows: PsychometricMetricRow[]
+): PsychometricAnalysis['summary'] {
+  const sortedCaseCounts = scoreRows
+    .map(row => row.n)
+    .sort((left, right) => left - right);
+  const middleIndex = Math.floor(sortedCaseCounts.length / 2);
+  let median = 0;
+  if (sortedCaseCounts.length % 2 === 1) {
+    median = sortedCaseCounts[middleIndex];
+  } else if (sortedCaseCounts.length > 0) {
+    median =
+      (sortedCaseCounts[middleIndex - 1] +
+        sortedCaseCounts[middleIndex]) /
+      2;
+  }
+  const countStatus = (status: CorrelationStatus): number => scoreRows
+    .filter(row => row.status === status).length;
+
+  return [
+    { key: 'Items insgesamt', value: scoreRows.length },
+    {
+      key: 'Items mit n = 0',
+      value: scoreRows.filter(row => row.n === 0).length
+    },
+    {
+      key: 'Items mit 1 <= n < 30',
+      value: scoreRows.filter(row => row.n >= 1 && row.n < 30).length
+    },
+    {
+      key: 'Items mit n >= 30',
+      value: scoreRows.filter(row => row.n >= 30).length
+    },
+    {
+      key: 'Items mit berechneter Score-Trennschärfe (Status OK)',
+      value: countStatus('OK')
+    },
+    {
+      key: 'Status INSUFFICIENT_CASES',
+      value: countStatus('INSUFFICIENT_CASES')
+    },
+    {
+      key: 'Status CONSTANT_ITEM',
+      value: countStatus('CONSTANT_ITEM')
+    },
+    {
+      key: 'Status CONSTANT_DOMAIN',
+      value: countStatus('CONSTANT_DOMAIN')
+    },
+    {
+      key: 'Minimum paarweise vollständige Fälle (n)',
+      value: sortedCaseCounts[0] ?? 0
+    },
+    {
+      key: 'Median paarweise vollständige Fälle (n)',
+      value: median
+    },
+    {
+      key: 'Maximum paarweise vollständige Fälle (n)',
+      value: sortedCaseCounts[sortedCaseCounts.length - 1] ?? 0
+    }
+  ];
+}
+
 @Injectable()
 export class PsychometricAnalysisEngine {
   private readonly emptyCategoryValue = '___EMPTY___';
@@ -125,7 +189,10 @@ export class PsychometricAnalysisEngine {
           key: 'Hinweis fehlende Scores',
           value:
             'Numerische Missing-Scores wurden einbezogen; Missing-Scores mit null wurden paarweise ausgeschlossen.'
-        }
+        },
+        ...createPsychometricScoreSummary(
+          rows.filter(row => row.type === 'SCORE')
+        )
       ]
     };
   }

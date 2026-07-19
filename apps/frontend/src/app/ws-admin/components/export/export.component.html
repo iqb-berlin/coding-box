@@ -85,6 +85,103 @@
           </mat-form-field>
 
           <ng-container *ngIf="selectedFormat === 'psychometrics'">
+            <div class="psychometric-info-block">
+              <div class="psychometric-info-header">
+                <mat-icon>info</mat-icon>
+                <p>
+                  {{
+                    'ws-admin.export-options.psychometric-info-summary'
+                      | translate
+                  }}
+                </p>
+              </div>
+
+              <p class="psychometric-item-count">
+                {{
+                  'ws-admin.export-options.psychometric-items-detected'
+                    | translate: { count: psychometricItemCount }
+                }}
+              </p>
+
+              <button
+                mat-button
+                type="button"
+                class="psychometric-info-toggle"
+                (click)="
+                  isPsychometricInfoExpanded = !isPsychometricInfoExpanded
+                "
+                [attr.aria-expanded]="isPsychometricInfoExpanded"
+                aria-controls="psychometric-info-details"
+              >
+                <mat-icon>{{
+                  isPsychometricInfoExpanded
+                    ? 'expand_less'
+                    : 'help_outline'
+                }}</mat-icon>
+                {{
+                  (isPsychometricInfoExpanded
+                    ? 'ws-admin.export-options.psychometric-info-hide-details'
+                    : 'ws-admin.export-options.psychometric-info-show-details')
+                    | translate
+                }}
+              </button>
+
+              <div
+                *ngIf="isPsychometricInfoExpanded"
+                id="psychometric-info-details"
+                class="psychometric-info-grid"
+              >
+                <div class="psychometric-info-item">
+                  <strong>{{
+                    'ws-admin.export-options.psychometric-info-score-title'
+                      | translate
+                  }}</strong>
+                  <p>
+                    {{
+                      'ws-admin.export-options.psychometric-info-score-description'
+                        | translate
+                    }}
+                  </p>
+                </div>
+                <div class="psychometric-info-item">
+                  <strong>{{
+                    'ws-admin.export-options.psychometric-info-code-category-title'
+                      | translate
+                  }}</strong>
+                  <p>
+                    {{
+                      'ws-admin.export-options.psychometric-info-code-category-description'
+                        | translate
+                    }}
+                  </p>
+                </div>
+                <div class="psychometric-info-item">
+                  <strong>{{
+                    'ws-admin.export-options.psychometric-info-status-title'
+                      | translate
+                  }}</strong>
+                  <p>
+                    {{
+                      'ws-admin.export-options.psychometric-info-status-description'
+                        | translate
+                    }}
+                  </p>
+                </div>
+                <div class="psychometric-info-item">
+                  <strong>{{
+                    'ws-admin.export-options.psychometric-info-part-whole-title'
+                      | translate
+                  }}</strong>
+                  <p>
+                    {{
+                      'ws-admin.export-options.psychometric-info-part-whole-description'
+                        | translate
+                    }}
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <mat-form-field appearance="outline">
               <mat-label>{{
                 'ws-admin.export-options.psychometric-missings-profile'
@@ -182,10 +279,6 @@
                 'ws-admin.export-options.psychometric-part-whole' | translate
               }}
             </mat-checkbox>
-
-            <p class="psychometric-note">
-              {{ 'ws-admin.export-options.psychometric-note' | translate }}
-            </p>
           </ng-container>
 
           <mat-checkbox
