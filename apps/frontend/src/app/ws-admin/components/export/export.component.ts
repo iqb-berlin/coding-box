@@ -75,7 +75,9 @@ export class ExportComponent {
   resultsFormat: ResultsExportFormat = 'csv';
   matrixValue: MatrixValue = 'score';
   psychometricDomainCandidates: PsychometricDomainCandidateDto[] = [];
+  psychometricItemCount = 0;
   psychometricMappingIssueCount = 0;
+  psychometricMappingIssueDetails = '';
   missingsProfiles: MissingsProfileOption[] = [];
   selectedPsychometricDomain = 'workspace';
   selectedMissingsProfileId: number | null = null;
@@ -240,6 +242,7 @@ export class ExportComponent {
       this.isLoadingPsychometricOptions ||
       this.psychometricOptionsLoadFailed ||
       this.selectedMissingsProfileId === null ||
+      this.psychometricItemCount === 0 ||
       !Number.isSafeInteger(this.maxCategoryCount) ||
       this.maxCategoryCount < 1 ||
       this.maxCategoryCount > 100
@@ -308,12 +311,17 @@ export class ExportComponent {
   ): void {
     if (result.ok) {
       this.psychometricDomainCandidates = result.value.candidates;
+      this.psychometricItemCount = result.value.itemCount;
       this.psychometricMappingIssueCount = result.value.mappingIssueCount;
+      this.psychometricMappingIssueDetails =
+        result.value.mappingIssuePreview.join('\n');
       return;
     }
 
     this.psychometricDomainCandidates = [];
+    this.psychometricItemCount = 0;
     this.psychometricMappingIssueCount = 0;
+    this.psychometricMappingIssueDetails = '';
     this.showPsychometricOptionsError(
       'ws-admin.export.errors.psychometric-domain-options-failed'
     );

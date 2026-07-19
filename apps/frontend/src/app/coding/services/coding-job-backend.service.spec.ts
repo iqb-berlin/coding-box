@@ -777,7 +777,11 @@ describe('CodingJobBackendService', () => {
             selectable: true
           }
         ],
-        mappingIssueCount: 0
+        itemCount: 2,
+        mappingIssueCount: 0,
+        mappingFallbackCount: 0,
+        mappingIssuePreview: [],
+        mappingFallbackPreview: []
       });
     });
   });
