@@ -1,7 +1,10 @@
 import { Job } from 'bull';
 import * as fs from 'fs';
 import { PassThrough, Readable } from 'stream';
-import { CodingExportOrchestratorService, CodingExportService } from '../../database/services/coding';
+import {
+  CodingExportOrchestratorService, CodingExportService,
+  CodingPsychometricExportService
+} from '../../database/services/coding';
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
 import { CacheService } from '../../cache/cache.service';
 import { ExportJobData, JobQueueService } from '../job-queue.service';
@@ -9,7 +12,8 @@ import { ExportJobProcessor } from './export-job.processor';
 
 jest.mock('../../database/services/coding', () => ({
   CodingExportOrchestratorService: jest.fn(),
-  CodingExportService: jest.fn()
+  CodingExportService: jest.fn(),
+  CodingPsychometricExportService: jest.fn()
 }));
 jest.mock('../../database/services/test-results', () => ({
   WorkspaceTestResultsService: jest.fn()
@@ -25,7 +29,7 @@ describe('ExportJobProcessor', () => {
       ...data
     } as ExportJobData,
     progress: jest.fn().mockResolvedValue(undefined)
-  } as unknown as Job<ExportJobData>);
+  }) as unknown as Job<ExportJobData>;
 
   const createProcessor = () => {
     const codingExportService = {
@@ -57,12 +61,19 @@ describe('ExportJobProcessor', () => {
       clearExportJobCancellationSignal: jest.fn()
     };
 
+    const codingPsychometricExportService = {
+      exportPsychometricsAsCsv: jest.fn(),
+      writePsychometricsExcelToFile: jest.fn((filePath: string) => fs.promises.writeFile(filePath, 'psychometrics')
+      )
+    };
+
     const processor = new ExportJobProcessor(
       codingExportService as unknown as CodingExportService,
       codingExportOrchestratorService as unknown as CodingExportOrchestratorService,
       {} as WorkspaceTestResultsService,
       cacheService as unknown as CacheService,
-      jobQueueService as unknown as JobQueueService
+      jobQueueService as unknown as JobQueueService,
+      codingPsychometricExportService as unknown as CodingPsychometricExportService
     );
 
     return {
@@ -70,7 +81,8 @@ describe('ExportJobProcessor', () => {
       codingExportService,
       codingExportOrchestratorService,
       cacheService,
-      jobQueueService
+      jobQueueService,
+      codingPsychometricExportService
     };
   };
 
@@ -167,7 +179,7 @@ describe('ExportJobProcessor', () => {
       async (targetPath: string, options: {
         onProgress?: (
           percentage: number,
-          details?: { phase?: 'writing'; processedRows?: number; totalRows?: number }
+          details?: { phase?: 'writing'; processedRows?: number; totalRows?: number; }
         ) => Promise<void>;
       }) => {
         filePath = targetPath;
@@ -463,6 +475,73 @@ describe('ExportJobProcessor', () => {
     } finally {
       cleanup(filePath);
     }
+  });
+
+  it('routes psychometric Excel exports with the selected options', async () => {
+    const { processor, codingPsychometricExportService } = createProcessor();
+    let filePath: string | undefined;
+
+    try {
+      const result = await processor.process(
+        createJob({
+          exportType: 'psychometrics',
+          version: 'v3',
+          format: 'excel',
+          partWholeCorrection: false,
+          missingsProfileId: 4,
+          domain: {
+            mode: 'vomd-field',
+            scope: 'ITEM',
+            profileId: 'profile',
+            entryId: 'domain'
+          },
+          maxCategoryCount: 12
+        })
+      );
+      filePath = result.filePath;
+
+      expect(
+        codingPsychometricExportService.writePsychometricsExcelToFile
+      ).toHaveBeenCalledWith(
+        expect.stringMatching(/\.xlsx$/),
+        expect.objectContaining({
+          workspaceId: 7,
+          version: 'v3',
+          partWholeCorrection: false,
+          missingsProfileId: 4,
+          domain: {
+            mode: 'vomd-field',
+            scope: 'ITEM',
+            profileId: 'profile',
+            entryId: 'domain'
+          },
+          maxCategoryCount: 12,
+          onProgress: expect.any(Function),
+          checkCancellation: expect.any(Function)
+        })
+      );
+      expect(result.fileName).toMatch(/\.xlsx$/);
+    } finally {
+      cleanup(filePath);
+    }
+  });
+
+  it('rejects non-boolean psychometric part-whole options before exporting', async () => {
+    const { processor, codingPsychometricExportService } = createProcessor();
+
+    await expect(processor.process(createJob({
+      exportType: 'psychometrics',
+      partWholeCorrection: 'false' as never
+    }))).rejects.toThrow(
+      'psychometrics partWholeCorrection must be a boolean'
+    );
+
+    expect(
+      codingPsychometricExportService.exportPsychometricsAsCsv
+    ).not.toHaveBeenCalled();
+    expect(
+      codingPsychometricExportService.writePsychometricsExcelToFile
+    ).not.toHaveBeenCalled();
   });
 
   it('rejects invalid item matrix versions before exporting', async () => {

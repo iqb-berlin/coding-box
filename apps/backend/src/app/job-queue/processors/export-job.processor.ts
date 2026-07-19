@@ -13,10 +13,14 @@ import {
   ExportJobResult,
   JobQueueService
 } from '../job-queue.service';
-import { CodingExportOrchestratorService, CodingExportService } from '../../database/services/coding';
+import {
+  CodingExportOrchestratorService, CodingExportService,
+  CodingPsychometricExportService
+} from '../../database/services/coding';
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
 import { CacheService } from '../../cache/cache.service';
 import { ExportJobCancelledException } from '../exceptions/export-job-cancelled.exception';
+import { parseExportRequest } from '../../../../../../api-dto/coding/export-request.dto';
 
 @Injectable()
 @Processor('data-export')
@@ -31,69 +35,9 @@ export class ExportJobProcessor {
     @Inject(forwardRef(() => WorkspaceTestResultsService))
     private workspaceTestResultsService: WorkspaceTestResultsService,
     private cacheService: CacheService,
-    private jobQueueService: JobQueueService
+    private jobQueueService: JobQueueService,
+    private codingPsychometricExportService: CodingPsychometricExportService
   ) { }
-
-  private validateExportJobData(job: Job<ExportJobData>): void {
-    if (
-      job.data.exportType === 'results-by-version' &&
-      job.data.format !== undefined &&
-      job.data.format !== 'csv' &&
-      job.data.format !== 'excel'
-    ) {
-      throw new Error(
-        'results-by-version exports support only "csv" or "excel" format'
-      );
-    }
-
-    if (
-      job.data.exportType === 'results-by-version' &&
-      job.data.includeGeoGebraFiles &&
-      job.data.format !== 'excel'
-    ) {
-      throw new Error(
-        'GeoGebra file packages are supported only for results-by-version Excel exports'
-      );
-    }
-
-    if (
-      job.data.exportType === 'results-by-version' &&
-      job.data.includeGeoGebraFiles &&
-      job.data.includeResponseValues === false
-    ) {
-      throw new Error(
-        'GeoGebra file packages require response values because links are written to the value column'
-      );
-    }
-
-    if (
-      job.data.exportType === 'item-matrix' &&
-      job.data.format !== undefined &&
-      job.data.format !== 'csv' &&
-      job.data.format !== 'excel'
-    ) {
-      throw new Error('item-matrix exports support only "csv" or "excel" format');
-    }
-
-    if (
-      job.data.exportType === 'item-matrix' &&
-      job.data.matrixValue !== undefined &&
-      job.data.matrixValue !== 'code' &&
-      job.data.matrixValue !== 'score'
-    ) {
-      throw new Error('item-matrix exports support only "code" or "score" matrix values');
-    }
-
-    if (
-      job.data.exportType === 'item-matrix' &&
-      job.data.version !== undefined &&
-      job.data.version !== 'v1' &&
-      job.data.version !== 'v2' &&
-      job.data.version !== 'v3'
-    ) {
-      throw new Error('item-matrix exports support only "v1", "v2" or "v3" versions');
-    }
-  }
 
   private async checkCancellation(
     job: Job<ExportJobData>,
@@ -124,9 +68,7 @@ export class ExportJobProcessor {
     }
   }
 
-  private createCancelledResult(
-    job: Job<ExportJobData>
-  ): ExportJobResult {
+  private createCancelledResult(job: Job<ExportJobData>): ExportJobResult {
     return {
       fileId: job.id.toString(),
       fileName: '',
@@ -193,7 +135,11 @@ export class ExportJobProcessor {
       if (options.checkCancellation) {
         cancellationTimer = setInterval(() => {
           options.checkCancellation?.().catch(error => {
-            (stream as NodeJS.ReadableStream & { destroy?: (error?: Error) => void }).destroy?.(error);
+            (
+              stream as NodeJS.ReadableStream & {
+                destroy?: (error?: Error) => void;
+              }
+            ).destroy?.(error);
             writeStream.destroy(error);
           });
         }, 1000);
@@ -222,31 +168,11 @@ export class ExportJobProcessor {
     );
     const startedAt = Date.now();
 
-    const validExportTypes = [
-      'aggregated',
-      'by-coder',
-      'by-variable',
-      'by-variable-compact',
-      'detailed',
-      'coding-times',
-      'test-results',
-      'test-logs',
-      'results-by-version',
-      'coding-list',
-      'item-matrix'
-    ];
-    if (!validExportTypes.includes(job.data.exportType)) {
-      const errorMessage = `Unknown export type: ${job.data.exportType}`;
-      this.logger.error(
-        `Error processing export job ${job.id}: ${errorMessage}`
-      );
-      throw new Error(errorMessage);
-    }
-
-    this.validateExportJobData(job);
+    parseExportRequest(job.data);
 
     const jobId = job.id.toString();
-    const cancellationSignal = this.jobQueueService.createExportJobCancellationSignal(jobId);
+    const cancellationSignal =
+      this.jobQueueService.createExportJobCancellationSignal(jobId);
     let filePath: string | undefined;
 
     try {
@@ -265,6 +191,8 @@ export class ExportJobProcessor {
           job.data.format !== 'excel' &&
           job.data.format !== 'json') ||
         (job.data.exportType === 'item-matrix' &&
+          job.data.format !== 'excel') ||
+        (job.data.exportType === 'psychometrics' &&
           job.data.format !== 'excel');
       let fileExt = isCsv ? 'csv' : 'xlsx';
       if (job.data.exportType === 'coding-list' && job.data.format === 'json') {
@@ -320,7 +248,8 @@ export class ExportJobProcessor {
               includeReplayUrl: job.data.includeReplayUrl || false,
               onProgress,
               includeResponseValues: job.data.includeResponseValues !== false,
-              includeGeoGebraResponseValues: job.data.includeGeoGebraResponseValues === true,
+              includeGeoGebraResponseValues:
+                job.data.includeGeoGebraResponseValues === true,
               includeGeoGebraFiles: job.data.includeGeoGebraFiles === true,
               checkCancellation
             };
@@ -330,17 +259,22 @@ export class ExportJobProcessor {
             );
           } else {
             // CSV Stream
-            const stream = await this.codingExportOrchestratorService.exportResultsByVersionAsCsv({
-              workspaceId: job.data.workspaceId,
-              version,
-              authToken: job.data.authToken || '',
-              serverUrl: job.data.serverUrl || '',
-              includeReplayUrl: job.data.includeReplayUrl || false,
-              onProgress,
-              includeResponseValues: job.data.includeResponseValues !== false,
-              includeGeoGebraResponseValues: job.data.includeGeoGebraResponseValues === true,
-              checkCancellation
-            });
+            const stream =
+              await this.codingExportOrchestratorService.exportResultsByVersionAsCsv(
+                {
+                  workspaceId: job.data.workspaceId,
+                  version,
+                  authToken: job.data.authToken || '',
+                  serverUrl: job.data.serverUrl || '',
+                  includeReplayUrl: job.data.includeReplayUrl || false,
+                  onProgress,
+                  includeResponseValues:
+                    job.data.includeResponseValues !== false,
+                  includeGeoGebraResponseValues:
+                    job.data.includeGeoGebraResponseValues === true,
+                  checkCancellation
+                }
+              );
 
             await this.writeStreamToFile(stream, filePath, {
               prependUtf8Bom: true,
@@ -354,7 +288,9 @@ export class ExportJobProcessor {
         case 'coding-list': {
           const onProgress = async (percentage: number) => {
             const jobProgress = 20 + Math.round((percentage / 100) * 70);
-            await this.updateJobProgress(job, jobProgress, { phase: 'writing' });
+            await this.updateJobProgress(job, jobProgress, {
+              phase: 'writing'
+            });
             await checkCancellation();
           };
 
@@ -369,26 +305,31 @@ export class ExportJobProcessor {
               checkCancellation
             );
           } else if (job.data.format === 'json') {
-            const stream = await this.codingExportService.exportCodingListForJobAsJson(
-              job.data.workspaceId,
-              job.data.authToken || '',
-              job.data.serverUrl || '',
-              onProgress,
-              job.data.trainingRequired,
-              checkCancellation
-            );
+            const stream =
+              await this.codingExportService.exportCodingListForJobAsJson(
+                job.data.workspaceId,
+                job.data.authToken || '',
+                job.data.serverUrl || '',
+                onProgress,
+                job.data.trainingRequired,
+                checkCancellation
+              );
 
-            await this.writeStreamToFile(stream, filePath, { checkCancellation, cancellationSignal });
+            await this.writeStreamToFile(stream, filePath, {
+              checkCancellation,
+              cancellationSignal
+            });
           } else {
             // CSV
-            const stream = await this.codingExportService.exportCodingListForJobAsCsv(
-              job.data.workspaceId,
-              job.data.authToken || '',
-              job.data.serverUrl || '',
-              onProgress,
-              job.data.trainingRequired,
-              checkCancellation
-            );
+            const stream =
+              await this.codingExportService.exportCodingListForJobAsCsv(
+                job.data.workspaceId,
+                job.data.authToken || '',
+                job.data.serverUrl || '',
+                onProgress,
+                job.data.trainingRequired,
+                checkCancellation
+              );
 
             await this.writeStreamToFile(stream, filePath, {
               prependUtf8Bom: true,
@@ -402,7 +343,9 @@ export class ExportJobProcessor {
         case 'item-matrix': {
           const onProgress = async (percentage: number) => {
             const jobProgress = 20 + Math.round((percentage / 100) * 70);
-            await this.updateJobProgress(job, jobProgress, { phase: 'writing' });
+            await this.updateJobProgress(job, jobProgress, {
+              phase: 'writing'
+            });
             await checkCancellation();
           };
 
@@ -418,14 +361,61 @@ export class ExportJobProcessor {
               }
             );
           } else {
-            const stream = await this.codingExportOrchestratorService.exportItemMatrixAsCsv({
-              workspaceId: job.data.workspaceId,
-              matrixValue: job.data.matrixValue || 'score',
-              version: job.data.version || 'v2',
-              onProgress,
-              checkCancellation
-            });
+            const stream =
+              await this.codingExportOrchestratorService.exportItemMatrixAsCsv({
+                workspaceId: job.data.workspaceId,
+                matrixValue: job.data.matrixValue || 'score',
+                version: job.data.version || 'v2',
+                onProgress,
+                checkCancellation
+              });
 
+            await this.writeStreamToFile(stream, filePath, {
+              prependUtf8Bom: true,
+              checkCancellation,
+              cancellationSignal
+            });
+          }
+          break;
+        }
+
+        case 'psychometrics': {
+          const onProgress = async (
+            percentage: number,
+            details?: {
+              processedRows?: number;
+              totalRows?: number;
+            }
+          ) => {
+            const jobProgress = 20 + Math.round((percentage / 100) * 70);
+            await this.updateJobProgress(job, jobProgress, {
+              phase: 'writing',
+              processedRows: details?.processedRows,
+              totalRows: details?.totalRows
+            });
+            await checkCancellation();
+          };
+          const exportOptions = {
+            workspaceId: job.data.workspaceId,
+            version: job.data.version || 'v2',
+            partWholeCorrection: job.data.partWholeCorrection !== false,
+            missingsProfileId: job.data.missingsProfileId,
+            domain: job.data.domain || { mode: 'workspace' as const },
+            maxCategoryCount: job.data.maxCategoryCount ?? 10,
+            onProgress,
+            checkCancellation
+          };
+
+          if (job.data.format === 'excel') {
+            await this.codingPsychometricExportService.writePsychometricsExcelToFile(
+              filePath,
+              exportOptions
+            );
+          } else {
+            const stream =
+              await this.codingPsychometricExportService.exportPsychometricsAsCsv(
+                exportOptions
+              );
             await this.writeStreamToFile(stream, filePath, {
               prependUtf8Bom: true,
               checkCancellation,
@@ -533,7 +523,8 @@ export class ExportJobProcessor {
             filePath,
             {
               workspaceId: job.data.workspaceId,
-              outputCommentsInsteadOfCodes: job.data.outputCommentsInsteadOfCodes || false,
+              outputCommentsInsteadOfCodes:
+                job.data.outputCommentsInsteadOfCodes || false,
               includeReplayUrl: job.data.includeReplayUrl || false,
               anonymizeCoders: job.data.anonymizeCoders || false,
               usePseudoCoders: job.data.usePseudoCoders || false,
@@ -571,7 +562,9 @@ export class ExportJobProcessor {
             job.data.testResultFilters,
             async progress => {
               const jobProgress = 20 + Math.round((progress / 100) * 70);
-              await this.updateJobProgress(job, jobProgress, { phase: 'writing' });
+              await this.updateJobProgress(job, jobProgress, {
+                phase: 'writing'
+              });
               await this.checkCancellation(job, filePath);
             }
           );
@@ -585,7 +578,9 @@ export class ExportJobProcessor {
             job.data.testResultFilters,
             async progress => {
               const jobProgress = 20 + Math.round((progress / 100) * 70);
-              await this.updateJobProgress(job, jobProgress, { phase: 'writing' });
+              await this.updateJobProgress(job, jobProgress, {
+                phase: 'writing'
+              });
               await this.checkCancellation(job, filePath);
             }
           );
@@ -634,11 +629,15 @@ export class ExportJobProcessor {
 
       await this.updateJobProgress(job, 100, { phase: 'completed' });
 
-      this.logger.log(`Job ${job.id} completed successfully in ${Date.now() - startedAt}ms`);
+      this.logger.log(
+        `Job ${job.id} completed successfully in ${Date.now() - startedAt}ms`
+      );
       return metadata;
     } catch (error) {
       if (error instanceof ExportJobCancelledException) {
-        this.logger.log(`Export job ${job.id} was cancelled after ${Date.now() - startedAt}ms`);
+        this.logger.log(
+          `Export job ${job.id} was cancelled after ${Date.now() - startedAt}ms`
+        );
         this.cleanupPartialExportFile(filePath);
         return this.createCancelledResult(job);
       }

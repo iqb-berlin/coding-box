@@ -12,14 +12,19 @@ export class MissingsProfileService {
   private http = inject(HttpClient);
 
   getMissingsProfiles(workspaceId: number): Observable<{ label: string; id: number }[]> {
-    return this.http
-      .get<{ label: string; id: number }[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/missings-profiles`,
-      {}
-    )
+    return this.getMissingsProfilesOrThrow(workspaceId)
       .pipe(
         catchError(() => of([]))
       );
+  }
+
+  getMissingsProfilesOrThrow(
+    workspaceId: number
+  ): Observable<{ label: string; id: number }[]> {
+    return this.http.get<{ label: string; id: number }[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/missings-profiles`,
+      {}
+    );
   }
 
   getMissingsProfileDetails(workspaceId: number, id: string | number): Observable<MissingsProfilesDto | null> {

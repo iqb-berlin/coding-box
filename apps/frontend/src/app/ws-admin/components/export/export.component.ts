@@ -1,4 +1,5 @@
-import { Component, inject } from '@angular/core';
+import { Component, DestroyRef, inject } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -9,16 +10,32 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSelectModule } from '@angular/material/select';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
+import {
+  catchError, forkJoin, map, Observable, of
+} from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
-import { ExportJobConfig, ExportJobService } from '../../../shared/services/file/export-job.service';
+import {
+  ExportJobConfig,
+  ExportJobService
+} from '../../../shared/services/file/export-job.service';
 import { ResponseService } from '../../../shared/services/response/response.service';
+import { MissingsProfileService } from '../../../coding/services/missings-profile.service';
+import type {
+  PsychometricDomainCandidatesDto,
+  PsychometricDomainCandidateDto,
+  PsychometricDomainSelection
+} from '../../../../../../../api-dto/coding/psychometric-discrimination.dto';
 
-export type ExportFormat = 'results-by-version' | 'item-matrix';
+export type ExportFormat =
+  'results-by-version' | 'item-matrix' | 'psychometrics';
 type ResultsVersion = 'v1' | 'v2' | 'v3';
 type ResultsExportFormat = 'csv' | 'excel';
 type MatrixValue = 'code' | 'score';
+type MissingsProfileOption = { label: string; id: number };
+type OptionLoadResult<T> = { ok: true; value: T } | { ok: false };
 
 @Component({
   selector: 'coding-box-export',
@@ -36,6 +53,7 @@ type MatrixValue = 'code' | 'score';
     MatSelectModule,
     MatFormFieldModule,
     MatIconModule,
+    MatInputModule,
     FormsModule,
     CommonModule
   ]
@@ -46,6 +64,8 @@ export class ExportComponent {
   private translateService = inject(TranslateService);
   private snackBar = inject(MatSnackBar);
   private responseService = inject(ResponseService);
+  private missingsProfileService = inject(MissingsProfileService);
+  private destroyRef = inject(DestroyRef);
 
   selectedFormat: ExportFormat = 'results-by-version';
   isStartingExport = false;
@@ -56,19 +76,94 @@ export class ExportComponent {
   resultsVersion: ResultsVersion = 'v2';
   resultsFormat: ResultsExportFormat = 'csv';
   matrixValue: MatrixValue = 'score';
+  psychometricDomainCandidates: PsychometricDomainCandidateDto[] = [];
+  psychometricItemCount = 0;
+  psychometricMappingIssueCount = 0;
+  psychometricMappingIssueDetails = '';
+  missingsProfiles: MissingsProfileOption[] = [];
+  selectedPsychometricDomain = 'workspace';
+  selectedMissingsProfileId: number | null = null;
+  partWholeCorrection = true;
+  maxCategoryCount = 10;
+  isPsychometricInfoExpanded = false;
+  isLoadingPsychometricOptions = false;
+  psychometricOptionsLoadFailed = false;
+  private psychometricOptionsWorkspaceId: number | null = null;
+  private loadingPsychometricOptionsWorkspaceId: number | null = null;
 
   constructor() {
-    this.loadOptions();
+    this.loadGeneralOptions();
+    this.appService.selectedWorkspaceId$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.resetWorkspaceOptions();
+        this.loadGeneralOptions();
+        if (this.selectedFormat === 'psychometrics') {
+          this.loadPsychometricOptions();
+        }
+      });
   }
 
-  private loadOptions(): void {
+  private loadGeneralOptions(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return;
 
-    this.responseService.hasGeogebraResponses(workspaceId).subscribe(hasGeoGebraResponses => {
-      this.hasGeoGebraResponses = hasGeoGebraResponses;
-      this.clearUnsupportedResultsOptions();
+    this.responseService
+      .hasGeogebraResponses(workspaceId)
+      .subscribe(hasGeoGebraResponses => {
+        if (workspaceId !== this.appService.selectedWorkspaceId) return;
+        this.hasGeoGebraResponses = hasGeoGebraResponses;
+        this.clearUnsupportedResultsOptions();
+      });
+  }
+
+  private loadPsychometricOptions(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (
+      !workspaceId ||
+      this.psychometricOptionsWorkspaceId === workspaceId ||
+      this.loadingPsychometricOptionsWorkspaceId === workspaceId
+    ) {
+      return;
+    }
+
+    this.psychometricOptionsLoadFailed = false;
+    this.isLoadingPsychometricOptions = true;
+    this.loadingPsychometricOptionsWorkspaceId = workspaceId;
+    forkJoin({
+      profiles: this.asOptionLoadResult(
+        this.missingsProfileService.getMissingsProfilesOrThrow(workspaceId)
+      ),
+      domains: this.asOptionLoadResult(
+        this.exportJobService.getPsychometricDomainCandidates(workspaceId)
+      )
+    }).subscribe(result => {
+      if (workspaceId !== this.appService.selectedWorkspaceId) return;
+      this.applyMissingsProfileResult(result.profiles);
+      this.applyDomainCandidateResult(result.domains);
+      this.psychometricOptionsLoadFailed =
+        !result.profiles.ok || !result.domains.ok;
+      this.psychometricOptionsWorkspaceId =
+        this.psychometricOptionsLoadFailed ? null : workspaceId;
+      this.loadingPsychometricOptionsWorkspaceId = null;
+      this.isLoadingPsychometricOptions = false;
     });
+  }
+
+  private resetWorkspaceOptions(): void {
+    this.hasGeoGebraResponses = false;
+    this.psychometricDomainCandidates = [];
+    this.psychometricItemCount = 0;
+    this.psychometricMappingIssueCount = 0;
+    this.psychometricMappingIssueDetails = '';
+    this.missingsProfiles = [];
+    this.selectedPsychometricDomain = 'workspace';
+    this.selectedMissingsProfileId = null;
+    this.isLoadingPsychometricOptions = false;
+    this.psychometricOptionsLoadFailed = false;
+    this.psychometricOptionsWorkspaceId = null;
+    this.loadingPsychometricOptionsWorkspaceId = null;
+    this.clearUnsupportedResultsOptions();
   }
 
   onResultsFormatChange(): void {
@@ -77,6 +172,9 @@ export class ExportComponent {
 
   onSelectedFormatChange(): void {
     this.clearUnsupportedResultsOptions();
+    if (this.selectedFormat === 'psychometrics') {
+      this.loadPsychometricOptions();
+    }
   }
 
   onIncludeResponseValuesChange(): void {
@@ -118,26 +216,34 @@ export class ExportComponent {
       return;
     }
 
+    if (this.isExportDisabled) {
+      return;
+    }
+
     this.isStartingExport = true;
 
-    this.exportJobService.startJob(workspaceId, this.buildExportConfig()).subscribe({
-      next: () => {
-        this.snackBar.open(
-          this.translateService.instant('ws-admin.export.job-started'),
-          this.translateService.instant('close'),
-          { duration: 3000 }
-        );
-        this.isStartingExport = false;
-      },
-      error: () => {
-        this.snackBar.open(
-          this.translateService.instant('ws-admin.export.errors.start-failed'),
-          this.translateService.instant('close'),
-          { duration: 5000 }
-        );
-        this.isStartingExport = false;
-      }
-    });
+    this.exportJobService
+      .startJob(workspaceId, this.buildExportConfig())
+      .subscribe({
+        next: () => {
+          this.snackBar.open(
+            this.translateService.instant('ws-admin.export.job-started'),
+            this.translateService.instant('close'),
+            { duration: 3000 }
+          );
+          this.isStartingExport = false;
+        },
+        error: () => {
+          this.snackBar.open(
+            this.translateService.instant(
+              'ws-admin.export.errors.start-failed'
+            ),
+            this.translateService.instant('close'),
+            { duration: 5000 }
+          );
+          this.isStartingExport = false;
+        }
+      });
   }
 
   private buildExportConfig(): ExportJobConfig {
@@ -151,6 +257,19 @@ export class ExportComponent {
       };
     }
 
+    if (this.selectedFormat === 'psychometrics') {
+      return {
+        exportType: 'psychometrics',
+        userId: this.appService.userId,
+        version: this.resultsVersion,
+        format: this.resultsFormat,
+        partWholeCorrection: this.partWholeCorrection,
+        missingsProfileId: this.selectedMissingsProfileId || undefined,
+        domain: this.getPsychometricDomainSelection(),
+        maxCategoryCount: this.maxCategoryCount
+      };
+    }
+
     return {
       exportType: this.selectedFormat,
       userId: this.appService.userId,
@@ -161,5 +280,121 @@ export class ExportComponent {
       includeGeoGebraResponseValues: this.includeGeoGebraResponseValues,
       includeGeoGebraFiles: this.includeGeoGebraFiles
     };
+  }
+
+  get isExportDisabled(): boolean {
+    if (this.isStartingExport) {
+      return true;
+    }
+    if (this.selectedFormat !== 'psychometrics') {
+      return false;
+    }
+    if (
+      this.isLoadingPsychometricOptions ||
+      this.psychometricOptionsLoadFailed ||
+      this.selectedMissingsProfileId === null ||
+      this.psychometricItemCount === 0 ||
+      !Number.isSafeInteger(this.maxCategoryCount) ||
+      this.maxCategoryCount < 1 ||
+      this.maxCategoryCount > 100
+    ) {
+      return true;
+    }
+    if (this.psychometricMappingIssueCount > 0) {
+      return true;
+    }
+    if (this.selectedPsychometricDomain === 'workspace') {
+      return false;
+    }
+    return !this.getSelectedDomainCandidate()?.selectable;
+  }
+
+  getPsychometricDomainKey(candidate: PsychometricDomainCandidateDto): string {
+    return [candidate.scope, candidate.profileId, candidate.entryId].join(
+      '\u001F'
+    );
+  }
+
+  private getSelectedDomainCandidate():
+  PsychometricDomainCandidateDto | undefined {
+    return this.psychometricDomainCandidates.find(
+      candidate => this.getPsychometricDomainKey(candidate) ===
+        this.selectedPsychometricDomain
+    );
+  }
+
+  private getPsychometricDomainSelection(): PsychometricDomainSelection {
+    const candidate = this.getSelectedDomainCandidate();
+    if (this.selectedPsychometricDomain === 'workspace' || !candidate) {
+      return { mode: 'workspace' };
+    }
+    return {
+      mode: 'vomd-field',
+      scope: candidate.scope,
+      profileId: candidate.profileId,
+      entryId: candidate.entryId
+    };
+  }
+
+  private applyMissingsProfileResult(
+    result: OptionLoadResult<MissingsProfileOption[]>
+  ): void {
+    if (result.ok) {
+      this.missingsProfiles = result.value;
+      if (this.selectedMissingsProfileId === null && result.value.length > 0) {
+        const isStandardProfile = (profile: MissingsProfileOption) => /iqb[\s-]*standard/i.test(profile.label);
+        const standardProfile = result.value.find(isStandardProfile);
+        this.selectedMissingsProfileId =
+          standardProfile?.id || result.value[0].id;
+      }
+      return;
+    }
+
+    this.missingsProfiles = [];
+    this.selectedMissingsProfileId = null;
+    this.showPsychometricOptionsError(
+      'ws-admin.export.errors.psychometric-options-failed'
+    );
+  }
+
+  private applyDomainCandidateResult(
+    result: OptionLoadResult<PsychometricDomainCandidatesDto>
+  ): void {
+    if (result.ok) {
+      this.psychometricDomainCandidates = result.value.candidates;
+      this.psychometricItemCount = result.value.itemCount;
+      this.psychometricMappingIssueCount = result.value.mappingIssueCount;
+      this.psychometricMappingIssueDetails =
+        result.value.mappingIssuePreview.join('\n');
+      return;
+    }
+
+    this.psychometricDomainCandidates = [];
+    this.psychometricItemCount = 0;
+    this.psychometricMappingIssueCount = 0;
+    this.psychometricMappingIssueDetails = '';
+    this.showPsychometricOptionsError(
+      'ws-admin.export.errors.psychometric-domain-options-failed'
+    );
+  }
+
+  private asOptionLoadResult<T>(
+    request: Observable<T>
+  ): Observable<OptionLoadResult<T>> {
+    return request.pipe(
+      map((value): OptionLoadResult<T> => ({
+        ok: true,
+        value
+      })),
+      catchError(() => of<OptionLoadResult<T>>({ ok: false }))
+    );
+  }
+
+  private showPsychometricOptionsError(messageKey: string): void {
+    this.snackBar.open(
+      this.translateService.instant(messageKey),
+      this.translateService.instant('close'),
+      { duration: 5000 }
+    );
   }
 }
