@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, EntityManager, SelectQueryBuilder } from 'typeorm';
-import { PsychometricVersion } from '../../../../../../../api-dto/coding/psychometric-discrimination.dto';
 import { ResponseEntity } from '../../entities/response.entity';
 import { STATISTICS_IGNORED_STATUSES } from '../../utils/response-status-converter';
 import {
@@ -15,6 +14,11 @@ import {
   PsychometricResponseReaderInput,
   PsychometricResponseSnapshot
 } from './psychometric-export.types';
+
+const NORMALIZED_PSYCHOMETRIC_UNIT_SQL =
+  'TRIM(REGEXP_REPLACE(' +
+  "REGEXP_REPLACE(UPPER(TRIM(unit.name)), '^.*[\\\\/]', ''), " +
+  "'\\.(VOMD|VOCS|XML)$', ''))";
 
 @Injectable()
 export class PsychometricResponseReader {
@@ -49,8 +53,7 @@ export class PsychometricResponseReader {
         checkCancellation
       );
       const totalRows = await this.countResponseRows(
-        input.workspaceId,
-        input.version,
+        input,
         queryRunner.manager,
         exclusions
       );
@@ -58,8 +61,7 @@ export class PsychometricResponseReader {
         duplicatePersonIds,
         totalRows,
         forEachBatch: (batchCallback, cancellationCallback) => this.forEachResponseBatch(
-          input.workspaceId,
-          input.version,
+          input,
           queryRunner.manager,
           exclusions,
           batchCallback,
@@ -88,12 +90,7 @@ export class PsychometricResponseReader {
     checkCancellation?: () => Promise<void>
   ): Promise<Set<number>> {
     await checkCancellation?.();
-    const query = this.createResponseQuery(
-      input.workspaceId,
-      input.version,
-      manager,
-      exclusions
-    );
+    const query = this.createResponseQuery(input, manager, exclusions);
     const rows = await query
       .select('person.id', 'personId')
       .addSelect('UPPER(TRIM(unit.name))', 'unitName')
@@ -119,23 +116,16 @@ export class PsychometricResponseReader {
   }
 
   private async countResponseRows(
-    workspaceId: number,
-    version: PsychometricVersion,
+    input: PsychometricResponseReaderInput,
     manager: EntityManager,
     exclusions: ResolvedWorkspaceExclusions
   ): Promise<number> {
-    const query = this.createResponseQuery(
-      workspaceId,
-      version,
-      manager,
-      exclusions
-    );
+    const query = this.createResponseQuery(input, manager, exclusions);
     return query.getCount();
   }
 
   private async forEachResponseBatch(
-    workspaceId: number,
-    version: PsychometricVersion,
+    input: PsychometricResponseReaderInput,
     manager: EntityManager,
     exclusions: ResolvedWorkspaceExclusions,
     callback: (
@@ -150,24 +140,29 @@ export class PsychometricResponseReader {
 
     while (hasMoreRows) {
       await checkCancellation?.();
-      const query = this.createResponseQuery(
-        workspaceId,
-        version,
-        manager,
-        exclusions
-      );
+      const query = this.createResponseQuery(input, manager, exclusions);
+      const versionColumns = {
+        v1: {
+          code: 'response.code_v1',
+          score: 'response.score_v1'
+        },
+        v2: {
+          code: 'response.code_v2',
+          score: 'response.score_v2'
+        },
+        v3: {
+          code: 'response.code_v3',
+          score: 'response.score_v3'
+        }
+      }[input.version];
       const rows = await query
         .select('response.id', 'responseId')
         .addSelect('person.id', 'personId')
         .addSelect('unit.name', 'unitName')
         .addSelect('response.variableid', 'variableId')
         .addSelect('response.value', 'value')
-        .addSelect('response.code_v1', 'codeV1')
-        .addSelect('response.score_v1', 'scoreV1')
-        .addSelect('response.code_v2', 'codeV2')
-        .addSelect('response.score_v2', 'scoreV2')
-        .addSelect('response.code_v3', 'codeV3')
-        .addSelect('response.score_v3', 'scoreV3')
+        .addSelect(versionColumns.code, 'code')
+        .addSelect(versionColumns.score, 'score')
         .andWhere('response.id > :lastResponseId', { lastResponseId })
         .orderBy('response.id', 'ASC')
         .limit(this.responseBatchSize)
@@ -186,13 +181,12 @@ export class PsychometricResponseReader {
     }
 
     this.logger.debug(
-      `Read ${processedRows} response rows for psychometric ${version} export`
+      `Read ${processedRows} response rows for psychometric ${input.version} export`
     );
   }
 
   private createResponseQuery(
-    workspaceId: number,
-    version: PsychometricVersion,
+    input: PsychometricResponseReaderInput,
     manager: EntityManager,
     exclusions: ResolvedWorkspaceExclusions
   ): SelectQueryBuilder<ResponseEntity> {
@@ -203,14 +197,36 @@ export class PsychometricResponseReader {
       .innerJoin('unit.booklet', 'booklet')
       .innerJoin('booklet.person', 'person')
       .innerJoin('booklet.bookletinfo', 'bookletinfo')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .where('person.workspace_id = :workspaceId', {
+        workspaceId: input.workspaceId
+      })
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere(`response.status_${version} IS NOT NULL`)
+      .andWhere(`response.status_${input.version} IS NOT NULL`)
       .andWhere(
-        `response.status_${version} NOT IN (:...psychometricIgnoredStatuses)`,
+        `response.status_${input.version} NOT IN (:...psychometricIgnoredStatuses)`,
         { psychometricIgnoredStatuses: STATISTICS_IGNORED_STATUSES }
       );
+    this.applyVariablePairFilter(
+      query,
+      Array.from(input.mapping.byLogicalKey.keys())
+    );
     applyResolvedExclusionsToQuery(query, exclusions);
     return query;
+  }
+
+  private applyVariablePairFilter(
+    query: SelectQueryBuilder<ResponseEntity>,
+    variablePairKeys: string[]
+  ): void {
+    if (variablePairKeys.length === 0) {
+      query.andWhere('1 = 0');
+      return;
+    }
+    query.andWhere(
+      `CONCAT(${NORMALIZED_PSYCHOMETRIC_UNIT_SQL}, CHR(31), ` +
+        'UPPER(TRIM(response.variableid))) ' +
+        'IN (:...psychometricVariablePairKeys)',
+      { psychometricVariablePairKeys: variablePairKeys }
+    );
   }
 }

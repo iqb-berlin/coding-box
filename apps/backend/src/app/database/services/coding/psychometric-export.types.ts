@@ -99,12 +99,8 @@ export interface PsychometricRawResponseRow {
   unitName: string;
   variableId: string;
   value: string | null;
-  codeV1: number | string | null;
-  scoreV1: number | string | null;
-  codeV2: number | string | null;
-  scoreV2: number | string | null;
-  codeV3: number | string | null;
-  scoreV3: number | string | null;
+  code: number | string | null;
+  score: number | string | null;
 }
 
 export interface PsychometricMetricRow {

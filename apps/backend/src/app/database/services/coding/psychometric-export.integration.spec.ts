@@ -163,12 +163,27 @@ describe('Psychometric export integration', () => {
         let lastResponseId = 0;
         let statusKey: 'statusV1' | 'statusV2' | 'statusV3' | null = null;
         let ignoredStatuses: number[] = [];
+        let variablePairKeys: string[] | null = null;
         const getScopedRows = () => responseRows.filter(row => {
           if (statusKey === null) {
             return true;
           }
           const status = row[statusKey];
-          return status !== null && !ignoredStatuses.includes(status);
+          const variablePairKey = [
+            row.unitName
+              .trim()
+              .replace(/^.*[\\/]/, '')
+              .replace(/\.(VOMD|VOCS|XML)$/i, '')
+              .trim()
+              .toUpperCase(),
+            row.variableId.trim().toUpperCase()
+          ].join('\u001F');
+          return (
+            status !== null &&
+              !ignoredStatuses.includes(status) &&
+              (variablePairKeys === null ||
+                variablePairKeys.includes(variablePairKey))
+          );
         });
         const queryBuilder = {
           innerJoin: jest.fn().mockReturnThis(),
@@ -179,6 +194,7 @@ describe('Psychometric export integration', () => {
               parameters?: {
                 lastResponseId?: number;
                 psychometricIgnoredStatuses?: number[];
+                psychometricVariablePairKeys?: string[];
               }
             ) => {
               if (condition.includes('response.id >')) {
@@ -191,6 +207,9 @@ describe('Psychometric export integration', () => {
               }
               if (parameters?.psychometricIgnoredStatuses) {
                 ignoredStatuses = parameters.psychometricIgnoredStatuses;
+              }
+              if (parameters?.psychometricVariablePairKeys) {
+                variablePairKeys = parameters.psychometricVariablePairKeys;
               }
               return queryBuilder;
             }
@@ -228,9 +247,21 @@ describe('Psychometric export integration', () => {
                   };
                 });
             }
-            return getScopedRows().filter(
-              row => row.responseId > lastResponseId
-            );
+            const version = statusKey?.slice(-2) || 'V2';
+            const codeKey = `code${version}` as 'codeV1' | 'codeV2' | 'codeV3';
+            const scoreKey = `score${version}` as
+              'scoreV1' | 'scoreV2' | 'scoreV3';
+            return getScopedRows()
+              .filter(row => row.responseId > lastResponseId)
+              .map(row => ({
+                responseId: row.responseId,
+                personId: row.personId,
+                unitName: row.unitName,
+                variableId: row.variableId,
+                value: row.value,
+                code: row[codeKey],
+                score: row[scoreKey]
+              }));
           })
         };
         return queryBuilder;
@@ -563,6 +594,34 @@ describe('Psychometric export integration', () => {
     expect(csv).toContain('SCORE;WORKSPACE');
     expect(csv).toContain('CATEGORY;WORKSPACE');
     expect(csv).not.toContain(';HELPER;');
+  });
+
+  it('matches response unit names with paths and resource suffixes', async () => {
+    const service = createAnalysisService({
+      1: { unitName: 'folder/UNIT_A.XML' }
+    });
+    const analysis = await (
+      service as never as {
+        analyze: (options: {
+          workspaceId: number;
+          version: 'v2';
+          partWholeCorrection: boolean;
+        }) => Promise<{
+          rows: Array<{
+            type: string;
+            n: number;
+          }>;
+        }>;
+      }
+    ).analyze({
+      workspaceId: 7,
+      version: 'v2',
+      partWholeCorrection: false
+    });
+
+    expect(analysis.rows.find(row => row.type === 'SCORE')).toEqual(
+      expect.objectContaining({ n: 4 })
+    );
   });
 
   it('excludes codes and scores with ignored statuses for the selected version', async () => {

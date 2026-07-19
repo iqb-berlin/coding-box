@@ -101,12 +101,8 @@ describe('PsychometricAnalysisEngine', () => {
     unitName: 'UNIT_A',
     variableId,
     value,
-    codeV1: code,
-    scoreV1: score,
-    codeV2: code,
-    scoreV2: score,
-    codeV3: code,
-    scoreV3: score
+    code,
+    score
   });
 
   it('calculates deterministically without mutating metadata or using I/O mocks', async () => {
@@ -204,9 +200,7 @@ describe('PsychometricAnalysisEngine', () => {
     const engine = new PsychometricAnalysisEngine();
     const mapping = createMapping();
     mapping.items = [mapping.items[0]];
-    mapping.byLogicalKey = new Map([
-      [mapping.items[0].key, mapping.items[0]]
-    ]);
+    mapping.byLogicalKey = new Map([[mapping.items[0].key, mapping.items[0]]]);
     const rows = [
       createRow(1, 1, 'V1', '', -3, 99),
       createRow(2, 2, 'V1', 'A', 1, 1)
@@ -253,9 +247,7 @@ describe('PsychometricAnalysisEngine', () => {
     const engine = new PsychometricAnalysisEngine();
     const mapping = createMapping();
     mapping.items = [mapping.items[0]];
-    mapping.byLogicalKey = new Map([
-      [mapping.items[0].key, mapping.items[0]]
-    ]);
+    mapping.byLogicalKey = new Map([[mapping.items[0].key, mapping.items[0]]]);
     mapping.items[0].variable.values = Array.from(
       { length: 1000 },
       (_value, index) => ({
@@ -281,9 +273,7 @@ describe('PsychometricAnalysisEngine', () => {
       }
     });
 
-    expect(
-      analysis.rows.filter(row => row.type === 'CATEGORY')
-    ).toEqual([
+    expect(analysis.rows.filter(row => row.type === 'CATEGORY')).toEqual([
       expect.objectContaining({
         status: 'TOO_MANY_CATEGORIES'
       })
@@ -294,9 +284,7 @@ describe('PsychometricAnalysisEngine', () => {
     const engine = new PsychometricAnalysisEngine();
     const mapping = createMapping();
     mapping.items = [mapping.items[0]];
-    mapping.byLogicalKey = new Map([
-      [mapping.items[0].key, mapping.items[0]]
-    ]);
+    mapping.byLogicalKey = new Map([[mapping.items[0].key, mapping.items[0]]]);
     mapping.items[0].variable.processing = ['TAKE_EMPTY_AS_VALID'];
     mapping.items[0].variable.values = [
       { value: '', label: 'Leere Antwort' },
