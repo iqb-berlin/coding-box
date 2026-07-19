@@ -84,7 +84,8 @@ describe('PsychometricAnalysisEngine', () => {
     return {
       items,
       byLogicalKey: new Map(items.map(item => [item.key, item])),
-      issues: []
+      issues: [],
+      fallbacks: []
     };
   };
 
@@ -108,6 +109,7 @@ describe('PsychometricAnalysisEngine', () => {
   it('calculates deterministically without mutating metadata or using I/O mocks', async () => {
     const engine = new PsychometricAnalysisEngine();
     const mapping = createMapping();
+    mapping.fallbacks = ['Legacy-Fallback'];
     const rows = [
       createRow(1, 1, 'V1', 'A', 1, 1),
       createRow(2, 1, 'V2', 'X', 1, 1),
@@ -140,6 +142,10 @@ describe('PsychometricAnalysisEngine', () => {
 
     expect(second).toEqual(first);
     expect(mapping.items[0]).not.toHaveProperty('codeDefinitions');
+    expect(first.summary).toContainEqual({
+      key: 'Legacy-VOMD-Fallbacks',
+      value: 1
+    });
     expect(first.rows).toContainEqual(
       expect.objectContaining({
         type: 'SCORE',
@@ -193,6 +199,10 @@ describe('PsychometricAnalysisEngine', () => {
     expect(analysis.summary).toContainEqual({
       key: 'Berücksichtigte Testpersonen',
       value: 1
+    });
+    expect(analysis.summary).toContainEqual({
+      key: 'Legacy-VOMD-Fallbacks',
+      value: 0
     });
   });
 

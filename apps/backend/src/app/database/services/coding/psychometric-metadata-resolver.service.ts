@@ -54,6 +54,8 @@ export class PsychometricMetadataResolver {
     const items: PsychometricMappedItem[] = [];
     const byLogicalKey = new Map<string, PsychometricMappedItem>();
     const issues: string[] = [];
+    const fallbacks: string[] = [];
+    const mappingSourceByKey = new Map<string, 'direct' | 'fallback'>();
     const unitDetailsByKey = new Map(
       unitDetails.map(unit => [
         normalizePsychometricUnitKey(unit.unitName),
@@ -80,42 +82,58 @@ export class PsychometricMetadataResolver {
           vomdItem
         }))
         )
-        .forEach(({ document, vomdItem }) => {
+        .map(({ document, vomdItem }) => {
           const vomdVariableId = String(vomdItem.variableId || '').trim();
           const itemId = String(vomdItem.id || vomdVariableId || '?');
-          if (!vomdVariableId) {
-            issues.push(
-              `${unit.unitName}/${itemId}: VOMD-Item ohne variableId`
-            );
-            return;
-          }
-
-          const normalizedVomdVariableId =
-            normalizePsychometricVariableKey(vomdVariableId);
-          const variableCandidates = unit.variables.filter(variable => [variable.alias, variable.id]
-            .map(value => normalizePsychometricVariableKey(value))
-            .includes(normalizedVomdVariableId)
+          const resolution = this.resolveVomdVariable(
+            unit,
+            itemId,
+            vomdVariableId
           );
-          if (variableCandidates.length === 0) {
-            issues.push(
-              `${unit.unitName}/${itemId}: Variable ${vomdVariableId} nicht gefunden`
-            );
-            return;
-          }
-          if (variableCandidates.length > 1) {
-            issues.push(
-              `${unit.unitName}/${itemId}: Variable ${vomdVariableId} ist mehrdeutig`
-            );
+          return {
+            document,
+            vomdItem,
+            resolution
+          };
+        })
+        .sort((left, right) => Number(Boolean(left.resolution.fallbackNote)) -
+          Number(Boolean(right.resolution.fallbackNote))
+        )
+        .forEach(({
+          document, vomdItem, resolution
+        }) => {
+          if (resolution.issue) {
+            issues.push(resolution.issue);
             return;
           }
 
-          const variable = variableCandidates[0];
+          const variable = resolution.variable;
+          if (!variable) {
+            return;
+          }
           const variableId = String(variable.alias || variable.id).trim();
           const sourceVariableId = String(variable.id || variableId).trim();
           const key = getPsychometricLogicalKey(unit.unitName, variableId);
-          if (items.some(item => item.key === key)) {
+          const mappingSource = resolution.fallbackNote ?
+            'fallback' :
+            'direct';
+          const existingMappingSource = mappingSourceByKey.get(key);
+          if (
+            mappingSource === 'fallback' &&
+            existingMappingSource === 'direct'
+          ) {
+            fallbacks.push(
+              `${resolution.fallbackNote}, aber wegen bereits direkter ` +
+              'Zuordnung ignoriert'
+            );
+            return;
+          }
+          if (existingMappingSource) {
             issues.push(`${unit.unitName}/${variableId}: mehrere VOMD-Items`);
             return;
+          }
+          if (resolution.fallbackNote) {
+            fallbacks.push(`${resolution.fallbackNote} und verwendet`);
           }
           const mappedItem: PsychometricMappedItem = {
             key,
@@ -131,6 +149,7 @@ export class PsychometricMetadataResolver {
             vomdItem
           };
           items.push(mappedItem);
+          mappingSourceByKey.set(key, mappingSource);
 
           [variableId, sourceVariableId].forEach(responseVariableId => {
             const logicalKey = getPsychometricLogicalKey(
@@ -149,7 +168,12 @@ export class PsychometricMetadataResolver {
         });
     });
 
-    return { items, byLogicalKey, issues };
+    return {
+      items,
+      byLogicalKey,
+      issues,
+      fallbacks
+    };
   }
 
   assignDomains(
@@ -226,6 +250,7 @@ export class PsychometricMetadataResolver {
   ): PsychometricDomainCandidatesDto {
     const itemCount = mapping.items.length;
     const mappingIssueCount = mapping.issues.length;
+    const mappingFallbackCount = mapping.fallbacks.length;
     const candidates = new Map<
     string,
     {
@@ -284,8 +309,83 @@ export class PsychometricMetadataResolver {
 
     return {
       candidates: domainCandidates,
-      mappingIssueCount
+      itemCount,
+      mappingIssueCount,
+      mappingFallbackCount,
+      mappingIssuePreview: mapping.issues.slice(0, 10),
+      mappingFallbackPreview: mapping.fallbacks.slice(0, 10)
     };
+  }
+
+  private resolveVomdVariable(
+    unit: {
+      unitName: string;
+      variables: PsychometricMappedItem['variable'][];
+    },
+    itemId: string,
+    vomdVariableId: string
+  ): {
+      variable?: PsychometricMappedItem['variable'];
+      issue?: string;
+      fallbackNote?: string;
+    } {
+    const variableCandidates = this.findVariableCandidates(
+      unit.variables,
+      vomdVariableId
+    );
+    if (variableCandidates.length === 1) {
+      return { variable: variableCandidates[0] };
+    }
+    if (variableCandidates.length > 1) {
+      return {
+        issue: `${unit.unitName}/${itemId}: Variable ${vomdVariableId} ist mehrdeutig`
+      };
+    }
+
+    const canTryItemId =
+      normalizePsychometricVariableKey(itemId) !==
+      normalizePsychometricVariableKey(vomdVariableId);
+    const fallbackCandidates = canTryItemId ?
+      this.findVariableCandidates(unit.variables, itemId) :
+      [];
+    if (fallbackCandidates.length === 1) {
+      const reason = vomdVariableId ?
+        `Variable ${vomdVariableId} nicht gefunden` :
+        'variableId fehlt';
+      return {
+        variable: fallbackCandidates[0],
+        fallbackNote:
+          `${unit.unitName}/${itemId}: ${reason}; ` +
+          `Item-ID ${itemId} als eindeutiger Fallback erkannt`
+      };
+    }
+    if (fallbackCandidates.length > 1) {
+      return {
+        issue:
+          `${unit.unitName}/${itemId}: Item-ID ${itemId} ist als ` +
+          'Variablenfallback mehrdeutig'
+      };
+    }
+
+    return {
+      issue: vomdVariableId ?
+        `${unit.unitName}/${itemId}: Variable ${vomdVariableId} nicht gefunden` :
+        `${unit.unitName}/${itemId}: VOMD-Item ohne variableId`
+    };
+  }
+
+  private findVariableCandidates(
+    variables: PsychometricMappedItem['variable'][],
+    identifier: string
+  ): PsychometricMappedItem['variable'][] {
+    const normalizedIdentifier = normalizePsychometricVariableKey(identifier);
+    if (!normalizedIdentifier) {
+      return [];
+    }
+    return variables.filter(variable => [variable.alias, variable.id]
+      .map(value => normalizePsychometricVariableKey(value))
+      .includes(normalizedIdentifier)
+    );
   }
 
   private async loadVomdDocuments(

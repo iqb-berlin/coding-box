@@ -106,6 +106,10 @@ export class PsychometricAnalysisEngine {
         },
         { key: 'Maximale Kategorienzahl', value: options.maxCategoryCount },
         { key: 'Zugeordnete Items', value: mapping.items.length },
+        {
+          key: 'Legacy-VOMD-Fallbacks',
+          value: input.mapping.fallbacks.length
+        },
         { key: 'Berücksichtigte Testpersonen', value: includedPersonIds.size },
         { key: 'Berücksichtigte Ergebniszeilen', value: includedResponseCount },
         {

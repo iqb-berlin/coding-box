@@ -70,7 +70,8 @@ describe('PsychometricResponseReader', () => {
       byLogicalKey: new Map([
         [getPsychometricLogicalKey('UNIT_A', 'V1'), {} as never]
       ]),
-      issues: []
+      issues: [],
+      fallbacks: []
     };
     const firstPass = jest.fn().mockResolvedValue(undefined);
     const secondPass = jest.fn().mockResolvedValue(undefined);

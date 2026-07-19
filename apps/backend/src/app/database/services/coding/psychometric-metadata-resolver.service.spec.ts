@@ -94,7 +94,11 @@ describe('PsychometricMetadataResolver', () => {
           selectable: true
         })
       ],
-      mappingIssueCount: 0
+      itemCount: 2,
+      mappingIssueCount: 0,
+      mappingFallbackCount: 0,
+      mappingIssuePreview: [],
+      mappingFallbackPreview: []
     });
   });
 
@@ -221,8 +225,199 @@ describe('PsychometricMetadataResolver', () => {
     );
     await expect(resolver.getDomainCandidates(7)).resolves.toEqual({
       candidates: [],
-      mappingIssueCount: 1
+      itemCount: 0,
+      mappingIssueCount: 1,
+      mappingFallbackCount: 0,
+      mappingIssuePreview: [
+        'UNIT_A/ITEM_MISSING: Variable UNKNOWN nicht gefunden'
+      ],
+      mappingFallbackPreview: []
     });
+  });
+
+  it('uses an unambiguous item id when variableId is missing', async () => {
+    const resolver = createResolver(
+      {
+        items: [
+          {
+            id: 'V1',
+            variableId: null
+          }
+        ]
+      },
+      [
+        {
+          id: 'source-v1',
+          alias: 'V1',
+          type: 'string',
+          hasCodingScheme: true
+        }
+      ]
+    );
+
+    const mapping = await resolver.buildItemMapping(7);
+
+    expect(mapping.items).toHaveLength(1);
+    expect(mapping.items[0]).toEqual(
+      expect.objectContaining({
+        itemId: 'V1',
+        variableId: 'V1',
+        sourceVariableId: 'source-v1'
+      })
+    );
+    expect(mapping.issues).toEqual([]);
+    expect(mapping.fallbacks).toEqual([
+      'UNIT_A/V1: variableId fehlt; ' +
+        'Item-ID V1 als eindeutiger Fallback erkannt und verwendet'
+    ]);
+    await expect(resolver.getDomainCandidates(7)).resolves.toEqual({
+      candidates: [],
+      itemCount: 1,
+      mappingIssueCount: 0,
+      mappingFallbackCount: 1,
+      mappingIssuePreview: [],
+      mappingFallbackPreview: [
+        'UNIT_A/V1: variableId fehlt; ' +
+          'Item-ID V1 als eindeutiger Fallback erkannt und verwendet'
+      ]
+    });
+  });
+
+  it('uses an unambiguous item id when variableId is stale', async () => {
+    const resolver = createResolver(
+      {
+        items: [
+          {
+            id: 'V1',
+            variableId: 'OLD'
+          }
+        ]
+      },
+      [
+        {
+          id: 'source-v1',
+          alias: 'V1',
+          type: 'string',
+          hasCodingScheme: true
+        }
+      ]
+    );
+
+    const mapping = await resolver.buildItemMapping(7);
+
+    expect(mapping.items).toHaveLength(1);
+    expect(mapping.issues).toEqual([]);
+    expect(mapping.fallbacks).toEqual([
+      'UNIT_A/V1: Variable OLD nicht gefunden; ' +
+        'Item-ID V1 als eindeutiger Fallback erkannt und verwendet'
+    ]);
+  });
+
+  it('prefers a direct mapping over a redundant legacy fallback', async () => {
+    const resolver = createResolver(
+      {
+        items: [
+          {
+            id: 'V1',
+            variableId: null
+          },
+          {
+            id: 'CURRENT_ITEM',
+            variableId: 'V1'
+          }
+        ]
+      },
+      [
+        {
+          id: 'source-v1',
+          alias: 'V1',
+          type: 'string',
+          hasCodingScheme: true
+        }
+      ]
+    );
+
+    const mapping = await resolver.buildItemMapping(7);
+
+    expect(mapping.items).toHaveLength(1);
+    expect(mapping.items[0].itemId).toBe('CURRENT_ITEM');
+    expect(mapping.issues).toEqual([]);
+    expect(mapping.fallbacks).toEqual([
+      'UNIT_A/V1: variableId fehlt; ' +
+        'Item-ID V1 als eindeutiger Fallback erkannt, aber wegen bereits ' +
+        'direkter Zuordnung ignoriert'
+    ]);
+  });
+
+  it('still rejects duplicate fallback mappings without a direct mapping', async () => {
+    const resolver = createResolver(
+      {
+        items: [
+          {
+            id: 'V1',
+            variableId: null
+          },
+          {
+            id: 'V1',
+            variableId: null
+          }
+        ]
+      },
+      [
+        {
+          id: 'source-v1',
+          alias: 'V1',
+          type: 'string',
+          hasCodingScheme: true
+        }
+      ]
+    );
+
+    const mapping = await resolver.buildItemMapping(7);
+
+    expect(mapping.items).toHaveLength(1);
+    expect(mapping.issues).toEqual([
+      'UNIT_A/V1: mehrere VOMD-Items'
+    ]);
+    expect(mapping.fallbacks).toEqual([
+      'UNIT_A/V1: variableId fehlt; ' +
+        'Item-ID V1 als eindeutiger Fallback erkannt und verwendet'
+    ]);
+  });
+
+  it('rejects an ambiguous item id fallback', async () => {
+    const resolver = createResolver(
+      {
+        items: [
+          {
+            id: 'COMMON',
+            variableId: null
+          }
+        ]
+      },
+      [
+        {
+          id: 'V1',
+          alias: 'COMMON',
+          type: 'string',
+          hasCodingScheme: true
+        },
+        {
+          id: 'V2',
+          alias: 'COMMON',
+          type: 'string',
+          hasCodingScheme: true
+        }
+      ]
+    );
+
+    const mapping = await resolver.buildItemMapping(7);
+
+    expect(mapping.items).toEqual([]);
+    expect(mapping.fallbacks).toEqual([]);
+    expect(mapping.issues).toEqual([
+      'UNIT_A/COMMON: Item-ID COMMON ist als Variablenfallback mehrdeutig'
+    ]);
   });
 
   it('assigns the selected VOMD item field to every mapped item', async () => {
