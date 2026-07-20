@@ -31,6 +31,85 @@ export interface EffectiveManualCodingCaseCounts {
   casesInJobs: number;
 }
 
+export interface AggregationPeerKey {
+  unitName: string;
+  variableId: string;
+  normalizedValue: string;
+}
+
+export interface AggregationPeerValueCandidate {
+  unitName: string;
+  variableId: string;
+  value: string | null;
+}
+
+export interface AggregationPeerLookupKey {
+  unitName: string;
+  variableId: string;
+  value: string;
+}
+
+export function buildAggregationPeerLookupKeys(
+  peerKeys: readonly AggregationPeerKey[],
+  candidates: readonly AggregationPeerValueCandidate[],
+  matchingFlags: readonly AggregationMatchingFlag[]
+): AggregationPeerLookupKey[] {
+  const peerKeySet = new Set(peerKeys.map(serializeAggregationPeerKey));
+  const lookupKeys = new Map<string, AggregationPeerLookupKey>();
+
+  candidates.forEach(candidate => {
+    if (!isAggregatableValue(candidate.value)) {
+      return;
+    }
+
+    const peerKey = getAggregationPeerKey(
+      candidate.unitName,
+      candidate.variableId,
+      candidate.value,
+      matchingFlags
+    );
+    if (!peerKeySet.has(serializeAggregationPeerKey(peerKey))) {
+      return;
+    }
+
+    const lookupKey = {
+      unitName: candidate.unitName,
+      variableId: candidate.variableId,
+      value: candidate.value as string
+    };
+    lookupKeys.set(JSON.stringify([
+      lookupKey.unitName,
+      lookupKey.variableId,
+      lookupKey.value
+    ]), lookupKey);
+  });
+
+  return Array.from(lookupKeys.values());
+}
+
+export function serializeAggregationPeerKey(
+  peerKey: AggregationPeerKey
+): string {
+  return JSON.stringify([
+    peerKey.unitName,
+    peerKey.variableId,
+    peerKey.normalizedValue
+  ]);
+}
+
+export function getAggregationPeerKey(
+  unitName: string,
+  variableId: string,
+  value: string | null,
+  matchingFlags: readonly AggregationMatchingFlag[]
+): AggregationPeerKey {
+  return {
+    unitName: unitName.toUpperCase(),
+    variableId,
+    normalizedValue: normalizeAggregationValue(value, matchingFlags)
+  };
+}
+
 export function normalizeAggregationValue(
   value: string | null,
   flags: readonly AggregationMatchingFlag[]
@@ -65,6 +144,78 @@ export function isDerivedAggregationVariable(
   return derivedVariableMap.get(unitName.toUpperCase())?.has(variableId) ?? false;
 }
 
+export function getAggregationVariableKey(
+  unitName: string,
+  variableId: string
+): string {
+  return `${unitName.toUpperCase()}::${variableId}`;
+}
+
+export function partitionResponsesByAggregationVariable<T>(
+  responses: readonly T[],
+  variables: readonly { unitName: string; variableId: string }[],
+  getVariableReference: (response: T) => {
+    unitName: string;
+    variableId: string;
+  }
+): Map<string, T[]> {
+  const variableKeys = new Set(
+    variables.map(variable => getAggregationVariableKey(
+      variable.unitName,
+      variable.variableId
+    ))
+  );
+
+  const partitionedResponses = new Map<string, T[]>();
+  responses.forEach(response => {
+    const reference = getVariableReference(response);
+    const variableKey = getAggregationVariableKey(
+      reference.unitName,
+      reference.variableId
+    );
+    if (!variableKeys.has(variableKey)) {
+      return;
+    }
+
+    const variableResponses = partitionedResponses.get(variableKey) || [];
+    variableResponses.push(response);
+    partitionedResponses.set(variableKey, variableResponses);
+  });
+
+  return partitionedResponses;
+}
+
+export function buildAggregationPeerKeys<T extends AggregationSourceResponse>(
+  responses: T[],
+  matchingFlags: readonly AggregationMatchingFlag[],
+  derivedVariableMap: Map<string, Set<string>>
+): AggregationPeerKey[] {
+  const keys = new Map<string, AggregationPeerKey>();
+
+  responses.forEach(response => {
+    if (
+      !isAggregatableValue(response.value) ||
+      isDerivedAggregationVariable(
+        derivedVariableMap,
+        response.unitName,
+        response.variableId
+      )
+    ) {
+      return;
+    }
+
+    const peerKey = getAggregationPeerKey(
+      response.unitName,
+      response.variableId,
+      response.value,
+      matchingFlags
+    );
+    keys.set(serializeAggregationPeerKey(peerKey), peerKey);
+  });
+
+  return Array.from(keys.values());
+}
+
 export function getManualCodingDeduplicationKey(
   response: ManualCodingDeduplicationResponse
 ): string {
@@ -74,7 +225,7 @@ export function getManualCodingDeduplicationKey(
     response.personCode || '',
     response.personGroup || '',
     response.bookletName || '',
-    response.unitName,
+    response.unitName.toUpperCase(),
     response.variableId,
     valueHash
   ].join('::');
@@ -101,7 +252,8 @@ export function countEffectiveManualCodingCases<T extends ManualCodingDeduplicat
   assignedResponseIds: ReadonlySet<number>,
   matchingFlags: readonly AggregationMatchingFlag[],
   threshold: number | null,
-  derivedVariableMap: Map<string, Set<string>>
+  derivedVariableMap: Map<string, Set<string>>,
+  activeResponseIds?: ReadonlySet<number>
 ): EffectiveManualCodingCaseCounts {
   const assignedDeduplicationKeys = new Set(
     responses
@@ -117,6 +269,19 @@ export function countEffectiveManualCodingCases<T extends ManualCodingDeduplicat
       ))
       .map(response => response.responseId)
   );
+  const activeDeduplicationKeys = activeResponseIds ? new Set(
+    responses
+      .filter(response => activeResponseIds.has(response.responseId))
+      .map(response => getManualCodingDeduplicationKey(response))
+  ) : null;
+  const activeDedupedResponseIds = activeResponseIds ? new Set(
+    dedupedResponses
+      .filter(response => (
+        activeResponseIds.has(response.responseId) ||
+        activeDeduplicationKeys?.has(getManualCodingDeduplicationKey(response))
+      ))
+      .map(response => response.responseId)
+  ) : null;
   const aggregatedGroups = buildAggregationGroups(
     dedupedResponses,
     matchingFlags,
@@ -127,6 +292,14 @@ export function countEffectiveManualCodingCases<T extends ManualCodingDeduplicat
   let casesInJobs = 0;
 
   for (const group of aggregatedGroups) {
+    const activeResponses = activeDedupedResponseIds ?
+      group.responses.filter(response => activeDedupedResponseIds.has(response.responseId)) :
+      group.responses;
+
+    if (activeResponses.length === 0) {
+      continue;
+    }
+
     if (threshold !== null && group.responses.length >= threshold) {
       uniqueCases += 1;
       if (group.responses.some(response => assignedDedupedResponseIds.has(response.responseId))) {
@@ -135,8 +308,8 @@ export function countEffectiveManualCodingCases<T extends ManualCodingDeduplicat
       continue;
     }
 
-    uniqueCases += group.responses.length;
-    casesInJobs += group.responses
+    uniqueCases += activeResponses.length;
+    casesInJobs += activeResponses
       .filter(response => assignedDedupedResponseIds.has(response.responseId))
       .length;
   }
@@ -156,7 +329,10 @@ export function buildAggregationGroups<T extends AggregationSourceResponse>(
   const groupedResponses = new Map<string, T[]>();
 
   for (const response of responses) {
-    const variableKey = `${response.unitName.toUpperCase()}::${response.variableId}`;
+    const variableKey = getAggregationVariableKey(
+      response.unitName,
+      response.variableId
+    );
     const keepSeparate =
       !aggregationActive ||
       !isAggregatableValue(response.value) ||

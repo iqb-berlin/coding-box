@@ -130,8 +130,8 @@ describe('WorkspaceCoreService', () => {
     expect(cacheService.delete).toHaveBeenCalledWith('coding-statistics:schema-v4:1:v2');
     expect(cacheService.delete).toHaveBeenCalledWith('coding-statistics:schema-v4:1:v3');
     expect(cacheService.incr).toHaveBeenCalledWith('coding_incomplete_variables_version:1');
-    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v8:1');
-    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_scope_v1:1');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v9:1');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_scope_v2:1');
     expect(cacheService.delete).toHaveBeenCalledWith('flat_response_filter_options:version:1');
     expect(cacheService.deleteByPattern).toHaveBeenCalledWith('response-analysis:1_*');
     expect(cacheService.deleteByPattern).toHaveBeenCalledWith('responses:1:*');

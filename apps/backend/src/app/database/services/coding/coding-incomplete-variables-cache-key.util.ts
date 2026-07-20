@@ -1,9 +1,9 @@
 export function getCodingIncompleteVariablesCacheKey(workspaceId: number): string {
-  return `coding_incomplete_variables_v8:${workspaceId}`;
+  return `coding_incomplete_variables_v9:${workspaceId}`;
 }
 
 export function getCodingIncompleteVariablesScopeCacheKey(workspaceId: number): string {
-  return `coding_incomplete_variables_scope_v1:${workspaceId}`;
+  return `coding_incomplete_variables_scope_v2:${workspaceId}`;
 }
 
 export function getCodingIncompleteVariablesCacheVersionKey(workspaceId: number): string {

@@ -106,8 +106,8 @@ describe('ExternalCodingImportService', () => {
     expect(queryRunner.rollbackTransaction).not.toHaveBeenCalled();
     expect(queryRunner.release).toHaveBeenCalled();
     expect(cacheService.incr).toHaveBeenCalledWith('coding_incomplete_variables_version:17');
-    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v8:17');
-    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_scope_v1:17');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v9:17');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_scope_v2:17');
   });
 
   it('imports DERIVE_ERROR without turning it into completed false coding', async () => {

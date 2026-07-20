@@ -894,6 +894,69 @@ describe('CodeSelectorComponent', () => {
     expect(fixture.nativeElement.querySelector('.variable-trigger-btn')).toBeNull();
   });
 
+  it('resolves bundle variables by response id across unit-name case variants', () => {
+    const bundleContext = {
+      bundleId: 9,
+      bundleName: 'Bundle',
+      caseKey: 'case-1',
+      caseOrderingMode: 'alternating' as const,
+      variables: [
+        {
+          responseId: 1,
+          unitName: 'Unit_A',
+          variableId: 'VAR1',
+          variableAnchor: 'VAR1',
+          variablePage: '0',
+          status: 'manual-open' as const,
+          code: null,
+          score: null,
+          source: 'manual' as const
+        },
+        {
+          responseId: 2,
+          unitName: 'unit_a',
+          variableId: 'VAR2',
+          variableAnchor: 'VAR2',
+          variablePage: '0',
+          status: 'manual-open' as const,
+          code: null,
+          score: null,
+          source: 'manual' as const
+        }
+      ]
+    };
+    component.unitsData = {
+      id: 1,
+      name: 'Job',
+      currentUnitIndex: 0,
+      units: [
+        {
+          id: 1,
+          name: 'UNIT_A',
+          alias: 'UNIT_A',
+          bookletId: 0,
+          variableId: 'VAR1',
+          variableBundleId: 9,
+          bundleContext
+        },
+        {
+          id: 2,
+          name: 'UNIT_A',
+          alias: 'UNIT_A',
+          bookletId: 0,
+          variableId: 'VAR2',
+          variableBundleId: 9,
+          bundleContext
+        }
+      ]
+    };
+
+    const secondVariable = component.bundleVariableNavigationItems[1];
+
+    expect(secondVariable.targetUnit?.id).toBe(2);
+    expect(secondVariable.disabled).toBe(false);
+  });
+
   it('keeps the navigation dropdown visible for bundle jobs and lists one entry per bundle', () => {
     component.showProgress = true;
     component.codingService = {

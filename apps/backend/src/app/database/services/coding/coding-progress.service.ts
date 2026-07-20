@@ -18,7 +18,9 @@ import { CacheService } from '../../../cache/cache.service';
 import {
   buildAggregationGroups,
   countEffectiveManualCodingCases,
+  getAggregationVariableKey,
   ManualCodingDeduplicationResponse,
+  partitionResponsesByAggregationVariable,
   summarizeAggregationGroups
 } from './aggregation-metrics.util';
 import { IQB_STANDARD_MISSING_CODES, MissingsProfilesService } from './missings-profiles.service';
@@ -34,6 +36,7 @@ import {
   getNonCodingIssueReviewJobSqlCondition
 } from './coding-job-type.util';
 import { getCodingIncompleteVariablesCacheVersionKey } from './coding-incomplete-variables-cache-key.util';
+import { CodingAggregationPeerService } from './coding-aggregation-peer.service';
 
 type ResponseMatchingFlag =
   | 'NO_AGGREGATION'
@@ -132,6 +135,36 @@ interface VariableDefinitionReference {
 
 interface VariableCaseCount extends UnitVariableReference {
   caseCount: number;
+  unitNameAliases: string[];
+}
+
+type UnitVariableReferenceWithAliases = UnitVariableReference & {
+  unitNameAliases?: string[];
+};
+
+function getCoverageVariableKey(
+  unitName: string,
+  variableId: string
+): string {
+  return `${unitName.toUpperCase()}:${variableId}`;
+}
+
+function expandUnitNameAliases(
+  variables: UnitVariableReferenceWithAliases[]
+): UnitVariableReference[] {
+  const references = new Map<string, UnitVariableReference>();
+
+  variables.forEach(variable => {
+    const unitNames = variable.unitNameAliases?.length ?
+      variable.unitNameAliases :
+      [variable.unitName];
+    unitNames.forEach(unitName => {
+      const key = `${unitName}::${variable.variableId}`;
+      references.set(key, { unitName, variableId: variable.variableId });
+    });
+  });
+
+  return Array.from(references.values());
 }
 
 interface CrossDefinitionCaseRow {
@@ -168,6 +201,7 @@ export class CodingProgressService {
     private workspaceFilesService: WorkspaceFilesService,
     private workspaceExclusionService: WorkspaceExclusionService,
     private cacheService: CacheService,
+    private codingAggregationPeerService: CodingAggregationPeerService,
     @Optional()
     private missingsProfilesService?: MissingsProfilesService
   ) { }
@@ -1028,21 +1062,25 @@ export class CodingProgressService {
       const variableCaseCountMap = new Map<string, VariableCaseCount>();
 
       filteredIncompleteVariablesResult.forEach(row => {
-        const variableKey = `${row.unitName}:${row.variableId}`;
+        const variableKey = getCoverageVariableKey(row.unitName, row.variableId);
         const existing = variableCaseCountMap.get(variableKey);
         if (existing) {
           existing.caseCount += parseInt(row.caseCount, 10);
+          if (!existing.unitNameAliases.includes(row.unitName)) {
+            existing.unitNameAliases.push(row.unitName);
+          }
           return;
         }
         variableCaseCountMap.set(variableKey, {
           unitName: row.unitName,
           variableId: row.variableId,
-          caseCount: parseInt(row.caseCount, 10)
+          caseCount: parseInt(row.caseCount, 10),
+          unitNameAliases: [row.unitName]
         });
       });
 
       variableCaseCountMap.forEach(row => {
-        const variableKey = `${row.unitName}:${row.variableId}`;
+        const variableKey = getCoverageVariableKey(row.unitName, row.variableId);
         variablesNeedingCoding.add(variableKey);
         variableCaseCounts.push(row);
       });
@@ -1068,7 +1106,10 @@ export class CodingProgressService {
 
         if (definition.assigned_variables) {
           definition.assigned_variables.forEach(variable => {
-            const variableKey = `${variable.unitName}:${variable.variableId}`;
+            const variableKey = getCoverageVariableKey(
+              variable.unitName,
+              variable.variableId
+            );
             if (variablesNeedingCoding.has(variableKey)) {
               definitionVariables.add(variableKey);
             }
@@ -1086,7 +1127,10 @@ export class CodingProgressService {
           variableBundles.forEach(bundle => {
             if (bundle.variables) {
               bundle.variables.forEach(variable => {
-                const variableKey = `${variable.unitName}:${variable.variableId}`;
+                const variableKey = getCoverageVariableKey(
+                  variable.unitName,
+                  variable.variableId
+                );
                 if (variablesNeedingCoding.has(variableKey)) {
                   definitionVariables.add(variableKey);
                 }
@@ -1110,7 +1154,10 @@ export class CodingProgressService {
       }
 
       const coveredVariableCaseCounts = variableCaseCounts.filter(
-        variable => coveredVariables.has(`${variable.unitName}:${variable.variableId}`)
+        variable => coveredVariables.has(getCoverageVariableKey(
+          variable.unitName,
+          variable.variableId
+        ))
       );
       const effectiveVariableCaseCoverageMap =
         await this.getEffectiveVariableCasesInJobs(workspaceId, coveredVariableCaseCounts);
@@ -1140,12 +1187,15 @@ export class CodingProgressService {
 
         // Check if variable is fully or partially covered on the effective case level.
         const variableCaseInfo = variableCaseCounts.find(
-          v => `${v.unitName}:${v.variableId}` === variableKey
+          v => getCoverageVariableKey(v.unitName, v.variableId) === variableKey
         );
 
         if (variableCaseInfo) {
           const effectiveCoverage = effectiveVariableCaseCoverageMap.get(
-            `${variableCaseInfo.unitName}::${variableCaseInfo.variableId}`
+            getAggregationVariableKey(
+              variableCaseInfo.unitName,
+              variableCaseInfo.variableId
+            )
           ) || {
             effectiveTotalCasesToCode: variableCaseInfo.caseCount,
             effectiveCasesInJobs: 0
@@ -1191,7 +1241,11 @@ export class CodingProgressService {
         partiallyAbgedeckteVariablen: partiallyAbgedeckteCount,
         fullyAbgedeckteVariablen: fullyAbgedeckteCount,
         coveragePercentage,
-        variableCaseCounts,
+        variableCaseCounts: variableCaseCounts.map(({
+          unitName,
+          variableId,
+          caseCount
+        }) => ({ unitName, variableId, caseCount })),
         coverageByStatus: {
           draft: Array.from(coverageByStatus.draft),
           pending_review: Array.from(coverageByStatus.pending_review),
@@ -1204,7 +1258,10 @@ export class CodingProgressService {
           )
         },
         statusTotalVariables: new Set(
-          incompleteVariablesResult.map(row => `${row.unitName}:${row.variableId}`)
+          incompleteVariablesResult.map(row => getCoverageVariableKey(
+            row.unitName,
+            row.variableId
+          ))
         ).size,
         coveredSourceVariableCount:
           excludedSourceSummary.coveredSourceVariableCount,
@@ -1224,7 +1281,7 @@ export class CodingProgressService {
 
   private async getVariableCasesInJobs(
     workspaceId: number,
-    variables: UnitVariableReference[]
+    variables: UnitVariableReferenceWithAliases[]
   ): Promise<Map<string, number>> {
     if (variables.length === 0) {
       return new Map<string, number>();
@@ -1245,7 +1302,7 @@ export class CodingProgressService {
       })
       .groupBy('cju.unit_name')
       .addGroupBy('cju.variable_id');
-    this.applyVariableReferenceFilter(query, variables, {
+    this.applyVariableReferenceFilter(query, expandUnitNameAliases(variables), {
       unitNameExpression: 'cju.unit_name',
       variableIdExpression: 'cju.variable_id',
       parameterPrefix: 'variableCasesInJobs'
@@ -1265,8 +1322,11 @@ export class CodingProgressService {
     const casesInJobsMap = new Map<string, number>();
 
     rawResults.forEach(row => {
-      const key = `${row.unitName}::${row.variableId}`;
-      casesInJobsMap.set(key, parseInt(row.casesInJobs, 10));
+      const key = getAggregationVariableKey(row.unitName, row.variableId);
+      casesInJobsMap.set(
+        key,
+        (casesInJobsMap.get(key) || 0) + parseInt(row.casesInJobs, 10)
+      );
     });
 
     return casesInJobsMap;
@@ -1290,7 +1350,10 @@ export class CodingProgressService {
     if (!aggregationActive) {
       const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId, variables);
       variables.forEach(variable => {
-        const key = `${variable.unitName}::${variable.variableId}`;
+        const key = getAggregationVariableKey(
+          variable.unitName,
+          variable.variableId
+        );
         result.set(key, {
           effectiveTotalCasesToCode: variable.caseCount,
           effectiveCasesInJobs: casesInJobsMap.get(key) || 0
@@ -1301,34 +1364,43 @@ export class CodingProgressService {
 
     const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
     const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
-    const codingCompleteStatus = statusStringToNumber('CODING_COMPLETE');
-    const variableKeys = new Set(
-      variables.map(variable => `${variable.unitName}:${variable.variableId}`)
-    );
-    const [responses, assignedResponseIds, derivedVariableMap] = await Promise.all([
+    const [activeResponses, derivedVariableMap] = await Promise.all([
       this.getCoverageResponsesForVariables(workspaceId, variables),
-      this.getAssignedCoverageResponseIdsForVariables(workspaceId, variables),
       this.getDerivedVariableMap(workspaceId)
     ]);
-    const responsesByVariable = new Map<string, CoverageResponse[]>();
-
-    responses
-      .filter(response => (
-        response.statusV1 === codingIncompleteStatus ||
-        response.statusV1 === intendedIncompleteStatus
-      ))
-      .filter(response => response.statusV2 !== codingCompleteStatus)
-      .filter(response => variableKeys.has(`${response.unitName}:${response.variableId}`))
-      .forEach(response => {
-        const key = `${response.unitName}::${response.variableId}`;
-        const variableResponses = responsesByVariable.get(key) || [];
-        variableResponses.push(response);
-        responsesByVariable.set(key, variableResponses);
-      });
+    const completedPeers = await this.getCompletedCoveragePeersForResponses(
+      workspaceId,
+      activeResponses,
+      matchingFlags,
+      derivedVariableMap
+    );
+    const responses = [...activeResponses, ...completedPeers];
+    const assignedResponseIds = await this.getAssignedVariableCoverageResponseIds(
+      workspaceId,
+      responses.map(response => response.responseId)
+    );
+    const activeResponseIds = new Set(
+      activeResponses.map(response => response.responseId)
+    );
+    const responsesByVariable = partitionResponsesByAggregationVariable(
+      responses
+        .filter(response => (
+          response.statusV1 === codingIncompleteStatus ||
+          response.statusV1 === intendedIncompleteStatus
+        )),
+      variables,
+      response => ({
+        unitName: response.unitName,
+        variableId: response.variableId
+      })
+    );
 
     variables.forEach(variable => {
-      const key = `${variable.unitName}::${variable.variableId}`;
-      const variableResponses = responsesByVariable.get(key) || [];
+      const resultKey = getAggregationVariableKey(
+        variable.unitName,
+        variable.variableId
+      );
+      const variableResponses = responsesByVariable.get(resultKey) || [];
       const responsesWithCaseFields: ManualCodingDeduplicationResponse[] =
         variableResponses.map(response => ({
           responseId: response.responseId,
@@ -1345,10 +1417,11 @@ export class CodingProgressService {
         assignedResponseIds,
         matchingFlags,
         aggregationThreshold,
-        derivedVariableMap
+        derivedVariableMap,
+        activeResponseIds
       );
 
-      result.set(key, {
+      result.set(resultKey, {
         effectiveTotalCasesToCode: effectiveCaseCounts.uniqueCases,
         effectiveCasesInJobs: effectiveCaseCounts.casesInJobs
       });
@@ -1359,7 +1432,7 @@ export class CodingProgressService {
 
   private async getCoverageResponsesForVariables(
     workspaceId: number,
-    variables: UnitVariableReference[]
+    variables: UnitVariableReferenceWithAliases[]
   ): Promise<CoverageResponse[]> {
     if (variables.length === 0) {
       return [];
@@ -1410,7 +1483,7 @@ export class CodingProgressService {
           });
       }))
       .orderBy('response.id', 'ASC');
-    this.applyVariableReferenceFilter(query, variables, {
+    this.applyVariableReferenceFilter(query, expandUnitNameAliases(variables), {
       unitNameExpression: 'unit.name',
       variableIdExpression: 'response.variableid',
       parameterPrefix: 'variableCoverageResponses'
@@ -1435,61 +1508,73 @@ export class CodingProgressService {
     }));
   }
 
-  private async getAssignedCoverageResponseIdsForVariables(
+  private async getCompletedCoveragePeersForResponses(
     workspaceId: number,
-    variables: UnitVariableReference[]
+    activeResponses: CoverageResponse[],
+    matchingFlags: ResponseMatchingFlag[],
+    derivedVariableMap: Map<string, Set<string>>
+  ): Promise<CoverageResponse[]> {
+    const completedPeers = await this.codingAggregationPeerService
+      .findCompletedPeers({
+        workspaceId,
+        sourceResponses: activeResponses,
+        matchingFlags,
+        derivedVariableMap,
+        loadQueryContext: async () => {
+          const [defaultMirCode, exclusions] = await Promise.all([
+            this.getDefaultMirCode(workspaceId),
+            this.workspaceExclusionService.resolveExclusionsForQueries(
+              workspaceId
+            )
+          ]);
+          return { defaultMirCode, exclusions };
+        }
+      });
+
+    return completedPeers.map(response => ({
+      responseId: response.responseId,
+      value: response.value,
+      codeV2: response.codeV2,
+      statusV2: response.statusV2,
+      statusV1: response.statusV1,
+      variableId: response.variableId,
+      unitName: response.unitName,
+      bookletName: response.bookletName,
+      personLogin: response.personLogin,
+      personCode: response.personCode,
+      personGroup: response.personGroup
+    }));
+  }
+
+  private async getAssignedVariableCoverageResponseIds(
+    workspaceId: number,
+    responseIds: number[]
   ): Promise<Set<number>> {
-    if (variables.length === 0) {
-      return new Set<number>();
+    const assignedResponseIds = new Set<number>();
+    const uniqueResponseIds = Array.from(new Set(responseIds));
+    const chunkSize = 5000;
+
+    for (let offset = 0; offset < uniqueResponseIds.length; offset += chunkSize) {
+      const responseIdChunk = uniqueResponseIds.slice(offset, offset + chunkSize);
+      const query = this.codingJobUnitRepository
+        .createQueryBuilder('cju')
+        .select('DISTINCT cju.response_id', 'responseId')
+        .leftJoin('cju.coding_job', 'coding_job')
+        .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('coding_job.training_id IS NULL')
+        .andWhere('cju.response_id IN (:...responseIds)', {
+          responseIds: responseIdChunk
+        });
+      applyNonCodingIssueReviewJobFilter(
+        query,
+        'coding_job',
+        `assignedVariableCoverageReviewJobType${offset}`
+      );
+      const raw = await query.getRawMany();
+      raw.forEach(row => assignedResponseIds.add(Number(row.responseId)));
     }
 
-    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    const query = this.codingJobUnitRepository
-      .createQueryBuilder('cju')
-      .select('DISTINCT cju.response_id', 'responseId')
-      .innerJoin('cju.response', 'response')
-      .leftJoin('cju.coding_job', 'coding_job')
-      .leftJoin('response.unit', 'unit')
-      .leftJoin('unit.booklet', 'booklet')
-      .leftJoin('booklet.bookletinfo', 'bookletinfo')
-      .leftJoin('booklet.person', 'person')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('coding_job.training_id IS NULL')
-      .andWhere('(response.status_v2 IS NULL OR response.status_v2 != :completedV2Status)', {
-        completedV2Status: statusStringToNumber('CODING_COMPLETE')
-      })
-      .andWhere(new Brackets(qb => {
-        qb.where('response.code_v2 IS NULL')
-          .orWhere(subQuery => {
-            const exists = subQuery
-              .subQuery()
-              .select('1')
-              .from('coding_job_unit', 'assigned_cju')
-              .where('assigned_cju.response_id = response.id')
-              .getQuery();
-            return `EXISTS (${exists})`;
-          });
-      }));
-    applyNonCodingIssueReviewJobFilter(
-      query,
-      'coding_job',
-      'assignedVariableCoverageReviewJobType'
-    );
-    this.applyManualProgressStatusFilter(query, 'andWhere');
-    this.applyVariableReferenceFilter(query, variables, {
-      unitNameExpression: 'cju.unit_name',
-      variableIdExpression: 'cju.variable_id',
-      parameterPrefix: 'assignedVariableCoverage'
-    });
-    applyResolvedExclusionsToQuery(query, exclusions, {
-      unitNameExpression: 'cju.unit_name',
-      bookletNameExpression: 'cju.booklet_name',
-      parameterPrefix: 'assignedVariableCoverage'
-    });
-    const raw = await query.getRawMany();
-
-    return new Set(raw.map(row => Number(row.responseId)));
+    return assignedResponseIds;
   }
 
   private applyVariableReferenceFilter(
@@ -1566,8 +1651,11 @@ export class CodingProgressService {
         return;
       }
 
-      const variableKey = `${row.unitName}:${row.variableId}`;
-      const caseKey = `${row.unitName}::${row.variableId}::${responseId}`;
+      const variableKey = getCoverageVariableKey(row.unitName, row.variableId);
+      const caseKey = `${getAggregationVariableKey(
+        row.unitName,
+        row.variableId
+      )}::${responseId}`;
       const caseDefinitions = definitionsByCaseKey.get(caseKey) || new Map<number, VariableDefinitionReference>();
 
       caseDefinitions.set(definitionId, {

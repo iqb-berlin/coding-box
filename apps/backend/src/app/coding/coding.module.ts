@@ -22,6 +22,7 @@ import { Unit } from '../database/entities/unit.entity';
 import { Booklet } from '../database/entities/booklet.entity';
 import { ChunkEntity } from '../database/entities/chunk.entity';
 import { CodingUnitFreshness } from '../database/entities/coding-unit-freshness.entity';
+import { CodingAggregationPeerService } from '../database/services/coding/coding-aggregation-peer.service';
 
 import {
   CodingJobService,
@@ -94,6 +95,7 @@ import { UserModule } from '../user/user.module';
     UserModule
   ],
   providers: [
+    CodingAggregationPeerService,
     CodingJobService,
     JobDefinitionService,
     CodingStatisticsService,
@@ -131,6 +133,7 @@ import { UserModule } from '../user/user.module';
     }
   ],
   exports: [
+    CodingAggregationPeerService,
     CodingJobService,
     JobDefinitionService,
     CodingStatisticsService,

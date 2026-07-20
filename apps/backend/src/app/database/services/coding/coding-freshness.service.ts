@@ -1434,7 +1434,7 @@ export class CodingFreshnessService {
             added_responses.response_id
           FROM added_responses
           INNER JOIN coding_job_variable
-            ON coding_job_variable.unit_name = added_responses.unit_name
+            ON UPPER(coding_job_variable.unit_name) = UPPER(added_responses.unit_name)
             AND coding_job_variable.variable_id = added_responses.variable_id
           INNER JOIN coding_job
             ON coding_job.id = coding_job_variable.coding_job_id
@@ -1449,12 +1449,12 @@ export class CodingFreshnessService {
           FROM added_responses
           INNER JOIN variable_bundle
             ON variable_bundle.workspace_id = $1
-            AND variable_bundle.variables @> jsonb_build_array(
-              jsonb_build_object(
-                'unitName', added_responses.unit_name,
-                'variableId', added_responses.variable_id
+            AND EXISTS (
+              SELECT 1
+              FROM jsonb_array_elements(variable_bundle.variables) bundle_variable
+              WHERE UPPER(bundle_variable ->> 'unitName') = UPPER(added_responses.unit_name)
+                AND bundle_variable ->> 'variableId' = added_responses.variable_id
               )
-            )
           INNER JOIN coding_job_variable_bundle
             ON coding_job_variable_bundle.variable_bundle_id = variable_bundle.id
           INNER JOIN coding_job
@@ -1533,7 +1533,7 @@ export class CodingFreshnessService {
             added_responses.response_id
           FROM added_responses
           INNER JOIN coding_job_variable
-            ON coding_job_variable.unit_name = added_responses.unit_name
+            ON UPPER(coding_job_variable.unit_name) = UPPER(added_responses.unit_name)
             AND coding_job_variable.variable_id = added_responses.variable_id
           INNER JOIN coding_job
             ON coding_job.id = coding_job_variable.coding_job_id
@@ -1548,12 +1548,12 @@ export class CodingFreshnessService {
           FROM added_responses
           INNER JOIN variable_bundle
             ON variable_bundle.workspace_id = $1
-            AND variable_bundle.variables @> jsonb_build_array(
-              jsonb_build_object(
-                'unitName', added_responses.unit_name,
-                'variableId', added_responses.variable_id
+            AND EXISTS (
+              SELECT 1
+              FROM jsonb_array_elements(variable_bundle.variables) bundle_variable
+              WHERE UPPER(bundle_variable ->> 'unitName') = UPPER(added_responses.unit_name)
+                AND bundle_variable ->> 'variableId' = added_responses.variable_id
               )
-            )
           INNER JOIN coding_job_variable_bundle
             ON coding_job_variable_bundle.variable_bundle_id = variable_bundle.id
           INNER JOIN coding_job

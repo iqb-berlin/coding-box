@@ -14,6 +14,7 @@ import { JobDefinition } from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
+import { CodingAggregationPeerService } from './coding-aggregation-peer.service';
 
 jest.mock('../workspace/workspace-files.service', () => ({
   WorkspaceFilesService: class {}
@@ -259,6 +260,7 @@ describe('CodingJobService', () => {
       workspaceFilesService as never,
       workspaceExclusionService as never,
       usersService as never,
+      new CodingAggregationPeerService(responseRepository as never),
       codingFreshnessService as never,
       codingFileCacheService as never,
       missingsProfilesService as never,
@@ -528,7 +530,7 @@ describe('CodingJobService', () => {
         {
           id: 123,
           variableid: 'VAR',
-          unitName: 'UNIT',
+          unitName: 'unit',
           unitAlias: 'ALIAS',
           bookletName: 'BOOKLET',
           personLogin: 'coder-login',
@@ -1761,10 +1763,10 @@ describe('CodingJobService', () => {
       'coding_incomplete_variables_version:7'
     );
     expect(cacheService.delete).toHaveBeenCalledWith(
-      'coding_incomplete_variables_v8:7'
+      'coding_incomplete_variables_v9:7'
     );
     expect(cacheService.delete).toHaveBeenCalledWith(
-      'coding_incomplete_variables_scope_v1:7'
+      'coding_incomplete_variables_scope_v2:7'
     );
   });
 
@@ -2276,6 +2278,192 @@ describe('CodingJobService', () => {
     ).resolves.toEqual([]);
 
     expectManualCodingCandidateStatusFilter(qb);
+    expect(qb.addSelect).toHaveBeenCalledWith(
+      'response.status_v2',
+      'statusV2'
+    );
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      '((UPPER(unit.name) = UPPER(:slimUnitName0) AND response.variableid = :slimVariableId0))',
+      {
+        slimUnitName0: 'UNIT',
+        slimVariableId0: 'VAR'
+      }
+    );
+  });
+
+  it('matches assigned responses across unit-name case variants', async () => {
+    const qb = createQueryBuilder([{ responseId: '42' }]);
+    codingJobUnitRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await (
+      service as unknown as {
+        getAssignedResponseIdsForVariables: (
+          workspaceId: number,
+          variables: Array<{ unitName: string; variableId: string }>
+        ) => Promise<Set<number>>;
+      }
+    ).getAssignedResponseIdsForVariables(3, [
+      { unitName: 'Unit', variableId: 'VAR' }
+    ]);
+
+    expect(result).toEqual(new Set([42]));
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      '((UPPER(cju.unit_name) = UPPER(:assignedUnitName0) AND cju.variable_id = :assignedVariableId0))',
+      {
+        assignedUnitName0: 'Unit',
+        assignedVariableId0: 'VAR'
+      }
+    );
+  });
+
+  it('loads completed aggregation peers only for normalized active response values', async () => {
+    const activeQuery = createQueryBuilder([
+      {
+        id: '2',
+        variableid: 'VAR',
+        value: 'Same\u00a0answer',
+        statusV1: statusStringToNumber('CODING_INCOMPLETE'),
+        statusV2: null,
+        unitName: 'UNIT',
+        unitAlias: null,
+        bookletName: 'BOOKLET',
+        personLogin: 'person-2',
+        personCode: 'code-2',
+        personGroup: 'group'
+      }
+    ]);
+    const peerQuery = createQueryBuilder([
+      {
+        id: '1',
+        variableid: 'VAR',
+        value: ' sameanswer ',
+        statusV1: statusStringToNumber('CODING_INCOMPLETE'),
+        statusV2: statusStringToNumber('CODING_COMPLETE'),
+        unitName: 'UNIT',
+        unitAlias: null,
+        bookletName: 'BOOKLET',
+        personLogin: 'person-1',
+        personCode: 'code-1',
+        personGroup: 'group'
+      },
+      {
+        id: '3',
+        variableid: 'VAR',
+        value: 'Different answer',
+        statusV1: statusStringToNumber('CODING_INCOMPLETE'),
+        statusV2: statusStringToNumber('CODING_COMPLETE'),
+        unitName: 'UNIT',
+        unitAlias: null,
+        bookletName: 'BOOKLET',
+        personLogin: 'person-3',
+        personCode: 'code-3',
+        personGroup: 'group'
+      }
+    ]);
+    const peerValueQuery = createQueryBuilder([
+      { unitName: 'UNIT', variableId: 'VAR', value: ' sameanswer ' },
+      { unitName: 'Unit', variableId: 'VAR', value: 'Same answer' }
+    ]);
+    responseRepository.createQueryBuilder
+      .mockReturnValueOnce(activeQuery)
+      .mockReturnValueOnce(peerValueQuery)
+      .mockReturnValueOnce(peerQuery);
+
+    const result = await service.getSlimResponsesForVariableCoverage(
+      3,
+      [{ unitName: 'UNIT', variableId: 'VAR' }],
+      [ResponseMatchingFlag.IGNORE_CASE, ResponseMatchingFlag.IGNORE_WHITESPACE],
+      2,
+      new Map()
+    );
+
+    expect(result.map(response => response.id)).toEqual([2, 1]);
+    expect(peerQuery.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('jsonb_to_recordset'),
+      expect.objectContaining({
+        aggregationPeerKeys: expect.stringContaining('sameanswer')
+      })
+    );
+    expect(peerValueQuery.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('aggregation_peer_variable'),
+      {
+        aggregationPeerVariables: JSON.stringify([
+          { unitName: 'UNIT', variableId: 'VAR' }
+        ])
+      }
+    );
+    expect(peerQuery.andWhere).toHaveBeenCalledWith(
+      'response.status_v2 = :completedV2Status',
+      { completedV2Status: statusStringToNumber('CODING_COMPLETE') }
+    );
+    expect(peerQuery.andWhere).toHaveBeenCalledWith(
+      '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
+      { aggregatedCode: -111, defaultMirCode: 99 }
+    );
+    const peerLookupCondition = peerQuery.andWhere.mock.calls.find(
+      ([condition]) => typeof condition === 'string' &&
+        condition.includes('jsonb_to_recordset')
+    )?.[0] as string;
+    expect(peerLookupCondition).toContain(
+      'aggregation_peer."value" = response.value'
+    );
+    expect(peerLookupCondition).not.toContain('UPPER(unit.name)');
+    expect(peerLookupCondition).toContain(
+      'aggregation_peer."unitName" = unit.name'
+    );
+    expect(peerQuery.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('jsonb_to_recordset'),
+      expect.objectContaining({
+        aggregationPeerKeys: expect.stringContaining('"unitName":"Unit"')
+      })
+    );
+  });
+
+  it('filters completed aggregation peers by value in SQL for exact matching', async () => {
+    const activeQuery = createQueryBuilder([{
+      id: '2',
+      variableid: 'VAR',
+      value: 'exact answer',
+      statusV1: statusStringToNumber('CODING_INCOMPLETE'),
+      statusV2: null,
+      unitName: 'UNIT',
+      unitAlias: null,
+      bookletName: 'BOOKLET',
+      personLogin: 'person-2',
+      personCode: 'code-2',
+      personGroup: 'group'
+    }]);
+    const peerValueQuery = createQueryBuilder([
+      { unitName: 'UNIT', variableId: 'VAR', value: 'exact answer' }
+    ]);
+    const peerQuery = createQueryBuilder([]);
+    responseRepository.createQueryBuilder
+      .mockReturnValueOnce(activeQuery)
+      .mockReturnValueOnce(peerValueQuery)
+      .mockReturnValueOnce(peerQuery);
+
+    await service.getSlimResponsesForVariableCoverage(
+      3,
+      [{ unitName: 'UNIT', variableId: 'VAR' }],
+      [],
+      2,
+      new Map()
+    );
+
+    const peerLookupCondition = peerQuery.andWhere.mock.calls.find(
+      ([condition]) => typeof condition === 'string' &&
+        condition.includes('jsonb_to_recordset')
+    )?.[0] as string;
+    expect(peerLookupCondition).toContain(
+      'aggregation_peer."value" = response.value'
+    );
+    const peerValueCondition = peerValueQuery.andWhere.mock.calls.find(
+      ([condition]) => typeof condition === 'string' &&
+        condition.includes('aggregation_peer_value')
+    )?.[0] as string;
+    expect(peerValueCondition).toContain(
+      'aggregation_peer_value."normalizedValue" = response.value'
+    );
   });
 
   it('includes DERIVE_ERROR responses for job-definition variables that opt into manual coding', async () => {
@@ -2285,7 +2473,7 @@ describe('CodingJobService', () => {
     await expect(
       service.getResponsesForVariables(3, [
         {
-          unitName: 'UNIT',
+          unitName: 'Unit',
           variableId: 'VAR',
           includeDeriveError: true
         }
@@ -2313,7 +2501,7 @@ describe('CodingJobService', () => {
       }
     );
     expect(bracketBuilder.orWhere).toHaveBeenCalledWith(
-      expect.stringContaining('response.status_v1 = :deriveErrorStatus'),
+      expect.stringContaining('CONCAT(UPPER(unit.name), CHR(31), response.variableid)'),
       {
         deriveErrorStatus: statusStringToNumber('DERIVE_ERROR'),
         deriveErrorManualCodingPairKeys: ['UNIT\u001FVAR']
@@ -4752,6 +4940,25 @@ describe('CodingJobService', () => {
             person: { login: 'login', code: 'code', group: 'group' }
           }
         }
+      },
+      {
+        id: 101,
+        variableid: 'VAR_A',
+        is_autocoder_generated: false,
+        status_v1: null,
+        code_v1: null,
+        score_v1: null,
+        code_v2: null,
+        score_v2: null,
+        code_v3: null,
+        score_v3: null,
+        unit: {
+          name: 'unit_a',
+          booklet: {
+            bookletinfo: { name: 'BOOKLET' },
+            person: { login: 'login', code: 'code', group: 'group' }
+          }
+        }
       }
     ]);
 
@@ -4775,7 +4982,7 @@ describe('CodingJobService', () => {
         workspace_id: 3,
         name: 'Bundle',
         variables: [
-          { unitName: 'UNIT_A', variableId: 'VAR_A' },
+          { unitName: 'unit_a', variableId: 'VAR_A' },
           { unitName: 'UNIT_B', variableId: 'VAR_B' }
         ]
       }

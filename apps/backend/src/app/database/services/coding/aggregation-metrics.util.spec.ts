@@ -1,5 +1,9 @@
 import {
+  buildAggregationPeerLookupKeys,
+  buildAggregationPeerKeys,
   buildAggregationGroups,
+  countEffectiveManualCodingCases,
+  partitionResponsesByAggregationVariable,
   summarizeAggregationGroups
 } from './aggregation-metrics.util';
 
@@ -94,5 +98,203 @@ describe('aggregation metrics', () => {
       effectiveCases: 2,
       aggregationActive: false
     });
+  });
+
+  it('normalizes unit names in completed peer lookup keys like aggregation groups', () => {
+    const peerKeys = buildAggregationPeerKeys(
+      [
+        {
+          responseId: 1,
+          unitName: 'unit_base',
+          variableId: 'answer',
+          value: 'Same\u00a0answer'
+        }
+      ],
+      ['IGNORE_CASE', 'IGNORE_WHITESPACE'],
+      derivedVariables
+    );
+
+    expect(peerKeys).toEqual([
+      {
+        unitName: 'UNIT_BASE',
+        variableId: 'answer',
+        normalizedValue: 'sameanswer'
+      }
+    ]);
+  });
+
+  it('builds exact raw-value lookups only for normalized peer matches', () => {
+    const peerKeys = buildAggregationPeerKeys(
+      [{
+        responseId: 1,
+        unitName: 'UNIT_BASE',
+        variableId: 'answer',
+        value: 'Same answer'
+      }],
+      ['IGNORE_CASE', 'IGNORE_WHITESPACE'],
+      derivedVariables
+    );
+
+    expect(buildAggregationPeerLookupKeys(
+      peerKeys,
+      [
+        {
+          unitName: 'unit_base',
+          variableId: 'answer',
+          value: ' sameanswer '
+        },
+        {
+          unitName: 'UNIT_BASE',
+          variableId: 'answer',
+          value: 'different'
+        },
+        {
+          unitName: 'OTHER_UNIT',
+          variableId: 'answer',
+          value: 'Same answer'
+        }
+      ],
+      ['IGNORE_CASE', 'IGNORE_WHITESPACE']
+    )).toEqual([{
+      unitName: 'unit_base',
+      variableId: 'answer',
+      value: ' sameanswer '
+    }]);
+  });
+
+  it('assigns all unit-name case variants to one canonical variable partition', () => {
+    const responses = [
+      { unitName: 'unit_base', variableId: 'answer', responseId: 1 },
+      { unitName: 'UNIT_BASE', variableId: 'answer', responseId: 2 },
+      { unitName: 'Unit_Base', variableId: 'answer', responseId: 3 }
+    ];
+    const partitions = partitionResponsesByAggregationVariable(
+      responses,
+      [
+        { unitName: 'unit_base', variableId: 'answer' },
+        { unitName: 'UNIT_BASE', variableId: 'answer' }
+      ],
+      response => response
+    );
+
+    expect(partitions.get('UNIT_BASE::answer')?.map(r => r.responseId)).toEqual([
+      1,
+      2,
+      3
+    ]);
+    expect(partitions.size).toBe(1);
+  });
+
+  it('assigns a differently cased peer when there is one unambiguous variable', () => {
+    const responses = [
+      { unitName: 'UNIT_BASE', variableId: 'answer', responseId: 1 }
+    ];
+    const partitions = partitionResponsesByAggregationVariable(
+      responses,
+      [{ unitName: 'unit_base', variableId: 'answer' }],
+      response => response
+    );
+
+    expect(partitions.get('UNIT_BASE::answer')?.map(r => r.responseId)).toEqual([1]);
+  });
+
+  it('keeps an open sibling covered by an assigned completed aggregation group', () => {
+    const responses = [
+      {
+        responseId: 1,
+        unitName: 'UNIT_BASE',
+        variableId: 'answer',
+        value: 'Same answer',
+        personLogin: 'person-1'
+      },
+      {
+        responseId: 2,
+        unitName: 'UNIT_BASE',
+        variableId: 'answer',
+        value: ' sameanswer ',
+        personLogin: 'person-2'
+      }
+    ];
+
+    const counts = countEffectiveManualCodingCases(
+      responses,
+      new Set([1]),
+      ['IGNORE_CASE', 'IGNORE_WHITESPACE'],
+      2,
+      derivedVariables,
+      new Set([2])
+    );
+
+    expect(counts).toEqual({ uniqueCases: 1, casesInJobs: 1 });
+  });
+
+  it('does not transfer coverage when the full group stays below the threshold', () => {
+    const responses = [
+      {
+        responseId: 1,
+        unitName: 'UNIT_BASE',
+        variableId: 'answer',
+        value: 'Same answer',
+        personLogin: 'person-1'
+      },
+      {
+        responseId: 2,
+        unitName: 'UNIT_BASE',
+        variableId: 'answer',
+        value: 'sameanswer',
+        personLogin: 'person-2'
+      }
+    ];
+
+    const counts = countEffectiveManualCodingCases(
+      responses,
+      new Set([1]),
+      ['IGNORE_CASE', 'IGNORE_WHITESPACE'],
+      3,
+      derivedVariables,
+      new Set([2])
+    );
+
+    expect(counts).toEqual({ uniqueCases: 1, casesInJobs: 0 });
+  });
+
+  it('deduplicates same-person responses across unit-name case variants', () => {
+    const responses = [
+      {
+        responseId: 1,
+        unitName: 'unit_base',
+        variableId: 'answer',
+        value: 'same',
+        bookletName: 'booklet',
+        personLogin: 'person-1'
+      },
+      {
+        responseId: 2,
+        unitName: 'UNIT_BASE',
+        variableId: 'answer',
+        value: 'same',
+        bookletName: 'booklet',
+        personLogin: 'person-1'
+      },
+      {
+        responseId: 3,
+        unitName: 'UNIT_BASE',
+        variableId: 'answer',
+        value: 'same',
+        bookletName: 'booklet',
+        personLogin: 'person-2'
+      }
+    ];
+
+    const counts = countEffectiveManualCodingCases(
+      responses,
+      new Set([3]),
+      [],
+      3,
+      derivedVariables,
+      new Set([2])
+    );
+
+    expect(counts).toEqual({ uniqueCases: 1, casesInJobs: 0 });
   });
 });
