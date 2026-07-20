@@ -1755,6 +1755,40 @@ describe('WorkspaceTestResultsService', () => {
     });
   });
 
+  describe('findFlatResponseFrequencies', () => {
+    it('should return response-value frequencies as proportions', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getRawMany
+        .mockResolvedValueOnce([{
+          unitKey: 'Unit A',
+          variableId: 'variable-1',
+          total: '10'
+        }])
+        .mockResolvedValueOnce([{
+          unitKey: 'Unit A',
+          variableId: 'variable-1',
+          value: 'answer-a',
+          count: '2'
+        }]);
+
+      const result = await service.findFlatResponseFrequencies(1, [{
+        unitKey: 'Unit A',
+        variableId: 'variable-1',
+        values: ['answer-a']
+      }]);
+
+      expect(result['Unit%20A:variable-1']).toEqual({
+        total: 10,
+        values: [{
+          value: 'answer-a',
+          count: 2,
+          p: 0.2
+        }]
+      });
+    });
+  });
+
   describe('findLogAnomaliesForBooklets', () => {
     const thresholds = {
       longLoadingThresholdMs: 5000,
