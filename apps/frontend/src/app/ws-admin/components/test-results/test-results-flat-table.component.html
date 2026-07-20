@@ -294,7 +294,13 @@
           </ng-container>
 
           <ng-container matColumnDef="frequencies">
-            <th mat-header-cell *matHeaderCellDef>Lösungshäufigkeiten</th>
+            <th
+              mat-header-cell
+              *matHeaderCellDef
+              [matTooltip]="'test-results-page.flat-table.response-frequency-tooltip' | translate"
+            >
+              {{ 'test-results-page.flat-table.response-frequency-column' | translate }}
+            </th>
             <td mat-cell *matCellDef="let row" [matTooltip]="getFrequencySummary(row)">
               {{ getFrequencySummary(row) }}
             </td>

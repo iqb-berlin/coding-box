@@ -109,6 +109,31 @@ describe('TestResultsFlatTableComponent', () => {
     fixture.destroy();
   });
 
+  it('should display response-value frequencies as proportions', () => {
+    const frequencyState = component as unknown as {
+      frequenciesByComboKey: Map<string, {
+        total: number;
+        values: Array<{ value: string; count: number; p: number }>;
+      }>;
+    };
+    frequencyState.frequenciesByComboKey.set('Unit%20A:variable-1', {
+      total: 10,
+      values: [{
+        value: 'answer-a',
+        count: 2,
+        p: 0.2
+      }]
+    });
+
+    const summary = component.getFrequencySummary({
+      unit: 'Unit A',
+      response: 'variable-1',
+      responseValue: 'answer-a'
+    } as Parameters<TestResultsFlatTableComponent['getFrequencySummary']>[0]);
+
+    expect(summary).toBe('p=.200 (n=2)');
+  });
+
   it('should not include row log anomalies when the dashboard force is disabled by workspace setting', () => {
     component.forceShowLogAnomalies = true;
     component.ngOnChanges({
