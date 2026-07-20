@@ -4861,7 +4861,79 @@ describe('CodingJobService', () => {
     });
   });
 
-  it('uses all visible bundle units for bundle context when only open units are returned', async () => {
+  it('prefers a prepared response result over an open bundle job unit', () => {
+    const resolveStatus = (
+      service as unknown as {
+        getCodingJobBundleVariableStatus: (
+          response: ResponseEntity,
+          manualUnit: CodingJobUnit
+        ) => {
+          status: string;
+          code: number | null;
+          score: number | null;
+          source: string;
+        };
+      }
+    ).getCodingJobBundleVariableStatus.bind(service);
+    const response = {
+      code_v1: null,
+      score_v1: null,
+      code_v2: -98,
+      score_v2: 0,
+      code_v3: null,
+      score_v3: null,
+      is_autocoder_generated: false
+    } as ResponseEntity;
+
+    expect(resolveStatus(response, {
+      code: null,
+      score: null,
+      is_open: true
+    } as CodingJobUnit)).toEqual({
+      status: 'auto-coded',
+      code: -98,
+      score: 0,
+      source: 'auto'
+    });
+  });
+
+  it('keeps a manual bundle decision authoritative over a response result', () => {
+    const resolveStatus = (
+      service as unknown as {
+        getCodingJobBundleVariableStatus: (
+          response: ResponseEntity,
+          manualUnit: CodingJobUnit
+        ) => {
+          status: string;
+          code: number | null;
+          score: number | null;
+          source: string;
+        };
+      }
+    ).getCodingJobBundleVariableStatus.bind(service);
+    const response = {
+      code_v1: null,
+      score_v1: null,
+      code_v2: -98,
+      score_v2: 0,
+      code_v3: null,
+      score_v3: null,
+      is_autocoder_generated: false
+    } as ResponseEntity;
+
+    expect(resolveStatus(response, {
+      code: 7,
+      score: 2,
+      is_open: false
+    } as CodingJobUnit)).toEqual({
+      status: 'manual-coded',
+      code: 7,
+      score: 2,
+      source: 'manual'
+    });
+  });
+
+  it('uses all visible bundle units and prepared results for bundle context', async () => {
     const openUnit = {
       response_id: 99,
       unit_name: 'UNIT_A',
@@ -4893,6 +4965,22 @@ describe('CodingJobService', () => {
       code: 7,
       score: 2,
       is_open: false
+    };
+    const preparedBundleUnit = {
+      response_id: 102,
+      unit_name: 'UNIT_C',
+      unit_alias: 'Unit C',
+      variable_id: 'VAR_C',
+      variable_anchor: 'VAR_C',
+      booklet_name: 'BOOKLET',
+      person_login: 'login',
+      person_code: 'code',
+      person_group: 'group',
+      notes: null,
+      variable_bundle_id: 9,
+      code: null,
+      score: null,
+      is_open: true
     };
     const responseQueryBuilder: Record<string, jest.Mock> = {};
     [
@@ -4959,6 +5047,26 @@ describe('CodingJobService', () => {
             person: { login: 'login', code: 'code', group: 'group' }
           }
         }
+      },
+      {
+        id: 102,
+        variableid: 'VAR_C',
+        is_autocoder_generated: false,
+        status_v1: 3,
+        code_v1: null,
+        score_v1: null,
+        status_v2: 5,
+        code_v2: -98,
+        score_v2: 0,
+        code_v3: null,
+        score_v3: null,
+        unit: {
+          name: 'UNIT_C',
+          booklet: {
+            bookletinfo: { name: 'BOOKLET' },
+            person: { login: 'login', code: 'code', group: 'group' }
+          }
+        }
       }
     ]);
 
@@ -4983,18 +5091,29 @@ describe('CodingJobService', () => {
         name: 'Bundle',
         variables: [
           { unitName: 'unit_a', variableId: 'VAR_A' },
-          { unitName: 'UNIT_B', variableId: 'VAR_B' }
+          { unitName: 'UNIT_B', variableId: 'VAR_B' },
+          { unitName: 'UNIT_C', variableId: 'VAR_C' }
         ]
       }
     ]);
     codingJobUnitRepository.find
       .mockResolvedValueOnce([openUnit])
-      .mockResolvedValueOnce([openUnit, closedBundleUnit])
+      .mockResolvedValueOnce([
+        openUnit,
+        closedBundleUnit,
+        preparedBundleUnit
+      ])
       .mockResolvedValueOnce([]);
     responseRepository.createQueryBuilder.mockReturnValue(responseQueryBuilder);
-    codingFileCacheService.getVariablePageMap.mockImplementation(async (unitName: string) => new Map([
-      [unitName === 'UNIT_A' ? 'VAR_A' : 'VAR_B', unitName === 'UNIT_A' ? '0' : '1']
-    ]));
+    codingFileCacheService.getVariablePageMap.mockImplementation(async (unitName: string) => {
+      const variableId = unitName.replace('UNIT_', 'VAR_');
+      const pageByUnit: Record<string, string> = {
+        UNIT_A: '0',
+        UNIT_B: '1',
+        UNIT_C: '2'
+      };
+      return new Map([[variableId, pageByUnit[unitName]]]);
+    });
 
     const result = await service.getCodingJobUnits(10, true);
 
@@ -5023,6 +5142,16 @@ describe('CodingJobService', () => {
         score: 2,
         source: 'manual',
         variablePage: '1'
+      }),
+      expect.objectContaining({
+        responseId: 102,
+        unitName: 'UNIT_C',
+        variableId: 'VAR_C',
+        status: 'auto-coded',
+        code: -98,
+        score: 0,
+        source: 'auto',
+        variablePage: '2'
       })
     ]);
   });
