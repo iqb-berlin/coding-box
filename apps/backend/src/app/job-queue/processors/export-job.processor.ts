@@ -354,8 +354,13 @@ export class ExportJobProcessor {
               filePath,
               {
                 workspaceId: job.data.workspaceId,
+                missingsProfileId: job.data.missingsProfileId,
                 matrixValue: job.data.matrixValue || 'score',
                 version: job.data.version || 'v2',
+                notReachedScope: job.data.notReachedScope || 'unit',
+                recodeTrailingOmissions:
+                  job.data.recodeTrailingOmissions || false,
+                items: job.data.items,
                 onProgress,
                 checkCancellation
               }
@@ -364,8 +369,13 @@ export class ExportJobProcessor {
             const stream =
               await this.codingExportOrchestratorService.exportItemMatrixAsCsv({
                 workspaceId: job.data.workspaceId,
+                missingsProfileId: job.data.missingsProfileId,
                 matrixValue: job.data.matrixValue || 'score',
                 version: job.data.version || 'v2',
+                notReachedScope: job.data.notReachedScope || 'unit',
+                recodeTrailingOmissions:
+                  job.data.recodeTrailingOmissions || false,
+                items: job.data.items,
                 onProgress,
                 checkCancellation
               });
@@ -600,7 +610,10 @@ export class ExportJobProcessor {
 
       const stats = fs.statSync(filePath);
       const fileSize = stats.size;
-      const finalFileName = path.basename(filePath);
+      const finalFileName =
+        job.data.exportType === 'item-matrix' ?
+          `Itemdatensatz-${new Date().toISOString().slice(0, 10)}.${fileExt}` :
+          path.basename(filePath);
 
       this.logger.log(
         `Export file generated successfully: ${finalFileName} (${fileSize} bytes) ` +

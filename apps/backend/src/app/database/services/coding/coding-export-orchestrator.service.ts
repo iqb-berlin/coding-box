@@ -5,9 +5,11 @@ import { CodingExportService } from './coding-export.service';
 import { CodingListService } from './coding-list.service';
 import {
   CodingItemMatrixExportService,
+  ItemMatrixExportConfiguration,
   ItemMatrixValue,
   ItemMatrixVersion
 } from './coding-item-matrix-export.service';
+import { ItemDatasetOptionsDto } from '../../../../../../../api-dto/coding/export-request.dto';
 
 type CodingVersion = 'v1' | 'v2' | 'v3';
 
@@ -54,8 +56,12 @@ export interface DetailedCodingResultsExportOptions {
 
 export interface ItemMatrixExportOptions {
   workspaceId: number;
+  missingsProfileId: number;
   matrixValue?: ItemMatrixValue;
   version?: ItemMatrixVersion;
+  notReachedScope?: ItemMatrixExportConfiguration['notReachedScope'];
+  recodeTrailingOmissions?: boolean;
+  items?: ItemMatrixExportConfiguration['items'];
   onProgress?: ExportProgressCallback;
   checkCancellation?: () => Promise<void>;
 }
@@ -191,6 +197,7 @@ export class CodingExportOrchestratorService {
       options.workspaceId,
       options.matrixValue || 'score',
       options.version || 'v2',
+      this.getItemMatrixConfiguration(options),
       options.onProgress,
       options.checkCancellation
     ) as Readable);
@@ -201,6 +208,7 @@ export class CodingExportOrchestratorService {
       options.workspaceId,
       options.matrixValue || 'score',
       options.version || 'v2',
+      this.getItemMatrixConfiguration(options),
       options.onProgress,
       options.checkCancellation
     );
@@ -215,8 +223,24 @@ export class CodingExportOrchestratorService {
       options.workspaceId,
       options.matrixValue || 'score',
       options.version || 'v2',
+      this.getItemMatrixConfiguration(options),
       options.onProgress,
       options.checkCancellation
     );
+  }
+
+  getItemDatasetOptions(workspaceId: number): Promise<ItemDatasetOptionsDto> {
+    return this.codingItemMatrixExportService.getItemDatasetOptions(workspaceId);
+  }
+
+  private getItemMatrixConfiguration(
+    options: ItemMatrixExportOptions
+  ): ItemMatrixExportConfiguration {
+    return {
+      missingsProfileId: options.missingsProfileId,
+      notReachedScope: options.notReachedScope || 'unit',
+      recodeTrailingOmissions: options.recodeTrailingOmissions || false,
+      items: options.items
+    };
   }
 }

@@ -72,6 +72,34 @@ describe('WorkspaceCodingExportController', () => {
   const codingPsychometricExportServiceMock =
     {} as CodingPsychometricExportService;
 
+  it('returns item dataset options from the shared metadata resolver path', async () => {
+    const options = {
+      items: [{
+        unitId: 'UNIT1',
+        unitLabel: 'Aufgabe 1',
+        itemId: 'ITEM1',
+        itemLabel: 'Item 1',
+        columnName: 'Aufgabe1_ITEM1'
+      }],
+      mappingIssues: []
+    };
+    const codingExportOrchestratorService = {
+      getItemDatasetOptions: jest.fn().mockResolvedValue(options)
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      codingExportOrchestratorService as unknown as CodingExportOrchestratorService,
+      {} as JobQueueService,
+      {} as CacheService,
+      codingPsychometricExportServiceMock
+    );
+
+    await expect(controller.getItemDatasetOptions(5)).resolves.toEqual(options);
+    expect(codingExportOrchestratorService.getItemDatasetOptions)
+      .toHaveBeenCalledWith(5);
+  });
+
   it('ends the response instead of crashing when versioned CSV streaming fails', async () => {
     const csvStream = new PassThrough();
     const codingExportOrchestratorService = {
