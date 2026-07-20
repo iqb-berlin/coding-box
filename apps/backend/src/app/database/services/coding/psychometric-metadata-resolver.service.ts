@@ -28,6 +28,11 @@ import {
   VomdDocument
 } from './psychometric-export.types';
 
+export interface PsychometricItemMappingOptions {
+  excludedUnitNames?: readonly string[];
+  requireItemIds?: boolean;
+}
+
 @Injectable()
 export class PsychometricMetadataResolver {
   constructor(
@@ -45,11 +50,15 @@ export class PsychometricMetadataResolver {
   }
 
   async buildItemMapping(
-    workspaceId: number
+    workspaceId: number,
+    options: PsychometricItemMappingOptions = {}
   ): Promise<PsychometricItemMapping> {
+    const excludedUnitKeys = new Set(
+      (options.excludedUnitNames || []).map(normalizePsychometricUnitKey)
+    );
     const [unitDetails, vomdDocuments] = await Promise.all([
       this.workspaceFilesService.getUnitVariableDetails(workspaceId),
-      this.loadVomdDocuments(workspaceId)
+      this.loadVomdDocuments(workspaceId, excludedUnitKeys)
     ]);
     const items: PsychometricMappedItem[] = [];
     const byLogicalKey = new Map<string, PsychometricMappedItem>();
@@ -70,6 +79,9 @@ export class PsychometricMetadataResolver {
     });
 
     unitDetailsByKey.forEach((unit, unitKey) => {
+      if (excludedUnitKeys.has(unitKey)) {
+        return;
+      }
       const documents = documentsByUnit.get(unitKey) || [];
       if (documents.length === 0) {
         issues.push(`${unit.unitName}: keine VOMD-Datei`);
@@ -84,15 +96,24 @@ export class PsychometricMetadataResolver {
         )
         .map(({ document, vomdItem }) => {
           const vomdVariableId = String(vomdItem.variableId || '').trim();
-          const itemId = String(vomdItem.id || vomdVariableId || '?');
-          const resolution = this.resolveVomdVariable(
-            unit,
-            itemId,
-            vomdVariableId
-          );
+          const explicitItemId = String(vomdItem.id || '').trim();
+          const itemId = explicitItemId || vomdVariableId || '?';
+          const resolution =
+            options.requireItemIds && !explicitItemId ?
+              {
+                issue:
+                  `${unit.unitName}/${vomdVariableId || '?'}: ` +
+                  'VOMD-Item ohne ID'
+              } :
+              this.resolveVomdVariable(
+                unit,
+                itemId,
+                vomdVariableId
+              );
           return {
             document,
             vomdItem,
+            itemId,
             resolution
           };
         })
@@ -100,7 +121,7 @@ export class PsychometricMetadataResolver {
           Number(Boolean(right.resolution.fallbackNote))
         )
         .forEach(({
-          document, vomdItem, resolution
+          document, vomdItem, itemId, resolution
         }) => {
           if (resolution.issue) {
             issues.push(resolution.issue);
@@ -140,9 +161,9 @@ export class PsychometricMetadataResolver {
             unitName: unit.unitName,
             variableId,
             sourceVariableId,
-            itemId: String(vomdItem.id || variableId),
+            itemId,
             itemLabel: String(
-              vomdItem.description || vomdItem.id || variableId
+              vomdItem.description || itemId || variableId
             ),
             variable,
             vomd: document,
@@ -389,7 +410,8 @@ export class PsychometricMetadataResolver {
   }
 
   private async loadVomdDocuments(
-    workspaceId: number
+    workspaceId: number,
+    excludedUnitKeys: ReadonlySet<string> = new Set()
   ): Promise<VomdDocument[]> {
     const files = await this.fileUploadRepository.find({
       where: [
@@ -408,6 +430,10 @@ export class PsychometricMetadataResolver {
     });
     const uniqueFiles = Array.from(
       new Map(files.map(file => [file.id, file])).values()
+    ).filter(
+      file => !excludedUnitKeys.has(
+        normalizePsychometricUnitKey(file.file_id || file.filename)
+      )
     );
 
     return uniqueFiles.map(file => {

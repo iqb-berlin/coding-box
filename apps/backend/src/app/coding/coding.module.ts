@@ -156,6 +156,7 @@ import { UserModule } from '../user/user.module';
     CodingFreshnessService,
     CodingReadinessService,
     CodingItemMatrixExportService,
+    PsychometricMetadataResolver,
     CodingPsychometricExportService,
     CODING_PROCESS_CACHE_INVALIDATOR,
     CODING_READINESS_CACHE_INVALIDATOR

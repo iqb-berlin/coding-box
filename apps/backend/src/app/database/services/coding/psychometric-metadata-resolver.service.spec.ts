@@ -235,6 +235,106 @@ describe('PsychometricMetadataResolver', () => {
     });
   });
 
+  it('requires explicit VOMD item IDs only for strict item mappings', async () => {
+    const resolver = createResolver(
+      {
+        items: [
+          {
+            variableId: 'V1'
+          }
+        ]
+      },
+      [
+        {
+          id: 'V1',
+          alias: 'V1',
+          type: 'string',
+          hasCodingScheme: true
+        }
+      ]
+    );
+
+    const defaultMapping = await resolver.buildItemMapping(7);
+    const strictMapping = await resolver.buildItemMapping(7, {
+      requireItemIds: true
+    });
+
+    expect(defaultMapping.items).toEqual([
+      expect.objectContaining({
+        itemId: 'V1',
+        variableId: 'V1'
+      })
+    ]);
+    expect(defaultMapping.issues).toEqual([]);
+    expect(strictMapping.items).toHaveLength(0);
+    expect(strictMapping.issues).toEqual([
+      'UNIT_A/V1: VOMD-Item ohne ID'
+    ]);
+  });
+
+  it('does not map or report issues for explicitly excluded units', async () => {
+    const resolver = createResolver(
+      {
+        items: [
+          {
+            id: 'ITEM_MISSING',
+            variableId: 'UNKNOWN'
+          }
+        ]
+      },
+      [
+        {
+          id: 'V1',
+          alias: 'V1',
+          type: 'string',
+          hasCodingScheme: true
+        }
+      ]
+    );
+
+    const mapping = await resolver.buildItemMapping(7, {
+      excludedUnitNames: ['unit_a.xml']
+    });
+
+    expect(mapping.items).toEqual([]);
+    expect(mapping.issues).toEqual([]);
+    expect(mapping.fallbacks).toEqual([]);
+  });
+
+  it('does not parse malformed VOMD files of explicitly excluded units', async () => {
+    const resolver = new PsychometricMetadataResolver(
+      {
+        find: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            file_id: 'UNIT_A.VOMD',
+            filename: 'UNIT_A.vomd',
+            data: '{invalid'
+          }
+        ])
+      } as never,
+      {
+        getUnitVariableDetails: jest.fn().mockResolvedValue([
+          {
+            unitName: 'UNIT_A',
+            unitId: 'UNIT_A',
+            variables: []
+          }
+        ])
+      } as never,
+      {} as never
+    );
+
+    await expect(
+      resolver.buildItemMapping(7, { excludedUnitNames: ['UNIT_A'] })
+    ).resolves.toEqual({
+      items: [],
+      byLogicalKey: new Map(),
+      issues: [],
+      fallbacks: []
+    });
+  });
+
   it('uses an unambiguous item id when variableId is missing', async () => {
     const resolver = createResolver(
       {
