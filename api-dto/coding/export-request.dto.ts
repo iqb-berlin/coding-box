@@ -31,9 +31,23 @@ export interface ItemDatasetOption extends ItemDatasetSelection {
   columnName: string;
 }
 
+export type ItemDatasetMappingIssueCode =
+  | 'vomd-mapping'
+  | 'ambiguous-vomd-fallback'
+  | 'column-name-collision'
+  | 'unknown-selection';
+
+export interface ItemDatasetMappingIssueDto {
+  code: ItemDatasetMappingIssueCode;
+  message: string;
+  unitId?: string;
+  itemId?: string;
+  columnName?: string;
+}
+
 export interface ItemDatasetOptionsDto {
   items: ItemDatasetOption[];
-  mappingIssues: string[];
+  mappingIssues: ItemDatasetMappingIssueDto[];
 }
 
 interface ExportRequestTransportOptions {

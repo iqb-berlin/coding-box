@@ -30,9 +30,13 @@ import type {
 } from '../../../../../../../api-dto/coding/psychometric-discrimination.dto';
 import type {
   ItemDatasetNotReachedScope,
+  ItemDatasetMappingIssueDto,
   ItemDatasetOption,
   ItemDatasetOptionsDto
 } from '../../../../../../../api-dto/coding/export-request.dto';
+import {
+  ItemDatasetSelectionKey
+} from '../../../../../../../api-dto/coding/item-dataset-key';
 
 export type ExportFormat =
   'results-by-version' | 'item-matrix' | 'psychometrics';
@@ -84,7 +88,7 @@ export class ExportComponent {
   itemDatasetOptions: ItemDatasetOption[] = [];
   selectedItemKeys: string[] = [];
   itemSearch = '';
-  itemDatasetMappingIssues: string[] = [];
+  itemDatasetMappingIssues: ItemDatasetMappingIssueDto[] = [];
   notReachedScope: ItemDatasetNotReachedScope = 'unit';
   recodeTrailingOmissions = false;
   isLoadingItemDatasetOptions = false;
@@ -338,8 +342,11 @@ export class ExportComponent {
         notReachedScope: this.notReachedScope,
         recodeTrailingOmissions: this.recodeTrailingOmissions,
         items: this.selectedItemKeys.map(key => {
-          const [unitId, itemId] = key.split('\u001F');
-          return { unitId, itemId };
+          const selectionKey = ItemDatasetSelectionKey.parse(key);
+          return {
+            unitId: selectionKey?.unitId || '',
+            itemId: selectionKey?.itemId || ''
+          };
         }),
         displayLabelKey: 'export-toast.types.item-matrix',
         downloadFilePrefix: 'Itemdatensatz'
@@ -424,7 +431,9 @@ export class ExportComponent {
   }
 
   getItemDatasetKey(item: ItemDatasetOption): string {
-    return `${item.unitId}\u001F${item.itemId}`;
+    return ItemDatasetSelectionKey
+      .from(item.unitId, item.itemId)
+      .toString();
   }
 
   onItemDatasetSelectionChange(selectedVisibleKeys: string[]): void {

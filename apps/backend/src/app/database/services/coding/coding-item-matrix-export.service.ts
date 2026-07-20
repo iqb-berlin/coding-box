@@ -1,11 +1,5 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-  Optional
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import * as cheerio from 'cheerio';
 import * as ExcelJS from 'exceljs';
 import * as fastCsv from 'fast-csv';
 import * as fs from 'fs';
@@ -13,31 +7,36 @@ import { PassThrough, Stream } from 'stream';
 import { Repository } from 'typeorm';
 import {
   ItemDatasetNotReachedScope,
+  ItemDatasetMappingIssueDto,
   ItemDatasetOptionsDto,
   ItemDatasetSelection
 } from '../../../../../../../api-dto/coding/export-request.dto';
+import {
+  ItemDatasetResponseKey,
+  ItemDatasetSelectionKey
+} from '../../../../../../../api-dto/coding/item-dataset-key';
 import { Booklet } from '../../entities/booklet.entity';
-import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
-import { Unit } from '../../entities/unit.entity';
-import { statusNumberToString } from '../../utils/response-status-converter';
 import {
   isExcludedByResolvedExclusions,
   normalizeExclusionBookletId,
-  normalizeExclusionUnitId,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
-import {
-  aggregateItemDatasetMissingStates,
-  ItemDatasetMissingState
-} from './item-dataset-missing-aggregation.util';
 import {
   IqbStandardMissingId,
   MissingsProfilesService,
   ResolvedMissingValue
 } from './missings-profiles.service';
-import { PsychometricMetadataResolver } from './psychometric-metadata-resolver.service';
+import {
+  ItemDatasetBookletDesign,
+  ItemDatasetCellResolver,
+  ItemDatasetColumn,
+  ItemDatasetProfile,
+  ItemDatasetResponseValue,
+  ResolvedItemDatasetCell
+} from './item-dataset-cell-resolver';
+import { ItemDatasetMetadataService } from './item-dataset-metadata.service';
 
 export type ItemMatrixValue = 'code' | 'score';
 export type ItemMatrixFormat = 'csv' | 'excel';
@@ -50,18 +49,7 @@ export interface ItemMatrixExportConfiguration {
   items?: ItemDatasetSelection[];
 }
 
-interface MatrixColumn {
-  key: string;
-  header: string;
-  unitName: string;
-  unitId: string;
-  variableId: string;
-  sourceVariableId: string;
-  itemId: string;
-  itemLabel: string;
-  itemOrder: number;
-  isDerived: boolean;
-}
+type MatrixColumn = ItemDatasetColumn;
 
 interface MatrixRow {
   bookletId: number;
@@ -88,36 +76,13 @@ interface RawResponseValueRow {
   scoreV3: number | string | null;
 }
 
-interface ResponseValue {
-  code: number | null;
-  score: number | null;
-  status: number | null;
-}
+type ResponseValue = ItemDatasetResponseValue;
 
-interface BookletUnitPosition {
-  unitId: string;
-  order: number;
-  testletKey: string;
-}
+type BookletDesign = ItemDatasetBookletDesign;
 
-interface BookletDesign {
-  units: Map<string, BookletUnitPosition>;
-}
+type ProfileDefinitions = ItemDatasetProfile;
 
-interface ProfileDefinitions {
-  byId: Map<IqbStandardMissingId, ResolvedMissingValue>;
-  byCode: Map<number, ResolvedMissingValue>;
-}
-
-interface ResolvedCell {
-  state: ItemDatasetMissingState;
-  code: number | null;
-  score: number | null;
-  unresolved: boolean;
-  activity: boolean;
-  candidate: boolean;
-  omission: boolean;
-}
+type ResolvedCell = ResolvedItemDatasetCell;
 
 interface MatrixContext {
   rows: MatrixRow[];
@@ -146,6 +111,7 @@ const fixedHeaders = [
 @Injectable()
 export class CodingItemMatrixExportService {
   private readonly logger = new Logger(CodingItemMatrixExportService.name);
+  private readonly cellResolver = new ItemDatasetCellResolver();
   private static readonly exportYieldEveryItems = 50;
 
   constructor(
@@ -153,16 +119,10 @@ export class CodingItemMatrixExportService {
     private readonly responseRepository: Repository<ResponseEntity>,
     @InjectRepository(Booklet)
     private readonly bookletRepository: Repository<Booklet>,
-    @InjectRepository(Unit)
-    private readonly unitRepository: Repository<Unit>,
     private readonly workspaceFilesService: WorkspaceFilesService,
     private readonly workspaceExclusionService: WorkspaceExclusionService,
     private readonly missingsProfilesService: MissingsProfilesService,
-    @Optional()
-    @InjectRepository(FileUpload)
-    private readonly fileUploadRepository?: Repository<FileUpload>,
-    @Optional()
-    private readonly metadataResolver?: PsychometricMetadataResolver
+    private readonly metadataService: ItemDatasetMetadataService
   ) {}
 
   async getItemDatasetOptions(
@@ -209,23 +169,22 @@ export class CodingItemMatrixExportService {
         matrixStream.on('error', error => outputStream.emit('error', error));
         matrixStream.pipe(outputStream);
 
-        await this.writeRows(
+        for await (const row of this.resolveRows(
           workspaceId,
           context,
           value,
           version,
           configuration,
-          async row => {
-            if (!matrixStream.write(row)) {
-              await new Promise(resolve => {
-                matrixStream.once('drain', resolve);
-              });
-              await checkCancellation?.();
-            }
-          },
           progressCallback,
           checkCancellation
-        );
+        )) {
+          if (!matrixStream.write(row)) {
+            await new Promise(resolve => {
+              matrixStream.once('drain', resolve);
+            });
+            await checkCancellation?.();
+          }
+        }
         await checkCancellation?.();
         matrixStream.end();
       } catch (error) {
@@ -328,18 +287,17 @@ export class CodingItemMatrixExportService {
       width: header.length > 24 ? 28 : 18
     }));
 
-    await this.writeRows(
+    for await (const row of this.resolveRows(
       workspaceId,
       context,
       value,
       version,
       configuration,
-      async row => {
-        worksheet.addRow(row).commit();
-      },
       progressCallback,
       checkCancellation
-    );
+    )) {
+      worksheet.addRow(row).commit();
+    }
     await checkCancellation?.();
     await worksheet.commit();
     await workbook.commit();
@@ -374,8 +332,9 @@ export class CodingItemMatrixExportService {
     );
     const issues = [...columnResult.issues, ...selectedColumns.issues];
     if (issues.length > 0) {
+      const issueMessages = issues.map(issue => issue.message).join('; ');
       throw new BadRequestException(
-        `Item-Metadaten sind unvollständig oder mehrdeutig: ${issues.join('; ')}`
+        `Item-Metadaten sind unvollständig oder mehrdeutig: ${issueMessages}`
       );
     }
     if (selectedColumns.columns.length === 0) {
@@ -490,220 +449,48 @@ export class CodingItemMatrixExportService {
     workspaceId: number,
     selection?: ItemDatasetSelection[],
     checkCancellation?: () => Promise<void>
-  ): Promise<{ columns: MatrixColumn[]; issues: string[] }> {
-    if (!this.metadataResolver) {
-      return {
-        columns: [],
-        issues: ['VOMD-Metadaten-Resolver ist nicht verfügbar']
-      };
-    }
-    await checkCancellation?.();
-    const exclusions =
-      await this.workspaceExclusionService.resolveExclusionsForQueries(
-        workspaceId
-      );
-    const [mapping, aliases] = await Promise.all([
-      this.metadataResolver.buildItemMapping(workspaceId, {
-        excludedUnitNames: exclusions.globalIgnoredUnits,
-        requireItemIds: true
-      }),
-      this.getUnitAliases(workspaceId, checkCancellation)
-    ]);
-    const issues = [
-      ...mapping.issues,
-      ...mapping.fallbacks.map(
-        fallback => `Nicht eindeutige VOMD-Fallback-Zuordnung: ${fallback}`
-      )
-    ];
-    const requested = selection ?
-      new Set(
-        selection.map(item => this.getSelectionKey(item.unitId, item.itemId)
-        )
-      ) :
-      null;
-    const matched = new Set<string>();
-    const headers = new Map<string, string>(
-      fixedHeaders.map(header => [header, 'feste Identifikationsspalte'])
+  ): Promise<{
+      columns: MatrixColumn[];
+      issues: ItemDatasetMappingIssueDto[];
+    }> {
+    return this.metadataService.buildColumns(
+      workspaceId,
+      selection,
+      checkCancellation
     );
-    const columns: MatrixColumn[] = [];
-
-    mapping.items.forEach((item, itemOrder) => {
-      const unitId = normalizeExclusionUnitId(item.unitName);
-      const selectionKey = this.getSelectionKey(unitId, item.itemId);
-      if (
-        isExcludedByResolvedExclusions(exclusions, '', item.unitName) ||
-        (requested && !requested.has(selectionKey))
-      ) {
-        return;
-      }
-      matched.add(selectionKey);
-      const unitLabel = aliases.get(unitId) || unitId;
-      const header = `${unitLabel}_${item.itemId}`;
-      const existing = headers.get(header);
-      if (existing) {
-        issues.push(
-          `Spaltenname '${header}' kollidiert für ${existing} und ${selectionKey}`
-        );
-        return;
-      }
-      headers.set(header, selectionKey);
-      columns.push({
-        key: this.getResponseKey(item.unitName, item.variableId),
-        header,
-        unitName: item.unitName,
-        unitId,
-        variableId: item.variableId,
-        sourceVariableId: item.sourceVariableId,
-        itemId: item.itemId,
-        itemLabel: item.itemLabel,
-        itemOrder,
-        isDerived: item.variable.isDerived === true
-      });
-    });
-
-    requested?.forEach(key => {
-      if (!matched.has(key)) {
-        issues.push(
-          `Ausgewähltes Item '${key}' konnte nicht eindeutig zugeordnet werden`
-        );
-      }
-    });
-    return { columns, issues: Array.from(new Set(issues)) };
   }
 
   private filterColumns(
     columns: MatrixColumn[],
     selection?: ItemDatasetSelection[]
-  ): { columns: MatrixColumn[]; issues: string[] } {
-    if (!selection) {
-      return { columns, issues: [] };
-    }
-    const requested = new Set(
-      selection.map(item => this.getSelectionKey(item.unitId, item.itemId))
-    );
-    const filtered = columns.filter(item => requested.has(this.getSelectionKey(item.unitId, item.itemId))
-    );
-    const matched = new Set(
-      filtered.map(item => this.getSelectionKey(item.unitId, item.itemId))
-    );
-    return {
-      columns: filtered,
-      issues: Array.from(requested)
-        .filter(key => !matched.has(key))
-        .map(
-          key => `Ausgewähltes Item '${key}' konnte nicht eindeutig zugeordnet werden`
-        )
-    };
+  ): {
+      columns: MatrixColumn[];
+      issues: ItemDatasetMappingIssueDto[];
+    } {
+    return this.metadataService.filterColumns(columns, selection);
   }
 
   private sortColumnsByBookletDesigns(
     columns: MatrixColumn[],
     designs: Map<string, BookletDesign>
   ): MatrixColumn[] {
-    const unitRanks = new Map<string, number>();
-    Array.from(designs.values()).forEach((design, bookletIndex) => {
-      design.units.forEach(position => {
-        const rank = bookletIndex * 1_000_000 + position.order;
-        const current = unitRanks.get(position.unitId);
-        if (current === undefined || rank < current) {
-          unitRanks.set(position.unitId, rank);
-        }
-      });
-    });
-    return [...columns].sort(
-      (left, right) => (unitRanks.get(left.unitId) ?? Number.MAX_SAFE_INTEGER) -
-          (unitRanks.get(right.unitId) ?? Number.MAX_SAFE_INTEGER) ||
-        left.itemOrder - right.itemOrder ||
-        left.itemId.localeCompare(right.itemId)
-    );
+    return this.metadataService.sortColumnsByBookletDesigns(columns, designs);
   }
 
   private async getBookletDesigns(
     workspaceId: number,
     checkCancellation?: () => Promise<void>
   ): Promise<Map<string, BookletDesign>> {
-    if (!this.fileUploadRepository) {
-      throw new Error(
-        'Booklet-Dateien sind für den Itemdatensatz nicht verfügbar'
-      );
-    }
-    const [files, exclusions] = await Promise.all([
-      this.fileUploadRepository.find({
-        where: { workspace_id: workspaceId, file_type: 'Booklet' },
-        select: ['file_id', 'data'],
-        order: { file_id: 'ASC' }
-      }),
-      this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId)
-    ]);
-    const result = new Map<string, BookletDesign>();
-
-    for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
-      if (this.shouldYieldExportItem(fileIndex)) {
-        await checkCancellation?.();
-        await this.yieldToEventLoop();
-      }
-      const file = files[fileIndex];
-      const bookletId = normalizeExclusionBookletId(file.file_id);
-      try {
-        const $ = cheerio.load(file.data, { xmlMode: true });
-        const testlets = $('Testlet, testlet').toArray();
-        const units = new Map<string, BookletUnitPosition>();
-        $('Unit, unit').each((order, element) => {
-          const unitId = normalizeExclusionUnitId($(element).attr('id'));
-          if (
-            !unitId ||
-            units.has(unitId) ||
-            isExcludedByResolvedExclusions(exclusions, bookletId, unitId)
-          ) {
-            return;
-          }
-          const testlet = $(element).closest('Testlet, testlet').get(0);
-          const testletIndex = testlet ?
-            testlets.indexOf(testlet as (typeof testlets)[number]) :
-            -1;
-          const testletId = testlet ?
-            String($(testlet).attr('id') || testletIndex) :
-            'root';
-          units.set(unitId, {
-            unitId,
-            order,
-            testletKey: `${testletIndex}:${testletId}`
-          });
-        });
-        result.set(bookletId, { units });
-      } catch (error) {
-        throw new BadRequestException(
-          `Booklet-Struktur '${file.file_id}' konnte nicht gelesen werden: ` +
-            `${(error as Error).message}`
-        );
-      }
-    }
-    return result;
+    return this.metadataService.getBookletDesigns(
+      workspaceId,
+      checkCancellation
+    );
   }
 
   private async getDerivedSources(
     workspaceId: number
   ): Promise<Map<string, string[]>> {
-    const bySource =
-      await this.workspaceFilesService.getDerivedVariablesBySourceMap(
-        workspaceId
-      );
-    const result = new Map<string, string[]>();
-    bySource.forEach((derivedVariables, sourceKey) => {
-      const separator = sourceKey.indexOf('\u001F');
-      if (separator < 0) {
-        return;
-      }
-      const unitName = sourceKey.slice(0, separator);
-      const sourceVariable = sourceKey.slice(separator + 1);
-      derivedVariables.forEach(derivedVariable => {
-        const derivedKey = this.getResponseKey(unitName, derivedVariable);
-        const sources = result.get(derivedKey) || [];
-        sources.push(this.getResponseKey(unitName, sourceVariable));
-        result.set(derivedKey, sources);
-      });
-    });
-    return result;
+    return this.metadataService.getDerivedSources(workspaceId);
   }
 
   private getHeaders(columns: MatrixColumn[]): string[] {
@@ -748,53 +535,15 @@ export class CodingItemMatrixExportService {
       }));
   }
 
-  private async getUnitAliases(
-    workspaceId: number,
-    checkCancellation?: () => Promise<void>
-  ): Promise<Map<string, string>> {
-    const rows = await this.unitRepository
-      .createQueryBuilder('unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .innerJoin('booklet.person', 'person')
-      .select('unit.name', 'unitName')
-      .addSelect('unit.alias', 'unitAlias')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('unit.alias IS NOT NULL')
-      .andWhere("unit.alias != ''")
-      .distinct(true)
-      .getRawMany<{ unitName: string; unitAlias: string }>();
-    await checkCancellation?.();
-
-    const aliasesByUnit = new Map<string, Set<string>>();
-    rows.forEach(row => {
-      const unitId = normalizeExclusionUnitId(row.unitName);
-      const alias = String(row.unitAlias || '').trim();
-      if (!unitId || !alias) {
-        return;
-      }
-      const aliases = aliasesByUnit.get(unitId) || new Set<string>();
-      aliases.add(alias);
-      aliasesByUnit.set(unitId, aliases);
-    });
-    const stableAliases = new Map<string, string>();
-    aliasesByUnit.forEach((aliases, unitId) => {
-      if (aliases.size === 1) {
-        stableAliases.set(unitId, Array.from(aliases)[0]);
-      }
-    });
-    return stableAliases;
-  }
-
-  private async writeRows(
+  private async* resolveRows(
     workspaceId: number,
     context: MatrixContext,
     requestedValue: ItemMatrixValue,
     version: ItemMatrixVersion,
     configuration: ItemMatrixExportConfiguration,
-    writeRow: (row: Record<string, string | number>) => Promise<void>,
     progressCallback?: (percentage: number) => Promise<void>,
     checkCancellation?: () => Promise<void>
-  ): Promise<void> {
+  ): AsyncGenerator<Record<string, string | number>> {
     const batchSize = 100;
     let written = 0;
     for (let start = 0; start < context.rows.length; start += batchSize) {
@@ -853,7 +602,7 @@ export class CodingItemMatrixExportService {
             requestedValue
           );
         }
-        await writeRow(exportRow);
+        yield exportRow;
         written += 1;
       }
       if (progressCallback && context.rows.length > 0) {
@@ -874,410 +623,34 @@ export class CodingItemMatrixExportService {
     configuration: ItemMatrixExportConfiguration,
     checkCancellation?: () => Promise<void>
   ): Promise<ResolvedCell[]> {
-    const derivedWithoutResult: boolean[] = [];
-    const initialCells: ResolvedCell[] = [];
-    for (let index = 0; index < columns.length; index += 1) {
-      await this.checkExportCancellationPoint(index, checkCancellation);
-      const column = columns[index];
-      const value = responseValues.get(column.key);
-      derivedWithoutResult.push(
-        column.isDerived &&
-        (!value || (value.code === null && value.score === null))
-      );
-      if (!design.units.has(column.unitId)) {
-        initialCells.push(this.fromMissing(profile.byId.get('mbd')!));
-      } else {
-        initialCells.push(
-          this.resolveInitialCell(responseValues.get(column.key), profile)
-        );
-      }
-    }
     await checkCancellation?.();
-    const sourceColumns = this.getDerivedSourceColumns(columns, derivedSources);
-    const sourceCells: ResolvedCell[] = [];
-    for (let index = 0; index < sourceColumns.length; index += 1) {
-      await this.checkExportCancellationPoint(index, checkCancellation);
-      const column = sourceColumns[index];
-      if (!design.units.has(column.unitId)) {
-        sourceCells.push(this.fromMissing(profile.byId.get('mbd')!));
-      } else {
-        sourceCells.push(
-          this.resolveInitialCell(responseValues.get(column.key), profile)
-        );
-      }
-    }
-    const resolutionColumns = [...columns, ...sourceColumns];
-    const resolutionCells = [...initialCells, ...sourceCells];
-    await checkCancellation?.();
-    this.resolveNotReachedCandidates(
-      resolutionCells,
-      resolutionColumns,
+    const resolution = this.cellResolver.resolveIncrementally(
+      columns,
       design,
+      responseValues,
       profile,
-      configuration.notReachedScope || 'unit',
-      configuration.recodeTrailingOmissions === true
+      derivedSources,
+      configuration
     );
-    const cells = resolutionCells.slice(0, columns.length);
-
-    const cellsByResponseKey = new Map<string, ResolvedCell>();
-    for (let index = 0; index < resolutionColumns.length; index += 1) {
-      await this.checkExportCancellationPoint(index, checkCancellation);
-      const column = resolutionColumns[index];
-      const cell = resolutionCells[index];
-      cellsByResponseKey.set(column.key, cell);
-      const sourceKey = this.getResponseKey(
-        column.unitName,
-        column.sourceVariableId
-      );
-      if (!cellsByResponseKey.has(sourceKey)) {
-        cellsByResponseKey.set(sourceKey, cell);
-      }
+    let step = resolution.next();
+    while (!step.done) {
+      await checkCancellation?.();
+      await this.yieldToEventLoop();
+      step = resolution.next();
     }
-    const recursion = new Set<string>();
-    for (let index = 0; index < columns.length; index += 1) {
-      await this.checkExportCancellationPoint(index, checkCancellation);
-      const column = columns[index];
-      if (!derivedWithoutResult[index] || !design.units.has(column.unitId)) {
-        continue;
-      }
-      const state = this.resolveDerivedState(
-        column.key,
-        responseValues,
-        derivedSources,
-        profile,
-        cellsByResponseKey,
-        recursion
-      );
-      if (state !== 'valid' && state !== 'error') {
-        cells[index] = this.fromMissing(
-          profile.byId.get(state as IqbStandardMissingId)!
-        );
-      } else {
-        cells[index] = this.unresolvedCell();
-      }
-      cellsByResponseKey.set(column.key, cells[index]);
-    }
-    return cells;
-  }
-
-  private getDerivedSourceColumns(
-    columns: MatrixColumn[],
-    derivedSources: Map<string, string[]>
-  ): MatrixColumn[] {
-    const directColumns = new Map<string, MatrixColumn | null>();
-    const registerDirectColumn = (
-      key: string,
-      column: MatrixColumn
-    ): void => {
-      const existing = directColumns.get(key);
-      if (
-        existing &&
-        this.getSelectionKey(existing.unitId, existing.itemId) !==
-          this.getSelectionKey(column.unitId, column.itemId)
-      ) {
-        directColumns.set(key, null);
-      } else if (existing === undefined) {
-        directColumns.set(key, column);
-      }
-    };
-    columns.forEach(column => {
-      registerDirectColumn(column.key, column);
-      registerDirectColumn(
-        this.getResponseKey(column.unitName, column.sourceVariableId),
-        column
-      );
-    });
-
-    const sourceAnchors = new Map<string, MatrixColumn | null>();
-    const registerSourceAnchor = (
-      sourceKey: string,
-      anchor: MatrixColumn
-    ): void => {
-      const existing = sourceAnchors.get(sourceKey);
-      if (
-        existing &&
-        this.getSelectionKey(existing.unitId, existing.itemId) !==
-          this.getSelectionKey(anchor.unitId, anchor.itemId)
-      ) {
-        sourceAnchors.set(sourceKey, null);
-      } else if (existing === undefined) {
-        sourceAnchors.set(sourceKey, anchor);
-      }
-    };
-    const visitSources = (
-      derivedKey: string,
-      fallbackAnchor: MatrixColumn,
-      path: Set<string>
-    ): void => {
-      if (path.has(derivedKey)) {
-        return;
-      }
-      const nextPath = new Set(path).add(derivedKey);
-      (derivedSources.get(derivedKey) || []).forEach(sourceKey => {
-        const directAnchor = directColumns.get(sourceKey);
-        const anchor = directAnchor || fallbackAnchor;
-        if (directAnchor === undefined) {
-          registerSourceAnchor(sourceKey, anchor);
-        }
-        if (derivedSources.has(sourceKey)) {
-          visitSources(sourceKey, anchor, nextPath);
-        }
-      });
-    };
-    columns.forEach(column => {
-      if (derivedSources.has(column.key)) {
-        visitSources(column.key, column, new Set());
-      }
-    });
-
-    return Array.from(sourceAnchors.entries())
-      .filter((entry): entry is [string, MatrixColumn] => entry[1] !== null)
-      .map(([sourceKey, anchor]) => ({
-        ...anchor,
-        key: sourceKey,
-        variableId: sourceKey.slice(sourceKey.indexOf('\u001F') + 1),
-        sourceVariableId: sourceKey.slice(sourceKey.indexOf('\u001F') + 1),
-        isDerived: derivedSources.has(sourceKey)
-      }));
-  }
-
-  private resolveInitialCell(
-    value: ResponseValue | undefined,
-    profile: ProfileDefinitions
-  ): ResolvedCell {
-    if (value && (value.code !== null || value.score !== null)) {
-      if (value.code === -3 || value.code === -4) {
-        return this.fromMissing(
-          profile.byId.get(value.code === -3 ? 'mir' : 'mci')!
-        );
-      }
-      const storedMissing =
-        value.code !== null && value.code < 0 ?
-          profile.byCode.get(value.code) :
-          undefined;
-      if (storedMissing) {
-        return {
-          ...this.fromMissing(storedMissing),
-          code: value.code,
-          score: value.score ?? storedMissing.score
-        };
-      }
-      return {
-        state:
-          (value.code !== null && value.code >= 0) ||
-          (value.code === null && value.score !== null) ?
-            'valid' :
-            'error',
-        code: value.code,
-        score: value.score,
-        unresolved: value.code === null,
-        activity: true,
-        candidate: false,
-        omission: false
-      };
-    }
-
-    const status =
-      value?.status === null || value?.status === undefined ?
-        null :
-        statusNumberToString(value.status);
-    if (status === 'INVALID') {
-      return this.fromMissing(profile.byId.get('mir')!);
-    }
-    if (status === 'CODING_ERROR') {
-      return this.fromMissing(profile.byId.get('mci')!);
-    }
-    if (
-      status === 'UNSET' ||
-      status === 'DISPLAYED' ||
-      status === 'PARTLY_DISPLAYED'
-    ) {
-      return {
-        ...this.fromMissing(profile.byId.get('mbi_mbo')!),
-        omission: true,
-        activity: true
-      };
-    }
-    if (status === 'NOT_REACHED' || !value) {
-      return {
-        ...this.unresolvedCell(),
-        state: 'mnr',
-        candidate: true,
-        activity: false
-      };
-    }
-    return this.unresolvedCell();
-  }
-
-  private resolveNotReachedCandidates(
-    cells: ResolvedCell[],
-    columns: MatrixColumn[],
-    design: BookletDesign,
-    profile: ProfileDefinitions,
-    scope: ItemDatasetNotReachedScope,
-    recodeTrailingOmissions: boolean
-  ): void {
-    const groups = new Map<string, number[]>();
-    columns.forEach((column, index) => {
-      const position = design.units.get(column.unitId);
-      if (!position) {
-        return;
-      }
-      let group = column.unitId;
-      if (scope === 'booklet') {
-        group = 'booklet';
-      } else if (scope === 'testlet') {
-        group = position.testletKey;
-      }
-      const indexes = groups.get(group) || [];
-      indexes.push(index);
-      groups.set(group, indexes);
-    });
-
-    groups.forEach(indexes => {
-      indexes.sort((left, right) => {
-        const leftPosition = design.units.get(columns[left].unitId)!;
-        const rightPosition = design.units.get(columns[right].unitId)!;
-        return (
-          leftPosition.order - rightPosition.order ||
-          columns[left].itemOrder - columns[right].itemOrder
-        );
-      });
-      let laterActivity = false;
-      let position = indexes.length - 1;
-      while (position >= 0) {
-        const referenceIndex = indexes[position];
-        const referencePosition = design.units.get(
-          columns[referenceIndex].unitId
-        )!;
-        const itemOrder = columns[referenceIndex].itemOrder;
-        let firstAtPosition = position;
-        while (firstAtPosition > 0) {
-          const previousIndex = indexes[firstAtPosition - 1];
-          const previousPosition = design.units.get(
-            columns[previousIndex].unitId
-          )!;
-          if (
-            previousPosition.order !== referencePosition.order ||
-            columns[previousIndex].itemOrder !== itemOrder
-          ) {
-            break;
-          }
-          firstAtPosition -= 1;
-        }
-        const positionIndexes = indexes.slice(firstAtPosition, position + 1);
-        for (const cellIndex of positionIndexes) {
-          const cell = cells[cellIndex];
-          if (cell.candidate) {
-            cells[cellIndex] = this.fromMissing(
-              profile.byId.get(laterActivity ? 'mbi_mbo' : 'mnr')!
-            );
-          } else if (
-            cell.omission &&
-            recodeTrailingOmissions &&
-            !laterActivity
-          ) {
-            cells[cellIndex] = this.fromMissing(profile.byId.get('mnr')!);
-          }
-        }
-        for (const cellIndex of positionIndexes) {
-          if (cells[cellIndex].activity) {
-            laterActivity = true;
-            break;
-          }
-        }
-        position = firstAtPosition - 1;
-      }
-    });
-  }
-
-  private resolveDerivedState(
-    key: string,
-    responseValues: Map<string, ResponseValue>,
-    derivedSources: Map<string, string[]>,
-    profile: ProfileDefinitions,
-    cellsByResponseKey: Map<string, ResolvedCell>,
-    recursion: Set<string>
-  ): ItemDatasetMissingState {
-    if (recursion.has(key)) {
-      return 'error';
-    }
-    const sources = derivedSources.get(key);
-    if (!sources || sources.length === 0) {
-      return cellsByResponseKey.get(key)?.state || 'error';
-    }
-    recursion.add(key);
-    const states = sources.map(sourceKey => {
-      const sourceValue = responseValues.get(sourceKey);
-      if (
-        sourceValue &&
-        (sourceValue.code !== null || sourceValue.score !== null)
-      ) {
-        return (
-          cellsByResponseKey.get(sourceKey)?.state ||
-          this.resolveInitialCell(sourceValue, profile).state
-        );
-      }
-      if (derivedSources.has(sourceKey)) {
-        return this.resolveDerivedState(
-          sourceKey,
-          responseValues,
-          derivedSources,
-          profile,
-          cellsByResponseKey,
-          recursion
-        );
-      }
-      const resolvedSource = cellsByResponseKey.get(sourceKey);
-      if (resolvedSource) {
-        return resolvedSource.state;
-      }
-      return sourceValue ?
-        this.resolveInitialCell(sourceValue, profile).state :
-        'error';
-    });
-    recursion.delete(key);
-    return aggregateItemDatasetMissingStates(states);
-  }
-
-  private fromMissing(missing: ResolvedMissingValue): ResolvedCell {
-    return {
-      state: this.toItemDatasetMissingState(missing.id),
-      code: missing.code,
-      score: missing.score,
-      unresolved: false,
-      activity: missing.id !== 'mnr' && missing.id !== 'mbd',
-      candidate: false,
-      omission: missing.id === 'mbi_mbo'
-    };
-  }
-
-  private toItemDatasetMissingState(id: string): ItemDatasetMissingState {
-    return requiredMissingIds.includes(id as IqbStandardMissingId) ?
-      id as IqbStandardMissingId :
-      'error';
+    await checkCancellation?.();
+    return step.value;
   }
 
   private unresolvedCell(): ResolvedCell {
-    return {
-      state: 'error',
-      code: null,
-      score: null,
-      unresolved: true,
-      activity: true,
-      candidate: false,
-      omission: false
-    };
+    return this.cellResolver.unresolvedCell();
   }
 
   private getExportValue(
     cell: ResolvedCell,
     requestedValue: ItemMatrixValue
   ): string | number {
-    if (requestedValue === 'score') {
-      return cell.score === null ? '' : cell.score;
-    }
-    return cell.unresolved || cell.code === null ? 'NA' : cell.code;
+    return this.cellResolver.getExportValue(cell, requestedValue);
   }
 
   private async getResponseValuesForRows(
@@ -1406,11 +779,11 @@ export class CodingItemMatrixExportService {
   }
 
   private getSelectionKey(unitId: string, itemId: string): string {
-    return `${normalizeExclusionUnitId(unitId)}\u001F${String(itemId).trim()}`;
+    return ItemDatasetSelectionKey.from(unitId, itemId).toString();
   }
 
   private getResponseKey(unitId: string, variableId: string): string {
-    return `${normalizeExclusionUnitId(unitId)}\u001F${String(variableId).trim()}`;
+    return ItemDatasetResponseKey.from(unitId, variableId).toString();
   }
 
   private toNullableNumber(
