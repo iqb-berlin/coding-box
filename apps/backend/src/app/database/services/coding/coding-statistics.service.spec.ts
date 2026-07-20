@@ -344,10 +344,10 @@ describe('CodingStatisticsService', () => {
         'coding_incomplete_variables_version:1'
       );
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding_incomplete_variables_v8:1'
+        'coding_incomplete_variables_v9:1'
       );
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding_incomplete_variables_scope_v1:1'
+        'coding_incomplete_variables_scope_v2:1'
       );
     });
 
