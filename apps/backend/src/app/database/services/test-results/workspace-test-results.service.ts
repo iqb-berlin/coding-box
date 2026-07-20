@@ -3580,7 +3580,7 @@ export class WorkspaceTestResultsService {
         return {
           value: v,
           count,
-          p: total > 0 ? (count / total) * 100 : 0
+          p: total > 0 ? count / total : 0
         };
       });
       result[key] = { total, values: rows };

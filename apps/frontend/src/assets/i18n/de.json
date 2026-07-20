@@ -2225,6 +2225,10 @@
       "manual-title": "Kodierstatus wird manuell aktualisiert",
       "manual-text": "Automatische Statusprüfungen sind für diesen Arbeitsbereich deaktiviert. Aktualisieren Sie den Kodierstatus in der Kodierungsverwaltung bei Bedarf manuell.",
       "refresh": "Kodierstatus aktualisieren"
+    },
+    "flat-table": {
+      "response-frequency-column": "Antwortwerthäufigkeit",
+      "response-frequency-tooltip": "Aggregierte Häufigkeit dieses Antwortwerts über alle berücksichtigten Fälle. Der Wert wird in jeder passenden Fallzeile wiederholt."
     }
   },
   "coding-variables-dialog": {
