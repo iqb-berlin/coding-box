@@ -65,7 +65,7 @@ describe('ExportToastComponent', () => {
           'coding-times': 'Kodierzeiten-Bericht',
           'manual-review-most-frequent': 'Kodierer: häufigster Code',
           'results-by-version': 'Finale Ergebnisdaten',
-          'item-matrix': 'Itemmatrix'
+          'item-matrix': 'Itemdatensatz'
         },
         errors: {
           'too-many-worksheets-title': 'Export zu groß',
@@ -109,7 +109,7 @@ describe('ExportToastComponent', () => {
     expect(component.getExportTypeLabel(jobs[0])).toBe('Kodierer: häufigster Code');
     expect(component.getExportTypeLabel('detailed')).toBe('Detailliertes Kodierprotokoll');
     expect(component.getExportTypeLabel('results-by-version')).toBe('Finale Ergebnisdaten');
-    expect(component.getExportTypeLabel('item-matrix')).toBe('Itemmatrix');
+    expect(component.getExportTypeLabel('item-matrix')).toBe('Itemdatensatz');
     expect(component.getExportTypeLabel('by-variable-compact')).toBe('Nach Variable, kompakt');
     expect(component.getExportTypeLabel('custom')).toBe('custom');
     expect(component.getErrorTitle(jobs[3])).toBe('Export fehlgeschlagen');

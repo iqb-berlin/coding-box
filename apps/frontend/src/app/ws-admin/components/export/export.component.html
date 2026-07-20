@@ -18,6 +18,7 @@
               'ws-admin.export-options.export-type' | translate
             }}</mat-label>
             <mat-select
+              data-cy="export-type"
               [(ngModel)]="selectedFormat"
               (ngModelChange)="onSelectedFormatChange()"
             >
@@ -84,6 +85,122 @@
             </mat-select>
           </mat-form-field>
 
+          <ng-container *ngIf="selectedFormat === 'item-matrix'">
+            <mat-form-field appearance="outline">
+              <mat-label>{{
+                'ws-admin.export-options.item-dataset-missings-profile'
+                  | translate
+              }}</mat-label>
+              <mat-select
+                data-cy="item-dataset-missings-profile"
+                [(ngModel)]="selectedItemDatasetMissingsProfileId"
+              >
+                <mat-option
+                  *ngFor="let profile of itemDatasetMissingsProfiles"
+                  [value]="profile.id"
+                >
+                  {{ profile.label }}
+                </mat-option>
+              </mat-select>
+              <mat-hint *ngIf="itemDatasetMissingsProfiles.length === 0">
+                {{
+                  'ws-admin.export-options.item-dataset-no-missings-profile'
+                    | translate
+                }}
+              </mat-hint>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>{{
+                'ws-admin.export-options.item-dataset-search' | translate
+              }}</mat-label>
+              <input
+                data-cy="item-dataset-search"
+                matInput
+                [(ngModel)]="itemSearch"
+              />
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>{{
+                'ws-admin.export-options.item-dataset-items' | translate
+              }}</mat-label>
+              <mat-select
+                data-cy="item-dataset-items"
+                [ngModel]="selectedItemKeys"
+                (ngModelChange)="onItemDatasetSelectionChange($event)"
+                multiple
+              >
+                <mat-option
+                  *ngFor="let item of filteredItemDatasetOptions"
+                  [value]="getItemDatasetKey(item)"
+                >
+                  {{ item.columnName }} · {{ item.itemLabel }}
+                </mat-option>
+              </mat-select>
+              <mat-hint>
+                {{
+                  'ws-admin.export-options.item-dataset-items-selected'
+                    | translate: { count: selectedItemKeys.length }
+                }}
+              </mat-hint>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>{{
+                'ws-admin.export-options.item-dataset-mnr-scope' | translate
+              }}</mat-label>
+              <mat-select
+                data-cy="item-dataset-mnr-scope"
+                [(ngModel)]="notReachedScope"
+                (ngModelChange)="onNotReachedScopeChange()"
+              >
+                <mat-option value="unit">{{
+                  'ws-admin.export-options.item-dataset-mnr-scope-unit'
+                    | translate
+                }}</mat-option>
+                <mat-option value="testlet">{{
+                  'ws-admin.export-options.item-dataset-mnr-scope-testlet'
+                    | translate
+                }}</mat-option>
+                <mat-option value="booklet">{{
+                  'ws-admin.export-options.item-dataset-mnr-scope-booklet'
+                    | translate
+                }}</mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <mat-checkbox
+              data-cy="item-dataset-recode-trailing"
+              *ngIf="notReachedScope !== 'unit'"
+              [(ngModel)]="recodeTrailingOmissions"
+              color="primary"
+            >
+              {{
+                'ws-admin.export-options.item-dataset-recode-trailing'
+                  | translate
+              }}
+            </mat-checkbox>
+
+            <div
+              *ngIf="itemDatasetMappingIssues.length > 0"
+              class="export-warning"
+            >
+              <mat-icon>warning</mat-icon>
+              <div>
+                <div class="warning-title">
+                  {{
+                    'ws-admin.export-options.item-dataset-mapping-title'
+                      | translate
+                  }}
+                </div>
+                <p *ngFor="let issue of itemDatasetMappingIssues">
+                  {{ issue }}
+                </p>
+              </div>
+            </div>
+          </ng-container>
+
           <ng-container *ngIf="selectedFormat === 'psychometrics'">
             <div class="psychometric-info-block">
               <div class="psychometric-info-header">
@@ -114,15 +231,13 @@
                 aria-controls="psychometric-info-details"
               >
                 <mat-icon>{{
-                  isPsychometricInfoExpanded
-                    ? 'expand_less'
-                    : 'help_outline'
+                  isPsychometricInfoExpanded ? 'expand_less' : 'help_outline'
                 }}</mat-icon>
                 {{
                   (isPsychometricInfoExpanded
                     ? 'ws-admin.export-options.psychometric-info-hide-details'
-                    : 'ws-admin.export-options.psychometric-info-show-details')
-                    | translate
+                    : 'ws-admin.export-options.psychometric-info-show-details'
+                  ) | translate
                 }}
               </button>
 
@@ -332,6 +447,7 @@
     </mat-card-content>
     <mat-card-actions align="end">
       <button
+        data-cy="start-export"
         mat-raised-button
         color="primary"
         (click)="onExport()"

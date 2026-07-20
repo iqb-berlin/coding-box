@@ -785,4 +785,28 @@ describe('CodingJobBackendService', () => {
       });
     });
   });
+
+  describe('item dataset exports', () => {
+    it('loads selectable VOMD items and mapping issues', () => {
+      service.getItemDatasetOptions(5).subscribe(result => {
+        expect(result.items[0].columnName).toBe('Aufgabe1_ITEM1');
+        expect(result.mappingIssues).toEqual([]);
+      });
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/5/coding/export/item-dataset-options`
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush({
+        items: [{
+          unitId: 'UNIT1',
+          unitLabel: 'Aufgabe 1',
+          itemId: 'ITEM1',
+          itemLabel: 'Item 1',
+          columnName: 'Aufgabe1_ITEM1'
+        }],
+        mappingIssues: []
+      });
+    });
+  });
 });
