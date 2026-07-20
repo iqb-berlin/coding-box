@@ -16,6 +16,7 @@ describe('ExportComponent', () => {
   let snackOpen: jest.Mock;
   let getMissingsProfiles: jest.Mock;
   let getPsychometricDomainCandidates: jest.Mock;
+  let getItemDatasetOptions: jest.Mock;
   let selectedWorkspaceIdSubject: Subject<number>;
   let appService: {
     selectedWorkspaceId: number;
@@ -58,6 +59,16 @@ describe('ExportComponent', () => {
         mappingFallbackPreview: []
       })
     );
+    getItemDatasetOptions = jest.fn().mockReturnValue(of({
+      items: [{
+        unitId: 'UNIT1',
+        unitLabel: 'Aufgabe 1',
+        itemId: 'ITEM1',
+        itemLabel: 'Item 1',
+        columnName: 'Aufgabe1_ITEM1'
+      }],
+      mappingIssues: []
+    }));
 
     await TestBed.configureTestingModule({
       imports: [
@@ -74,7 +85,8 @@ describe('ExportComponent', () => {
           provide: ExportJobService,
           useValue: {
             startJob,
-            getPsychometricDomainCandidates
+            getPsychometricDomainCandidates,
+            getItemDatasetOptions
           }
         },
         {
@@ -318,7 +330,12 @@ describe('ExportComponent', () => {
         userId: 2,
         version: 'v2',
         format: 'csv',
-        matrixValue: 'score'
+        matrixValue: 'score',
+        missingsProfileId: 4,
+        notReachedScope: 'unit',
+        recodeTrailingOmissions: false,
+        items: [{ unitId: 'UNIT1', itemId: 'ITEM1' }],
+        downloadFilePrefix: 'Itemdatensatz'
       })
     );
     const config = startJob.mock.calls[0][1];
@@ -327,6 +344,138 @@ describe('ExportComponent', () => {
     expect(config).not.toHaveProperty('includeGeoGebraFiles');
     expect(component.includeGeoGebraResponseValues).toBe(false);
     expect(component.includeGeoGebraFiles).toBe(false);
+  });
+
+  it('blocks item dataset exports when VOMD mappings are invalid', () => {
+    getItemDatasetOptions.mockReturnValue(of({
+      items: [],
+      mappingIssues: ['UNIT1/VAR1: keine VOMD-Zuordnung']
+    }));
+    component.selectedFormat = 'item-matrix';
+
+    component.onSelectedFormatChange();
+
+    expect(component.itemDatasetMappingIssues).toEqual([
+      'UNIT1/VAR1: keine VOMD-Zuordnung'
+    ]);
+    expect(component.isExportDisabled).toBe(true);
+  });
+
+  it('requires an explicit item dataset profile when IQB standard is absent', () => {
+    fixture.destroy();
+    getMissingsProfiles.mockReturnValueOnce(of([
+      { id: 7, label: 'Projektprofil' }
+    ]));
+
+    fixture = TestBed.createComponent(ExportComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    component.selectedFormat = 'item-matrix';
+    component.onSelectedFormatChange();
+
+    expect(component.selectedItemDatasetMissingsProfileId).toBeNull();
+    expect(component.isExportDisabled).toBe(true);
+
+    component.selectedItemDatasetMissingsProfileId = 7;
+
+    expect(component.isExportDisabled).toBe(false);
+  });
+
+  it('preselects only the canonical IQB standard profile', () => {
+    fixture.destroy();
+    getMissingsProfiles.mockReturnValueOnce(of([
+      { id: 7, label: 'Mein IQB Standard angepasst' },
+      { id: 4, label: 'IQB-Standard' }
+    ]));
+
+    fixture = TestBed.createComponent(ExportComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    component.selectedFormat = 'item-matrix';
+    component.onSelectedFormatChange();
+
+    expect(component.selectedItemDatasetMissingsProfileId).toBe(4);
+  });
+
+  it('keeps item dataset and psychometric profile selections separate', () => {
+    component.selectedFormat = 'item-matrix';
+    component.onSelectedFormatChange();
+    component.selectedItemDatasetMissingsProfileId = 7;
+
+    component.selectedFormat = 'psychometrics';
+    component.onSelectedFormatChange();
+    component.selectedMissingsProfileId = 9;
+
+    expect(component.selectedItemDatasetMissingsProfileId).toBe(7);
+    expect(component.selectedMissingsProfileId).toBe(9);
+  });
+
+  it('preserves hidden item selections when a filtered selection changes', () => {
+    component.itemDatasetOptions = [
+      {
+        unitId: 'UNIT1',
+        unitLabel: 'Aufgabe 1',
+        itemId: 'ITEM1',
+        itemLabel: 'Item 1',
+        columnName: 'Aufgabe1_ITEM1'
+      },
+      {
+        unitId: 'UNIT2',
+        unitLabel: 'Aufgabe 2',
+        itemId: 'ITEM2',
+        itemLabel: 'Item 2',
+        columnName: 'Aufgabe2_ITEM2'
+      }
+    ];
+    component.selectedItemKeys = component.itemDatasetOptions.map(
+      item => component.getItemDatasetKey(item)
+    );
+    component.itemSearch = 'ITEM2';
+
+    component.onItemDatasetSelectionChange([]);
+
+    expect(component.selectedItemKeys).toEqual(['UNIT1\u001FITEM1']);
+  });
+
+  it('keeps item profiles available when psychometric profile loading fails', () => {
+    fixture.destroy();
+    getMissingsProfiles
+      .mockReturnValueOnce(of([{ id: 4, label: 'IQB-Standard' }]))
+      .mockReturnValueOnce(
+        throwError(() => new Error('psychometric profiles failed'))
+      );
+
+    fixture = TestBed.createComponent(ExportComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    component.selectedFormat = 'item-matrix';
+    component.onSelectedFormatChange();
+
+    expect(component.itemDatasetMissingsProfiles).toEqual([
+      { id: 4, label: 'IQB-Standard' }
+    ]);
+    expect(component.selectedItemDatasetMissingsProfileId).toBe(4);
+
+    component.selectedFormat = 'psychometrics';
+    component.onSelectedFormatChange();
+    component.selectedFormat = 'item-matrix';
+    component.onSelectedFormatChange();
+
+    expect(component.itemDatasetMissingsProfiles).toEqual([
+      { id: 4, label: 'IQB-Standard' }
+    ]);
+    expect(component.selectedItemDatasetMissingsProfileId).toBe(4);
+    expect(component.isExportDisabled).toBe(false);
+  });
+
+  it('clears trailing omission recoding for per-task scope', () => {
+    component.notReachedScope = 'booklet';
+    component.recodeTrailingOmissions = true;
+    component.notReachedScope = 'unit';
+
+    component.onNotReachedScopeChange();
+
+    expect(component.recodeTrailingOmissions).toBe(false);
   });
 
   it('includes GeoGebra package option only for Excel result exports', () => {
