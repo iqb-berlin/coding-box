@@ -5,6 +5,7 @@ import {
   CodingItemMatrixExportService,
   ItemMatrixExportConfiguration
 } from './coding-item-matrix-export.service';
+import { ItemDatasetMetadataService } from './item-dataset-metadata.service';
 
 const collectStream = (stream: NodeJS.ReadableStream): Promise<string> => new Promise((resolve, reject) => {
   let output = '';
@@ -88,25 +89,34 @@ const createService = (
     fileUploadRepository?: object;
     metadataResolver?: object;
   } = {}
-) => new CodingItemMatrixExportService(
-  (overrides.responseRepository || {}) as never,
-  (overrides.bookletRepository || {}) as never,
-  (overrides.unitRepository || {}) as never,
-  (overrides.workspaceFilesService || {
+) => {
+  const workspaceFilesService = overrides.workspaceFilesService || {
     getUnitVariableMap: jest.fn().mockResolvedValue(new Map()),
     getDerivedVariablesBySourceMap: jest.fn().mockResolvedValue(new Map())
-  }) as never,
-  (overrides.workspaceExclusionService || {
+  };
+  const workspaceExclusionService = overrides.workspaceExclusionService || {
     resolveExclusionsForQueries: jest.fn().mockResolvedValue({
       globalIgnoredUnits: [],
       ignoredBooklets: [],
       testletIgnoredUnits: []
     })
-  }) as never,
-  (overrides.missingsProfilesService || {}) as never,
-  overrides.fileUploadRepository as never,
-  overrides.metadataResolver as never
-);
+  };
+  const metadataService = new ItemDatasetMetadataService(
+    (overrides.unitRepository || {}) as never,
+    (overrides.fileUploadRepository || {}) as never,
+    workspaceFilesService as never,
+    workspaceExclusionService as never,
+    (overrides.metadataResolver || {}) as never
+  );
+  return new CodingItemMatrixExportService(
+    (overrides.responseRepository || {}) as never,
+    (overrides.bookletRepository || {}) as never,
+    workspaceFilesService as never,
+    workspaceExclusionService as never,
+    (overrides.missingsProfilesService || {}) as never,
+    metadataService
+  );
+};
 
 describe('CodingItemMatrixExportService', () => {
   it('handles output stream errors when Excel preparation fails', async () => {
@@ -848,7 +858,13 @@ describe('CodingItemMatrixExportService', () => {
       itemId: 'ITEM1',
       columnName: 'Aufgabe_ITEM1'
     });
-    expect(options.mappingIssues[0]).toContain(
+    expect(options.mappingIssues[0]).toMatchObject({
+      code: 'column-name-collision',
+      unitId: 'UNIT2',
+      itemId: 'ITEM1',
+      columnName: 'Aufgabe_ITEM1'
+    });
+    expect(options.mappingIssues[0].message).toContain(
       "Spaltenname 'Aufgabe_ITEM1' kollidiert"
     );
   });
@@ -890,10 +906,15 @@ describe('CodingItemMatrixExportService', () => {
 
     const options = await service.getItemDatasetOptions(7);
 
-    expect(options.mappingIssues).toContain(
-      'Spaltenname \'person_login\' kollidiert für feste ' +
-        'Identifikationsspalte und UNIT1\u001Flogin'
-    );
+    expect(options.mappingIssues).toContainEqual({
+      code: 'column-name-collision',
+      message:
+        "Spaltenname 'person_login' kollidiert für feste " +
+        'Identifikationsspalte und UNIT1\u001Flogin',
+      unitId: 'UNIT1',
+      itemId: 'login',
+      columnName: 'person_login'
+    });
   });
 
   it('excludes globally ignored units before resolving VOMD metadata', async () => {
@@ -971,14 +992,21 @@ describe('CodingItemMatrixExportService', () => {
         buildColumns: (
           workspaceId: number,
           selection: Array<{ unitId: string; itemId: string }>
-        ) => Promise<{ columns: unknown[]; issues: string[] }>;
+        ) => Promise<{
+          columns: unknown[];
+          issues: Array<{ code: string; message: string }>;
+        }>;
       }
     ).buildColumns(7, [{ unitId: 'UNIT1', itemId: 'UNKNOWN' }]);
 
     expect(result.columns).toHaveLength(0);
-    expect(result.issues).toContain(
-      "Ausgewähltes Item 'UNIT1\u001FUNKNOWN' konnte nicht eindeutig zugeordnet werden"
-    );
+    expect(result.issues).toContainEqual({
+      code: 'unknown-selection',
+      message:
+        "Ausgewähltes Item 'UNIT1\u001FUNKNOWN' konnte nicht eindeutig zugeordnet werden",
+      unitId: 'UNIT1',
+      itemId: 'UNKNOWN'
+    });
   });
 
   it('rejects profiles with an absent score property', async () => {
@@ -1031,6 +1059,11 @@ describe('CodingItemMatrixExportService', () => {
     const columns = Array.from({ length: 101 }, (_, index) => (
       column(String(index + 1))
     ));
+    Object.defineProperty(columns[100], 'key', {
+      get: () => {
+        throw new Error('cell resolution continued past its checkpoint');
+      }
+    });
     const context = {
       rows: [
         {
@@ -1070,36 +1103,40 @@ describe('CodingItemMatrixExportService', () => {
     const checkCancellation = jest
       .fn()
       .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(cancellationError);
-    const writeRow = jest.fn();
 
-    await expect(
-      (
+    const consumeRows = async (): Promise<unknown[]> => {
+      const rows = (
         service as never as {
-          writeRows: (
+          resolveRows: (
             workspaceId: number,
             contextValue: unknown,
             requestedValue: 'code' | 'score',
             version: 'v1' | 'v2' | 'v3',
             configValue: ItemMatrixExportConfiguration,
-            writer: jest.Mock,
             progressCallback: undefined,
             cancellationCheck: () => Promise<void>
-          ) => Promise<void>;
+          ) => AsyncGenerator<unknown>;
         }
-      ).writeRows(
+      ).resolveRows(
         7,
         context,
         'code',
         'v2',
         configuration,
-        writeRow,
         undefined,
         checkCancellation
-      )
-    ).rejects.toBe(cancellationError);
-    expect(checkCancellation).toHaveBeenCalledTimes(2);
-    expect(writeRow).not.toHaveBeenCalled();
+      );
+      const resolved = [];
+      for await (const row of rows) {
+        resolved.push(row);
+      }
+      return resolved;
+    };
+
+    await expect(consumeRows()).rejects.toBe(cancellationError);
+    expect(checkCancellation).toHaveBeenCalledTimes(3);
   });
 
   it('checks cancellation while indexing large response batches', async () => {

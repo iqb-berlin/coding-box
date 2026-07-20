@@ -349,14 +349,22 @@ describe('ExportComponent', () => {
   it('blocks item dataset exports when VOMD mappings are invalid', () => {
     getItemDatasetOptions.mockReturnValue(of({
       items: [],
-      mappingIssues: ['UNIT1/VAR1: keine VOMD-Zuordnung']
+      mappingIssues: [{
+        code: 'vomd-mapping',
+        message: 'UNIT1/VAR1: keine VOMD-Zuordnung',
+        unitId: 'UNIT1'
+      }]
     }));
     component.selectedFormat = 'item-matrix';
 
     component.onSelectedFormatChange();
 
     expect(component.itemDatasetMappingIssues).toEqual([
-      'UNIT1/VAR1: keine VOMD-Zuordnung'
+      {
+        code: 'vomd-mapping',
+        message: 'UNIT1/VAR1: keine VOMD-Zuordnung',
+        unitId: 'UNIT1'
+      }
     ]);
     expect(component.isExportDisabled).toBe(true);
   });
