@@ -4564,12 +4564,38 @@ export class CodingJobService {
       score: number | null;
       source: 'manual' | 'auto' | 'none';
     } {
-    if (manualUnit) {
-      const hasManualCode =
-        manualUnit.code !== null &&
-        manualUnit.code !== undefined;
+    const latestCode = response ? getLatestCode(response) : null;
+    const hasManualCode =
+      manualUnit?.code !== null &&
+      manualUnit?.code !== undefined;
+
+    // Keep an actual manual decision authoritative. If the job unit has no
+    // decision, a response result written after job creation (for example by
+    // empty-response coding) must still be shown as automatically coded.
+    if (manualUnit && hasManualCode) {
       return {
-        status: hasManualCode || manualUnit.is_open === false ?
+        status: 'manual-coded',
+        code: manualUnit.code ?? null,
+        score: manualUnit.score ?? null,
+        source: 'manual'
+      };
+    }
+
+    if (
+      response &&
+      (response.is_autocoder_generated === true || latestCode?.code !== null)
+    ) {
+      return {
+        status: 'auto-coded',
+        code: latestCode?.code ?? null,
+        score: latestCode?.score ?? null,
+        source: 'auto'
+      };
+    }
+
+    if (manualUnit) {
+      return {
+        status: manualUnit.is_open === false ?
           'manual-coded' :
           'manual-open',
         code: manualUnit.code ?? null,
@@ -4587,21 +4613,12 @@ export class CodingJobService {
       };
     }
 
-    const latestCode = getLatestCode(response);
-    if (
-      response.is_autocoder_generated === true ||
-      latestCode.code !== null ||
-      response.status_v1 !== null
-    ) {
+    if (response.status_v1 !== null) {
       return {
-        status: latestCode.code !== null || response.is_autocoder_generated === true ?
-          'auto-coded' :
-          'not-coded',
-        code: latestCode.code ?? null,
-        score: latestCode.score ?? null,
-        source: latestCode.code !== null || response.is_autocoder_generated === true ?
-          'auto' :
-          'none'
+        status: 'not-coded',
+        code: null,
+        score: null,
+        source: 'none'
       };
     }
 
