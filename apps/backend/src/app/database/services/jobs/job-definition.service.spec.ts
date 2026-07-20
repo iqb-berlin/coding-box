@@ -2054,7 +2054,7 @@ describe('JobDefinitionService', () => {
 
     await expect(service.previewJobDefinitionUpdateRefresh(2, 7, {
       maxCodingCases: 4
-    })).rejects.toThrow(/Unit 1:Var 1/);
+    })).rejects.toThrow(/UNIT 1:Var 1/);
 
     expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, expect.arrayContaining([
       expect.objectContaining({
@@ -2100,7 +2100,7 @@ describe('JobDefinitionService', () => {
 
     await expect(service.previewJobDefinitionUpdateRefresh(2, 7, {
       assignedVariables: [existingVariable, addedVariable]
-    })).rejects.toThrow(/Unit 2:Var 2/);
+    })).rejects.toThrow(/UNIT 2:Var 2/);
 
     expect(codingJobService.previewJobDefinitionRefresh).not.toHaveBeenCalled();
   });
@@ -2393,7 +2393,7 @@ describe('JobDefinitionService', () => {
 
     await expect(service.refreshCodingJobFromUpdatedDefinition(2, 7, {
       maxCodingCases: 4
-    })).rejects.toThrow(/Unit 1:Var 1/);
+    })).rejects.toThrow(/UNIT 1:Var 1/);
 
     expect(codingJobService.calculateDistributionVariableUsageByStatusBatch).toHaveBeenCalledWith(7, expect.arrayContaining([
       expect.objectContaining({
@@ -2444,7 +2444,7 @@ describe('JobDefinitionService', () => {
 
     await expect(service.refreshCodingJobFromUpdatedDefinition(2, 7, {
       assignedVariables: [existingVariable, addedVariable]
-    })).rejects.toThrow(/Unit 2:Var 2/);
+    })).rejects.toThrow(/UNIT 2:Var 2/);
 
     expect(codingJobService.refreshDistributedCodingJobs).not.toHaveBeenCalled();
     expect(jobDefinitionRepository.save).not.toHaveBeenCalled();
