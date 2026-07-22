@@ -84,6 +84,27 @@ export class WorkspaceCodingExportController {
     private codingPsychometricExportService: CodingPsychometricExportService
   ) {}
 
+  private parseVersionedExportMissingsProfileId(
+    version: 'v1' | 'v2' | 'v3',
+    value?: string
+  ): number | undefined {
+    if (value === undefined || value === '') {
+      if (version === 'v1') {
+        throw new BadRequestException(
+          'Version v1 exports require missingsProfileId to be a positive integer'
+        );
+      }
+      return undefined;
+    }
+    const profileId = Number(value);
+    if (!Number.isSafeInteger(profileId) || profileId <= 0) {
+      throw new BadRequestException(
+        'missingsProfileId must be a positive integer'
+      );
+    }
+    return version === 'v1' ? profileId : undefined;
+  }
+
   private mapExportJobState(
     state: string,
     job: { data?: { isCancelled?: boolean }; failedReason?: string }
@@ -440,6 +461,12 @@ export class WorkspaceCodingExportController {
       'Include GeoGebra response values as raw strings instead of placeholders',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'missingsProfileId',
+    required: false,
+    description: 'Missing profile. Required for version v1 exports.',
+    type: Number
+  })
   @ApiOkResponse({
     description: 'Coding results for specified version exported as CSV',
     content: {
@@ -464,9 +491,14 @@ export class WorkspaceCodingExportController {
         transform: value => value === 'true'
       })
                    includeGeoGebraResponseValues: boolean,
-                   @Res() res: Response
+                   @Res() res: Response,
+                   @Query('missingsProfileId') missingsProfileId?: string
   ): Promise<void> {
     try {
+      const resolvedMissingsProfileId = this.parseVersionedExportMissingsProfileId(
+        version,
+        missingsProfileId
+      );
       const csvStream =
         await this.codingExportOrchestratorService.exportResultsByVersionAsCsv({
           workspaceId: workspace_id,
@@ -475,7 +507,8 @@ export class WorkspaceCodingExportController {
           serverUrl,
           includeReplayUrl: includeReplayUrls,
           includeResponseValues,
-          includeGeoGebraResponseValues
+          includeGeoGebraResponseValues,
+          missingsProfileId: resolvedMissingsProfileId
         });
 
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -500,7 +533,11 @@ export class WorkspaceCodingExportController {
       );
 
       if (!res.headersSent) {
-        res.status(500).json({ error: 'Export failed' });
+        if (error instanceof BadRequestException) {
+          res.status(error.getStatus()).json(error.getResponse());
+        } else {
+          res.status(500).json({ error: 'Export failed' });
+        }
       } else if (!res.writableEnded) {
         res.end();
       }
@@ -555,6 +592,12 @@ export class WorkspaceCodingExportController {
       'Return a ZIP package with GeoGebra responses as .ggb files and Excel hyperlinks',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'missingsProfileId',
+    required: false,
+    description: 'Missing profile. Required for version v1 exports.',
+    type: Number
+  })
   @ApiOkResponse({
     description:
       'Coding results for specified version exported as Excel or as ZIP when GeoGebra files are included',
@@ -588,7 +631,8 @@ export class WorkspaceCodingExportController {
                    includeGeoGebraResponseValues: boolean,
       @Query('includeGeoGebraFiles', { transform: value => value === 'true' })
                    includeGeoGebraFiles: boolean,
-                   @Res() res: Response
+                   @Res() res: Response,
+                   @Query('missingsProfileId') missingsProfileId?: string
   ): Promise<void> {
     if (includeGeoGebraFiles && !includeResponseValues) {
       throw new BadRequestException(
@@ -596,6 +640,10 @@ export class WorkspaceCodingExportController {
       );
     }
 
+    const resolvedMissingsProfileId = this.parseVersionedExportMissingsProfileId(
+      version,
+      missingsProfileId
+    );
     const buffer =
       await this.codingExportOrchestratorService.exportResultsByVersionAsExcel({
         workspaceId: workspace_id,
@@ -605,7 +653,8 @@ export class WorkspaceCodingExportController {
         includeReplayUrl: includeReplayUrls,
         includeResponseValues,
         includeGeoGebraResponseValues,
-        includeGeoGebraFiles
+        includeGeoGebraFiles,
+        missingsProfileId: resolvedMissingsProfileId
       });
 
     res.setHeader(
@@ -1217,7 +1266,7 @@ export class WorkspaceCodingExportController {
         missingsProfileId: {
           type: 'number',
           description:
-            'Missing profile used for codes and numeric missing scores. Required for item-matrix.'
+            'Missing profile used for codes and numeric missing scores. Required for item-matrix and results-by-version v1.'
         },
         notReachedScope: {
           type: 'string',

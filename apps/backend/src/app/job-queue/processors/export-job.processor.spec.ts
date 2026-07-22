@@ -171,7 +171,8 @@ describe('ExportJobProcessor', () => {
     const job = createJob({
       exportType: 'results-by-version',
       version: 'v1',
-      format: 'excel'
+      format: 'excel',
+      missingsProfileId: 7
     });
     let filePath: string | undefined;
 

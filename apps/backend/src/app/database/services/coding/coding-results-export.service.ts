@@ -215,7 +215,8 @@ export class CodingResultsExportService {
     progressCallback?: (percentage: number) => Promise<void>,
     includeResponseValues: boolean = true,
     includeGeoGebraResponseValues: boolean = false,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    missingsProfileId?: number
   ): Promise<Readable> {
     return this.codingListService.getCodingResultsByVersionCsvStream(
       workspaceId,
@@ -226,7 +227,8 @@ export class CodingResultsExportService {
       progressCallback,
       includeResponseValues,
       includeGeoGebraResponseValues,
-      checkCancellation
+      checkCancellation,
+      missingsProfileId
     );
   }
 
@@ -239,7 +241,8 @@ export class CodingResultsExportService {
     progressCallback?: (percentage: number) => Promise<void>,
     includeResponseValues: boolean = true,
     includeGeoGebraResponseValues: boolean = false,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    missingsProfileId?: number
   ): Promise<Buffer> {
     return this.codingListService.getCodingResultsByVersionAsExcel(
       workspaceId,
@@ -250,7 +253,8 @@ export class CodingResultsExportService {
       progressCallback,
       includeResponseValues,
       includeGeoGebraResponseValues,
-      checkCancellation
+      checkCancellation,
+      missingsProfileId
     );
   }
 
@@ -264,7 +268,8 @@ export class CodingResultsExportService {
     progressCallback?: (percentage: number) => Promise<void>,
     includeResponseValues: boolean = true,
     includeGeoGebraResponseValues: boolean = false,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    missingsProfileId?: number
   ): Promise<void> {
     return this.codingListService.writeCodingResultsByVersionExcelToFile(
       filePath,
@@ -276,7 +281,8 @@ export class CodingResultsExportService {
       progressCallback,
       includeResponseValues,
       includeGeoGebraResponseValues,
-      checkCancellation
+      checkCancellation,
+      missingsProfileId
     );
   }
 
@@ -287,7 +293,8 @@ export class CodingResultsExportService {
     serverUrl: string,
     includeReplayUrls: boolean,
     progressCallback?: (percentage: number) => Promise<void>,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    missingsProfileId?: number
   ): Promise<Buffer> {
     return this.codingListService.getCodingResultsByVersionAsGeoGebraZip(
       workspaceId,
@@ -296,7 +303,8 @@ export class CodingResultsExportService {
       serverUrl || '',
       includeReplayUrls,
       progressCallback,
-      checkCancellation
+      checkCancellation,
+      missingsProfileId
     );
   }
 
@@ -308,7 +316,8 @@ export class CodingResultsExportService {
     serverUrl: string,
     includeReplayUrls: boolean,
     progressCallback?: (percentage: number) => Promise<void>,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    missingsProfileId?: number
   ): Promise<void> {
     return this.codingListService.writeCodingResultsByVersionGeoGebraZipToFile(
       filePath,
@@ -318,7 +327,8 @@ export class CodingResultsExportService {
       serverUrl || '',
       includeReplayUrls,
       progressCallback,
-      checkCancellation
+      checkCancellation,
+      missingsProfileId
     );
   }
 

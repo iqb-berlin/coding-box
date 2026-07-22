@@ -66,6 +66,7 @@ describe('CodingExportOrchestratorService', () => {
       onProgress,
       false,
       false,
+      undefined,
       undefined
     );
   });
@@ -91,6 +92,7 @@ describe('CodingExportOrchestratorService', () => {
       undefined,
       true,
       true,
+      undefined,
       undefined
     );
   });
@@ -118,6 +120,7 @@ describe('CodingExportOrchestratorService', () => {
       'http://app.example',
       true,
       onProgress,
+      undefined,
       undefined
     );
     expect(codingListService.getCodingResultsByVersionAsExcel).not.toHaveBeenCalled();
@@ -150,7 +153,8 @@ describe('CodingExportOrchestratorService', () => {
       onProgress,
       false,
       true,
-      checkCancellation
+      checkCancellation,
+      undefined
     );
   });
 
@@ -178,7 +182,8 @@ describe('CodingExportOrchestratorService', () => {
       'http://app.example',
       true,
       onProgress,
-      checkCancellation
+      checkCancellation,
+      undefined
     );
     expect(codingListService.writeCodingResultsByVersionExcelToFile).not.toHaveBeenCalled();
   });
