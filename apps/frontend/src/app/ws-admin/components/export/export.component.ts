@@ -108,9 +108,11 @@ export class ExportComponent {
   psychometricMappingIssueDetails = '';
   missingsProfiles: MissingsProfileOption[] = [];
   itemDatasetMissingsProfiles: MissingsProfileOption[] = [];
+  resultsMissingsProfiles: MissingsProfileOption[] = [];
   selectedPsychometricDomain = 'workspace';
   selectedMissingsProfileId: number | null = null;
   selectedItemDatasetMissingsProfileId: number | null = null;
+  selectedResultsMissingsProfileId: number | null = null;
   partWholeCorrection = true;
   maxCategoryCount = 10;
   isPsychometricInfoExpanded = false;
@@ -120,6 +122,10 @@ export class ExportComponent {
   private loadingPsychometricOptionsWorkspaceId: number | null = null;
   private itemDatasetOptionsWorkspaceId: number | null = null;
   private loadingItemDatasetOptionsWorkspaceId: number | null = null;
+  private resultsOptionsWorkspaceId: number | null = null;
+  private loadingResultsOptionsWorkspaceId: number | null = null;
+  isLoadingResultsOptions = false;
+  resultsOptionsLoadFailed = false;
 
   constructor() {
     this.loadGeneralOptions();
@@ -132,6 +138,8 @@ export class ExportComponent {
           this.loadPsychometricOptions();
         } else if (this.selectedFormat === 'item-matrix') {
           this.loadItemDatasetOptions();
+        } else if (this.resultsVersion === 'v1') {
+          this.loadResultsOptions();
         }
       });
   }
@@ -223,6 +231,49 @@ export class ExportComponent {
     });
   }
 
+  private loadResultsOptions(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (
+      !workspaceId ||
+      this.resultsOptionsWorkspaceId === workspaceId ||
+      this.loadingResultsOptionsWorkspaceId === workspaceId
+    ) {
+      return;
+    }
+    this.resultsOptionsLoadFailed = false;
+    this.isLoadingResultsOptions = true;
+    this.loadingResultsOptionsWorkspaceId = workspaceId;
+    this.missingsProfileService.getExportMissingsProfilesOrThrow(workspaceId)
+      .subscribe({
+        next: profiles => {
+          if (workspaceId !== this.appService.selectedWorkspaceId) return;
+          this.resultsMissingsProfiles = profiles.filter(profile => (
+            Number.isSafeInteger(profile.id) && profile.id > 0
+          ));
+          const standard = this.resultsMissingsProfiles.find(profile => (
+            profile.label === 'IQB-Standard'
+          ));
+          this.selectedResultsMissingsProfileId = standard?.id ??
+            this.resultsMissingsProfiles[0]?.id ?? null;
+          this.resultsOptionsWorkspaceId = workspaceId;
+          this.loadingResultsOptionsWorkspaceId = null;
+          this.isLoadingResultsOptions = false;
+        },
+        error: () => {
+          if (workspaceId !== this.appService.selectedWorkspaceId) return;
+          this.resultsMissingsProfiles = [];
+          this.selectedResultsMissingsProfileId = null;
+          this.resultsOptionsLoadFailed = true;
+          this.resultsOptionsWorkspaceId = null;
+          this.loadingResultsOptionsWorkspaceId = null;
+          this.isLoadingResultsOptions = false;
+          this.showPsychometricOptionsError(
+            'ws-admin.export.errors.results-options-failed'
+          );
+        }
+      });
+  }
+
   private resetWorkspaceOptions(): void {
     this.hasGeoGebraResponses = false;
     this.psychometricDomainCandidates = [];
@@ -231,9 +282,11 @@ export class ExportComponent {
     this.psychometricMappingIssueDetails = '';
     this.missingsProfiles = [];
     this.itemDatasetMissingsProfiles = [];
+    this.resultsMissingsProfiles = [];
     this.selectedPsychometricDomain = 'workspace';
     this.selectedMissingsProfileId = null;
     this.selectedItemDatasetMissingsProfileId = null;
+    this.selectedResultsMissingsProfileId = null;
     this.itemDatasetOptions = [];
     this.selectedItemKeys = [];
     this.itemSearch = '';
@@ -249,6 +302,10 @@ export class ExportComponent {
     this.psychometricOptionsLoadFailed = false;
     this.psychometricOptionsWorkspaceId = null;
     this.loadingPsychometricOptionsWorkspaceId = null;
+    this.isLoadingResultsOptions = false;
+    this.resultsOptionsLoadFailed = false;
+    this.resultsOptionsWorkspaceId = null;
+    this.loadingResultsOptionsWorkspaceId = null;
     this.clearUnsupportedResultsOptions();
   }
 
@@ -262,6 +319,14 @@ export class ExportComponent {
       this.loadPsychometricOptions();
     } else if (this.selectedFormat === 'item-matrix') {
       this.loadItemDatasetOptions();
+    } else if (this.resultsVersion === 'v1') {
+      this.loadResultsOptions();
+    }
+  }
+
+  onResultsVersionChange(): void {
+    if (this.resultsVersion === 'v1') {
+      this.loadResultsOptions();
     }
   }
 
@@ -384,7 +449,9 @@ export class ExportComponent {
       format: this.resultsFormat,
       includeResponseValues: this.includeResponseValues,
       includeGeoGebraResponseValues: this.includeGeoGebraResponseValues,
-      includeGeoGebraFiles: this.includeGeoGebraFiles
+      includeGeoGebraFiles: this.includeGeoGebraFiles,
+      missingsProfileId: this.resultsVersion === 'v1' ?
+        this.selectedResultsMissingsProfileId || undefined : undefined
     };
   }
 
@@ -399,6 +466,13 @@ export class ExportComponent {
         this.itemDatasetOptions.length === 0 ||
         this.selectedItemKeys.length === 0 ||
         this.itemDatasetMappingIssues.length > 0;
+    }
+    if (this.selectedFormat === 'results-by-version') {
+      return this.resultsVersion === 'v1' && (
+        this.isLoadingResultsOptions ||
+        this.resultsOptionsLoadFailed ||
+        this.selectedResultsMissingsProfileId === null
+      );
     }
     if (this.selectedFormat !== 'psychometrics') {
       return false;

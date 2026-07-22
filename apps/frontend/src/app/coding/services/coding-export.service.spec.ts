@@ -209,8 +209,20 @@ describe('CodingExportService', () => {
     req.flush(new Blob());
   });
 
+  it('should pass the selected missing profile to direct v1 exports', () => {
+    service.getCodingResultsByVersion(1, 'v1', false, true, false, 7)
+      .subscribe();
+
+    const req = httpMock.expectOne(request => (
+      request.url === `${mockServerUrl}admin/workspace/1/coding/results-by-version` &&
+      request.params.get('version') === 'v1' &&
+      request.params.get('missingsProfileId') === '7'
+    ));
+    req.flush(new Blob());
+  });
+
   it('should pass response value option to export jobs', () => {
-    service.startExportJob(1, 'results-by-version', 'v1', 'csv', false, undefined, false).subscribe(res => {
+    service.startExportJob(1, 'results-by-version', 'v1', 'csv', false, undefined, false, false, false, 7).subscribe(res => {
       expect(res).toBeDefined();
     });
 
@@ -225,13 +237,14 @@ describe('CodingExportService', () => {
       includeResponseValues: false,
       includeGeoGebraFiles: false,
       includeGeoGebraResponseValues: false,
+      missingsProfileId: 7,
       authToken: ''
     });
     req.flush({ jobId: 'job-1', message: 'started' });
   });
 
   it('should use external replay tokens for result export jobs with replay URLs', () => {
-    service.startExportJob(1, 'results-by-version', 'v1', 'csv', true).subscribe(res => {
+    service.startExportJob(1, 'results-by-version', 'v1', 'csv', true, undefined, true, false, false, 7).subscribe(res => {
       expect(res).toBeDefined();
     });
 
@@ -244,6 +257,7 @@ describe('CodingExportService', () => {
     expect(req.request.body).toMatchObject({
       exportType: 'results-by-version',
       includeReplayUrl: true,
+      missingsProfileId: 7,
       authToken: 'auth-token'
     });
     req.flush({ jobId: 'job-1', message: 'started' });
