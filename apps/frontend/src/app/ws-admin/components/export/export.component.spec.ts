@@ -135,7 +135,18 @@ describe('ExportComponent', () => {
             'n bezeichnet paarweise vollständige Fälle. Weniger als 30 Fälle verhindern den Export nicht.',
           'psychometric-info-part-whole-title': 'Part-Whole-Korrektur',
           'psychometric-info-part-whole-description':
-            'Zieht den aktuellen Item-Score aus dem Domänenscore ab.'
+            'Zieht den aktuellen Item-Score aus dem Domänenscore ab.',
+          'item-dataset-mapping-title':
+            'Fehlerhafte Item-Metadaten: {{count}} – der Itemdatensatz kann nicht exportiert werden',
+          'item-dataset-mapping-warning-title':
+            'Item-Metadatenwarnungen: {{count}} – der Export ist weiterhin möglich',
+          'item-dataset-diagnostic-file': 'VOMD-Datei',
+          'item-dataset-diagnostic-expected-file': 'Erwartete VOMD-Datei',
+          'item-dataset-diagnostic-unit': 'Unit',
+          'item-dataset-diagnostic-item': 'Item',
+          'item-dataset-diagnostic-variable': 'variableId',
+          'item-dataset-diagnostic-target-variable': 'Ziel-variableId',
+          'item-dataset-diagnostic-column': 'Spalte'
         },
         export: {
           'job-started': 'Datenexport gestartet',
@@ -349,25 +360,35 @@ describe('ExportComponent', () => {
 
   it('blocks item dataset exports when VOMD mappings are invalid', () => {
     getItemDatasetOptions.mockReturnValue(of({
-      items: [],
+      items: [{
+        unitId: 'UNIT1',
+        unitLabel: 'Aufgabe 1',
+        itemId: 'ITEM1',
+        itemLabel: 'Item 1',
+        columnName: 'Aufgabe1_ITEM1'
+      }],
       mappingIssues: [{
         code: 'vomd-mapping',
         message: 'UNIT1/VAR1: keine VOMD-Zuordnung',
-        unitId: 'UNIT1'
+        unitId: 'UNIT1',
+        variableId: 'VAR1',
+        sourceFile: 'unit-one.vomd',
+        suggestedAction: 'variableId in der VOMD-Datei korrigieren.'
       }]
     }));
     component.selectedFormat = 'item-matrix';
 
     component.onSelectedFormatChange();
+    fixture.detectChanges();
 
-    expect(component.itemDatasetMappingIssues).toEqual([
-      {
-        code: 'vomd-mapping',
-        message: 'UNIT1/VAR1: keine VOMD-Zuordnung',
-        unitId: 'UNIT1'
-      }
-    ]);
+    expect(component.itemDatasetMappingIssues).toHaveLength(1);
     expect(component.isExportDisabled).toBe(true);
+    const error = fixture.nativeElement.querySelector(
+      '[data-cy="item-dataset-mapping-errors"]'
+    ) as HTMLElement;
+    expect(error.textContent).toContain('Fehlerhafte Item-Metadaten: 1');
+    expect(error.textContent).toContain('VOMD-Datei: unit-one.vomd');
+    expect(error.textContent).toContain('variableId: VAR1');
   });
 
   it('shows resolved VOMD fallbacks without blocking the export', () => {
@@ -385,6 +406,7 @@ describe('ExportComponent', () => {
         message: 'UNIT1/ITEM1: eindeutiger Fallback verwendet',
         unitId: 'UNIT1',
         itemId: 'ITEM1',
+        variableId: 'VAR1',
         sourceFile: 'UNIT1.vomd',
         suggestedAction: 'variableId in der VOMD-Datei korrigieren.'
       }]
@@ -406,6 +428,9 @@ describe('ExportComponent', () => {
     expect(warning.textContent).toContain(
       'variableId in der VOMD-Datei korrigieren.'
     );
+    expect(warning.textContent).toContain('Item-Metadatenwarnungen: 1');
+    expect(warning.textContent).toContain('VOMD-Datei: UNIT1.vomd');
+    expect(warning.textContent).toContain('Ziel-variableId: VAR1');
   });
 
   it('requires an explicit item dataset profile when IQB standard is absent', () => {

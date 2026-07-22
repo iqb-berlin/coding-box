@@ -30,6 +30,10 @@ describe('Itemdatensatz-Export', () => {
           mappingWarnings: [{
             code: 'vomd-fallback-used',
             message: 'UNIT1/ITEM1: eindeutiger Fallback verwendet',
+            unitId: 'UNIT1',
+            itemId: 'ITEM1',
+            variableId: 'VAR1',
+            sourceFile: 'unit-one.vomd',
             suggestedAction: 'variableId im VOMD-Item korrigieren.'
           }]
         }
@@ -70,8 +74,11 @@ describe('Itemdatensatz-Export', () => {
       'IQB-Standard'
     );
     cy.get('[data-cy="item-dataset-mapping-warnings"]')
+      .should('contain.text', 'Item-Metadatenwarnungen: 1')
       .should('contain.text', 'eindeutiger Fallback verwendet')
-      .and('contain.text', 'variableId im VOMD-Item korrigieren');
+      .and('contain.text', 'variableId im VOMD-Item korrigieren')
+      .and('contain.text', 'VOMD-Datei: unit-one.vomd')
+      .and('contain.text', 'Ziel-variableId: VAR1');
     cy.get('[data-cy="item-dataset-mapping-warnings"] .mapping-diagnostic')
       .should('have.length', 1);
     cy.get('[data-cy="start-export"]').should('not.be.disabled');
@@ -128,8 +135,10 @@ describe('Itemdatensatz-Export', () => {
     cy.contains('mat-option', 'Itemdatensatz').click();
 
     cy.get('[data-cy="item-dataset-mapping-errors"]')
+      .should('contain.text', 'Fehlerhafte Item-Metadaten: 1')
       .should('contain.text', 'UNIT2: keine VOMD-Datei')
-      .and('contain.text', 'VOMD-Datei erzeugen oder Unit ausschließen');
+      .and('contain.text', 'VOMD-Datei erzeugen oder Unit ausschließen')
+      .and('contain.text', 'Erwartete VOMD-Datei: UNIT2.vomd');
     cy.get('[data-cy="item-dataset-mapping-errors"] .mapping-diagnostic')
       .should('have.length', 1);
     cy.get('[data-cy="start-export"]').should('be.disabled');
