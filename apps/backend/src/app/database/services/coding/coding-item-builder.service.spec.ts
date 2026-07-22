@@ -108,6 +108,42 @@ describe('CodingItemBuilderService', () => {
     });
   });
 
+  it('uses an explicitly resolved v1 export value', async () => {
+    await expect(
+      createService().buildCodingItemWithVersionRow(
+        {
+          id: 1,
+          unitKey: 'UNIT1',
+          unitAlias: null,
+          personLogin: null,
+          personCode: null,
+          personGroup: null,
+          bookletName: null,
+          variableId: 'VAR1',
+          value: null,
+          statusV1: 1,
+          codeV1: null,
+          scoreV1: null,
+          statusV2: null,
+          codeV2: null,
+          scoreV2: null,
+          statusV3: null,
+          codeV3: null,
+          scoreV3: null
+        },
+        'v1',
+        '',
+        '',
+        1,
+        false,
+        true,
+        false,
+        undefined,
+        { code: -16, score: 'NA' }
+      )
+    ).resolves.toMatchObject({ code_v1: -16, score_v1: 'NA' });
+  });
+
   it('encodes replay anchor overrides in replay URLs', async () => {
     await expect(
       createService('TEXT/Anchor 1').buildCodingItem(

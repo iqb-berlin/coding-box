@@ -6,6 +6,28 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceCodingAnalysisController } from './workspace-coding-analysis.controller';
 
 describe('WorkspaceCodingAnalysisController', () => {
+  it('uses the read-only profile list for result exports', async () => {
+    const missingsProfilesService = {
+      getMissingsProfilesForExport: jest.fn().mockResolvedValue([
+        { id: 4, label: 'IQB-Standard' }
+      ])
+    };
+    const controller = new WorkspaceCodingAnalysisController(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      missingsProfilesService as never,
+      {} as never
+    );
+
+    await expect(controller.getExportMissingsProfiles(7)).resolves.toEqual([
+      { id: 4, label: 'IQB-Standard' }
+    ]);
+    expect(missingsProfilesService.getMissingsProfilesForExport)
+      .toHaveBeenCalledWith(7);
+  });
+
   it('passes excludeJobDefinitionId to incomplete variable availability', async () => {
     const codingValidationService = {
       getCodingIncompleteVariables: jest.fn().mockResolvedValue([])
@@ -52,6 +74,7 @@ describe('WorkspaceCodingAnalysisController', () => {
     'validateManualCodeAvailability',
     'getAppliedResultsCount',
     'getMissingsProfiles',
+    'getExportMissingsProfiles',
     'getResponseAnalysis',
     'getAggregationSettings',
     'saveAggregationSettings',

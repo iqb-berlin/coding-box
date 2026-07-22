@@ -55,6 +55,45 @@ function createService() {
 }
 
 describe('CodingResponseFilterService', () => {
+  it('keeps v1 omissions visible while excluding changed and partly displayed rows', async () => {
+    const { service, queryBuilder } = createService();
+
+    await service.countResponses(1, { version: 'v1' });
+
+    expect(queryBuilder.where).toHaveBeenCalledWith(
+      expect.stringContaining('NOT IN (:...statisticsIgnoredStatuses)'),
+      { statisticsIgnoredStatuses: [3, 10] }
+    );
+  });
+
+  it('keeps all raw response statuses required by the v1 missing mapping', async () => {
+    const { service, queryBuilder } = createService();
+
+    await service.countResponses(1, {
+      version: 'v1',
+      givenResponsesOnly: true
+    });
+
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'response.status IN (:...givenStatuses)',
+      { givenStatuses: [0, 1, 2, 3, 7, 9] }
+    );
+  });
+
+  it('preserves the existing raw response filter for v2 and v3', async () => {
+    const { service, queryBuilder } = createService();
+
+    await service.countResponses(1, {
+      version: 'v2',
+      givenResponsesOnly: true
+    });
+
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'response.status IN (:...givenStatuses)',
+      { givenStatuses: [1, 2, 3] }
+    );
+  });
+
   it('uses the effective v2 coding status when filtering versioned exports', async () => {
     const { service, queryBuilder } = createService();
 

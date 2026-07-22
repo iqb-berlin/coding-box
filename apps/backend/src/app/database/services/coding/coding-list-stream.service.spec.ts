@@ -12,6 +12,10 @@ import { CodingFileCacheService } from './coding-file-cache.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingReplayAnchorService } from './coding-replay-anchor.service';
+import type {
+  MissingsProfilesService,
+  ResolvedMissingsProfile
+} from './missings-profiles.service';
 
 jest.mock('libxmljs2', () => ({}));
 
@@ -155,6 +159,9 @@ describe('CodingListStreamService', () => {
     }).compile();
 
     service = module.get<CodingListStreamService>(CodingListStreamService);
+    (service as unknown as {
+      loadV1ExportProfile: jest.Mock
+    }).loadV1ExportProfile = jest.fn().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -264,6 +271,80 @@ describe('CodingListStreamService', () => {
         'score_v1'
       ].join(';'));
       expect(mockItemBuilderService.getHeadersForVersion).toHaveBeenCalledWith('v1', true);
+    });
+
+    it('resolves NOT_REACHED through the selected profile in v1 CSV exports', async () => {
+      const profile: ResolvedMissingsProfile = {
+        id: 7,
+        label: 'Custom',
+        byId: new Map([
+          ['mir', {
+            id: 'mir', label: 'MIR', code: -18, score: 0
+          }],
+          ['mci', {
+            id: 'mci', label: 'MCI', code: -17, score: null
+          }],
+          ['mbi_mbo', {
+            id: 'mbi_mbo', label: 'MBO', code: -19, score: 0
+          }],
+          ['mnr', {
+            id: 'mnr', label: 'MNR', code: -16, score: null
+          }]
+        ]),
+        byCode: new Map()
+      };
+      const missingsProfilesService = {
+        getResolvedMissingsProfileForExport: jest.fn().mockResolvedValue(profile)
+      };
+      const realItemBuilderService = new CodingItemBuilderService(
+        mockFileCacheService,
+        mockReplayAnchorService
+      );
+      const integrationService = new CodingListStreamService(
+        mockResponseFilterService,
+        realItemBuilderService,
+        mockFileCacheService,
+        {} as WorkspaceFilesService,
+        mockConfigService,
+        mockReplayAnchorService,
+        missingsProfilesService as unknown as MissingsProfilesService
+      );
+      mockFileCacheService.loadVoudData.mockResolvedValue(new Map([
+        ['var1', '1']
+      ]));
+      mockResponseFilterService.countResponses.mockResolvedValueOnce(1);
+      mockResponseFilterService.getVersionedResponsesBatchRaw
+        .mockResolvedValueOnce([{
+          ...createMockVersionRow(1),
+          statusV1: 1
+        }])
+        .mockResolvedValueOnce([]);
+
+      const stream = await integrationService.getCodingResultsByVersionCsvStream(
+        1,
+        'v1',
+        '',
+        'http://server',
+        false,
+        undefined,
+        true,
+        false,
+        undefined,
+        7
+      );
+      const chunks: Buffer[] = [];
+      stream.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+
+      await new Promise<void>((resolve, reject) => {
+        stream.on('end', resolve);
+        stream.on('error', reject);
+      });
+
+      expect(missingsProfilesService.getResolvedMissingsProfileForExport)
+        .toHaveBeenCalledWith(1, 7, ['mir', 'mci', 'mbi_mbo', 'mnr']);
+      expect(Buffer.concat(chunks).toString()).toContain(
+        ';NOT_REACHED;-16;NA'
+      );
     });
 
     it('should include replay URL column in versioned CSV exports when requested', async () => {

@@ -85,6 +85,7 @@ export interface ResultsByVersionExportRequest extends ExportRequestTransportOpt
   exportType: 'results-by-version';
   version?: ExportVersion;
   format?: Exclude<ExportFormat, 'json'>;
+  missingsProfileId?: number;
   includeResponseValues?: boolean;
   includeGeoGebraResponseValues?: boolean;
   includeGeoGebraFiles?: boolean;
@@ -230,6 +231,24 @@ export const parseExportRequest = (value: unknown): BackgroundExportRequest => {
     case 'results-by-version':
       assertOptionalTabularFormat(value, value.exportType);
       assertOptionalVersion(value, value.exportType);
+      if (
+        value.version === 'v1' &&
+        (!Number.isSafeInteger(value.missingsProfileId) ||
+          Number(value.missingsProfileId) <= 0)
+      ) {
+        throw new ExportRequestValidationError(
+          'results-by-version v1 exports require missingsProfileId to be a positive integer'
+        );
+      }
+      if (
+        value.missingsProfileId !== undefined &&
+        (!Number.isSafeInteger(value.missingsProfileId) ||
+          Number(value.missingsProfileId) <= 0)
+      ) {
+        throw new ExportRequestValidationError(
+          'results-by-version missingsProfileId must be a positive integer'
+        );
+      }
       if (value.includeGeoGebraFiles && value.format !== 'excel') {
         throw new ExportRequestValidationError(
           'GeoGebra file packages are supported only for results-by-version Excel exports'
