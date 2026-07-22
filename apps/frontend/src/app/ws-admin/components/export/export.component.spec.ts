@@ -4,6 +4,9 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, throwError } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ExportComponent } from './export.component';
+import {
+  ItemDatasetMappingDiagnosticsDialogComponent
+} from './item-dataset-mapping-diagnostics-dialog.component';
 import { AppService } from '../../../core/services/app.service';
 import { ExportJobService } from '../../../shared/services/file/export-job.service';
 import { ResponseService } from '../../../shared/services/response/response.service';
@@ -14,6 +17,7 @@ describe('ExportComponent', () => {
   let component: ExportComponent;
   let startJob: jest.Mock;
   let snackOpen: jest.Mock;
+  let openDialog: jest.Mock;
   let getMissingsProfiles: jest.Mock;
   let getPsychometricDomainCandidates: jest.Mock;
   let getItemDatasetOptions: jest.Mock;
@@ -35,6 +39,7 @@ describe('ExportComponent', () => {
     };
     startJob = jest.fn().mockReturnValue(of({ jobId: 'job-1' }));
     snackOpen = jest.fn();
+    openDialog = jest.fn().mockReturnValue({});
     getMissingsProfiles = jest
       .fn()
       .mockReturnValue(of([{ id: 4, label: 'IQB-Standard' }]));
@@ -146,7 +151,8 @@ describe('ExportComponent', () => {
           'item-dataset-diagnostic-item': 'Item',
           'item-dataset-diagnostic-variable': 'variableId',
           'item-dataset-diagnostic-target-variable': 'Ziel-variableId',
-          'item-dataset-diagnostic-column': 'Spalte'
+          'item-dataset-diagnostic-column': 'Spalte',
+          'item-dataset-diagnostics-show-details': 'Details anzeigen'
         },
         export: {
           'job-started': 'Datenexport gestartet',
@@ -164,6 +170,9 @@ describe('ExportComponent', () => {
 
     fixture = TestBed.createComponent(ExportComponent);
     component = fixture.componentInstance;
+    (component as unknown as { dialog: { open: jest.Mock } }).dialog = {
+      open: openDialog
+    };
     fixture.detectChanges();
   });
 
@@ -387,8 +396,24 @@ describe('ExportComponent', () => {
       '[data-cy="item-dataset-mapping-errors"]'
     ) as HTMLElement;
     expect(error.textContent).toContain('Fehlerhafte Item-Metadaten: 1');
-    expect(error.textContent).toContain('VOMD-Datei: unit-one.vomd');
-    expect(error.textContent).toContain('variableId: VAR1');
+    expect(error.textContent).toContain('Details anzeigen');
+    expect(error.textContent).not.toContain('unit-one.vomd');
+    expect(error.textContent).not.toContain('VAR1');
+
+    const detailsButton = error.querySelector('button') as HTMLButtonElement;
+    expect(detailsButton).toBeTruthy();
+    component.openItemDatasetMappingDiagnostics('error');
+
+    expect(openDialog).toHaveBeenCalledWith(
+      ItemDatasetMappingDiagnosticsDialogComponent,
+      expect.objectContaining({
+        maxHeight: '75vh',
+        data: {
+          severity: 'error',
+          diagnostics: component.itemDatasetMappingIssues
+        }
+      })
+    );
   });
 
   it('shows resolved VOMD fallbacks without blocking the export', () => {
@@ -422,15 +447,24 @@ describe('ExportComponent', () => {
     const warning = fixture.nativeElement.querySelector(
       '[data-cy="item-dataset-mapping-warnings"]'
     ) as HTMLElement;
-    expect(warning.textContent).toContain(
-      'UNIT1/ITEM1: eindeutiger Fallback verwendet'
-    );
-    expect(warning.textContent).toContain(
-      'variableId in der VOMD-Datei korrigieren.'
-    );
     expect(warning.textContent).toContain('Item-Metadatenwarnungen: 1');
-    expect(warning.textContent).toContain('VOMD-Datei: UNIT1.vomd');
-    expect(warning.textContent).toContain('Ziel-variableId: VAR1');
+    expect(warning.textContent).toContain('Details anzeigen');
+    expect(warning.textContent).not.toContain('UNIT1.vomd');
+    expect(warning.textContent).not.toContain('VAR1');
+
+    const detailsButton = warning.querySelector('button') as HTMLButtonElement;
+    expect(detailsButton).toBeTruthy();
+    component.openItemDatasetMappingDiagnostics('warning');
+
+    expect(openDialog).toHaveBeenCalledWith(
+      ItemDatasetMappingDiagnosticsDialogComponent,
+      expect.objectContaining({
+        data: {
+          severity: 'warning',
+          diagnostics: component.itemDatasetMappingWarnings
+        }
+      })
+    );
   });
 
   it('requires an explicit item dataset profile when IQB standard is absent', () => {

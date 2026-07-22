@@ -11,6 +11,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import {
@@ -38,6 +39,10 @@ import type {
 import {
   ItemDatasetSelectionKey
 } from '../../../../../../../api-dto/coding/item-dataset-key';
+import {
+  ItemDatasetMappingDiagnosticsDialogComponent,
+  ItemDatasetMappingSeverity
+} from './item-dataset-mapping-diagnostics-dialog.component';
 
 export type ExportFormat =
   'results-by-version' | 'item-matrix' | 'psychometrics';
@@ -64,6 +69,7 @@ type OptionLoadResult<T> = { ok: true; value: T } | { ok: false };
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
+    MatDialogModule,
     FormsModule,
     CommonModule
   ]
@@ -76,6 +82,7 @@ export class ExportComponent {
   private responseService = inject(ResponseService);
   private missingsProfileService = inject(MissingsProfileService);
   private destroyRef = inject(DestroyRef);
+  private dialog = inject(MatDialog);
 
   selectedFormat: ExportFormat = 'results-by-version';
   isStartingExport = false;
@@ -452,6 +459,21 @@ export class ExportComponent {
           selectedVisible.has(key) :
           previouslySelected.has(key)
       ));
+  }
+
+  openItemDatasetMappingDiagnostics(
+    severity: ItemDatasetMappingSeverity
+  ): void {
+    const diagnostics = severity === 'warning' ?
+      this.itemDatasetMappingWarnings : this.itemDatasetMappingIssues;
+    if (diagnostics.length === 0) return;
+    this.dialog.open(ItemDatasetMappingDiagnosticsDialogComponent, {
+      data: { severity, diagnostics },
+      maxWidth: '95vw',
+      maxHeight: '75vh',
+      restoreFocus: true,
+      width: '1000px'
+    });
   }
 
   private getSelectedDomainCandidate():

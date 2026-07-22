@@ -230,40 +230,11 @@
     .warning-title {
       font-weight: 600;
       color: #333;
-      margin-bottom: 4px;
+      margin-bottom: 8px;
     }
 
-    p {
-      margin: 0;
-      color: #4f4f4f;
-      line-height: 1.4;
-    }
-
-    .mapping-diagnostic {
-      margin-bottom: 12px;
-
-      &:last-child {
-        margin-bottom: 0;
-      }
-    }
-
-    .mapping-action {
-      font-size: 0.9em;
-      font-weight: 500;
-      margin-top: 3px;
-    }
-
-    .mapping-context {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 2px 12px;
-      color: #555;
-      font-size: 0.85em;
-      margin-top: 3px;
-
-      span {
-        overflow-wrap: anywhere;
-      }
+    .diagnostic-summary {
+      min-width: 0;
     }
 
     button {
