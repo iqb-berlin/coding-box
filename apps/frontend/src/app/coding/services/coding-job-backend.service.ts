@@ -16,7 +16,10 @@ import type {
 } from '../../../../../../api-dto/coding/job-refresh.dto';
 import type { ManualCodeAvailabilityValidationDto } from '../../../../../../api-dto/coding/manual-code-availability.dto';
 import type { PsychometricDomainCandidatesDto } from '../../../../../../api-dto/coding/psychometric-discrimination.dto';
-import type { BackgroundExportRequest } from '../../../../../../api-dto/coding/export-request.dto';
+import type {
+  BackgroundExportRequest,
+  ItemDatasetOptionsDto
+} from '../../../../../../api-dto/coding/export-request.dto';
 import {
   CodingJob,
   DistributionVariableUsageByStatus,
@@ -1123,6 +1126,15 @@ export class CodingJobBackendService {
   ): Observable<PsychometricDomainCandidatesDto> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/psychometric-domain-candidates`;
     return this.http.get<PsychometricDomainCandidatesDto>(url, {
+      headers: this.authHeader
+    });
+  }
+
+  getItemDatasetOptions(
+    workspaceId: number
+  ): Observable<ItemDatasetOptionsDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/item-dataset-options`;
+    return this.http.get<ItemDatasetOptionsDto>(url, {
       headers: this.authHeader
     });
   }

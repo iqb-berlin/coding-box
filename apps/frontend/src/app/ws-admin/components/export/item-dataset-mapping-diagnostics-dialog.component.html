@@ -1,0 +1,180 @@
+<div class="diagnostics-dialog" data-cy="item-dataset-diagnostics-dialog">
+  <h2 mat-dialog-title>
+    {{
+      (isWarning
+        ? 'ws-admin.export-options.item-dataset-diagnostics-title-warning'
+        : 'ws-admin.export-options.item-dataset-diagnostics-title-error'
+      ) | translate: { count: totalCount }
+    }}
+  </h2>
+
+  <mat-dialog-content>
+    <p class="dialog-description">
+      {{
+        (isWarning
+          ? 'ws-admin.export-options.item-dataset-diagnostics-description-warning'
+          : 'ws-admin.export-options.item-dataset-diagnostics-description-error'
+        ) | translate
+      }}
+    </p>
+
+    <div class="diagnostic-filters">
+      <mat-form-field appearance="outline">
+        <mat-label>{{
+          'ws-admin.export-options.item-dataset-diagnostics-search' | translate
+        }}</mat-label>
+        <input
+          data-cy="item-dataset-diagnostics-search"
+          matInput
+          [(ngModel)]="search"
+          (ngModelChange)="onFiltersChange()"
+        />
+        <mat-icon matSuffix>search</mat-icon>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>{{
+          'ws-admin.export-options.item-dataset-diagnostics-cause' | translate
+        }}</mat-label>
+        <mat-select
+          data-cy="item-dataset-diagnostics-cause"
+          [(ngModel)]="selectedCode"
+          (ngModelChange)="onFiltersChange()"
+        >
+          <mat-option value="">{{
+            'ws-admin.export-options.item-dataset-diagnostics-all-causes'
+              | translate
+          }}</mat-option>
+          <mat-option
+            *ngFor="let cause of availableCauses"
+            [value]="cause.code"
+          >
+            {{ cause.label }} ({{ cause.count }})
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+
+    <div class="diagnostic-toolbar">
+      <span data-cy="item-dataset-diagnostics-result-count">{{
+        'ws-admin.export-options.item-dataset-diagnostics-results'
+          | translate: { filtered: filteredCount, total: totalCount }
+      }}</span>
+      <button
+        data-cy="item-dataset-diagnostics-download"
+        mat-stroked-button
+        type="button"
+        (click)="downloadCsv()"
+        [disabled]="filteredCount === 0"
+      >
+        <mat-icon>download</mat-icon>
+        {{
+          'ws-admin.export-options.item-dataset-diagnostics-download'
+            | translate
+        }}
+      </button>
+    </div>
+
+    <mat-accordion *ngIf="visibleGroups.length > 0" [multi]="false">
+      <mat-expansion-panel
+        *ngFor="let group of visibleGroups"
+        [expanded]="expandedCode === group.code"
+        (opened)="onGroupOpened(group.code)"
+      >
+        <mat-expansion-panel-header>
+          <mat-panel-title>
+            <span>{{ group.label }}</span>
+            <span
+              class="group-count-mobile"
+              data-cy="item-dataset-diagnostics-group-count-mobile"
+            >
+              {{
+                'ws-admin.export-options.item-dataset-diagnostics-group-count'
+                  | translate: { count: group.diagnostics.length }
+              }}
+            </span>
+          </mat-panel-title>
+          <mat-panel-description>
+            {{
+              'ws-admin.export-options.item-dataset-diagnostics-group-count'
+                | translate: { count: group.diagnostics.length }
+            }}
+          </mat-panel-description>
+        </mat-expansion-panel-header>
+
+        <ng-container *ngIf="expandedCode === group.code">
+          <div
+            class="mapping-diagnostic"
+            *ngFor="let diagnostic of getPageDiagnostics(group)"
+          >
+            <p>{{ diagnostic.message }}</p>
+            <div class="mapping-context">
+              <span *ngIf="diagnostic.sourceFile">
+                <strong>{{ getSourceFileLabel(diagnostic) }}:</strong>
+                {{ diagnostic.sourceFile }}
+              </span>
+              <span *ngIf="diagnostic.unitId">
+                <strong>{{
+                  'ws-admin.export-options.item-dataset-diagnostic-unit'
+                    | translate
+                }}:</strong>
+                {{ diagnostic.unitId }}
+              </span>
+              <span *ngIf="diagnostic.itemId">
+                <strong>{{
+                  'ws-admin.export-options.item-dataset-diagnostic-item'
+                    | translate
+                }}:</strong>
+                {{ diagnostic.itemId }}
+              </span>
+              <span *ngIf="diagnostic.variableId">
+                <strong>{{
+                  (isWarning
+                    ? 'ws-admin.export-options.item-dataset-diagnostic-target-variable'
+                    : 'ws-admin.export-options.item-dataset-diagnostic-variable'
+                  ) | translate
+                }}:</strong>
+                {{ diagnostic.variableId }}
+              </span>
+              <span *ngIf="diagnostic.columnName">
+                <strong>{{
+                  'ws-admin.export-options.item-dataset-diagnostic-column'
+                    | translate
+                }}:</strong>
+                {{ diagnostic.columnName }}
+              </span>
+            </div>
+            <p class="mapping-action" *ngIf="diagnostic.suggestedAction">
+              {{ diagnostic.suggestedAction }}
+            </p>
+          </div>
+
+          <mat-paginator
+            *ngIf="group.diagnostics.length > pageSizeOptions[0]"
+            [length]="group.diagnostics.length"
+            [pageIndex]="getPageState(group.code).pageIndex"
+            [pageSize]="getPageState(group.code).pageSize"
+            [pageSizeOptions]="pageSizeOptions"
+            [showFirstLastButtons]="true"
+            (page)="onPageChange(group.code, $event)"
+          ></mat-paginator>
+        </ng-container>
+      </mat-expansion-panel>
+    </mat-accordion>
+
+    <div
+      class="empty-state"
+      data-cy="item-dataset-diagnostics-empty"
+      *ngIf="visibleGroups.length === 0"
+    >
+      <mat-icon>search_off</mat-icon>
+      {{ 'ws-admin.export-options.item-dataset-diagnostics-empty' | translate }}
+    </div>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" (click)="close()">
+      {{ 'close' | translate }}
+    </button>
+  </mat-dialog-actions>
+</div>

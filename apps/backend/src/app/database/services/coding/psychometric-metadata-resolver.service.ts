@@ -19,6 +19,9 @@ import {
   MetadataScalarValue,
   PsychometricItemMapping,
   PsychometricMappedItem,
+  PsychometricMappingFallbackDiagnostic,
+  PsychometricMappingIssueCode,
+  PsychometricMappingIssueDiagnostic,
   PsychometricMetadataScope,
   PsychometricMissingDefinition,
   StoredMetadataProfile,
@@ -27,6 +30,11 @@ import {
   StoredVomd,
   VomdDocument
 } from './psychometric-export.types';
+
+export interface PsychometricItemMappingOptions {
+  excludedUnitNames?: readonly string[];
+  requireItemIds?: boolean;
+}
 
 @Injectable()
 export class PsychometricMetadataResolver {
@@ -45,16 +53,32 @@ export class PsychometricMetadataResolver {
   }
 
   async buildItemMapping(
-    workspaceId: number
+    workspaceId: number,
+    options: PsychometricItemMappingOptions = {}
   ): Promise<PsychometricItemMapping> {
+    const excludedUnitKeys = new Set(
+      (options.excludedUnitNames || []).map(normalizePsychometricUnitKey)
+    );
     const [unitDetails, vomdDocuments] = await Promise.all([
       this.workspaceFilesService.getUnitVariableDetails(workspaceId),
-      this.loadVomdDocuments(workspaceId)
+      this.loadVomdDocuments(workspaceId, excludedUnitKeys)
     ]);
     const items: PsychometricMappedItem[] = [];
     const byLogicalKey = new Map<string, PsychometricMappedItem>();
     const issues: string[] = [];
     const fallbacks: string[] = [];
+    const issueDiagnostics: PsychometricMappingIssueDiagnostic[] = [];
+    const fallbackDiagnostics: PsychometricMappingFallbackDiagnostic[] = [];
+    const addIssue = (diagnostic: PsychometricMappingIssueDiagnostic): void => {
+      issues.push(diagnostic.message);
+      issueDiagnostics.push(diagnostic);
+    };
+    const addFallback = (
+      diagnostic: PsychometricMappingFallbackDiagnostic
+    ): void => {
+      fallbacks.push(diagnostic.message);
+      fallbackDiagnostics.push(diagnostic);
+    };
     const mappingSourceByKey = new Map<string, 'direct' | 'fallback'>();
     const unitDetailsByKey = new Map(
       unitDetails.map(unit => [
@@ -70,13 +94,26 @@ export class PsychometricMetadataResolver {
     });
 
     unitDetailsByKey.forEach((unit, unitKey) => {
+      if (excludedUnitKeys.has(unitKey)) {
+        return;
+      }
       const documents = documentsByUnit.get(unitKey) || [];
       if (documents.length === 0) {
-        issues.push(`${unit.unitName}: keine VOMD-Datei`);
+        const message = `${unit.unitName}: keine VOMD-Datei`;
+        addIssue({
+          code: 'missing-vomd',
+          message,
+          unitId: unit.unitName,
+          sourceFile: `${unit.unitName}.vomd`,
+          suggestedAction: this.getIssueSuggestedAction(
+            'missing-vomd',
+            unit.unitName
+          )
+        });
         return;
       }
 
-      documents
+      const resolvedItems = documents
         .flatMap(document => document.items.map(vomdItem => ({
           document,
           vomdItem
@@ -84,26 +121,62 @@ export class PsychometricMetadataResolver {
         )
         .map(({ document, vomdItem }) => {
           const vomdVariableId = String(vomdItem.variableId || '').trim();
-          const itemId = String(vomdItem.id || vomdVariableId || '?');
-          const resolution = this.resolveVomdVariable(
-            unit,
-            itemId,
-            vomdVariableId
-          );
+          const explicitItemId = String(vomdItem.id || '').trim();
+          const itemId = explicitItemId || vomdVariableId || '?';
+          const resolution =
+            options.requireItemIds && !explicitItemId ?
+              {
+                issue:
+                  `${unit.unitName}/${vomdVariableId || '?'}: ` +
+                  'VOMD-Item ohne ID',
+                issueCode: 'missing-item-id' as const
+              } :
+              this.resolveVomdVariable(
+                unit,
+                itemId,
+                vomdVariableId
+              );
           return {
             document,
             vomdItem,
+            itemId,
             resolution
           };
+        });
+      const directMappingKeys = new Set(
+        resolvedItems.flatMap(({ resolution }) => {
+          if (
+            resolution.issue ||
+            resolution.fallbackNote ||
+            !resolution.variable
+          ) {
+            return [];
+          }
+          const variableId = String(
+            resolution.variable.alias || resolution.variable.id
+          ).trim();
+          return [getPsychometricLogicalKey(unit.unitName, variableId)];
         })
-        .sort((left, right) => Number(Boolean(left.resolution.fallbackNote)) -
-          Number(Boolean(right.resolution.fallbackNote))
-        )
+      );
+
+      resolvedItems
         .forEach(({
-          document, vomdItem, resolution
+          document, vomdItem, itemId, resolution
         }) => {
           if (resolution.issue) {
-            issues.push(resolution.issue);
+            const issueCode = resolution.issueCode || 'variable-not-found';
+            addIssue({
+              code: issueCode,
+              message: resolution.issue,
+              unitId: unit.unitName,
+              itemId,
+              variableId: String(vomdItem.variableId || '').trim() || undefined,
+              sourceFile: document.fileName,
+              suggestedAction: this.getIssueSuggestedAction(
+                issueCode,
+                unit.unitName
+              )
+            });
             return;
           }
 
@@ -120,29 +193,64 @@ export class PsychometricMetadataResolver {
           const existingMappingSource = mappingSourceByKey.get(key);
           if (
             mappingSource === 'fallback' &&
-            existingMappingSource === 'direct'
+            directMappingKeys.has(key)
           ) {
-            fallbacks.push(
+            const message =
               `${resolution.fallbackNote}, aber wegen bereits direkter ` +
-              'Zuordnung ignoriert'
-            );
+              'Zuordnung ignoriert';
+            addFallback({
+              kind: 'ignored',
+              message,
+              unitId: unit.unitName,
+              itemId,
+              variableId,
+              sourceFile: document.fileName,
+              suggestedAction:
+                'Redundantes Legacy-VOMD-Item entfernen oder die VOMD-Datei ' +
+                'im Quellsystem neu erzeugen.'
+            });
             return;
           }
           if (existingMappingSource) {
-            issues.push(`${unit.unitName}/${variableId}: mehrere VOMD-Items`);
+            const message =
+              `${unit.unitName}/${variableId}: mehrere VOMD-Items`;
+            addIssue({
+              code: 'duplicate-vomd-item',
+              message,
+              unitId: unit.unitName,
+              itemId,
+              variableId,
+              sourceFile: document.fileName,
+              suggestedAction: this.getIssueSuggestedAction(
+                'duplicate-vomd-item',
+                unit.unitName
+              )
+            });
             return;
           }
           if (resolution.fallbackNote) {
-            fallbacks.push(`${resolution.fallbackNote} und verwendet`);
+            const message = `${resolution.fallbackNote} und verwendet`;
+            addFallback({
+              kind: 'used',
+              message,
+              unitId: unit.unitName,
+              itemId,
+              variableId,
+              sourceFile: document.fileName,
+              suggestedAction:
+                `variableId für ${unit.unitName}/${itemId} mit der ` +
+                'Unit-/VOCS-Variable abgleichen und in der VOMD-Datei ' +
+                'ergänzen oder korrigieren.'
+            });
           }
           const mappedItem: PsychometricMappedItem = {
             key,
             unitName: unit.unitName,
             variableId,
             sourceVariableId,
-            itemId: String(vomdItem.id || variableId),
+            itemId,
             itemLabel: String(
-              vomdItem.description || vomdItem.id || variableId
+              vomdItem.description || itemId || variableId
             ),
             variable,
             vomd: document,
@@ -158,9 +266,21 @@ export class PsychometricMetadataResolver {
             );
             const existing = byLogicalKey.get(logicalKey);
             if (existing && existing !== mappedItem) {
-              issues.push(
-                `${unit.unitName}/${responseVariableId}: mehrdeutige Variablenzuordnung`
-              );
+              const message =
+                `${unit.unitName}/${responseVariableId}: ` +
+                'mehrdeutige Variablenzuordnung';
+              addIssue({
+                code: 'ambiguous-variable-mapping',
+                message,
+                unitId: unit.unitName,
+                itemId,
+                variableId: responseVariableId,
+                sourceFile: document.fileName,
+                suggestedAction: this.getIssueSuggestedAction(
+                  'ambiguous-variable-mapping',
+                  unit.unitName
+                )
+              });
             } else {
               byLogicalKey.set(logicalKey, mappedItem);
             }
@@ -172,7 +292,9 @@ export class PsychometricMetadataResolver {
       items,
       byLogicalKey,
       issues,
-      fallbacks
+      fallbacks,
+      issueDiagnostics,
+      fallbackDiagnostics
     };
   }
 
@@ -327,6 +449,7 @@ export class PsychometricMetadataResolver {
   ): {
       variable?: PsychometricMappedItem['variable'];
       issue?: string;
+      issueCode?: PsychometricMappingIssueCode;
       fallbackNote?: string;
     } {
     const variableCandidates = this.findVariableCandidates(
@@ -338,7 +461,8 @@ export class PsychometricMetadataResolver {
     }
     if (variableCandidates.length > 1) {
       return {
-        issue: `${unit.unitName}/${itemId}: Variable ${vomdVariableId} ist mehrdeutig`
+        issue: `${unit.unitName}/${itemId}: Variable ${vomdVariableId} ist mehrdeutig`,
+        issueCode: 'ambiguous-variable'
       };
     }
 
@@ -363,15 +487,46 @@ export class PsychometricMetadataResolver {
       return {
         issue:
           `${unit.unitName}/${itemId}: Item-ID ${itemId} ist als ` +
-          'Variablenfallback mehrdeutig'
+          'Variablenfallback mehrdeutig',
+        issueCode: 'ambiguous-item-fallback'
       };
     }
 
     return {
       issue: vomdVariableId ?
         `${unit.unitName}/${itemId}: Variable ${vomdVariableId} nicht gefunden` :
-        `${unit.unitName}/${itemId}: VOMD-Item ohne variableId`
+        `${unit.unitName}/${itemId}: VOMD-Item ohne variableId`,
+      issueCode: vomdVariableId ?
+        'variable-not-found' :
+        'missing-variable-id'
     };
+  }
+
+  private getIssueSuggestedAction(
+    code: PsychometricMappingIssueCode,
+    unitName: string
+  ): string {
+    switch (code) {
+      case 'missing-vomd':
+        return `VOMD-Datei für ${unitName} erzeugen und hochladen oder die ` +
+          'Unit als technische Unit ausschließen.';
+      case 'missing-item-id':
+        return 'Im betroffenen VOMD-Item eine eindeutige Item-ID ergänzen.';
+      case 'missing-variable-id':
+      case 'variable-not-found':
+        return 'variableId im VOMD-Item mit ID oder Alias der Unit-/VOCS-' +
+          'Variable abgleichen und korrigieren.';
+      case 'ambiguous-variable':
+      case 'ambiguous-item-fallback':
+      case 'ambiguous-variable-mapping':
+        return 'Doppelte Variablen-IDs oder -Aliasse bereinigen und im ' +
+          'VOMD-Item eine eindeutige variableId setzen.';
+      case 'duplicate-vomd-item':
+        return 'Veraltete oder doppelte VOMD-Items entfernen und die ' +
+          'VOMD-Datei im Quellsystem neu erzeugen.';
+      default:
+        return 'VOMD- und Unit-/VOCS-Metadaten prüfen und eindeutig zuordnen.';
+    }
   }
 
   private findVariableCandidates(
@@ -389,7 +544,8 @@ export class PsychometricMetadataResolver {
   }
 
   private async loadVomdDocuments(
-    workspaceId: number
+    workspaceId: number,
+    excludedUnitKeys: ReadonlySet<string> = new Set()
   ): Promise<VomdDocument[]> {
     const files = await this.fileUploadRepository.find({
       where: [
@@ -408,6 +564,10 @@ export class PsychometricMetadataResolver {
     });
     const uniqueFiles = Array.from(
       new Map(files.map(file => [file.id, file])).values()
+    ).filter(
+      file => !excludedUnitKeys.has(
+        normalizePsychometricUnitKey(file.file_id || file.filename)
+      )
     );
 
     return uniqueFiles.map(file => {

@@ -78,6 +78,38 @@ export interface PsychometricItemMapping {
   byLogicalKey: Map<string, PsychometricMappedItem>;
   issues: string[];
   fallbacks: string[];
+  issueDiagnostics?: PsychometricMappingIssueDiagnostic[];
+  fallbackDiagnostics?: PsychometricMappingFallbackDiagnostic[];
+}
+
+export type PsychometricMappingIssueCode =
+  | 'missing-vomd'
+  | 'missing-item-id'
+  | 'missing-variable-id'
+  | 'variable-not-found'
+  | 'ambiguous-variable'
+  | 'ambiguous-item-fallback'
+  | 'duplicate-vomd-item'
+  | 'ambiguous-variable-mapping';
+
+export interface PsychometricMappingIssueDiagnostic {
+  code: PsychometricMappingIssueCode;
+  message: string;
+  unitId: string;
+  itemId?: string;
+  variableId?: string;
+  sourceFile?: string;
+  suggestedAction: string;
+}
+
+export interface PsychometricMappingFallbackDiagnostic {
+  kind: 'used' | 'ignored';
+  message: string;
+  unitId: string;
+  itemId: string;
+  variableId?: string;
+  sourceFile?: string;
+  suggestedAction: string;
 }
 
 export interface PsychometricMetricDefinition {

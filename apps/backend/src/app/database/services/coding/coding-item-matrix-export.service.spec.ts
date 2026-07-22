@@ -1,297 +1,821 @@
 import * as ExcelJS from 'exceljs';
-import { CodingItemMatrixExportService } from './coding-item-matrix-export.service';
+import * as fs from 'fs';
+import { PassThrough } from 'stream';
+import {
+  CodingItemMatrixExportService,
+  ItemMatrixExportConfiguration
+} from './coding-item-matrix-export.service';
+import { ItemDatasetMetadataService } from './item-dataset-metadata.service';
 
-const collectStream = (stream: NodeJS.ReadableStream): Promise<string> => (
-  new Promise((resolve, reject) => {
-    let output = '';
-    stream.on('data', chunk => {
-      output += chunk.toString();
-    });
-    stream.on('end', () => resolve(output));
-    stream.on('error', reject);
-  })
-);
+const collectStream = (stream: NodeJS.ReadableStream): Promise<string> => new Promise((resolve, reject) => {
+  let output = '';
+  stream.on('data', chunk => {
+    output += chunk.toString();
+  });
+  stream.on('end', () => resolve(output));
+  stream.on('error', reject);
+});
+
+const missingEntries = [
+  {
+    id: 'mir',
+    label: 'invalid',
+    code: -81,
+    score: 0
+  },
+  {
+    id: 'mci',
+    label: 'coding error',
+    code: -82,
+    score: null
+  },
+  {
+    id: 'mbi_mbo',
+    label: 'omitted',
+    code: -83,
+    score: 0
+  },
+  {
+    id: 'mnr',
+    label: 'not reached',
+    code: -84,
+    score: null
+  },
+  {
+    id: 'mbd',
+    label: 'by design',
+    code: -85,
+    score: null
+  }
+];
+
+const profile = {
+  byId: new Map(missingEntries.map(entry => [entry.id, entry])),
+  byCode: new Map(missingEntries.map(entry => [entry.code, entry]))
+};
+
+const configuration: ItemMatrixExportConfiguration = {
+  missingsProfileId: 4,
+  notReachedScope: 'unit',
+  recodeTrailingOmissions: false
+};
+
+const column = (
+  itemId: string,
+  unitId = 'UNIT1',
+  variableId = `VAR${itemId}`,
+  isDerived = false
+) => ({
+  key: `${unitId}\u001F${variableId}`,
+  header: `${unitId}_${itemId}`,
+  unitName: unitId,
+  unitId,
+  variableId,
+  sourceVariableId: variableId,
+  itemId,
+  itemLabel: itemId,
+  itemOrder: Number(itemId.replace(/\D/g, '')) || 0,
+  isDerived
+});
+
+const createService = (
+  overrides: {
+    responseRepository?: object;
+    bookletRepository?: object;
+    unitRepository?: object;
+    workspaceFilesService?: object;
+    workspaceExclusionService?: object;
+    missingsProfilesService?: object;
+    fileUploadRepository?: object;
+    metadataResolver?: object;
+  } = {}
+) => {
+  const workspaceFilesService = overrides.workspaceFilesService || {
+    getUnitVariableMap: jest.fn().mockResolvedValue(new Map()),
+    getDerivedVariablesBySourceMap: jest.fn().mockResolvedValue(new Map())
+  };
+  const workspaceExclusionService = overrides.workspaceExclusionService || {
+    resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+      globalIgnoredUnits: [],
+      ignoredBooklets: [],
+      testletIgnoredUnits: []
+    })
+  };
+  const metadataService = new ItemDatasetMetadataService(
+    (overrides.unitRepository || {}) as never,
+    (overrides.fileUploadRepository || {}) as never,
+    workspaceFilesService as never,
+    workspaceExclusionService as never,
+    (overrides.metadataResolver || {}) as never
+  );
+  return new CodingItemMatrixExportService(
+    (overrides.responseRepository || {}) as never,
+    (overrides.bookletRepository || {}) as never,
+    workspaceFilesService as never,
+    workspaceExclusionService as never,
+    (overrides.missingsProfilesService || {}) as never,
+    metadataService
+  );
+};
 
 describe('CodingItemMatrixExportService', () => {
-  const createService = (
-    missingsProfilesService: {
-      getMissingByIdForProfileOrDefault?: jest.Mock;
-      getMissingByCodeForProfileOrDefault?: jest.Mock;
-    } = {}
-  ) => new CodingItemMatrixExportService(
-    {} as never,
-    {} as never,
-    {} as never,
-    {} as never,
-    {} as never,
-    missingsProfilesService as never
-  );
-
-  it('streams score matrix rows with stable metadata and item columns', async () => {
+  it('handles output stream errors when Excel preparation fails', async () => {
+    const outputStream = new PassThrough();
+    const createWriteStream = jest
+      .spyOn(fs, 'createWriteStream')
+      .mockReturnValue(outputStream as never);
     const service = createService();
-    (service as never as {
-      buildMatrixContext: jest.Mock;
-      getResponseValuesForRows: jest.Mock;
-    }).buildMatrixContext = jest.fn().mockResolvedValue({
-      rows: [{
-        bookletId: 10,
-        bookletName: 'BOOKLET-1',
-        personLogin: 'login-1',
-        personCode: 'code-1',
-        personGroup: 'group-1'
-      }],
-      columns: [{
-        key: 'UNIT1\u001FVAR1',
-        header: 'Alias1__VAR1',
-        unitName: 'UNIT1',
-        variableId: 'VAR1'
-      }],
-      bookletUnits: new Map([['BOOKLET-1', new Set(['UNIT1'])]]),
-      mbdMissing: {
-        id: 'mbd', label: 'missing by design', code: -94, score: null
+    const preparationError = new Error('profile validation failed');
+    (
+      service as never as {
+        writeExcel: (
+          stream: NodeJS.WritableStream
+        ) => Promise<void>;
       }
+    ).writeExcel = jest.fn(async stream => {
+      expect(stream.listenerCount('error')).toBeGreaterThan(0);
+      throw preparationError;
     });
-    (service as never as { getResponseValuesForRows: jest.Mock }).getResponseValuesForRows =
-      jest.fn().mockResolvedValue(new Map([
-        [10, new Map([['UNIT1\u001FVAR1', { code: 3, score: 2 }]])]
-      ]));
 
-    const output = await collectStream(service.exportItemMatrixAsCsvStream(7, 'score', 'v2'));
-
-    expect(output).toContain('person_login;person_code;person_group;booklet_name;Alias1__VAR1');
-    expect(output).toContain('login-1;code-1;group-1;BOOKLET-1;2');
-  });
-
-  it('exports mbd only for units outside the row booklet in code and score matrices', async () => {
-    const service = createService();
-    (service as never as {
-      buildMatrixContext: jest.Mock;
-      getResponseValuesForRows: jest.Mock;
-    }).buildMatrixContext = jest.fn().mockResolvedValue({
-      rows: [{
-        bookletId: 10,
-        bookletName: 'BOOKLET-1',
-        personLogin: 'login-1',
-        personCode: 'code-1',
-        personGroup: 'group-1'
-      }],
-      columns: [
-        {
-          key: 'UNIT1\u001FVAR1',
-          header: 'UNIT1__VAR1',
-          unitName: 'UNIT1',
-          variableId: 'VAR1'
-        },
-        {
-          key: 'UNIT2\u001FVAR1',
-          header: 'UNIT2__VAR1',
-          unitName: 'UNIT2',
-          variableId: 'VAR1'
-        }
-      ],
-      bookletUnits: new Map([['BOOKLET-1', new Set(['UNIT1'])]]),
-      mbdMissing: {
-        id: 'mbd', label: 'missing by design', code: -94, score: null
-      }
-    });
-    (service as never as { getResponseValuesForRows: jest.Mock }).getResponseValuesForRows =
-      jest.fn().mockResolvedValue(new Map());
-
-    const codeOutput = await collectStream(service.exportItemMatrixAsCsvStream(7, 'code'));
-    const scoreOutput = await collectStream(service.exportItemMatrixAsCsvStream(7, 'score'));
-    const excelBuffer = await service.exportItemMatrixAsExcel(7, 'score');
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(excelBuffer);
-    const excelRow = workbook.getWorksheet('Itemmatrix')!.getRow(2);
-
-    expect(codeOutput).toContain('login-1;code-1;group-1;BOOKLET-1;;-94');
-    expect(scoreOutput).toContain('login-1;code-1;group-1;BOOKLET-1;;NA');
-    expect(excelRow.getCell(5).value).toBeNull();
-    expect(excelRow.getCell(6).value).toBe('NA');
-  });
-
-  it('loads and normalizes expected units from booklet XML', async () => {
-    const fileUploadRepository = {
-      find: jest.fn().mockResolvedValue([{
-        file_id: 'Booklet-1',
-        data: '<Booklet><Testlet><Unit id="unit1.xml"/><Unit id="UNIT2"/></Testlet></Booklet>'
-      }])
-    };
-    const service = new CodingItemMatrixExportService(
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      fileUploadRepository as never
-    );
-
-    const bookletUnits = await (service as never as {
-      getBookletUnits: (workspaceId: number) => Promise<Map<string, Set<string>>>;
-    }).getBookletUnits(7);
-
-    expect(fileUploadRepository.find).toHaveBeenCalledWith({
-      where: { workspace_id: 7, file_type: 'Booklet' },
-      select: ['file_id', 'data']
-    });
-    expect(bookletUnits.get('BOOKLET-1')).toEqual(new Set(['UNIT1', 'UNIT2']));
-  });
-
-  it('fails before matrix creation when mbd is missing from the profile', async () => {
-    const missingsProfilesService = {
-      getMissingByIdForProfileOrDefault: jest.fn().mockRejectedValue(
-        new Error("Missing 'mbd' not found in profile 3")
+    await expect(
+      service.writeItemMatrixExcelToFile(
+        '/tmp/item-dataset-stream-error.xlsx',
+        7,
+        'score',
+        'v2',
+        configuration
       )
-    };
-    const service = createService(missingsProfilesService);
-    (service as never as {
-      getRows: jest.Mock;
-      getColumns: jest.Mock;
-      getBookletUnits: jest.Mock;
-    }).getRows = jest.fn().mockResolvedValue([]);
-    (service as never as { getColumns: jest.Mock }).getColumns = jest.fn().mockResolvedValue([]);
-    (service as never as { getBookletUnits: jest.Mock }).getBookletUnits =
-      jest.fn().mockResolvedValue(new Map());
+    ).rejects.toBe(preparationError);
+    expect(outputStream.destroyed).toBe(true);
 
-    await expect((service as never as {
-      buildMatrixContext: (workspaceId: number) => Promise<unknown>;
-    }).buildMatrixContext(7)).rejects.toThrow("Missing 'mbd' not found in profile 3");
-    expect(missingsProfilesService.getMissingByIdForProfileOrDefault)
-      .toHaveBeenCalledWith(7, null, 'mbd');
+    createWriteStream.mockRestore();
   });
 
-  it('checks cancellation before writing item matrix rows', async () => {
+  it('uses identical CSV/Excel semantics and names the sheet Itemdatensatz', async () => {
     const service = createService();
-    const cancellationError = new Error('cancelled');
-    const checkCancellation = jest.fn().mockRejectedValue(cancellationError);
-    const buildMatrixContext = jest.fn(async (
-      _workspaceId: number,
-      passedCheckCancellation?: () => Promise<void>
-    ) => {
-      await passedCheckCancellation?.();
-      return {
-        rows: [{
+    const columns = [column('1'), column('2', 'UNIT2'), column('3')];
+    const context = {
+      rows: [
+        {
           bookletId: 10,
           bookletName: 'BOOKLET-1',
           personLogin: 'login-1',
           personCode: 'code-1',
           personGroup: 'group-1'
-        }],
-        columns: [{
-          key: 'UNIT1\u001FVAR1',
-          header: 'Alias1__VAR1',
-          unitName: 'UNIT1',
-          variableId: 'VAR1'
-        }]
-      };
-    });
-    const getResponseValuesForRows = jest.fn();
-    (service as never as {
-      buildMatrixContext: typeof buildMatrixContext;
-      getResponseValuesForRows: typeof getResponseValuesForRows;
-    }).buildMatrixContext = buildMatrixContext;
-    (service as never as {
-      getResponseValuesForRows: typeof getResponseValuesForRows;
-    }).getResponseValuesForRows = getResponseValuesForRows;
-
-    await expect(collectStream(
-      service.exportItemMatrixAsCsvStream(7, 'score', 'v2', undefined, checkCancellation)
-    )).rejects.toThrow('cancelled');
-
-    expect(buildMatrixContext).toHaveBeenCalledWith(7, checkCancellation);
-    expect(getResponseValuesForRows).not.toHaveBeenCalled();
-  });
-
-  it('maps internal manual missing codes through the missing profile', async () => {
-    const missingsProfilesService = {
-      getMissingByIdForProfileOrDefault: jest.fn().mockResolvedValue({
-        id: 'mir',
-        label: 'missing invalid response',
-        code: -98,
-        score: null
-      })
+        }
+      ],
+      columns,
+      bookletDesigns: new Map([
+        [
+          'BOOKLET-1',
+          {
+            units: new Map([
+              [
+                'UNIT1',
+                {
+                  unitId: 'UNIT1',
+                  order: 0,
+                  testletKey: '0:T1'
+                }
+              ]
+            ])
+          }
+        ]
+      ]),
+      profile,
+      derivedSources: new Map()
     };
-    const service = createService(missingsProfilesService);
-    (service as never as {
-      buildMatrixContext: jest.Mock;
-      getResponseValuesForRows: jest.Mock;
-    }).buildMatrixContext = jest.fn().mockResolvedValue({
-      rows: [{
-        bookletId: 11,
-        bookletName: 'BOOKLET-1',
-        personLogin: 'login-1',
-        personCode: 'code-1',
-        personGroup: 'group-1'
-      }],
-      columns: [{
-        key: 'UNIT1\u001FVAR1',
-        header: 'UNIT1__VAR1',
-        unitName: 'UNIT1',
-        variableId: 'VAR1'
-      }],
-      bookletUnits: new Map([['BOOKLET-1', new Set(['UNIT1'])]]),
-      mbdMissing: {
-        id: 'mbd', label: 'missing by design', code: -94, score: null
-      }
-    });
-    (service as never as { getResponseValuesForRows: jest.Mock }).getResponseValuesForRows =
-      jest.fn().mockResolvedValue(new Map([
-        [11, new Map([['UNIT1\u001FVAR1', { code: -3, score: null }]])]
-      ]));
+    const values = new Map([
+      [
+        10,
+        new Map([
+          [columns[0].key, { code: 3, score: 2, status: 5 }],
+          [columns[2].key, { code: null, score: 1, status: 5 }]
+        ])
+      ]
+    ]);
+    (service as never as { buildMatrixContext: jest.Mock }).buildMatrixContext =
+      jest.fn().mockResolvedValue(context);
+    (
+      service as never as { getResponseValuesForRows: jest.Mock }
+    ).getResponseValuesForRows = jest.fn().mockResolvedValue(values);
 
-    const output = await collectStream(service.exportItemMatrixAsCsvStream(7, 'code', 'v2'));
-    const scoreOutput = await collectStream(service.exportItemMatrixAsCsvStream(7, 'score', 'v2'));
+    const codeCsv = await collectStream(
+      service.exportItemMatrixAsCsvStream(7, 'code', 'v2', configuration)
+    );
+    const scoreCsv = await collectStream(
+      service.exportItemMatrixAsCsvStream(7, 'score', 'v2', configuration)
+    );
+    const excel = await service.exportItemMatrixAsExcel(
+      7,
+      'score',
+      'v2',
+      configuration
+    );
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(excel);
+    const excelRow = workbook.getWorksheet('Itemdatensatz')!.getRow(2);
 
-    expect(output).toContain('login-1;code-1;group-1;BOOKLET-1;-98');
-    expect(scoreOutput).toContain('login-1;code-1;group-1;BOOKLET-1;NA');
-    expect(missingsProfilesService.getMissingByIdForProfileOrDefault)
-      .toHaveBeenCalledWith(7, null, 'mir');
+    expect(codeCsv).toContain(
+      'person_login;person_code;person_group;booklet_name;UNIT1_1;UNIT2_2;UNIT1_3'
+    );
+    expect(codeCsv).toContain('login-1;code-1;group-1;BOOKLET-1;3;-85;NA');
+    expect(scoreCsv).toContain('login-1;code-1;group-1;BOOKLET-1;2;;1');
+    expect(excelRow.getCell(5).value).toBe(2);
+    expect(excelRow.getCell(6).value).toBeNull();
+    expect(excelRow.getCell(7).value).toBe(1);
   });
 
-  it('exports existing concrete missing codes without resolving them through the default profile', async () => {
-    const missingsProfilesService = {
-      getMissingByIdForProfileOrDefault: jest.fn(),
-      getMissingByCodeForProfileOrDefault: jest.fn()
+  it('maps statuses and internal codes through the selected profile', async () => {
+    const service = createService();
+    const columns = [
+      column('1'),
+      column('2'),
+      column('3'),
+      column('4'),
+      column('5'),
+      column('6')
+    ];
+    const responseValues = new Map([
+      [columns[0].key, { code: null, score: null, status: 7 }],
+      [columns[1].key, { code: null, score: null, status: 9 }],
+      [columns[2].key, { code: null, score: null, status: 2 }],
+      [columns[3].key, { code: -3, score: null, status: 5 }],
+      [columns[4].key, { code: -4, score: null, status: 5 }],
+      [columns[5].key, { code: null, score: null, status: 4 }]
+    ]);
+    const cells = await (
+      service as never as {
+        resolveRowCells: (
+          columnsValue: unknown[],
+          design: unknown,
+          values: unknown,
+          profileValue: unknown,
+          derived: unknown,
+          config: ItemMatrixExportConfiguration
+        ) => Promise<
+        Array<{
+          code: number | null;
+          score: number | null;
+          unresolved: boolean;
+        }>
+        >;
+      }
+    ).resolveRowCells(
+      columns,
+      {
+        units: new Map([
+          [
+            'UNIT1',
+            {
+              unitId: 'UNIT1',
+              order: 0,
+              testletKey: '0:T1'
+            }
+          ]
+        ])
+      },
+      responseValues,
+      profile,
+      new Map(),
+      configuration
+    );
+
+    expect(cells.map(cellValue => cellValue.code)).toEqual([
+      -81, -82, -83, -81, -82, null
+    ]);
+    expect(cells.map(cellValue => cellValue.score)).toEqual([
+      0,
+      null,
+      0,
+      0,
+      null,
+      null
+    ]);
+    expect(cells[5].unresolved).toBe(true);
+  });
+
+  it('resolves mnr per unit and optionally recodes trailing omissions', async () => {
+    const service = createService();
+    const columns = [column('1'), column('2'), column('3')];
+    const design = {
+      units: new Map([
+        [
+          'UNIT1',
+          {
+            unitId: 'UNIT1',
+            order: 0,
+            testletKey: '0:T1'
+          }
+        ]
+      ])
     };
-    const service = createService(missingsProfilesService);
-    (service as never as {
-      buildMatrixContext: jest.Mock;
-      getResponseValuesForRows: jest.Mock;
-    }).buildMatrixContext = jest.fn().mockResolvedValue({
-      rows: [{
-        bookletId: 12,
-        bookletName: 'BOOKLET-1',
-        personLogin: 'login-1',
-        personCode: 'code-1',
-        personGroup: 'group-1'
-      }],
-      columns: [{
-        key: 'UNIT1\u001FVAR1',
-        header: 'UNIT1__VAR1',
-        unitName: 'UNIT1',
-        variableId: 'VAR1'
-      }],
-      bookletUnits: new Map([['BOOKLET-1', new Set(['UNIT1'])]]),
-      mbdMissing: {
-        id: 'mbd', label: 'missing by design', code: -94, score: null
+    const values = new Map([
+      [columns[0].key, { code: null, score: null, status: 1 }],
+      [columns[1].key, { code: null, score: null, status: 2 }],
+      [columns[2].key, { code: null, score: null, status: 1 }]
+    ]);
+    const resolve = (config: ItemMatrixExportConfiguration) => (
+      service as never as {
+        resolveRowCells: (
+          columnsValue: unknown[],
+          designValue: unknown,
+          responseValues: unknown,
+          profileValue: unknown,
+          derived: unknown,
+          configValue: ItemMatrixExportConfiguration
+        ) => Promise<Array<{ code: number }>>;
       }
+    ).resolveRowCells(columns, design, values, profile, new Map(), config);
+
+    const defaultCells = await resolve(configuration);
+    const recodedCells = await resolve({
+      ...configuration,
+      notReachedScope: 'booklet',
+      recodeTrailingOmissions: true
     });
-    (service as never as { getResponseValuesForRows: jest.Mock }).getResponseValuesForRows =
-      jest.fn().mockResolvedValue(new Map([
-        [12, new Map([['UNIT1\u001FVAR1', { code: -96, score: null }]])]
-      ]));
 
-    const codeOutput = await collectStream(service.exportItemMatrixAsCsvStream(7, 'code', 'v2'));
-    const scoreOutput = await collectStream(service.exportItemMatrixAsCsvStream(7, 'score', 'v2'));
-
-    expect(codeOutput).toContain('login-1;code-1;group-1;BOOKLET-1;-96');
-    expect(scoreOutput).toContain('login-1;code-1;group-1;BOOKLET-1;NA');
-    expect(missingsProfilesService.getMissingByIdForProfileOrDefault).not.toHaveBeenCalled();
-    expect(missingsProfilesService.getMissingByCodeForProfileOrDefault).not.toHaveBeenCalled();
+    expect(defaultCells.map(cellValue => cellValue.code)).toEqual([
+      -83, -83, -84
+    ]);
+    expect(recodedCells.map(cellValue => cellValue.code)).toEqual([
+      -84, -84, -84
+    ]);
   });
 
-  it('falls back to the unit key when aliases differ for the same unit', async () => {
+  it('does not treat stored mnr codes as later activity', async () => {
+    const service = createService();
+    const columns = [column('1'), column('2')];
+    const design = {
+      units: new Map([
+        [
+          'UNIT1',
+          {
+            unitId: 'UNIT1',
+            order: 0,
+            testletKey: '0:T1'
+          }
+        ]
+      ])
+    };
+    const values = new Map([
+      [columns[1].key, { code: -84, score: null, status: 5 }]
+    ]);
+
+    const cells = await (
+      service as never as {
+        resolveRowCells: (
+          columnsValue: unknown[],
+          designValue: unknown,
+          responseValues: unknown,
+          profileValue: unknown,
+          derived: unknown,
+          configValue: ItemMatrixExportConfiguration
+        ) => Promise<Array<{ code: number }>>;
+      }
+    ).resolveRowCells(columns, design, values, profile, new Map(), {
+      ...configuration,
+      notReachedScope: 'booklet'
+    });
+
+    expect(cells.map(cellValue => cellValue.code)).toEqual([-84, -84]);
+  });
+
+  it('recodes stored trailing mbi_mbo codes only when requested', async () => {
+    const service = createService();
+    const columns = [column('1')];
+    const design = {
+      units: new Map([
+        [
+          'UNIT1',
+          {
+            unitId: 'UNIT1',
+            order: 0,
+            testletKey: '0:T1'
+          }
+        ]
+      ])
+    };
+    const values = new Map([
+      [columns[0].key, { code: -83, score: 0, status: 5 }]
+    ]);
+    const resolve = (recodeTrailingOmissions: boolean) => (
+      service as never as {
+        resolveRowCells: (
+          columnsValue: unknown[],
+          designValue: unknown,
+          responseValues: unknown,
+          profileValue: unknown,
+          derived: unknown,
+          configValue: ItemMatrixExportConfiguration
+        ) => Promise<Array<{ code: number }>>;
+      }
+    ).resolveRowCells(columns, design, values, profile, new Map(), {
+      ...configuration,
+      notReachedScope: 'booklet',
+      recodeTrailingOmissions
+    });
+
+    expect((await resolve(false))[0].code).toBe(-83);
+    expect((await resolve(true))[0].code).toBe(-84);
+  });
+
+  it('distinguishes unit, testlet and booklet mnr ranges', async () => {
+    const service = createService();
+    const columns = [
+      column('1', 'UNIT1'),
+      column('2', 'UNIT2'),
+      column('3', 'UNIT3'),
+      column('4', 'UNIT4')
+    ];
+    const design = {
+      units: new Map([
+        ['UNIT1', { unitId: 'UNIT1', order: 0, testletKey: '0:T1' }],
+        ['UNIT2', { unitId: 'UNIT2', order: 1, testletKey: '0:T1' }],
+        ['UNIT3', { unitId: 'UNIT3', order: 2, testletKey: '1:T2' }],
+        ['UNIT4', { unitId: 'UNIT4', order: 3, testletKey: '2:T3' }]
+      ])
+    };
+    const values = new Map([
+      [columns[0].key, { code: null, score: null, status: 1 }],
+      [columns[1].key, { code: 1, score: 1, status: 5 }],
+      [columns[2].key, { code: null, score: null, status: 1 }],
+      [columns[3].key, { code: 1, score: 1, status: 5 }]
+    ]);
+    const resolve = (scope: 'unit' | 'testlet' | 'booklet') => (
+      service as never as {
+        resolveRowCells: (
+          columnsValue: unknown[],
+          designValue: unknown,
+          responseValues: unknown,
+          profileValue: unknown,
+          derived: unknown,
+          configValue: ItemMatrixExportConfiguration
+        ) => Promise<Array<{ code: number }>>;
+      }
+    ).resolveRowCells(columns, design, values, profile, new Map(), {
+      ...configuration,
+      notReachedScope: scope
+    });
+
+    expect((await resolve('unit')).map(cellValue => cellValue.code)).toEqual([
+      -84, 1, -84, 1
+    ]);
+    expect(
+      (await resolve('testlet')).map(cellValue => cellValue.code)
+    ).toEqual([-83, 1, -84, 1]);
+    expect(
+      (await resolve('booklet')).map(cellValue => cellValue.code)
+    ).toEqual([-83, 1, -83, 1]);
+  });
+
+  it('aggregates nested derived missings and leaves valid-only derivations unresolved', async () => {
+    const service = createService();
+    const derived = column('3', 'UNIT1', 'DERIVED', true);
+    const design = {
+      units: new Map([
+        [
+          'UNIT1',
+          {
+            unitId: 'UNIT1',
+            order: 0,
+            testletKey: '0:T1'
+          }
+        ]
+      ])
+    };
+    const derivedSources = new Map([
+      [derived.key, ['UNIT1\u001FINNER', 'UNIT1\u001FBASE3']],
+      ['UNIT1\u001FINNER', ['UNIT1\u001FBASE1', 'UNIT1\u001FBASE2']]
+    ]);
+    const mixedValues = new Map([
+      ['UNIT1\u001FBASE1', { code: -81, score: 0, status: 5 }],
+      ['UNIT1\u001FBASE2', { code: -83, score: 0, status: 5 }],
+      ['UNIT1\u001FBASE3', { code: -81, score: 0, status: 5 }]
+    ]);
+    const validValues = new Map([
+      ['UNIT1\u001FBASE1', { code: 1, score: 1, status: 5 }],
+      ['UNIT1\u001FBASE2', { code: 1, score: 1, status: 5 }],
+      ['UNIT1\u001FBASE3', { code: 1, score: 1, status: 5 }]
+    ]);
+    const resolve = (values: Map<string, unknown>) => (
+      service as never as {
+        resolveRowCells: (
+          columnsValue: unknown[],
+          designValue: unknown,
+          responseValues: unknown,
+          profileValue: unknown,
+          derivedValue: unknown,
+          configValue: ItemMatrixExportConfiguration
+        ) => Promise<Array<{ code: number | null; unresolved: boolean }>>;
+      }
+    ).resolveRowCells(
+      [derived],
+      design,
+      values,
+      profile,
+      derivedSources,
+      configuration
+    );
+
+    expect((await resolve(mixedValues))[0].code).toBe(-81);
+    expect((await resolve(validValues))[0]).toMatchObject({
+      code: null,
+      unresolved: true
+    });
+  });
+
+  it('uses the resolved state of each source for derived missings', async () => {
+    const service = createService();
+    const source = column('1', 'UNIT1', 'SOURCE');
+    const laterActivity = column('2', 'UNIT1', 'ACTIVITY');
+    const derived = column('3', 'UNIT1', 'DERIVED', true);
+    const design = {
+      units: new Map([
+        [
+          'UNIT1',
+          {
+            unitId: 'UNIT1',
+            order: 0,
+            testletKey: '0:T1'
+          }
+        ]
+      ])
+    };
+    const values = new Map([
+      [laterActivity.key, { code: 1, score: 1, status: 5 }]
+    ]);
+    const derivedSources = new Map([[derived.key, [source.key]]]);
+
+    const cells = await (
+      service as never as {
+        resolveRowCells: (
+          columnsValue: unknown[],
+          designValue: unknown,
+          responseValues: unknown,
+          profileValue: unknown,
+          derivedValue: unknown,
+          configValue: ItemMatrixExportConfiguration
+        ) => Promise<Array<{ code: number | null }>>;
+      }
+    ).resolveRowCells(
+      [source, laterActivity, derived],
+      design,
+      values,
+      profile,
+      derivedSources,
+      configuration
+    );
+
+    expect(cells.map(cellValue => cellValue.code)).toEqual([-83, 1, -83]);
+  });
+
+  it('treats score-only sources as valid during derived missing aggregation', async () => {
+    const service = createService();
+    const derived = column('3', 'UNIT1', 'DERIVED', true);
+    const design = {
+      units: new Map([
+        [
+          'UNIT1',
+          {
+            unitId: 'UNIT1',
+            order: 0,
+            testletKey: '0:T1'
+          }
+        ]
+      ])
+    };
+    const derivedSources = new Map([
+      [
+        derived.key,
+        ['UNIT1\u001FSCORE_ONLY', 'UNIT1\u001FCODING_ERROR']
+      ]
+    ]);
+    const values = new Map([
+      [
+        'UNIT1\u001FSCORE_ONLY',
+        { code: null, score: 1, status: 5 }
+      ],
+      [
+        'UNIT1\u001FCODING_ERROR',
+        { code: -82, score: null, status: 5 }
+      ]
+    ]);
+
+    const cells = await (
+      service as never as {
+        resolveRowCells: (
+          columnsValue: unknown[],
+          designValue: unknown,
+          responseValues: unknown,
+          profileValue: unknown,
+          derivedValue: unknown,
+          configValue: ItemMatrixExportConfiguration
+        ) => Promise<Array<{ code: number | null }>>;
+      }
+    ).resolveRowCells(
+      [derived],
+      design,
+      values,
+      profile,
+      derivedSources,
+      configuration
+    );
+
+    expect(cells[0].code).toBe(-82);
+  });
+
+  it('treats additional profile missings as errors only for derived aggregation', async () => {
+    const service = createService();
+    const source = column('1', 'UNIT1', 'SOURCE');
+    const derived = column('2', 'UNIT1', 'DERIVED', true);
+    const customMissing = {
+      id: 'project_missing',
+      label: 'project missing',
+      code: -90,
+      score: 0
+    };
+    const customProfile = {
+      byId: profile.byId,
+      byCode: new Map([
+        ...profile.byCode,
+        [customMissing.code, customMissing]
+      ])
+    };
+    const design = {
+      units: new Map([
+        [
+          'UNIT1',
+          {
+            unitId: 'UNIT1',
+            order: 0,
+            testletKey: '0:T1'
+          }
+        ]
+      ])
+    };
+    const values = new Map([
+      [source.key, { code: customMissing.code, score: null, status: 5 }]
+    ]);
+    const derivedSources = new Map([[derived.key, [source.key]]]);
+
+    const cells = await (
+      service as never as {
+        resolveRowCells: (
+          columnsValue: unknown[],
+          designValue: unknown,
+          responseValues: unknown,
+          profileValue: unknown,
+          derivedValue: unknown,
+          configValue: ItemMatrixExportConfiguration
+        ) => Promise<
+        Array<{
+          code: number | null;
+          score: number | null;
+          unresolved: boolean;
+        }>
+        >;
+      }
+    ).resolveRowCells(
+      [source, derived],
+      design,
+      values,
+      customProfile,
+      derivedSources,
+      configuration
+    );
+
+    expect(cells[0]).toMatchObject({
+      code: -90,
+      score: 0,
+      unresolved: false
+    });
+    expect(cells[1]).toMatchObject({
+      code: null,
+      score: null,
+      unresolved: true
+    });
+  });
+
+  it('applies booklet mnr sequencing to derived sources without export columns', async () => {
+    const service = createService();
+    const derived = column('1', 'UNIT1', 'DERIVED', true);
+    const laterActivity = column('2', 'UNIT2', 'ACTIVITY');
+    const design = {
+      units: new Map([
+        ['UNIT1', { unitId: 'UNIT1', order: 0, testletKey: '0:T1' }],
+        ['UNIT2', { unitId: 'UNIT2', order: 1, testletKey: '0:T1' }]
+      ])
+    };
+    const derivedSources = new Map([
+      [derived.key, ['UNIT1\u001FSOURCE_WITHOUT_ITEM']]
+    ]);
+    const resolve = (
+      values: Map<string, unknown>,
+      sources = derivedSources
+    ) => (
+      service as never as {
+        resolveRowCells: (
+          columnsValue: unknown[],
+          designValue: unknown,
+          responseValues: unknown,
+          profileValue: unknown,
+          derivedValue: unknown,
+          configValue: ItemMatrixExportConfiguration
+        ) => Promise<Array<{ code: number | null }>>;
+      }
+    ).resolveRowCells(
+      [derived, laterActivity],
+      design,
+      values,
+      profile,
+      sources,
+      {
+        ...configuration,
+        notReachedScope: 'booklet'
+      }
+    );
+
+    const withLaterActivity = await resolve(new Map([
+      [laterActivity.key, { code: 1, score: 1, status: 5 }]
+    ]));
+    const withoutLaterActivity = await resolve(new Map());
+    const withSameItemOmission = await resolve(
+      new Map([
+        [
+          'UNIT1\u001FSOURCE_OMISSION',
+          { code: null, score: null, status: 0 }
+        ]
+      ]),
+      new Map([
+        [
+          derived.key,
+          [
+            'UNIT1\u001FSOURCE_NOT_REACHED',
+            'UNIT1\u001FSOURCE_OMISSION'
+          ]
+        ]
+      ])
+    );
+
+    expect(withLaterActivity.map(cellValue => cellValue.code)).toEqual([
+      -83, 1
+    ]);
+    expect(withoutLaterActivity.map(cellValue => cellValue.code)).toEqual([
+      -84, -84
+    ]);
+    expect(withSameItemOmission.map(cellValue => cellValue.code)).toEqual([
+      -84, -84
+    ]);
+  });
+
+  it('leaves valid plus mbi_mbo derivations unresolved', async () => {
+    const service = createService();
+    const derived = column('3', 'UNIT1', 'DERIVED', true);
+    const design = {
+      units: new Map([
+        [
+          'UNIT1',
+          {
+            unitId: 'UNIT1',
+            order: 0,
+            testletKey: '0:T1'
+          }
+        ]
+      ])
+    };
+    const derivedSources = new Map([
+      [derived.key, ['UNIT1\u001FVALID', 'UNIT1\u001FOMISSION']]
+    ]);
+    const values = new Map([
+      ['UNIT1\u001FVALID', { code: 1, score: 1, status: 5 }],
+      ['UNIT1\u001FOMISSION', { code: -83, score: 0, status: 5 }]
+    ]);
+
+    const cells = await (
+      service as never as {
+        resolveRowCells: (
+          columnsValue: unknown[],
+          designValue: unknown,
+          responseValues: unknown,
+          profileValue: unknown,
+          derivedValue: unknown,
+          configValue: ItemMatrixExportConfiguration
+        ) => Promise<Array<{ code: number | null; unresolved: boolean }>>;
+      }
+    ).resolveRowCells(
+      [derived],
+      design,
+      values,
+      profile,
+      derivedSources,
+      configuration
+    );
+
+    expect(cells[0]).toMatchObject({ code: null, unresolved: true });
+  });
+
+  it('returns selectable VOMD items with one underscore and reports collisions', async () => {
     const queryBuilder = {
       innerJoin: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
@@ -300,46 +824,103 @@ describe('CodingItemMatrixExportService', () => {
       andWhere: jest.fn().mockReturnThis(),
       distinct: jest.fn().mockReturnThis(),
       getRawMany: jest.fn().mockResolvedValue([
-        { unitName: 'UNIT1', unitAlias: 'AliasA' },
-        { unitName: 'UNIT1', unitAlias: 'AliasB' },
-        { unitName: 'UNIT2', unitAlias: 'AliasC' }
+        { unitName: 'UNIT1', unitAlias: 'Aufgabe' },
+        { unitName: 'UNIT2', unitAlias: 'Aufgabe' }
       ])
     };
-    const unitRepository = {
-      createQueryBuilder: jest.fn().mockReturnValue(queryBuilder)
-    };
-    const workspaceFilesService = {
-      getUnitVariableMap: jest.fn().mockResolvedValue(new Map([
-        ['UNIT1', new Set(['VAR1'])],
-        ['UNIT2', new Set(['VAR1'])]
-      ]))
-    };
-    const workspaceExclusionService = {
-      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
-        globalIgnoredUnits: [],
-        ignoredBooklets: [],
-        testletIgnoredUnits: []
-      })
-    };
-    const service = new CodingItemMatrixExportService(
-      {} as never,
-      {} as never,
-      unitRepository as never,
-      workspaceFilesService as never,
-      workspaceExclusionService as never
+    const mappedItem = (unitName: string, variableId: string) => ({
+      key: `${unitName}\u001F${variableId}`,
+      unitName,
+      variableId,
+      sourceVariableId: variableId,
+      itemId: 'ITEM1',
+      itemLabel: `${unitName} Item`,
+      variable: { isDerived: false }
+    });
+    const service = createService({
+      unitRepository: {
+        createQueryBuilder: jest.fn().mockReturnValue(queryBuilder)
+      },
+      metadataResolver: {
+        buildItemMapping: jest.fn().mockResolvedValue({
+          items: [mappedItem('UNIT1', 'VAR1'), mappedItem('UNIT2', 'VAR2')],
+          issues: [],
+          fallbacks: [],
+          byLogicalKey: new Map()
+        })
+      }
+    });
+
+    const options = await service.getItemDatasetOptions(7);
+
+    expect(options.items[0]).toMatchObject({
+      unitId: 'UNIT1',
+      itemId: 'ITEM1',
+      columnName: 'Aufgabe_ITEM1'
+    });
+    expect(options.mappingIssues[0]).toMatchObject({
+      code: 'column-name-collision',
+      unitId: 'UNIT2',
+      itemId: 'ITEM1',
+      columnName: 'Aufgabe_ITEM1'
+    });
+    expect(options.mappingIssues[0].message).toContain(
+      "Spaltenname 'Aufgabe_ITEM1' kollidiert"
     );
-
-    const columns = await (service as never as {
-      getColumns: (workspaceId: number) => Promise<Array<{ header: string }>>;
-    }).getColumns(7);
-
-    expect(columns.map(column => column.header)).toEqual([
-      'UNIT1__VAR1',
-      'AliasC__VAR1'
-    ]);
   });
 
-  it('does not create matrix columns for globally excluded units', async () => {
+  it('reports item headers that collide with fixed identification columns', async () => {
+    const queryBuilder = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      distinct: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([
+        { unitName: 'UNIT1', unitAlias: 'person' }
+      ])
+    };
+    const service = createService({
+      unitRepository: {
+        createQueryBuilder: jest.fn().mockReturnValue(queryBuilder)
+      },
+      metadataResolver: {
+        buildItemMapping: jest.fn().mockResolvedValue({
+          items: [
+            {
+              unitName: 'UNIT1',
+              variableId: 'VAR1',
+              sourceVariableId: 'VAR1',
+              itemId: 'login',
+              itemLabel: 'Login item',
+              variable: { isDerived: false }
+            }
+          ],
+          issues: [],
+          fallbacks: [],
+          byLogicalKey: new Map()
+        })
+      }
+    });
+
+    const options = await service.getItemDatasetOptions(7);
+
+    expect(options.mappingIssues).toContainEqual({
+      code: 'column-name-collision',
+      message:
+        "Spaltenname 'person_login' kollidiert für feste " +
+        'Identifikationsspalte und UNIT1\u001Flogin',
+      unitId: 'UNIT1',
+      itemId: 'login',
+      columnName: 'person_login',
+      suggestedAction:
+        'Unit-Alias oder Item-ID so anpassen, dass der Spaltenname innerhalb ' +
+        'des Itemdatensatzes eindeutig ist.'
+    });
+  });
+
+  it('returns resolved VOMD fallbacks as non-blocking warnings', async () => {
     const queryBuilder = {
       innerJoin: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
@@ -349,109 +930,547 @@ describe('CodingItemMatrixExportService', () => {
       distinct: jest.fn().mockReturnThis(),
       getRawMany: jest.fn().mockResolvedValue([])
     };
-    const unitRepository = {
-      createQueryBuilder: jest.fn().mockReturnValue(queryBuilder)
-    };
-    const workspaceFilesService = {
-      getUnitVariableMap: jest.fn().mockResolvedValue(new Map([
-        ['UNIT1', new Set(['VAR1'])],
-        ['UNIT2', new Set(['VAR2'])]
-      ]))
-    };
-    const workspaceExclusionService = {
-      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
-        globalIgnoredUnits: ['UNIT1'],
-        ignoredBooklets: [],
-        testletIgnoredUnits: []
+    const service = createService({
+      unitRepository: {
+        createQueryBuilder: jest.fn().mockReturnValue(queryBuilder)
+      },
+      metadataResolver: {
+        buildItemMapping: jest.fn().mockResolvedValue({
+          items: [{
+            unitName: 'UNIT1',
+            variableId: 'VAR1',
+            sourceVariableId: 'SOURCE1',
+            itemId: 'ITEM1',
+            itemLabel: 'Item',
+            variable: { isDerived: false }
+          }],
+          issues: [],
+          fallbacks: ['UNIT1/ITEM1: eindeutiger Fallback und verwendet'],
+          fallbackDiagnostics: [{
+            kind: 'used',
+            message: 'UNIT1/ITEM1: eindeutiger Fallback und verwendet',
+            unitId: 'UNIT1',
+            itemId: 'ITEM1',
+            variableId: 'VAR1',
+            sourceFile: 'UNIT1.vomd',
+            suggestedAction: 'variableId korrigieren.'
+          }],
+          byLogicalKey: new Map()
+        })
+      }
+    });
+
+    const options = await service.getItemDatasetOptions(7);
+
+    expect(options.mappingIssues).toEqual([]);
+    expect(options.mappingWarnings).toEqual([
+      expect.objectContaining({
+        code: 'vomd-fallback-used',
+        unitId: 'UNIT1',
+        itemId: 'ITEM1',
+        sourceFile: 'UNIT1.vomd'
       })
-    };
-    const service = new CodingItemMatrixExportService(
-      {} as never,
-      {} as never,
-      unitRepository as never,
-      workspaceFilesService as never,
-      workspaceExclusionService as never
-    );
-
-    const columns = await (service as never as {
-      getColumns: (workspaceId: number) => Promise<Array<{ header: string }>>;
-    }).getColumns(7);
-
-    expect(columns.map(column => column.header)).toEqual(['UNIT2__VAR2']);
+    ]);
+    expect(options.items).toHaveLength(1);
   });
 
-  it('loads item-matrix response values with raw selects instead of hydrated entities', async () => {
-    const responseQueryBuilder = {
+  it('builds an export context when mapping contains only warnings', async () => {
+    const service = createService();
+    const matrixColumn = column('1');
+    const internals = service as never as {
+      getRows: jest.Mock;
+      buildColumns: jest.Mock;
+      getBookletDesigns: jest.Mock;
+      loadAndValidateProfile: jest.Mock;
+      getDerivedSources: jest.Mock;
+      sortColumnsByBookletDesigns: jest.Mock;
+      filterColumns: jest.Mock;
+      buildMatrixContext: (
+        workspaceId: number,
+        config: ItemMatrixExportConfiguration
+      ) => Promise<{ columns: unknown[] }>;
+    };
+    internals.getRows = jest.fn().mockResolvedValue([]);
+    internals.buildColumns = jest.fn().mockResolvedValue({
+      columns: [matrixColumn],
+      issues: [],
+      warnings: [{
+        code: 'vomd-fallback-used',
+        message: 'UNIT1/1: eindeutiger Fallback verwendet'
+      }]
+    });
+    internals.getBookletDesigns = jest.fn().mockResolvedValue(new Map());
+    internals.loadAndValidateProfile = jest.fn().mockResolvedValue(profile);
+    internals.getDerivedSources = jest.fn().mockResolvedValue(new Map());
+    internals.sortColumnsByBookletDesigns = jest.fn().mockReturnValue([
+      matrixColumn
+    ]);
+    internals.filterColumns = jest.fn().mockReturnValue({
+      columns: [matrixColumn],
+      issues: [],
+      warnings: []
+    });
+
+    await expect(
+      internals.buildMatrixContext(7, configuration)
+    ).resolves.toEqual(expect.objectContaining({ columns: [matrixColumn] }));
+  });
+
+  it('includes only genuine mapping errors in the export failure', async () => {
+    const service = createService();
+    const matrixColumn = column('1');
+    const internals = service as never as {
+      getRows: jest.Mock;
+      buildColumns: jest.Mock;
+      getBookletDesigns: jest.Mock;
+      loadAndValidateProfile: jest.Mock;
+      getDerivedSources: jest.Mock;
+      sortColumnsByBookletDesigns: jest.Mock;
+      filterColumns: jest.Mock;
+      buildMatrixContext: (
+        workspaceId: number,
+        config: ItemMatrixExportConfiguration
+      ) => Promise<unknown>;
+    };
+    internals.getRows = jest.fn().mockResolvedValue([]);
+    internals.buildColumns = jest.fn().mockResolvedValue({
+      columns: [matrixColumn],
+      issues: [{
+        code: 'missing-vomd',
+        message: 'UNIT2: keine VOMD-Datei'
+      }],
+      warnings: [{
+        code: 'vomd-fallback-used',
+        message: 'UNIT1/1: eindeutiger Fallback verwendet'
+      }]
+    });
+    internals.getBookletDesigns = jest.fn().mockResolvedValue(new Map());
+    internals.loadAndValidateProfile = jest.fn().mockResolvedValue(profile);
+    internals.getDerivedSources = jest.fn().mockResolvedValue(new Map());
+    internals.sortColumnsByBookletDesigns = jest.fn().mockReturnValue([
+      matrixColumn
+    ]);
+    internals.filterColumns = jest.fn().mockReturnValue({
+      columns: [matrixColumn],
+      issues: [],
+      warnings: []
+    });
+
+    await expect(
+      internals.buildMatrixContext(7, configuration)
+    ).rejects.toThrow('UNIT2: keine VOMD-Datei');
+    await expect(
+      internals.buildMatrixContext(7, configuration)
+    ).rejects.not.toThrow('eindeutiger Fallback verwendet');
+  });
+
+  it('keeps genuine errors global when a clean item is selected', async () => {
+    const queryBuilder = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      distinct: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([])
+    };
+    const service = createService({
+      unitRepository: {
+        createQueryBuilder: jest.fn().mockReturnValue(queryBuilder)
+      },
+      metadataResolver: {
+        buildItemMapping: jest.fn().mockResolvedValue({
+          items: [{
+            unitName: 'UNIT1',
+            variableId: 'VAR1',
+            sourceVariableId: 'VAR1',
+            itemId: 'ITEM1',
+            itemLabel: 'Item',
+            variable: { isDerived: false }
+          }],
+          issues: ['UNIT2: keine VOMD-Datei'],
+          issueDiagnostics: [{
+            code: 'missing-vomd',
+            message: 'UNIT2: keine VOMD-Datei',
+            unitId: 'UNIT2',
+            sourceFile: 'UNIT2.vomd',
+            suggestedAction: 'VOMD-Datei hochladen.'
+          }],
+          fallbacks: [],
+          byLogicalKey: new Map()
+        })
+      }
+    });
+
+    const result = await (
+      service as never as {
+        buildColumns: (
+          workspaceId: number,
+          selection: Array<{ unitId: string; itemId: string }>
+        ) => Promise<{
+          columns: unknown[];
+          issues: Array<{ code: string; message: string }>;
+        }>;
+      }
+    ).buildColumns(7, [{ unitId: 'UNIT1', itemId: 'ITEM1' }]);
+
+    expect(result.columns).toHaveLength(1);
+    expect(result.issues).toEqual([
+      expect.objectContaining({
+        code: 'missing-vomd',
+        unitId: 'UNIT2'
+      })
+    ]);
+  });
+
+  it('excludes globally ignored units before resolving VOMD metadata', async () => {
+    const queryBuilder = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      distinct: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([])
+    };
+    const buildItemMapping = jest.fn().mockResolvedValue({
+      items: [],
+      issues: [],
+      fallbacks: [],
+      byLogicalKey: new Map()
+    });
+    const service = createService({
+      unitRepository: {
+        createQueryBuilder: jest.fn().mockReturnValue(queryBuilder)
+      },
+      workspaceExclusionService: {
+        resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+          globalIgnoredUnits: ['IGNORED_UNIT'],
+          ignoredBooklets: [],
+          testletIgnoredUnits: []
+        })
+      },
+      metadataResolver: { buildItemMapping }
+    });
+
+    await service.getItemDatasetOptions(7);
+
+    expect(buildItemMapping).toHaveBeenCalledWith(7, {
+      excludedUnitNames: ['IGNORED_UNIT'],
+      requireItemIds: true
+    });
+  });
+
+  it('filters items by unit/item pairs and reports unknown selections', async () => {
+    const queryBuilder = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      distinct: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([])
+    };
+    const service = createService({
+      unitRepository: {
+        createQueryBuilder: jest.fn().mockReturnValue(queryBuilder)
+      },
+      metadataResolver: {
+        buildItemMapping: jest.fn().mockResolvedValue({
+          items: [
+            {
+              unitName: 'UNIT1',
+              variableId: 'VAR1',
+              sourceVariableId: 'VAR1',
+              itemId: 'ITEM1',
+              itemLabel: 'Item',
+              variable: { isDerived: false }
+            }
+          ],
+          issues: [],
+          fallbacks: [],
+          byLogicalKey: new Map()
+        })
+      }
+    });
+    const result = await (
+      service as never as {
+        buildColumns: (
+          workspaceId: number,
+          selection: Array<{ unitId: string; itemId: string }>
+        ) => Promise<{
+          columns: unknown[];
+          issues: Array<{ code: string; message: string }>;
+        }>;
+      }
+    ).buildColumns(7, [{ unitId: 'UNIT1', itemId: 'UNKNOWN' }]);
+
+    expect(result.columns).toHaveLength(0);
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      code: 'unknown-selection',
+      message:
+        "Ausgewähltes Item 'UNIT1\u001FUNKNOWN' konnte nicht eindeutig zugeordnet werden",
+      unitId: 'UNIT1',
+      itemId: 'UNKNOWN'
+    }));
+  });
+
+  it('rejects profiles with an absent score property', async () => {
+    const service = createService({
+      missingsProfilesService: {
+        getMissingsProfileDetails: jest.fn().mockResolvedValue({
+          parseMissings: () => [
+            ...missingEntries.filter(entry => entry.id !== 'mbd'),
+            { id: 'mbd', label: 'by design', code: -85 }
+          ]
+        })
+      }
+    });
+
+    await expect(
+      (
+        service as never as {
+          loadAndValidateProfile: (
+            workspaceId: number,
+            profileId: number
+          ) => Promise<unknown>;
+        }
+      ).loadAndValidateProfile(7, 4)
+    ).rejects.toThrow("Missing 'mbd' in Profil 4 hat kein score-Property");
+  });
+
+  it('rejects profiles without all required missing IDs', async () => {
+    const service = createService({
+      missingsProfilesService: {
+        getMissingsProfileDetails: jest.fn().mockResolvedValue({
+          parseMissings: () => missingEntries.filter(entry => entry.id !== 'mnr')
+        })
+      }
+    });
+
+    await expect(
+      (
+        service as never as {
+          loadAndValidateProfile: (
+            workspaceId: number,
+            profileId: number
+          ) => Promise<unknown>;
+        }
+      ).loadAndValidateProfile(7, 4)
+    ).rejects.toThrow('Missing-Profil 4 enthält nicht: mnr');
+  });
+
+  it('checks cancellation while resolving large item rows', async () => {
+    const service = createService();
+    const columns = Array.from({ length: 101 }, (_, index) => (
+      column(String(index + 1))
+    ));
+    Object.defineProperty(columns[100], 'key', {
+      get: () => {
+        throw new Error('cell resolution continued past its checkpoint');
+      }
+    });
+    const context = {
+      rows: [
+        {
+          bookletId: 10,
+          bookletName: 'BOOKLET-1',
+          personLogin: 'login-1',
+          personCode: 'code-1',
+          personGroup: 'group-1'
+        }
+      ],
+      columns,
+      analysisColumns: columns,
+      bookletDesigns: new Map([
+        [
+          'BOOKLET-1',
+          {
+            units: new Map([
+              [
+                'UNIT1',
+                {
+                  unitId: 'UNIT1',
+                  order: 0,
+                  testletKey: '0:T1'
+                }
+              ]
+            ])
+          }
+        ]
+      ]),
+      profile,
+      derivedSources: new Map()
+    };
+    (
+      service as never as { getResponseValuesForRows: jest.Mock }
+    ).getResponseValuesForRows = jest.fn().mockResolvedValue(new Map());
+    const cancellationError = new Error('cancelled');
+    const checkCancellation = jest
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(cancellationError);
+
+    const consumeRows = async (): Promise<unknown[]> => {
+      const rows = (
+        service as never as {
+          resolveRows: (
+            workspaceId: number,
+            contextValue: unknown,
+            requestedValue: 'code' | 'score',
+            version: 'v1' | 'v2' | 'v3',
+            configValue: ItemMatrixExportConfiguration,
+            progressCallback: undefined,
+            cancellationCheck: () => Promise<void>
+          ) => AsyncGenerator<unknown>;
+        }
+      ).resolveRows(
+        7,
+        context,
+        'code',
+        'v2',
+        configuration,
+        undefined,
+        checkCancellation
+      );
+      const resolved = [];
+      for await (const row of rows) {
+        resolved.push(row);
+      }
+      return resolved;
+    };
+
+    await expect(consumeRows()).rejects.toBe(cancellationError);
+    expect(checkCancellation).toHaveBeenCalledTimes(3);
+  });
+
+  it('checks cancellation while indexing large response batches', async () => {
+    const responses = Array.from({ length: 501 }, (_, index) => ({
+      id: index + 1,
+      bookletId: 10,
+      bookletName: 'BOOKLET-1',
+      unitName: 'UNIT1',
+      variableId: 'VAR1',
+      status: 5,
+      codeV1: 1,
+      scoreV1: 1,
+      codeV2: 1,
+      scoreV2: 1,
+      codeV3: 1,
+      scoreV3: 1
+    }));
+    const queryBuilder = {
       innerJoin: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
       addSelect: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
-      getRawMany: jest.fn().mockResolvedValue([{
-        id: '1',
-        bookletId: '10',
-        bookletName: 'BOOKLET-1',
-        unitName: 'UNIT1',
-        variableId: 'VAR1',
-        codeV1: null,
-        scoreV1: null,
-        codeV2: '4',
-        scoreV2: '2',
-        codeV3: null,
-        scoreV3: null
-      }])
+      getRawMany: jest.fn().mockResolvedValue(responses)
     };
-    const responseRepository = {
-      createQueryBuilder: jest.fn().mockReturnValue(responseQueryBuilder)
-    };
-    const workspaceFilesService = {
-      getUnitVariableMap: jest.fn().mockResolvedValue(new Map([
-        ['UNIT1', new Set(['VAR1'])]
-      ]))
-    };
-    const workspaceExclusionService = {
-      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
-        globalIgnoredUnits: [],
-        ignoredBooklets: [],
-        testletIgnoredUnits: []
-      })
-    };
-    const service = new CodingItemMatrixExportService(
-      responseRepository as never,
-      {} as never,
-      {} as never,
-      workspaceFilesService as never,
-      workspaceExclusionService as never
-    );
+    const service = createService({
+      responseRepository: {
+        createQueryBuilder: jest.fn().mockReturnValue(queryBuilder)
+      },
+      workspaceFilesService: {
+        getUnitVariableMap: jest.fn().mockResolvedValue(
+          new Map([['UNIT1', new Set(['VAR1'])]])
+        )
+      }
+    });
+    const checkCancellation = jest.fn().mockResolvedValue(undefined);
 
-    const values = await (service as never as {
-      getResponseValuesForRows: (
-        workspaceId: number,
-        rows: Array<{
-          bookletId: number;
-          bookletName: string;
-          personLogin: string;
-          personCode: string;
-          personGroup: string;
-        }>,
-        version: 'v1' | 'v2' | 'v3'
-      ) => Promise<Map<number, Map<string, { code: number | null; score: number | null }>>>;
-    }).getResponseValuesForRows(
+    await (
+      service as never as {
+        getResponseValuesForRows: (
+          workspaceId: number,
+          rows: Array<{ bookletId: number }>,
+          version: 'v1' | 'v2' | 'v3',
+          cancellationCheck: () => Promise<void>
+        ) => Promise<unknown>;
+      }
+    ).getResponseValuesForRows(
       7,
-      [{
-        bookletId: 10,
-        bookletName: 'BOOKLET-1',
-        personLogin: 'login-1',
-        personCode: 'code-1',
-        personGroup: 'group-1'
-      }],
-      'v2'
+      [{ bookletId: 10 }],
+      'v2',
+      checkCancellation
     );
 
-    expect(responseQueryBuilder.innerJoin).toHaveBeenCalledWith('response.unit', 'unit');
-    expect(responseQueryBuilder.innerJoin).toHaveBeenCalledWith('unit.booklet', 'booklet');
-    expect(responseQueryBuilder.innerJoin).toHaveBeenCalledWith('booklet.bookletinfo', 'bookletinfo');
-    expect(responseQueryBuilder.getRawMany).toHaveBeenCalled();
-    expect(values.get(10)?.get('UNIT1\u001FVAR1')).toEqual({ code: 4, score: 2 });
+    expect(checkCancellation).toHaveBeenCalledTimes(4);
+  });
+
+  it('loads ordered units and testlet boundaries from booklet XML', async () => {
+    const repository = {
+      find: jest.fn().mockResolvedValue([
+        {
+          file_id: 'Booklet-1',
+          data:
+            '<Booklet><Testlet id="T1"><Unit id="UNIT1"/></Testlet>' +
+            '<Testlet id="T2"><Unit id="UNIT2.xml"/></Testlet></Booklet>'
+        }
+      ])
+    };
+    const service = createService({ fileUploadRepository: repository });
+    const designs = await (
+      service as never as {
+        getBookletDesigns: (workspaceId: number) => Promise<
+        Map<
+        string,
+        {
+          units: Map<string, { order: number; testletKey: string }>;
+        }
+        >
+        >;
+      }
+    ).getBookletDesigns(7);
+
+    expect(designs.get('BOOKLET-1')?.units.get('UNIT1')).toMatchObject({
+      order: 0,
+      testletKey: '0:T1'
+    });
+    expect(designs.get('BOOKLET-1')?.units.get('UNIT2')).toMatchObject({
+      order: 1,
+      testletKey: '1:T2'
+    });
+    expect(repository.find).toHaveBeenCalledWith({
+      where: { workspace_id: 7, file_type: 'Booklet' },
+      select: ['file_id', 'data'],
+      order: { file_id: 'ASC' }
+    });
+  });
+
+  it('removes testlet-specific exclusions from the effective booklet design', async () => {
+    const repository = {
+      find: jest.fn().mockResolvedValue([
+        {
+          file_id: 'Booklet-1',
+          data:
+            '<Booklet><Testlet id="T1"><Unit id="UNIT1"/></Testlet>' +
+            '<Testlet id="T2"><Unit id="UNIT2"/></Testlet></Booklet>'
+        }
+      ])
+    };
+    const service = createService({
+      fileUploadRepository: repository,
+      workspaceExclusionService: {
+        resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+          globalIgnoredUnits: [],
+          ignoredBooklets: [],
+          testletIgnoredUnits: [
+            { bookletId: 'BOOKLET-1', unitId: 'UNIT1' }
+          ]
+        })
+      }
+    });
+    const designs = await (
+      service as never as {
+        getBookletDesigns: (workspaceId: number) => Promise<
+        Map<string, { units: Map<string, unknown> }>
+        >;
+      }
+    ).getBookletDesigns(7);
+
+    expect(designs.get('BOOKLET-1')?.units.has('UNIT1')).toBe(false);
+    expect(designs.get('BOOKLET-1')?.units.has('UNIT2')).toBe(true);
   });
 });

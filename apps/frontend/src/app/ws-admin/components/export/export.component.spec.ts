@@ -4,6 +4,9 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, throwError } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ExportComponent } from './export.component';
+import {
+  ItemDatasetMappingDiagnosticsDialogComponent
+} from './item-dataset-mapping-diagnostics-dialog.component';
 import { AppService } from '../../../core/services/app.service';
 import { ExportJobService } from '../../../shared/services/file/export-job.service';
 import { ResponseService } from '../../../shared/services/response/response.service';
@@ -14,8 +17,10 @@ describe('ExportComponent', () => {
   let component: ExportComponent;
   let startJob: jest.Mock;
   let snackOpen: jest.Mock;
+  let openDialog: jest.Mock;
   let getMissingsProfiles: jest.Mock;
   let getPsychometricDomainCandidates: jest.Mock;
+  let getItemDatasetOptions: jest.Mock;
   let selectedWorkspaceIdSubject: Subject<number>;
   let appService: {
     selectedWorkspaceId: number;
@@ -34,6 +39,7 @@ describe('ExportComponent', () => {
     };
     startJob = jest.fn().mockReturnValue(of({ jobId: 'job-1' }));
     snackOpen = jest.fn();
+    openDialog = jest.fn().mockReturnValue({});
     getMissingsProfiles = jest
       .fn()
       .mockReturnValue(of([{ id: 4, label: 'IQB-Standard' }]));
@@ -58,6 +64,17 @@ describe('ExportComponent', () => {
         mappingFallbackPreview: []
       })
     );
+    getItemDatasetOptions = jest.fn().mockReturnValue(of({
+      items: [{
+        unitId: 'UNIT1',
+        unitLabel: 'Aufgabe 1',
+        itemId: 'ITEM1',
+        itemLabel: 'Item 1',
+        columnName: 'Aufgabe1_ITEM1'
+      }],
+      mappingIssues: [],
+      mappingWarnings: []
+    }));
 
     await TestBed.configureTestingModule({
       imports: [
@@ -74,7 +91,8 @@ describe('ExportComponent', () => {
           provide: ExportJobService,
           useValue: {
             startJob,
-            getPsychometricDomainCandidates
+            getPsychometricDomainCandidates,
+            getItemDatasetOptions
           }
         },
         {
@@ -122,7 +140,19 @@ describe('ExportComponent', () => {
             'n bezeichnet paarweise vollständige Fälle. Weniger als 30 Fälle verhindern den Export nicht.',
           'psychometric-info-part-whole-title': 'Part-Whole-Korrektur',
           'psychometric-info-part-whole-description':
-            'Zieht den aktuellen Item-Score aus dem Domänenscore ab.'
+            'Zieht den aktuellen Item-Score aus dem Domänenscore ab.',
+          'item-dataset-mapping-title':
+            'Fehlerhafte Item-Metadaten: {{count}} – der Itemdatensatz kann nicht exportiert werden',
+          'item-dataset-mapping-warning-title':
+            'Item-Metadatenwarnungen: {{count}} – der Export ist weiterhin möglich',
+          'item-dataset-diagnostic-file': 'VOMD-Datei',
+          'item-dataset-diagnostic-expected-file': 'Erwartete VOMD-Datei',
+          'item-dataset-diagnostic-unit': 'Unit',
+          'item-dataset-diagnostic-item': 'Item',
+          'item-dataset-diagnostic-variable': 'variableId',
+          'item-dataset-diagnostic-target-variable': 'Ziel-variableId',
+          'item-dataset-diagnostic-column': 'Spalte',
+          'item-dataset-diagnostics-show-details': 'Details anzeigen'
         },
         export: {
           'job-started': 'Datenexport gestartet',
@@ -140,6 +170,9 @@ describe('ExportComponent', () => {
 
     fixture = TestBed.createComponent(ExportComponent);
     component = fixture.componentInstance;
+    (component as unknown as { dialog: { open: jest.Mock } }).dialog = {
+      open: openDialog
+    };
     fixture.detectChanges();
   });
 
@@ -318,7 +351,12 @@ describe('ExportComponent', () => {
         userId: 2,
         version: 'v2',
         format: 'csv',
-        matrixValue: 'score'
+        matrixValue: 'score',
+        missingsProfileId: 4,
+        notReachedScope: 'unit',
+        recodeTrailingOmissions: false,
+        items: [{ unitId: 'UNIT1', itemId: 'ITEM1' }],
+        downloadFilePrefix: 'Itemdatensatz'
       })
     );
     const config = startJob.mock.calls[0][1];
@@ -327,6 +365,223 @@ describe('ExportComponent', () => {
     expect(config).not.toHaveProperty('includeGeoGebraFiles');
     expect(component.includeGeoGebraResponseValues).toBe(false);
     expect(component.includeGeoGebraFiles).toBe(false);
+  });
+
+  it('blocks item dataset exports when VOMD mappings are invalid', () => {
+    getItemDatasetOptions.mockReturnValue(of({
+      items: [{
+        unitId: 'UNIT1',
+        unitLabel: 'Aufgabe 1',
+        itemId: 'ITEM1',
+        itemLabel: 'Item 1',
+        columnName: 'Aufgabe1_ITEM1'
+      }],
+      mappingIssues: [{
+        code: 'vomd-mapping',
+        message: 'UNIT1/VAR1: keine VOMD-Zuordnung',
+        unitId: 'UNIT1',
+        variableId: 'VAR1',
+        sourceFile: 'unit-one.vomd',
+        suggestedAction: 'variableId in der VOMD-Datei korrigieren.'
+      }]
+    }));
+    component.selectedFormat = 'item-matrix';
+
+    component.onSelectedFormatChange();
+    fixture.detectChanges();
+
+    expect(component.itemDatasetMappingIssues).toHaveLength(1);
+    expect(component.isExportDisabled).toBe(true);
+    const error = fixture.nativeElement.querySelector(
+      '[data-cy="item-dataset-mapping-errors"]'
+    ) as HTMLElement;
+    expect(error.textContent).toContain('Fehlerhafte Item-Metadaten: 1');
+    expect(error.textContent).toContain('Details anzeigen');
+    expect(error.textContent).not.toContain('unit-one.vomd');
+    expect(error.textContent).not.toContain('VAR1');
+
+    const detailsButton = error.querySelector('button') as HTMLButtonElement;
+    expect(detailsButton).toBeTruthy();
+    component.openItemDatasetMappingDiagnostics('error');
+
+    expect(openDialog).toHaveBeenCalledWith(
+      ItemDatasetMappingDiagnosticsDialogComponent,
+      expect.objectContaining({
+        maxHeight: '75vh',
+        data: {
+          severity: 'error',
+          diagnostics: component.itemDatasetMappingIssues
+        }
+      })
+    );
+  });
+
+  it('shows resolved VOMD fallbacks without blocking the export', () => {
+    getItemDatasetOptions.mockReturnValue(of({
+      items: [{
+        unitId: 'UNIT1',
+        unitLabel: 'Aufgabe 1',
+        itemId: 'ITEM1',
+        itemLabel: 'Item 1',
+        columnName: 'Aufgabe1_ITEM1'
+      }],
+      mappingIssues: [],
+      mappingWarnings: [{
+        code: 'vomd-fallback-used',
+        message: 'UNIT1/ITEM1: eindeutiger Fallback verwendet',
+        unitId: 'UNIT1',
+        itemId: 'ITEM1',
+        variableId: 'VAR1',
+        sourceFile: 'UNIT1.vomd',
+        suggestedAction: 'variableId in der VOMD-Datei korrigieren.'
+      }]
+    }));
+    component.selectedFormat = 'item-matrix';
+
+    component.onSelectedFormatChange();
+    fixture.detectChanges();
+
+    expect(component.itemDatasetMappingIssues).toEqual([]);
+    expect(component.itemDatasetMappingWarnings).toHaveLength(1);
+    expect(component.isExportDisabled).toBe(false);
+    const warning = fixture.nativeElement.querySelector(
+      '[data-cy="item-dataset-mapping-warnings"]'
+    ) as HTMLElement;
+    expect(warning.textContent).toContain('Item-Metadatenwarnungen: 1');
+    expect(warning.textContent).toContain('Details anzeigen');
+    expect(warning.textContent).not.toContain('UNIT1.vomd');
+    expect(warning.textContent).not.toContain('VAR1');
+
+    const detailsButton = warning.querySelector('button') as HTMLButtonElement;
+    expect(detailsButton).toBeTruthy();
+    component.openItemDatasetMappingDiagnostics('warning');
+
+    expect(openDialog).toHaveBeenCalledWith(
+      ItemDatasetMappingDiagnosticsDialogComponent,
+      expect.objectContaining({
+        data: {
+          severity: 'warning',
+          diagnostics: component.itemDatasetMappingWarnings
+        }
+      })
+    );
+  });
+
+  it('requires an explicit item dataset profile when IQB standard is absent', () => {
+    fixture.destroy();
+    getMissingsProfiles.mockReturnValueOnce(of([
+      { id: 7, label: 'Projektprofil' }
+    ]));
+
+    fixture = TestBed.createComponent(ExportComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    component.selectedFormat = 'item-matrix';
+    component.onSelectedFormatChange();
+
+    expect(component.selectedItemDatasetMissingsProfileId).toBeNull();
+    expect(component.isExportDisabled).toBe(true);
+
+    component.selectedItemDatasetMissingsProfileId = 7;
+
+    expect(component.isExportDisabled).toBe(false);
+  });
+
+  it('preselects only the canonical IQB standard profile', () => {
+    fixture.destroy();
+    getMissingsProfiles.mockReturnValueOnce(of([
+      { id: 7, label: 'Mein IQB Standard angepasst' },
+      { id: 4, label: 'IQB-Standard' }
+    ]));
+
+    fixture = TestBed.createComponent(ExportComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    component.selectedFormat = 'item-matrix';
+    component.onSelectedFormatChange();
+
+    expect(component.selectedItemDatasetMissingsProfileId).toBe(4);
+  });
+
+  it('keeps item dataset and psychometric profile selections separate', () => {
+    component.selectedFormat = 'item-matrix';
+    component.onSelectedFormatChange();
+    component.selectedItemDatasetMissingsProfileId = 7;
+
+    component.selectedFormat = 'psychometrics';
+    component.onSelectedFormatChange();
+    component.selectedMissingsProfileId = 9;
+
+    expect(component.selectedItemDatasetMissingsProfileId).toBe(7);
+    expect(component.selectedMissingsProfileId).toBe(9);
+  });
+
+  it('preserves hidden item selections when a filtered selection changes', () => {
+    component.itemDatasetOptions = [
+      {
+        unitId: 'UNIT1',
+        unitLabel: 'Aufgabe 1',
+        itemId: 'ITEM1',
+        itemLabel: 'Item 1',
+        columnName: 'Aufgabe1_ITEM1'
+      },
+      {
+        unitId: 'UNIT2',
+        unitLabel: 'Aufgabe 2',
+        itemId: 'ITEM2',
+        itemLabel: 'Item 2',
+        columnName: 'Aufgabe2_ITEM2'
+      }
+    ];
+    component.selectedItemKeys = component.itemDatasetOptions.map(
+      item => component.getItemDatasetKey(item)
+    );
+    component.itemSearch = 'ITEM2';
+
+    component.onItemDatasetSelectionChange([]);
+
+    expect(component.selectedItemKeys).toEqual(['UNIT1\u001FITEM1']);
+  });
+
+  it('keeps item profiles available when psychometric profile loading fails', () => {
+    fixture.destroy();
+    getMissingsProfiles
+      .mockReturnValueOnce(of([{ id: 4, label: 'IQB-Standard' }]))
+      .mockReturnValueOnce(
+        throwError(() => new Error('psychometric profiles failed'))
+      );
+
+    fixture = TestBed.createComponent(ExportComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    component.selectedFormat = 'item-matrix';
+    component.onSelectedFormatChange();
+
+    expect(component.itemDatasetMissingsProfiles).toEqual([
+      { id: 4, label: 'IQB-Standard' }
+    ]);
+    expect(component.selectedItemDatasetMissingsProfileId).toBe(4);
+
+    component.selectedFormat = 'psychometrics';
+    component.onSelectedFormatChange();
+    component.selectedFormat = 'item-matrix';
+    component.onSelectedFormatChange();
+
+    expect(component.itemDatasetMissingsProfiles).toEqual([
+      { id: 4, label: 'IQB-Standard' }
+    ]);
+    expect(component.selectedItemDatasetMissingsProfileId).toBe(4);
+    expect(component.isExportDisabled).toBe(false);
+  });
+
+  it('clears trailing omission recoding for per-task scope', () => {
+    component.notReachedScope = 'booklet';
+    component.recodeTrailingOmissions = true;
+    component.notReachedScope = 'unit';
+
+    component.onNotReachedScopeChange();
+
+    expect(component.recodeTrailingOmissions).toBe(false);
   });
 
   it('includes GeoGebra package option only for Excel result exports', () => {
