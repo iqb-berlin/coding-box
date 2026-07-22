@@ -965,9 +965,18 @@ scan-develop-commit-traefik-image:
 
 
 build-pre-release:
-  stage: build-images
+  stage: publish-images
   rules:
     - !reference [ .pre-release_rules, rules ]
+  needs:
+    - job: scan-main-commit-db-image
+      artifacts: false
+    - job: scan-main-commit-liquibase-image
+      artifacts: false
+    - job: scan-main-commit-backend-image
+      artifacts: false
+    - job: scan-main-commit-frontend-image
+      artifacts: false
   image: ${DOCKER_IMAGE}
   services:
     - name: ${DOCKER_SERVICE}
