@@ -4,6 +4,7 @@ import * as cheerio from 'cheerio';
 import { Repository } from 'typeorm';
 import {
   ItemDatasetMappingIssueDto,
+  ItemDatasetMappingWarningDto,
   ItemDatasetSelection
 } from '../../../../../../../api-dto/coding/export-request.dto';
 import {
@@ -36,6 +37,7 @@ const fixedHeaders = [
 export interface ItemDatasetColumnResolution {
   columns: ItemDatasetColumn[];
   issues: ItemDatasetMappingIssueDto[];
+  warnings: ItemDatasetMappingWarningDto[];
 }
 
 @Injectable()
@@ -69,16 +71,35 @@ export class ItemDatasetMetadataService {
       }),
       this.getUnitAliases(workspaceId, checkCancellation)
     ]);
-    const issues: ItemDatasetMappingIssueDto[] = [
-      ...mapping.issues.map(message => ({
+    const issues: ItemDatasetMappingIssueDto[] =
+      mapping.issueDiagnostics?.map(diagnostic => ({
+        ...diagnostic
+      })) || mapping.issues.map(message => ({
         code: 'vomd-mapping' as const,
-        message
-      })),
-      ...mapping.fallbacks.map(message => ({
-        code: 'ambiguous-vomd-fallback' as const,
-        message: `Nicht eindeutige VOMD-Fallback-Zuordnung: ${message}`
-      }))
-    ];
+        message,
+        suggestedAction:
+          'VOMD- und Unit-/VOCS-Metadaten prüfen und eindeutig zuordnen.'
+      }));
+    const warnings: ItemDatasetMappingWarningDto[] =
+      mapping.fallbackDiagnostics?.map(diagnostic => ({
+        code: diagnostic.kind === 'used' ?
+          'vomd-fallback-used' as const :
+          'vomd-fallback-ignored' as const,
+        message: diagnostic.message,
+        unitId: diagnostic.unitId,
+        itemId: diagnostic.itemId,
+        variableId: diagnostic.variableId,
+        sourceFile: diagnostic.sourceFile,
+        suggestedAction: diagnostic.suggestedAction
+      })) || mapping.fallbacks.map(message => ({
+        code: message.includes('ignoriert') ?
+          'vomd-fallback-ignored' as const :
+          'vomd-fallback-used' as const,
+        message,
+        suggestedAction: message.includes('ignoriert') ?
+          'Redundantes Legacy-VOMD-Item entfernen oder die VOMD-Datei neu erzeugen.' :
+          'variableId im VOMD-Item ergänzen oder korrigieren.'
+      }));
     const requested = selection ?
       new Set(
         selection.map(item => ItemDatasetSelectionKey
@@ -115,7 +136,10 @@ export class ItemDatasetMetadataService {
             `${selectionKey}`,
           unitId,
           itemId: item.itemId,
-          columnName: header
+          columnName: header,
+          suggestedAction:
+            'Unit-Alias oder Item-ID so anpassen, dass der Spaltenname ' +
+            'innerhalb des Itemdatensatzes eindeutig ist.'
         });
         return;
       }
@@ -149,11 +173,18 @@ export class ItemDatasetMetadataService {
           unitId: selected ?
             normalizeItemDatasetUnitId(selected.unitId) :
             undefined,
-          itemId: selected?.itemId
+          itemId: selected?.itemId,
+          suggestedAction:
+            'Item-Auswahl aktualisieren und Unit-ID sowie Item-ID mit den ' +
+            'aktuellen VOMD-Metadaten abgleichen.'
         });
       }
     });
-    return { columns, issues: this.uniqueIssues(issues) };
+    return {
+      columns,
+      issues: this.uniqueIssues(issues),
+      warnings: this.uniqueWarnings(warnings)
+    };
   }
 
   filterColumns(
@@ -161,7 +192,7 @@ export class ItemDatasetMetadataService {
     selection?: ItemDatasetSelection[]
   ): ItemDatasetColumnResolution {
     if (!selection) {
-      return { columns, issues: [] };
+      return { columns, issues: [], warnings: [] };
     }
     const requested = new Set(
       selection.map(item => ItemDatasetSelectionKey
@@ -178,6 +209,7 @@ export class ItemDatasetMetadataService {
     );
     return {
       columns: filtered,
+      warnings: [],
       issues: Array.from(requested)
         .filter(key => !matched.has(key))
         .map(key => {
@@ -192,7 +224,10 @@ export class ItemDatasetMetadataService {
             unitId: selected ?
               normalizeItemDatasetUnitId(selected.unitId) :
               undefined,
-            itemId: selected?.itemId
+            itemId: selected?.itemId,
+            suggestedAction:
+              'Item-Auswahl aktualisieren und Unit-ID sowie Item-ID mit den ' +
+              'aktuellen VOMD-Metadaten abgleichen.'
           };
         })
     };
@@ -349,6 +384,16 @@ export class ItemDatasetMetadataService {
     const unique = new Map<string, ItemDatasetMappingIssueDto>();
     issues.forEach(issue => {
       unique.set(`${issue.code}\u001F${issue.message}`, issue);
+    });
+    return Array.from(unique.values());
+  }
+
+  private uniqueWarnings(
+    warnings: ItemDatasetMappingWarningDto[]
+  ): ItemDatasetMappingWarningDto[] {
+    const unique = new Map<string, ItemDatasetMappingWarningDto>();
+    warnings.forEach(warning => {
+      unique.set(`${warning.code}\u001F${warning.message}`, warning);
     });
     return Array.from(unique.values());
   }

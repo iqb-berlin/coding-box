@@ -331,7 +331,9 @@ describe('PsychometricMetadataResolver', () => {
       items: [],
       byLogicalKey: new Map(),
       issues: [],
-      fallbacks: []
+      fallbacks: [],
+      issueDiagnostics: [],
+      fallbackDiagnostics: []
     });
   });
 
@@ -369,6 +371,15 @@ describe('PsychometricMetadataResolver', () => {
     expect(mapping.fallbacks).toEqual([
       'UNIT_A/V1: variableId fehlt; ' +
         'Item-ID V1 als eindeutiger Fallback erkannt und verwendet'
+    ]);
+    expect(mapping.fallbackDiagnostics).toEqual([
+      expect.objectContaining({
+        kind: 'used',
+        unitId: 'UNIT_A',
+        itemId: 'V1',
+        variableId: 'V1',
+        sourceFile: 'UNIT_A.vomd'
+      })
     ]);
     await expect(resolver.getDomainCandidates(7)).resolves.toEqual({
       candidates: [],
@@ -447,6 +458,15 @@ describe('PsychometricMetadataResolver', () => {
         'Item-ID V1 als eindeutiger Fallback erkannt, aber wegen bereits ' +
         'direkter Zuordnung ignoriert'
     ]);
+    expect(mapping.fallbackDiagnostics).toEqual([
+      expect.objectContaining({
+        kind: 'ignored',
+        unitId: 'UNIT_A',
+        itemId: 'V1',
+        variableId: 'V1',
+        sourceFile: 'UNIT_A.vomd'
+      })
+    ]);
   });
 
   it('still rejects duplicate fallback mappings without a direct mapping', async () => {
@@ -517,6 +537,14 @@ describe('PsychometricMetadataResolver', () => {
     expect(mapping.fallbacks).toEqual([]);
     expect(mapping.issues).toEqual([
       'UNIT_A/COMMON: Item-ID COMMON ist als Variablenfallback mehrdeutig'
+    ]);
+    expect(mapping.issueDiagnostics).toEqual([
+      expect.objectContaining({
+        code: 'ambiguous-item-fallback',
+        unitId: 'UNIT_A',
+        itemId: 'COMMON',
+        sourceFile: 'UNIT_A.vomd'
+      })
     ]);
   });
 

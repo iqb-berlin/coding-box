@@ -34,20 +34,45 @@ export interface ItemDatasetOption extends ItemDatasetSelection {
 export type ItemDatasetMappingIssueCode =
   | 'vomd-mapping'
   | 'ambiguous-vomd-fallback'
+  | 'missing-vomd'
+  | 'missing-item-id'
+  | 'missing-variable-id'
+  | 'variable-not-found'
+  | 'ambiguous-variable'
+  | 'ambiguous-item-fallback'
+  | 'duplicate-vomd-item'
+  | 'ambiguous-variable-mapping'
   | 'column-name-collision'
   | 'unknown-selection';
 
-export interface ItemDatasetMappingIssueDto {
-  code: ItemDatasetMappingIssueCode;
+export type ItemDatasetMappingWarningCode =
+  | 'vomd-fallback-used'
+  | 'vomd-fallback-ignored';
+
+interface ItemDatasetMappingDiagnosticDto {
   message: string;
   unitId?: string;
   itemId?: string;
+  variableId?: string;
   columnName?: string;
+  sourceFile?: string;
+  suggestedAction?: string;
+}
+
+export interface ItemDatasetMappingIssueDto
+  extends ItemDatasetMappingDiagnosticDto {
+  code: ItemDatasetMappingIssueCode;
+}
+
+export interface ItemDatasetMappingWarningDto
+  extends ItemDatasetMappingDiagnosticDto {
+  code: ItemDatasetMappingWarningCode;
 }
 
 export interface ItemDatasetOptionsDto {
   items: ItemDatasetOption[];
   mappingIssues: ItemDatasetMappingIssueDto[];
+  mappingWarnings?: ItemDatasetMappingWarningDto[];
 }
 
 interface ExportRequestTransportOptions {

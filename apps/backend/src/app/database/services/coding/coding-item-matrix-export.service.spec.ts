@@ -913,8 +913,214 @@ describe('CodingItemMatrixExportService', () => {
         'Identifikationsspalte und UNIT1\u001Flogin',
       unitId: 'UNIT1',
       itemId: 'login',
-      columnName: 'person_login'
+      columnName: 'person_login',
+      suggestedAction:
+        'Unit-Alias oder Item-ID so anpassen, dass der Spaltenname innerhalb ' +
+        'des Itemdatensatzes eindeutig ist.'
     });
+  });
+
+  it('returns resolved VOMD fallbacks as non-blocking warnings', async () => {
+    const queryBuilder = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      distinct: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([])
+    };
+    const service = createService({
+      unitRepository: {
+        createQueryBuilder: jest.fn().mockReturnValue(queryBuilder)
+      },
+      metadataResolver: {
+        buildItemMapping: jest.fn().mockResolvedValue({
+          items: [{
+            unitName: 'UNIT1',
+            variableId: 'VAR1',
+            sourceVariableId: 'SOURCE1',
+            itemId: 'ITEM1',
+            itemLabel: 'Item',
+            variable: { isDerived: false }
+          }],
+          issues: [],
+          fallbacks: ['UNIT1/ITEM1: eindeutiger Fallback und verwendet'],
+          fallbackDiagnostics: [{
+            kind: 'used',
+            message: 'UNIT1/ITEM1: eindeutiger Fallback und verwendet',
+            unitId: 'UNIT1',
+            itemId: 'ITEM1',
+            variableId: 'VAR1',
+            sourceFile: 'UNIT1.vomd',
+            suggestedAction: 'variableId korrigieren.'
+          }],
+          byLogicalKey: new Map()
+        })
+      }
+    });
+
+    const options = await service.getItemDatasetOptions(7);
+
+    expect(options.mappingIssues).toEqual([]);
+    expect(options.mappingWarnings).toEqual([
+      expect.objectContaining({
+        code: 'vomd-fallback-used',
+        unitId: 'UNIT1',
+        itemId: 'ITEM1',
+        sourceFile: 'UNIT1.vomd'
+      })
+    ]);
+    expect(options.items).toHaveLength(1);
+  });
+
+  it('builds an export context when mapping contains only warnings', async () => {
+    const service = createService();
+    const matrixColumn = column('1');
+    const internals = service as never as {
+      getRows: jest.Mock;
+      buildColumns: jest.Mock;
+      getBookletDesigns: jest.Mock;
+      loadAndValidateProfile: jest.Mock;
+      getDerivedSources: jest.Mock;
+      sortColumnsByBookletDesigns: jest.Mock;
+      filterColumns: jest.Mock;
+      buildMatrixContext: (
+        workspaceId: number,
+        config: ItemMatrixExportConfiguration
+      ) => Promise<{ columns: unknown[] }>;
+    };
+    internals.getRows = jest.fn().mockResolvedValue([]);
+    internals.buildColumns = jest.fn().mockResolvedValue({
+      columns: [matrixColumn],
+      issues: [],
+      warnings: [{
+        code: 'vomd-fallback-used',
+        message: 'UNIT1/1: eindeutiger Fallback verwendet'
+      }]
+    });
+    internals.getBookletDesigns = jest.fn().mockResolvedValue(new Map());
+    internals.loadAndValidateProfile = jest.fn().mockResolvedValue(profile);
+    internals.getDerivedSources = jest.fn().mockResolvedValue(new Map());
+    internals.sortColumnsByBookletDesigns = jest.fn().mockReturnValue([
+      matrixColumn
+    ]);
+    internals.filterColumns = jest.fn().mockReturnValue({
+      columns: [matrixColumn],
+      issues: [],
+      warnings: []
+    });
+
+    await expect(
+      internals.buildMatrixContext(7, configuration)
+    ).resolves.toEqual(expect.objectContaining({ columns: [matrixColumn] }));
+  });
+
+  it('includes only genuine mapping errors in the export failure', async () => {
+    const service = createService();
+    const matrixColumn = column('1');
+    const internals = service as never as {
+      getRows: jest.Mock;
+      buildColumns: jest.Mock;
+      getBookletDesigns: jest.Mock;
+      loadAndValidateProfile: jest.Mock;
+      getDerivedSources: jest.Mock;
+      sortColumnsByBookletDesigns: jest.Mock;
+      filterColumns: jest.Mock;
+      buildMatrixContext: (
+        workspaceId: number,
+        config: ItemMatrixExportConfiguration
+      ) => Promise<unknown>;
+    };
+    internals.getRows = jest.fn().mockResolvedValue([]);
+    internals.buildColumns = jest.fn().mockResolvedValue({
+      columns: [matrixColumn],
+      issues: [{
+        code: 'missing-vomd',
+        message: 'UNIT2: keine VOMD-Datei'
+      }],
+      warnings: [{
+        code: 'vomd-fallback-used',
+        message: 'UNIT1/1: eindeutiger Fallback verwendet'
+      }]
+    });
+    internals.getBookletDesigns = jest.fn().mockResolvedValue(new Map());
+    internals.loadAndValidateProfile = jest.fn().mockResolvedValue(profile);
+    internals.getDerivedSources = jest.fn().mockResolvedValue(new Map());
+    internals.sortColumnsByBookletDesigns = jest.fn().mockReturnValue([
+      matrixColumn
+    ]);
+    internals.filterColumns = jest.fn().mockReturnValue({
+      columns: [matrixColumn],
+      issues: [],
+      warnings: []
+    });
+
+    await expect(
+      internals.buildMatrixContext(7, configuration)
+    ).rejects.toThrow('UNIT2: keine VOMD-Datei');
+    await expect(
+      internals.buildMatrixContext(7, configuration)
+    ).rejects.not.toThrow('eindeutiger Fallback verwendet');
+  });
+
+  it('keeps genuine errors global when a clean item is selected', async () => {
+    const queryBuilder = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      distinct: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([])
+    };
+    const service = createService({
+      unitRepository: {
+        createQueryBuilder: jest.fn().mockReturnValue(queryBuilder)
+      },
+      metadataResolver: {
+        buildItemMapping: jest.fn().mockResolvedValue({
+          items: [{
+            unitName: 'UNIT1',
+            variableId: 'VAR1',
+            sourceVariableId: 'VAR1',
+            itemId: 'ITEM1',
+            itemLabel: 'Item',
+            variable: { isDerived: false }
+          }],
+          issues: ['UNIT2: keine VOMD-Datei'],
+          issueDiagnostics: [{
+            code: 'missing-vomd',
+            message: 'UNIT2: keine VOMD-Datei',
+            unitId: 'UNIT2',
+            sourceFile: 'UNIT2.vomd',
+            suggestedAction: 'VOMD-Datei hochladen.'
+          }],
+          fallbacks: [],
+          byLogicalKey: new Map()
+        })
+      }
+    });
+
+    const result = await (
+      service as never as {
+        buildColumns: (
+          workspaceId: number,
+          selection: Array<{ unitId: string; itemId: string }>
+        ) => Promise<{
+          columns: unknown[];
+          issues: Array<{ code: string; message: string }>;
+        }>;
+      }
+    ).buildColumns(7, [{ unitId: 'UNIT1', itemId: 'ITEM1' }]);
+
+    expect(result.columns).toHaveLength(1);
+    expect(result.issues).toEqual([
+      expect.objectContaining({
+        code: 'missing-vomd',
+        unitId: 'UNIT2'
+      })
+    ]);
   });
 
   it('excludes globally ignored units before resolving VOMD metadata', async () => {
@@ -1000,13 +1206,13 @@ describe('CodingItemMatrixExportService', () => {
     ).buildColumns(7, [{ unitId: 'UNIT1', itemId: 'UNKNOWN' }]);
 
     expect(result.columns).toHaveLength(0);
-    expect(result.issues).toContainEqual({
+    expect(result.issues).toContainEqual(expect.objectContaining({
       code: 'unknown-selection',
       message:
         "Ausgewähltes Item 'UNIT1\u001FUNKNOWN' konnte nicht eindeutig zugeordnet werden",
       unitId: 'UNIT1',
       itemId: 'UNKNOWN'
-    });
+    }));
   });
 
   it('rejects profiles with an absent score property', async () => {
