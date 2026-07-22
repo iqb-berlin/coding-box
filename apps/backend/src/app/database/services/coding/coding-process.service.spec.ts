@@ -16,6 +16,7 @@ import Persons from '../../entities/persons.entity';
 import { Unit } from '../../entities/unit.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import { ResponseEntity } from '../../entities/response.entity';
+import { AutocoderPersistenceTargetCollisionError } from './autocoder-persistence-target-collision.error';
 
 jest.mock('@iqb/responses', () => ({
   CodingSchemeFactory: {
@@ -1205,7 +1206,7 @@ describe('CodingProcessService', () => {
       expect(() => assertUniqueTargets([
         { id: 10 },
         { id: 10 }
-      ])).toThrow('Autocoder produced multiple updates for response:10');
+      ])).toThrow(AutocoderPersistenceTargetCollisionError);
       expect(() => assertUniqueTargets([
         {
           id: -1,
@@ -1222,6 +1223,64 @@ describe('CodingProcessService', () => {
           subform: ''
         }
       ])).toThrow('Autocoder produced multiple updates for generated:1:03:');
+    });
+
+    it('rolls back and rejects persistence target collisions', async () => {
+      const response02 = createMockResponse(10, 1, '02');
+      (Autocoder.CodingSchemeFactory.code as jest.Mock).mockReturnValueOnce([
+        {
+          id: '02',
+          value: 'first result',
+          status: 'CODING_COMPLETE',
+          code: 1,
+          score: 1,
+          subform: ''
+        },
+        {
+          id: '02',
+          value: 'second result',
+          status: 'CODING_COMPLETE',
+          code: 2,
+          score: 1,
+          subform: ''
+        }
+      ]);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([
+          ['TEST_UNIT_1', new Set(['02'])]
+        ])
+      );
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce([mockUnits[0]])
+        .mockResolvedValueOnce([response02]);
+      (fileUploadRepository.find as jest.Mock)
+        .mockReset()
+        .mockResolvedValueOnce([
+          createMockFileUpload(
+            'ALIAS_1',
+            '<xml><codingSchemeRef>TEST-SCHEME-REF</codingSchemeRef></xml>'
+          )
+        ])
+        .mockResolvedValueOnce([
+          createMockFileUpload(
+            'TEST-SCHEME-REF',
+            JSON.stringify({
+              version: '3.4',
+              variableCodings: [{ id: '04', alias: '02' }]
+            })
+          )
+        ]);
+
+      await expect(
+        service.processTestPersonsBatch(workspaceId, ['1'], 1)
+      ).rejects.toBeInstanceOf(AutocoderPersistenceTargetCollisionError);
+
+      const createQueryRunner = responseRepository.manager.connection
+        .createQueryRunner as jest.Mock;
+      const queryRunner = createQueryRunner.mock.results[0].value;
+      expect(queryRunner.rollbackTransaction).toHaveBeenCalledTimes(1);
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .not.toHaveBeenCalled();
     });
 
     it('should call progress callback at appropriate intervals', async () => {

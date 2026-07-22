@@ -30,6 +30,7 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { CodingReadinessService } from './coding-readiness.service';
+import { AutocoderPersistenceTargetCollisionError } from './autocoder-persistence-target-collision.error';
 
 type UnitCodingJobMetadata = {
   source?: 'manual-selection' | 'coding-freshness';
@@ -644,6 +645,9 @@ export class CodingProcessService {
         `Error while processing test persons in batch: ${error.message} \n ${error.stack}`
       );
       await queryRunner.rollbackTransaction();
+      if (error instanceof AutocoderPersistenceTargetCollisionError) {
+        throw error;
+      }
       return statistics;
     } finally {
       if (!queryRunner.isReleased) {
@@ -1176,9 +1180,10 @@ export class CodingProcessService {
       const previousIndex = targetIndexes.get(target);
 
       if (previousIndex !== undefined) {
-        throw new Error(
-          `Autocoder produced multiple updates for ${target} ` +
-          `(results ${previousIndex + 1} and ${index + 1}).`
+        throw new AutocoderPersistenceTargetCollisionError(
+          target,
+          previousIndex,
+          index
         );
       }
 
