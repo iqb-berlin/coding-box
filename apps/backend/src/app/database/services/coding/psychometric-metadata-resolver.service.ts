@@ -113,7 +113,7 @@ export class PsychometricMetadataResolver {
         return;
       }
 
-      documents
+      const resolvedItems = documents
         .flatMap(document => document.items.map(vomdItem => ({
           document,
           vomdItem
@@ -142,10 +142,24 @@ export class PsychometricMetadataResolver {
             itemId,
             resolution
           };
+        });
+      const directMappingKeys = new Set(
+        resolvedItems.flatMap(({ resolution }) => {
+          if (
+            resolution.issue ||
+            resolution.fallbackNote ||
+            !resolution.variable
+          ) {
+            return [];
+          }
+          const variableId = String(
+            resolution.variable.alias || resolution.variable.id
+          ).trim();
+          return [getPsychometricLogicalKey(unit.unitName, variableId)];
         })
-        .sort((left, right) => Number(Boolean(left.resolution.fallbackNote)) -
-          Number(Boolean(right.resolution.fallbackNote))
-        )
+      );
+
+      resolvedItems
         .forEach(({
           document, vomdItem, itemId, resolution
         }) => {
@@ -179,7 +193,7 @@ export class PsychometricMetadataResolver {
           const existingMappingSource = mappingSourceByKey.get(key);
           if (
             mappingSource === 'fallback' &&
-            existingMappingSource === 'direct'
+            directMappingKeys.has(key)
           ) {
             const message =
               `${resolution.fallbackNote}, aber wegen bereits direkter ` +
