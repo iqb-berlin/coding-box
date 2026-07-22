@@ -380,7 +380,7 @@ describe('CodingManagementService', () => {
       global.URL.createObjectURL = jest.fn();
       global.URL.revokeObjectURL = jest.fn();
 
-      await service.downloadCodingResults('v1', 'csv', true, false);
+      await service.downloadCodingResults('v1', 'csv', true, false, false, false, 7);
 
       expect(exportServiceMock.startExportJob).toHaveBeenCalledWith(
         1,
@@ -391,7 +391,8 @@ describe('CodingManagementService', () => {
         undefined,
         false,
         false,
-        false
+        false,
+        7
       );
     });
 
@@ -415,7 +416,8 @@ describe('CodingManagementService', () => {
         undefined,
         true,
         true,
-        false
+        false,
+        undefined
       );
     });
 
@@ -439,7 +441,8 @@ describe('CodingManagementService', () => {
         undefined,
         true,
         false,
-        true
+        true,
+        undefined
       );
     });
 

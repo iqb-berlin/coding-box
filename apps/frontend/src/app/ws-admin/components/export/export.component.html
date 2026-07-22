@@ -38,7 +38,7 @@
             <mat-label>{{
               'ws-admin.export-options.results-version' | translate
             }}</mat-label>
-            <mat-select [(ngModel)]="resultsVersion">
+            <mat-select [(ngModel)]="resultsVersion" (ngModelChange)="onResultsVersionChange()">
               <mat-option value="v1">{{
                 'ws-admin.export-options.results-version-v1' | translate
               }}</mat-option>
@@ -49,6 +49,33 @@
                 'ws-admin.export-options.results-version-v3' | translate
               }}</mat-option>
             </mat-select>
+          </mat-form-field>
+
+          <mat-form-field
+            *ngIf="selectedFormat === 'results-by-version' && resultsVersion === 'v1'"
+            appearance="outline"
+          >
+            <mat-label>{{
+              'ws-admin.export-options.results-missings-profile' | translate
+            }}</mat-label>
+            <mat-select
+              data-cy="results-missings-profile"
+              [(ngModel)]="selectedResultsMissingsProfileId"
+              [disabled]="isLoadingResultsOptions"
+            >
+              <mat-option
+                *ngFor="let profile of resultsMissingsProfiles"
+                [value]="profile.id"
+              >
+                {{ profile.label }}
+              </mat-option>
+            </mat-select>
+            <mat-hint *ngIf="isLoadingResultsOptions">
+              {{ 'ws-admin.export-options.results-missings-profile-loading' | translate }}
+            </mat-hint>
+            <mat-hint *ngIf="!isLoadingResultsOptions && resultsMissingsProfiles.length === 0">
+              {{ 'ws-admin.export-options.results-no-missings-profile' | translate }}
+            </mat-hint>
           </mat-form-field>
 
           <mat-form-field appearance="outline">
