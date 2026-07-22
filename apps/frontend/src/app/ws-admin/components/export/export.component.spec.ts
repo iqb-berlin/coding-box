@@ -19,6 +19,7 @@ describe('ExportComponent', () => {
   let snackOpen: jest.Mock;
   let openDialog: jest.Mock;
   let getMissingsProfiles: jest.Mock;
+  let getExportMissingsProfiles: jest.Mock;
   let getPsychometricDomainCandidates: jest.Mock;
   let getItemDatasetOptions: jest.Mock;
   let selectedWorkspaceIdSubject: Subject<number>;
@@ -41,6 +42,9 @@ describe('ExportComponent', () => {
     snackOpen = jest.fn();
     openDialog = jest.fn().mockReturnValue({});
     getMissingsProfiles = jest
+      .fn()
+      .mockReturnValue(of([{ id: 4, label: 'IQB-Standard' }]));
+    getExportMissingsProfiles = jest
       .fn()
       .mockReturnValue(of([{ id: 4, label: 'IQB-Standard' }]));
     getPsychometricDomainCandidates = jest.fn().mockReturnValue(
@@ -108,7 +112,8 @@ describe('ExportComponent', () => {
         {
           provide: MissingsProfileService,
           useValue: {
-            getMissingsProfilesOrThrow: getMissingsProfiles
+            getMissingsProfilesOrThrow: getMissingsProfiles,
+            getExportMissingsProfilesOrThrow: getExportMissingsProfiles
           }
         }
       ]
@@ -179,6 +184,7 @@ describe('ExportComponent', () => {
   it('defaults to final result exports', () => {
     expect(component.selectedFormat).toBe('results-by-version');
     expect(getMissingsProfiles).not.toHaveBeenCalled();
+    expect(getExportMissingsProfiles).not.toHaveBeenCalled();
     expect(getPsychometricDomainCandidates).not.toHaveBeenCalled();
   });
 
@@ -330,6 +336,31 @@ describe('ExportComponent', () => {
       'Schließen',
       { duration: 3000 }
     );
+  });
+
+  it('requires and submits the selected missing profile for v1 result exports', () => {
+    component.resultsVersion = 'v1';
+
+    component.onResultsVersionChange();
+
+    expect(getExportMissingsProfiles).toHaveBeenCalledWith(5);
+    expect(component.selectedResultsMissingsProfileId).toBe(4);
+    expect(component.isExportDisabled).toBe(false);
+
+    component.onExport();
+
+    expect(startJob).toHaveBeenCalledWith(
+      5,
+      expect.objectContaining({
+        exportType: 'results-by-version',
+        version: 'v1',
+        missingsProfileId: 4
+      })
+    );
+
+    component.selectedResultsMissingsProfileId = null;
+
+    expect(component.isExportDisabled).toBe(true);
   });
 
   it('starts item matrix exports with matrix options', () => {

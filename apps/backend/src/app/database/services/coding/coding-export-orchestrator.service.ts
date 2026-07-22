@@ -33,6 +33,7 @@ export interface VersionedCodingResultsExportOptions {
   includeResponseValues?: boolean;
   includeGeoGebraResponseValues?: boolean;
   includeGeoGebraFiles?: boolean;
+  missingsProfileId?: number;
   onProgress?: ExportProgressCallback;
   checkCancellation?: () => Promise<void>;
 }
@@ -86,7 +87,8 @@ export class CodingExportOrchestratorService {
       options.onProgress,
       options.includeResponseValues !== false,
       options.includeGeoGebraResponseValues === true,
-      options.checkCancellation
+      options.checkCancellation,
+      options.missingsProfileId
     );
   }
 
@@ -101,7 +103,8 @@ export class CodingExportOrchestratorService {
         options.serverUrl || '',
         options.includeReplayUrl || false,
         options.onProgress,
-        options.checkCancellation
+        options.checkCancellation,
+        options.missingsProfileId
       );
     }
 
@@ -114,7 +117,8 @@ export class CodingExportOrchestratorService {
       options.onProgress,
       options.includeResponseValues !== false,
       options.includeGeoGebraResponseValues === true,
-      options.checkCancellation
+      options.checkCancellation,
+      options.missingsProfileId
     );
   }
 
@@ -131,7 +135,8 @@ export class CodingExportOrchestratorService {
         options.serverUrl || '',
         options.includeReplayUrl || false,
         options.onProgress,
-        options.checkCancellation
+        options.checkCancellation,
+        options.missingsProfileId
       );
       return;
     }
@@ -146,7 +151,8 @@ export class CodingExportOrchestratorService {
       options.onProgress,
       options.includeResponseValues !== false,
       options.includeGeoGebraResponseValues === true,
-      options.checkCancellation
+      options.checkCancellation,
+      options.missingsProfileId
     );
   }
 

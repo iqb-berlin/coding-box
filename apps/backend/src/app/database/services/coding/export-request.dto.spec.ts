@@ -34,3 +34,30 @@ describe('item dataset export request validation', () => {
     );
   });
 });
+
+describe('results-by-version export request validation', () => {
+  it('requires a positive missing profile for v1', () => {
+    expect(() => parseExportRequest({
+      exportType: 'results-by-version',
+      version: 'v1',
+      format: 'csv'
+    })).toThrow('results-by-version v1 exports require missingsProfileId');
+  });
+
+  it('accepts v1 with a positive missing profile', () => {
+    expect(parseExportRequest({
+      exportType: 'results-by-version',
+      version: 'v1',
+      format: 'excel',
+      missingsProfileId: 7
+    })).toMatchObject({ version: 'v1', missingsProfileId: 7 });
+  });
+
+  it('keeps v2 independent from missing profiles', () => {
+    expect(parseExportRequest({
+      exportType: 'results-by-version',
+      version: 'v2',
+      format: 'csv'
+    })).toMatchObject({ version: 'v2' });
+  });
+});

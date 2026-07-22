@@ -1,4 +1,6 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import {
+  BadRequestException, Injectable, Logger, Optional
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
@@ -25,6 +27,11 @@ import {
 } from './geogebra-export.util';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingReplayAnchorService } from './coding-replay-anchor.service';
+import {
+  MissingsProfilesService,
+  ResolvedMissingsProfile
+} from './missings-profiles.service';
+import { resolveV1ExportValue } from './versioned-results-missing-resolver';
 
 interface JsonStream {
   on(event: 'data', listener: (item: CodingItem) => void): void;
@@ -73,8 +80,71 @@ export class CodingListStreamService {
     private readonly fileCacheService: CodingFileCacheService,
     private readonly workspaceFilesService: WorkspaceFilesService,
     @Optional() private readonly configService?: ConfigService,
-    @Optional() private readonly replayAnchorService?: CodingReplayAnchorService
+    @Optional() private readonly replayAnchorService?: CodingReplayAnchorService,
+    @Optional() private readonly missingsProfilesService?: MissingsProfilesService
   ) { }
+
+  private async loadV1ExportProfile(
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3',
+    missingsProfileId?: number
+  ): Promise<ResolvedMissingsProfile | undefined> {
+    if (version !== 'v1') {
+      return undefined;
+    }
+    if (!Number.isSafeInteger(missingsProfileId) || Number(missingsProfileId) <= 0) {
+      throw new BadRequestException(
+        'Version v1 exports require missingsProfileId to be a positive integer'
+      );
+    }
+    if (!this.missingsProfilesService) {
+      throw new BadRequestException('Missings profile service is unavailable');
+    }
+    return this.missingsProfilesService.getResolvedMissingsProfileForExport(
+      workspaceId,
+      Number(missingsProfileId),
+      ['mir', 'mci', 'mbi_mbo', 'mnr']
+    );
+  }
+
+  private buildVersionedExportItem(
+    row: CodingItemVersionRow,
+    version: 'v1' | 'v2' | 'v3',
+    authToken: string,
+    serverUrl: string,
+    workspaceId: number,
+    includeReplayUrls: boolean,
+    includeResponseValues: boolean,
+    includeGeoGebraResponseValues: boolean,
+    variableAnchorMaps: CodingVariableAnchorMaps,
+    v1ExportProfile?: ResolvedMissingsProfile
+  ): Promise<CodingItem | null> {
+    if (v1ExportProfile) {
+      return this.itemBuilderService.buildCodingItemWithVersionRow(
+        row,
+        version,
+        authToken,
+        serverUrl,
+        workspaceId,
+        includeReplayUrls,
+        includeResponseValues,
+        includeGeoGebraResponseValues,
+        variableAnchorMaps,
+        resolveV1ExportValue(row, v1ExportProfile)
+      );
+    }
+    return this.itemBuilderService.buildCodingItemWithVersionRow(
+      row,
+      version,
+      authToken,
+      serverUrl,
+      workspaceId,
+      includeReplayUrls,
+      includeResponseValues,
+      includeGeoGebraResponseValues,
+      variableAnchorMaps
+    );
+  }
 
   private getGeoGebraExportLimits(): { maxFileCount: number; maxBytes: number } {
     return {
@@ -883,12 +953,18 @@ export class CodingListStreamService {
     progressCallback?: ExportProgressCallback,
     includeResponseValues: boolean = true,
     includeGeoGebraResponseValues: boolean = false,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    missingsProfileId?: number
   ) {
     this.logger.log(
       `Memory-efficient CSV export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls}, response values: ${includeResponseValues})`
     );
     this.fileCacheService.clearCaches();
+    const v1ExportProfile = await this.loadV1ExportProfile(
+      workspace_id,
+      version,
+      missingsProfileId
+    );
     const headers = this.itemBuilderService.getHeadersForVersion(version, includeResponseValues);
     const csvStream = fastCsv.format({
       headers: includeReplayUrls ? [...headers, 'url'] : headers,
@@ -948,7 +1024,7 @@ export class CodingListStreamService {
             }
 
             const row = rows[rowIndex];
-            const item = await this.itemBuilderService.buildCodingItemWithVersionRow(
+            const item = await this.buildVersionedExportItem(
               row,
               version,
               authToken,
@@ -957,7 +1033,8 @@ export class CodingListStreamService {
               includeReplayUrls,
               includeResponseValues,
               includeGeoGebraResponseValues,
-              variableAnchorMaps
+              variableAnchorMaps,
+              v1ExportProfile
             );
 
             if (item !== null) {
@@ -1032,12 +1109,18 @@ export class CodingListStreamService {
     progressCallback?: ExportProgressCallback,
     includeResponseValues: boolean = true,
     includeGeoGebraResponseValues: boolean = false,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    missingsProfileId?: number
   ): Promise<Buffer> {
     this.logger.log(
       `Starting streaming Excel export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls}, response values: ${includeResponseValues})`
     );
     this.fileCacheService.clearCaches();
+    const v1ExportProfile = await this.loadV1ExportProfile(
+      workspace_id,
+      version,
+      missingsProfileId
+    );
 
     const chunks: Buffer[] = [];
 
@@ -1119,7 +1202,7 @@ export class CodingListStreamService {
           }
 
           const row = rows[rowIndex];
-          const item = await this.itemBuilderService.buildCodingItemWithVersionRow(
+          const item = await this.buildVersionedExportItem(
             row,
             version,
             authToken || '',
@@ -1128,7 +1211,8 @@ export class CodingListStreamService {
             includeReplayUrls,
             includeResponseValues,
             includeGeoGebraResponseValues,
-            variableAnchorMaps
+            variableAnchorMaps,
+            v1ExportProfile
           );
 
           if (item !== null) {
@@ -1213,12 +1297,18 @@ export class CodingListStreamService {
     progressCallback?: ExportProgressCallback,
     includeResponseValues: boolean = true,
     includeGeoGebraResponseValues: boolean = false,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    missingsProfileId?: number
   ): Promise<void> {
     this.logger.log(
       `Starting direct-to-file Excel export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls}, response values: ${includeResponseValues})`
     );
     this.fileCacheService.clearCaches();
+    const v1ExportProfile = await this.loadV1ExportProfile(
+      workspace_id,
+      version,
+      missingsProfileId
+    );
 
     const outputStream = fs.createWriteStream(filePath);
     const streamComplete = new Promise<void>((resolve, reject) => {
@@ -1292,7 +1382,7 @@ export class CodingListStreamService {
           }
 
           const row = rows[rowIndex];
-          const item = await this.itemBuilderService.buildCodingItemWithVersionRow(
+          const item = await this.buildVersionedExportItem(
             row,
             version,
             authToken || '',
@@ -1301,7 +1391,8 @@ export class CodingListStreamService {
             includeReplayUrls,
             includeResponseValues,
             includeGeoGebraResponseValues,
-            variableAnchorMaps
+            variableAnchorMaps,
+            v1ExportProfile
           );
 
           if (item !== null) {
@@ -1376,7 +1467,8 @@ export class CodingListStreamService {
     serverUrl?: string,
     includeReplayUrls: boolean = false,
     progressCallback?: ExportProgressCallback,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    missingsProfileId?: number
   ): Promise<Buffer> {
     this.logger.log(
       `Starting GeoGebra ZIP export for coding results version ${version}, workspace ${workspace_id}`
@@ -1396,7 +1488,8 @@ export class CodingListStreamService {
       serverUrl,
       includeReplayUrls,
       progressCallback,
-      checkCancellation
+      checkCancellation,
+      missingsProfileId
     );
 
     return Buffer.concat(chunks);
@@ -1410,7 +1503,8 @@ export class CodingListStreamService {
     serverUrl?: string,
     includeReplayUrls: boolean = false,
     progressCallback?: ExportProgressCallback,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    missingsProfileId?: number
   ): Promise<void> {
     const outputStream = fs.createWriteStream(filePath);
 
@@ -1423,7 +1517,8 @@ export class CodingListStreamService {
         serverUrl,
         includeReplayUrls,
         progressCallback,
-        checkCancellation
+        checkCancellation,
+        missingsProfileId
       );
     } catch (error) {
       outputStream.destroy();
@@ -1440,12 +1535,18 @@ export class CodingListStreamService {
     serverUrl?: string,
     includeReplayUrls: boolean = false,
     progressCallback?: ExportProgressCallback,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    missingsProfileId?: number
   ): Promise<void> {
     this.logger.log(
       `Starting streaming GeoGebra ZIP export for coding results version ${version}, workspace ${workspace_id}`
     );
     this.fileCacheService.clearCaches();
+    const v1ExportProfile = await this.loadV1ExportProfile(
+      workspace_id,
+      version,
+      missingsProfileId
+    );
 
     const zipArchive = archiver('zip', {
       zlib: { level: 9 }
@@ -1535,7 +1636,7 @@ export class CodingListStreamService {
           }
 
           const row = rows[rowIndex];
-          const item = await this.itemBuilderService.buildCodingItemWithVersionRow(
+          const item = await this.buildVersionedExportItem(
             row,
             version,
             authToken || '',
@@ -1544,7 +1645,8 @@ export class CodingListStreamService {
             includeReplayUrls,
             true,
             true,
-            variableAnchorMaps
+            variableAnchorMaps,
+            v1ExportProfile
           );
 
           if (item !== null) {

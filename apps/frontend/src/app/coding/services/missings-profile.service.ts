@@ -27,6 +27,15 @@ export class MissingsProfileService {
     );
   }
 
+  getExportMissingsProfilesOrThrow(
+    workspaceId: number
+  ): Observable<{ label: string; id: number }[]> {
+    return this.http.get<{ label: string; id: number }[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/export-missings-profiles`,
+      {}
+    );
+  }
+
   getMissingsProfileDetails(workspaceId: number, id: string | number): Observable<MissingsProfilesDto | null> {
     return this.http
       .get<MissingsProfilesDto>(

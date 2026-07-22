@@ -40,6 +40,85 @@ describe('MissingsProfilesService', () => {
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; error: jest.Mock } }).logger, 'error').mockImplementation(jest.fn());
   });
 
+  it('resolves an export profile strictly without writing it', async () => {
+    repo.findOne.mockResolvedValueOnce({
+      id: 7,
+      workspace_id: 1,
+      label: 'Custom',
+      missings: JSON.stringify([
+        {
+          id: 'mir', label: 'MIR', code: -18, score: 0
+        },
+        {
+          id: 'mci', label: 'MCI', code: -17, score: null
+        },
+        {
+          id: 'mbi_mbo', label: 'MBO', code: -19, score: 0
+        },
+        {
+          id: 'mnr', label: 'MNR', code: -16, score: null
+        }
+      ])
+    });
+
+    const resolved = await service.getResolvedMissingsProfileForExport(
+      1,
+      7,
+      ['mir', 'mci', 'mbi_mbo', 'mnr']
+    );
+
+    expect(resolved.byId.get('mnr')).toEqual(expect.objectContaining({
+      code: -16,
+      score: null
+    }));
+    expect(repo.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects an export profile missing a required id', async () => {
+    repo.findOne.mockResolvedValueOnce({
+      id: 7,
+      workspace_id: 1,
+      label: 'Incomplete',
+      missings: JSON.stringify([
+        {
+          id: 'mir', label: 'MIR', code: -18, score: 0
+        }
+      ])
+    });
+
+    await expect(service.getResolvedMissingsProfileForExport(
+      1,
+      7,
+      ['mir', 'mci']
+    )).rejects.toThrow("Missing profile 7 must define 'mci'");
+  });
+
+  it('lists export profiles without creating or updating profiles', async () => {
+    repo.find.mockResolvedValueOnce([
+      { id: 7, label: 'Custom' },
+      { id: 4, label: 'IQB-Standard' }
+    ]);
+
+    await expect(service.getMissingsProfilesForExport(1)).resolves.toEqual([
+      { id: 7, label: 'Custom' },
+      { id: 4, label: 'IQB-Standard' }
+    ]);
+
+    expect(repo.find).toHaveBeenCalledWith({
+      where: { workspace_id: 1 },
+      select: ['id', 'label']
+    });
+    expect(repo.findOne).not.toHaveBeenCalled();
+    expect(repo.save).not.toHaveBeenCalled();
+  });
+
+  it('propagates read-only export profile loading errors', async () => {
+    repo.find.mockRejectedValueOnce(new Error('database unavailable'));
+
+    await expect(service.getMissingsProfilesForExport(1))
+      .rejects.toThrow('database unavailable');
+  });
+
   it('returns existing profiles and creates defaults for empty repositories', async () => {
     const defaultMissings = '[]';
     repo.find

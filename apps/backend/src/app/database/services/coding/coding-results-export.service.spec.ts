@@ -249,6 +249,7 @@ describe('CodingResultsExportService', () => {
       undefined,
       true,
       false,
+      undefined,
       undefined
     );
     expect(codingListService.getCodingResultsByVersionAsExcel).toHaveBeenCalledWith(
@@ -260,6 +261,7 @@ describe('CodingResultsExportService', () => {
       undefined,
       true,
       false,
+      undefined,
       undefined
     );
   });
@@ -279,7 +281,8 @@ describe('CodingResultsExportService', () => {
       onProgress,
       true,
       true,
-      checkCancellation
+      checkCancellation,
+      undefined
     )).resolves.toBeUndefined();
 
     expect(codingListService.writeCodingResultsByVersionExcelToFile).toHaveBeenCalledWith(
@@ -292,7 +295,8 @@ describe('CodingResultsExportService', () => {
       onProgress,
       true,
       true,
-      checkCancellation
+      checkCancellation,
+      undefined
     );
   });
 
@@ -311,6 +315,7 @@ describe('CodingResultsExportService', () => {
       '',
       true,
       onProgress,
+      undefined,
       undefined
     );
   });
@@ -341,7 +346,8 @@ describe('CodingResultsExportService', () => {
       '',
       true,
       onProgress,
-      checkCancellation
+      checkCancellation,
+      undefined
     );
   });
 

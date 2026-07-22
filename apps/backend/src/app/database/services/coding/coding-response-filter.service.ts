@@ -149,9 +149,10 @@ export class CodingResponseFilterService {
     // Establish base conditions
     if (version) {
       const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
+      const ignoredStatuses = version === 'v1' ? [3, 10] : STATISTICS_IGNORED_STATUSES;
       queryBuilder.where(
         `${effectiveStatusExpression} NOT IN (:...statisticsIgnoredStatuses)`,
-        { statisticsIgnoredStatuses: STATISTICS_IGNORED_STATUSES }
+        { statisticsIgnoredStatuses: ignoredStatuses }
       );
     } else if (options.manualCodingCandidatesOnly) {
       queryBuilder.where('response.status_v1 IN (:...statuses)', {
@@ -176,11 +177,20 @@ export class CodingResponseFilterService {
     }
 
     if (options.givenResponsesOnly) {
-      const givenStatuses = [
-        statusStringToNumber('NOT_REACHED') || 1,
-        statusStringToNumber('DISPLAYED') || 2,
-        statusStringToNumber('VALUE_CHANGED') || 3
-      ];
+      const givenStatuses = version === 'v1' ?
+        [
+          statusStringToNumber('UNSET') ?? 0,
+          statusStringToNumber('NOT_REACHED') ?? 1,
+          statusStringToNumber('DISPLAYED') ?? 2,
+          statusStringToNumber('VALUE_CHANGED') ?? 3,
+          statusStringToNumber('INVALID') ?? 7,
+          statusStringToNumber('CODING_ERROR') ?? 9
+        ] :
+        [
+          statusStringToNumber('NOT_REACHED') ?? 1,
+          statusStringToNumber('DISPLAYED') ?? 2,
+          statusStringToNumber('VALUE_CHANGED') ?? 3
+        ];
       queryBuilder.andWhere('response.status IN (:...givenStatuses)', { givenStatuses });
     }
 
