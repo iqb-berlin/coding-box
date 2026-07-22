@@ -63,6 +63,10 @@ describe('Itemdatensatz-Export', () => {
               mappingWarnings: [{
                 code: 'vomd-fallback-used',
                 message: 'UNIT1/ITEM1: eindeutiger Fallback verwendet',
+                unitId: 'UNIT1',
+                itemId: 'ITEM1',
+                variableId: 'VAR1',
+                sourceFile: 'unit-one.vomd',
                 suggestedAction: 'variableId korrigieren.'
               }]
             }),
@@ -84,7 +88,9 @@ describe('Itemdatensatz-Export', () => {
     cy.get('input').should('exist');
     cy.get('[data-cy="item-dataset-mapping-warnings"]')
       .should('contain.text', 'eindeutiger Fallback verwendet')
-      .and('contain.text', 'variableId korrigieren');
+      .and('contain.text', 'variableId korrigieren')
+      .and('contain.text', 'unit-one.vomd')
+      .and('contain.text', 'VAR1');
     cy.get('[data-cy="item-dataset-mapping-warnings"] .mapping-diagnostic')
       .should('have.length', 1);
     cy.get('mat-select[multiple]').click();

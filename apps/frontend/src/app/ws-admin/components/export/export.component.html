@@ -193,6 +193,7 @@
                   {{
                     'ws-admin.export-options.item-dataset-mapping-warning-title'
                       | translate
+                        : { count: itemDatasetMappingWarnings.length }
                   }}
                 </div>
                 <div
@@ -200,6 +201,43 @@
                   *ngFor="let warning of itemDatasetMappingWarnings"
                 >
                   <p>{{ warning.message }}</p>
+                  <div class="mapping-context">
+                    <span *ngIf="warning.sourceFile">
+                      <strong>{{
+                        'ws-admin.export-options.item-dataset-diagnostic-file'
+                          | translate
+                      }}:</strong>
+                      {{ warning.sourceFile }}
+                    </span>
+                    <span *ngIf="warning.unitId">
+                      <strong>{{
+                        'ws-admin.export-options.item-dataset-diagnostic-unit'
+                          | translate
+                      }}:</strong>
+                      {{ warning.unitId }}
+                    </span>
+                    <span *ngIf="warning.itemId">
+                      <strong>{{
+                        'ws-admin.export-options.item-dataset-diagnostic-item'
+                          | translate
+                      }}:</strong>
+                      {{ warning.itemId }}
+                    </span>
+                    <span *ngIf="warning.variableId">
+                      <strong>{{
+                        'ws-admin.export-options.item-dataset-diagnostic-target-variable'
+                          | translate
+                      }}:</strong>
+                      {{ warning.variableId }}
+                    </span>
+                    <span *ngIf="warning.columnName">
+                      <strong>{{
+                        'ws-admin.export-options.item-dataset-diagnostic-column'
+                          | translate
+                      }}:</strong>
+                      {{ warning.columnName }}
+                    </span>
+                  </div>
                   <p
                     class="mapping-action"
                     *ngIf="warning.suggestedAction"
@@ -220,7 +258,7 @@
                 <div class="warning-title">
                   {{
                     'ws-admin.export-options.item-dataset-mapping-title'
-                      | translate
+                      | translate: { count: itemDatasetMappingIssues.length }
                   }}
                 </div>
                 <div
@@ -228,6 +266,46 @@
                   *ngFor="let issue of itemDatasetMappingIssues"
                 >
                   <p>{{ issue.message }}</p>
+                  <div class="mapping-context">
+                    <span *ngIf="issue.sourceFile">
+                      <strong>{{
+                        (issue.code === 'missing-vomd'
+                          ? 'ws-admin.export-options.item-dataset-diagnostic-expected-file'
+                          : 'ws-admin.export-options.item-dataset-diagnostic-file'
+                        )
+                          | translate
+                      }}:</strong>
+                      {{ issue.sourceFile }}
+                    </span>
+                    <span *ngIf="issue.unitId">
+                      <strong>{{
+                        'ws-admin.export-options.item-dataset-diagnostic-unit'
+                          | translate
+                      }}:</strong>
+                      {{ issue.unitId }}
+                    </span>
+                    <span *ngIf="issue.itemId">
+                      <strong>{{
+                        'ws-admin.export-options.item-dataset-diagnostic-item'
+                          | translate
+                      }}:</strong>
+                      {{ issue.itemId }}
+                    </span>
+                    <span *ngIf="issue.variableId">
+                      <strong>{{
+                        'ws-admin.export-options.item-dataset-diagnostic-variable'
+                          | translate
+                      }}:</strong>
+                      {{ issue.variableId }}
+                    </span>
+                    <span *ngIf="issue.columnName">
+                      <strong>{{
+                        'ws-admin.export-options.item-dataset-diagnostic-column'
+                          | translate
+                      }}:</strong>
+                      {{ issue.columnName }}
+                    </span>
+                  </div>
                   <p class="mapping-action" *ngIf="issue.suggestedAction">
                     {{ issue.suggestedAction }}
                   </p>
