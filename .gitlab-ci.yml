@@ -17,6 +17,7 @@ stages:
   - scan-dependencies
   - build-images
   - scan-images
+  - publish-images
 
 image: ${DOCKER_HUB_PROXY}${BASE_IMAGE}
 
