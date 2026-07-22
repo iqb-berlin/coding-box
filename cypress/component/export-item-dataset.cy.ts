@@ -59,7 +59,12 @@ describe('Itemdatensatz-Export', () => {
                   columnName: 'Aufgabe2_ITEM2'
                 }
               ],
-              mappingIssues: []
+              mappingIssues: [],
+              mappingWarnings: [{
+                code: 'vomd-fallback-used',
+                message: 'UNIT1/ITEM1: eindeutiger Fallback verwendet',
+                suggestedAction: 'variableId korrigieren.'
+              }]
             }),
             startJob: (_workspaceId: number, config: unknown) => {
               startedJobs.push(config);
@@ -77,6 +82,11 @@ describe('Itemdatensatz-Export', () => {
     cy.get('mat-select').first().click();
     cy.get('mat-option[value="item-matrix"]').click();
     cy.get('input').should('exist');
+    cy.get('[data-cy="item-dataset-mapping-warnings"]')
+      .should('contain.text', 'eindeutiger Fallback verwendet')
+      .and('contain.text', 'variableId korrigieren');
+    cy.get('[data-cy="item-dataset-mapping-warnings"] .mapping-diagnostic')
+      .should('have.length', 1);
     cy.get('mat-select[multiple]').click();
     cy.contains('mat-option', 'Aufgabe2_ITEM2').click();
     cy.get('body').type('{esc}');

@@ -31,6 +31,7 @@ import type {
 import type {
   ItemDatasetNotReachedScope,
   ItemDatasetMappingIssueDto,
+  ItemDatasetMappingWarningDto,
   ItemDatasetOption,
   ItemDatasetOptionsDto
 } from '../../../../../../../api-dto/coding/export-request.dto';
@@ -89,6 +90,7 @@ export class ExportComponent {
   selectedItemKeys: string[] = [];
   itemSearch = '';
   itemDatasetMappingIssues: ItemDatasetMappingIssueDto[] = [];
+  itemDatasetMappingWarnings: ItemDatasetMappingWarningDto[] = [];
   notReachedScope: ItemDatasetNotReachedScope = 'unit';
   recodeTrailingOmissions = false;
   isLoadingItemDatasetOptions = false;
@@ -229,6 +231,7 @@ export class ExportComponent {
     this.selectedItemKeys = [];
     this.itemSearch = '';
     this.itemDatasetMappingIssues = [];
+    this.itemDatasetMappingWarnings = [];
     this.notReachedScope = 'unit';
     this.recodeTrailingOmissions = false;
     this.isLoadingItemDatasetOptions = false;
@@ -553,6 +556,7 @@ export class ExportComponent {
     if (result.ok) {
       this.itemDatasetOptions = result.value.items;
       this.itemDatasetMappingIssues = result.value.mappingIssues;
+      this.itemDatasetMappingWarnings = result.value.mappingWarnings || [];
       this.selectedItemKeys = result.value.items.map(item => (
         this.getItemDatasetKey(item)
       ));
@@ -561,6 +565,7 @@ export class ExportComponent {
     this.itemDatasetOptions = [];
     this.selectedItemKeys = [];
     this.itemDatasetMappingIssues = [];
+    this.itemDatasetMappingWarnings = [];
     this.showPsychometricOptionsError(
       'ws-admin.export.errors.item-dataset-options-failed'
     );

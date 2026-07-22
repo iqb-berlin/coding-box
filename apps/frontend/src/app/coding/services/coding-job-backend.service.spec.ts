@@ -791,6 +791,7 @@ describe('CodingJobBackendService', () => {
       service.getItemDatasetOptions(5).subscribe(result => {
         expect(result.items[0].columnName).toBe('Aufgabe1_ITEM1');
         expect(result.mappingIssues).toEqual([]);
+        expect(result.mappingWarnings).toEqual([]);
       });
 
       const req = httpMock.expectOne(
@@ -805,7 +806,8 @@ describe('CodingJobBackendService', () => {
           itemLabel: 'Item 1',
           columnName: 'Aufgabe1_ITEM1'
         }],
-        mappingIssues: []
+        mappingIssues: [],
+        mappingWarnings: []
       });
     });
   });
