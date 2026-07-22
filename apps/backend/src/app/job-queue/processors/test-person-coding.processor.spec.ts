@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { WorkspaceCodingService } from '../../database/services/workspace';
 import { TestPersonCodingJobData } from '../job-queue.service';
 import { TestPersonCodingProcessor } from './test-person-coding.processor';
+import { AutocoderPersistenceTargetCollisionError } from '../../database/services/coding/autocoder-persistence-target-collision.error';
 
 describe('TestPersonCodingProcessor', () => {
   afterEach(() => {
@@ -88,5 +89,33 @@ describe('TestPersonCodingProcessor', () => {
       totalResponses: 10,
       statusCounts: { CODED: 10 }
     });
+  });
+
+  it('fails collision jobs without reporting 100 percent or success', async () => {
+    const collisionError = new AutocoderPersistenceTargetCollisionError(
+      'response:10',
+      0,
+      1
+    );
+    const workspaceCodingService = {
+      processTestPersonsBatch: jest.fn().mockRejectedValue(collisionError)
+    };
+    const getLatestJob = jest.fn().mockResolvedValue({
+      data: { isPaused: false }
+    });
+    const job = createJob(getLatestJob);
+    const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation();
+    jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    const processor = new TestPersonCodingProcessor(
+      workspaceCodingService as unknown as WorkspaceCodingService
+    );
+
+    await expect(processor.process(job)).rejects.toBe(collisionError);
+
+    expect(job.progress).toHaveBeenCalledWith(0);
+    expect(job.progress).not.toHaveBeenCalledWith(100);
+    expect(logSpy).not.toHaveBeenCalledWith(
+      `Job ${job.id} completed successfully`
+    );
   });
 });
