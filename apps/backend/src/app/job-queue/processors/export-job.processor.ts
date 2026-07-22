@@ -251,6 +251,7 @@ export class ExportJobProcessor {
               includeGeoGebraResponseValues:
                 job.data.includeGeoGebraResponseValues === true,
               includeGeoGebraFiles: job.data.includeGeoGebraFiles === true,
+              missingsProfileId: job.data.missingsProfileId,
               checkCancellation
             };
             await this.codingExportOrchestratorService.exportResultsByVersionAsExcelToFile(
@@ -272,6 +273,7 @@ export class ExportJobProcessor {
                     job.data.includeResponseValues !== false,
                   includeGeoGebraResponseValues:
                     job.data.includeGeoGebraResponseValues === true,
+                  missingsProfileId: job.data.missingsProfileId,
                   checkCancellation
                 }
               );

@@ -74,7 +74,8 @@ export class CodingExportService {
     version: 'v1' | 'v2' | 'v3',
     includeReplayUrls: boolean = false,
     includeResponseValues: boolean = true,
-    includeGeoGebraResponseValues: boolean = false
+    includeGeoGebraResponseValues: boolean = false,
+    missingsProfileId?: number
   ): Observable<Blob> {
     return this.getReplayExportAuthToken(
       workspace_id,
@@ -82,13 +83,16 @@ export class CodingExportService {
       () => this.createExternalReplayToken(workspace_id)
     ).pipe(
       switchMap(token => {
-        const params = new HttpParams()
+        let params = new HttpParams()
           .set('authToken', token)
           .set('serverUrl', window.location.origin)
           .set('version', version)
           .set('includeReplayUrls', includeReplayUrls ? 'true' : 'false')
           .set('includeResponseValues', includeResponseValues ? 'true' : 'false')
           .set('includeGeoGebraResponseValues', includeGeoGebraResponseValues ? 'true' : 'false');
+        if (version === 'v1' && missingsProfileId !== undefined) {
+          params = params.set('missingsProfileId', missingsProfileId.toString());
+        }
         return this.http.get(
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/results-by-version`,
           {
@@ -106,7 +110,8 @@ export class CodingExportService {
     includeReplayUrls: boolean = false,
     includeResponseValues: boolean = true,
     includeGeoGebraFiles: boolean = false,
-    includeGeoGebraResponseValues: boolean = false
+    includeGeoGebraResponseValues: boolean = false,
+    missingsProfileId?: number
   ): Observable<Blob> {
     return this.getReplayExportAuthToken(
       workspace_id,
@@ -114,7 +119,7 @@ export class CodingExportService {
       () => this.createExternalReplayToken(workspace_id)
     ).pipe(
       switchMap(token => {
-        const params = new HttpParams()
+        let params = new HttpParams()
           .set('authToken', token)
           .set('serverUrl', window.location.origin)
           .set('version', version)
@@ -122,6 +127,9 @@ export class CodingExportService {
           .set('includeResponseValues', includeResponseValues ? 'true' : 'false')
           .set('includeGeoGebraFiles', includeGeoGebraFiles ? 'true' : 'false')
           .set('includeGeoGebraResponseValues', includeGeoGebraResponseValues ? 'true' : 'false');
+        if (version === 'v1' && missingsProfileId !== undefined) {
+          params = params.set('missingsProfileId', missingsProfileId.toString());
+        }
         return this.http.get(
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/results-by-version/excel`,
           {
@@ -235,7 +243,8 @@ export class CodingExportService {
     trainingRequired?: boolean,
     includeResponseValues: boolean = true,
     includeGeoGebraFiles: boolean = false,
-    includeGeoGebraResponseValues: boolean = false
+    includeGeoGebraResponseValues: boolean = false,
+    missingsProfileId?: number
   ): Observable<{ jobId: string; message: string }> {
     const authToken$ = this.getReplayExportAuthToken(
       workspaceId,
@@ -253,6 +262,7 @@ export class CodingExportService {
           includeResponseValues,
           includeGeoGebraFiles,
           includeGeoGebraResponseValues,
+          missingsProfileId,
           trainingRequired,
           authToken: token,
           serverUrl: window.location.origin

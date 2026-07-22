@@ -51,6 +51,11 @@ export interface CodingItemVersionRow {
   scoreV3: number | null;
 }
 
+export interface CodingItemVersionExportValue {
+  code: number | '';
+  score: number | 'NA' | '';
+}
+
 /**
  * Service responsible for building CodingItem objects from ResponseEntity data.
  *
@@ -295,7 +300,8 @@ export class CodingItemBuilderService {
     includeReplayUrls: boolean = false,
     includeResponseValues: boolean = true,
     includeGeoGebraResponseValues: boolean = false,
-    variableAnchorMaps?: CodingVariableAnchorMaps
+    variableAnchorMaps?: CodingVariableAnchorMaps,
+    resolvedV1Value?: CodingItemVersionExportValue
   ): Promise<CodingItem | null> {
     try {
       const unitKey = row.unitKey || '';
@@ -355,8 +361,8 @@ export class CodingItemBuilderService {
 
       if (targetVersion === 'v1') {
         baseItem.status_v1 = this.formatStatus(row.statusV1);
-        baseItem.code_v1 = mapCodeForExport(row.codeV1) ?? '';
-        baseItem.score_v1 = row.scoreV1 ?? '';
+        baseItem.code_v1 = resolvedV1Value?.code ?? mapCodeForExport(row.codeV1) ?? '';
+        baseItem.score_v1 = resolvedV1Value?.score ?? row.scoreV1 ?? '';
       } else if (targetVersion === 'v2') {
         baseItem.status_v1 = this.formatStatus(row.statusV1);
         baseItem.code_v1 = mapCodeForExport(row.codeV1) ?? '';

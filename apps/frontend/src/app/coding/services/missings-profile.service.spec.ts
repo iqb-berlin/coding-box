@@ -57,6 +57,20 @@ describe('MissingsProfileService', () => {
     expect(onError).toHaveBeenCalledTimes(1);
   });
 
+  it('should load export profiles from the read-only endpoint', () => {
+    const mockRes = [{ label: 'IQB-Standard', id: 4 }];
+
+    service.getExportMissingsProfilesOrThrow(1).subscribe(res => {
+      expect(res).toEqual(mockRes);
+    });
+
+    const req = httpMock.expectOne(
+      `${mockServerUrl}admin/workspace/1/coding/export-missings-profiles`
+    );
+    expect(req.request.method).toBe('GET');
+    req.flush(mockRes);
+  });
+
   it('should delete missings profile', () => {
     service.deleteMissingsProfile(1, 'test label').subscribe(res => {
       expect(res).toBe(true);
