@@ -23,6 +23,29 @@
     - if: $CI_COMMIT_TAG
       when: never
 
+.production_image_rules:
+  rules:
+    - if: "$CI_COMMIT_TAG =~ $PRERELEASE_RULES_REGEX"
+    - if: "$CI_COMMIT_TAG =~ $RELEASE_RULES_REGEX"
+    - if: $CI_COMMIT_BRANCH &&
+        $CI_COMMIT_BRANCH == "main" &&
+        $CI_PIPELINE_SOURCE != "external_pull_request_event"
+    - if: $CI_COMMIT_TAG
+      when: never
+
+.production_image_scan_rules:
+  rules:
+    - if: "$CI_COMMIT_TAG =~ $PRERELEASE_RULES_REGEX"
+      allow_failure: false
+    - if: "$CI_COMMIT_TAG =~ $RELEASE_RULES_REGEX"
+      allow_failure: false
+    - if: $CI_COMMIT_BRANCH &&
+        $CI_COMMIT_BRANCH == "main" &&
+        $CI_PIPELINE_SOURCE != "external_pull_request_event"
+      allow_failure: true
+    - if: $CI_COMMIT_TAG
+      when: never
+
 .release_rules:
   rules:
     - if: "$CI_COMMIT_TAG =~ $RELEASE_RULES_REGEX"
@@ -102,6 +125,20 @@ check-release-rules:
     - if [[ ${CI_COMMIT_TAG} =~ ${RELEASE_SCRIPT_REGEX} ]];
       then echo "${CI_COMMIT_TAG} is a valid release tag.";
       else echo "${CI_COMMIT_TAG} is not a valid release tag!"; fi
+
+check-release-version:
+  stage: .pre
+  rules:
+    - if: "$CI_COMMIT_TAG =~ $PRERELEASE_RULES_REGEX"
+    - if: "$CI_COMMIT_TAG =~ $RELEASE_RULES_REGEX"
+  script:
+    - RELEASE_VERSION="${CI_COMMIT_TAG%%-*}"
+    - PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+    - LOCK_VERSION="$(node -p "require('./package-lock.json').version")"
+    - LOCK_ROOT_VERSION="$(node -p "require('./package-lock.json').packages[''].version")"
+    - test "${RELEASE_VERSION}" = "${PACKAGE_VERSION}"
+    - test "${RELEASE_VERSION}" = "${LOCK_VERSION}"
+    - test "${RELEASE_VERSION}" = "${LOCK_ROOT_VERSION}"
 
 build-main-pr-base-image:
   stage: build
@@ -659,7 +696,7 @@ audit-main-pr-frontend:
 build-main-commit-db-image:
   stage: build-images
   rules:
-    - !reference [ .main_commit_rules, rules ]
+    - !reference [ .production_image_rules, rules ]
   image: ${DOCKER_IMAGE}
   services:
     - name: ${DOCKER_SERVICE}
@@ -694,7 +731,7 @@ build-main-commit-db-image:
 build-main-commit-liquibase-image:
   stage: build-images
   rules:
-    - !reference [ .main_commit_rules, rules ]
+    - !reference [ .production_image_rules, rules ]
   image: ${DOCKER_IMAGE}
   services:
     - name: ${DOCKER_SERVICE}
@@ -729,7 +766,7 @@ build-main-commit-liquibase-image:
 build-main-commit-base-image:
   stage: build-images
   rules:
-    - !reference [ .main_commit_rules, rules ]
+    - !reference [ .production_image_rules, rules ]
   image: ${DOCKER_IMAGE}
   services:
     - name: ${DOCKER_SERVICE}
@@ -764,7 +801,7 @@ build-main-commit-base-image:
 build-main-commit-backend-image:
   stage: build-images
   rules:
-    - !reference [ .main_commit_rules, rules ]
+    - !reference [ .production_image_rules, rules ]
   needs:
     - build-main-commit-base-image
   image: ${DOCKER_IMAGE}
@@ -805,7 +842,7 @@ build-main-commit-backend-image:
 build-main-commit-frontend-image:
   stage: build-images
   rules:
-    - !reference [ .main_commit_rules, rules ]
+    - !reference [ .production_image_rules, rules ]
   needs:
     - build-main-commit-base-image
   image: ${DOCKER_IMAGE}
@@ -834,7 +871,7 @@ build-main-commit-frontend-image:
           --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY}
           --build-arg BASE_IMAGE_NAME=${BASE_IMAGE_NAME}:${CI_COMMIT_SHA}
           --build-arg BUILDKIT_INLINE_CACHE=1
-          --cache-from ${BACKEND_IMAGE_NAME}:main
+          --cache-from ${FRONTEND_IMAGE_NAME}:main
           --file apps/frontend/Dockerfile
           --tag ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}
         .
@@ -847,7 +884,7 @@ scan-main-commit-db-image:
   stage: scan-images
   allow_failure: true
   rules:
-    - !reference [ .main_commit_rules, rules ]
+    - !reference [ .production_image_scan_rules, rules ]
   needs:
     - build-main-commit-db-image
   image:
@@ -905,7 +942,7 @@ scan-main-commit-liquibase-image:
   stage: scan-images
   allow_failure: true
   rules:
-    - !reference [ .main_commit_rules, rules ]
+    - !reference [ .production_image_scan_rules, rules ]
   needs:
     - build-main-commit-liquibase-image
   image:
@@ -963,7 +1000,7 @@ scan-main-commit-backend-image:
   stage: scan-images
   allow_failure: true
   rules:
-    - !reference [ .main_commit_rules, rules ]
+    - !reference [ .production_image_scan_rules, rules ]
   needs:
     - build-main-commit-backend-image
   image:
@@ -1021,7 +1058,7 @@ scan-main-commit-frontend-image:
   stage: scan-images
   allow_failure: true
   rules:
-    - !reference [ .main_commit_rules, rules ]
+    - !reference [ .production_image_scan_rules, rules ]
   needs:
     - build-main-commit-frontend-image
   image:
@@ -1133,9 +1170,18 @@ scan-main-commit-traefik-image:
       container_scanning: gl-container-scanning-report.json
 
 build-release:
-  stage: build-images
+  stage: publish-images
   rules:
     - !reference [ .release_rules, rules ]
+  needs:
+    - job: scan-main-commit-db-image
+      artifacts: false
+    - job: scan-main-commit-liquibase-image
+      artifacts: false
+    - job: scan-main-commit-backend-image
+      artifacts: false
+    - job: scan-main-commit-frontend-image
+      artifacts: false
   image: ${DOCKER_IMAGE}
   services:
     - name: ${DOCKER_SERVICE}
@@ -1168,10 +1214,14 @@ build-release:
     - docker tag ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA} iqbberlin/coding-box-backend:latest
     - docker tag ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA} iqbberlin/coding-box-frontend:${CI_COMMIT_TAG}
     - docker tag ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA} iqbberlin/coding-box-frontend:latest
-    - docker push -a -q iqbberlin/coding-box-db
-    - docker push -a -q iqbberlin/coding-box-liquibase
-    - docker push -a -q iqbberlin/coding-box-backend
-    - docker push -a -q iqbberlin/coding-box-frontend
+    - docker push --quiet iqbberlin/coding-box-db:${CI_COMMIT_TAG}
+    - docker push --quiet iqbberlin/coding-box-liquibase:${CI_COMMIT_TAG}
+    - docker push --quiet iqbberlin/coding-box-backend:${CI_COMMIT_TAG}
+    - docker push --quiet iqbberlin/coding-box-frontend:${CI_COMMIT_TAG}
+    - docker push --quiet iqbberlin/coding-box-db:latest
+    - docker push --quiet iqbberlin/coding-box-liquibase:latest
+    - docker push --quiet iqbberlin/coding-box-backend:latest
+    - docker push --quiet iqbberlin/coding-box-frontend:latest
   after_script:
     - docker logout ${CI_REGISTRY}
     - docker logout
