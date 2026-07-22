@@ -424,6 +424,45 @@ describe('PsychometricMetadataResolver', () => {
     ]);
   });
 
+  it('keeps VOMD item order when direct and fallback mappings are mixed', async () => {
+    const resolver = createResolver(
+      {
+        items: [
+          {
+            id: 'V1',
+            variableId: null
+          },
+          {
+            id: 'ITEM_2',
+            variableId: 'V2'
+          }
+        ]
+      },
+      [
+        {
+          id: 'source-v1',
+          alias: 'V1',
+          type: 'string',
+          hasCodingScheme: true
+        },
+        {
+          id: 'source-v2',
+          alias: 'V2',
+          type: 'string',
+          hasCodingScheme: true
+        }
+      ]
+    );
+
+    const mapping = await resolver.buildItemMapping(7);
+
+    expect(mapping.items.map(item => item.itemId)).toEqual(['V1', 'ITEM_2']);
+    expect(mapping.issues).toEqual([]);
+    expect(mapping.fallbackDiagnostics).toEqual([
+      expect.objectContaining({ kind: 'used', itemId: 'V1' })
+    ]);
+  });
+
   it('prefers a direct mapping over a redundant legacy fallback', async () => {
     const resolver = createResolver(
       {
