@@ -956,16 +956,10 @@ export class CodingProcessService {
           fileIdToCodingSchemeMap.get(codingSchemeRef) || emptyScheme :
           emptyScheme;
 
-        const variableAliasToIdMap = new Map<string, string>();
-        if (Array.isArray(scheme.variableCodings)) {
-          scheme.variableCodings.forEach((vc: VariableCodingData) => {
-            const key = (vc.alias ?? vc.id) as string | undefined;
-            const value = vc.id as string | undefined;
-            if (key && value) {
-              variableAliasToIdMap.set(key, value);
-            }
-          });
-        }
+        const technicalIdFallbackByAlias =
+          this.createUnambiguousTechnicalIdFallbacks(
+            scheme.variableCodings || []
+          );
 
         const inputResponses = responses.map(response => {
           let inputStatus = response.status;
@@ -1008,27 +1002,13 @@ export class CodingProcessService {
           }
           statistics.statusCounts[codedStatus] += 1;
 
-          const mappedIdFromAlias = variableAliasToIdMap.get(codedResult.id);
-          const possibleVariableIds = new Set<string>([codedResult.id]);
-          if (mappedIdFromAlias) {
-            possibleVariableIds.add(mappedIdFromAlias);
-          }
-          const possibleVariableIdsNormalized = new Set(
-            Array.from(possibleVariableIds).map(v => String(v).toUpperCase())
-          );
           const codedSubform = codedResult.subform || '';
-
-          // Prefer updates for the same variable + subform to avoid generating
-          // duplicates on repeated autocoder runs (especially for derived vars).
-          const matchingResponses = responses
-            .filter(
-              r => possibleVariableIdsNormalized.has(
-                String(r.variableid).toUpperCase()
-              ) &&
-                String(r.subform || '') === codedSubform
-            )
-            .sort((a, b) => b.id - a.id);
-          const existingResponse = matchingResponses[0];
+          const existingResponse = this.findExistingResponseForAutocoderResult(
+            responses,
+            codedResult.id,
+            codedSubform,
+            technicalIdFallbackByAlias
+          );
 
           const codedResponse: CodedResponse = {
             id: existingResponse ? existingResponse.id : -1
@@ -1084,12 +1064,130 @@ export class CodingProcessService {
     }
 
     allCodedResponses.length = responseIndex;
+    this.assertUniqueAutocoderPersistenceTargets(allCodedResponses);
 
     if (progressCallback) {
       progressCallback(95);
     }
 
     return { allCodedResponses, statistics };
+  }
+
+  private createUnambiguousTechnicalIdFallbacks(
+    variableCodings: VariableCodingData[]
+  ): Map<string, string> {
+    const outputVariableIds = new Set(
+      variableCodings
+        .map(coding => this.normalizeVariableId(coding.alias || coding.id))
+        .filter(Boolean)
+    );
+    const technicalIdFallbackByAlias = new Map<string, string>();
+
+    variableCodings.forEach(coding => {
+      const alias = coding.alias || coding.id;
+      const technicalId = coding.id;
+      if (!alias || !technicalId) {
+        return;
+      }
+
+      const normalizedAlias = this.normalizeVariableId(alias);
+      const normalizedTechnicalId = this.normalizeVariableId(technicalId);
+
+      // A technical ID that is also another coding's output alias is
+      // ambiguous and must never be used as a compatibility fallback.
+      if (
+        normalizedAlias === normalizedTechnicalId ||
+        outputVariableIds.has(normalizedTechnicalId)
+      ) {
+        return;
+      }
+
+      technicalIdFallbackByAlias.set(normalizedAlias, technicalId);
+    });
+
+    return technicalIdFallbackByAlias;
+  }
+
+  private findExistingResponseForAutocoderResult(
+    responses: ResponseEntity[],
+    codedResultId: string,
+    codedSubform: string,
+    technicalIdFallbackByAlias: Map<string, string>
+  ): ResponseEntity | undefined {
+    const normalizedResultId = this.normalizeVariableId(codedResultId);
+    const hasMatchingSubform = (response: ResponseEntity) => (
+      String(response.subform || '') === codedSubform
+    );
+    const newestResponse = (matchingResponses: ResponseEntity[]) => (
+      matchingResponses.sort((a, b) => b.id - a.id)[0]
+    );
+
+    // Test-result response IDs use the variable alias. An exact alias match
+    // must win even when that alias is also another variable's technical ID.
+    const exactAliasMatch = responses
+      .filter(response => (
+        this.normalizeVariableId(response.variableid) === normalizedResultId &&
+        hasMatchingSubform(response)
+      ))
+      .sort((a, b) => (
+        Number(a.is_autocoder_generated) -
+          Number(b.is_autocoder_generated) ||
+        b.id - a.id
+      ))[0];
+    if (exactAliasMatch) {
+      return exactAliasMatch;
+    }
+
+    const mappedTechnicalId = technicalIdFallbackByAlias.get(
+      normalizedResultId
+    );
+    if (
+      !mappedTechnicalId ||
+      this.normalizeVariableId(mappedTechnicalId) === normalizedResultId
+    ) {
+      return undefined;
+    }
+
+    // Older runs may have persisted generated derived responses under the
+    // technical ID. Keep that compatibility fallback strictly limited to
+    // generated rows so an imported response with a colliding alias can never
+    // receive another variable's result.
+    return newestResponse(
+      responses.filter(response => (
+        response.is_autocoder_generated === true &&
+        this.normalizeVariableId(response.variableid) ===
+          this.normalizeVariableId(mappedTechnicalId) &&
+        hasMatchingSubform(response)
+      ))
+    );
+  }
+
+  private assertUniqueAutocoderPersistenceTargets(
+    codedResponses: CodedResponse[]
+  ): void {
+    const targetIndexes = new Map<string, number>();
+
+    codedResponses.forEach((response, index) => {
+      const target = response.isNew ?
+        `generated:${response.unitid}:${this.normalizeVariableId(
+          response.variableid
+        )}:${String(response.subform || '')}` :
+        `response:${response.id}`;
+      const previousIndex = targetIndexes.get(target);
+
+      if (previousIndex !== undefined) {
+        throw new Error(
+          `Autocoder produced multiple updates for ${target} ` +
+          `(results ${previousIndex + 1} and ${index + 1}).`
+        );
+      }
+
+      targetIndexes.set(target, index);
+    });
+  }
+
+  private normalizeVariableId(variableId: unknown): string {
+    return String(variableId ?? '').toUpperCase();
   }
 
   private async getCodingSchemeFiles(
