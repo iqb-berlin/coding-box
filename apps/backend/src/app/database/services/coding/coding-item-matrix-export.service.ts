@@ -7,7 +7,6 @@ import { PassThrough, Stream } from 'stream';
 import { Repository } from 'typeorm';
 import {
   ItemDatasetNotReachedScope,
-  ItemDatasetMappingIssueDto,
   ItemDatasetOptionsDto,
   ItemDatasetSelection
 } from '../../../../../../../api-dto/coding/export-request.dto';
@@ -36,7 +35,10 @@ import {
   ItemDatasetResponseValue,
   ResolvedItemDatasetCell
 } from './item-dataset-cell-resolver';
-import { ItemDatasetMetadataService } from './item-dataset-metadata.service';
+import {
+  ItemDatasetColumnResolution,
+  ItemDatasetMetadataService
+} from './item-dataset-metadata.service';
 
 export type ItemMatrixValue = 'code' | 'score';
 export type ItemMatrixFormat = 'csv' | 'excel';
@@ -140,7 +142,8 @@ export class CodingItemMatrixExportService {
         itemLabel: column.itemLabel,
         columnName: column.header
       })),
-      mappingIssues: result.issues
+      mappingIssues: result.issues,
+      mappingWarnings: result.warnings
     };
   }
 
@@ -449,10 +452,7 @@ export class CodingItemMatrixExportService {
     workspaceId: number,
     selection?: ItemDatasetSelection[],
     checkCancellation?: () => Promise<void>
-  ): Promise<{
-      columns: MatrixColumn[];
-      issues: ItemDatasetMappingIssueDto[];
-    }> {
+  ): Promise<ItemDatasetColumnResolution> {
     return this.metadataService.buildColumns(
       workspaceId,
       selection,
@@ -463,10 +463,7 @@ export class CodingItemMatrixExportService {
   private filterColumns(
     columns: MatrixColumn[],
     selection?: ItemDatasetSelection[]
-  ): {
-      columns: MatrixColumn[];
-      issues: ItemDatasetMappingIssueDto[];
-    } {
+  ): ItemDatasetColumnResolution {
     return this.metadataService.filterColumns(columns, selection);
   }
 
