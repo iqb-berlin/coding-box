@@ -235,6 +235,108 @@ describe('PsychometricMetadataResolver', () => {
     });
   });
 
+  it('requires explicit VOMD item IDs only for strict item mappings', async () => {
+    const resolver = createResolver(
+      {
+        items: [
+          {
+            variableId: 'V1'
+          }
+        ]
+      },
+      [
+        {
+          id: 'V1',
+          alias: 'V1',
+          type: 'string',
+          hasCodingScheme: true
+        }
+      ]
+    );
+
+    const defaultMapping = await resolver.buildItemMapping(7);
+    const strictMapping = await resolver.buildItemMapping(7, {
+      requireItemIds: true
+    });
+
+    expect(defaultMapping.items).toEqual([
+      expect.objectContaining({
+        itemId: 'V1',
+        variableId: 'V1'
+      })
+    ]);
+    expect(defaultMapping.issues).toEqual([]);
+    expect(strictMapping.items).toHaveLength(0);
+    expect(strictMapping.issues).toEqual([
+      'UNIT_A/V1: VOMD-Item ohne ID'
+    ]);
+  });
+
+  it('does not map or report issues for explicitly excluded units', async () => {
+    const resolver = createResolver(
+      {
+        items: [
+          {
+            id: 'ITEM_MISSING',
+            variableId: 'UNKNOWN'
+          }
+        ]
+      },
+      [
+        {
+          id: 'V1',
+          alias: 'V1',
+          type: 'string',
+          hasCodingScheme: true
+        }
+      ]
+    );
+
+    const mapping = await resolver.buildItemMapping(7, {
+      excludedUnitNames: ['unit_a.xml']
+    });
+
+    expect(mapping.items).toEqual([]);
+    expect(mapping.issues).toEqual([]);
+    expect(mapping.fallbacks).toEqual([]);
+  });
+
+  it('does not parse malformed VOMD files of explicitly excluded units', async () => {
+    const resolver = new PsychometricMetadataResolver(
+      {
+        find: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            file_id: 'UNIT_A.VOMD',
+            filename: 'UNIT_A.vomd',
+            data: '{invalid'
+          }
+        ])
+      } as never,
+      {
+        getUnitVariableDetails: jest.fn().mockResolvedValue([
+          {
+            unitName: 'UNIT_A',
+            unitId: 'UNIT_A',
+            variables: []
+          }
+        ])
+      } as never,
+      {} as never
+    );
+
+    await expect(
+      resolver.buildItemMapping(7, { excludedUnitNames: ['UNIT_A'] })
+    ).resolves.toEqual({
+      items: [],
+      byLogicalKey: new Map(),
+      issues: [],
+      fallbacks: [],
+      issueDiagnostics: [],
+      fallbackDiagnostics: []
+    });
+  });
+
   it('uses an unambiguous item id when variableId is missing', async () => {
     const resolver = createResolver(
       {
@@ -269,6 +371,15 @@ describe('PsychometricMetadataResolver', () => {
     expect(mapping.fallbacks).toEqual([
       'UNIT_A/V1: variableId fehlt; ' +
         'Item-ID V1 als eindeutiger Fallback erkannt und verwendet'
+    ]);
+    expect(mapping.fallbackDiagnostics).toEqual([
+      expect.objectContaining({
+        kind: 'used',
+        unitId: 'UNIT_A',
+        itemId: 'V1',
+        variableId: 'V1',
+        sourceFile: 'UNIT_A.vomd'
+      })
     ]);
     await expect(resolver.getDomainCandidates(7)).resolves.toEqual({
       candidates: [],
@@ -313,6 +424,45 @@ describe('PsychometricMetadataResolver', () => {
     ]);
   });
 
+  it('keeps VOMD item order when direct and fallback mappings are mixed', async () => {
+    const resolver = createResolver(
+      {
+        items: [
+          {
+            id: 'V1',
+            variableId: null
+          },
+          {
+            id: 'ITEM_2',
+            variableId: 'V2'
+          }
+        ]
+      },
+      [
+        {
+          id: 'source-v1',
+          alias: 'V1',
+          type: 'string',
+          hasCodingScheme: true
+        },
+        {
+          id: 'source-v2',
+          alias: 'V2',
+          type: 'string',
+          hasCodingScheme: true
+        }
+      ]
+    );
+
+    const mapping = await resolver.buildItemMapping(7);
+
+    expect(mapping.items.map(item => item.itemId)).toEqual(['V1', 'ITEM_2']);
+    expect(mapping.issues).toEqual([]);
+    expect(mapping.fallbackDiagnostics).toEqual([
+      expect.objectContaining({ kind: 'used', itemId: 'V1' })
+    ]);
+  });
+
   it('prefers a direct mapping over a redundant legacy fallback', async () => {
     const resolver = createResolver(
       {
@@ -346,6 +496,15 @@ describe('PsychometricMetadataResolver', () => {
       'UNIT_A/V1: variableId fehlt; ' +
         'Item-ID V1 als eindeutiger Fallback erkannt, aber wegen bereits ' +
         'direkter Zuordnung ignoriert'
+    ]);
+    expect(mapping.fallbackDiagnostics).toEqual([
+      expect.objectContaining({
+        kind: 'ignored',
+        unitId: 'UNIT_A',
+        itemId: 'V1',
+        variableId: 'V1',
+        sourceFile: 'UNIT_A.vomd'
+      })
     ]);
   });
 
@@ -417,6 +576,14 @@ describe('PsychometricMetadataResolver', () => {
     expect(mapping.fallbacks).toEqual([]);
     expect(mapping.issues).toEqual([
       'UNIT_A/COMMON: Item-ID COMMON ist als Variablenfallback mehrdeutig'
+    ]);
+    expect(mapping.issueDiagnostics).toEqual([
+      expect.objectContaining({
+        code: 'ambiguous-item-fallback',
+        unitId: 'UNIT_A',
+        itemId: 'COMMON',
+        sourceFile: 'UNIT_A.vomd'
+      })
     ]);
   });
 

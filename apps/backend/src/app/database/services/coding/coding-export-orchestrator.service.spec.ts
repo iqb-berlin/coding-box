@@ -192,6 +192,7 @@ describe('CodingExportOrchestratorService', () => {
 
     await expect(service.exportItemMatrixAsCsv({
       workspaceId: 7,
+      missingsProfileId: 3,
       matrixValue: 'code',
       version: 'v1',
       onProgress,
@@ -202,6 +203,12 @@ describe('CodingExportOrchestratorService', () => {
       7,
       'code',
       'v1',
+      {
+        missingsProfileId: 3,
+        notReachedScope: 'unit',
+        recodeTrailingOmissions: false,
+        items: undefined
+      },
       onProgress,
       checkCancellation
     );
@@ -214,6 +221,7 @@ describe('CodingExportOrchestratorService', () => {
 
     await expect(service.exportItemMatrixAsExcel({
       workspaceId: 7,
+      missingsProfileId: 3,
       matrixValue: 'score',
       version: 'v2'
     })).resolves.toBe(buffer);
@@ -222,6 +230,12 @@ describe('CodingExportOrchestratorService', () => {
       7,
       'score',
       'v2',
+      {
+        missingsProfileId: 3,
+        notReachedScope: 'unit',
+        recodeTrailingOmissions: false,
+        items: undefined
+      },
       undefined,
       undefined
     );
@@ -234,6 +248,7 @@ describe('CodingExportOrchestratorService', () => {
 
     await expect(service.exportItemMatrixAsExcelToFile('/tmp/matrix.xlsx', {
       workspaceId: 7,
+      missingsProfileId: 3,
       matrixValue: 'score',
       version: 'v2',
       onProgress,
@@ -245,6 +260,12 @@ describe('CodingExportOrchestratorService', () => {
       7,
       'score',
       'v2',
+      {
+        missingsProfileId: 3,
+        notReachedScope: 'unit',
+        recodeTrailingOmissions: false,
+        items: undefined
+      },
       onProgress,
       checkCancellation
     );

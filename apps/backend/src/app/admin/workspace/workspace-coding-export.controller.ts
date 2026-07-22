@@ -42,6 +42,7 @@ import { PsychometricDomainCandidatesDto } from '../../../../../../api-dto/codin
 import {
   BackgroundExportRequest,
   ExportRequestValidationError,
+  ItemDatasetOptionsDto,
   parseExportRequest
 } from '../../../../../../api-dto/coding/export-request.dto';
 
@@ -1216,7 +1217,29 @@ export class WorkspaceCodingExportController {
         missingsProfileId: {
           type: 'number',
           description:
-            'Missing profile used for codes and numeric missing scores'
+            'Missing profile used for codes and numeric missing scores. Required for item-matrix.'
+        },
+        notReachedScope: {
+          type: 'string',
+          enum: ['unit', 'testlet', 'booklet'],
+          description: 'Range used to distinguish mnr from omitted items'
+        },
+        recodeTrailingOmissions: {
+          type: 'boolean',
+          description:
+            'Recode trailing omissions as mnr for testlet or booklet scope'
+        },
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['unitId', 'itemId'],
+            properties: {
+              unitId: { type: 'string' },
+              itemId: { type: 'string' }
+            }
+          },
+          description: 'Selected VOMD items; omitted means all items'
         },
         domain: {
           type: 'object',
@@ -1317,6 +1340,22 @@ export class WorkspaceCodingExportController {
     @WorkspaceId() workspace_id: number
   ): Promise<PsychometricDomainCandidatesDto> {
     return this.codingPsychometricExportService.getDomainCandidates(
+      workspace_id
+    );
+  }
+
+  @Get(':workspace_id/coding/export/item-dataset-options')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description:
+      'Selectable VOMD items and mapping issues for the item dataset export'
+  })
+  async getItemDatasetOptions(
+    @WorkspaceId() workspace_id: number
+  ): Promise<ItemDatasetOptionsDto> {
+    return this.codingExportOrchestratorService.getItemDatasetOptions(
       workspace_id
     );
   }

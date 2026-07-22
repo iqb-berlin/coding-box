@@ -1,0 +1,122 @@
+.diagnostics-dialog {
+  width: min(1000px, 95vw);
+  max-width: 95vw;
+
+  mat-dialog-content {
+    max-height: 75vh;
+  }
+
+  .dialog-description {
+    color: #555;
+    margin: 0 0 16px;
+  }
+
+  .diagnostic-filters {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr);
+    gap: 12px;
+
+    mat-form-field {
+      width: 100%;
+    }
+  }
+
+  .diagnostic-toolbar {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: space-between;
+    margin-bottom: 12px;
+
+    span {
+      color: #555;
+      font-weight: 500;
+    }
+  }
+
+  mat-expansion-panel {
+    margin-bottom: 8px;
+  }
+
+  mat-panel-description {
+    flex-grow: 0;
+  }
+
+  .group-count-mobile {
+    display: none;
+  }
+
+  .mapping-diagnostic {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    padding: 12px 0;
+
+    &:first-child {
+      padding-top: 0;
+    }
+
+    &:last-of-type {
+      border-bottom: 0;
+    }
+
+    p {
+      color: #4f4f4f;
+      line-height: 1.4;
+      margin: 0;
+    }
+  }
+
+  .mapping-context {
+    color: #555;
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.85em;
+    gap: 2px 12px;
+    margin-top: 4px;
+
+    span {
+      overflow-wrap: anywhere;
+    }
+  }
+
+  .mapping-action {
+    font-size: 0.9em;
+    font-weight: 500;
+    margin-top: 4px !important;
+  }
+
+  .empty-state {
+    align-items: center;
+    color: #666;
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    min-height: 120px;
+  }
+}
+
+@media (max-width: 700px) {
+  .diagnostics-dialog {
+    width: 92vw;
+
+    .diagnostic-filters {
+      grid-template-columns: 1fr;
+    }
+
+    mat-panel-description {
+      display: none;
+    }
+
+    mat-panel-title {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .group-count-mobile {
+      color: #555;
+      display: inline;
+      font-size: 0.85em;
+      font-weight: 400;
+    }
+  }
+}

@@ -18,6 +18,62 @@ export const BACKGROUND_EXPORT_TYPES = [
 export type BackgroundExportType = (typeof BACKGROUND_EXPORT_TYPES)[number];
 export type ExportVersion = 'v1' | 'v2' | 'v3';
 export type ExportFormat = 'csv' | 'json' | 'excel';
+export type ItemDatasetNotReachedScope = 'unit' | 'testlet' | 'booklet';
+
+export interface ItemDatasetSelection {
+  unitId: string;
+  itemId: string;
+}
+
+export interface ItemDatasetOption extends ItemDatasetSelection {
+  unitLabel: string;
+  itemLabel: string;
+  columnName: string;
+}
+
+export type ItemDatasetMappingIssueCode =
+  | 'vomd-mapping'
+  | 'ambiguous-vomd-fallback'
+  | 'missing-vomd'
+  | 'missing-item-id'
+  | 'missing-variable-id'
+  | 'variable-not-found'
+  | 'ambiguous-variable'
+  | 'ambiguous-item-fallback'
+  | 'duplicate-vomd-item'
+  | 'ambiguous-variable-mapping'
+  | 'column-name-collision'
+  | 'unknown-selection';
+
+export type ItemDatasetMappingWarningCode =
+  | 'vomd-fallback-used'
+  | 'vomd-fallback-ignored';
+
+interface ItemDatasetMappingDiagnosticDto {
+  message: string;
+  unitId?: string;
+  itemId?: string;
+  variableId?: string;
+  columnName?: string;
+  sourceFile?: string;
+  suggestedAction?: string;
+}
+
+export interface ItemDatasetMappingIssueDto
+  extends ItemDatasetMappingDiagnosticDto {
+  code: ItemDatasetMappingIssueCode;
+}
+
+export interface ItemDatasetMappingWarningDto
+  extends ItemDatasetMappingDiagnosticDto {
+  code: ItemDatasetMappingWarningCode;
+}
+
+export interface ItemDatasetOptionsDto {
+  items: ItemDatasetOption[];
+  mappingIssues: ItemDatasetMappingIssueDto[];
+  mappingWarnings?: ItemDatasetMappingWarningDto[];
+}
 
 interface ExportRequestTransportOptions {
   authToken?: string;
@@ -39,6 +95,10 @@ export interface ItemMatrixExportRequest extends ExportRequestTransportOptions {
   version?: ExportVersion;
   format?: Exclude<ExportFormat, 'json'>;
   matrixValue?: 'code' | 'score';
+  missingsProfileId: number;
+  notReachedScope?: ItemDatasetNotReachedScope;
+  recodeTrailingOmissions?: boolean;
+  items?: ItemDatasetSelection[];
 }
 
 export interface PsychometricExportRequest
@@ -190,6 +250,53 @@ export const parseExportRequest = (value: unknown): BackgroundExportRequest => {
       ) {
         throw new ExportRequestValidationError(
           'item-matrix exports support only "code" or "score" matrix values'
+        );
+      }
+      if (
+        !Number.isSafeInteger(value.missingsProfileId) ||
+        Number(value.missingsProfileId) <= 0
+      ) {
+        throw new ExportRequestValidationError(
+          'item-matrix missingsProfileId must be a positive integer'
+        );
+      }
+      if (
+        value.notReachedScope !== undefined &&
+        !isOneOf(value.notReachedScope, ['unit', 'testlet', 'booklet'])
+      ) {
+        throw new ExportRequestValidationError(
+          'item-matrix notReachedScope must be "unit", "testlet" or "booklet"'
+        );
+      }
+      if (
+        value.recodeTrailingOmissions !== undefined &&
+        typeof value.recodeTrailingOmissions !== 'boolean'
+      ) {
+        throw new ExportRequestValidationError(
+          'item-matrix recodeTrailingOmissions must be a boolean'
+        );
+      }
+      if (
+        value.recodeTrailingOmissions === true &&
+        (value.notReachedScope === undefined || value.notReachedScope === 'unit')
+      ) {
+        throw new ExportRequestValidationError(
+          'item-matrix recodeTrailingOmissions is supported only for testlet or booklet scope'
+        );
+      }
+      if (
+        value.items !== undefined &&
+        (!Array.isArray(value.items) ||
+          value.items.some(item => (
+            !isRecord(item) ||
+            typeof item.unitId !== 'string' ||
+            item.unitId.trim() === '' ||
+            typeof item.itemId !== 'string' ||
+            item.itemId.trim() === ''
+          )))
+      ) {
+        throw new ExportRequestValidationError(
+          'item-matrix items must contain valid unitId/itemId pairs'
         );
       }
       break;

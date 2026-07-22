@@ -428,18 +428,25 @@ describe('ExportJobProcessor', () => {
         exportType: 'item-matrix',
         version: 'v2',
         format: 'csv',
-        matrixValue: 'score'
+        matrixValue: 'score',
+        missingsProfileId: 4
       }));
       filePath = result.filePath;
 
       expect(codingExportOrchestratorService.exportItemMatrixAsCsv).toHaveBeenCalledWith({
         workspaceId: 7,
+        missingsProfileId: 4,
         matrixValue: 'score',
         version: 'v2',
+        notReachedScope: 'unit',
+        recodeTrailingOmissions: false,
+        items: undefined,
         onProgress: expect.any(Function),
         checkCancellation: expect.any(Function)
       });
-      expect(result.fileName).toMatch(/\.csv$/);
+      expect(result.fileName).toMatch(
+        /^Itemdatensatz-\d{4}-\d{2}-\d{2}\.csv$/
+      );
       expect(fs.readFileSync(filePath as string).toString('utf-8')).toBe('\uFEFFmatrix');
     } finally {
       cleanup(filePath);
@@ -455,7 +462,8 @@ describe('ExportJobProcessor', () => {
         exportType: 'item-matrix',
         version: 'v3',
         format: 'excel',
-        matrixValue: 'code'
+        matrixValue: 'code',
+        missingsProfileId: 4
       }));
       filePath = result.filePath;
 
@@ -463,14 +471,20 @@ describe('ExportJobProcessor', () => {
         expect.stringMatching(/\.xlsx$/),
         {
           workspaceId: 7,
+          missingsProfileId: 4,
           matrixValue: 'code',
           version: 'v3',
+          notReachedScope: 'unit',
+          recodeTrailingOmissions: false,
+          items: undefined,
           onProgress: expect.any(Function),
           checkCancellation: expect.any(Function)
         }
       );
       expect(codingExportOrchestratorService.exportItemMatrixAsExcel).not.toHaveBeenCalled();
-      expect(result.fileName).toMatch(/\.xlsx$/);
+      expect(result.fileName).toMatch(
+        /^Itemdatensatz-\d{4}-\d{2}-\d{2}\.xlsx$/
+      );
       expect(fs.readFileSync(filePath as string).toString('utf-8')).toBe('xlsx');
     } finally {
       cleanup(filePath);

@@ -26,7 +26,10 @@ import {
 } from '../../../core/services/auth-session.config';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import type { PsychometricDomainCandidatesDto } from '../../../../../../../api-dto/coding/psychometric-discrimination.dto';
-import type { BackgroundExportRequest } from '../../../../../../../api-dto/coding/export-request.dto';
+import type {
+  BackgroundExportRequest,
+  ItemDatasetOptionsDto
+} from '../../../../../../../api-dto/coding/export-request.dto';
 
 export interface ExportJob {
   jobId: string;
@@ -168,6 +171,12 @@ export class ExportJobService implements OnDestroy {
     return this.codingJobBackendService.getPsychometricDomainCandidates(
       workspaceId
     );
+  }
+
+  getItemDatasetOptions(
+    workspaceId: number
+  ): Observable<ItemDatasetOptionsDto> {
+    return this.codingJobBackendService.getItemDatasetOptions(workspaceId);
   }
 
   private withReplayAuthToken(
