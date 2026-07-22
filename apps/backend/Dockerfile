@@ -19,6 +19,9 @@ RUN --mount=type=cache,target=/var/cache/apt \
     apt update && \
     apt install -y --no-install-recommends tini
 
+RUN --mount=type=cache,target=/root/.npm \
+    npm install -g --no-fund npm@11.18.0
+
 USER node
 
 WORKDIR /usr/src/coding-box-${PROJECT}

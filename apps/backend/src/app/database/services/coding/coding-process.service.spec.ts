@@ -16,6 +16,7 @@ import Persons from '../../entities/persons.entity';
 import { Unit } from '../../entities/unit.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import { ResponseEntity } from '../../entities/response.entity';
+import { AutocoderPersistenceTargetCollisionError } from './autocoder-persistence-target-collision.error';
 
 jest.mock('@iqb/responses', () => ({
   CodingSchemeFactory: {
@@ -976,6 +977,310 @@ describe('CodingProcessService', () => {
           expect.any(Object),
           expect.any(Object)
         );
+    });
+
+    it('prefers exact DHB003 aliases over colliding technical variable IDs', () => {
+      const response02 = createMockResponse(10, 1, '02');
+      const response04 = createMockResponse(20, 1, '04');
+      const response03 = createMockResponse(30, 1, '03');
+      const response05 = createMockResponse(40, 1, '05');
+      const generatedTechnical04 = createMockResponse(50, 1, '04');
+      generatedTechnical04.is_autocoder_generated = true;
+      const generatedTechnical05 = createMockResponse(60, 1, '05');
+      generatedTechnical05.is_autocoder_generated = true;
+      const technicalIdFallbackByAlias = new Map([
+        ['02', '04'],
+        ['04', '07'],
+        ['03', '05'],
+        ['05', '09']
+      ]);
+      const resolveResponse = (
+        service as unknown as {
+          findExistingResponseForAutocoderResult: (
+            responses: ResponseEntity[],
+            codedResultId: string,
+            codedSubform: string,
+            technicalIdFallbackByAlias: Map<string, string>
+          ) => ResponseEntity | undefined;
+        }
+      ).findExistingResponseForAutocoderResult.bind(service);
+      const responses = [
+        response02,
+        response04,
+        response03,
+        response05,
+        generatedTechnical04,
+        generatedTechnical05
+      ];
+
+      expect(resolveResponse(responses, '02', '', technicalIdFallbackByAlias))
+        .toBe(response02);
+      expect(resolveResponse(responses, '04', '', technicalIdFallbackByAlias))
+        .toBe(response04);
+      expect(resolveResponse(responses, '03', '', technicalIdFallbackByAlias))
+        .toBe(response03);
+      expect(resolveResponse(responses, '05', '', technicalIdFallbackByAlias))
+        .toBe(response05);
+    });
+
+    it('limits the technical-ID fallback to legacy generated responses', () => {
+      const importedTechnicalIdCollision = createMockResponse(
+        20,
+        1,
+        'TECHNICAL_04'
+      );
+      const legacyGeneratedResponse = createMockResponse(
+        30,
+        1,
+        'TECHNICAL_04'
+      );
+      legacyGeneratedResponse.is_autocoder_generated = true;
+      const technicalIdFallbackByAlias = new Map([
+        ['02', 'TECHNICAL_04']
+      ]);
+      const resolveResponse = (
+        service as unknown as {
+          findExistingResponseForAutocoderResult: (
+            responses: ResponseEntity[],
+            codedResultId: string,
+            codedSubform: string,
+            technicalIdFallbackByAlias: Map<string, string>
+          ) => ResponseEntity | undefined;
+        }
+      ).findExistingResponseForAutocoderResult.bind(service);
+
+      expect(resolveResponse(
+        [importedTechnicalIdCollision],
+        '02',
+        '',
+        technicalIdFallbackByAlias
+      )).toBeUndefined();
+      expect(resolveResponse(
+        [importedTechnicalIdCollision, legacyGeneratedResponse],
+        '02',
+        '',
+        technicalIdFallbackByAlias
+      )).toBe(legacyGeneratedResponse);
+    });
+
+    it('excludes technical IDs that are also another output alias', () => {
+      const serviceInternals = service as unknown as {
+        createUnambiguousTechnicalIdFallbacks: (
+          variableCodings: Array<{ id: string; alias?: string }>
+        ) => Map<string, string>;
+        findExistingResponseForAutocoderResult: (
+          responses: ResponseEntity[],
+          codedResultId: string,
+          codedSubform: string,
+          technicalIdFallbackByAlias: Map<string, string>
+        ) => ResponseEntity | undefined;
+      };
+      const technicalIdFallbackByAlias =
+        serviceInternals.createUnambiguousTechnicalIdFallbacks([
+          { id: '04', alias: '02' },
+          { id: '07', alias: '04' },
+          { id: '05', alias: '03' },
+          { id: '09', alias: '05' }
+        ]);
+      const generated04 = createMockResponse(50, 1, '04');
+      generated04.is_autocoder_generated = true;
+
+      expect(Array.from(technicalIdFallbackByAlias.entries())).toEqual([
+        ['04', '07'],
+        ['05', '09']
+      ]);
+      expect(serviceInternals.findExistingResponseForAutocoderResult(
+        [generated04],
+        '02',
+        '',
+        technicalIdFallbackByAlias
+      )).toBeUndefined();
+    });
+
+    it('routes all DHB003 aliases correctly through response processing', async () => {
+      const dhbResponses = [
+        createMockResponse(10, 1, '02'),
+        createMockResponse(20, 1, '04'),
+        createMockResponse(40, 1, '05')
+      ];
+      const dhbVariableCodings = [
+        { id: '04', alias: '02' },
+        { id: '07', alias: '04' },
+        { id: '05', alias: '03' },
+        { id: '09', alias: '05' }
+      ];
+      (Autocoder.CodingSchemeFactory.code as jest.Mock).mockReturnValueOnce([
+        {
+          id: '02',
+          value: 'response 02',
+          status: 'CODING_COMPLETE',
+          code: 102,
+          score: 1,
+          subform: ''
+        },
+        {
+          id: '04',
+          value: 'response 04',
+          status: 'CODING_COMPLETE',
+          code: 104,
+          score: 1,
+          subform: ''
+        },
+        {
+          id: '03',
+          value: 'derived 03',
+          status: 'CODING_COMPLETE',
+          code: 103,
+          score: 1,
+          subform: ''
+        },
+        {
+          id: '05',
+          value: 'response 05',
+          status: 'CODING_COMPLETE',
+          code: 105,
+          score: 1,
+          subform: ''
+        }
+      ]);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([
+          ['TEST_UNIT_1', new Set(['02', '04', '05'])]
+        ])
+      );
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce([mockUnits[0]])
+        .mockResolvedValueOnce(dhbResponses);
+      (fileUploadRepository.find as jest.Mock)
+        .mockReset()
+        .mockResolvedValueOnce([
+          createMockFileUpload(
+            'ALIAS_1',
+            '<xml><codingSchemeRef>TEST-SCHEME-REF</codingSchemeRef></xml>'
+          )
+        ])
+        .mockResolvedValueOnce([
+          createMockFileUpload(
+            'TEST-SCHEME-REF',
+            JSON.stringify({
+              version: '3.4',
+              variableCodings: dhbVariableCodings
+            })
+          )
+        ]);
+
+      await service.processTestPersonsBatch(workspaceId, ['1'], 1);
+
+      const codedResponses =
+        mockResponseManagementService.updateResponsesInDatabase
+          .mock.calls[0][1];
+      expect(codedResponses).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 10, code_v1: 102 }),
+        expect.objectContaining({ id: 20, code_v1: 104 }),
+        expect.objectContaining({
+          id: -1,
+          isNew: true,
+          variableid: '03',
+          code_v1: 103
+        }),
+        expect.objectContaining({ id: 40, code_v1: 105 })
+      ]));
+      expect(codedResponses).toHaveLength(4);
+    });
+
+    it('rejects multiple autocoder results for the same persistence target', () => {
+      const assertUniqueTargets = (
+        service as unknown as {
+          assertUniqueAutocoderPersistenceTargets: (
+            responses: Array<{
+              id: number;
+              isNew?: boolean;
+              unitid?: number;
+              variableid?: string;
+              subform?: string;
+            }>
+          ) => void;
+        }
+      ).assertUniqueAutocoderPersistenceTargets.bind(service);
+
+      expect(() => assertUniqueTargets([
+        { id: 10 },
+        { id: 10 }
+      ])).toThrow(AutocoderPersistenceTargetCollisionError);
+      expect(() => assertUniqueTargets([
+        {
+          id: -1,
+          isNew: true,
+          unitid: 1,
+          variableid: '03',
+          subform: ''
+        },
+        {
+          id: -1,
+          isNew: true,
+          unitid: 1,
+          variableid: '03',
+          subform: ''
+        }
+      ])).toThrow('Autocoder produced multiple updates for generated:1:03:');
+    });
+
+    it('rolls back and rejects persistence target collisions', async () => {
+      const response02 = createMockResponse(10, 1, '02');
+      (Autocoder.CodingSchemeFactory.code as jest.Mock).mockReturnValueOnce([
+        {
+          id: '02',
+          value: 'first result',
+          status: 'CODING_COMPLETE',
+          code: 1,
+          score: 1,
+          subform: ''
+        },
+        {
+          id: '02',
+          value: 'second result',
+          status: 'CODING_COMPLETE',
+          code: 2,
+          score: 1,
+          subform: ''
+        }
+      ]);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([
+          ['TEST_UNIT_1', new Set(['02'])]
+        ])
+      );
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce([mockUnits[0]])
+        .mockResolvedValueOnce([response02]);
+      (fileUploadRepository.find as jest.Mock)
+        .mockReset()
+        .mockResolvedValueOnce([
+          createMockFileUpload(
+            'ALIAS_1',
+            '<xml><codingSchemeRef>TEST-SCHEME-REF</codingSchemeRef></xml>'
+          )
+        ])
+        .mockResolvedValueOnce([
+          createMockFileUpload(
+            'TEST-SCHEME-REF',
+            JSON.stringify({
+              version: '3.4',
+              variableCodings: [{ id: '04', alias: '02' }]
+            })
+          )
+        ]);
+
+      await expect(
+        service.processTestPersonsBatch(workspaceId, ['1'], 1)
+      ).rejects.toBeInstanceOf(AutocoderPersistenceTargetCollisionError);
+
+      const createQueryRunner = responseRepository.manager.connection
+        .createQueryRunner as jest.Mock;
+      const queryRunner = createQueryRunner.mock.results[0].value;
+      expect(queryRunner.rollbackTransaction).toHaveBeenCalledTimes(1);
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .not.toHaveBeenCalled();
     });
 
     it('should call progress callback at appropriate intervals', async () => {
