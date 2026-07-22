@@ -629,10 +629,7 @@ export class CodingManagementService {
         this.showInfoSnackbar(this.translateService.instant('coding-management.download-dialog.download-cancelled'));
         return;
       }
-      this.showErrorSnackbar(
-        this.translateService.instant('coding-management.download-dialog.download-failed', { error: (error as Error).message || error }),
-        false
-      );
+      this.showErrorSnackbar(this.getDownloadFailureMessage(error), false);
     } finally {
       this.clearActiveDownload('coding-results');
       this.downloadProgress$.next(null);
@@ -689,10 +686,7 @@ export class CodingManagementService {
         this.showInfoSnackbar(this.translateService.instant('coding-management.download-dialog.download-cancelled'));
         return;
       }
-      this.showErrorSnackbar(
-        this.translateService.instant('coding-management.download-dialog.download-failed', { error: (error as Error).message || error }),
-        false
-      );
+      this.showErrorSnackbar(this.getDownloadFailureMessage(error), false);
     } finally {
       this.clearActiveDownload('coding-list');
       this.codingListDownloadProgress$.next(null);
@@ -886,6 +880,20 @@ export class CodingManagementService {
 
   private showInfoSnackbar(msg: string): void {
     this.snackBar.open(msg, 'Schließen', { duration: 3000 });
+  }
+
+  private getDownloadFailureMessage(error: unknown): string {
+    const summary = this.translateService.instant(
+      'coding-management.download-dialog.download-failed'
+    );
+    let details = '';
+    if (error instanceof Error) {
+      details = error.message.trim();
+    } else if (typeof error === 'string') {
+      details = error.trim();
+    }
+
+    return details ? `${summary}: ${details}` : summary;
   }
 
   private getDateString(): string {

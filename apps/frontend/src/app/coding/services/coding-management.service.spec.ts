@@ -396,6 +396,36 @@ describe('CodingManagementService', () => {
       );
     });
 
+    it('should show the profile validation reason when a v1 export job fails', async () => {
+      const validationError = "Missing profile 7 must define 'mnr'";
+      exportServiceMock.startExportJob.mockReturnValue(of({
+        jobId: 'job-1',
+        message: 'started'
+      }));
+      exportServiceMock.getExportJobStatus.mockReturnValue(of({
+        status: 'failed',
+        progress: 0,
+        error: validationError
+      }) as never);
+
+      await service.downloadCodingResults(
+        'v1',
+        'csv',
+        false,
+        true,
+        false,
+        false,
+        7
+      );
+
+      expect(snackBarMock.open).toHaveBeenCalledWith(
+        `coding-management.download-dialog.download-failed: ${validationError}`,
+        'close',
+        { duration: 5000, panelClass: ['error-snackbar'] }
+      );
+      expect(exportServiceMock.downloadExportFile).not.toHaveBeenCalled();
+    });
+
     it('should pass GeoGebra package option to background export job', async () => {
       exportServiceMock.startExportJob.mockReturnValue(of({ jobId: 'job-1', message: 'started' }));
       exportServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'completed', progress: 100 }) as never);
