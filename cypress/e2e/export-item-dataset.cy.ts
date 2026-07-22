@@ -26,7 +26,12 @@ describe('Itemdatensatz-Export', () => {
               columnName: 'Aufgabe2_ITEM2'
             }
           ],
-          mappingIssues: []
+          mappingIssues: [],
+          mappingWarnings: [{
+            code: 'vomd-fallback-used',
+            message: 'UNIT1/ITEM1: eindeutiger Fallback verwendet',
+            suggestedAction: 'variableId im VOMD-Item korrigieren.'
+          }]
         }
       }
     ).as('itemDatasetOptions');
@@ -64,6 +69,12 @@ describe('Itemdatensatz-Export', () => {
       'contain.text',
       'IQB-Standard'
     );
+    cy.get('[data-cy="item-dataset-mapping-warnings"]')
+      .should('contain.text', 'eindeutiger Fallback verwendet')
+      .and('contain.text', 'variableId im VOMD-Item korrigieren');
+    cy.get('[data-cy="item-dataset-mapping-warnings"] .mapping-diagnostic')
+      .should('have.length', 1);
+    cy.get('[data-cy="start-export"]').should('not.be.disabled');
     cy.get('[data-cy="item-dataset-search"]').type('Aufgabe2');
     cy.get('[data-cy="item-dataset-items"]').click();
     cy.contains('mat-option', 'Aufgabe2_ITEM2').click();
@@ -76,5 +87,51 @@ describe('Itemdatensatz-Export', () => {
 
     cy.wait('@startExport');
     cy.get('coding-box-export-toast').should('contain.text', 'Itemdatensatz');
+  });
+
+  it('explains genuine mapping errors and blocks the export', () => {
+    cy.mockKeycloakAuthentication();
+    cy.stubWorkspace({ workspaceId: 5 });
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/missings-profiles', {
+      body: [{ id: 4, label: 'IQB-Standard' }]
+    });
+    cy.intercept(
+      'GET',
+      '**/api/admin/workspace/5/coding/export/item-dataset-options',
+      {
+        body: {
+          items: [{
+            unitId: 'UNIT1',
+            unitLabel: 'Aufgabe 1',
+            itemId: 'ITEM1',
+            itemLabel: 'Item 1',
+            columnName: 'Aufgabe1_ITEM1'
+          }],
+          mappingIssues: [{
+            code: 'missing-vomd',
+            message: 'UNIT2: keine VOMD-Datei',
+            unitId: 'UNIT2',
+            sourceFile: 'UNIT2.vomd',
+            suggestedAction: 'VOMD-Datei erzeugen oder Unit ausschließen.'
+          }],
+          mappingWarnings: []
+        }
+      }
+    );
+
+    cy.visit('/');
+    cy.wait('@authData');
+    cy.window().then((window) => {
+      window.location.hash = '/workspace-admin/5/export';
+    });
+    cy.get('[data-cy="export-type"]').click();
+    cy.contains('mat-option', 'Itemdatensatz').click();
+
+    cy.get('[data-cy="item-dataset-mapping-errors"]')
+      .should('contain.text', 'UNIT2: keine VOMD-Datei')
+      .and('contain.text', 'VOMD-Datei erzeugen oder Unit ausschließen');
+    cy.get('[data-cy="item-dataset-mapping-errors"] .mapping-diagnostic')
+      .should('have.length', 1);
+    cy.get('[data-cy="start-export"]').should('be.disabled');
   });
 });

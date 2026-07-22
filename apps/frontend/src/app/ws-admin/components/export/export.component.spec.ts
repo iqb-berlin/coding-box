@@ -67,7 +67,8 @@ describe('ExportComponent', () => {
         itemLabel: 'Item 1',
         columnName: 'Aufgabe1_ITEM1'
       }],
-      mappingIssues: []
+      mappingIssues: [],
+      mappingWarnings: []
     }));
 
     await TestBed.configureTestingModule({
@@ -367,6 +368,44 @@ describe('ExportComponent', () => {
       }
     ]);
     expect(component.isExportDisabled).toBe(true);
+  });
+
+  it('shows resolved VOMD fallbacks without blocking the export', () => {
+    getItemDatasetOptions.mockReturnValue(of({
+      items: [{
+        unitId: 'UNIT1',
+        unitLabel: 'Aufgabe 1',
+        itemId: 'ITEM1',
+        itemLabel: 'Item 1',
+        columnName: 'Aufgabe1_ITEM1'
+      }],
+      mappingIssues: [],
+      mappingWarnings: [{
+        code: 'vomd-fallback-used',
+        message: 'UNIT1/ITEM1: eindeutiger Fallback verwendet',
+        unitId: 'UNIT1',
+        itemId: 'ITEM1',
+        sourceFile: 'UNIT1.vomd',
+        suggestedAction: 'variableId in der VOMD-Datei korrigieren.'
+      }]
+    }));
+    component.selectedFormat = 'item-matrix';
+
+    component.onSelectedFormatChange();
+    fixture.detectChanges();
+
+    expect(component.itemDatasetMappingIssues).toEqual([]);
+    expect(component.itemDatasetMappingWarnings).toHaveLength(1);
+    expect(component.isExportDisabled).toBe(false);
+    const warning = fixture.nativeElement.querySelector(
+      '[data-cy="item-dataset-mapping-warnings"]'
+    ) as HTMLElement;
+    expect(warning.textContent).toContain(
+      'UNIT1/ITEM1: eindeutiger Fallback verwendet'
+    );
+    expect(warning.textContent).toContain(
+      'variableId in der VOMD-Datei korrigieren.'
+    );
   });
 
   it('requires an explicit item dataset profile when IQB standard is absent', () => {

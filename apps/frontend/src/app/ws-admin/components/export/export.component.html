@@ -183,8 +183,37 @@
             </mat-checkbox>
 
             <div
+              data-cy="item-dataset-mapping-warnings"
+              *ngIf="itemDatasetMappingWarnings.length > 0"
+              class="export-warning export-warning--notice"
+            >
+              <mat-icon>info</mat-icon>
+              <div>
+                <div class="warning-title">
+                  {{
+                    'ws-admin.export-options.item-dataset-mapping-warning-title'
+                      | translate
+                  }}
+                </div>
+                <div
+                  class="mapping-diagnostic"
+                  *ngFor="let warning of itemDatasetMappingWarnings"
+                >
+                  <p>{{ warning.message }}</p>
+                  <p
+                    class="mapping-action"
+                    *ngIf="warning.suggestedAction"
+                  >
+                    {{ warning.suggestedAction }}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div
+              data-cy="item-dataset-mapping-errors"
               *ngIf="itemDatasetMappingIssues.length > 0"
-              class="export-warning"
+              class="export-warning export-warning--error"
             >
               <mat-icon>warning</mat-icon>
               <div>
@@ -194,9 +223,15 @@
                       | translate
                   }}
                 </div>
-                <p *ngFor="let issue of itemDatasetMappingIssues">
-                  {{ issue.message }}
-                </p>
+                <div
+                  class="mapping-diagnostic"
+                  *ngFor="let issue of itemDatasetMappingIssues"
+                >
+                  <p>{{ issue.message }}</p>
+                  <p class="mapping-action" *ngIf="issue.suggestedAction">
+                    {{ issue.suggestedAction }}
+                  </p>
+                </div>
               </div>
             </div>
           </ng-container>

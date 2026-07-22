@@ -575,6 +575,7 @@
       "item-dataset-mnr-scope-booklet": "Pro Booklet",
       "item-dataset-recode-trailing": "Abschließende Auslassungen als nicht erreicht behandeln",
       "item-dataset-mapping-title": "Der Itemdatensatz kann wegen fehlerhafter Item-Metadaten nicht exportiert werden",
+      "item-dataset-mapping-warning-title": "Hinweise zu den Item-Metadaten; der Export ist weiterhin möglich",
       "psychometric-missings-profile": "Missing-Profil",
       "psychometric-no-missings-profile": "Kein Missing-Profil verfügbar",
       "psychometric-domain": "Domänenbildung",
