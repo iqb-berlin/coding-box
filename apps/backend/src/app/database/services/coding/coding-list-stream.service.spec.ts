@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import * as ExcelJS from 'exceljs';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -11,7 +12,9 @@ import { CodingItemBuilderService, CodingItemVersionRow } from './coding-item-bu
 import { CodingFileCacheService } from './coding-file-cache.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { ResponseEntity } from '../../entities/response.entity';
+import { Setting } from '../../entities/setting.entity';
 import { CodingReplayAnchorService } from './coding-replay-anchor.service';
+import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
 import type {
   MissingsProfilesService,
   ResolvedMissingsProfile
@@ -26,6 +29,8 @@ describe('CodingListStreamService', () => {
   let mockFileCacheService: jest.Mocked<CodingFileCacheService>;
   let mockConfigService: jest.Mocked<ConfigService>;
   let mockReplayAnchorService: jest.Mocked<CodingReplayAnchorService>;
+  let mockWorkspaceFilesService: jest.Mocked<WorkspaceFilesService>;
+  let mockSettingRepository: { findOne: jest.Mock };
 
   const createMockResponse = (id: number): ResponseEntity => ({
     id,
@@ -137,6 +142,15 @@ describe('CodingListStreamService', () => {
     mockReplayAnchorService = {
       getVariableAnchorMaps: jest.fn().mockResolvedValue(new Map())
     } as unknown as jest.Mocked<CodingReplayAnchorService>;
+    mockWorkspaceFilesService = {
+      getCoderTrainingRequiredVariableMap: jest.fn().mockResolvedValue(new Map()),
+      getUnitVariableMap: jest.fn().mockResolvedValue(new Map()),
+      getManualInstructionVariableMap: jest.fn().mockResolvedValue(new Map()),
+      getDerivedVariablesBySourceMap: jest.fn().mockResolvedValue(new Map())
+    } as unknown as jest.Mocked<WorkspaceFilesService>;
+    mockSettingRepository = {
+      findOne: jest.fn().mockResolvedValue(null)
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -151,10 +165,9 @@ describe('CodingListStreamService', () => {
         { provide: CodingReplayAnchorService, useValue: mockReplayAnchorService },
         {
           provide: WorkspaceFilesService,
-          useValue: {
-            getCoderTrainingRequiredVariableMap: jest.fn().mockResolvedValue(new Map())
-          }
-        }
+          useValue: mockWorkspaceFilesService
+        },
+        { provide: getRepositoryToken(Setting), useValue: mockSettingRepository }
       ]
     }).compile();
 
@@ -169,6 +182,66 @@ describe('CodingListStreamService', () => {
   });
 
   describe('Stream creation', () => {
+    it('forwards the workspace DERIVE_ERROR scope through CSV, Excel and JSON exports', async () => {
+      mockSettingRepository.findOne.mockResolvedValue({
+        key: 'workspace-1-include-derive-error-in-manual-coding',
+        content: JSON.stringify({ enabled: true })
+      });
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([[
+        'UNIT1',
+        new Set(['SOURCE_VAR', 'DERIVED_VAR'])
+      ]]));
+      mockWorkspaceFilesService.getManualInstructionVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['DERIVED_VAR'])]])
+      );
+      mockWorkspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(
+        new Map([[
+          getManualCodingScopeKey('UNIT1', 'SOURCE_VAR'),
+          new Set(['DERIVED_VAR'])
+        ]])
+      );
+
+      const expectedFilterOptions = {
+        manualCodingCandidatesOnly: true,
+        deriveErrorManualCodingPairKeys: ['UNIT1\u001FDERIVED_VAR']
+      };
+      mockResponseFilterService.getResponsesBatch
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+
+      const csvStream = await service.getCodingListCsvStream(
+        1,
+        'token',
+        'http://server'
+      );
+      csvStream.on('data', () => {});
+      await new Promise<void>(resolve => {
+        csvStream.on('end', resolve);
+      });
+
+      await service.getCodingListAsExcel(1, 'token', 'http://server');
+
+      const jsonStream = service.getCodingListJsonStream(
+        1,
+        'token',
+        'http://server'
+      );
+      await new Promise<void>(resolve => {
+        jsonStream.on('end', resolve);
+        jsonStream.on('data', () => {});
+      });
+
+      expect(mockResponseFilterService.countResponses).toHaveBeenCalledTimes(3);
+      expect(mockResponseFilterService.getResponsesBatch).toHaveBeenCalledTimes(3);
+      mockResponseFilterService.countResponses.mock.calls.forEach(call => {
+        expect(call).toEqual([1, expectedFilterOptions]);
+      });
+      mockResponseFilterService.getResponsesBatch.mock.calls.forEach(call => {
+        expect(call).toEqual([1, 0, 500, expectedFilterOptions]);
+      });
+    });
+
     it('should create CSV stream', async () => {
       mockResponseFilterService.getResponsesBatch.mockResolvedValueOnce([]);
 
