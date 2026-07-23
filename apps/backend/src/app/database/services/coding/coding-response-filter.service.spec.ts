@@ -1,4 +1,4 @@
-import { Repository } from 'typeorm';
+import { Brackets, Repository } from 'typeorm';
 import { CodingResponseFilterService } from './coding-response-filter.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingFileCacheService } from './coding-file-cache.service';
@@ -13,6 +13,7 @@ function createQueryBuilderMock() {
   queryBuilder.select = jest.fn(() => queryBuilder);
   queryBuilder.addSelect = jest.fn(() => queryBuilder);
   queryBuilder.where = jest.fn(() => queryBuilder);
+  queryBuilder.orWhere = jest.fn(() => queryBuilder);
   queryBuilder.andWhere = jest.fn(() => queryBuilder);
   queryBuilder.orderBy = jest.fn(() => queryBuilder);
   queryBuilder.take = jest.fn(() => queryBuilder);
@@ -162,6 +163,43 @@ describe('CodingResponseFilterService', () => {
           12
         ]
       }
+    );
+  });
+
+  it('includes DERIVE_ERROR only for explicitly scoped coding-list variables', async () => {
+    const { service, queryBuilder } = createService();
+    const deriveErrorManualCodingPairKeys = ['UNIT1\u001Fvar1'];
+
+    await service.countResponses(1, {
+      manualCodingCandidatesOnly: true,
+      deriveErrorManualCodingPairKeys
+    });
+
+    const statusFilter = queryBuilder.where.mock.calls[0][0] as Brackets;
+    expect(statusFilter).toBeInstanceOf(Brackets);
+    statusFilter.whereFactory(queryBuilder as never);
+    expect(queryBuilder.where).toHaveBeenCalledWith(
+      'response.status_v1 IN (:...statuses)',
+      { statuses: [8, 12] }
+    );
+    expect(queryBuilder.orWhere).toHaveBeenCalledWith(
+      expect.stringContaining('response.status_v1 = :deriveErrorStatus'),
+      {
+        deriveErrorStatus: 4,
+        deriveErrorManualCodingPairKeys
+      }
+    );
+    const deriveErrorCondition =
+      queryBuilder.orWhere.mock.calls[0][0] as string;
+    expect(deriveErrorCondition).toContain('response.value IS NOT NULL');
+    expect(deriveErrorCondition).toContain(
+      "response.value ~ '[^[:space:]]'"
+    );
+    expect(deriveErrorCondition).toContain(
+      "response.variableid NOT ILIKE '%image%'"
+    );
+    expect(deriveErrorCondition).toContain(
+      "response.variableid NOT ILIKE '%\\_0%' ESCAPE '\\'"
     );
   });
 

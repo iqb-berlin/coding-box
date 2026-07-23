@@ -63,6 +63,7 @@ const createQueryBuilder = (rawResults: unknown[] = []) => {
     'leftJoin',
     'where',
     'andWhere',
+    'distinct',
     'groupBy',
     'addGroupBy',
     'orderBy'

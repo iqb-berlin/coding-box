@@ -129,7 +129,7 @@ describe('WorkspaceSettingsController', () => {
       key: 'workspace-5-include-derive-error-in-manual-coding',
       value: JSON.stringify({ enabled: false }),
       description:
-        'Controls whether DERIVE_ERROR responses can be included in manual coding jobs'
+        'Controls whether DERIVE_ERROR responses are included in coding lists and can be selected for manual coding jobs'
     });
   });
 
