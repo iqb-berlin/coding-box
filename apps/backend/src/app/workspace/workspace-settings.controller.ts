@@ -69,7 +69,7 @@ const DEFAULT_WORKSPACE_SETTINGS: Record<string, {
   'include-derive-error-in-manual-coding': {
     value: { enabled: false },
     description:
-      'Controls whether DERIVE_ERROR responses can be included in manual coding jobs'
+      'Controls whether DERIVE_ERROR responses are included in coding lists and can be selected for manual coding jobs'
   },
   'enable-regex-search': {
     value: { enabled: false },
