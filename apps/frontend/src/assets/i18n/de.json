@@ -1348,7 +1348,7 @@
     "auto-refresh-manual-coding-jobs": "Kodierübersichten und Kodierjob-Tabellen automatisch aktualisieren",
     "auto-refresh-manual-coding-jobs-description": "Wenn aktiviert, werden Kodierübersicht, Manuelle Kodierung und Kodierjob-Tabellen automatisch bei relevanten Änderungen aktualisiert. Wenn deaktiviert, laden Sie teure Übersichten und Listen gezielt per Aktualisieren-Button.",
     "include-derive-error-in-manual-coding": "DERIVE_ERROR in manueller Kodierung zulassen",
-    "include-derive-error-in-manual-coding-description": "Wenn aktiviert, können DERIVE_ERROR-Fälle bei Kodierjobdefinitionen gezielt in die manuelle Kodierung aufgenommen werden. Standardmäßig ist diese Funktion deaktiviert.",
+    "include-derive-error-in-manual-coding-description": "Wenn aktiviert, werden DERIVE_ERROR-Fälle in Kodierlisten aufgenommen und können bei Kodierjobdefinitionen gezielt in die manuelle Kodierung einbezogen werden. Standardmäßig ist diese Funktion deaktiviert.",
     "include-derive-error-in-manual-coding-enabled": "DERIVE_ERROR-Fälle können in die manuelle Kodierung aufgenommen werden",
     "include-derive-error-in-manual-coding-disabled": "DERIVE_ERROR-Fälle werden nicht in die manuelle Kodierung aufgenommen",
     "enable-regex-search": "Reguläre Ausdrücke in Suchfeldern",

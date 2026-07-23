@@ -9,6 +9,7 @@ const createQueryBuilder = (rows: unknown[]) => {
     'leftJoin',
     'where',
     'andWhere',
+    'distinct',
     'orderBy'
   ].forEach(method => {
     queryBuilder[method] = jest.fn().mockReturnValue(queryBuilder);
@@ -77,6 +78,11 @@ describe('CodingAggregationPeerService', () => {
       codeV2: 1
     })]);
     expect(responseRepository.createQueryBuilder).toHaveBeenCalledTimes(2);
+    expect(peerValueQuery.select).toHaveBeenCalledWith(
+      'unit.name',
+      'unitName'
+    );
+    expect(peerValueQuery.distinct).toHaveBeenCalledWith(true);
     expect(peerValueQuery.andWhere).toHaveBeenCalledWith(
       expect.stringContaining('aggregation_peer_variable'),
       {
