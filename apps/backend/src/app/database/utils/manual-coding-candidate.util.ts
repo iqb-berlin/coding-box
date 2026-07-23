@@ -1,4 +1,8 @@
 import { statusStringToNumber } from './response-status-converter';
+import {
+  getCoveredSourceKeysForManualDerivedVariables,
+  getManualCodingScopeKey
+} from './manual-coding-scope.util';
 
 function requireStatusNumber(status: string): number {
   const statusNumber = statusStringToNumber(status);
@@ -74,4 +78,31 @@ export function getDeriveErrorManualCodingPairKeys(
         variable.variableId
       ))
   ));
+}
+
+export function getDeriveErrorCodingListPairKeys(
+  unitVariableMap: Map<string, Set<string>>,
+  manualInstructionMap: Map<string, Set<string>>,
+  derivedVariablesBySourceMap: Map<string, Set<string>>
+): string[] {
+  const manualInstructionVariables = Array.from(
+    manualInstructionMap.entries()
+  ).flatMap(([unitName, variableIds]) => (
+    Array.from(variableIds).map(variableId => ({ unitName, variableId }))
+  ));
+  const coveredSourceKeys = getCoveredSourceKeysForManualDerivedVariables(
+    manualInstructionVariables,
+    derivedVariablesBySourceMap
+  );
+
+  return Array.from(unitVariableMap.entries()).flatMap(
+    ([unitName, variableIds]) => Array.from(variableIds)
+      .filter(variableId => !coveredSourceKeys.has(
+        getManualCodingScopeKey(unitName, variableId)
+      ))
+      .map(variableId => toManualCodingVariablePairKey(
+        unitName.toUpperCase(),
+        variableId
+      ))
+  );
 }

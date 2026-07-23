@@ -2,6 +2,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
+import { Setting } from '../../entities/setting.entity';
 import { statusNumberToString } from '../../utils/response-status-converter';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
@@ -18,11 +19,19 @@ import {
 } from '../../utils/manual-coding-scope.util';
 import {
   CODING_INCOMPLETE_STATUS,
+  DERIVE_ERROR_STATUS,
+  getDeriveErrorCodingListPairKeys,
   INTENDED_INCOMPLETE_STATUS,
-  MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+  MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES,
+  toManualCodingVariablePairKey
 } from '../../utils/manual-coding-candidate.util';
+import { isDeriveErrorInManualCodingEnabled } from '../../utils/manual-coding-setting.util';
 import { generateReplayUrl } from '../../../utils/replay-url.util';
 import { CodingReplayAnchorService } from './coding-replay-anchor.service';
+import {
+  getCodingResponseValueCandidateSql,
+  getCodingVariableIdCandidateSql
+} from './coding-response-candidate.util';
 
 const PAGE_MAP_LOOKUP_BATCH_SIZE = 8;
 
@@ -45,7 +54,10 @@ export class CodingListQueryService {
     private readonly workspaceFilesService: WorkspaceFilesService,
     private readonly workspaceCoreService: WorkspaceCoreService,
     private readonly workspaceExclusionService: WorkspaceExclusionService,
-    @Optional() private readonly replayAnchorService?: CodingReplayAnchorService
+    @Optional() private readonly replayAnchorService?: CodingReplayAnchorService,
+    @Optional()
+    @InjectRepository(Setting)
+    private readonly settingRepository?: Repository<Setting>
   ) { }
 
   async getValidVariablePairKeys(workspaceId: number): Promise<string[]> {
@@ -70,6 +82,14 @@ export class CodingListQueryService {
     }> {
     try {
       const server = serverUrl;
+      const includeDeriveError =
+        await isDeriveErrorInManualCodingEnabled(
+          this.settingRepository,
+          workspace_id
+        );
+      const candidateStatuses = includeDeriveError ?
+        [...MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES, DERIVE_ERROR_STATUS] :
+        MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES;
 
       // 1) Query explicitly selected manual-coding candidate responses.
       const queryBuilder = this.responseRepository
@@ -81,7 +101,7 @@ export class CodingListQueryService {
         .where('person.workspace_id = :workspace_id', { workspace_id })
         .andWhere('person.consider = :consider', { consider: true })
         .andWhere('response.status_v1 IN (:...statuses)', {
-          statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+          statuses: candidateStatuses
         })
         .orderBy('response.id', 'ASC');
 
@@ -119,6 +139,15 @@ export class CodingListQueryService {
       manualInstructionMap.forEach((variables: Set<string>, unitNameKey: string) => {
         manualInstructionSets.set(unitNameKey.toUpperCase(), variables);
       });
+      const deriveErrorPairKeys = new Set(
+        includeDeriveError ?
+          getDeriveErrorCodingListPairKeys(
+            unitVariableMap,
+            manualInstructionMap,
+            derivedVariablesBySourceMap
+          ) :
+          []
+      );
 
       // 3) Filter responses:
       //    - Variable must exist in unitVariableMap (valid, non-BASE/BASE_NO_VALUE)
@@ -129,8 +158,18 @@ export class CodingListQueryService {
         const unitKey = r.unit?.name || '';
         const variableId = r.variableid || '';
         const hasValue = r.value != null && r.value.trim() !== '';
+        const responseStatus = Number(r.status_v1);
+        const isIncludedDeriveError =
+          responseStatus === DERIVE_ERROR_STATUS &&
+          deriveErrorPairKeys.has(toManualCodingVariablePairKey(
+            unitKey.toUpperCase(),
+            variableId
+          ));
 
-        if (!MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES.includes(Number(r.status_v1))) return false;
+        if (
+          !MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES.includes(responseStatus) &&
+          !isIncludedDeriveError
+        ) return false;
         if (!hasValue) return false;
 
         const hasExcludedSubstring = /image|text|audio|frame|video|_0/i.test(variableId);
@@ -249,7 +288,7 @@ export class CodingListQueryService {
       this.logger.log(
         `Found ${sortedResult.length} coding items after manual-coding candidate filtering, total raw ${total}`
       );
-      return { items: sortedResult, total };
+      return { items: sortedResult, total: sortedResult.length };
     } catch (error) {
       this.logger.error(`Error fetching coding list: ${error.message}`);
       return { items: [], total: 0 };
@@ -318,6 +357,13 @@ export class CodingListQueryService {
     workspaceId: number,
     trainingRequired?: boolean
   ): Promise<Array<{ unitName: string; variableId: string }>> {
+    const includeDeriveError = await isDeriveErrorInManualCodingEnabled(
+      this.settingRepository,
+      workspaceId
+    );
+    const candidateStatuses = includeDeriveError ?
+      [...MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES, DERIVE_ERROR_STATUS] :
+      MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES;
     const queryBuilder = this.responseRepository
       .createQueryBuilder('response')
       .innerJoin('response.unit', 'unit')
@@ -329,20 +375,12 @@ export class CodingListQueryService {
       .addSelect('response.status_v1', 'statusV1')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere("(response.value IS NOT NULL AND response.value != '')")
+      .andWhere(getCodingResponseValueCandidateSql('response'))
       .andWhere('response.status_v1 IN (:...statuses)', {
-        statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+        statuses: candidateStatuses
       });
 
-    // Exclude media variables
-    queryBuilder.andWhere(
-      `response.variableid NOT LIKE 'image%'
-       AND response.variableid NOT LIKE 'text%'
-       AND response.variableid NOT LIKE 'audio%'
-       AND response.variableid NOT LIKE 'frame%'
-       AND response.variableid NOT LIKE 'video%'
-       AND response.variableid NOT LIKE '%_0' ESCAPE '\\'`
-    );
+    queryBuilder.andWhere(getCodingVariableIdCandidateSql('response'));
 
     const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     applyResolvedExclusionsToQuery(queryBuilder, { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits });
@@ -378,12 +416,31 @@ export class CodingListQueryService {
     manualInstructionMap.forEach((variables: Set<string>, unitName: string) => {
       manualInstructionSets.set(unitName.toUpperCase(), variables);
     });
+    const deriveErrorPairKeys = new Set(
+      includeDeriveError ?
+        getDeriveErrorCodingListPairKeys(
+          unitVariableMap,
+          manualInstructionMap,
+          derivedVariablesBySourceMap
+        ) :
+        []
+    );
 
     const baseFilteredResults = rawResults.filter(row => {
-      const unitNameUpper = row.unitName?.toUpperCase();
+      const unitNameUpper = row.unitName?.toUpperCase() || '';
       const variableId: string = row.variableId;
+      const responseStatus = Number(row.statusV1);
+      const isIncludedDeriveError =
+        responseStatus === DERIVE_ERROR_STATUS &&
+        deriveErrorPairKeys.has(toManualCodingVariablePairKey(
+          unitNameUpper,
+          variableId
+        ));
 
-      if (!MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES.includes(Number(row.statusV1))) return false;
+      if (
+        !MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES.includes(responseStatus) &&
+        !isIncludedDeriveError
+      ) return false;
 
       const validVars = validVariableSets.get(unitNameUpper);
       if (!validVars?.has(variableId)) return false;
