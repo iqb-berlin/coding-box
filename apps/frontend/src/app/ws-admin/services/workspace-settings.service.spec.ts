@@ -467,7 +467,7 @@ describe('WorkspaceSettingsService', () => {
       expect(req.request.body).toEqual({
         key: 'include-derive-error-in-manual-coding',
         value: '{"enabled":true}',
-        description: 'Controls whether DERIVE_ERROR responses can be included in manual coding jobs'
+        description: 'Controls whether DERIVE_ERROR responses are included in coding lists and can be selected for manual coding jobs'
       });
       req.flush({});
     });
