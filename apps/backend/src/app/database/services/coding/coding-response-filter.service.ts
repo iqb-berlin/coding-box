@@ -1,6 +1,6 @@
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Brackets, Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
 import {
   statusStringToNumber,
@@ -16,8 +16,15 @@ import {
 } from '../workspace/workspace-exclusion.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
-import { MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES } from '../../utils/manual-coding-candidate.util';
-import { isCodingResponseCandidateByPattern } from './coding-response-candidate.util';
+import {
+  DERIVE_ERROR_STATUS,
+  MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+} from '../../utils/manual-coding-candidate.util';
+import {
+  getCodingResponseValueCandidateSql,
+  getCodingVariableIdCandidateSql,
+  isCodingResponseCandidateByPattern
+} from './coding-response-candidate.util';
 import type { CodingItemVersionRow } from './coding-item-builder.service';
 
 type RawNumericValue = number | string | null;
@@ -53,6 +60,7 @@ export interface ResponseFilterOptions {
   validCodingVariablesOnly?: boolean;
   givenResponsesOnly?: boolean;
   manualCodingCandidatesOnly?: boolean;
+  deriveErrorManualCodingPairKeys?: string[];
 }
 
 /**
@@ -155,9 +163,29 @@ export class CodingResponseFilterService {
         { statisticsIgnoredStatuses: ignoredStatuses }
       );
     } else if (options.manualCodingCandidatesOnly) {
-      queryBuilder.where('response.status_v1 IN (:...statuses)', {
-        statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
-      });
+      const deriveErrorManualCodingPairKeys =
+        options.deriveErrorManualCodingPairKeys || [];
+      if (deriveErrorManualCodingPairKeys.length === 0) {
+        queryBuilder.where('response.status_v1 IN (:...statuses)', {
+          statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+        });
+      } else {
+        queryBuilder.where(new Brackets(qb => {
+          qb.where('response.status_v1 IN (:...statuses)', {
+            statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+          }).orWhere(
+            `response.status_v1 = :deriveErrorStatus
+              AND ${getCodingResponseValueCandidateSql('response')}
+              AND ${getCodingVariableIdCandidateSql('response')}
+              AND CONCAT(UPPER(unit.name), CHR(31), response.variableid)
+                IN (:...deriveErrorManualCodingPairKeys)`,
+            {
+              deriveErrorStatus: DERIVE_ERROR_STATUS,
+              deriveErrorManualCodingPairKeys
+            }
+          );
+        }));
+      }
     } else if (options.statuses?.length) {
       queryBuilder.where('response.status_v1 IN (:...statuses)', {
         statuses: options.statuses

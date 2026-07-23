@@ -85,6 +85,7 @@ import {
   ManualCodingVariableReference,
   MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
 } from '../../utils/manual-coding-candidate.util';
+import { isDeriveErrorInManualCodingEnabled } from '../../utils/manual-coding-setting.util';
 import {
   applyNonCodingIssueReviewJobFilter,
   CODING_JOB_TYPE_CODING_ISSUE_REVIEW,
@@ -446,9 +447,6 @@ export interface CodingJobAggregationSettings {
   fromJobSnapshot: boolean;
 }
 
-const INCLUDE_DERIVE_ERROR_IN_MANUAL_CODING_SETTING_KEY =
-  'include-derive-error-in-manual-coding';
-
 @Injectable()
 export class CodingJobService {
   private readonly logger = new Logger(CodingJobService.name);
@@ -668,22 +666,7 @@ export class CodingJobService {
     const repository = manager ?
       manager.getRepository(Setting) :
       this.settingRepository;
-    const setting = await repository.findOne({
-      where: {
-        key: `workspace-${workspaceId}-${INCLUDE_DERIVE_ERROR_IN_MANUAL_CODING_SETTING_KEY}`
-      }
-    });
-
-    if (!setting) {
-      return false;
-    }
-
-    try {
-      const parsed = JSON.parse(setting.content);
-      return parsed.enabled === true;
-    } catch {
-      return false;
-    }
+    return isDeriveErrorInManualCodingEnabled(repository, workspaceId);
   }
 
   async assertDeriveErrorManualCodingEnabled(
