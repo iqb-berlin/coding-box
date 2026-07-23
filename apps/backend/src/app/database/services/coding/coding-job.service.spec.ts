@@ -43,6 +43,7 @@ const createQueryBuilder = (result: unknown = []) => {
     'innerJoinAndSelect',
     'where',
     'andWhere',
+    'distinct',
     'groupBy',
     'addGroupBy',
     'orderBy',

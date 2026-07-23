@@ -146,9 +146,10 @@ export class CodingAggregationPeerService {
     ).values());
 
     const peerValueQuery = createCompletedPeerQuery('Values')
-      .select('DISTINCT unit.name', 'unitName')
+      .select('unit.name', 'unitName')
       .addSelect('response.variableid', 'variableId')
       .addSelect('response.value', 'value')
+      .distinct(true)
       .andWhere(
         `EXISTS (
           SELECT 1
