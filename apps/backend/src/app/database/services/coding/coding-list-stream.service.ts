@@ -2,11 +2,13 @@ import {
   BadRequestException, Injectable, Logger, Optional
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
 import * as fs from 'fs';
 import archiver = require('archiver');
 import { PassThrough, Writable } from 'stream';
+import { Repository } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import {
   CodingResponseFilterService,
@@ -26,12 +28,15 @@ import {
   decodeGeoGebraValue
 } from './geogebra-export.util';
 import { ResponseEntity } from '../../entities/response.entity';
+import { Setting } from '../../entities/setting.entity';
 import { CodingReplayAnchorService } from './coding-replay-anchor.service';
 import {
   MissingsProfilesService,
   ResolvedMissingsProfile
 } from './missings-profiles.service';
 import { resolveV1ExportValue } from './versioned-results-missing-resolver';
+import { getDeriveErrorCodingListPairKeys } from '../../utils/manual-coding-candidate.util';
+import { isDeriveErrorInManualCodingEnabled } from '../../utils/manual-coding-setting.util';
 
 interface JsonStream {
   on(event: 'data', listener: (item: CodingItem) => void): void;
@@ -81,7 +86,10 @@ export class CodingListStreamService {
     private readonly workspaceFilesService: WorkspaceFilesService,
     @Optional() private readonly configService?: ConfigService,
     @Optional() private readonly replayAnchorService?: CodingReplayAnchorService,
-    @Optional() private readonly missingsProfilesService?: MissingsProfilesService
+    @Optional() private readonly missingsProfilesService?: MissingsProfilesService,
+    @Optional()
+    @InjectRepository(Setting)
+    private readonly settingRepository?: Repository<Setting>
   ) { }
 
   private async loadV1ExportProfile(
@@ -273,16 +281,44 @@ export class CodingListStreamService {
       trainingRequiredMap: Map<string, Set<string>> | null;
     }> {
     await checkCancellation?.();
-    const trainingRequiredMap = await (
+    const includeDeriveError = await isDeriveErrorInManualCodingEnabled(
+      this.settingRepository,
+      workspaceId
+    );
+    const [
+      trainingRequiredMap,
+      unitVariableMap,
+      manualInstructionMap,
+      derivedVariablesBySourceMap
+    ] = await Promise.all([
       trainingRequired !== undefined ?
         this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspaceId) :
-        Promise.resolve(null)
-    );
+        Promise.resolve(null),
+      includeDeriveError ?
+        this.workspaceFilesService.getUnitVariableMap(workspaceId) :
+        Promise.resolve(new Map<string, Set<string>>()),
+      includeDeriveError ?
+        this.workspaceFilesService.getManualInstructionVariableMap(workspaceId) :
+        Promise.resolve(new Map<string, Set<string>>()),
+      includeDeriveError ?
+        this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId) :
+        Promise.resolve(new Map<string, Set<string>>())
+    ]);
     await checkCancellation?.();
+    const deriveErrorManualCodingPairKeys = includeDeriveError ?
+      getDeriveErrorCodingListPairKeys(
+        unitVariableMap,
+        manualInstructionMap,
+        derivedVariablesBySourceMap
+      ) :
+      [];
 
     return {
       filterOptions: {
-        manualCodingCandidatesOnly: true
+        manualCodingCandidatesOnly: true,
+        ...(deriveErrorManualCodingPairKeys.length > 0 ?
+          { deriveErrorManualCodingPairKeys } :
+          {})
       },
       trainingRequiredMap
     };
