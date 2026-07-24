@@ -5,6 +5,12 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { CacheService } from './cache.service';
 import { CodingValidationService } from '../database/services/coding';
 import Persons from '../database/entities/persons.entity';
+import { enqueueCacheStartupWarmup } from './cache-startup-warmup.queue';
+import {
+  captureMemoryUsage,
+  formatMemoryUsage,
+  isHeapUsageHigh
+} from './memory-usage.util';
 
 @Injectable()
 export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
@@ -20,16 +26,19 @@ export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
   /**
    * Run on module initialization to pre-cache all manual coding variables.
    */
-  async onModuleInit(): Promise<void> {
-    this.logger.log('Starting manual coding variables cache warmup on application startup');
-
-    try {
-      await this.cacheAllWorkspacesIncompleteVariables();
-      this.logger.log('Completed manual coding variables cache warmup');
-    } catch (error) {
-      this.logger.error(`Error during manual coding variables cache warmup: ${error.message}`, error.stack);
-      // Don't throw error to avoid crashing application startup
-    }
+  onModuleInit(): void {
+    this.logger.log('Queued manual coding variables cache warmup on application startup');
+    enqueueCacheStartupWarmup(async () => {
+      this.logger.log('Starting manual coding variables cache warmup on application startup');
+      try {
+        await this.cacheAllWorkspacesIncompleteVariables();
+        this.logger.log('Completed manual coding variables cache warmup');
+      } catch (error) {
+        this.logger.error(`Error during manual coding variables cache warmup: ${error.message}`, error.stack);
+      }
+    }).catch(error => {
+      this.logger.error(`Unexpected startup warmup queue error: ${error.message}`, error.stack);
+    });
   }
 
   /**
@@ -64,7 +73,7 @@ export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
       }
 
       // Log initial memory usage
-      const initialMemoryUsage = this.getMemoryUsage();
+      const initialMemoryUsage = formatMemoryUsage(captureMemoryUsage());
       this.logger.log(`Initial memory usage: ${initialMemoryUsage}`);
 
       // Process workspaces sequentially to prevent memory overflow
@@ -76,20 +85,18 @@ export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
 
           // Log progress and memory usage every 10 workspaces or at memory thresholds
           if (processedCount % 10 === 0) {
-            const currentMemoryUsage = this.getMemoryUsage();
+            const memoryUsage = captureMemoryUsage();
+            const currentMemoryUsage = formatMemoryUsage(memoryUsage);
             this.logger.log(`Processed ${processedCount}/${workspaces.length} workspaces. Memory usage: ${currentMemoryUsage}`);
 
-            // If memory usage exceeds 80% of available heap, log warning
-            const memUsage = process.memoryUsage();
-            const heapUsedPercent = (memUsage.heapUsed / memUsage.heapTotal) * 100;
-            if (heapUsedPercent > 80) {
-              this.logger.warn(`High memory usage detected: ${heapUsedPercent.toFixed(1)}% of heap used (${(memUsage.heapUsed / 1024 / 1024).toFixed(1)}MB/${(memUsage.heapTotal / 1024 / 1024).toFixed(1)}MB)`);
+            if (isHeapUsageHigh(memoryUsage)) {
+              this.logger.warn(`High memory usage detected: ${currentMemoryUsage}`);
             }
 
             // Trigger garbage collection if available
             if (global.gc) {
               global.gc();
-              const afterGcMemory = this.getMemoryUsage();
+              const afterGcMemory = formatMemoryUsage(captureMemoryUsage());
               this.logger.log(`Memory usage after GC: ${afterGcMemory}`);
             }
           }
@@ -99,7 +106,7 @@ export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
         }
       }
 
-      const finalMemoryUsage = this.getMemoryUsage();
+      const finalMemoryUsage = formatMemoryUsage(captureMemoryUsage());
       const duration = (Date.now() - startTime) / 1000;
       this.logger.log(`Cached manual coding variables for all workspaces in ${duration.toFixed(2)} seconds. Final memory usage: ${finalMemoryUsage}`);
     } catch (error) {
@@ -121,14 +128,14 @@ export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
     } catch (error) {
       // Handle specific memory-related errors
       if (error.message.includes('heap limit') || error.message.includes('out of memory') || error.code === 'ERR_OUT_OF_MEMORY') {
-        this.logger.error(`Memory limit exceeded while caching workspace ${workspaceId}. Memory usage: ${this.getMemoryUsage()}. Error: ${error.message}`, error.stack);
+        this.logger.error(`Memory limit exceeded while caching workspace ${workspaceId}. Memory usage: ${formatMemoryUsage(captureMemoryUsage())}. Error: ${error.message}`, error.stack);
 
         // Trigger GC if available and retry once
         if (global.gc) {
           try {
             global.gc();
             this.logger.log(`GC triggered after memory error. Retrying workspace ${workspaceId}...`);
-            const afterGcMemory = this.getMemoryUsage();
+            const afterGcMemory = formatMemoryUsage(captureMemoryUsage());
             this.logger.log(`Memory usage after GC: ${afterGcMemory}`);
 
             // Retry once with reduced scope if possible
@@ -158,18 +165,5 @@ export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
       .select('DISTINCT person.workspace_id', 'workspace_id')
       .where('person.consider = :consider', { consider: true })
       .getRawMany();
-  }
-
-  /**
-   * Get formatted memory usage string
-   */
-  private getMemoryUsage(): string {
-    const memUsage = process.memoryUsage();
-    const heapUsedMB = (memUsage.heapUsed / 1024 / 1024).toFixed(1);
-    const heapTotalMB = (memUsage.heapTotal / 1024 / 1024).toFixed(1);
-    const heapPercent = ((memUsage.heapUsed / memUsage.heapTotal) * 100).toFixed(1);
-    const rssMB = (memUsage.rss / 1024 / 1024).toFixed(1);
-
-    return `Heap: ${heapUsedMB}MB/${heapTotalMB}MB (${heapPercent}%), RSS: ${rssMB}MB`;
   }
 }

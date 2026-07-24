@@ -22,6 +22,8 @@ describe('ReplayStatisticsService', () => {
       await service.storeReplayStatistics({
         workspaceId: 1,
         unitId: 'UNIT-1',
+        replayAttemptId: 'attempt-1',
+        requestId: 'request-1',
         durationMilliseconds: 1234,
         clientTimings: {
           routeToVisibleMs: 100,
@@ -40,6 +42,8 @@ describe('ReplayStatisticsService', () => {
       expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({
         workspace_id: 1,
         unit_id: 'UNIT-1',
+        replay_attempt_id: 'attempt-1',
+        request_id: 'request-1',
         replay_source: 'internal',
         duration_milliseconds: 1234,
         client_timings: {
