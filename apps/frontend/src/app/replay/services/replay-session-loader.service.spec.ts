@@ -22,7 +22,8 @@ describe('ReplaySessionLoaderService', () => {
     workspaceId: 47,
     codingJobId: 77,
     authToken: 'replay-token',
-    onlyOpen: true
+    onlyOpen: true,
+    replayAttemptId: 'attempt-1'
   };
 
   const session: ReplayCodingSessionDto = {
@@ -77,7 +78,7 @@ describe('ReplaySessionLoaderService', () => {
     const result = await service.load(request);
 
     expect(codingJobBackendService.getReplayCodingSession)
-      .toHaveBeenCalledWith(47, 77, 'replay-token', true);
+      .toHaveBeenCalledWith(47, 77, 'replay-token', true, 'attempt-1');
     expect(codingJobBackendService.getCodingJobUnits).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       session,
@@ -120,7 +121,7 @@ describe('ReplaySessionLoaderService', () => {
       const result = await service.load(request);
 
       expect(codingJobBackendService.getCodingJobUnits)
-        .toHaveBeenCalledWith(47, 77, 'replay-token', true);
+        .toHaveBeenCalledWith(47, 77, 'replay-token', true, 'attempt-1');
       expect(result.source).toBe('legacy');
       expect(result.session).toBeNull();
       expect(result.unitsData?.units).toHaveLength(1);

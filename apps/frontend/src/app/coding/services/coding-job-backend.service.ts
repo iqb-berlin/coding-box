@@ -30,6 +30,7 @@ import {
 } from '../models/coding-job.model';
 import type { BundleContext } from '../../replay/services/units-replay.service';
 import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
+import { withReplayAttemptHeader } from '../../replay/utils/replay-request-correlation';
 
 export interface CodingJobUnitDto {
   responseId: number;
@@ -852,7 +853,8 @@ export class CodingJobBackendService {
     workspaceId: number,
     codingJobId: number,
     authToken?: string,
-    onlyOpen: boolean = false
+    onlyOpen: boolean = false,
+    replayAttemptId?: string
   ): Observable<CodingJobUnitDto[]> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/units`;
     let params = new HttpParams();
@@ -860,7 +862,10 @@ export class CodingJobBackendService {
       params = params.set('onlyOpen', 'true');
     }
     return this.http.get<CodingJobUnitDto[]>(url, {
-      headers: this.getAuthHeader(authToken),
+      headers: withReplayAttemptHeader(
+        this.getAuthHeader(authToken),
+        replayAttemptId
+      ),
       params
     });
   }
@@ -869,12 +874,16 @@ export class CodingJobBackendService {
     workspaceId: number,
     codingJobId: number,
     authToken?: string,
-    onlyOpen: boolean = false
+    onlyOpen: boolean = false,
+    replayAttemptId?: string
   ): Observable<ReplayCodingSessionDto> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/replay-session`;
     const params = new HttpParams().set('onlyOpen', String(onlyOpen));
     return this.http.get<ReplayCodingSessionDto>(url, {
-      headers: this.getAuthHeader(authToken),
+      headers: withReplayAttemptHeader(
+        this.getAuthHeader(authToken),
+        replayAttemptId
+      ),
       params,
       context: suppressGlobalHttpErrorContext()
     });

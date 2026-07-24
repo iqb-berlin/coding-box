@@ -26,6 +26,7 @@ export interface ReplaySessionLoadRequest {
   codingJobId: number;
   authToken?: string;
   onlyOpen: boolean;
+  replayAttemptId?: string;
 }
 
 export type ReplaySessionLoadSource = 'session' | 'legacy';
@@ -106,7 +107,8 @@ export class ReplaySessionLoaderService {
           request.workspaceId,
           request.codingJobId,
           request.authToken,
-          request.onlyOpen
+          request.onlyOpen,
+          request.replayAttemptId
         )
       );
       const responseReceivedAt = performance.now();
@@ -138,7 +140,8 @@ export class ReplaySessionLoaderService {
             request.workspaceId,
             request.codingJobId,
             request.authToken,
-            request.onlyOpen
+            request.onlyOpen,
+            request.replayAttemptId
           )
         );
 

@@ -67,6 +67,13 @@ class ReplayBackendServiceMock {
     }
   }));
 
+  getReplayResponse = jest.fn().mockReturnValue(of({
+    response: { responses: [{ id: '1', content: 'response data' }] },
+    serverTimings: {
+      totalMs: 5
+    }
+  }));
+
   storeReplayStatistics = jest.fn().mockReturnValue(of({ success: true }));
 }
 
@@ -498,7 +505,8 @@ describe('ReplayComponent', () => {
           responseTotalMs: 5
         }
       }),
-      'valid-token'
+      'valid-token',
+      expect.any(String)
     );
   });
 
@@ -529,7 +537,8 @@ describe('ReplayComponent', () => {
       expect.objectContaining({
         replayUrl: expect.stringContaining('mode=booklet-view')
       }),
-      'valid-token'
+      'valid-token',
+      expect.any(String)
     );
     const replayUrl = replayBackendService.storeReplayStatistics.mock.calls[0][1].replayUrl as string;
     expect(replayUrl).not.toContain('auth=');
@@ -791,6 +800,87 @@ describe('ReplayComponent', () => {
     expect(component.codingService.currentVariableId).toBe('VAR_2');
   });
 
+  it('should navigate within the loaded unit without requesting its payload again', async () => {
+    replayBackendService.getReplayPayload.mockClear();
+    const navigateToPage = jest.fn().mockReturnValue(true);
+    component.unitPlayerComponent = {
+      navigateToPage
+    } as unknown as UnitPlayerComponent;
+
+    await component.handleUnitChanged({
+      id: 1,
+      name: 'unit-123',
+      alias: null,
+      bookletId: 0,
+      testPerson: 'valid@test@person',
+      variableId: 'VAR_2',
+      variableAnchor: 'ANCHOR_2',
+      variablePage: '2'
+    });
+
+    expect(navigateToPage).toHaveBeenCalledWith('2');
+    expect(replayBackendService.getReplayPayload).not.toHaveBeenCalled();
+    expect(replayBackendService.getReplayResponse).not.toHaveBeenCalled();
+  });
+
+  it('should load only responses when the test person changes within the same unit', async () => {
+    replayBackendService.getReplayPayload.mockClear();
+    replayBackendService.getReplayResponse.mockClear().mockReturnValue(of({
+      response: {
+        responses: [{ id: 'chunk', content: 'new person response' }]
+      },
+      serverTimings: {
+        totalMs: 7
+      }
+    }));
+    const replayComponent = component as unknown as { reloadKey: number };
+    const initialReloadKey = replayComponent.reloadKey;
+
+    await component.handleUnitChanged({
+      id: 2,
+      name: 'unit-123',
+      alias: null,
+      bookletId: 0,
+      testPerson: 'valid@test@other',
+      variableId: 'VAR_2',
+      variableAnchor: 'ANCHOR_2',
+      variablePage: '2'
+    });
+
+    expect(replayBackendService.getReplayResponse).toHaveBeenCalledWith(
+      1,
+      'valid@test@other',
+      'unit-123',
+      'valid-token',
+      expect.any(String)
+    );
+    expect(replayBackendService.getReplayPayload).not.toHaveBeenCalled();
+    expect(replayComponent.reloadKey).toBe(initialReloadKey);
+    expect(component.responses).toEqual({
+      responses: [{ id: 'chunk', content: 'new person response' }]
+    });
+  });
+
+  it('should fall back to a full payload when the loaded player is not ready to navigate', async () => {
+    replayBackendService.getReplayPayload.mockClear();
+    component.unitPlayerComponent = {
+      navigateToPage: jest.fn().mockReturnValue(false)
+    } as unknown as UnitPlayerComponent;
+
+    await component.handleUnitChanged({
+      id: 1,
+      name: 'unit-123',
+      alias: null,
+      bookletId: 0,
+      testPerson: 'valid@test@person',
+      variableId: 'VAR_2',
+      variableAnchor: 'ANCHOR_2',
+      variablePage: '2'
+    });
+
+    expect(replayBackendService.getReplayPayload).toHaveBeenCalledTimes(1);
+  });
+
   it('should not change coding units when the code selector blocks leaving the current case', async () => {
     const canLeaveCurrentUnit = jest.fn().mockReturnValue(false);
     const privateComponent = component as unknown as {
@@ -1029,8 +1119,9 @@ describe('ReplayComponent', () => {
 
     expect(
       codingJobBackendServiceMock.getReplayCodingSession
-    ).toHaveBeenCalledWith(47, 77, 'valid-token', true);
-    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', true);
+    ).toHaveBeenCalledWith(47, 77, 'valid-token', true, expect.any(String));
+    expect(codingJobBackendServiceMock.getCodingJobUnits)
+      .toHaveBeenCalledWith(47, 77, 'valid-token', true, expect.any(String));
   });
 
   it('should initialize coding replay from one session request', async () => {
@@ -1100,7 +1191,7 @@ describe('ReplayComponent', () => {
 
     expect(
       codingJobBackendServiceMock.getReplayCodingSession
-    ).toHaveBeenCalledWith(47, 77, 'valid-token', true);
+    ).toHaveBeenCalledWith(47, 77, 'valid-token', true, expect.any(String));
     expect(codingJobBackendServiceMock.getCodingJobUnits).not.toHaveBeenCalled();
     expect(codingJobBackendServiceMock.getCodingProgress).not.toHaveBeenCalled();
     expect(codingJobBackendServiceMock.getCodingNotes).not.toHaveBeenCalled();
@@ -1449,7 +1540,7 @@ describe('ReplayComponent', () => {
     ).toHaveBeenCalledTimes(1);
     expect(
       codingJobBackendServiceMock.getReplayCodingSession
-    ).toHaveBeenCalledWith(47, 77, 'fresh-token', false);
+    ).toHaveBeenCalledWith(47, 77, 'fresh-token', false, expect.any(String));
     expect(component.unitId).toBe('unit-2');
     expect(component.page).toBe('1');
     expect(component.codingService.currentVariableId).toBe('VAR2');
@@ -1574,7 +1665,7 @@ describe('ReplayComponent', () => {
 
     expect(
       codingJobBackendServiceMock.getReplayCodingSession
-    ).toHaveBeenCalledWith(47, 77, 'coding-token', false);
+    ).toHaveBeenCalledWith(47, 77, 'coding-token', false, expect.any(String));
     expect(component.unitId).toBe('unit-2');
     expect(component.codingService.currentVariableId).toBe('VAR2');
   });
@@ -1836,14 +1927,16 @@ describe('ReplayComponent', () => {
       'valid@test@person',
       'unit-new',
       'valid-token',
-      true
+      true,
+      expect.any(String)
     );
     expect(replayBackendService.getReplayPayload).not.toHaveBeenCalledWith(
       47,
       'valid@test@person',
       'unit-old',
       'valid-token',
-      true
+      true,
+      expect.any(String)
     );
     expect(component.unitId).toBe('unit-new');
     expect(component.codingService.currentVariableId).toBe('NEW_VAR');
@@ -1908,7 +2001,8 @@ describe('ReplayComponent', () => {
       1,
       ['replay:read', 'replay-statistics:write', 'coding-job:operate']
     );
-    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'fresh-workspace-token', false);
+    expect(codingJobBackendServiceMock.getCodingJobUnits)
+      .toHaveBeenCalledWith(47, 77, 'fresh-workspace-token', false, expect.any(String));
     expect(window.location.href).toContain('workspaceId=47');
     expect(window.location.href).not.toContain('auth=');
   });
@@ -1945,7 +2039,8 @@ describe('ReplayComponent', () => {
     });
 
     expect(appService.createOwnToken).not.toHaveBeenCalled();
-    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'invalid-token', false);
+    expect(codingJobBackendServiceMock.getCodingJobUnits)
+      .toHaveBeenCalledWith(47, 77, 'invalid-token', false, expect.any(String));
     expect(window.location.href).toContain('auth=invalid-token');
   });
 
@@ -1990,7 +2085,8 @@ describe('ReplayComponent', () => {
       47,
       77,
       expiredTokenFromOtherWorkspace,
-      false
+      false,
+      expect.any(String)
     );
     expect(window.location.href).toContain(`auth=${expiredTokenFromOtherWorkspace}`);
   });
@@ -2035,7 +2131,8 @@ describe('ReplayComponent', () => {
       47,
       77,
       expiredTokenWithoutWorkspace,
-      false
+      false,
+      expect.any(String)
     );
     expect(window.location.href).toContain(`auth=${expiredTokenWithoutWorkspace}`);
   });
@@ -2435,7 +2532,8 @@ describe('ReplayComponent', () => {
     expect(component.isReviewMode).toBe(true);
     expect(component.codingService.isReviewMode).toBe(true);
     expect(component.isCodingReadOnly()).toBe(true);
-    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', false);
+    expect(codingJobBackendServiceMock.getCodingJobUnits)
+      .toHaveBeenCalledWith(47, 77, 'valid-token', false, expect.any(String));
     expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
     expect(codingJobBackendServiceMock.resumeCodingJob).not.toHaveBeenCalled();
   });
@@ -2485,7 +2583,8 @@ describe('ReplayComponent', () => {
     expect(component.codingService.isReviewMode).toBe(false);
     expect(component.codingService.isCompletedJobReview).toBe(false);
     expect(component.isCodingReadOnly()).toBe(false);
-    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', false);
+    expect(codingJobBackendServiceMock.getCodingJobUnits)
+      .toHaveBeenCalledWith(47, 77, 'valid-token', false, expect.any(String));
     expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
     expect(codingJobBackendServiceMock.resumeCodingJob).not.toHaveBeenCalled();
   });

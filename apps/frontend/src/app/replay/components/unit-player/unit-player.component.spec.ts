@@ -190,4 +190,23 @@ describe('UnitPlayerComponent', () => {
 
     expect(emitSpy).toHaveBeenCalledWith('notInList');
   });
+
+  it('should navigate directly without restarting the player', () => {
+    const postMessage = jest.fn();
+    component.postMessageTarget = { postMessage } as unknown as Window;
+    component.playerApiVersion = 3;
+
+    expect(component.navigateToPage('page-2')).toBe(true);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'vopPageNavigationCommand',
+      sessionId: '',
+      target: 'page-2'
+    }, '*');
+  });
+
+  it('should not navigate before the player is ready', () => {
+    component.postMessageTarget = undefined;
+
+    expect(component.navigateToPage('page-2')).toBe(false);
+  });
 });
