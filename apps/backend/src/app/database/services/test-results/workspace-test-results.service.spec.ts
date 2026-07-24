@@ -2136,7 +2136,7 @@ describe('WorkspaceTestResultsService', () => {
       expect(unitRepository.createQueryBuilder).not.toHaveBeenCalled();
     });
 
-    it('should look up replay units by alias first', async () => {
+    it('should look up replay units by alias or name in one query and prefer aliases', async () => {
       const unitQb = mockQueryBuilder();
       (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
       unitQb.getRawOne.mockResolvedValue({ unitId: 77 });
@@ -2152,9 +2152,17 @@ describe('WorkspaceTestResultsService', () => {
       );
 
       expect(result).toEqual({ responses: [] });
-      expect(unitQb.andWhere).toHaveBeenCalledWith('unit.alias = :unitId', {
-        unitId: 'unit-original-id'
-      });
+      expect(unitQb.andWhere).toHaveBeenCalledWith(
+        '(unit.alias = :unitId OR unit.name = :unitId)',
+        {
+          unitId: 'unit-original-id'
+        }
+      );
+      expect(unitQb.orderBy).toHaveBeenCalledWith(
+        'CASE WHEN unit.alias = :unitId THEN 0 ELSE 1 END',
+        'ASC'
+      );
+      expect(unitQb.limit).toHaveBeenCalledWith(1);
       expect(unitRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
     });
 
@@ -2184,14 +2192,10 @@ describe('WorkspaceTestResultsService', () => {
       });
     });
 
-    it('should fall back to visible unit name when alias lookup misses', async () => {
-      const aliasQb = mockQueryBuilder();
-      const nameQb = mockQueryBuilder();
-      (unitRepository.createQueryBuilder as jest.Mock)
-        .mockReturnValueOnce(aliasQb)
-        .mockReturnValueOnce(nameQb);
-      aliasQb.getRawOne.mockResolvedValue(null);
-      nameQb.getRawOne.mockResolvedValue({ unitId: 77 });
+    it('should accept a visible unit name when no alias matches', async () => {
+      const unitQb = mockQueryBuilder();
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      unitQb.getRawOne.mockResolvedValue({ unitId: 77 });
 
       const responseQb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseQb);
@@ -2204,12 +2208,13 @@ describe('WorkspaceTestResultsService', () => {
       );
 
       expect(result).toEqual({ responses: [] });
-      expect(aliasQb.andWhere).toHaveBeenCalledWith('unit.alias = :unitId', {
-        unitId: 'unit-visible-id'
-      });
-      expect(nameQb.andWhere).toHaveBeenCalledWith('unit.name = :unitId', {
-        unitId: 'unit-visible-id'
-      });
+      expect(unitQb.andWhere).toHaveBeenCalledWith(
+        '(unit.alias = :unitId OR unit.name = :unitId)',
+        {
+          unitId: 'unit-visible-id'
+        }
+      );
+      expect(unitRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
     });
   });
 

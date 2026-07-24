@@ -4424,15 +4424,11 @@ export class WorkspaceTestResultsService {
       return queryBuilder;
     };
 
-    let unitRow = await createUnitLookupQuery()
-      .andWhere('unit.alias = :unitId', { unitId })
+    const unitRow = await createUnitLookupQuery()
+      .andWhere('(unit.alias = :unitId OR unit.name = :unitId)', { unitId })
+      .orderBy('CASE WHEN unit.alias = :unitId THEN 0 ELSE 1 END', 'ASC')
+      .limit(1)
       .getRawOne<{ unitId: number }>();
-
-    if (!unitRow) {
-      unitRow = await createUnitLookupQuery()
-        .andWhere('unit.name = :unitId', { unitId })
-        .getRawOne<{ unitId: number }>();
-    }
 
     const unitDbId = unitRow?.unitId;
 
