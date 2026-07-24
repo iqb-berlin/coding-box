@@ -67,6 +67,8 @@ describe('ReplayBackendService', () => {
         durationMilliseconds: 1000,
         clientTimings: {
           codingSessionMs: null,
+          routeToCodingSessionRequestMs: null,
+          codingSessionResponseToPayloadRequestMs: null,
           payloadMs: 100,
           routeToVisibleMs: null,
           loadToVisibleMs: 200,
