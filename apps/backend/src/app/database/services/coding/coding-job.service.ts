@@ -98,6 +98,13 @@ import {
   DistributionCoderLoad
 } from './coding-job-distribution-planner';
 import { CodingAggregationPeerService } from './coding-aggregation-peer.service';
+import {
+  ReplayCodingBundleContextDto,
+  ReplayCodingBundleVariableStatus,
+  ReplayCodingProgressEntryDto,
+  ReplayCodingSessionDto,
+  ReplayCodingSessionUnitDto
+} from '../../../../../../../api-dto/coding/replay-coding-session.dto';
 
 function isSafeKey(key: string): boolean {
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
@@ -305,31 +312,12 @@ type DistributionCreatedJob = {
   caseCount: number;
 };
 
-type CodingJobBundleVariableStatus =
-  | 'manual-open'
-  | 'manual-coded'
-  | 'auto-coded'
-  | 'not-coded'
-  | 'not-available';
-
-type CodingJobBundleVariableContext = {
-  responseId: number | null;
-  unitName: string;
-  variableId: string;
-  variableAnchor: string;
-  variablePage: string;
-  status: CodingJobBundleVariableStatus;
-  code: number | null;
-  score: number | null;
-  source: 'manual' | 'auto' | 'none';
-};
-
-type CodingJobBundleContext = {
-  bundleId: number;
-  bundleName: string;
-  caseKey: string;
-  caseOrderingMode: 'continuous' | 'alternating';
-  variables: CodingJobBundleVariableContext[];
+type CodingJobBundleVariableStatus = ReplayCodingBundleVariableStatus;
+type CodingJobBundleContext = ReplayCodingBundleContextDto;
+type CodingJobNavigationUnit = ReplayCodingSessionUnitDto & {
+  notes: string | null;
+  isDoubleCoded: boolean;
+  otherCoders: string[];
 };
 
 type DistributedCodingJobsResult = {
@@ -3925,6 +3913,7 @@ export class CodingJobService {
       select: ['file_id', 'data']
     });
     const unitFileById = new Map(unitFiles.map(file => [file.file_id, file]));
+    const codingSchemeRefsByUnitFileId = new Map<string, string[]>();
     const codingSchemeRefsByUnit = new Map<CodingJobUnit, string[]>();
     const codingSchemeRefs = new Set<string>();
 
@@ -3937,12 +3926,18 @@ export class CodingJobService {
         return;
       }
 
-      const codingSchemeRef = this.extractCodingSchemeRef(unitFile);
-      if (!codingSchemeRef) {
-        return;
+      let refs = codingSchemeRefsByUnitFileId.get(unitFile.file_id);
+      if (!refs) {
+        const codingSchemeRef = this.extractCodingSchemeRef(unitFile);
+        refs = codingSchemeRef ?
+          this.getCodingSchemeFileIdCandidates(codingSchemeRef) :
+          [];
+        codingSchemeRefsByUnitFileId.set(unitFile.file_id, refs);
       }
 
-      const refs = this.getCodingSchemeFileIdCandidates(codingSchemeRef);
+      if (refs.length === 0) {
+        return;
+      }
       codingSchemeRefsByUnit.set(unit, refs);
       refs.forEach(ref => codingSchemeRefs.add(ref));
     });
@@ -4185,20 +4180,22 @@ export class CodingJobService {
       codingJob
     );
 
-    if (codingJobUnits.length === 0) {
-      return {};
-    }
+    return this.buildCodingProgress(codingJobUnits, codingJob.workspace_id);
+  }
 
+  private async buildCodingProgress(
+    codingJobUnits: CodingJobUnit[],
+    workspaceId: number
+  ): Promise<Record<string, ReplayCodingProgressEntryDto>> {
     const codedUnits = codingJobUnits.filter(
       unit => unit.code !== null && unit.code >= 0
     );
     const codingSchemesByUnit = await this.getCodingSchemesForUnits(
       codedUnits,
-      codingJob.workspace_id
+      workspaceId
     );
 
-    const progressMap: Record<string, SaveCodingProgressDto['selectedCode']> =
-      {};
+    const progressMap: Record<string, ReplayCodingProgressEntryDto> = {};
 
     const setProgressEntry = (unit: CodingJobUnit, compositeKey: string) => {
       const progressCode = unit.code ?? unit.coding_issue_option;
@@ -4279,10 +4276,12 @@ export class CodingJobService {
       codingJob
     );
 
-    if (codingJobUnits.length === 0) {
-      return {};
-    }
+    return this.buildCodingNotes(codingJobUnits);
+  }
 
+  private buildCodingNotes(
+    codingJobUnits: CodingJobUnit[]
+  ): Record<string, string> {
     const notesMap: Record<string, string> = {};
 
     codingJobUnits.forEach(unit => {
@@ -4298,33 +4297,7 @@ export class CodingJobService {
   async getCodingJobUnits(
     codingJobId: number,
     onlyOpen: boolean = false
-  ): Promise<
-    {
-      responseId: number;
-      unitName: string;
-      unitAlias: string | null;
-      variableId: string;
-      variableAnchor: string;
-      variablePage: string;
-      bookletName: string;
-      personLogin: string;
-      personCode: string;
-      personGroup: string;
-      notes: string | null;
-      variableBundleId: number | null;
-      bundleContext: CodingJobBundleContext | null;
-      isDoubleCoded: boolean;
-      otherCoders: string[];
-    }[]
-    > {
-    const whereClause: { coding_job_id: number; is_open?: boolean } = {
-      coding_job_id: codingJobId
-    };
-
-    if (onlyOpen) {
-      whereClause.is_open = true;
-    }
-
+  ): Promise<CodingJobNavigationUnit[]> {
     const codingJob = await this.codingJobRepository.findOne({
       where: { id: codingJobId },
       relations: ['codingJobCoders', 'codingJobCoders.user']
@@ -4333,17 +4306,10 @@ export class CodingJobService {
       return [];
     }
 
-    const globalMode = codingJob.case_ordering_mode || 'continuous';
-
     const bundles = await this.codingJobVariableBundleRepository.find({
       where: { coding_job_id: codingJobId },
       order: { id: 'ASC' }
     });
-
-    const bundleModes = new Map<number, string>();
-    for (const b of bundles) {
-      bundleModes.set(b.variable_bundle_id, b.case_ordering_mode || globalMode);
-    }
 
     const codingJobUnitSelect: (keyof CodingJobUnit)[] = [
       'response_id',
@@ -4363,7 +4329,7 @@ export class CodingJobService {
     ];
 
     const codingJobUnits = await this.codingJobUnitRepository.find({
-      where: whereClause,
+      where: { coding_job_id: codingJobId },
       select: codingJobUnitSelect
     });
     const exclusions =
@@ -4377,18 +4343,132 @@ export class CodingJobService {
         unit.unit_name
       )
     );
-    const visibleCodingJobUnitsForContext = onlyOpen ?
-      (await this.codingJobUnitRepository.find({
+
+    return this.buildCodingJobNavigationUnits(
+      codingJob,
+      bundles,
+      visibleCodingJobUnits,
+      onlyOpen,
+      true
+    );
+  }
+
+  async getCodingJobReplaySession(
+    codingJobId: number,
+    workspaceId: number,
+    onlyOpen: boolean = false
+  ): Promise<ReplayCodingSessionDto> {
+    const startedAt = Date.now();
+    const codingJob = await this.codingJobRepository.findOne({
+      where: { id: codingJobId, workspace_id: workspaceId }
+    });
+    const jobLoadedAt = Date.now();
+
+    if (!codingJob) {
+      throw new NotFoundException(
+        `Coding job with ID ${codingJobId} not found`
+      );
+    }
+
+    const [bundles, codingJobUnits, exclusions] = await Promise.all([
+      this.codingJobVariableBundleRepository.find({
         where: { coding_job_id: codingJobId },
-        select: codingJobUnitSelect
-      })).filter(
-        unit => !isExcludedByResolvedExclusions(
-          exclusions,
-          unit.booklet_name,
-          unit.unit_name
-        )
-      ) :
-      visibleCodingJobUnits;
+        order: { id: 'ASC' }
+      }),
+      this.codingJobUnitRepository.find({
+        where: { coding_job_id: codingJobId }
+      }),
+      this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId)
+    ]);
+    const contextLoadedAt = Date.now();
+    const visibleCodingJobUnits = codingJobUnits.filter(
+      unit => !isExcludedByResolvedExclusions(
+        exclusions,
+        unit.booklet_name,
+        unit.unit_name
+      )
+    );
+    const effectiveCodingJobUnits =
+      await this.applyCodingIssueReviewOverlays(
+        codingJob,
+        visibleCodingJobUnits
+      );
+    const reviewOverlaysAppliedAt = Date.now();
+
+    const navigationUnits = await this.buildCodingJobNavigationUnits(
+      codingJob,
+      bundles,
+      visibleCodingJobUnits,
+      onlyOpen,
+      false
+    );
+    const units: ReplayCodingSessionUnitDto[] = navigationUnits.map(unit => ({
+      responseId: unit.responseId,
+      unitName: unit.unitName,
+      unitAlias: unit.unitAlias,
+      variableId: unit.variableId,
+      variableAnchor: unit.variableAnchor,
+      variablePage: unit.variablePage,
+      bookletName: unit.bookletName,
+      personLogin: unit.personLogin,
+      personCode: unit.personCode,
+      personGroup: unit.personGroup,
+      variableBundleId: unit.variableBundleId,
+      bundleContext: unit.bundleContext
+    }));
+    const unitsBuiltAt = Date.now();
+    const progress = await this.buildCodingProgress(
+      effectiveCodingJobUnits,
+      workspaceId
+    );
+    const progressBuiltAt = Date.now();
+    const notes = this.buildCodingNotes(effectiveCodingJobUnits);
+    const notesBuiltAt = Date.now();
+    const job = {
+      status: codingJob.status,
+      comment: codingJob.comment ?? null,
+      showScore: codingJob.showScore,
+      allowComments: codingJob.allowComments,
+      suppressGeneralInstructions: codingJob.suppressGeneralInstructions
+    };
+    const responsePreparedAt = Date.now();
+
+    return {
+      units,
+      progress,
+      notes,
+      job,
+      serverTimings: {
+        loadJobMs: jobLoadedAt - startedAt,
+        loadContextMs: contextLoadedAt - jobLoadedAt,
+        reviewOverlaysMs: reviewOverlaysAppliedAt - contextLoadedAt,
+        buildUnitsMs: unitsBuiltAt - reviewOverlaysAppliedAt,
+        buildProgressMs: progressBuiltAt - unitsBuiltAt,
+        buildNotesMs: notesBuiltAt - progressBuiltAt,
+        finalizeResponseMs: responsePreparedAt - notesBuiltAt,
+        totalMs: responsePreparedAt - startedAt
+      }
+    };
+  }
+
+  private async buildCodingJobNavigationUnits(
+    codingJob: CodingJob,
+    bundles: CodingJobVariableBundle[],
+    visibleCodingJobUnitsForContext: CodingJobUnit[],
+    onlyOpen: boolean,
+    includePeerCoders: boolean
+  ): Promise<CodingJobNavigationUnit[]> {
+    const globalMode = codingJob.case_ordering_mode || 'continuous';
+    const bundleModes = new Map<number, string>();
+    for (const bundle of bundles) {
+      bundleModes.set(
+        bundle.variable_bundle_id,
+        bundle.case_ordering_mode || globalMode
+      );
+    }
+    const visibleCodingJobUnits = onlyOpen ?
+      visibleCodingJobUnitsForContext.filter(unit => unit.is_open) :
+      visibleCodingJobUnitsForContext;
 
     // Detect double coding and other coders in the same logical coding scope.
     const responseIds = visibleCodingJobUnits.map(unit => unit.response_id);
@@ -4397,11 +4477,11 @@ export class CodingJobService {
       (codingJob.codingJobCoders || []).map(cjc => cjc.user_id)
     );
 
-    if (responseIds.length > 0) {
+    if (includePeerCoders && responseIds.length > 0) {
       const otherUnits = await this.codingJobUnitRepository.find({
         where: {
           response_id: In(responseIds),
-          coding_job_id: Not(codingJobId)
+          coding_job_id: Not(codingJob.id)
         },
         relations: [
           'coding_job',

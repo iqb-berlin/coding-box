@@ -2,7 +2,7 @@
 import { ActivatedRoute } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import {
-  BehaviorSubject, finalize, of, Subject
+  BehaviorSubject, finalize, of, Subject, throwError
 } from 'rxjs';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
@@ -25,6 +25,11 @@ import { utf8ToBase64 } from '../../../shared/utils/common-utils';
 import { CodingScheme } from '../../../models/coding-interfaces';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
+import {
+  CODING_JOB_WORKSPACE_TOKEN_SCOPES,
+  REPLAY_WORKSPACE_TOKEN_SCOPES
+} from '../../../core/services/auth-session.config';
+import type { ReplayCodingSessionDto } from '../../../../../../../api-dto/coding/replay-coding-session.dto';
 
 function createUnsignedJwt(payload: Record<string, unknown>): string {
   const encode = (value: Record<string, unknown>) => btoa(JSON.stringify(value))
@@ -118,12 +123,13 @@ let routeParams: {
   page: 'page-1', testPerson: 'valid@test@person', unitId: 'unit-123', anchor: undefined
 };
 let routeQueryParams: Record<string, string> = { auth: 'valid-token' };
+let routeParamsSubject: Subject<typeof routeParams> | null = null;
 
 // Konfiguration der Aktivierten Route, inklusive Parameter und Query Params
 const fakeActivatedRoute = {
   snapshot: { data: {}, url: [{ path: '' }] },
   get params() {
-    return of(routeParams);
+    return routeParamsSubject?.asObservable() ?? of(routeParams);
   },
   get queryParams() {
     return of(routeQueryParams);
@@ -137,6 +143,7 @@ describe('ReplayComponent', () => {
   let replayBackendService: ReplayBackendServiceMock;
   let codingJobBackendServiceMock: {
     getCodingJobUnits: jest.Mock;
+    getReplayCodingSession: jest.Mock;
     updateCodingJob: jest.Mock;
     pauseCodingJob: jest.Mock;
     resumeCodingJob: jest.Mock;
@@ -152,6 +159,7 @@ describe('ReplayComponent', () => {
 
   beforeEach(async () => {
     sessionStorage.clear();
+    routeParamsSubject = null;
     routeParams = {
       page: 'page-1', testPerson: 'valid@test@person', unitId: 'unit-123', anchor: undefined
     };
@@ -168,6 +176,9 @@ describe('ReplayComponent', () => {
 
     codingJobBackendServiceMock = {
       getCodingJobUnits: jest.fn().mockReturnValue(of([])),
+      getReplayCodingSession: jest.fn().mockReturnValue(throwError(() => (
+        new HttpErrorResponse({ status: 404 })
+      ))),
       updateCodingJob: jest.fn().mockReturnValue(of({})),
       pauseCodingJob: jest.fn().mockReturnValue(of({})),
       resumeCodingJob: jest.fn().mockReturnValue(of({})),
@@ -206,6 +217,7 @@ describe('ReplayComponent', () => {
   });
 
   afterEach(() => {
+    routeParamsSubject = null;
     jest.useRealTimers();
     jest.restoreAllMocks();
     sessionStorage.clear();
@@ -386,6 +398,8 @@ describe('ReplayComponent', () => {
     const privateComponent = component as unknown as {
       routeStartTime: number;
       loadStartTime: number;
+      codingSessionRequestStartTime: number;
+      codingSessionResponseTime: number;
       payloadRequestStartTime: number;
       payloadResponseTime: number;
       playerReadyTime: number;
@@ -394,11 +408,16 @@ describe('ReplayComponent', () => {
 
     privateComponent.routeStartTime = 100;
     privateComponent.loadStartTime = 300;
+    privateComponent.codingSessionRequestStartTime = 150;
+    privateComponent.codingSessionResponseTime = 250;
     privateComponent.payloadRequestStartTime = 300;
     privateComponent.payloadResponseTime = 500;
     privateComponent.playerReadyTime = 650;
 
     expect(privateComponent.getClientTimings(900)).toEqual({
+      codingSessionMs: 100,
+      routeToCodingSessionRequestMs: 50,
+      codingSessionResponseToPayloadRequestMs: 50,
       routeToVisibleMs: 800,
       loadToVisibleMs: 600,
       routeToPayloadRequestMs: 200,
@@ -407,6 +426,26 @@ describe('ReplayComponent', () => {
       payloadToPlayerReadyMs: 150,
       playerReadyToVisibleMs: 250
     });
+  });
+
+  it('should clear coding session timings when resetting the replay context', () => {
+    const privateComponent = component as unknown as {
+      codingSessionRequestStartTime: number;
+      codingSessionResponseTime: number;
+      codingSessionServerTimings: Record<string, number> | null;
+      resetUnitData: (preserveCodingData?: boolean) => void;
+      getClientTimings: (visibleTime: number) => Record<string, number | null>;
+    };
+    privateComponent.codingSessionRequestStartTime = 100;
+    privateComponent.codingSessionResponseTime = 250;
+    privateComponent.codingSessionServerTimings = {
+      codingSessionTotalMs: 75
+    };
+
+    privateComponent.resetUnitData();
+
+    expect(privateComponent.getClientTimings(300).codingSessionMs).toBeNull();
+    expect(privateComponent.codingSessionServerTimings).toBeNull();
   });
 
   it('should store client and server timings with replay statistics', () => {
@@ -444,6 +483,9 @@ describe('ReplayComponent', () => {
         durationMilliseconds: 800,
         success: true,
         clientTimings: {
+          codingSessionMs: null,
+          routeToCodingSessionRequestMs: null,
+          codingSessionResponseToPayloadRequestMs: null,
           routeToVisibleMs: 800,
           loadToVisibleMs: 600,
           routeToPayloadRequestMs: 200,
@@ -959,6 +1001,9 @@ describe('ReplayComponent', () => {
       workspaceId: '47',
       onlyOpen: 'true'
     };
+    codingJobBackendServiceMock.getReplayCodingSession.mockReturnValue(
+      throwError(() => new HttpErrorResponse({ status: 405 }))
+    );
     codingJobBackendServiceMock.getCodingJobUnits.mockReturnValue(of([{
       responseId: 1,
       unitName: 'unit-123',
@@ -982,7 +1027,733 @@ describe('ReplayComponent', () => {
       setTimeout(resolve, 0);
     });
 
+    expect(
+      codingJobBackendServiceMock.getReplayCodingSession
+    ).toHaveBeenCalledWith(47, 77, 'valid-token', true);
     expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', true);
+  });
+
+  it('should initialize coding replay from one session request', async () => {
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      anchor: 'VAR1'
+    };
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'coding',
+      codingJobId: '77',
+      workspaceId: '47',
+      onlyOpen: 'true'
+    };
+    codingJobBackendServiceMock.getReplayCodingSession.mockReturnValue(of({
+      units: [{
+        responseId: 1,
+        unitName: 'unit-123',
+        unitAlias: 'Unit 123',
+        variableId: 'VAR1',
+        variableAnchor: 'VAR1',
+        variablePage: '0',
+        bookletName: 'Booklet 1',
+        personLogin: 'valid',
+        personCode: 'test',
+        personGroup: '',
+        variableBundleId: null,
+        bundleContext: null
+      }],
+      progress: {
+        saved: {
+          id: 7,
+          code: '7',
+          label: 'Code 7',
+          score: 1
+        }
+      },
+      notes: {
+        saved: 'Session note'
+      },
+      job: {
+        status: 'active',
+        comment: 'Session comment',
+        showScore: true,
+        allowComments: false,
+        suppressGeneralInstructions: true
+      },
+      serverTimings: {
+        totalMs: 15
+      }
+    }));
+    codingJobBackendServiceMock.getCodingJobUnits.mockClear();
+    codingJobBackendServiceMock.getCodingProgress.mockClear();
+    codingJobBackendServiceMock.getCodingNotes.mockClear();
+    codingJobBackendServiceMock.getCodingJob.mockClear();
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(
+      codingJobBackendServiceMock.getReplayCodingSession
+    ).toHaveBeenCalledWith(47, 77, 'valid-token', true);
+    expect(codingJobBackendServiceMock.getCodingJobUnits).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.getCodingProgress).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.getCodingNotes).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.getCodingJob).not.toHaveBeenCalled();
+    expect(component.codingService.selectedCodes.get('saved')).toEqual({
+      id: 7,
+      code: '7',
+      label: 'Code 7',
+      score: 1
+    });
+    expect(component.codingService.notes.get('saved')).toBe('Session note');
+    expect(component.codingService.codingJobComment).toBe('Session comment');
+    expect(component.codingService.showScore).toBe(true);
+    expect(component.codingService.allowComments).toBe(false);
+  });
+
+  it('should share an in-flight session request and only apply the latest route', async () => {
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'coding',
+      codingJobId: '77',
+      workspaceId: '47'
+    };
+    routeParamsSubject = new Subject<typeof routeParams>();
+    const sessionResponse = new Subject<ReplayCodingSessionDto>();
+    codingJobBackendServiceMock.getReplayCodingSession.mockReturnValue(
+      sessionResponse.asObservable()
+    );
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    let releaseSecondRouterRun: (() => void) | undefined;
+    const secondRouterRunPending = new Promise<void>(resolve => {
+      releaseSecondRouterRun = resolve;
+    });
+    const refreshAuthTokenSpy = jest.spyOn(
+      component as unknown as {
+        refreshExpiredReplayAuthToken: (
+          workspaceId: number,
+          routerRunId?: number
+        ) => Promise<void>;
+      },
+      'refreshExpiredReplayAuthToken'
+    );
+    refreshAuthTokenSpy
+      .mockResolvedValueOnce()
+      .mockReturnValueOnce(secondRouterRunPending);
+    fixture.detectChanges();
+
+    routeParamsSubject.next({
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-1',
+      anchor: 'VAR1'
+    });
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    routeParamsSubject.next({
+      page: '1',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-2',
+      anchor: 'VAR2'
+    });
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(
+      codingJobBackendServiceMock.getReplayCodingSession
+    ).toHaveBeenCalledTimes(1);
+
+    sessionResponse.next({
+      units: [
+        {
+          responseId: 1,
+          unitName: 'unit-1',
+          unitAlias: 'Unit 1',
+          variableId: 'VAR1',
+          variableAnchor: 'VAR1',
+          variablePage: '0',
+          bookletName: 'Booklet 1',
+          personLogin: 'valid',
+          personCode: 'test',
+          personGroup: '',
+          variableBundleId: null,
+          bundleContext: null
+        },
+        {
+          responseId: 2,
+          unitName: 'unit-2',
+          unitAlias: 'Unit 2',
+          variableId: 'VAR2',
+          variableAnchor: 'VAR2',
+          variablePage: '1',
+          bookletName: 'Booklet 1',
+          personLogin: 'valid',
+          personCode: 'test',
+          personGroup: '',
+          variableBundleId: null,
+          bundleContext: null
+        }
+      ],
+      progress: {},
+      notes: {},
+      job: {
+        status: 'active',
+        comment: null,
+        showScore: false,
+        allowComments: true,
+        suppressGeneralInstructions: false
+      },
+      serverTimings: {
+        totalMs: 15
+      }
+    });
+    sessionResponse.complete();
+    await Promise.resolve();
+
+    releaseSecondRouterRun?.();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(
+      codingJobBackendServiceMock.getReplayCodingSession
+    ).toHaveBeenCalledTimes(1);
+    expect(component.unitId).toBe('unit-2');
+    expect(component.page).toBe('1');
+    expect(component.codingService.currentVariableId).toBe('VAR2');
+  });
+
+  it('should discard an abandoned session request after switching coding jobs', async () => {
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'coding',
+      codingJobId: '77',
+      workspaceId: '47'
+    };
+    routeParamsSubject = new Subject<typeof routeParams>();
+    const firstSessionResponse = new Subject<ReplayCodingSessionDto>();
+    const secondSessionResponse = new Subject<ReplayCodingSessionDto>();
+    codingJobBackendServiceMock.getReplayCodingSession.mockImplementation(
+      (_workspaceId: number, jobId: number) => (
+        jobId === 77 ?
+          firstSessionResponse.asObservable() :
+          secondSessionResponse.asObservable()
+      )
+    );
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    routeParamsSubject.next({
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-1',
+      anchor: 'VAR1'
+    });
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'coding',
+      codingJobId: '88',
+      workspaceId: '47'
+    };
+    routeParamsSubject.next({
+      page: '1',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-2',
+      anchor: 'VAR2'
+    });
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(
+      codingJobBackendServiceMock.getReplayCodingSession
+    ).toHaveBeenCalledTimes(2);
+
+    firstSessionResponse.next({
+      units: [{
+        responseId: 1,
+        unitName: 'unit-1',
+        unitAlias: 'Unit 1',
+        variableId: 'VAR1',
+        variableAnchor: 'VAR1',
+        variablePage: '0',
+        bookletName: 'Booklet 1',
+        personLogin: 'valid',
+        personCode: 'test',
+        personGroup: '',
+        variableBundleId: null,
+        bundleContext: null
+      }],
+      progress: {},
+      notes: {},
+      job: {
+        status: 'active',
+        comment: null,
+        showScore: false,
+        allowComments: true,
+        suppressGeneralInstructions: false
+      },
+      serverTimings: {}
+    });
+    firstSessionResponse.complete();
+    await Promise.resolve();
+
+    expect(component.unitId).not.toBe('unit-1');
+
+    secondSessionResponse.next({
+      units: [{
+        responseId: 2,
+        unitName: 'unit-2',
+        unitAlias: 'Unit 2',
+        variableId: 'VAR2',
+        variableAnchor: 'VAR2',
+        variablePage: '1',
+        bookletName: 'Booklet 1',
+        personLogin: 'valid',
+        personCode: 'test',
+        personGroup: '',
+        variableBundleId: null,
+        bundleContext: null
+      }],
+      progress: {},
+      notes: {},
+      job: {
+        status: 'active',
+        comment: null,
+        showScore: false,
+        allowComments: true,
+        suppressGeneralInstructions: false
+      },
+      serverTimings: {}
+    });
+    secondSessionResponse.complete();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(
+      codingJobBackendServiceMock.getReplayCodingSession
+    ).toHaveBeenCalledTimes(2);
+    expect(component.unitId).toBe('unit-2');
+    expect(component.codingService.currentVariableId).toBe('VAR2');
+  });
+
+  it('should await one shared token refresh before starting the latest replay session', async () => {
+    const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+    const expiredToken = createUnsignedJwt({
+      workspace: '47',
+      exp: Math.floor(Date.now() / 1000) - 60
+    });
+    const tokenSubject = new Subject<string>();
+    routeQueryParams = {
+      auth: expiredToken,
+      mode: 'coding',
+      codingJobId: '77',
+      workspaceId: '47'
+    };
+    routeParamsSubject = new Subject<typeof routeParams>();
+    (tokenUtils.validateToken as jest.Mock).mockImplementation((token: string) => {
+      if (token === expiredToken) {
+        return { isValid: false, errorType: 'token_expired' };
+      }
+      return { isValid: true };
+    });
+    (jwtDecodeModule.jwtDecode as jest.Mock).mockReturnValue({
+      workspace: '47'
+    });
+    appService.createOwnToken.mockClear();
+    appService.createOwnToken.mockReturnValue(tokenSubject.asObservable());
+    codingJobBackendServiceMock.getReplayCodingSession.mockReturnValue(of({
+      units: [{
+        responseId: 2,
+        unitName: 'unit-2',
+        unitAlias: 'Unit 2',
+        variableId: 'VAR2',
+        variableAnchor: 'VAR2',
+        variablePage: '1',
+        bookletName: 'Booklet 1',
+        personLogin: 'valid',
+        personCode: 'test',
+        personGroup: '',
+        variableBundleId: null,
+        bundleContext: null
+      }],
+      progress: {},
+      notes: {},
+      job: {
+        status: 'active',
+        comment: null,
+        showScore: false,
+        allowComments: true,
+        suppressGeneralInstructions: false
+      },
+      serverTimings: {}
+    }));
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    routeParamsSubject.next({
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-1',
+      anchor: 'VAR1'
+    });
+    await Promise.resolve();
+    routeParamsSubject.next({
+      page: '1',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-2',
+      anchor: 'VAR2'
+    });
+    await Promise.resolve();
+
+    expect(appService.createOwnToken).toHaveBeenCalledTimes(1);
+    expect(
+      codingJobBackendServiceMock.getReplayCodingSession
+    ).not.toHaveBeenCalled();
+
+    tokenSubject.next('fresh-token');
+    tokenSubject.complete();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(appService.createOwnToken).toHaveBeenCalledTimes(1);
+    expect(
+      codingJobBackendServiceMock.getReplayCodingSession
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      codingJobBackendServiceMock.getReplayCodingSession
+    ).toHaveBeenCalledWith(47, 77, 'fresh-token', false);
+    expect(component.unitId).toBe('unit-2');
+    expect(component.page).toBe('1');
+    expect(component.codingService.currentVariableId).toBe('VAR2');
+  });
+
+  it('should not share a replay-only token refresh with a coding route', async () => {
+    const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+    const expiredToken = createUnsignedJwt({
+      workspace: '47',
+      exp: Math.floor(Date.now() / 1000) - 60
+    });
+    const replayTokenSubject = new Subject<string>();
+    const codingTokenSubject = new Subject<string>();
+    routeQueryParams = {
+      auth: expiredToken,
+      mode: 'booklet-view',
+      workspaceId: '47'
+    };
+    routeParamsSubject = new Subject<typeof routeParams>();
+    (tokenUtils.validateToken as jest.Mock).mockImplementation((token: string) => {
+      if (token === expiredToken) {
+        return { isValid: false, errorType: 'token_expired' };
+      }
+      return { isValid: true };
+    });
+    (jwtDecodeModule.jwtDecode as jest.Mock).mockReturnValue({
+      workspace: '47'
+    });
+    appService.createOwnToken.mockClear();
+    appService.createOwnToken.mockImplementation(
+      (
+        _workspaceId: number,
+        _duration: number,
+        scopes: string[]
+      ) => (
+        scopes.includes('coding-job:operate') ?
+          codingTokenSubject.asObservable() :
+          replayTokenSubject.asObservable()
+      )
+    );
+    codingJobBackendServiceMock.getReplayCodingSession.mockReturnValue(of({
+      units: [{
+        responseId: 2,
+        unitName: 'unit-2',
+        unitAlias: 'Unit 2',
+        variableId: 'VAR2',
+        variableAnchor: 'VAR2',
+        variablePage: '1',
+        bookletName: 'Booklet 1',
+        personLogin: 'valid',
+        personCode: 'test',
+        personGroup: '',
+        variableBundleId: null,
+        bundleContext: null
+      }],
+      progress: {},
+      notes: {},
+      job: {
+        status: 'active',
+        comment: null,
+        showScore: false,
+        allowComments: true,
+        suppressGeneralInstructions: false
+      },
+      serverTimings: {}
+    }));
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    routeParamsSubject.next({
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-1',
+      anchor: 'VAR1'
+    });
+    await Promise.resolve();
+
+    routeQueryParams = {
+      auth: expiredToken,
+      mode: 'coding',
+      codingJobId: '77',
+      workspaceId: '47'
+    };
+    routeParamsSubject.next({
+      page: '1',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-2',
+      anchor: 'VAR2'
+    });
+    await Promise.resolve();
+
+    expect(appService.createOwnToken).toHaveBeenCalledTimes(2);
+    expect(appService.createOwnToken).toHaveBeenNthCalledWith(
+      1,
+      47,
+      1,
+      REPLAY_WORKSPACE_TOKEN_SCOPES
+    );
+    expect(appService.createOwnToken).toHaveBeenNthCalledWith(
+      2,
+      47,
+      1,
+      CODING_JOB_WORKSPACE_TOKEN_SCOPES
+    );
+
+    replayTokenSubject.next('replay-token');
+    replayTokenSubject.complete();
+    await Promise.resolve();
+    expect(
+      codingJobBackendServiceMock.getReplayCodingSession
+    ).not.toHaveBeenCalled();
+
+    codingTokenSubject.next('coding-token');
+    codingTokenSubject.complete();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(
+      codingJobBackendServiceMock.getReplayCodingSession
+    ).toHaveBeenCalledWith(47, 77, 'coding-token', false);
+    expect(component.unitId).toBe('unit-2');
+    expect(component.codingService.currentVariableId).toBe('VAR2');
+  });
+
+  it('should retry an abandoned failed token refresh for the same scopes', async () => {
+    const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+    const expiredToken = createUnsignedJwt({
+      workspace: '47',
+      exp: Math.floor(Date.now() / 1000) - 60
+    });
+    const firstReplayTokenSubject = new Subject<string>();
+    const codingTokenSubject = new Subject<string>();
+    const retryReplayTokenSubject = new Subject<string>();
+    const privateComponent = component as unknown as {
+      authToken: string;
+      routerRunId: number;
+      replayTokenRefreshRequests: Map<string, unknown>;
+      refreshExpiredReplayAuthToken: (
+        workspaceId: number,
+        routerRunId: number,
+        scopes: string[]
+      ) => Promise<void>;
+    };
+    (tokenUtils.validateToken as jest.Mock).mockImplementation((token: string) => (
+      token === expiredToken ?
+        { isValid: false, errorType: 'token_expired' } :
+        { isValid: true }
+    ));
+    (jwtDecodeModule.jwtDecode as jest.Mock).mockReturnValue({
+      workspace: '47'
+    });
+    appService.createOwnToken.mockClear();
+    appService.createOwnToken
+      .mockReturnValueOnce(firstReplayTokenSubject.asObservable())
+      .mockReturnValueOnce(codingTokenSubject.asObservable())
+      .mockReturnValueOnce(retryReplayTokenSubject.asObservable());
+    privateComponent.authToken = expiredToken;
+
+    privateComponent.routerRunId = 1;
+    const firstRefresh = privateComponent.refreshExpiredReplayAuthToken(
+      47,
+      1,
+      REPLAY_WORKSPACE_TOKEN_SCOPES
+    );
+    await Promise.resolve();
+
+    privateComponent.routerRunId = 2;
+    const codingRefresh = privateComponent.refreshExpiredReplayAuthToken(
+      47,
+      2,
+      CODING_JOB_WORKSPACE_TOKEN_SCOPES
+    );
+    await Promise.resolve();
+
+    expect(appService.createOwnToken).toHaveBeenCalledTimes(2);
+    expect([...privateComponent.replayTokenRefreshRequests.keys()]).toEqual([
+      '47:coding-job:operate,replay-statistics:write,replay:read'
+    ]);
+
+    firstReplayTokenSubject.error(new Error('temporary refresh failure'));
+    await firstRefresh;
+
+    privateComponent.routerRunId = 3;
+    const retryRefresh = privateComponent.refreshExpiredReplayAuthToken(
+      47,
+      3,
+      REPLAY_WORKSPACE_TOKEN_SCOPES
+    );
+    await Promise.resolve();
+
+    expect(appService.createOwnToken).toHaveBeenCalledTimes(3);
+    expect(appService.createOwnToken).toHaveBeenLastCalledWith(
+      47,
+      1,
+      REPLAY_WORKSPACE_TOKEN_SCOPES
+    );
+
+    retryReplayTokenSubject.next('fresh-replay-token');
+    retryReplayTokenSubject.complete();
+    await retryRefresh;
+    codingTokenSubject.error(new Error('abandoned coding refresh'));
+    await codingRefresh;
+
+    expect(privateComponent.authToken).toBe('fresh-replay-token');
+    expect(privateComponent.replayTokenRefreshRequests.size).toBe(0);
+  });
+
+  it('should not apply an abandoned reauthentication token after a newer scoped refresh', async () => {
+    const appService = TestBed.inject(AppService) as unknown as AppServiceMock;
+    const expiredToken = createUnsignedJwt({
+      workspace: '47',
+      exp: Math.floor(Date.now() / 1000) - 60
+    });
+    const replayTokenSubject = new Subject<string>();
+    const codingTokenSubject = new Subject<string>();
+    const privateComponent = component as unknown as {
+      authToken: string;
+      routerRunId: number;
+      refreshReplayAuthTokenForWorkspace: (
+        workspaceId: number,
+        canApply: (() => boolean) | undefined,
+        scopes: string[]
+      ) => Promise<boolean>;
+      refreshExpiredReplayAuthToken: (
+        workspaceId: number,
+        routerRunId: number,
+        scopes: string[]
+      ) => Promise<void>;
+    };
+    (tokenUtils.validateToken as jest.Mock).mockImplementation((token: string) => (
+      token === expiredToken ?
+        { isValid: false, errorType: 'token_expired' } :
+        { isValid: true }
+    ));
+    (jwtDecodeModule.jwtDecode as jest.Mock).mockReturnValue({
+      workspace: '47'
+    });
+    appService.createOwnToken.mockClear();
+    appService.createOwnToken
+      .mockReturnValueOnce(replayTokenSubject.asObservable())
+      .mockReturnValueOnce(codingTokenSubject.asObservable());
+    privateComponent.authToken = expiredToken;
+
+    const abandonedReplayRefresh =
+      privateComponent.refreshReplayAuthTokenForWorkspace(
+        47,
+        undefined,
+        REPLAY_WORKSPACE_TOKEN_SCOPES
+      );
+    await Promise.resolve();
+
+    privateComponent.routerRunId = 1;
+    const codingRefresh = privateComponent.refreshExpiredReplayAuthToken(
+      47,
+      1,
+      CODING_JOB_WORKSPACE_TOKEN_SCOPES
+    );
+    await Promise.resolve();
+
+    codingTokenSubject.next('fresh-coding-token');
+    codingTokenSubject.complete();
+    await codingRefresh;
+    expect(privateComponent.authToken).toBe('fresh-coding-token');
+
+    replayTokenSubject.next('stale-replay-token');
+    replayTokenSubject.complete();
+
+    await expect(abandonedReplayRefresh).resolves.toBe(false);
+    expect(privateComponent.authToken).toBe('fresh-coding-token');
+  });
+
+  it('should not mask replay-session server errors with legacy requests', async () => {
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      anchor: 'VAR1'
+    };
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'coding',
+      codingJobId: '77',
+      workspaceId: '47'
+    };
+    codingJobBackendServiceMock.getReplayCodingSession.mockReturnValue(
+      throwError(() => new HttpErrorResponse({ status: 500 }))
+    );
+    codingJobBackendServiceMock.getCodingJobUnits.mockClear();
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(codingJobBackendServiceMock.getCodingJobUnits).not.toHaveBeenCalled();
   });
 
   it('should load the recovered coding unit instead of stale route params after session recovery', async () => {
@@ -1782,20 +2553,41 @@ describe('ReplayComponent', () => {
       workspaceId: '47',
       onlyOpen: 'true'
     };
-    codingJobBackendServiceMock.getCodingJobUnits.mockReturnValue(of([{
-      responseId: 1,
-      unitName: 'unit-123',
-      unitAlias: 'Unit 123',
-      variableId: 'VAR1',
-      variableAnchor: 'VAR1',
-      variablePage: '0',
-      bookletName: 'Booklet 1',
-      personLogin: 'valid',
-      personCode: 'test',
-      personGroup: '',
-      isDoubleCoded: false,
-      otherCoders: []
-    }]));
+    codingJobBackendServiceMock.getReplayCodingSession.mockReturnValue(of({
+      units: [{
+        responseId: 1,
+        unitName: 'unit-123',
+        unitAlias: 'Unit 123',
+        variableId: 'VAR1',
+        variableAnchor: 'VAR1',
+        variablePage: '0',
+        bookletName: 'Booklet 1',
+        personLogin: 'valid',
+        personCode: 'test',
+        personGroup: '',
+        variableBundleId: null,
+        bundleContext: null
+      }],
+      progress: {
+        saved: {
+          id: 7,
+          code: '7',
+          label: 'Code 7',
+          score: 1
+        }
+      },
+      notes: {
+        saved: 'Cached session note'
+      },
+      job: {
+        status: 'review',
+        comment: 'Cached session comment',
+        showScore: true,
+        allowComments: false,
+        suppressGeneralInstructions: true
+      },
+      serverTimings: {}
+    }));
 
     fixture.destroy();
     fixture = TestBed.createComponent(ReplayComponent);
@@ -1806,16 +2598,49 @@ describe('ReplayComponent', () => {
       setTimeout(resolve, 0);
     });
 
-    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledTimes(1);
+    expect(
+      codingJobBackendServiceMock.getReplayCodingSession
+    ).toHaveBeenCalledTimes(1);
+    expect(codingJobBackendServiceMock.getCodingJobUnits).not.toHaveBeenCalled();
+    expect(component.codingService.selectedCodes.get('saved')).toEqual({
+      id: 7,
+      code: '7',
+      label: 'Code 7',
+      score: 1
+    });
+    expect(component.codingService.notes.get('saved')).toBe('Cached session note');
+    expect(component.codingService.isCompletedJobReview).toBe(true);
 
-    codingJobBackendServiceMock.getCodingJobUnits.mockClear();
+    codingJobBackendServiceMock.getReplayCodingSession.mockClear();
+    codingJobBackendServiceMock.getCodingProgress.mockClear();
+    codingJobBackendServiceMock.getCodingNotes.mockClear();
+    codingJobBackendServiceMock.getCodingJob.mockClear();
+    codingJobBackendServiceMock.resumeCodingJob.mockClear();
     component.subscribeRouter();
     await fixture.whenStable();
     await new Promise<void>(resolve => {
       setTimeout(resolve, 0);
     });
 
-    expect(codingJobBackendServiceMock.getCodingJobUnits).not.toHaveBeenCalled();
+    expect(
+      codingJobBackendServiceMock.getReplayCodingSession
+    ).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.getCodingProgress).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.getCodingNotes).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.getCodingJob).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.resumeCodingJob).not.toHaveBeenCalled();
+    expect(component.codingService.selectedCodes.get('saved')).toEqual({
+      id: 7,
+      code: '7',
+      label: 'Code 7',
+      score: 1
+    });
+    expect(component.codingService.notes.get('saved')).toBe('Cached session note');
+    expect(component.codingService.codingJobComment).toBe('Cached session comment');
+    expect(component.codingService.showScore).toBe(true);
+    expect(component.codingService.allowComments).toBe(false);
+    expect(component.codingService.suppressGeneralInstructions).toBe(true);
+    expect(component.codingService.isCompletedJobReview).toBe(true);
   });
 
   it('should normalize player ID correctly', () => {
