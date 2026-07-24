@@ -612,6 +612,29 @@ describe('CodingJobBackendService', () => {
       req.flush([]);
     });
 
+    it('should load a replay session with the supplied token and onlyOpen flag', () => {
+      service.getReplayCodingSession(47, 123, 'url-token', true).subscribe();
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}wsg-admin/workspace/47/coding-job/123/replay-session?onlyOpen=true`
+      );
+      expect(req.request.method).toBe('GET');
+      expect(req.request.headers.get('Authorization')).toBe('Bearer url-token');
+      req.flush({
+        units: [],
+        progress: {},
+        notes: {},
+        job: {
+          status: 'active',
+          comment: null,
+          showScore: false,
+          allowComments: true,
+          suppressGeneralInstructions: false
+        },
+        serverTimings: {}
+      });
+    });
+
     it('should prepare coding job reviews through the read-only endpoint', () => {
       service.prepareCodingJobReview(47, 123).subscribe();
 

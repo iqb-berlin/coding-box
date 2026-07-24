@@ -16,6 +16,7 @@ import type {
 } from '../../../../../../api-dto/coding/job-refresh.dto';
 import type { ManualCodeAvailabilityValidationDto } from '../../../../../../api-dto/coding/manual-code-availability.dto';
 import type { PsychometricDomainCandidatesDto } from '../../../../../../api-dto/coding/psychometric-discrimination.dto';
+import type { ReplayCodingSessionDto } from '../../../../../../api-dto/coding/replay-coding-session.dto';
 import type {
   BackgroundExportRequest,
   ItemDatasetOptionsDto
@@ -28,6 +29,7 @@ import {
   VariableBundle
 } from '../models/coding-job.model';
 import type { BundleContext } from '../../replay/services/units-replay.service';
+import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 
 export interface CodingJobUnitDto {
   responseId: number;
@@ -860,6 +862,21 @@ export class CodingJobBackendService {
     return this.http.get<CodingJobUnitDto[]>(url, {
       headers: this.getAuthHeader(authToken),
       params
+    });
+  }
+
+  getReplayCodingSession(
+    workspaceId: number,
+    codingJobId: number,
+    authToken?: string,
+    onlyOpen: boolean = false
+  ): Observable<ReplayCodingSessionDto> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/replay-session`;
+    const params = new HttpParams().set('onlyOpen', String(onlyOpen));
+    return this.http.get<ReplayCodingSessionDto>(url, {
+      headers: this.getAuthHeader(authToken),
+      params,
+      context: suppressGlobalHttpErrorContext()
     });
   }
 

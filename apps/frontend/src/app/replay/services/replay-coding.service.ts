@@ -8,6 +8,7 @@ import {
 } from '../../models/coding-interfaces';
 import { findVariableCodingByPublicId } from '../../coding/utils/coding-scheme.util';
 import { UnitsReplay, UnitsReplayUnit } from './units-replay.service';
+import type { ReplayCodingSessionDto } from '../../../../../../api-dto/coding/replay-coding-session.dto';
 
 export interface SavedCode {
   id: number;
@@ -300,41 +301,18 @@ export class ReplayCodingService {
   async loadSavedCodingProgress(workspaceId: number, jobId: number): Promise<void> {
     if (!jobId || !workspaceId) return;
 
-    this.selectedCodes.clear();
-    this.openUnitKeys.clear();
-    this.notes.clear();
-    this.latestRequestedSelectionByKey.clear();
+    this.resetLoadedCodingState();
 
     try {
       const savedProgress = await firstValueFrom(
         this.codingJobBackendService.getCodingProgress(workspaceId, jobId, ...this.authTokenArg)
       ) as { [key: string]: SavedCode };
-
-      Object.keys(savedProgress).forEach(compositeKey => {
-        const partialCode = savedProgress[compositeKey];
-        if (compositeKey.endsWith(':open')) {
-          this.openUnitKeys.add(compositeKey.slice(0, -':open'.length));
-          return;
-        }
-        if (partialCode?.id !== null && partialCode?.id !== undefined) {
-          const fullCode = this.findCodeById(partialCode.id);
-          const toStore: SavedCode = fullCode ? this.convertCodeToSavedCode(fullCode) : partialCode;
-          if (partialCode.codingIssueOption !== undefined && partialCode.codingIssueOption !== null) {
-            toStore.codingIssueOption = partialCode.codingIssueOption;
-          }
-          this.selectedCodes.set(compositeKey, toStore);
-          this.openUnitKeys.delete(compositeKey);
-        }
-      });
+      this.applySavedProgress(savedProgress);
 
       const savedNotes = await firstValueFrom(
         this.codingJobBackendService.getCodingNotes(workspaceId, jobId, ...this.authTokenArg)
       );
-      if (savedNotes) {
-        Object.keys(savedNotes).forEach(key => {
-          this.notes.set(key, savedNotes[key]);
-        });
-      }
+      this.applySavedNotes(savedNotes ?? {});
 
       const codingJob = await firstValueFrom(
         this.codingJobBackendService.getCodingJob(workspaceId, jobId, ...this.authTokenArg)
@@ -343,6 +321,56 @@ export class ReplayCodingService {
     } catch (error) {
       // Ignore errors when loading saved coding progress
     }
+  }
+
+  applyReplayCodingSession(session: ReplayCodingSessionDto): void {
+    this.resetLoadedCodingState();
+    const progress = Object.fromEntries(
+      Object.entries(session.progress)
+        .filter((entry): entry is [string, NonNullable<typeof entry[1]>] => entry[1] !== null)
+        .map(([key, entry]) => [
+          key,
+          {
+            ...entry,
+            label: entry.label ?? ''
+          } satisfies SavedCode
+        ])
+    );
+    this.applySavedProgress(progress);
+    this.applySavedNotes(session.notes);
+    this.setCodingJobMetadata(session.job);
+  }
+
+  private resetLoadedCodingState(): void {
+    this.selectedCodes.clear();
+    this.openUnitKeys.clear();
+    this.notes.clear();
+    this.latestRequestedSelectionByKey.clear();
+  }
+
+  private applySavedProgress(savedProgress: Record<string, SavedCode>): void {
+    Object.keys(savedProgress).forEach(compositeKey => {
+      const partialCode = savedProgress[compositeKey];
+      if (compositeKey.endsWith(':open')) {
+        this.openUnitKeys.add(compositeKey.slice(0, -':open'.length));
+        return;
+      }
+      if (partialCode?.id !== null && partialCode?.id !== undefined) {
+        const fullCode = this.findCodeById(partialCode.id);
+        const toStore: SavedCode = fullCode ? this.convertCodeToSavedCode(fullCode) : partialCode;
+        if (partialCode.codingIssueOption !== undefined && partialCode.codingIssueOption !== null) {
+          toStore.codingIssueOption = partialCode.codingIssueOption;
+        }
+        this.selectedCodes.set(compositeKey, toStore);
+        this.openUnitKeys.delete(compositeKey);
+      }
+    });
+  }
+
+  private applySavedNotes(savedNotes: Record<string, string>): void {
+    Object.keys(savedNotes).forEach(key => {
+      this.notes.set(key, savedNotes[key]);
+    });
   }
 
   findCodeById(codeId: number): Code | null {

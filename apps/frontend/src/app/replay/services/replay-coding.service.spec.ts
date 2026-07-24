@@ -203,6 +203,56 @@ describe('ReplayCodingService', () => {
     });
   });
 
+  describe('applyReplayCodingSession', () => {
+    it('applies progress, open markers, notes, and slim job metadata', () => {
+      service.applyReplayCodingSession({
+        units: [],
+        progress: {
+          coded: {
+            id: 7,
+            code: '7',
+            label: 'Code 7',
+            score: 2,
+            codingIssueOption: -1
+          },
+          'open-key:open': {
+            id: -1,
+            code: '',
+            label: 'OPEN'
+          }
+        },
+        notes: {
+          coded: 'Check this response'
+        },
+        job: {
+          status: 'review',
+          comment: 'Training hint',
+          showScore: true,
+          allowComments: false,
+          suppressGeneralInstructions: true
+        },
+        serverTimings: {
+          totalMs: 12
+        }
+      });
+
+      expect(service.selectedCodes.get('coded')).toEqual({
+        id: 7,
+        code: '7',
+        label: 'Code 7',
+        score: 2,
+        codingIssueOption: -1
+      });
+      expect(service.openUnitKeys).toContain('open-key');
+      expect(service.notes.get('coded')).toBe('Check this response');
+      expect(service.codingJobComment).toBe('Training hint');
+      expect(service.showScore).toBe(true);
+      expect(service.allowComments).toBe(false);
+      expect(service.suppressGeneralInstructions).toBe(true);
+      expect(service.isCompletedJobReview).toBe(true);
+    });
+  });
+
   describe('saveCodingProgress', () => {
     it('should save progress via backend', async () => {
       codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
