@@ -55,6 +55,43 @@ describe('ReplayStatisticsService', () => {
       }));
     });
 
+    it('should store coding session timings', async () => {
+      await service.storeReplayStatistics({
+        workspaceId: 1,
+        unitId: 'UNIT-1',
+        durationMilliseconds: 1234,
+        clientTimings: {
+          codingSessionMs: 100.123
+        },
+        serverTimings: {
+          codingSessionLoadJobMs: 1,
+          codingSessionLoadContextMs: 2,
+          codingSessionReviewOverlaysMs: 3,
+          codingSessionBuildUnitsMs: 4,
+          codingSessionBuildProgressMs: 5,
+          codingSessionBuildNotesMs: 6,
+          codingSessionFinalizeResponseMs: 7,
+          codingSessionTotalMs: 28.456
+        }
+      });
+
+      expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({
+        client_timings: {
+          codingSessionMs: 100.12
+        },
+        server_timings: {
+          codingSessionLoadJobMs: 1,
+          codingSessionLoadContextMs: 2,
+          codingSessionReviewOverlaysMs: 3,
+          codingSessionBuildUnitsMs: 4,
+          codingSessionBuildProgressMs: 5,
+          codingSessionBuildNotesMs: 6,
+          codingSessionFinalizeResponseMs: 7,
+          codingSessionTotalMs: 28.46
+        }
+      }));
+    });
+
     it('should store external replay source when provided', async () => {
       await service.storeReplayStatistics({
         workspaceId: 1,
