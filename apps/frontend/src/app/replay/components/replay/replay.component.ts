@@ -41,7 +41,6 @@ import { CodingJobCommentDialogComponent } from '../../../coding/components/codi
 import { NavigateCodingCasesDialogComponent, NavigateCodingCasesDialogData } from '../navigate-coding-cases-dialog/navigate-coding-cases-dialog.component';
 import { ReplayCodingRecoverySnapshot, ReplayCodingService, SavedCode } from '../../services/replay-coding.service';
 import { base64ToUtf8 } from '../../../shared/utils/common-utils';
-import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { hasManualInstruction } from '../../../coding/utils/manual-coding.util';
 import { findVariableCodingByPublicId } from '../../../coding/utils/coding-scheme.util';
 import {
@@ -51,10 +50,11 @@ import {
 } from '../../../core/services/auth-session.config';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import { CodingScheme } from '../../../models/coding-interfaces';
-import type {
-  ReplayCodingSessionDto,
-  ReplayCodingSessionUnitDto
-} from '../../../../../../../api-dto/coding/replay-coding-session.dto';
+import {
+  ReplaySessionLoadError,
+  ReplaySessionLoadRequest,
+  ReplaySessionLoaderService
+} from '../../services/replay-session-loader.service';
 
 interface ReplayUnitPayload {
   unitDef: FilesDto[];
@@ -73,11 +73,6 @@ interface ReplayUnitPayload {
 interface PendingReplayNotesCommit {
   variableId: string;
   notes: string;
-}
-
-interface PendingReplayCodingSession {
-  request: Promise<ReplayCodingSessionDto>;
-  startedAt: number;
 }
 
 interface PendingReplayTokenRefresh {
@@ -100,7 +95,7 @@ interface ReplayRecoveryDraft {
 }
 
 @Component({
-  providers: [ReplayCodingService],
+  providers: [ReplayCodingService, ReplaySessionLoaderService],
   selector: 'coding-box-replay',
   imports: [
     MatFormFieldModule,
@@ -131,7 +126,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private dialog = inject(MatDialog);
   private translateService = inject(TranslateService);
   codingService = inject(ReplayCodingService);
-  private codingJobBackendService = inject(CodingJobBackendService);
+  private replaySessionLoader = inject(ReplaySessionLoaderService);
   private sessionRecoveryService = inject(SessionRecoveryService);
 
   player: string = '';
@@ -157,9 +152,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private pageErrorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
   private routerSubscription: Subscription | null = null;
   private routerRunId = 0;
-
-  private readonly replayCodingSessionRequests =
-    new Map<string, PendingReplayCodingSession>();
 
   private readonly replayTokenRefreshRequests =
     new Map<string, PendingReplayTokenRefresh>();
@@ -507,75 +499,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  private createCodingJobUnitsReplay(
-    jobId: number,
-    apiUnits: ReplayCodingSessionUnitDto[]
-  ): UnitsReplay {
-    return {
-      id: jobId,
-      name: `Coding-Job: ${jobId}`,
-      units: apiUnits.map((item, idx) => ({
-        id: idx,
-        name: item.unitName,
-        alias: item.unitAlias,
-        bookletId: 0,
-        testPerson: item.personGroup ?
-          `${item.personLogin}@${item.personCode}@${item.personGroup}@${item.bookletName}` :
-          `${item.personLogin}@${item.personCode}@${item.bookletName}`,
-        variableId: item.variableId,
-        variableAnchor: item.variableAnchor,
-        variablePage: item.variablePage,
-        variableBundleId: item.variableBundleId,
-        bundleContext: item.bundleContext
-      })),
-      currentUnitIndex: 0
-    };
-  }
-
-  private getReplayCodingSessionRequest(
-    cacheKey: string,
-    workspaceId: number,
-    jobId: number,
-    authToken: string,
-    onlyOpen: boolean
-  ): PendingReplayCodingSession {
-    const pendingRequest = this.replayCodingSessionRequests.get(cacheKey);
-    if (pendingRequest) {
-      return pendingRequest;
-    }
-
-    const requestEntry: PendingReplayCodingSession = {
-      startedAt: performance.now(),
-      request: firstValueFrom(
-        this.codingJobBackendService.getReplayCodingSession(
-          workspaceId,
-          jobId,
-          authToken,
-          onlyOpen
-        )
-      )
-    };
-    this.replayCodingSessionRequests.set(cacheKey, requestEntry);
-    return requestEntry;
-  }
-
-  private clearReplayCodingSessionRequest(
-    cacheKey: string,
-    requestEntry: PendingReplayCodingSession
-  ): void {
-    if (this.replayCodingSessionRequests.get(cacheKey) === requestEntry) {
-      this.replayCodingSessionRequests.delete(cacheKey);
-    }
-  }
-
-  private pruneReplayCodingSessionRequests(cacheKey: string | null): void {
-    this.replayCodingSessionRequests.forEach((_requestEntry, requestCacheKey) => {
-      if (requestCacheKey !== cacheKey) {
-        this.replayCodingSessionRequests.delete(requestCacheKey);
-      }
-    });
-  }
-
   private isCurrentRouterRun(runId: number): boolean {
     return runId === this.routerRunId;
   }
@@ -652,12 +575,19 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         const cachedJobId = Number(queryParams.codingJobId);
         const cachedWorkspaceId = Number(queryParams.workspaceId);
         const cachedOnlyOpen = queryParams.onlyOpen === 'true';
-        const incomingUnitsCacheKey = queryParams.codingJobId &&
+        const incomingSessionRequest: ReplaySessionLoadRequest | null =
+          queryParams.codingJobId &&
           queryParams.workspaceId &&
           !queryParams.unitsData ?
-          `${cachedWorkspaceId}:${cachedJobId}:${cachedOnlyOpen}` :
-          null;
-        this.pruneReplayCodingSessionRequests(incomingUnitsCacheKey);
+            {
+              workspaceId: cachedWorkspaceId,
+              codingJobId: cachedJobId,
+              authToken: this.authToken,
+              onlyOpen: cachedOnlyOpen
+            } :
+            null;
+        const incomingUnitsCacheKey =
+          this.replaySessionLoader.retainOnly(incomingSessionRequest);
         const preserveCodingData = incomingUnitsCacheKey !== null &&
           this.unitsData?.id === cachedJobId &&
           this.loadedCodingJobUnitsKey === incomingUnitsCacheKey;
@@ -705,78 +635,66 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             const jobId = Number(queryParams.codingJobId);
             const wsId = Number(queryParams.workspaceId);
             const onlyOpen = queryParams.onlyOpen === 'true';
-            const unitsCacheKey = `${wsId}:${jobId}:${onlyOpen}`;
+            const sessionRequest: ReplaySessionLoadRequest = {
+              workspaceId: wsId,
+              codingJobId: jobId,
+              authToken: this.authToken,
+              onlyOpen
+            };
+            const unitsCacheKey =
+              this.replaySessionLoader.getRequestKey(sessionRequest);
             if (this.unitsData?.id === jobId && this.loadedCodingJobUnitsKey === unitsCacheKey) {
               deserializedUnits = this.unitsData;
             } else {
-              this.codingSessionResponseTime = 0;
-              this.codingSessionServerTimings = null;
-              const sessionRequest = this.getReplayCodingSessionRequest(
-                unitsCacheKey,
-                wsId,
-                jobId,
-                this.authToken,
-                onlyOpen
-              );
-              this.codingSessionRequestStartTime = sessionRequest.startedAt;
+              const sessionLoad =
+                this.replaySessionLoader.load(sessionRequest);
               try {
-                const session = await sessionRequest.request;
+                const result = await sessionLoad;
                 if (!this.isCurrentRouterRun(routerRunId)) {
                   return;
                 }
-                this.codingSessionResponseTime = performance.now();
-                this.codingSessionServerTimings = Object.fromEntries(
-                  Object.entries(session.serverTimings).map(([key, value]) => [
-                    `codingSession${key.charAt(0).toUpperCase()}${key.slice(1)}`,
-                    value
-                  ])
+                this.replaySessionLoader.discard(
+                  sessionRequest,
+                  sessionLoad
                 );
-                this.codingService.applyReplayCodingSession(session);
-                this.codingProgressLoadedForJobKey = `${wsId}:${jobId}`;
-                deserializedUnits = this.createCodingJobUnitsReplay(
-                  jobId,
-                  session.units
-                );
-                this.loadedCodingJobUnitsKey = unitsCacheKey;
-                this.clearReplayCodingSessionRequest(
-                  unitsCacheKey,
-                  sessionRequest
-                );
+                this.codingSessionRequestStartTime =
+                  result.timings.requestStartedAt;
+                this.codingSessionResponseTime =
+                  result.timings.responseReceivedAt;
+                this.codingSessionServerTimings =
+                  result.timings.serverTimings;
+                if (result.source === 'session') {
+                  this.codingService.applyReplayCodingSession(result.session);
+                  this.codingProgressLoadedForJobKey = `${wsId}:${jobId}`;
+                }
+                deserializedUnits = result.unitsData;
+                if (deserializedUnits) {
+                  this.loadedCodingJobUnitsKey = unitsCacheKey;
+                }
               } catch (error) {
                 if (!this.isCurrentRouterRun(routerRunId)) {
                   return;
                 }
-                this.clearReplayCodingSessionRequest(
-                  unitsCacheKey,
-                  sessionRequest
+                this.replaySessionLoader.discard(
+                  sessionRequest,
+                  sessionLoad
                 );
-                this.codingSessionResponseTime = performance.now();
-                const httpError = error as HttpErrorResponse;
-                if (httpError.status !== 404 && httpError.status !== 405) {
-                  this.setIsLoaded();
-                  this.catchError(httpError);
-                  return;
+                const loadError = error instanceof ReplaySessionLoadError ?
+                  error :
+                  null;
+                if (loadError) {
+                  this.codingSessionRequestStartTime =
+                    loadError.timings.requestStartedAt;
+                  this.codingSessionResponseTime =
+                    loadError.timings.responseReceivedAt;
+                  this.codingSessionServerTimings =
+                    loadError.timings.serverTimings;
                 }
-
-                try {
-                  const apiUnits = await firstValueFrom(
-                    this.codingJobBackendService.getCodingJobUnits(wsId, jobId, this.authToken, onlyOpen)
-                  );
-                  if (!this.isCurrentRouterRun(routerRunId)) {
-                    return;
-                  }
-                  if (apiUnits && apiUnits.length > 0) {
-                    deserializedUnits = this.createCodingJobUnitsReplay(jobId, apiUnits);
-                    this.loadedCodingJobUnitsKey = unitsCacheKey;
-                  }
-                } catch (legacyError) {
-                  if (!this.isCurrentRouterRun(routerRunId)) {
-                    return;
-                  }
-                  this.setIsLoaded();
-                  this.catchError(legacyError as HttpErrorResponse);
-                  return;
-                }
+                this.setIsLoaded();
+                this.catchError(
+                  (loadError?.requestError ?? error) as HttpErrorResponse
+                );
+                return;
               }
             }
           } else if (queryParams.bookletKey) {
@@ -1604,7 +1522,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   ngOnDestroy(): void {
     this.routerRunId += 1;
-    this.replayCodingSessionRequests.clear();
+    this.replaySessionLoader.clear();
     this.replayTokenRefreshRequests.clear();
     this.invalidateUnitPayloadRequests();
     this.unitPayloadCancellation?.complete();
