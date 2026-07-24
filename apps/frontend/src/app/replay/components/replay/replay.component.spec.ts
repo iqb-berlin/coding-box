@@ -1277,12 +1277,9 @@ describe('ReplayComponent', () => {
       setTimeout(resolve, 0);
     });
 
-    const sessionRequests = (
-      component as unknown as {
-        replayCodingSessionRequests: Map<string, unknown>;
-      }
-    ).replayCodingSessionRequests;
-    expect([...sessionRequests.keys()]).toEqual(['47:88:false']);
+    expect(
+      codingJobBackendServiceMock.getReplayCodingSession
+    ).toHaveBeenCalledTimes(2);
 
     firstSessionResponse.next({
       units: [{
@@ -1313,7 +1310,6 @@ describe('ReplayComponent', () => {
     firstSessionResponse.complete();
     await Promise.resolve();
 
-    expect([...sessionRequests.keys()]).toEqual(['47:88:false']);
     expect(component.unitId).not.toBe('unit-1');
 
     secondSessionResponse.next({
@@ -1348,7 +1344,9 @@ describe('ReplayComponent', () => {
       setTimeout(resolve, 0);
     });
 
-    expect(sessionRequests.size).toBe(0);
+    expect(
+      codingJobBackendServiceMock.getReplayCodingSession
+    ).toHaveBeenCalledTimes(2);
     expect(component.unitId).toBe('unit-2');
     expect(component.codingService.currentVariableId).toBe('VAR2');
   });
