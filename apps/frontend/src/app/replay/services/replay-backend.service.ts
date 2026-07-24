@@ -21,6 +21,9 @@ export type ReplayUnitResponse = {
 export type ReplayTimingMap = Record<string, number | null>;
 export type ReplayStatisticsSource = 'internal' | 'external';
 export type ReplayClientTimings = {
+  codingSessionMs: number | null;
+  routeToCodingSessionRequestMs: number | null;
+  codingSessionResponseToPayloadRequestMs: number | null;
   routeToVisibleMs: number | null;
   loadToVisibleMs: number | null;
   routeToPayloadRequestMs: number | null;

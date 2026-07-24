@@ -35,7 +35,10 @@ export class ReplayStatisticsService {
     'payloadMs',
     'payloadToVisibleMs',
     'payloadToPlayerReadyMs',
-    'playerReadyToVisibleMs'
+    'playerReadyToVisibleMs',
+    'codingSessionMs',
+    'routeToCodingSessionRequestMs',
+    'codingSessionResponseToPayloadRequestMs'
   ]);
 
   private static readonly SERVER_TIMING_KEYS = new Set([
@@ -53,7 +56,15 @@ export class ReplayStatisticsService {
     'payloadExtractPlayerIdMs',
     'payloadFindPlayerMs',
     'payloadFindUnitResponseMs',
-    'payloadTotalMs'
+    'payloadTotalMs',
+    'codingSessionLoadJobMs',
+    'codingSessionLoadContextMs',
+    'codingSessionReviewOverlaysMs',
+    'codingSessionBuildUnitsMs',
+    'codingSessionBuildProgressMs',
+    'codingSessionBuildNotesMs',
+    'codingSessionFinalizeResponseMs',
+    'codingSessionTotalMs'
   ]);
 
   private applyTimeFilters(
