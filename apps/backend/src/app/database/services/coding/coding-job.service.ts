@@ -116,6 +116,20 @@ export enum ResponseMatchingFlag {
   IGNORE_WHITESPACE = 'IGNORE_WHITESPACE'
 }
 
+const DEFAULT_CODING_FILE_LOAD_CONCURRENCY = 4;
+
+function getCodingFileLoadConcurrency(): number {
+  const configured = Number(process.env.CODING_FILE_LOAD_CONCURRENCY);
+  const poolMax = Number(process.env.POSTGRES_POOL_MAX);
+  const requested = Number.isInteger(configured) && configured > 0 ?
+    configured :
+    DEFAULT_CODING_FILE_LOAD_CONCURRENCY;
+  const poolBudget = Number.isInteger(poolMax) && poolMax > 0 ?
+    Math.max(1, poolMax - 1) :
+    requested;
+  return Math.max(1, Math.min(requested, poolBudget));
+}
+
 interface CodingSchemeCode {
   id: number | string;
   code?: string;
@@ -4733,29 +4747,43 @@ export class CodingJobService {
       unit => unit.variable_bundle_id !== null &&
         caseKeys.has(this.getCodingJobBundleUnitCaseKey(unit))
     );
-    const variableIds = Array.from(
-      new Set(
+    const bundleVariables = Array.from(
+      new Map(
         variableBundles.flatMap(bundle => (
           bundle.variables || []
-        ).map(variable => variable.variableId))
-      )
-    );
-    const unitNames = Array.from(
-      new Set(
-        variableBundles.flatMap(bundle => (
-          bundle.variables || []
-        ).map(variable => variable.unitName))
-      )
+        )).map(variable => [
+          getAggregationVariableKey(variable.unitName, variable.variableId),
+          {
+            unitName: variable.unitName.toUpperCase(),
+            variableId: variable.variableId
+          }
+        ])
+      ).values()
     );
 
-    if (variableIds.length === 0 || unitNames.length === 0) {
+    if (bundleVariables.length === 0) {
       return new Map();
     }
 
-    const personLogins = Array.from(new Set(bundledUnits.map(unit => unit.person_login)));
-    const personCodes = Array.from(new Set(bundledUnits.map(unit => unit.person_code)));
-    const personGroups = Array.from(new Set(bundledUnits.map(unit => unit.person_group)));
-    const bookletNames = Array.from(new Set(bundledUnits.map(unit => unit.booklet_name)));
+    const bundleCases = Array.from(caseKeys).map(caseKey => {
+      const [login, code, group, bookletName] = caseKey.split('\u0000');
+      return {
+        login,
+        code,
+        group,
+        bookletName
+      };
+    });
+    const bundleTargets = bundleCases.flatMap(bundleCase => (
+      bundleVariables.map(variable => ({
+        login: bundleCase.login,
+        code: bundleCase.code,
+        person_group: bundleCase.group,
+        booklet_name: bundleCase.bookletName,
+        unit_name: variable.unitName,
+        variable_id: variable.variableId
+      }))
+    ));
     const manualUnitByResponseId = new Map(
       contextBundledUnits.map(unit => [unit.response_id, unit])
     );
@@ -4766,15 +4794,33 @@ export class CodingJobService {
       .leftJoinAndSelect('booklet.person', 'person')
       .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
       .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('response.variableid IN (:...variableIds)', { variableIds })
-      .andWhere('UPPER(unit.name) IN (:...unitNames)', {
-        unitNames: unitNames.map(unitName => unitName.toUpperCase())
-      })
-      .andWhere('person.login IN (:...personLogins)', { personLogins })
-      .andWhere('person.code IN (:...personCodes)', { personCodes })
-      .andWhere('person.group IN (:...personGroups)', { personGroups })
-      .andWhere("COALESCE(bookletinfo.name, '') IN (:...bookletNames)", {
-        bookletNames
+      .andWhere(`
+        (
+          person.login,
+          person.code,
+          COALESCE(person.group, ''),
+          COALESCE(bookletinfo.name, ''),
+          UPPER(unit.name),
+          response.variableid
+        ) IN (
+          SELECT
+            bundle_target.login,
+            bundle_target.code,
+            bundle_target.person_group,
+            bundle_target.booklet_name,
+            bundle_target.unit_name,
+            bundle_target.variable_id
+          FROM jsonb_to_recordset(CAST(:bundleTargets AS jsonb)) AS bundle_target(
+            login text,
+            code text,
+            person_group text,
+            booklet_name text,
+            unit_name text,
+            variable_id text
+          )
+        )
+      `, {
+        bundleTargets: JSON.stringify(bundleTargets)
       })
       .getMany();
 
@@ -4884,8 +4930,11 @@ export class CodingJobService {
       )
     );
 
-    await Promise.all(
-      unitNames.map(async unitName => {
+    let nextUnitIndex = 0;
+    const loadNextUnit = async (): Promise<void> => {
+      while (nextUnitIndex < unitNames.length) {
+        const unitName = unitNames[nextUnitIndex];
+        nextUnitIndex += 1;
         try {
           const pageMap = await this.codingFileCacheService!.getVariablePageMap(
             unitName,
@@ -4898,7 +4947,19 @@ export class CodingJobService {
           );
           variablePageMaps.set(unitName, new Map<string, string>());
         }
-      })
+      }
+    };
+
+    await Promise.all(
+      Array.from(
+        {
+          length: Math.min(
+            getCodingFileLoadConcurrency(),
+            unitNames.length
+          )
+        },
+        () => loadNextUnit()
+      )
     );
 
     return variablePageMaps;

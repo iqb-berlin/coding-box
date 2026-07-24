@@ -7,10 +7,29 @@ import Persons from '../database/entities/persons.entity';
 import { Unit } from '../database/entities/unit.entity';
 import { WorkspaceTestResultsService } from '../database/services/test-results';
 
+const DEFAULT_WORKSPACE_CONCURRENCY = 1;
+const DEFAULT_ITEM_CONCURRENCY = 4;
+
+interface ResponseCacheWarmupItem {
+  workspaceId: number;
+  connector: string;
+  unitId: string;
+  cacheKey: string;
+}
+
+function parsePositiveInteger(
+  value: string | undefined,
+  fallback: number
+): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 @Injectable()
 export class ResponseCacheSchedulerService {
   private readonly logger = new Logger(ResponseCacheSchedulerService.name);
   private readonly responseCacheVersionSuffix = ':v6';
+  private cacheAllResponsesInFlight: Promise<void> | null = null;
 
   constructor(
     private readonly cacheService: CacheService,
@@ -22,7 +41,25 @@ export class ResponseCacheSchedulerService {
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_1AM)
-  async cacheAllResponses() {
+  async cacheAllResponses(): Promise<void> {
+    if (this.cacheAllResponsesInFlight) {
+      this.logger.warn('Skipping response cache warmup because the previous run is still active');
+      await this.cacheAllResponsesInFlight;
+      return;
+    }
+
+    const warmup = this.runCacheAllResponses();
+    this.cacheAllResponsesInFlight = warmup;
+    try {
+      await warmup;
+    } finally {
+      if (this.cacheAllResponsesInFlight === warmup) {
+        this.cacheAllResponsesInFlight = null;
+      }
+    }
+  }
+
+  private async runCacheAllResponses(): Promise<void> {
     this.logger.log('Starting nightly task to cache all responses');
     const startTime = Date.now();
 
@@ -32,7 +69,10 @@ export class ResponseCacheSchedulerService {
       this.logger.log(`Found ${workspaces.length} workspaces with test persons`);
 
       // Process workspaces in parallel with a concurrency limit
-      const concurrencyLimit = 3; // Adjust based on system resources
+      const concurrencyLimit = parsePositiveInteger(
+        process.env.RESPONSE_CACHE_WORKSPACE_CONCURRENCY,
+        DEFAULT_WORKSPACE_CONCURRENCY
+      );
       const chunks = this.chunkArray(workspaces, concurrencyLimit);
 
       for (const workspaceChunk of chunks) {
@@ -61,7 +101,8 @@ export class ResponseCacheSchedulerService {
       this.logger.log(`Found ${personsWithUnits.length} persons in workspace ${workspaceId}`);
 
       // Prepare all cache items to check
-      const cacheCheckItems: { workspaceId: number; connector: string; unitId: string; cacheKey: string }[] = [];
+      const cacheCheckItemsByKey =
+        new Map<string, ResponseCacheWarmupItem>();
 
       for (const person of personsWithUnits) {
         for (const unit of person.units) {
@@ -72,7 +113,7 @@ export class ResponseCacheSchedulerService {
             for (const unitId of unitIds) {
               const cacheKey = `${this.cacheService.generateUnitResponseCacheKey(workspaceId, connector, unitId)}${this.responseCacheVersionSuffix}`;
 
-              cacheCheckItems.push({
+              cacheCheckItemsByKey.set(cacheKey, {
                 workspaceId,
                 connector,
                 unitId,
@@ -82,6 +123,7 @@ export class ResponseCacheSchedulerService {
           }
         }
       }
+      const cacheCheckItems = Array.from(cacheCheckItemsByKey.values());
 
       // Check which items are already in cache (in batches)
       const batchSize = 100;
@@ -104,7 +146,10 @@ export class ResponseCacheSchedulerService {
       this.logger.log(`Found ${itemsToCache.length} items that need caching in workspace ${workspaceId}`);
 
       // Process items that need caching in smaller parallel batches
-      const cacheBatchSize = 20; // Adjust based on system resources
+      const cacheBatchSize = parsePositiveInteger(
+        process.env.RESPONSE_CACHE_ITEM_CONCURRENCY,
+        DEFAULT_ITEM_CONCURRENCY
+      );
       const cacheBatches = this.chunkArray(itemsToCache, cacheBatchSize);
 
       for (const batch of cacheBatches) {
