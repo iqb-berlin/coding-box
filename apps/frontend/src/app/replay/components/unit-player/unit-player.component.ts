@@ -557,6 +557,15 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     }
   }
 
+  navigateToPage(pageId: string): boolean {
+    if (!pageId || !this.postMessageTarget) {
+      return false;
+    }
+
+    this.sendPageNavigationMessage(pageId);
+    return true;
+  }
+
   /**
    * Finds the index of the current (disabled) page in the page list.
    * @returns The current page's index or -1 if not found.
