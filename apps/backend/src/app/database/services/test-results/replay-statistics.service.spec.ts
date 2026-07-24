@@ -61,7 +61,9 @@ describe('ReplayStatisticsService', () => {
         unitId: 'UNIT-1',
         durationMilliseconds: 1234,
         clientTimings: {
-          codingSessionMs: 100.123
+          codingSessionMs: 100.123,
+          routeToCodingSessionRequestMs: 12.345,
+          codingSessionResponseToPayloadRequestMs: 23.456
         },
         serverTimings: {
           codingSessionLoadJobMs: 1,
@@ -77,7 +79,9 @@ describe('ReplayStatisticsService', () => {
 
       expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({
         client_timings: {
-          codingSessionMs: 100.12
+          codingSessionMs: 100.12,
+          routeToCodingSessionRequestMs: 12.35,
+          codingSessionResponseToPayloadRequestMs: 23.46
         },
         server_timings: {
           codingSessionLoadJobMs: 1,

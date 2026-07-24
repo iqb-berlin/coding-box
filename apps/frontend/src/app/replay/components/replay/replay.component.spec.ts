@@ -398,6 +398,8 @@ describe('ReplayComponent', () => {
     const privateComponent = component as unknown as {
       routeStartTime: number;
       loadStartTime: number;
+      codingSessionRequestStartTime: number;
+      codingSessionResponseTime: number;
       payloadRequestStartTime: number;
       payloadResponseTime: number;
       playerReadyTime: number;
@@ -406,12 +408,16 @@ describe('ReplayComponent', () => {
 
     privateComponent.routeStartTime = 100;
     privateComponent.loadStartTime = 300;
+    privateComponent.codingSessionRequestStartTime = 150;
+    privateComponent.codingSessionResponseTime = 250;
     privateComponent.payloadRequestStartTime = 300;
     privateComponent.payloadResponseTime = 500;
     privateComponent.playerReadyTime = 650;
 
     expect(privateComponent.getClientTimings(900)).toEqual({
-      codingSessionMs: null,
+      codingSessionMs: 100,
+      routeToCodingSessionRequestMs: 50,
+      codingSessionResponseToPayloadRequestMs: 50,
       routeToVisibleMs: 800,
       loadToVisibleMs: 600,
       routeToPayloadRequestMs: 200,
@@ -478,6 +484,8 @@ describe('ReplayComponent', () => {
         success: true,
         clientTimings: {
           codingSessionMs: null,
+          routeToCodingSessionRequestMs: null,
+          codingSessionResponseToPayloadRequestMs: null,
           routeToVisibleMs: 800,
           loadToVisibleMs: 600,
           routeToPayloadRequestMs: 200,

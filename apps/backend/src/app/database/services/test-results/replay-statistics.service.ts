@@ -36,7 +36,9 @@ export class ReplayStatisticsService {
     'payloadToVisibleMs',
     'payloadToPlayerReadyMs',
     'playerReadyToVisibleMs',
-    'codingSessionMs'
+    'codingSessionMs',
+    'routeToCodingSessionRequestMs',
+    'codingSessionResponseToPayloadRequestMs'
   ]);
 
   private static readonly SERVER_TIMING_KEYS = new Set([

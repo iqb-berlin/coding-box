@@ -1110,6 +1110,24 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           this.codingSessionResponseTime
         ) :
         null,
+      routeToCodingSessionRequestMs: (
+        this.routeStartTime &&
+        this.codingSessionRequestStartTime
+      ) ?
+        this.getElapsedMs(
+          this.routeStartTime,
+          this.codingSessionRequestStartTime
+        ) :
+        null,
+      codingSessionResponseToPayloadRequestMs: (
+        this.codingSessionResponseTime &&
+        this.payloadRequestStartTime
+      ) ?
+        this.getElapsedMs(
+          this.codingSessionResponseTime,
+          this.payloadRequestStartTime
+        ) :
+        null,
       routeToVisibleMs: this.routeStartTime ? this.getElapsedMs(this.routeStartTime, visibleTime) : null,
       loadToVisibleMs: this.loadStartTime ? this.getElapsedMs(this.loadStartTime, visibleTime) : null,
       routeToPayloadRequestMs: (this.routeStartTime && this.payloadRequestStartTime) ?
