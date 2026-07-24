@@ -4750,6 +4750,93 @@ describe('CodingJobService', () => {
     }
   });
 
+  it('builds a replay session from one visible-unit scan without peer lookup', async () => {
+    const createUnit = (
+      responseId: number,
+      personLogin: string,
+      isOpen: boolean,
+      code: number | null,
+      notes: string | null
+    ) => ({
+      response_id: responseId,
+      coding_job_id: 10,
+      unit_name: 'UNIT',
+      unit_alias: 'ALIAS',
+      variable_id: 'VAR',
+      variable_anchor: 'VAR',
+      booklet_name: 'BOOKLET',
+      person_login: personLogin,
+      person_code: 'code',
+      person_group: 'group',
+      notes,
+      variable_bundle_id: null,
+      code,
+      score: code === null ? null : 2,
+      is_open: isOpen,
+      coding_issue_option: null
+    });
+    codingJobRepository.findOne.mockResolvedValue({
+      id: 10,
+      workspace_id: 3,
+      status: 'active',
+      comment: 'Training',
+      showScore: true,
+      allowComments: false,
+      suppressGeneralInstructions: true,
+      job_type: 'regular',
+      case_ordering_mode: 'continuous'
+    });
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+    codingJobUnitRepository.find.mockResolvedValue([
+      createUnit(1, 'open', true, null, null),
+      createUnit(2, 'coded-a', false, 7, 'First note'),
+      createUnit(3, 'coded-b', false, 7, 'Second note')
+    ]);
+    codingFileCacheService.getVariablePageMap.mockResolvedValue(
+      new Map([['VAR', '0']])
+    );
+    mockCodingScheme();
+    const extractCodingSchemeRefSpy = jest.spyOn(
+      service as unknown as {
+        extractCodingSchemeRef: (
+          unitFile: { file_id: string; data: unknown }
+        ) => string | null;
+      },
+      'extractCodingSchemeRef'
+    );
+
+    const result = await service.getCodingJobReplaySession(10, 3, true);
+
+    expect(codingJobUnitRepository.find).toHaveBeenCalledTimes(1);
+    expect(codingJobUnitRepository.find).toHaveBeenCalledWith({
+      where: { coding_job_id: 10 }
+    });
+    expect(result.units).toHaveLength(1);
+    expect(result.units[0]).toMatchObject({
+      responseId: 1,
+      personLogin: 'open',
+      variablePage: '0'
+    });
+    expect(result.units[0]).not.toHaveProperty('otherCoders');
+    expect(result.units[0]).not.toHaveProperty('isDoubleCoded');
+    expect(Object.values(result.progress).filter(entry => entry?.id === 7))
+      .toHaveLength(2);
+    expect(Object.values(result.notes)).toEqual([
+      'First note',
+      'Second note'
+    ]);
+    expect(result.job).toEqual({
+      status: 'active',
+      comment: 'Training',
+      showScore: true,
+      allowComments: false,
+      suppressGeneralInstructions: true
+    });
+    expect(extractCodingSchemeRefSpy).toHaveBeenCalledTimes(1);
+    expect(fileUploadRepository.find).toHaveBeenCalledTimes(2);
+    expect(result.serverTimings.totalMs).toEqual(expect.any(Number));
+  });
+
   it('filters current coder and unrelated scopes from double-coding markers', async () => {
     codingJobRepository.findOne.mockResolvedValue({
       id: 10,
@@ -5098,7 +5185,6 @@ describe('CodingJobService', () => {
       }
     ]);
     codingJobUnitRepository.find
-      .mockResolvedValueOnce([openUnit])
       .mockResolvedValueOnce([
         openUnit,
         closedBundleUnit,
@@ -5118,13 +5204,12 @@ describe('CodingJobService', () => {
 
     const result = await service.getCodingJobUnits(10, true);
 
-    expect(result).toHaveLength(1);
-    expect(codingJobUnitRepository.find).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        where: { coding_job_id: 10 }
-      })
-    );
+    expect(result).toHaveLength(2);
+    expect(codingJobUnitRepository.find).toHaveBeenCalledTimes(2);
+    expect(codingJobUnitRepository.find).toHaveBeenNthCalledWith(1, {
+      where: { coding_job_id: 10 },
+      select: expect.any(Array)
+    });
     expect(result[0].bundleContext?.caseKey).toBe('login\u0000code\u0000group\u0000BOOKLET');
     expect(result[0].bundleContext?.variables).toEqual([
       expect.objectContaining({
