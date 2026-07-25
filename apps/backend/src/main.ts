@@ -12,18 +12,13 @@ import { ExportWorkerModule } from './app/export-worker/export-worker.module';
 import { isExportWorkerProcess } from './app/export-worker/export-worker-role';
 import { GlobalHttpExceptionFilter } from './app/http/global-http-exception.filter';
 import {
-  IN_FLIGHT_REQUEST_THRESHOLD_ENV,
-  REQUEST_START_LOGGING_ENV,
-  SLOW_REQUEST_THRESHOLD_ENV,
-  createRequestMonitoringMiddleware,
-  parseBooleanFlag,
-  parseInFlightRequestThresholdMs,
-  parseSlowRequestThresholdMs
+  createRequestMonitoringMiddleware
 } from './app/http/request-monitoring.middleware';
 import { REQUEST_ID_HEADER } from './app/http/request-id';
 import { requestIdMiddleware } from './app/http/request-id.middleware';
 import { createPostgresPoolSnapshotProvider } from './app/database/postgres-pool-monitor';
 import { releaseCacheStartupWarmups } from './app/cache/cache-startup-warmup.queue';
+import { RuntimeConfigService } from './app/config/runtime-config.service';
 
 async function bootstrap() {
   if (isExportWorkerProcess()) {
@@ -35,18 +30,10 @@ async function bootstrap() {
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
+  const runtimeConfig = app.get(RuntimeConfigService);
   const host = configService.get('API_HOST') || 'localhost';
   const port = 3333;
   const globalPrefix = 'api';
-  const slowRequestThresholdMs = parseSlowRequestThresholdMs(
-    configService.get(SLOW_REQUEST_THRESHOLD_ENV)
-  );
-  const inFlightRequestThresholdMs = parseInFlightRequestThresholdMs(
-    configService.get(IN_FLIGHT_REQUEST_THRESHOLD_ENV)
-  );
-  const logStartedRequests = parseBooleanFlag(
-    configService.get(REQUEST_START_LOGGING_ENV)
-  );
   const getPoolSnapshot = createPostgresPoolSnapshotProvider(
     app.get(DataSource)
   );
@@ -62,9 +49,9 @@ async function bootstrap() {
   });
   app.use(createRequestMonitoringMiddleware({
     getPoolSnapshot,
-    inFlightRequestThresholdMs,
-    logStartedRequests,
-    slowRequestThresholdMs
+    inFlightRequestThresholdMs: runtimeConfig.inFlightRequestThresholdMs,
+    logStartedRequests: runtimeConfig.requestStartLogging,
+    slowRequestThresholdMs: runtimeConfig.slowRequestThresholdMs
   }));
 
   const packagesRoot = path.resolve('./packages');

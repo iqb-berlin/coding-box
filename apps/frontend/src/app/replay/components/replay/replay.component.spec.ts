@@ -30,6 +30,7 @@ import {
   REPLAY_WORKSPACE_TOKEN_SCOPES
 } from '../../../core/services/auth-session.config';
 import type { ReplayCodingSessionDto } from '../../../../../../../api-dto/coding/replay-coding-session.dto';
+import { ReplayAttemptContext } from '../../utils/replay-attempt-context';
 
 function createUnsignedJwt(payload: Record<string, unknown>): string {
   const encode = (value: Record<string, unknown>) => btoa(JSON.stringify(value))
@@ -395,75 +396,19 @@ describe('ReplayComponent', () => {
   });
 
   it('should keep server timings from replay payload', () => {
-    expect((component as unknown as { serverTimings: Record<string, number> | null }).serverTimings)
-      .toEqual({
-        responseTotalMs: 5
-      });
-  });
+    const replayAttempt = (component as unknown as {
+      replayAttempt: ReplayAttemptContext;
+    }).replayAttempt;
 
-  it('should calculate route and player timing segments', () => {
-    const privateComponent = component as unknown as {
-      routeStartTime: number;
-      loadStartTime: number;
-      codingSessionRequestStartTime: number;
-      codingSessionResponseTime: number;
-      payloadRequestStartTime: number;
-      payloadResponseTime: number;
-      playerReadyTime: number;
-      getClientTimings: (visibleTime: number) => Record<string, number | null>;
-    };
-
-    privateComponent.routeStartTime = 100;
-    privateComponent.loadStartTime = 300;
-    privateComponent.codingSessionRequestStartTime = 150;
-    privateComponent.codingSessionResponseTime = 250;
-    privateComponent.payloadRequestStartTime = 300;
-    privateComponent.payloadResponseTime = 500;
-    privateComponent.playerReadyTime = 650;
-
-    expect(privateComponent.getClientTimings(900)).toEqual({
-      codingSessionMs: 100,
-      routeToCodingSessionRequestMs: 50,
-      codingSessionResponseToPayloadRequestMs: 50,
-      routeToVisibleMs: 800,
-      loadToVisibleMs: 600,
-      routeToPayloadRequestMs: 200,
-      payloadMs: 200,
-      payloadToVisibleMs: 400,
-      payloadToPlayerReadyMs: 150,
-      playerReadyToVisibleMs: 250
+    expect(replayAttempt.getServerTimings()).toEqual({
+      responseTotalMs: 5
     });
-  });
-
-  it('should clear coding session timings when resetting the replay context', () => {
-    const privateComponent = component as unknown as {
-      codingSessionRequestStartTime: number;
-      codingSessionResponseTime: number;
-      codingSessionServerTimings: Record<string, number> | null;
-      resetUnitData: (preserveCodingData?: boolean) => void;
-      getClientTimings: (visibleTime: number) => Record<string, number | null>;
-    };
-    privateComponent.codingSessionRequestStartTime = 100;
-    privateComponent.codingSessionResponseTime = 250;
-    privateComponent.codingSessionServerTimings = {
-      codingSessionTotalMs: 75
-    };
-
-    privateComponent.resetUnitData();
-
-    expect(privateComponent.getClientTimings(300).codingSessionMs).toBeNull();
-    expect(privateComponent.codingSessionServerTimings).toBeNull();
   });
 
   it('should store client and server timings with replay statistics', () => {
     const privateComponent = component as unknown as {
-      routeStartTime: number;
-      loadStartTime: number;
-      payloadRequestStartTime: number;
-      payloadResponseTime: number;
-      playerReadyTime: number;
-      serverTimings: Record<string, number> | null;
       storeReplayStatistics: (
+        replayAttempt: ReplayAttemptContext,
         success: boolean,
         duration: number,
         errorMessage?: string,
@@ -473,16 +418,18 @@ describe('ReplayComponent', () => {
 
     replayBackendService.storeReplayStatistics.mockClear();
     component.workspaceId = 42;
-    privateComponent.routeStartTime = 100;
-    privateComponent.loadStartTime = 300;
-    privateComponent.payloadRequestStartTime = 300;
-    privateComponent.payloadResponseTime = 500;
-    privateComponent.playerReadyTime = 650;
-    privateComponent.serverTimings = {
-      responseTotalMs: 5
-    };
+    const replayAttempt = new ReplayAttemptContext(100, 'attempt-1');
+    replayAttempt.startPayloadLoad(300);
+    replayAttempt.recordPayloadResponse(500, { responseTotalMs: 5 });
+    replayAttempt.recordPlayerReady(650);
 
-    privateComponent.storeReplayStatistics(true, 800, undefined, 900);
+    privateComponent.storeReplayStatistics(
+      replayAttempt,
+      true,
+      800,
+      undefined,
+      900
+    );
 
     expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledWith(
       expect.any(Number),
@@ -506,13 +453,14 @@ describe('ReplayComponent', () => {
         }
       }),
       'valid-token',
-      expect.any(String)
+      'attempt-1'
     );
   });
 
   it('should omit auth and booklet units data from replay statistics URL', () => {
     const privateComponent = component as unknown as {
       storeReplayStatistics: (
+        replayAttempt: ReplayAttemptContext,
         success: boolean,
         duration: number,
         errorMessage?: string,
@@ -529,8 +477,15 @@ describe('ReplayComponent', () => {
 
     replayBackendService.storeReplayStatistics.mockClear();
     component.workspaceId = 42;
+    const replayAttempt = new ReplayAttemptContext(100, 'attempt-1');
 
-    privateComponent.storeReplayStatistics(true, 800, undefined, 900);
+    privateComponent.storeReplayStatistics(
+      replayAttempt,
+      true,
+      800,
+      undefined,
+      900
+    );
 
     expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledWith(
       expect.any(Number),
@@ -538,7 +493,7 @@ describe('ReplayComponent', () => {
         replayUrl: expect.stringContaining('mode=booklet-view')
       }),
       'valid-token',
-      expect.any(String)
+      'attempt-1'
     );
     const replayUrl = replayBackendService.storeReplayStatistics.mock.calls[0][1].replayUrl as string;
     expect(replayUrl).not.toContain('auth=');
@@ -565,6 +520,25 @@ describe('ReplayComponent', () => {
       'Keine valide Seite mit der ID "page-1" gefunden',
       'Schließen',
       { panelClass: ['snackbar-error'] }
+    );
+  });
+
+  it('should finalize replay statistics after an error', () => {
+    replayBackendService.storeReplayStatistics.mockClear();
+    component.page = 'page-1';
+
+    component.checkPageError('notInList');
+    component.onResponseVisible();
+
+    expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledTimes(1);
+    expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.objectContaining({
+        success: false,
+        errorMessage: 'Keine valide Seite mit der ID "page-1" gefunden'
+      }),
+      'valid-token',
+      expect.any(String)
     );
   });
 
@@ -804,25 +778,9 @@ describe('ReplayComponent', () => {
     replayBackendService.getReplayPayload.mockClear();
     const navigateToPage = jest.fn().mockReturnValue(true);
     const replayState = component as unknown as {
-      successStoredForCurrentReplay: boolean;
-      loadStartTime: number;
-      payloadRequestStartTime: number;
-      payloadResponseTime: number;
-      playerReadyTime: number;
-      serverTimings: Record<string, number> | null;
-      codingSessionRequestStartTime: number;
-      codingSessionResponseTime: number;
-      codingSessionServerTimings: Record<string, number> | null;
+      replayAttempt: ReplayAttemptContext;
     };
-    replayState.successStoredForCurrentReplay = true;
-    replayState.loadStartTime = 1;
-    replayState.payloadRequestStartTime = 2;
-    replayState.payloadResponseTime = 3;
-    replayState.playerReadyTime = 4;
-    replayState.serverTimings = { totalMs: 5 };
-    replayState.codingSessionRequestStartTime = 6;
-    replayState.codingSessionResponseTime = 7;
-    replayState.codingSessionServerTimings = { codingSessionTotalMs: 8 };
+    const previousAttempt = replayState.replayAttempt;
     component.unitPlayerComponent = {
       navigateToPage
     } as unknown as UnitPlayerComponent;
@@ -841,15 +799,16 @@ describe('ReplayComponent', () => {
     expect(navigateToPage).toHaveBeenCalledWith('2');
     expect(replayBackendService.getReplayPayload).not.toHaveBeenCalled();
     expect(replayBackendService.getReplayResponse).not.toHaveBeenCalled();
-    expect(replayState.successStoredForCurrentReplay).toBe(false);
-    expect(replayState.loadStartTime).toBe(0);
-    expect(replayState.payloadRequestStartTime).toBe(0);
-    expect(replayState.payloadResponseTime).toBe(0);
-    expect(replayState.playerReadyTime).toBe(0);
-    expect(replayState.serverTimings).toBeNull();
-    expect(replayState.codingSessionRequestStartTime).toBe(0);
-    expect(replayState.codingSessionResponseTime).toBe(0);
-    expect(replayState.codingSessionServerTimings).toBeNull();
+    expect(replayState.replayAttempt).not.toBe(previousAttempt);
+    expect(replayState.replayAttempt.getClientTimings(performance.now()))
+      .toEqual(expect.objectContaining({
+        codingSessionMs: null,
+        loadToVisibleMs: null,
+        payloadMs: null,
+        payloadToVisibleMs: null
+      }));
+    expect(replayState.replayAttempt.getServerTimings()).toBeUndefined();
+    expect(replayState.replayAttempt.tryFinalizeStatistics()).toBe(true);
   });
 
   it('should load only responses when the test person changes within the same unit', async () => {
@@ -862,8 +821,17 @@ describe('ReplayComponent', () => {
         totalMs: 7
       }
     }));
-    const replayComponent = component as unknown as { reloadKey: number };
+    const replayComponent = component as unknown as {
+      reloadKey: number;
+      replayAttempt: ReplayAttemptContext;
+    };
     const initialReloadKey = replayComponent.reloadKey;
+    const initialAttempt = replayComponent.replayAttempt;
+    initialAttempt.recordCodingSession({
+      requestStartedAt: 100,
+      responseReceivedAt: 200,
+      serverTimings: { codingSessionTotalMs: 50 }
+    });
 
     await component.handleUnitChanged({
       id: 2,
@@ -887,6 +855,14 @@ describe('ReplayComponent', () => {
     expect(replayComponent.reloadKey).toBe(initialReloadKey);
     expect(component.responses).toEqual({
       responses: [{ id: 'chunk', content: 'new person response' }]
+    });
+    expect(replayComponent.replayAttempt).not.toBe(initialAttempt);
+    expect(
+      replayComponent.replayAttempt.getClientTimings(performance.now())
+        .codingSessionMs
+    ).toBeNull();
+    expect(replayComponent.replayAttempt.getServerTimings()).toEqual({
+      responseTotalMs: 7
     });
   });
 

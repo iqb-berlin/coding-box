@@ -10,13 +10,18 @@ import {
   PostgresPoolSnapshot,
   PostgresPoolSnapshotProvider
 } from '../database/postgres-pool-monitor';
+import {
+  parseInFlightRequestThresholdMs,
+  parseSlowRequestThresholdMs
+} from '../config/runtime-config.service';
 
-export const DEFAULT_SLOW_REQUEST_THRESHOLD_MS = 1000;
-export const DEFAULT_IN_FLIGHT_REQUEST_THRESHOLD_MS = 10_000;
-export const SLOW_REQUEST_THRESHOLD_ENV = 'SLOW_REQUEST_THRESHOLD_MS';
-export const IN_FLIGHT_REQUEST_THRESHOLD_ENV =
-  'IN_FLIGHT_REQUEST_THRESHOLD_MS';
-export const REQUEST_START_LOGGING_ENV = 'REQUEST_START_LOGGING';
+export {
+  DEFAULT_IN_FLIGHT_REQUEST_THRESHOLD_MS,
+  DEFAULT_SLOW_REQUEST_THRESHOLD_MS,
+  parseBooleanFlag,
+  parseInFlightRequestThresholdMs,
+  parseSlowRequestThresholdMs
+} from '../config/runtime-config.service';
 
 interface RequestMonitoringLogger {
   error(message: string): void;
@@ -39,36 +44,6 @@ interface RequestMonitoringOptions {
 }
 
 const NANOSECONDS_PER_MILLISECOND = BigInt(1000000);
-
-export function parseSlowRequestThresholdMs(value: unknown): number {
-  return parsePositiveMilliseconds(value, DEFAULT_SLOW_REQUEST_THRESHOLD_MS);
-}
-
-export function parseInFlightRequestThresholdMs(value: unknown): number {
-  return parsePositiveMilliseconds(
-    value,
-    DEFAULT_IN_FLIGHT_REQUEST_THRESHOLD_MS
-  );
-}
-
-export function parseBooleanFlag(value: unknown): boolean {
-  return typeof value === 'string' &&
-    ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
-}
-
-function parsePositiveMilliseconds(value: unknown, fallback: number): number {
-  if (typeof value !== 'string' && typeof value !== 'number') {
-    return fallback;
-  }
-
-  const parsedValue = Number(value);
-
-  if (!Number.isFinite(parsedValue) || parsedValue < 1) {
-    return fallback;
-  }
-
-  return Math.floor(parsedValue);
-}
 
 export function createRequestMonitoringMiddleware(options: RequestMonitoringOptions = {}) {
   const logger = options.logger || new Logger('HttpRequestMonitoring');
