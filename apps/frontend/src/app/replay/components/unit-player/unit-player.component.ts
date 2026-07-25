@@ -9,7 +9,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
-  combineLatest, debounceTime, fromEvent, Observable, Subject, Subscription, takeUntil
+  combineLatest, debounceTime, fromEvent, Observable, ReplaySubject, Subject, Subscription, takeUntil
 } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from '../../../core/services/app.service';
@@ -47,7 +47,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   private lastPageError: 'notInList' | 'notCurrent' | null = null;
   private hasEmittedResponseVisible = false;
   @ViewChild('hostingIframe') hostingIframe!: ElementRef;
-  private validPages: Subject<{ pages: string[], current: string }> = new Subject();
+  private validPages = new ReplaySubject<{ pages: string[], current: string }>(1);
   private iFrameElement: HTMLIFrameElement | undefined;
   postMessageTarget: Window | undefined;
   private ngUnsubscribe = new Subject<void>();
@@ -65,6 +65,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   count: number = 0;
   dataParts!: { [key: string]: string };
   isLoaded: Subject<boolean> = new Subject<boolean>();
+  private currentPageId = '';
 
   ngOnChanges(changes: SimpleChanges): void {
     const unitDef = 'unitDef';
@@ -75,12 +76,14 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     const unitResponsesChange = changes[unitResponses];
 
     if (unitDefChange?.previousValue && !unitDefChange.currentValue) {
+      this.currentPageId = '';
       this.resetIframeContent();
       return;
     }
 
     if (unitDefChange?.currentValue && unitDefChange.previousValue !== unitDefChange.currentValue) {
       this.hasEmittedResponseVisible = false;
+      this.currentPageId = '';
       this.handleUnitDefChange(unitDefChange.currentValue, unitPlayerChange, unitResponsesChange);
     } else if (unitResponsesChange?.currentValue &&
       unitResponsesChange.previousValue !== unitResponsesChange.currentValue) {
@@ -207,12 +210,13 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     }
   }
 
-  private subscribeForValidPages(): void {
+  private subscribeForValidPages(requestedPageId?: string): void {
     const pageId$ = new Observable<string>(observer => {
-      observer.next(this.pageId() || '');
+      const getPageId = () => requestedPageId || this.pageId() || '';
+      observer.next(getPageId());
 
       const callback = () => {
-        observer.next(this.pageId() || '');
+        observer.next(getPageId());
       };
 
       // Use a longer interval to reduce unnecessary checks
@@ -266,10 +270,10 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     if (newPageError !== this.lastPageError) {
       this.lastPageError = newPageError;
       this.invalidPage.emit(newPageError);
+    }
 
-      if (newPageError === null) {
-        this.cleanupValidPagesSubscription();
-      }
+    if (newPageError === null) {
+      this.cleanupValidPagesSubscription();
     }
   }
 
@@ -442,7 +446,13 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   }
 
   // ++++++++++++ page nav ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  setPageList(validPages?: string[], currentPage?: string): void {
+  setPageList(
+    validPages?: string[],
+    currentPage?: string | number | null
+  ): void {
+    const normalizedCurrentPage = currentPage?.toString() ?? '';
+    this.currentPageId = normalizedCurrentPage;
+
     if ((validPages instanceof Array)) {
       const newPageList: PageData[] = [];
       if (validPages.length > 1) {
@@ -451,7 +461,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
             newPageList.push({
               index: -1,
               id: '#previous',
-              disabled: validPages[i] === currentPage,
+              disabled: validPages[i] === normalizedCurrentPage,
               type: '#previous'
             });
           }
@@ -459,7 +469,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
           newPageList.push({
             index: i + 1,
             id: validPages[i],
-            disabled: validPages[i] === currentPage,
+            disabled: validPages[i] === normalizedCurrentPage,
             type: '#goto'
           });
 
@@ -467,7 +477,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
             newPageList.push({
               index: -1,
               id: '#next',
-              disabled: validPages[i] === currentPage,
+              disabled: validPages[i] === normalizedCurrentPage,
               type: '#next'
             });
           }
@@ -476,7 +486,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       this.pageList = newPageList;
     } else if (this.pageList.length > 1 && currentPage !== undefined) {
       const currentPageIndex = this.pageList
-        .findIndex(page => page.id === currentPage && page.type === '#goto');
+        .findIndex(page => page.id === normalizedCurrentPage && page.type === '#goto');
 
       this.pageList.forEach((page, index) => {
         page.disabled = page.type === '#goto' && index === currentPageIndex;
@@ -562,7 +572,18 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       return false;
     }
 
+    const isCurrentPage = this.currentPageId === pageId;
+    this.hasEmittedResponseVisible = false;
+    this.cleanupValidPagesSubscription();
+    if (this.lastPageError !== null) {
+      this.lastPageError = null;
+      this.invalidPage.emit(null);
+    }
+    this.subscribeForValidPages(pageId);
     this.sendPageNavigationMessage(pageId);
+    if (isCurrentPage) {
+      this.notifyResponseVisible();
+    }
     return true;
   }
 

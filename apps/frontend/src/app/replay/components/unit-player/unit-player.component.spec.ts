@@ -3,6 +3,7 @@ import { SimpleChange } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { HttpClientModule } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { Subject } from 'rxjs';
 import { UnitPlayerComponent } from './unit-player.component';
 import { environment } from '../../../../environments/environment';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -202,6 +203,70 @@ describe('UnitPlayerComponent', () => {
       sessionId: '',
       target: 'page-2'
     }, '*');
+  });
+
+  it('should emit responseVisible again when navigating to the current page', () => {
+    const emitSpy = jest.spyOn(component.responseVisible, 'emit');
+    const appService = TestBed.inject(AppService);
+    const source = component.hostingIframe.nativeElement.contentWindow;
+    component.postMessageTarget = source;
+
+    appService.postMessage$.next(new MessageEvent('message', {
+      data: {
+        type: 'vopStateChangedNotification',
+        playerState: {
+          validPages: ['page-1'],
+          currentPage: 'page-1'
+        }
+      },
+      source
+    }));
+    expect(emitSpy).toHaveBeenCalledTimes(1);
+    expect(component.pageList).toEqual([]);
+
+    expect(component.navigateToPage('page-1')).toBe(true);
+
+    expect(emitSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('should handle a player state without a current page', () => {
+    const appService = TestBed.inject(AppService);
+    const source = component.hostingIframe.nativeElement.contentWindow;
+
+    expect(() => {
+      appService.postMessage$.next(new MessageEvent('message', {
+        data: {
+          type: 'vopStateChangedNotification',
+          playerState: {
+            validPages: ['page-1'],
+            currentPage: null
+          }
+        },
+        source
+      }));
+    }).not.toThrow();
+
+    expect(
+      (component as unknown as { currentPageId: string }).currentPageId
+    ).toBe('');
+  });
+
+  it('should validate the requested page again after direct navigation', () => {
+    jest.useFakeTimers();
+    const emitSpy = jest.spyOn(component.invalidPage, 'emit');
+    component.postMessageTarget = { postMessage: jest.fn() } as unknown as Window;
+
+    (component as unknown as {
+      validPages: Subject<{ pages: string[]; current: string }>;
+    }).validPages.next({
+      pages: ['page-1'],
+      current: 'page-1'
+    });
+
+    expect(component.navigateToPage('page-2')).toBe(true);
+    jest.advanceTimersByTime(2000);
+
+    expect(emitSpy).toHaveBeenCalledWith('notInList');
   });
 
   it('should not navigate before the player is ready', () => {

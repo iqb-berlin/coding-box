@@ -803,6 +803,26 @@ describe('ReplayComponent', () => {
   it('should navigate within the loaded unit without requesting its payload again', async () => {
     replayBackendService.getReplayPayload.mockClear();
     const navigateToPage = jest.fn().mockReturnValue(true);
+    const replayState = component as unknown as {
+      successStoredForCurrentReplay: boolean;
+      loadStartTime: number;
+      payloadRequestStartTime: number;
+      payloadResponseTime: number;
+      playerReadyTime: number;
+      serverTimings: Record<string, number> | null;
+      codingSessionRequestStartTime: number;
+      codingSessionResponseTime: number;
+      codingSessionServerTimings: Record<string, number> | null;
+    };
+    replayState.successStoredForCurrentReplay = true;
+    replayState.loadStartTime = 1;
+    replayState.payloadRequestStartTime = 2;
+    replayState.payloadResponseTime = 3;
+    replayState.playerReadyTime = 4;
+    replayState.serverTimings = { totalMs: 5 };
+    replayState.codingSessionRequestStartTime = 6;
+    replayState.codingSessionResponseTime = 7;
+    replayState.codingSessionServerTimings = { codingSessionTotalMs: 8 };
     component.unitPlayerComponent = {
       navigateToPage
     } as unknown as UnitPlayerComponent;
@@ -821,6 +841,15 @@ describe('ReplayComponent', () => {
     expect(navigateToPage).toHaveBeenCalledWith('2');
     expect(replayBackendService.getReplayPayload).not.toHaveBeenCalled();
     expect(replayBackendService.getReplayResponse).not.toHaveBeenCalled();
+    expect(replayState.successStoredForCurrentReplay).toBe(false);
+    expect(replayState.loadStartTime).toBe(0);
+    expect(replayState.payloadRequestStartTime).toBe(0);
+    expect(replayState.payloadResponseTime).toBe(0);
+    expect(replayState.playerReadyTime).toBe(0);
+    expect(replayState.serverTimings).toBeNull();
+    expect(replayState.codingSessionRequestStartTime).toBe(0);
+    expect(replayState.codingSessionResponseTime).toBe(0);
+    expect(replayState.codingSessionServerTimings).toBeNull();
   });
 
   it('should load only responses when the test person changes within the same unit', async () => {
