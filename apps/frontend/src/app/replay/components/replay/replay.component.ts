@@ -1401,8 +1401,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
       if (isSameUnit && isSameTestPerson) {
         this.invalidateUnitPayloadRequests();
-        if (this.page &&
-          !this.unitPlayerComponent?.navigateToPage(this.page)) {
+        if (this.page) {
+          this.prepareDirectPageNavigation();
+        }
+        if (this.page && !this.unitPlayerComponent?.navigateToPage(this.page)) {
           isCurrentUnitPayload = await this.loadAndApplyUnitData(
             workspaceId,
             this.getReplayRequestAuthToken()
@@ -1684,6 +1686,19 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.watermarkObserver?.disconnect();
     this.watermarkObserver = null;
     this.clearReplayNotesCommitDedupeTimeout();
+  }
+
+  private prepareDirectPageNavigation(): void {
+    this.replayStartTime = this.routeStartTime;
+    this.loadStartTime = 0;
+    this.payloadRequestStartTime = 0;
+    this.payloadResponseTime = 0;
+    this.playerReadyTime = 0;
+    this.serverTimings = null;
+    this.codingSessionRequestStartTime = 0;
+    this.codingSessionResponseTime = 0;
+    this.codingSessionServerTimings = null;
+    this.successStoredForCurrentReplay = false;
   }
 
   private scheduleAnchorHighlight(): void {
