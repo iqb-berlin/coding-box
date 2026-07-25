@@ -1208,7 +1208,7 @@ describe('ReplayComponent', () => {
     expect(component.codingService.allowComments).toBe(false);
   });
 
-  it('should share an in-flight session request and only apply the latest route', async () => {
+  it('should correlate in-flight session requests and only apply the latest route', async () => {
     routeQueryParams = {
       auth: 'valid-token',
       mode: 'coding',
@@ -1216,10 +1216,11 @@ describe('ReplayComponent', () => {
       workspaceId: '47'
     };
     routeParamsSubject = new Subject<typeof routeParams>();
-    const sessionResponse = new Subject<ReplayCodingSessionDto>();
-    codingJobBackendServiceMock.getReplayCodingSession.mockReturnValue(
-      sessionResponse.asObservable()
-    );
+    const firstSessionResponse = new Subject<ReplayCodingSessionDto>();
+    const secondSessionResponse = new Subject<ReplayCodingSessionDto>();
+    codingJobBackendServiceMock.getReplayCodingSession
+      .mockReturnValueOnce(firstSessionResponse.asObservable())
+      .mockReturnValueOnce(secondSessionResponse.asObservable());
 
     fixture.destroy();
     fixture = TestBed.createComponent(ReplayComponent);
@@ -1266,7 +1267,7 @@ describe('ReplayComponent', () => {
       codingJobBackendServiceMock.getReplayCodingSession
     ).toHaveBeenCalledTimes(1);
 
-    sessionResponse.next({
+    const replaySession: ReplayCodingSessionDto = {
       units: [
         {
           responseId: 1,
@@ -1309,19 +1310,33 @@ describe('ReplayComponent', () => {
       serverTimings: {
         totalMs: 15
       }
-    });
-    sessionResponse.complete();
+    };
+    firstSessionResponse.next(replaySession);
+    firstSessionResponse.complete();
     await Promise.resolve();
 
     releaseSecondRouterRun?.();
-    await fixture.whenStable();
     await new Promise<void>(resolve => {
       setTimeout(resolve, 0);
     });
 
     expect(
       codingJobBackendServiceMock.getReplayCodingSession
-    ).toHaveBeenCalledTimes(1);
+    ).toHaveBeenCalledTimes(2);
+
+    const firstAttemptId =
+      codingJobBackendServiceMock.getReplayCodingSession.mock.calls[0][4];
+    const secondAttemptId =
+      codingJobBackendServiceMock.getReplayCodingSession.mock.calls[1][4];
+    expect(firstAttemptId).not.toBe(secondAttemptId);
+
+    secondSessionResponse.next(replaySession);
+    secondSessionResponse.complete();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
     expect(component.unitId).toBe('unit-2');
     expect(component.page).toBe('1');
     expect(component.codingService.currentVariableId).toBe('VAR2');

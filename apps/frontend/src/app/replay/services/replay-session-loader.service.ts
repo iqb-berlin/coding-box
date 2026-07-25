@@ -57,13 +57,18 @@ export class ReplaySessionLoaderService {
     return `${request.workspaceId}:${request.codingJobId}:${request.onlyOpen}`;
   }
 
+  private getInFlightRequestKey(request: ReplaySessionLoadRequest): string {
+    return `${this.getRequestKey(request)}:${request.replayAttemptId || ''}`;
+  }
+
   retainOnly(request: ReplaySessionLoadRequest): string;
   retainOnly(request: null): null;
   retainOnly(request: ReplaySessionLoadRequest | null): string | null;
   retainOnly(request: ReplaySessionLoadRequest | null): string | null {
     const requestKey = request ? this.getRequestKey(request) : null;
+    const inFlightRequestKey = request ? this.getInFlightRequestKey(request) : null;
     this.requests.forEach((_request, key) => {
-      if (key !== requestKey) {
+      if (key !== inFlightRequestKey) {
         this.requests.delete(key);
       }
     });
@@ -71,14 +76,15 @@ export class ReplaySessionLoaderService {
   }
 
   load(request: ReplaySessionLoadRequest): Promise<ReplaySessionLoadResult> {
-    const requestKey = this.retainOnly(request);
-    const pendingRequest = this.requests.get(requestKey);
+    this.retainOnly(request);
+    const inFlightRequestKey = this.getInFlightRequestKey(request);
+    const pendingRequest = this.requests.get(inFlightRequestKey);
     if (pendingRequest) {
       return pendingRequest;
     }
 
     const loadRequest = this.loadSession(request);
-    this.requests.set(requestKey, loadRequest);
+    this.requests.set(inFlightRequestKey, loadRequest);
     return loadRequest;
   }
 
@@ -86,9 +92,9 @@ export class ReplaySessionLoaderService {
     request: ReplaySessionLoadRequest,
     loadRequest: Promise<ReplaySessionLoadResult>
   ): void {
-    const requestKey = this.getRequestKey(request);
-    if (this.requests.get(requestKey) === loadRequest) {
-      this.requests.delete(requestKey);
+    const inFlightRequestKey = this.getInFlightRequestKey(request);
+    if (this.requests.get(inFlightRequestKey) === loadRequest) {
+      this.requests.delete(inFlightRequestKey);
     }
   }
 

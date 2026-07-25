@@ -176,6 +176,35 @@ describe('ReplaySessionLoaderService', () => {
     expect(codingJobBackendService.getReplayCodingSession).toHaveBeenCalledTimes(1);
   });
 
+  it('does not share an in-flight request across replay attempts', async () => {
+    const firstResponse = new Subject<ReplayCodingSessionDto>();
+    const secondResponse = new Subject<ReplayCodingSessionDto>();
+    const secondAttemptRequest: ReplaySessionLoadRequest = {
+      ...request,
+      replayAttemptId: 'attempt-2'
+    };
+    codingJobBackendService.getReplayCodingSession
+      .mockReturnValueOnce(firstResponse.asObservable())
+      .mockReturnValueOnce(secondResponse.asObservable());
+
+    const firstLoad = service.load(request);
+    const secondLoad = service.load(secondAttemptRequest);
+
+    expect(service.getRequestKey(secondAttemptRequest))
+      .toBe(service.getRequestKey(request));
+    expect(codingJobBackendService.getReplayCodingSession)
+      .toHaveBeenNthCalledWith(1, 47, 77, 'replay-token', true, 'attempt-1');
+    expect(codingJobBackendService.getReplayCodingSession)
+      .toHaveBeenNthCalledWith(2, 47, 77, 'replay-token', true, 'attempt-2');
+
+    firstResponse.next(session);
+    firstResponse.complete();
+    secondResponse.next(session);
+    secondResponse.complete();
+
+    await Promise.all([firstLoad, secondLoad]);
+  });
+
   it('evicts an abandoned request when the requested coding job changes', async () => {
     const firstResponse = new Subject<ReplayCodingSessionDto>();
     const secondResponse = new Subject<ReplayCodingSessionDto>();
