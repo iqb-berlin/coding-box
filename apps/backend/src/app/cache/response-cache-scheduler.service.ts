@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -6,23 +6,17 @@ import { CacheService } from './cache.service';
 import Persons from '../database/entities/persons.entity';
 import { Unit } from '../database/entities/unit.entity';
 import { WorkspaceTestResultsService } from '../database/services/test-results';
-
-const DEFAULT_WORKSPACE_CONCURRENCY = 1;
-const DEFAULT_ITEM_CONCURRENCY = 4;
+import {
+  DEFAULT_RESPONSE_CACHE_ITEM_CONCURRENCY,
+  DEFAULT_RESPONSE_CACHE_WORKSPACE_CONCURRENCY,
+  RuntimeConfigService
+} from '../config/runtime-config.service';
 
 interface ResponseCacheWarmupItem {
   workspaceId: number;
   connector: string;
   unitId: string;
   cacheKey: string;
-}
-
-function parsePositiveInteger(
-  value: string | undefined,
-  fallback: number
-): number {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 @Injectable()
@@ -37,7 +31,9 @@ export class ResponseCacheSchedulerService {
     @InjectRepository(Persons)
     private readonly personsRepository: Repository<Persons>,
     @InjectRepository(Unit)
-    private readonly unitRepository: Repository<Unit>
+    private readonly unitRepository: Repository<Unit>,
+    @Optional()
+    private readonly runtimeConfig?: RuntimeConfigService
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_1AM)
@@ -69,10 +65,9 @@ export class ResponseCacheSchedulerService {
       this.logger.log(`Found ${workspaces.length} workspaces with test persons`);
 
       // Process workspaces in parallel with a concurrency limit
-      const concurrencyLimit = parsePositiveInteger(
-        process.env.RESPONSE_CACHE_WORKSPACE_CONCURRENCY,
-        DEFAULT_WORKSPACE_CONCURRENCY
-      );
+      const concurrencyLimit =
+        this.runtimeConfig?.responseCacheWorkspaceConcurrency ??
+        DEFAULT_RESPONSE_CACHE_WORKSPACE_CONCURRENCY;
       const chunks = this.chunkArray(workspaces, concurrencyLimit);
 
       for (const workspaceChunk of chunks) {
@@ -146,10 +141,9 @@ export class ResponseCacheSchedulerService {
       this.logger.log(`Found ${itemsToCache.length} items that need caching in workspace ${workspaceId}`);
 
       // Process items that need caching in smaller parallel batches
-      const cacheBatchSize = parsePositiveInteger(
-        process.env.RESPONSE_CACHE_ITEM_CONCURRENCY,
-        DEFAULT_ITEM_CONCURRENCY
-      );
+      const cacheBatchSize =
+        this.runtimeConfig?.responseCacheItemConcurrency ??
+        DEFAULT_RESPONSE_CACHE_ITEM_CONCURRENCY;
       const cacheBatches = this.chunkArray(itemsToCache, cacheBatchSize);
 
       for (const batch of cacheBatches) {

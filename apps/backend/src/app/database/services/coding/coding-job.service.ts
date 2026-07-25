@@ -105,6 +105,10 @@ import {
   ReplayCodingSessionDto,
   ReplayCodingSessionUnitDto
 } from '../../../../../../../api-dto/coding/replay-coding-session.dto';
+import {
+  DEFAULT_CODING_FILE_LOAD_CONCURRENCY,
+  RuntimeConfigService
+} from '../../../config/runtime-config.service';
 
 function isSafeKey(key: string): boolean {
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
@@ -114,20 +118,6 @@ export enum ResponseMatchingFlag {
   NO_AGGREGATION = 'NO_AGGREGATION',
   IGNORE_CASE = 'IGNORE_CASE',
   IGNORE_WHITESPACE = 'IGNORE_WHITESPACE'
-}
-
-const DEFAULT_CODING_FILE_LOAD_CONCURRENCY = 4;
-
-function getCodingFileLoadConcurrency(): number {
-  const configured = Number(process.env.CODING_FILE_LOAD_CONCURRENCY);
-  const poolMax = Number(process.env.POSTGRES_POOL_MAX);
-  const requested = Number.isInteger(configured) && configured > 0 ?
-    configured :
-    DEFAULT_CODING_FILE_LOAD_CONCURRENCY;
-  const poolBudget = Number.isInteger(poolMax) && poolMax > 0 ?
-    Math.max(1, poolMax - 1) :
-    requested;
-  return Math.max(1, Math.min(requested, poolBudget));
 }
 
 interface CodingSchemeCode {
@@ -490,7 +480,9 @@ export class CodingJobService {
     @InjectRepository(CoderTrainingDiscussionResult)
     private coderTrainingDiscussionResultRepository?: Repository<CoderTrainingDiscussionResult>,
     @Optional()
-    private replayAnchorService?: CodingReplayAnchorService
+    private replayAnchorService?: CodingReplayAnchorService,
+    @Optional()
+    private runtimeConfig?: RuntimeConfigService
   ) {}
 
   private async resolveMissingsProfileId(
@@ -4954,7 +4946,8 @@ export class CodingJobService {
       Array.from(
         {
           length: Math.min(
-            getCodingFileLoadConcurrency(),
+            this.runtimeConfig?.codingFileLoadConcurrency ??
+              DEFAULT_CODING_FILE_LOAD_CONCURRENCY,
             unitNames.length
           )
         },
