@@ -89,7 +89,11 @@ describe('ExportJobService', () => {
         progressMessage: '100/200 rows'
       }));
 
-      service.startJob(1, { exportType: 'results-by-version', userId: 1 }).subscribe();
+      service.startJob(1, {
+        exportType: 'results-by-version',
+        userId: 1,
+        missingsProfileId: 7
+      }).subscribe();
 
       tick(2000);
 

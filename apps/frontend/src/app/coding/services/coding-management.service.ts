@@ -560,11 +560,11 @@ export class CodingManagementService {
   downloadCodingResults(
     version: StatisticsVersion,
     format: CodingResultsExportFormat,
+    missingsProfileId: number,
     includeReplayUrls: boolean,
     includeResponseValues: boolean = true,
     includeGeoGebraFiles: boolean = false,
-    includeGeoGebraResponseValues: boolean = false,
-    missingsProfileId?: number
+    includeGeoGebraResponseValues: boolean = false
   ): Promise<void> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return Promise.resolve();
@@ -573,11 +573,11 @@ export class CodingManagementService {
       workspaceId,
       version,
       format,
+      missingsProfileId,
       includeReplayUrls,
       includeResponseValues,
       includeGeoGebraFiles,
-      includeGeoGebraResponseValues,
-      missingsProfileId
+      includeGeoGebraResponseValues
     );
   }
 
@@ -587,11 +587,11 @@ export class CodingManagementService {
     workspaceId: number,
     version: StatisticsVersion,
     format: CodingResultsExportFormat,
+    missingsProfileId: number,
     includeReplayUrls: boolean,
     includeResponseValues: boolean,
     includeGeoGebraFiles: boolean,
-    includeGeoGebraResponseValues: boolean,
-    missingsProfileId?: number
+    includeGeoGebraResponseValues: boolean
   ): Promise<void> {
     this.downloadProgress$.next(0);
 

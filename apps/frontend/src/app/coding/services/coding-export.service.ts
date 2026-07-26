@@ -72,10 +72,10 @@ export class CodingExportService {
   getCodingResultsByVersion(
     workspace_id: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     includeReplayUrls: boolean = false,
     includeResponseValues: boolean = true,
-    includeGeoGebraResponseValues: boolean = false,
-    missingsProfileId?: number
+    includeGeoGebraResponseValues: boolean = false
   ): Observable<Blob> {
     return this.getReplayExportAuthToken(
       workspace_id,
@@ -90,9 +90,7 @@ export class CodingExportService {
           .set('includeReplayUrls', includeReplayUrls ? 'true' : 'false')
           .set('includeResponseValues', includeResponseValues ? 'true' : 'false')
           .set('includeGeoGebraResponseValues', includeGeoGebraResponseValues ? 'true' : 'false');
-        if (version === 'v1' && missingsProfileId !== undefined) {
-          params = params.set('missingsProfileId', missingsProfileId.toString());
-        }
+        params = params.set('missingsProfileId', missingsProfileId.toString());
         return this.http.get(
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/results-by-version`,
           {
@@ -107,11 +105,11 @@ export class CodingExportService {
   getCodingResultsByVersionAsExcel(
     workspace_id: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     includeReplayUrls: boolean = false,
     includeResponseValues: boolean = true,
     includeGeoGebraFiles: boolean = false,
-    includeGeoGebraResponseValues: boolean = false,
-    missingsProfileId?: number
+    includeGeoGebraResponseValues: boolean = false
   ): Observable<Blob> {
     return this.getReplayExportAuthToken(
       workspace_id,
@@ -127,9 +125,7 @@ export class CodingExportService {
           .set('includeResponseValues', includeResponseValues ? 'true' : 'false')
           .set('includeGeoGebraFiles', includeGeoGebraFiles ? 'true' : 'false')
           .set('includeGeoGebraResponseValues', includeGeoGebraResponseValues ? 'true' : 'false');
-        if (version === 'v1' && missingsProfileId !== undefined) {
-          params = params.set('missingsProfileId', missingsProfileId.toString());
-        }
+        params = params.set('missingsProfileId', missingsProfileId.toString());
         return this.http.get(
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/results-by-version/excel`,
           {
@@ -236,7 +232,33 @@ export class CodingExportService {
 
   startExportJob(
     workspaceId: number,
-    exportType: string,
+    exportType: 'results-by-version',
+    version: 'v1' | 'v2' | 'v3',
+    format: 'csv' | 'excel',
+    includeReplayUrls: boolean,
+    trainingRequired: undefined,
+    includeResponseValues: boolean,
+    includeGeoGebraFiles: boolean,
+    includeGeoGebraResponseValues: boolean,
+    missingsProfileId: number
+  ): Observable<{ jobId: string; message: string }>;
+
+  startExportJob(
+    workspaceId: number,
+    exportType: 'coding-list',
+    version?: undefined,
+    format?: 'csv' | 'json' | 'excel',
+    includeReplayUrls?: boolean,
+    trainingRequired?: boolean,
+    includeResponseValues?: boolean,
+    includeGeoGebraFiles?: boolean,
+    includeGeoGebraResponseValues?: boolean,
+    missingsProfileId?: number
+  ): Observable<{ jobId: string; message: string }>;
+
+  startExportJob(
+    workspaceId: number,
+    exportType: 'results-by-version' | 'coding-list',
     version?: 'v1' | 'v2' | 'v3',
     format?: 'csv' | 'json' | 'excel',
     includeReplayUrls: boolean = false,

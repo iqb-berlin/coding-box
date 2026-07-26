@@ -1742,7 +1742,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       includeResponseValues: boolean;
       includeGeoGebraFiles: boolean;
       includeGeoGebraResponseValues: boolean;
-      missingsProfileId?: number;
+      missingsProfileId: number;
     } | undefined) => {
       if (result) {
         const {
@@ -1757,11 +1757,11 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         this.codingManagementService.downloadCodingResults(
           version,
           format,
+          missingsProfileId,
           includeReplayUrls,
           includeResponseValues,
           includeGeoGebraFiles,
-          includeGeoGebraResponseValues,
-          missingsProfileId
+          includeGeoGebraResponseValues
         )
           .finally(() => {
             this.isDownloadInProgress = false;
