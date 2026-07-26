@@ -11,6 +11,8 @@ import type {
   ItemDatasetMissingState
 } from './item-dataset-missing-aggregation.util';
 import type { IqbStandardMissingId } from './missings-profiles.service';
+import { ItemDatasetCellExportError } from './item-dataset-cell-export-error';
+import { mapCodeForExport } from '../../../utils/coding-utils';
 
 export interface ItemDatasetColumn {
   key: string;
@@ -196,10 +198,35 @@ export class ItemDatasetCellResolver {
     cell: ResolvedItemDatasetCell,
     requestedValue: 'code' | 'score'
   ): string | number {
-    if (requestedValue === 'score') {
-      return cell.score === null ? '' : cell.score;
+    const isMissing = requiredMissingIds.includes(
+      cell.state as IqbStandardMissingId
+    );
+    if (cell.state === 'error' && cell.code === null && cell.score === null) {
+      throw new ItemDatasetCellExportError('unresolved-cell');
     }
-    return cell.unresolved || cell.code === null ? 'NA' : cell.code;
+    if (
+      cell.state === 'error' &&
+      cell.code !== null &&
+      mapCodeForExport(cell.code) === null
+    ) {
+      throw new ItemDatasetCellExportError('invalid-code');
+    }
+    if (requestedValue === 'score') {
+      if (cell.score !== null) {
+        return cell.score;
+      }
+      if (
+        isMissing ||
+        (!cell.unresolved && cell.code !== null && cell.code < 0)
+      ) {
+        return 'NA';
+      }
+      throw new ItemDatasetCellExportError('missing-score');
+    }
+    if (cell.code === null) {
+      throw new ItemDatasetCellExportError('missing-code');
+    }
+    return cell.code;
   }
 
   unresolvedCell(): ResolvedItemDatasetCell {
@@ -353,11 +380,11 @@ export class ItemDatasetCellResolver {
         value.code !== null && value.code < 0 ?
           profile.byCode.get(value.code) :
           undefined;
-      if (storedMissing) {
+      if (storedMissing && value.score === storedMissing.score) {
         return {
           ...this.fromMissing(storedMissing),
           code: value.code,
-          score: value.score ?? storedMissing.score
+          score: value.score
         };
       }
       return {

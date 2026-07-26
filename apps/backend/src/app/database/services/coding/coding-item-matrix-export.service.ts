@@ -36,6 +36,10 @@ import {
   ResolvedItemDatasetCell
 } from './item-dataset-cell-resolver';
 import {
+  ItemDatasetCellExportError,
+  ItemDatasetCellExportFailureReason
+} from './item-dataset-cell-export-error';
+import {
   ItemDatasetColumnResolution,
   ItemDatasetMetadataService
 } from './item-dataset-metadata.service';
@@ -70,10 +74,13 @@ interface RawResponseValueRow {
   unitName: string;
   variableId: string;
   status: number | string | null;
+  statusV1: number | string | null;
   codeV1: number | string | null;
   scoreV1: number | string | null;
+  statusV2: number | string | null;
   codeV2: number | string | null;
   scoreV2: number | string | null;
+  statusV3: number | string | null;
   codeV3: number | string | null;
   scoreV3: number | string | null;
 }
@@ -94,6 +101,24 @@ interface MatrixContext {
   profile: ProfileDefinitions;
   derivedSources: Map<string, string[]>;
 }
+
+interface ItemDatasetResolutionSample {
+  rowNumber: number;
+  bookletName: string;
+  columnName: string;
+  reason: ItemDatasetCellExportFailureReason;
+}
+
+const buildItemDatasetResolutionErrorMessage = (
+  total: number,
+  samples: ItemDatasetResolutionSample[]
+): string => {
+  const sampleText = samples.map(sample => (
+    `Zeile ${sample.rowNumber}, Booklet '${sample.bookletName}', Spalte '${sample.columnName}' (${sample.reason})`
+  )).join('; ');
+  const examples = sampleText ? ` Beispiele: ${sampleText}` : '';
+  return `Itemdatensatz enthält ${total} nicht exportierbare Zelle${total === 1 ? '' : 'n'}.${examples}`;
+};
 
 const requiredMissingIds: IqbStandardMissingId[] = [
   'mir',
@@ -400,52 +425,15 @@ export class CodingItemMatrixExportService {
     profileId: number
   ): Promise<ProfileDefinitions> {
     const profile =
-      await this.missingsProfilesService.getMissingsProfileDetails(
+      await this.missingsProfilesService.getResolvedMissingsProfileForExport(
         workspaceId,
-        profileId
+        profileId,
+        requiredMissingIds
       );
-    if (!profile) {
-      throw new BadRequestException(
-        `Missing-Profil ${profileId} wurde nicht gefunden`
-      );
-    }
-    const entries = profile.parseMissings();
-    const byId = new Map<IqbStandardMissingId, ResolvedMissingValue>();
-    const byCode = new Map<number, ResolvedMissingValue>();
-
-    entries.forEach(entry => {
-      if (!Object.prototype.hasOwnProperty.call(entry, 'score')) {
-        throw new BadRequestException(
-          `Missing '${entry.id}' in Profil ${profileId} hat kein score-Property`
-        );
-      }
-      const resolved: ResolvedMissingValue = {
-        id: entry.id,
-        label: entry.label,
-        code: Number(entry.code),
-        score: entry.score === null ? null : Number(entry.score)
-      };
-      if (
-        !Number.isInteger(resolved.code) ||
-        (resolved.score !== null && !Number.isFinite(resolved.score))
-      ) {
-        throw new BadRequestException(
-          `Missing '${entry.id}' in Profil ${profileId} ist ungültig`
-        );
-      }
-      byCode.set(resolved.code, resolved);
-      if (requiredMissingIds.includes(entry.id as IqbStandardMissingId)) {
-        byId.set(entry.id as IqbStandardMissingId, resolved);
-      }
-    });
-
-    const missingIds = requiredMissingIds.filter(id => !byId.has(id));
-    if (missingIds.length > 0) {
-      throw new BadRequestException(
-        `Missing-Profil ${profileId} enthält nicht: ${missingIds.join(', ')}`
-      );
-    }
-    return { byId, byCode };
+    const byId = new Map<IqbStandardMissingId, ResolvedMissingValue>(
+      requiredMissingIds.map(id => [id, profile.byId.get(id)!])
+    );
+    return { byId, byCode: profile.byCode };
   }
 
   private async buildColumns(
@@ -542,6 +530,8 @@ export class CodingItemMatrixExportService {
     checkCancellation?: () => Promise<void>
   ): AsyncGenerator<Record<string, string | number>> {
     const batchSize = 100;
+    const resolutionSamples: ItemDatasetResolutionSample[] = [];
+    let resolutionFailureCount = 0;
     let written = 0;
     for (let start = 0; start < context.rows.length; start += batchSize) {
       await checkCancellation?.();
@@ -592,12 +582,28 @@ export class CodingItemMatrixExportService {
         for (let index = 0; index < context.columns.length; index += 1) {
           await this.checkExportCancellationPoint(index, checkCancellation);
           const column = context.columns[index];
-          exportRow[column.header] = this.getExportValue(
-            cellsByItem.get(
-              this.getSelectionKey(column.unitId, column.itemId)
-            ) || this.unresolvedCell(),
-            requestedValue
-          );
+          try {
+            exportRow[column.header] = this.getExportValue(
+              cellsByItem.get(
+                this.getSelectionKey(column.unitId, column.itemId)
+              ) || this.unresolvedCell(),
+              requestedValue
+            );
+          } catch (error) {
+            if (!(error instanceof ItemDatasetCellExportError)) {
+              throw error;
+            }
+            resolutionFailureCount += 1;
+            if (resolutionSamples.length < 20) {
+              resolutionSamples.push({
+                rowNumber: start + rowIndex + 2,
+                bookletName: row.bookletName,
+                columnName: column.header,
+                reason: error.reason
+              });
+            }
+            exportRow[column.header] = '';
+          }
         }
         yield exportRow;
         written += 1;
@@ -608,6 +614,12 @@ export class CodingItemMatrixExportService {
         );
       }
       await this.yieldToEventLoop();
+    }
+    if (resolutionFailureCount > 0) {
+      throw new BadRequestException(buildItemDatasetResolutionErrorMessage(
+        resolutionFailureCount,
+        resolutionSamples
+      ));
     }
   }
 
@@ -682,10 +694,13 @@ export class CodingItemMatrixExportService {
       .addSelect('unit.name', 'unitName')
       .addSelect('response.variableid', 'variableId')
       .addSelect('response.status', 'status')
+      .addSelect('response.status_v1', 'statusV1')
       .addSelect('response.code_v1', 'codeV1')
       .addSelect('response.score_v1', 'scoreV1')
+      .addSelect('response.status_v2', 'statusV2')
       .addSelect('response.code_v2', 'codeV2')
       .addSelect('response.score_v2', 'scoreV2')
+      .addSelect('response.status_v3', 'statusV3')
       .addSelect('response.code_v3', 'codeV3')
       .addSelect('response.score_v3', 'scoreV3')
       .where('booklet.id IN (:...bookletIds)', {
@@ -730,45 +745,42 @@ export class CodingItemMatrixExportService {
     version: ItemMatrixVersion
   ): ResponseValue {
     const hydrated = 'code_v1' in response;
-    const status = hydrated ?
-      response.status :
-      this.toNullableNumber(response.status);
     switch (version) {
       case 'v1':
         return hydrated ?
           {
             code: response.code_v1,
             score: response.score_v1,
-            status
+            status: response.status_v1
           } :
           {
             code: this.toNullableNumber(response.codeV1),
             score: this.toNullableNumber(response.scoreV1),
-            status
+            status: this.toNullableNumber(response.statusV1)
           };
       case 'v2':
         return hydrated ?
           {
             code: response.code_v2,
             score: response.score_v2,
-            status
+            status: response.status_v2
           } :
           {
             code: this.toNullableNumber(response.codeV2),
             score: this.toNullableNumber(response.scoreV2),
-            status
+            status: this.toNullableNumber(response.statusV2)
           };
       case 'v3':
         return hydrated ?
           {
             code: response.code_v3,
             score: response.score_v3,
-            status
+            status: response.status_v3
           } :
           {
             code: this.toNullableNumber(response.codeV3),
             score: this.toNullableNumber(response.scoreV3),
-            status
+            status: this.toNullableNumber(response.statusV3)
           };
       default:
         throw new Error(`Unsupported item dataset version: ${version}`);
