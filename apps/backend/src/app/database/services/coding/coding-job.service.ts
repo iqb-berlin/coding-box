@@ -318,6 +318,14 @@ type DistributionCreatedJob = {
 
 type CodingJobBundleVariableStatus = ReplayCodingBundleVariableStatus;
 type CodingJobBundleContext = ReplayCodingBundleContextDto;
+type CodingJobBundleTarget = {
+  login: string;
+  code: string;
+  person_group: string;
+  booklet_name: string;
+  unit_name: string;
+  variable_id: string;
+};
 type CodingJobNavigationUnit = ReplayCodingSessionUnitDto & {
   notes: string | null;
   isDoubleCoded: boolean;
@@ -4624,6 +4632,51 @@ export class CodingJobService {
     ].join('\u0000');
   }
 
+  private getCodingJobBundleTargets(
+    bundledUnits: CodingJobUnit[],
+    variableBundleById: Map<number, VariableBundle>
+  ): CodingJobBundleTarget[] {
+    const targets = new Map<string, CodingJobBundleTarget>();
+    const processedBundleCases = new Set<string>();
+
+    bundledUnits.forEach(unit => {
+      const bundleId = unit.variable_bundle_id;
+      if (bundleId === null) {
+        return;
+      }
+
+      const variableBundle = variableBundleById.get(bundleId);
+      if (!variableBundle) {
+        return;
+      }
+
+      const caseKey = this.getCodingJobBundleUnitCaseKey(unit);
+      const bundleCaseKey = `${caseKey}\u0000${bundleId}`;
+      if (processedBundleCases.has(bundleCaseKey)) {
+        return;
+      }
+      processedBundleCases.add(bundleCaseKey);
+
+      const [login, code, personGroup, bookletName] = caseKey.split('\u0000');
+      (variableBundle.variables || []).forEach(variable => {
+        const variableKey = getAggregationVariableKey(
+          variable.unitName,
+          variable.variableId
+        );
+        targets.set(`${caseKey}\u0000${variableKey}`, {
+          login,
+          code,
+          person_group: personGroup,
+          booklet_name: bookletName,
+          unit_name: variable.unitName.toUpperCase(),
+          variable_id: variable.variableId
+        });
+      });
+    });
+
+    return Array.from(targets.values());
+  }
+
   private getCodingJobBundleVariableStatus(
     response: ResponseEntity | undefined,
     manualUnit: CodingJobUnit | undefined
@@ -4739,43 +4792,13 @@ export class CodingJobService {
       unit => unit.variable_bundle_id !== null &&
         caseKeys.has(this.getCodingJobBundleUnitCaseKey(unit))
     );
-    const bundleVariables = Array.from(
-      new Map(
-        variableBundles.flatMap(bundle => (
-          bundle.variables || []
-        )).map(variable => [
-          getAggregationVariableKey(variable.unitName, variable.variableId),
-          {
-            unitName: variable.unitName.toUpperCase(),
-            variableId: variable.variableId
-          }
-        ])
-      ).values()
+    const bundleTargets = this.getCodingJobBundleTargets(
+      bundledUnits,
+      variableBundleById
     );
-
-    if (bundleVariables.length === 0) {
+    if (bundleTargets.length === 0) {
       return new Map();
     }
-
-    const bundleCases = Array.from(caseKeys).map(caseKey => {
-      const [login, code, group, bookletName] = caseKey.split('\u0000');
-      return {
-        login,
-        code,
-        group,
-        bookletName
-      };
-    });
-    const bundleTargets = bundleCases.flatMap(bundleCase => (
-      bundleVariables.map(variable => ({
-        login: bundleCase.login,
-        code: bundleCase.code,
-        person_group: bundleCase.group,
-        booklet_name: bundleCase.bookletName,
-        unit_name: variable.unitName,
-        variable_id: variable.variableId
-      }))
-    ));
     const manualUnitByResponseId = new Map(
       contextBundledUnits.map(unit => [unit.response_id, unit])
     );
