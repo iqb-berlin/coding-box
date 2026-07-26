@@ -39,6 +39,8 @@ type UnitCodingJobMetadata = {
   groupNames?: string;
 };
 
+const CODING_INCOMPLETE_STATUS = statusStringToNumber('CODING_INCOMPLETE');
+
 @Injectable()
 export class CodingProcessService {
   private readonly logger = new Logger(CodingProcessService.name);
@@ -952,10 +954,26 @@ export class CodingProcessService {
           let inputCode: number | undefined;
           let inputScore: number | undefined;
           if (autoCoderRun === 2) {
-            inputStatus =
-              response.status_v2 ?? response.status_v1 ?? response.status;
-            inputCode = response.code_v2 ?? response.code_v1 ?? undefined;
-            inputScore = response.score_v2 ?? response.score_v1 ?? undefined;
+            const isOpenV2Placeholder =
+              response.status_v2 === CODING_INCOMPLETE_STATUS &&
+              response.code_v2 === null &&
+              response.score_v2 === null;
+            const hasV2Result =
+              !isOpenV2Placeholder && (
+                response.status_v2 !== null ||
+                response.code_v2 !== null ||
+                response.score_v2 !== null
+              );
+            if (hasV2Result) {
+              inputStatus =
+                response.status_v2 ?? response.status_v1 ?? response.status;
+              inputCode = response.code_v2 ?? undefined;
+              inputScore = response.score_v2 ?? undefined;
+            } else {
+              inputStatus = response.status_v1 ?? response.status;
+              inputCode = response.code_v1 ?? undefined;
+              inputScore = response.score_v1 ?? undefined;
+            }
           }
           let responseValue = response.value as import('@iqbspecs/response/response.interface').ResponseValueType;
           const isArrayString = /^\[.*]$/.test(response.value);
