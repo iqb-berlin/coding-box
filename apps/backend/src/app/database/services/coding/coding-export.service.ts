@@ -723,50 +723,50 @@ export class CodingExportService {
   async exportCodingResultsByVersionAsCsv(
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     authToken: string,
     serverUrl: string,
     includeReplayUrls: boolean,
     progressCallback?: (percentage: number) => Promise<void>,
     includeResponseValues: boolean = true,
-    includeGeoGebraResponseValues: boolean = false,
-    missingsProfileId?: number
+    includeGeoGebraResponseValues: boolean = false
   ): Promise<Readable> {
     return this.codingListService.getCodingResultsByVersionCsvStream(
       workspaceId,
       version,
+      missingsProfileId,
       authToken || '',
       serverUrl || '',
       includeReplayUrls,
       progressCallback,
       includeResponseValues,
       includeGeoGebraResponseValues,
-      undefined,
-      missingsProfileId
+      undefined
     );
   }
 
   async exportCodingResultsByVersionAsExcel(
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     authToken: string,
     serverUrl: string,
     includeReplayUrls: boolean,
     progressCallback?: (percentage: number) => Promise<void>,
     includeResponseValues: boolean = true,
-    includeGeoGebraResponseValues: boolean = false,
-    missingsProfileId?: number
+    includeGeoGebraResponseValues: boolean = false
   ): Promise<Buffer> {
     return this.codingListService.getCodingResultsByVersionAsExcel(
       workspaceId,
       version,
+      missingsProfileId,
       authToken || '',
       serverUrl || '',
       includeReplayUrls,
       progressCallback,
       includeResponseValues,
       includeGeoGebraResponseValues,
-      undefined,
-      missingsProfileId
+      undefined
     );
   }
 

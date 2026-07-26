@@ -136,6 +136,7 @@ describe('ExportJobProcessor', () => {
         exportType: 'results-by-version',
         version: 'v3',
         format: 'excel',
+        missingsProfileId: 7,
         includeReplayUrl: true,
         includeResponseValues: true,
         authToken: 'auth-token',
@@ -148,6 +149,7 @@ describe('ExportJobProcessor', () => {
         {
           workspaceId: 7,
           version: 'v3',
+          missingsProfileId: 7,
           authToken: 'auth-token',
           serverUrl: 'http://app.example',
           includeReplayUrl: true,
@@ -271,6 +273,7 @@ describe('ExportJobProcessor', () => {
     try {
       const result = await processor.process(createJob({
         exportType: 'results-by-version',
+        missingsProfileId: 7,
         includeReplayUrl: true,
         includeResponseValues: true,
         authToken: 'auth-token',
@@ -281,6 +284,7 @@ describe('ExportJobProcessor', () => {
       expect(codingExportOrchestratorService.exportResultsByVersionAsCsv).toHaveBeenCalledWith({
         workspaceId: 7,
         version: 'v2',
+        missingsProfileId: 7,
         authToken: 'auth-token',
         serverUrl: 'http://app.example',
         includeReplayUrl: true,
@@ -315,7 +319,8 @@ describe('ExportJobProcessor', () => {
     const processPromise = processor.process(createJob({
       exportType: 'results-by-version',
       version: 'v2',
-      format: 'csv'
+      format: 'csv',
+      missingsProfileId: 7
     }));
 
     try {
@@ -355,7 +360,8 @@ describe('ExportJobProcessor', () => {
     const processPromise = processor.process(createJob({
       exportType: 'results-by-version',
       version: 'v2',
-      format: 'csv'
+      format: 'csv',
+      missingsProfileId: 7
     }));
 
     await new Promise(resolve => {
@@ -388,6 +394,7 @@ describe('ExportJobProcessor', () => {
         exportType: 'results-by-version',
         version: 'v2',
         format: 'excel',
+        missingsProfileId: 7,
         includeReplayUrl: true,
         includeResponseValues: true,
         includeGeoGebraFiles: true,
@@ -401,6 +408,7 @@ describe('ExportJobProcessor', () => {
         {
           workspaceId: 7,
           version: 'v2',
+          missingsProfileId: 7,
           authToken: 'auth-token',
           serverUrl: 'http://app.example',
           includeReplayUrl: true,
@@ -580,6 +588,7 @@ describe('ExportJobProcessor', () => {
     await expect(processor.process(createJob({
       exportType: 'results-by-version',
       format: 'excel',
+      missingsProfileId: 7,
       includeResponseValues: false,
       includeGeoGebraFiles: true
     }))).rejects.toThrow('GeoGebra file packages require response values');
@@ -866,7 +875,8 @@ describe('ExportJobProcessor', () => {
 
     await expect(processor.process(createJob({
       exportType: 'results-by-version',
-      format: format as never
+      format: format as never,
+      missingsProfileId: 7
     }))).rejects.toThrow('results-by-version exports support only "csv" or "excel" format');
 
     expect(codingExportOrchestratorService.exportResultsByVersionAsCsv).not.toHaveBeenCalled();

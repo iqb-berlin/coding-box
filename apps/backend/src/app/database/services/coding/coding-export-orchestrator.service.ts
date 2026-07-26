@@ -33,7 +33,7 @@ export interface VersionedCodingResultsExportOptions {
   includeResponseValues?: boolean;
   includeGeoGebraResponseValues?: boolean;
   includeGeoGebraFiles?: boolean;
-  missingsProfileId?: number;
+  missingsProfileId: number;
   onProgress?: ExportProgressCallback;
   checkCancellation?: () => Promise<void>;
 }
@@ -81,14 +81,14 @@ export class CodingExportOrchestratorService {
     return this.codingListService.getCodingResultsByVersionCsvStream(
       options.workspaceId,
       options.version || 'v2',
+      options.missingsProfileId,
       options.authToken || '',
       options.serverUrl || '',
       options.includeReplayUrl || false,
       options.onProgress,
       options.includeResponseValues !== false,
       options.includeGeoGebraResponseValues === true,
-      options.checkCancellation,
-      options.missingsProfileId
+      options.checkCancellation
     );
   }
 
@@ -99,26 +99,26 @@ export class CodingExportOrchestratorService {
       return this.codingListService.getCodingResultsByVersionAsGeoGebraZip(
         options.workspaceId,
         options.version || 'v2',
+        options.missingsProfileId,
         options.authToken || '',
         options.serverUrl || '',
         options.includeReplayUrl || false,
         options.onProgress,
-        options.checkCancellation,
-        options.missingsProfileId
+        options.checkCancellation
       );
     }
 
     return this.codingListService.getCodingResultsByVersionAsExcel(
       options.workspaceId,
       options.version || 'v2',
+      options.missingsProfileId,
       options.authToken || '',
       options.serverUrl || '',
       options.includeReplayUrl || false,
       options.onProgress,
       options.includeResponseValues !== false,
       options.includeGeoGebraResponseValues === true,
-      options.checkCancellation,
-      options.missingsProfileId
+      options.checkCancellation
     );
   }
 
@@ -131,12 +131,12 @@ export class CodingExportOrchestratorService {
         filePath,
         options.workspaceId,
         options.version || 'v2',
+        options.missingsProfileId,
         options.authToken || '',
         options.serverUrl || '',
         options.includeReplayUrl || false,
         options.onProgress,
-        options.checkCancellation,
-        options.missingsProfileId
+        options.checkCancellation
       );
       return;
     }
@@ -145,14 +145,14 @@ export class CodingExportOrchestratorService {
       filePath,
       options.workspaceId,
       options.version || 'v2',
+      options.missingsProfileId,
       options.authToken || '',
       options.serverUrl || '',
       options.includeReplayUrl || false,
       options.onProgress,
       options.includeResponseValues !== false,
       options.includeGeoGebraResponseValues === true,
-      options.checkCancellation,
-      options.missingsProfileId
+      options.checkCancellation
     );
   }
 

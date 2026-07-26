@@ -56,6 +56,12 @@ export interface CodingItemVersionExportValue {
   score: number | 'NA' | '';
 }
 
+export interface CodingItemVersionExportValues {
+  v1: CodingItemVersionExportValue;
+  v2?: CodingItemVersionExportValue;
+  v3?: CodingItemVersionExportValue;
+}
+
 /**
  * Service responsible for building CodingItem objects from ResponseEntity data.
  *
@@ -301,7 +307,7 @@ export class CodingItemBuilderService {
     includeResponseValues: boolean = true,
     includeGeoGebraResponseValues: boolean = false,
     variableAnchorMaps?: CodingVariableAnchorMaps,
-    resolvedV1Value?: CodingItemVersionExportValue
+    resolvedValues?: CodingItemVersionExportValues
   ): Promise<CodingItem | null> {
     try {
       const unitKey = row.unitKey || '';
@@ -361,25 +367,25 @@ export class CodingItemBuilderService {
 
       if (targetVersion === 'v1') {
         baseItem.status_v1 = this.formatStatus(row.statusV1);
-        baseItem.code_v1 = resolvedV1Value?.code ?? mapCodeForExport(row.codeV1) ?? '';
-        baseItem.score_v1 = resolvedV1Value?.score ?? row.scoreV1 ?? '';
+        baseItem.code_v1 = resolvedValues?.v1.code ?? mapCodeForExport(row.codeV1) ?? '';
+        baseItem.score_v1 = resolvedValues?.v1.score ?? row.scoreV1 ?? '';
       } else if (targetVersion === 'v2') {
         baseItem.status_v1 = this.formatStatus(row.statusV1);
-        baseItem.code_v1 = mapCodeForExport(row.codeV1) ?? '';
-        baseItem.score_v1 = row.scoreV1 ?? '';
+        baseItem.code_v1 = resolvedValues?.v1.code ?? mapCodeForExport(row.codeV1) ?? '';
+        baseItem.score_v1 = resolvedValues?.v1.score ?? row.scoreV1 ?? '';
         baseItem.status_v2 = this.formatStatus(row.statusV2);
-        baseItem.code_v2 = mapCodeForExport(row.codeV2) ?? '';
-        baseItem.score_v2 = row.scoreV2 ?? '';
+        baseItem.code_v2 = resolvedValues?.v2?.code ?? mapCodeForExport(row.codeV2) ?? '';
+        baseItem.score_v2 = resolvedValues?.v2?.score ?? row.scoreV2 ?? '';
       } else {
         baseItem.status_v1 = this.formatStatus(row.statusV1);
-        baseItem.code_v1 = mapCodeForExport(row.codeV1) ?? '';
-        baseItem.score_v1 = row.scoreV1 ?? '';
+        baseItem.code_v1 = resolvedValues?.v1.code ?? mapCodeForExport(row.codeV1) ?? '';
+        baseItem.score_v1 = resolvedValues?.v1.score ?? row.scoreV1 ?? '';
         baseItem.status_v2 = this.formatStatus(row.statusV2);
-        baseItem.code_v2 = mapCodeForExport(row.codeV2) ?? '';
-        baseItem.score_v2 = row.scoreV2 ?? '';
+        baseItem.code_v2 = resolvedValues?.v2?.code ?? mapCodeForExport(row.codeV2) ?? '';
+        baseItem.score_v2 = resolvedValues?.v2?.score ?? row.scoreV2 ?? '';
         baseItem.status_v3 = this.formatStatus(row.statusV3);
-        baseItem.code_v3 = mapCodeForExport(row.codeV3) ?? '';
-        baseItem.score_v3 = row.scoreV3 ?? '';
+        baseItem.code_v3 = resolvedValues?.v3?.code ?? mapCodeForExport(row.codeV3) ?? '';
+        baseItem.score_v3 = resolvedValues?.v3?.score ?? row.scoreV3 ?? '';
       }
 
       if (includeReplayUrls) {

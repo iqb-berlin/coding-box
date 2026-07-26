@@ -123,7 +123,8 @@ describe('WorkspaceCodingExportController', () => {
       false,
       false,
       false,
-      res as never
+      res as never,
+      '7'
     );
     await new Promise(resolve => {
       setImmediate(resolve);
@@ -141,7 +142,8 @@ describe('WorkspaceCodingExportController', () => {
       serverUrl: 'http://server',
       includeReplayUrl: false,
       includeResponseValues: false,
-      includeGeoGebraResponseValues: false
+      includeGeoGebraResponseValues: false,
+      missingsProfileId: 7
     });
     expect(res.setHeader).toHaveBeenCalledWith(
       'Content-Type',
@@ -222,7 +224,8 @@ describe('WorkspaceCodingExportController', () => {
       await expect(
         controller.startExportJob(5, { user: { id: 2 } } as never, {
           exportType: 'results-by-version',
-          format: format as never
+          format: format as never,
+          missingsProfileId: 7
         })
       ).rejects.toThrow(BadRequestException);
 
