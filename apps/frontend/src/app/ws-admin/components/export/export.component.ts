@@ -129,6 +129,7 @@ export class ExportComponent {
 
   constructor() {
     this.loadGeneralOptions();
+    this.loadResultsOptions();
     this.appService.selectedWorkspaceId$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
@@ -138,7 +139,7 @@ export class ExportComponent {
           this.loadPsychometricOptions();
         } else if (this.selectedFormat === 'item-matrix') {
           this.loadItemDatasetOptions();
-        } else if (this.resultsVersion === 'v1') {
+        } else if (this.selectedFormat === 'results-by-version') {
           this.loadResultsOptions();
         }
       });
@@ -319,15 +320,13 @@ export class ExportComponent {
       this.loadPsychometricOptions();
     } else if (this.selectedFormat === 'item-matrix') {
       this.loadItemDatasetOptions();
-    } else if (this.resultsVersion === 'v1') {
+    } else if (this.selectedFormat === 'results-by-version') {
       this.loadResultsOptions();
     }
   }
 
   onResultsVersionChange(): void {
-    if (this.resultsVersion === 'v1') {
-      this.loadResultsOptions();
-    }
+    this.loadResultsOptions();
   }
 
   onNotReachedScopeChange(): void {
@@ -450,8 +449,7 @@ export class ExportComponent {
       includeResponseValues: this.includeResponseValues,
       includeGeoGebraResponseValues: this.includeGeoGebraResponseValues,
       includeGeoGebraFiles: this.includeGeoGebraFiles,
-      missingsProfileId: this.resultsVersion === 'v1' ?
-        this.selectedResultsMissingsProfileId || undefined : undefined
+      missingsProfileId: this.selectedResultsMissingsProfileId!
     };
   }
 
@@ -468,7 +466,7 @@ export class ExportComponent {
         this.itemDatasetMappingIssues.length > 0;
     }
     if (this.selectedFormat === 'results-by-version') {
-      return this.resultsVersion === 'v1' && (
+      return (
         this.isLoadingResultsOptions ||
         this.resultsOptionsLoadFailed ||
         this.selectedResultsMissingsProfileId === null

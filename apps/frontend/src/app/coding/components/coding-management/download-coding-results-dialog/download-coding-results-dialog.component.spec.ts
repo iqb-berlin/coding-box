@@ -26,33 +26,21 @@ describe('DownloadCodingResultsDialogComponent', () => {
     return { component, dialogRef, missingsProfileService };
   };
 
-  it.each(['v2', 'v3'] as const)(
-    'does not load profiles or block an initial %s download',
+  it.each(['v1', 'v2', 'v3'] as const)(
+    'loads profiles and enables an initial %s download',
     version => {
       const { component, missingsProfileService } = createComponent(version);
 
       component.ngOnInit();
 
       expect(missingsProfileService.getExportMissingsProfilesOrThrow)
-        .not.toHaveBeenCalled();
+        .toHaveBeenCalledWith(5);
+      expect(component.selectedMissingsProfileId).toBe(4);
       expect(component.isDownloadDisabled).toBe(false);
     }
   );
 
-  it('loads profiles lazily when v1 is selected', () => {
-    const { component, missingsProfileService } = createComponent('v2');
-    component.ngOnInit();
-
-    component.selectedVersion = 'v1';
-    component.onVersionChange();
-
-    expect(missingsProfileService.getExportMissingsProfilesOrThrow)
-      .toHaveBeenCalledWith(5);
-    expect(component.selectedMissingsProfileId).toBe(4);
-    expect(component.isDownloadDisabled).toBe(false);
-  });
-
-  it('does not block v2 while a v1 profile request is pending', () => {
+  it('blocks every version while the profile request is pending', () => {
     const profiles = new Subject<Array<{ id: number; label: string }>>();
     const { component } = createComponent('v1', profiles);
     component.ngOnInit();
@@ -63,20 +51,23 @@ describe('DownloadCodingResultsDialogComponent', () => {
     component.selectedVersion = 'v2';
     component.onVersionChange();
 
-    expect(component.isDownloadDisabled).toBe(false);
+    expect(component.isDownloadDisabled).toBe(true);
   });
 
-  it('submits the selected profile only for v1', () => {
-    const { component, dialogRef } = createComponent('v1');
-    component.ngOnInit();
+  it.each(['v1', 'v2', 'v3'] as const)(
+    'submits the selected profile for %s',
+    version => {
+      const { component, dialogRef } = createComponent(version);
+      component.ngOnInit();
 
-    component.onDownload();
+      component.onDownload();
 
-    expect(dialogRef.close).toHaveBeenCalledWith(
-      expect.objectContaining({
-        version: 'v1',
-        missingsProfileId: 4
-      })
-    );
-  });
+      expect(dialogRef.close).toHaveBeenCalledWith(
+        expect.objectContaining({
+          version,
+          missingsProfileId: 4
+        })
+      );
+    }
+  );
 });

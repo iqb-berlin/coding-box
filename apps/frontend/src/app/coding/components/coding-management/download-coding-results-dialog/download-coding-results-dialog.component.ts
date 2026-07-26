@@ -80,8 +80,7 @@ export interface DownloadCodingResultsDialogData {
         </mat-card-content>
       </mat-card>
 
-      @if (selectedVersion === 'v1') {
-        <mat-card class="section-card">
+      <mat-card class="section-card">
           <mat-card-header>
             <mat-card-title>{{ 'coding-management.download-dialog.select-missings-profile' | translate }}</mat-card-title>
           </mat-card-header>
@@ -102,8 +101,7 @@ export interface DownloadCodingResultsDialogData {
               <p class="profile-error">{{ 'coding-management.download-dialog.no-missings-profiles' | translate }}</p>
             }
           </mat-card-content>
-        </mat-card>
-      }
+      </mat-card>
 
       <mat-card class="section-card format-card">
         <mat-card-header>
@@ -415,11 +413,11 @@ export class DownloadCodingResultsDialogComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.loadMissingsProfilesForV1();
+    this.loadMissingsProfiles();
   }
 
   get isDownloadDisabled(): boolean {
-    return this.selectedVersion === 'v1' && (
+    return (
       this.isLoadingMissingsProfiles ||
       this.missingsProfilesError ||
       this.selectedMissingsProfileId === null
@@ -427,12 +425,11 @@ export class DownloadCodingResultsDialogComponent implements OnInit {
   }
 
   onVersionChange(): void {
-    this.loadMissingsProfilesForV1();
+    this.loadMissingsProfiles();
   }
 
-  private loadMissingsProfilesForV1(): void {
+  private loadMissingsProfiles(): void {
     if (
-      this.selectedVersion !== 'v1' ||
       this.isLoadingMissingsProfiles ||
       this.hasLoadedMissingsProfiles
     ) {
@@ -486,7 +483,8 @@ export class DownloadCodingResultsDialogComponent implements OnInit {
 
   onDownload(): void {
     this.clearUnsupportedGeoGebraOption();
-    if (this.isDownloadDisabled) {
+    const missingsProfileId = this.selectedMissingsProfileId;
+    if (this.isDownloadDisabled || missingsProfileId === null) {
       return;
     }
     this.dialogRef.close({
@@ -496,8 +494,7 @@ export class DownloadCodingResultsDialogComponent implements OnInit {
       includeResponseValues: this.includeResponseValues,
       includeGeoGebraFiles: this.includeGeoGebraFiles,
       includeGeoGebraResponseValues: this.includeGeoGebraResponseValues,
-      missingsProfileId: this.selectedVersion === 'v1' ?
-        this.selectedMissingsProfileId : undefined
+      missingsProfileId
     });
   }
 
