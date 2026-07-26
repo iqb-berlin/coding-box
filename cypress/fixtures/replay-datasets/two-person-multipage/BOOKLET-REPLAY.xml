@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Booklet xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="https://w3id.org/iqb/spec/testcenter-booklet-xml/18.0">
+  <Metadata>
+    <Id>BOOKLET-REPLAY</Id>
+    <Label>Replay integration booklet</Label>
+  </Metadata>
+  <BookletConfig />
+  <Units>
+    <Unit id="UNIT-REPLAY-ALIAS" label="UNIT-REPLAY" />
+  </Units>
+</Booklet>

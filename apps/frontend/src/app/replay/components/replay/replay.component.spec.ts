@@ -2831,6 +2831,70 @@ describe('ReplayComponent', () => {
     expect(component.unitId).toBe('');
     expect(component.player).toBe('');
   });
+
+  it('should clear stale replay state and finalize statistics once for a 404', () => {
+    replayBackendService.storeReplayStatistics.mockClear();
+    component.unitId = 'stale-unit';
+    component.player = 'stale-player';
+    component.unitDef = 'stale-unit-definition';
+    component.responses = [{ id: 'chunk', content: 'stale-response' }];
+
+    const privateComponent = component as unknown as {
+      catchError: (error: HttpErrorResponse) => void;
+    };
+    privateComponent.catchError(new HttpErrorResponse({
+      status: 404,
+      error: {
+        statusCode: 404,
+        code: 'REPLAY_UNIT_NOT_FOUND',
+        message: 'Replay unit was not found.'
+      }
+    }));
+    component.onResponseVisible();
+
+    expect(component.unitId).toBe('');
+    expect(component.player).toBe('');
+    expect(component.unitDef).toBe('');
+    expect(component.responses).toBeUndefined();
+    expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledTimes(1);
+    expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.objectContaining({
+        success: false
+      }),
+      'valid-token',
+      expect.any(String)
+    );
+  });
+
+  it('should not clear a newer replay when an old error snackbar is dismissed', () => {
+    const dismissed = new Subject<void>();
+    snackBar.open.mockReturnValueOnce({
+      afterDismissed: () => dismissed.asObservable()
+    });
+    const privateComponent = component as unknown as {
+      openErrorSnackBar: (message: string, action: string) => void;
+      routerRunId: number;
+    };
+    privateComponent.routerRunId = 1;
+    privateComponent.openErrorSnackBar('old replay error', 'Schließen');
+
+    privateComponent.routerRunId = 2;
+    component.unitId = 'latest-unit';
+    component.player = 'latest-player';
+    component.unitDef = 'latest-unit-definition';
+    component.responses = [{ id: 'chunk', content: 'latest-response' }];
+    dismissed.next();
+    dismissed.complete();
+
+    expect(component.unitId).toBe('latest-unit');
+    expect(component.player).toBe('latest-player');
+    expect(component.unitDef).toBe('latest-unit-definition');
+    expect(component.responses).toEqual([
+      { id: 'chunk', content: 'latest-response' }
+    ]);
+  });
+
   describe('onKeyDown', () => {
     const digitShortcutCodingScheme: CodingScheme = {
       version: '1.0',
