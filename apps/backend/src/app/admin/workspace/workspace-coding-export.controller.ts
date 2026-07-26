@@ -85,16 +85,13 @@ export class WorkspaceCodingExportController {
   ) {}
 
   private parseVersionedExportMissingsProfileId(
-    version: 'v1' | 'v2' | 'v3',
+    _version: 'v1' | 'v2' | 'v3',
     value?: string
-  ): number | undefined {
+  ): number {
     if (value === undefined || value === '') {
-      if (version === 'v1') {
-        throw new BadRequestException(
-          'Version v1 exports require missingsProfileId to be a positive integer'
-        );
-      }
-      return undefined;
+      throw new BadRequestException(
+        'Versioned exports require missingsProfileId to be a positive integer'
+      );
     }
     const profileId = Number(value);
     if (!Number.isSafeInteger(profileId) || profileId <= 0) {
@@ -102,7 +99,7 @@ export class WorkspaceCodingExportController {
         'missingsProfileId must be a positive integer'
       );
     }
-    return version === 'v1' ? profileId : undefined;
+    return profileId;
   }
 
   private mapExportJobState(
@@ -463,8 +460,8 @@ export class WorkspaceCodingExportController {
   })
   @ApiQuery({
     name: 'missingsProfileId',
-    required: false,
-    description: 'Missing profile. Required for version v1 exports.',
+    required: true,
+    description: 'Missing profile used to resolve versioned missing values.',
     type: Number
   })
   @ApiOkResponse({
@@ -594,8 +591,8 @@ export class WorkspaceCodingExportController {
   })
   @ApiQuery({
     name: 'missingsProfileId',
-    required: false,
-    description: 'Missing profile. Required for version v1 exports.',
+    required: true,
+    description: 'Missing profile used to resolve versioned missing values.',
     type: Number
   })
   @ApiOkResponse({
@@ -1266,7 +1263,7 @@ export class WorkspaceCodingExportController {
         missingsProfileId: {
           type: 'number',
           description:
-            'Missing profile used for codes and numeric missing scores. Required for item-matrix and results-by-version v1.'
+            'Missing profile used for codes and missing scores. Required for item-matrix and every results-by-version export.'
         },
         notReachedScope: {
           type: 'string',

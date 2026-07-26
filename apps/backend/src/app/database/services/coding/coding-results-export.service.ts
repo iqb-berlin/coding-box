@@ -209,52 +209,52 @@ export class CodingResultsExportService {
   async exportCodingResultsByVersionAsCsv(
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     authToken: string,
     serverUrl: string,
     includeReplayUrls: boolean,
     progressCallback?: (percentage: number) => Promise<void>,
     includeResponseValues: boolean = true,
     includeGeoGebraResponseValues: boolean = false,
-    checkCancellation?: () => Promise<void>,
-    missingsProfileId?: number
+    checkCancellation?: () => Promise<void>
   ): Promise<Readable> {
     return this.codingListService.getCodingResultsByVersionCsvStream(
       workspaceId,
       version,
+      missingsProfileId,
       authToken || '',
       serverUrl || '',
       includeReplayUrls,
       progressCallback,
       includeResponseValues,
       includeGeoGebraResponseValues,
-      checkCancellation,
-      missingsProfileId
+      checkCancellation
     );
   }
 
   async exportCodingResultsByVersionAsExcel(
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     authToken: string,
     serverUrl: string,
     includeReplayUrls: boolean,
     progressCallback?: (percentage: number) => Promise<void>,
     includeResponseValues: boolean = true,
     includeGeoGebraResponseValues: boolean = false,
-    checkCancellation?: () => Promise<void>,
-    missingsProfileId?: number
+    checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     return this.codingListService.getCodingResultsByVersionAsExcel(
       workspaceId,
       version,
+      missingsProfileId,
       authToken || '',
       serverUrl || '',
       includeReplayUrls,
       progressCallback,
       includeResponseValues,
       includeGeoGebraResponseValues,
-      checkCancellation,
-      missingsProfileId
+      checkCancellation
     );
   }
 
@@ -262,49 +262,49 @@ export class CodingResultsExportService {
     filePath: string,
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     authToken: string,
     serverUrl: string,
     includeReplayUrls: boolean,
     progressCallback?: (percentage: number) => Promise<void>,
     includeResponseValues: boolean = true,
     includeGeoGebraResponseValues: boolean = false,
-    checkCancellation?: () => Promise<void>,
-    missingsProfileId?: number
+    checkCancellation?: () => Promise<void>
   ): Promise<void> {
     return this.codingListService.writeCodingResultsByVersionExcelToFile(
       filePath,
       workspaceId,
       version,
+      missingsProfileId,
       authToken || '',
       serverUrl || '',
       includeReplayUrls,
       progressCallback,
       includeResponseValues,
       includeGeoGebraResponseValues,
-      checkCancellation,
-      missingsProfileId
+      checkCancellation
     );
   }
 
   async exportCodingResultsByVersionAsGeoGebraZip(
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     authToken: string,
     serverUrl: string,
     includeReplayUrls: boolean,
     progressCallback?: (percentage: number) => Promise<void>,
-    checkCancellation?: () => Promise<void>,
-    missingsProfileId?: number
+    checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     return this.codingListService.getCodingResultsByVersionAsGeoGebraZip(
       workspaceId,
       version,
+      missingsProfileId,
       authToken || '',
       serverUrl || '',
       includeReplayUrls,
       progressCallback,
-      checkCancellation,
-      missingsProfileId
+      checkCancellation
     );
   }
 
@@ -312,23 +312,23 @@ export class CodingResultsExportService {
     filePath: string,
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     authToken: string,
     serverUrl: string,
     includeReplayUrls: boolean,
     progressCallback?: (percentage: number) => Promise<void>,
-    checkCancellation?: () => Promise<void>,
-    missingsProfileId?: number
+    checkCancellation?: () => Promise<void>
   ): Promise<void> {
     return this.codingListService.writeCodingResultsByVersionGeoGebraZipToFile(
       filePath,
       workspaceId,
       version,
+      missingsProfileId,
       authToken || '',
       serverUrl || '',
       includeReplayUrls,
       progressCallback,
-      checkCancellation,
-      missingsProfileId
+      checkCancellation
     );
   }
 

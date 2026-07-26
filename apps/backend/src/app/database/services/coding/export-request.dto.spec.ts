@@ -36,13 +36,16 @@ describe('item dataset export request validation', () => {
 });
 
 describe('results-by-version export request validation', () => {
-  it('requires a positive missing profile for v1', () => {
-    expect(() => parseExportRequest({
-      exportType: 'results-by-version',
-      version: 'v1',
-      format: 'csv'
-    })).toThrow('results-by-version v1 exports require missingsProfileId');
-  });
+  it.each(['v1', 'v2', 'v3'] as const)(
+    'requires a positive missing profile for %s',
+    version => {
+      expect(() => parseExportRequest({
+        exportType: 'results-by-version',
+        version,
+        format: 'csv'
+      })).toThrow('results-by-version exports require missingsProfileId');
+    }
+  );
 
   it('accepts v1 with a positive missing profile', () => {
     expect(parseExportRequest({
@@ -53,11 +56,12 @@ describe('results-by-version export request validation', () => {
     })).toMatchObject({ version: 'v1', missingsProfileId: 7 });
   });
 
-  it('keeps v2 independent from missing profiles', () => {
+  it('accepts v2 with a positive missing profile', () => {
     expect(parseExportRequest({
       exportType: 'results-by-version',
       version: 'v2',
-      format: 'csv'
-    })).toMatchObject({ version: 'v2' });
+      format: 'csv',
+      missingsProfileId: 7
+    })).toMatchObject({ version: 'v2', missingsProfileId: 7 });
   });
 });

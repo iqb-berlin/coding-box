@@ -139,7 +139,7 @@ describe('CodingItemBuilderService', () => {
         true,
         false,
         undefined,
-        { code: -16, score: 'NA' }
+        { v1: { code: -16, score: 'NA' } }
       )
     ).resolves.toMatchObject({ code_v1: -16, score_v1: 'NA' });
   });
