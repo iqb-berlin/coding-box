@@ -29,6 +29,11 @@ export interface ReplaySessionLoadRequest {
   replayAttemptId?: string;
 }
 
+interface ReplaySessionLoadRequestEntry {
+  authToken?: string;
+  loadRequest: Promise<ReplaySessionLoadResult>;
+}
+
 export type ReplaySessionLoadSource = 'session' | 'legacy';
 
 interface ReplaySessionLoadResultBase {
@@ -51,14 +56,10 @@ export type ReplaySessionLoadResult = ReplaySessionLoadResultBase & (
 @Injectable()
 export class ReplaySessionLoaderService {
   private codingJobBackendService = inject(CodingJobBackendService);
-  private readonly requests = new Map<string, Promise<ReplaySessionLoadResult>>();
+  private readonly requests = new Map<string, ReplaySessionLoadRequestEntry>();
 
   getRequestKey(request: ReplaySessionLoadRequest): string {
     return `${request.workspaceId}:${request.codingJobId}:${request.onlyOpen}`;
-  }
-
-  private getInFlightRequestKey(request: ReplaySessionLoadRequest): string {
-    return `${this.getRequestKey(request)}:${request.replayAttemptId || ''}`;
   }
 
   retainOnly(request: ReplaySessionLoadRequest): string;
@@ -66,9 +67,8 @@ export class ReplaySessionLoaderService {
   retainOnly(request: ReplaySessionLoadRequest | null): string | null;
   retainOnly(request: ReplaySessionLoadRequest | null): string | null {
     const requestKey = request ? this.getRequestKey(request) : null;
-    const inFlightRequestKey = request ? this.getInFlightRequestKey(request) : null;
     this.requests.forEach((_request, key) => {
-      if (key !== inFlightRequestKey) {
+      if (key !== requestKey) {
         this.requests.delete(key);
       }
     });
@@ -77,14 +77,17 @@ export class ReplaySessionLoaderService {
 
   load(request: ReplaySessionLoadRequest): Promise<ReplaySessionLoadResult> {
     this.retainOnly(request);
-    const inFlightRequestKey = this.getInFlightRequestKey(request);
-    const pendingRequest = this.requests.get(inFlightRequestKey);
-    if (pendingRequest) {
-      return pendingRequest;
+    const requestKey = this.getRequestKey(request);
+    const pendingRequestEntry = this.requests.get(requestKey);
+    if (pendingRequestEntry && pendingRequestEntry.authToken === request.authToken) {
+      return pendingRequestEntry.loadRequest;
     }
 
     const loadRequest = this.loadSession(request);
-    this.requests.set(inFlightRequestKey, loadRequest);
+    this.requests.set(requestKey, {
+      authToken: request.authToken,
+      loadRequest
+    });
     return loadRequest;
   }
 
@@ -92,9 +95,9 @@ export class ReplaySessionLoaderService {
     request: ReplaySessionLoadRequest,
     loadRequest: Promise<ReplaySessionLoadResult>
   ): void {
-    const inFlightRequestKey = this.getInFlightRequestKey(request);
-    if (this.requests.get(inFlightRequestKey) === loadRequest) {
-      this.requests.delete(inFlightRequestKey);
+    const requestKey = this.getRequestKey(request);
+    if (this.requests.get(requestKey)?.loadRequest === loadRequest) {
+      this.requests.delete(requestKey);
     }
   }
 
