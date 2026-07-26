@@ -117,6 +117,20 @@
           "devServerTarget": "frontend:serve:production"
         }
       }
+    },
+    "e2e-replay-live": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/e2e/replay/run-replay-e2e.mjs"
+      }
+    },
+    "e2e-replay-existing": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/e2e/replay/run-existing-replay-e2e.mjs"
+      }
     }
   }
 }

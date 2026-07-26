@@ -462,6 +462,48 @@ test-app:
   script:
     - npx nx affected --base=HEAD~1 --target=test --parallel=1 -- --maxWorkers=2
 
+test-replay-live:
+  stage: test-replay
+  interruptible: true
+  allow_failure: true
+  image: ${CYPRESS_IMAGE}
+  services:
+    - name: ${DOCKER_SERVICE}
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
+      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh ${DOCKER_DAEMON_OPTIONS}" ]
+      alias: docker
+  needs:
+    - install-dependencies
+  rules:
+    - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
+      changes:
+        - api-dto/coding/**/*
+        - apps/backend/src/app/admin/workspace/workspace-coding-replay*
+        - apps/backend/src/app/database/services/test-results/**/*
+        - apps/frontend/src/app/replay/**/*
+        - cypress/fixtures/replay-datasets/**/*
+        - cypress/e2e/replay-live.cy.ts
+        - cypress/support/replay-e2e.ts
+        - cypress.replay.config.ts
+        - scripts/e2e/replay/**/*
+      when: manual
+    - when: never
+  before_script:
+    - apt-get update
+    - apt-get install --yes --no-install-recommends docker.io docker-compose
+    - until docker info > /dev/null 2>&1; do sleep 1; done
+    - npx cypress install
+  script:
+    - npx nx run frontend:e2e-replay-live
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - cypress/replay-artifacts/screenshots
+      - cypress/replay-artifacts/videos
+      - tmp/replay-e2e-artifacts
+
 lint-app:
   stage: lint
   extends: .distributed

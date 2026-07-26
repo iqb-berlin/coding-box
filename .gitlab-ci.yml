@@ -12,6 +12,7 @@ stages:
   - test
   - test-db
   - test-units
+  - test-replay
   - lint
   - audit
   - scan-dependencies

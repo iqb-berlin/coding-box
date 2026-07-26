@@ -87,6 +87,7 @@ import {
   withRegexSearchStatementTimeout,
   withResponseValueSearchStatementTimeout
 } from '../../../utils/regex-search.util';
+import { ReplayResourceNotFoundError } from './replay-resource-not-found.error';
 
 interface PersonWhere {
   code: string;
@@ -4383,13 +4384,13 @@ export class WorkspaceTestResultsService {
 
     if (cachedResponse) {
       this.logger.log(
-        `Cache hit for responses: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`
+        `Cache hit for replay responses: workspace=${workspaceId}, unitId=${unitId}`
       );
       return cachedResponse;
     }
 
     this.logger.log(
-      `Cache miss for responses: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`
+      `Cache miss for replay responses: workspace=${workspaceId}, unitId=${unitId}`
     );
 
     const parts = connector.split('@');
@@ -4448,10 +4449,7 @@ export class WorkspaceTestResultsService {
       });
 
       if (!person) {
-        const searchDescription = group ?
-          `Person mit Login ${login}, Code ${code} und Gruppe ${group}` :
-          `Person mit Login ${login} und Code ${code}`;
-        throw new Error(`${searchDescription} wurde nicht gefunden.`);
+        throw new ReplayResourceNotFoundError('REPLAY_PERSON_NOT_FOUND');
       }
 
       const bookletInfo = await this.bookletInfoRepository.findOne({
@@ -4459,7 +4457,7 @@ export class WorkspaceTestResultsService {
       });
 
       if (!bookletInfo) {
-        throw new Error(`Kein Booklet mit der ID ${bookletId} gefunden.`);
+        throw new ReplayResourceNotFoundError('REPLAY_BOOKLET_NOT_FOUND');
       }
 
       const booklet = await this.bookletRepository.findOne({
@@ -4470,14 +4468,10 @@ export class WorkspaceTestResultsService {
       });
 
       if (!booklet) {
-        throw new Error(
-          `Kein Booklet für die Person mit ID ${person.id} und Booklet ID ${bookletId} gefunden.`
-        );
+        throw new ReplayResourceNotFoundError('REPLAY_BOOKLET_NOT_FOUND');
       }
 
-      throw new Error(
-        `Keine Unit mit der ID ${unitId} für das Booklet ${bookletId} gefunden.`
-      );
+      throw new ReplayResourceNotFoundError('REPLAY_UNIT_NOT_FOUND');
     }
 
     const chunks = await this.chunkRepository.find({
@@ -4572,7 +4566,7 @@ export class WorkspaceTestResultsService {
 
     await this.cacheService.set(cacheKey, result);
     this.logger.log(
-      `Cached responses for: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`
+      `Cached replay responses: workspace=${workspaceId}, unitId=${unitId}`
     );
 
     return result;

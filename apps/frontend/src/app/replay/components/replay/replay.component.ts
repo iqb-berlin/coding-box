@@ -237,10 +237,18 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private openErrorSnackBar(message: string, action: string) {
-    this.errorSnackbarRef = this.errorSnackBar
+    const routerRunId = this.routerRunId;
+    const snackbarRef = this.errorSnackBar
       .open(message, action, { panelClass: ['snackbar-error'] });
-    this.errorSnackbarRef.afterDismissed().subscribe(() => {
+    this.errorSnackbarRef = snackbarRef;
+    snackbarRef.afterDismissed().subscribe(() => {
+      if (this.errorSnackbarRef !== snackbarRef) {
+        return;
+      }
       this.errorSnackbarRef = null;
+      if (!this.isCurrentRouterRun(routerRunId)) {
+        return;
+      }
       this.resetUnitData();
       this.setIsLoaded();
     });

@@ -1,0 +1,3 @@
+groupname;loginname;code;bookletname;unitname;originalUnitId;responses;laststate
+REPLAY-GROUP;replay-login-a;replay-code-a;BOOKLET-REPLAY;UNIT-REPLAY;UNIT-REPLAY-ALIAS;"[{""content"":""[{\""id\"":\""answer_1\"",\""status\"":\""VALUE_CHANGED\"",\""value\"":\""PERSON-A-RESPONSE\""}]"",""id"":""elementCodes"",""responseType"":""iqb-standard@1.0"",""ts"":1784900000000,""variables"":[""answer_1""]}]";"{""CURRENT_PAGE_ID"":""0""}"
+REPLAY-GROUP;replay-login-b;replay-code-b;BOOKLET-REPLAY;UNIT-REPLAY;UNIT-REPLAY-ALIAS;"[{""content"":""[{\""id\"":\""answer_1\"",\""status\"":\""VALUE_CHANGED\"",\""value\"":\""PERSON-B-RESPONSE\""}]"",""id"":""elementCodes"",""responseType"":""iqb-standard@1.0"",""ts"":1784900001000,""variables"":[""answer_1""]}]";"{""CURRENT_PAGE_ID"":""0""}"

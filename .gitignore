@@ -24,6 +24,8 @@ docker.env
 # compiled output
 /dist
 /tmp
+/cache/replay-player/
+/cypress/replay-artifacts/
 /out-tsc
 
 # dependencies
