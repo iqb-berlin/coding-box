@@ -1,0 +1,107 @@
+services:
+  db:
+    image: postgres:14.23-alpine3.24@sha256:f1341c01408dc7278e9d365ed4f860cd3f87dd16b4464ac326fc0f422083a579
+    environment:
+      POSTGRES_USER: replay_e2e
+      POSTGRES_PASSWORD: replay_e2e
+      POSTGRES_DB: replay_e2e
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U replay_e2e -d replay_e2e']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - replay-db:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7.4-alpine
+    command: ['redis-server', '--save', '', '--appendonly', 'no']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - replay-redis:/data
+
+  liquibase:
+    image: liquibase/liquibase:4.28@sha256:7c813a2cb861f8b4718a09375c5265909127f4cb99f56bb95c956175c9b91525
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ${REPLAY_E2E_REPO_DIR}/database/changelog:/liquibase/changelog:ro
+    command:
+      - liquibase
+      - --url=jdbc:postgresql://db:5432/replay_e2e
+      - --username=replay_e2e
+      - --password=replay_e2e
+      - --classpath=changelog
+      - --changeLogFile=coding-box.changelog-root.xml
+      - update
+
+  backend:
+    build:
+      context: ${REPLAY_E2E_REPO_DIR}
+      dockerfile: scripts/e2e/replay/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      liquibase:
+        condition: service_completed_successfully
+    environment:
+      APP_ROLE: api
+      API_HOST: backend
+      JWT_SECRET: ${REPLAY_E2E_JWT_SECRET}
+      KEYCLOAK_CLIENT_ID: replay-e2e
+      OIDC_ISSUER: http://replay-e2e.invalid/realms/replay-e2e
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: replay_e2e
+      POSTGRES_PASSWORD: replay_e2e
+      POSTGRES_DB: replay_e2e
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PREFIX: ${REPLAY_E2E_REDIS_PREFIX}
+      ALLOW_LEGACY_WORKSPACE_REPLAY_TOKENS: 'false'
+      WORKSPACE_TOKEN_REPLAY_READ_MAX_DURATION_DAYS: '1'
+      DISABLED_JOB_QUEUE_PROCESSORS: data-export
+    command: ['npx', 'nx', 'serve', 'backend']
+    ports:
+      - '127.0.0.1:${REPLAY_E2E_API_PORT}:3333'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - node -e "const h=require('http');const r=h.get('http://backend:3333/api/health',x=>process.exit(x.statusCode===200?0:1));r.on('error',()=>process.exit(1));r.setTimeout(2000,()=>{r.destroy();process.exit(1)})"
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ${REPLAY_E2E_REPO_DIR}
+      dockerfile: scripts/e2e/replay/Dockerfile
+    depends_on:
+      backend:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - sed -i 's#http://localhost:3333#http://backend:3333#' apps/frontend/proxy.conf.json && npx nx serve frontend --host=0.0.0.0
+    ports:
+      - '127.0.0.1:${REPLAY_E2E_FRONTEND_PORT}:4200'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - node -e "const h=require('http');const r=h.get('http://127.0.0.1:4200',x=>process.exit(x.statusCode===200?0:1));r.on('error',()=>process.exit(1));r.setTimeout(2000,()=>{r.destroy();process.exit(1)})"
+      interval: 3s
+      timeout: 3s
+      retries: 50
+      start_period: 30s
+
+volumes:
+  replay-db:
+  replay-redis:

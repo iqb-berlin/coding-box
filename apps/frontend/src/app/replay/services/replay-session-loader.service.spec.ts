@@ -22,7 +22,8 @@ describe('ReplaySessionLoaderService', () => {
     workspaceId: 47,
     codingJobId: 77,
     authToken: 'replay-token',
-    onlyOpen: true
+    onlyOpen: true,
+    replayAttemptId: 'attempt-1'
   };
 
   const session: ReplayCodingSessionDto = {
@@ -77,7 +78,7 @@ describe('ReplaySessionLoaderService', () => {
     const result = await service.load(request);
 
     expect(codingJobBackendService.getReplayCodingSession)
-      .toHaveBeenCalledWith(47, 77, 'replay-token', true);
+      .toHaveBeenCalledWith(47, 77, 'replay-token', true, 'attempt-1');
     expect(codingJobBackendService.getCodingJobUnits).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       session,
@@ -120,7 +121,7 @@ describe('ReplaySessionLoaderService', () => {
       const result = await service.load(request);
 
       expect(codingJobBackendService.getCodingJobUnits)
-        .toHaveBeenCalledWith(47, 77, 'replay-token', true);
+        .toHaveBeenCalledWith(47, 77, 'replay-token', true, 'attempt-1');
       expect(result.source).toBe('legacy');
       expect(result.session).toBeNull();
       expect(result.unitsData?.units).toHaveLength(1);
@@ -173,6 +174,71 @@ describe('ReplaySessionLoaderService', () => {
 
     await expect(firstLoad).resolves.toEqual(await secondLoad);
     expect(codingJobBackendService.getReplayCodingSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('shares an in-flight session request across replay attempts', async () => {
+    const response = new Subject<ReplayCodingSessionDto>();
+    const secondAttemptRequest: ReplaySessionLoadRequest = {
+      ...request,
+      replayAttemptId: 'attempt-2'
+    };
+    codingJobBackendService.getReplayCodingSession.mockReturnValue(
+      response.asObservable()
+    );
+
+    const firstLoad = service.load(request);
+    const secondLoad = service.load(secondAttemptRequest);
+
+    expect(service.getRequestKey(secondAttemptRequest))
+      .toBe(service.getRequestKey(request));
+    expect(secondLoad).toBe(firstLoad);
+    expect(codingJobBackendService.getReplayCodingSession)
+      .toHaveBeenCalledTimes(1);
+    expect(codingJobBackendService.getReplayCodingSession)
+      .toHaveBeenCalledWith(47, 77, 'replay-token', true, 'attempt-1');
+
+    response.next(session);
+    response.complete();
+
+    await Promise.all([firstLoad, secondLoad]);
+  });
+
+  it('starts a new session request when the auth token changes', async () => {
+    const firstResponse = new Subject<ReplayCodingSessionDto>();
+    const refreshedResponse = new Subject<ReplayCodingSessionDto>();
+    const refreshedRequest: ReplaySessionLoadRequest = {
+      ...request,
+      authToken: 'refreshed-replay-token',
+      replayAttemptId: 'attempt-2'
+    };
+    codingJobBackendService.getReplayCodingSession
+      .mockReturnValueOnce(firstResponse.asObservable())
+      .mockReturnValueOnce(refreshedResponse.asObservable());
+
+    const firstLoad = service.load(request);
+    const refreshedLoad = service.load(refreshedRequest);
+
+    expect(refreshedLoad).not.toBe(firstLoad);
+    expect(codingJobBackendService.getReplayCodingSession)
+      .toHaveBeenCalledTimes(2);
+    expect(codingJobBackendService.getReplayCodingSession)
+      .toHaveBeenNthCalledWith(1, 47, 77, 'replay-token', true, 'attempt-1');
+    expect(codingJobBackendService.getReplayCodingSession)
+      .toHaveBeenNthCalledWith(
+        2,
+        47,
+        77,
+        'refreshed-replay-token',
+        true,
+        'attempt-2'
+      );
+
+    firstResponse.next(session);
+    firstResponse.complete();
+    refreshedResponse.next(session);
+    refreshedResponse.complete();
+
+    await Promise.all([firstLoad, refreshedLoad]);
   });
 
   it('evicts an abandoned request when the requested coding job changes', async () => {

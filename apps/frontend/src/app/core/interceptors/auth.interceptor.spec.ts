@@ -68,6 +68,9 @@ describe('authInterceptor', () => {
 
     const req = httpMock.expectOne('/api/workspaces');
     expect(req.request.headers.get('Authorization')).toBe('Bearer keycloak-token');
+    expect(req.request.headers.get('X-Request-Id')).toMatch(
+      /^[a-f0-9-]{32,36}$/i
+    );
     req.flush({});
   });
 
@@ -101,6 +104,21 @@ describe('authInterceptor', () => {
     const req = httpMock.expectOne('/api/scoped');
     expect(authService.getValidToken).not.toHaveBeenCalled();
     expect(req.request.headers.get('Authorization')).toBe('Bearer scoped-token');
+    expect(req.request.headers.get('X-Request-Id')).toMatch(
+      /^[a-f0-9-]{32,36}$/i
+    );
+    req.flush({});
+  });
+
+  it('should preserve an explicit request id', async () => {
+    http.get('/api/workspaces', {
+      headers: new HttpHeaders({ 'X-Request-Id': 'operation-123' })
+    }).subscribe();
+
+    await Promise.resolve();
+
+    const req = httpMock.expectOne('/api/workspaces');
+    expect(req.request.headers.get('X-Request-Id')).toBe('operation-123');
     req.flush({});
   });
 

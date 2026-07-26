@@ -105,6 +105,10 @@ import {
   ReplayCodingSessionDto,
   ReplayCodingSessionUnitDto
 } from '../../../../../../../api-dto/coding/replay-coding-session.dto';
+import {
+  DEFAULT_CODING_FILE_LOAD_CONCURRENCY,
+  RuntimeConfigService
+} from '../../../config/runtime-config.service';
 
 function isSafeKey(key: string): boolean {
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
@@ -314,6 +318,14 @@ type DistributionCreatedJob = {
 
 type CodingJobBundleVariableStatus = ReplayCodingBundleVariableStatus;
 type CodingJobBundleContext = ReplayCodingBundleContextDto;
+type CodingJobBundleTarget = {
+  login: string;
+  code: string;
+  person_group: string;
+  booklet_name: string;
+  unit_name: string;
+  variable_id: string;
+};
 type CodingJobNavigationUnit = ReplayCodingSessionUnitDto & {
   notes: string | null;
   isDoubleCoded: boolean;
@@ -476,7 +488,9 @@ export class CodingJobService {
     @InjectRepository(CoderTrainingDiscussionResult)
     private coderTrainingDiscussionResultRepository?: Repository<CoderTrainingDiscussionResult>,
     @Optional()
-    private replayAnchorService?: CodingReplayAnchorService
+    private replayAnchorService?: CodingReplayAnchorService,
+    @Optional()
+    private runtimeConfig?: RuntimeConfigService
   ) {}
 
   private async resolveMissingsProfileId(
@@ -4618,6 +4632,51 @@ export class CodingJobService {
     ].join('\u0000');
   }
 
+  private getCodingJobBundleTargets(
+    bundledUnits: CodingJobUnit[],
+    variableBundleById: Map<number, VariableBundle>
+  ): CodingJobBundleTarget[] {
+    const targets = new Map<string, CodingJobBundleTarget>();
+    const processedBundleCases = new Set<string>();
+
+    bundledUnits.forEach(unit => {
+      const bundleId = unit.variable_bundle_id;
+      if (bundleId === null) {
+        return;
+      }
+
+      const variableBundle = variableBundleById.get(bundleId);
+      if (!variableBundle) {
+        return;
+      }
+
+      const caseKey = this.getCodingJobBundleUnitCaseKey(unit);
+      const bundleCaseKey = `${caseKey}\u0000${bundleId}`;
+      if (processedBundleCases.has(bundleCaseKey)) {
+        return;
+      }
+      processedBundleCases.add(bundleCaseKey);
+
+      const [login, code, personGroup, bookletName] = caseKey.split('\u0000');
+      (variableBundle.variables || []).forEach(variable => {
+        const variableKey = getAggregationVariableKey(
+          variable.unitName,
+          variable.variableId
+        );
+        targets.set(`${caseKey}\u0000${variableKey}`, {
+          login,
+          code,
+          person_group: personGroup,
+          booklet_name: bookletName,
+          unit_name: variable.unitName.toUpperCase(),
+          variable_id: variable.variableId
+        });
+      });
+    });
+
+    return Array.from(targets.values());
+  }
+
   private getCodingJobBundleVariableStatus(
     response: ResponseEntity | undefined,
     manualUnit: CodingJobUnit | undefined
@@ -4733,29 +4792,13 @@ export class CodingJobService {
       unit => unit.variable_bundle_id !== null &&
         caseKeys.has(this.getCodingJobBundleUnitCaseKey(unit))
     );
-    const variableIds = Array.from(
-      new Set(
-        variableBundles.flatMap(bundle => (
-          bundle.variables || []
-        ).map(variable => variable.variableId))
-      )
+    const bundleTargets = this.getCodingJobBundleTargets(
+      bundledUnits,
+      variableBundleById
     );
-    const unitNames = Array.from(
-      new Set(
-        variableBundles.flatMap(bundle => (
-          bundle.variables || []
-        ).map(variable => variable.unitName))
-      )
-    );
-
-    if (variableIds.length === 0 || unitNames.length === 0) {
+    if (bundleTargets.length === 0) {
       return new Map();
     }
-
-    const personLogins = Array.from(new Set(bundledUnits.map(unit => unit.person_login)));
-    const personCodes = Array.from(new Set(bundledUnits.map(unit => unit.person_code)));
-    const personGroups = Array.from(new Set(bundledUnits.map(unit => unit.person_group)));
-    const bookletNames = Array.from(new Set(bundledUnits.map(unit => unit.booklet_name)));
     const manualUnitByResponseId = new Map(
       contextBundledUnits.map(unit => [unit.response_id, unit])
     );
@@ -4766,15 +4809,33 @@ export class CodingJobService {
       .leftJoinAndSelect('booklet.person', 'person')
       .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
       .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('response.variableid IN (:...variableIds)', { variableIds })
-      .andWhere('UPPER(unit.name) IN (:...unitNames)', {
-        unitNames: unitNames.map(unitName => unitName.toUpperCase())
-      })
-      .andWhere('person.login IN (:...personLogins)', { personLogins })
-      .andWhere('person.code IN (:...personCodes)', { personCodes })
-      .andWhere('person.group IN (:...personGroups)', { personGroups })
-      .andWhere("COALESCE(bookletinfo.name, '') IN (:...bookletNames)", {
-        bookletNames
+      .andWhere(`
+        (
+          person.login,
+          person.code,
+          COALESCE(person.group, ''),
+          COALESCE(bookletinfo.name, ''),
+          UPPER(unit.name),
+          response.variableid
+        ) IN (
+          SELECT
+            bundle_target.login,
+            bundle_target.code,
+            bundle_target.person_group,
+            bundle_target.booklet_name,
+            bundle_target.unit_name,
+            bundle_target.variable_id
+          FROM jsonb_to_recordset(CAST(:bundleTargets AS jsonb)) AS bundle_target(
+            login text,
+            code text,
+            person_group text,
+            booklet_name text,
+            unit_name text,
+            variable_id text
+          )
+        )
+      `, {
+        bundleTargets: JSON.stringify(bundleTargets)
       })
       .getMany();
 
@@ -4884,8 +4945,11 @@ export class CodingJobService {
       )
     );
 
-    await Promise.all(
-      unitNames.map(async unitName => {
+    let nextUnitIndex = 0;
+    const loadNextUnit = async (): Promise<void> => {
+      while (nextUnitIndex < unitNames.length) {
+        const unitName = unitNames[nextUnitIndex];
+        nextUnitIndex += 1;
         try {
           const pageMap = await this.codingFileCacheService!.getVariablePageMap(
             unitName,
@@ -4898,7 +4962,20 @@ export class CodingJobService {
           );
           variablePageMaps.set(unitName, new Map<string, string>());
         }
-      })
+      }
+    };
+
+    await Promise.all(
+      Array.from(
+        {
+          length: Math.min(
+            this.runtimeConfig?.codingFileLoadConcurrency ??
+              DEFAULT_CODING_FILE_LOAD_CONCURRENCY,
+            unitNames.length
+          )
+        },
+        () => loadNextUnit()
+      )
     );
 
     return variablePageMaps;

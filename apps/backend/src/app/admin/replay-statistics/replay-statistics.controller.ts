@@ -38,9 +38,16 @@ import {
   ReplayStatisticsSource
 } from '../../database/entities/replay-statistics.entity';
 import { StoreReplayStatisticsDto } from './dto/store-replay-statistics.dto';
+import {
+  REPLAY_ATTEMPT_ID_HEADER,
+  RequestWithRequestId,
+  normalizeReplayAttemptId,
+  normalizeRequestId
+} from '../../http/request-id';
 
-type ReplayStatisticsRequest = {
+type ReplayStatisticsRequest = Partial<RequestWithRequestId> & {
   user?: unknown;
+  header?: (name: string) => string | undefined;
 };
 
 /**
@@ -78,6 +85,11 @@ export class ReplayStatisticsController {
     return this.replayStatisticsService.storeReplayStatistics({
       workspaceId: Number(workspaceId),
       ...data,
+      replayAttemptId: normalizeReplayAttemptId(
+        data.replayAttemptId ??
+        request?.header?.(REPLAY_ATTEMPT_ID_HEADER)
+      ),
+      requestId: normalizeRequestId(request?.requestId),
       replaySource: this.resolveReplaySource(request?.user),
       replayUrl: this.sanitizeReplayUrl(data.replayUrl)
     });
