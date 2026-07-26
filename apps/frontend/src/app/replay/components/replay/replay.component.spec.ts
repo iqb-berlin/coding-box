@@ -30,6 +30,7 @@ import {
   REPLAY_WORKSPACE_TOKEN_SCOPES
 } from '../../../core/services/auth-session.config';
 import type { ReplayCodingSessionDto } from '../../../../../../../api-dto/coding/replay-coding-session.dto';
+import { ReplayAttemptContext } from '../../utils/replay-attempt-context';
 
 function createUnsignedJwt(payload: Record<string, unknown>): string {
   const encode = (value: Record<string, unknown>) => btoa(JSON.stringify(value))
@@ -64,6 +65,13 @@ class ReplayBackendServiceMock {
     player: [{ data: 'player data', file_id: 'PLAYER-1.0' }],
     serverTimings: {
       responseTotalMs: 5
+    }
+  }));
+
+  getReplayResponse = jest.fn().mockReturnValue(of({
+    response: { responses: [{ id: '1', content: 'response data' }] },
+    serverTimings: {
+      totalMs: 5
     }
   }));
 
@@ -388,75 +396,19 @@ describe('ReplayComponent', () => {
   });
 
   it('should keep server timings from replay payload', () => {
-    expect((component as unknown as { serverTimings: Record<string, number> | null }).serverTimings)
-      .toEqual({
-        responseTotalMs: 5
-      });
-  });
+    const replayAttempt = (component as unknown as {
+      replayAttempt: ReplayAttemptContext;
+    }).replayAttempt;
 
-  it('should calculate route and player timing segments', () => {
-    const privateComponent = component as unknown as {
-      routeStartTime: number;
-      loadStartTime: number;
-      codingSessionRequestStartTime: number;
-      codingSessionResponseTime: number;
-      payloadRequestStartTime: number;
-      payloadResponseTime: number;
-      playerReadyTime: number;
-      getClientTimings: (visibleTime: number) => Record<string, number | null>;
-    };
-
-    privateComponent.routeStartTime = 100;
-    privateComponent.loadStartTime = 300;
-    privateComponent.codingSessionRequestStartTime = 150;
-    privateComponent.codingSessionResponseTime = 250;
-    privateComponent.payloadRequestStartTime = 300;
-    privateComponent.payloadResponseTime = 500;
-    privateComponent.playerReadyTime = 650;
-
-    expect(privateComponent.getClientTimings(900)).toEqual({
-      codingSessionMs: 100,
-      routeToCodingSessionRequestMs: 50,
-      codingSessionResponseToPayloadRequestMs: 50,
-      routeToVisibleMs: 800,
-      loadToVisibleMs: 600,
-      routeToPayloadRequestMs: 200,
-      payloadMs: 200,
-      payloadToVisibleMs: 400,
-      payloadToPlayerReadyMs: 150,
-      playerReadyToVisibleMs: 250
+    expect(replayAttempt.getServerTimings()).toEqual({
+      responseTotalMs: 5
     });
-  });
-
-  it('should clear coding session timings when resetting the replay context', () => {
-    const privateComponent = component as unknown as {
-      codingSessionRequestStartTime: number;
-      codingSessionResponseTime: number;
-      codingSessionServerTimings: Record<string, number> | null;
-      resetUnitData: (preserveCodingData?: boolean) => void;
-      getClientTimings: (visibleTime: number) => Record<string, number | null>;
-    };
-    privateComponent.codingSessionRequestStartTime = 100;
-    privateComponent.codingSessionResponseTime = 250;
-    privateComponent.codingSessionServerTimings = {
-      codingSessionTotalMs: 75
-    };
-
-    privateComponent.resetUnitData();
-
-    expect(privateComponent.getClientTimings(300).codingSessionMs).toBeNull();
-    expect(privateComponent.codingSessionServerTimings).toBeNull();
   });
 
   it('should store client and server timings with replay statistics', () => {
     const privateComponent = component as unknown as {
-      routeStartTime: number;
-      loadStartTime: number;
-      payloadRequestStartTime: number;
-      payloadResponseTime: number;
-      playerReadyTime: number;
-      serverTimings: Record<string, number> | null;
       storeReplayStatistics: (
+        replayAttempt: ReplayAttemptContext,
         success: boolean,
         duration: number,
         errorMessage?: string,
@@ -466,16 +418,18 @@ describe('ReplayComponent', () => {
 
     replayBackendService.storeReplayStatistics.mockClear();
     component.workspaceId = 42;
-    privateComponent.routeStartTime = 100;
-    privateComponent.loadStartTime = 300;
-    privateComponent.payloadRequestStartTime = 300;
-    privateComponent.payloadResponseTime = 500;
-    privateComponent.playerReadyTime = 650;
-    privateComponent.serverTimings = {
-      responseTotalMs: 5
-    };
+    const replayAttempt = new ReplayAttemptContext(100, 'attempt-1');
+    replayAttempt.startPayloadLoad(300);
+    replayAttempt.recordPayloadResponse(500, { responseTotalMs: 5 });
+    replayAttempt.recordPlayerReady(650);
 
-    privateComponent.storeReplayStatistics(true, 800, undefined, 900);
+    privateComponent.storeReplayStatistics(
+      replayAttempt,
+      true,
+      800,
+      undefined,
+      900
+    );
 
     expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledWith(
       expect.any(Number),
@@ -498,13 +452,15 @@ describe('ReplayComponent', () => {
           responseTotalMs: 5
         }
       }),
-      'valid-token'
+      'valid-token',
+      'attempt-1'
     );
   });
 
   it('should omit auth and booklet units data from replay statistics URL', () => {
     const privateComponent = component as unknown as {
       storeReplayStatistics: (
+        replayAttempt: ReplayAttemptContext,
         success: boolean,
         duration: number,
         errorMessage?: string,
@@ -521,15 +477,23 @@ describe('ReplayComponent', () => {
 
     replayBackendService.storeReplayStatistics.mockClear();
     component.workspaceId = 42;
+    const replayAttempt = new ReplayAttemptContext(100, 'attempt-1');
 
-    privateComponent.storeReplayStatistics(true, 800, undefined, 900);
+    privateComponent.storeReplayStatistics(
+      replayAttempt,
+      true,
+      800,
+      undefined,
+      900
+    );
 
     expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledWith(
       expect.any(Number),
       expect.objectContaining({
         replayUrl: expect.stringContaining('mode=booklet-view')
       }),
-      'valid-token'
+      'valid-token',
+      'attempt-1'
     );
     const replayUrl = replayBackendService.storeReplayStatistics.mock.calls[0][1].replayUrl as string;
     expect(replayUrl).not.toContain('auth=');
@@ -556,6 +520,25 @@ describe('ReplayComponent', () => {
       'Keine valide Seite mit der ID "page-1" gefunden',
       'Schließen',
       { panelClass: ['snackbar-error'] }
+    );
+  });
+
+  it('should finalize replay statistics after an error', () => {
+    replayBackendService.storeReplayStatistics.mockClear();
+    component.page = 'page-1';
+
+    component.checkPageError('notInList');
+    component.onResponseVisible();
+
+    expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledTimes(1);
+    expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.objectContaining({
+        success: false,
+        errorMessage: 'Keine valide Seite mit der ID "page-1" gefunden'
+      }),
+      'valid-token',
+      expect.any(String)
     );
   });
 
@@ -789,6 +772,118 @@ describe('ReplayComponent', () => {
     expect(component.page).toBe('1');
     expect(component.anchor).toBe('ANCHOR_2');
     expect(component.codingService.currentVariableId).toBe('VAR_2');
+  });
+
+  it('should navigate within the loaded unit without requesting its payload again', async () => {
+    replayBackendService.getReplayPayload.mockClear();
+    const navigateToPage = jest.fn().mockReturnValue(true);
+    const replayState = component as unknown as {
+      replayAttempt: ReplayAttemptContext;
+    };
+    const previousAttempt = replayState.replayAttempt;
+    component.unitPlayerComponent = {
+      navigateToPage
+    } as unknown as UnitPlayerComponent;
+
+    await component.handleUnitChanged({
+      id: 1,
+      name: 'unit-123',
+      alias: null,
+      bookletId: 0,
+      testPerson: 'valid@test@person',
+      variableId: 'VAR_2',
+      variableAnchor: 'ANCHOR_2',
+      variablePage: '2'
+    });
+
+    expect(navigateToPage).toHaveBeenCalledWith('2');
+    expect(replayBackendService.getReplayPayload).not.toHaveBeenCalled();
+    expect(replayBackendService.getReplayResponse).not.toHaveBeenCalled();
+    expect(replayState.replayAttempt).not.toBe(previousAttempt);
+    expect(replayState.replayAttempt.getClientTimings(performance.now()))
+      .toEqual(expect.objectContaining({
+        codingSessionMs: null,
+        loadToVisibleMs: null,
+        payloadMs: null,
+        payloadToVisibleMs: null
+      }));
+    expect(replayState.replayAttempt.getServerTimings()).toBeUndefined();
+    expect(replayState.replayAttempt.tryFinalizeStatistics()).toBe(true);
+  });
+
+  it('should load only responses when the test person changes within the same unit', async () => {
+    replayBackendService.getReplayPayload.mockClear();
+    replayBackendService.getReplayResponse.mockClear().mockReturnValue(of({
+      response: {
+        responses: [{ id: 'chunk', content: 'new person response' }]
+      },
+      serverTimings: {
+        totalMs: 7
+      }
+    }));
+    const replayComponent = component as unknown as {
+      reloadKey: number;
+      replayAttempt: ReplayAttemptContext;
+    };
+    const initialReloadKey = replayComponent.reloadKey;
+    const initialAttempt = replayComponent.replayAttempt;
+    initialAttempt.recordCodingSession({
+      requestStartedAt: 100,
+      responseReceivedAt: 200,
+      serverTimings: { codingSessionTotalMs: 50 }
+    });
+
+    await component.handleUnitChanged({
+      id: 2,
+      name: 'unit-123',
+      alias: null,
+      bookletId: 0,
+      testPerson: 'valid@test@other',
+      variableId: 'VAR_2',
+      variableAnchor: 'ANCHOR_2',
+      variablePage: '2'
+    });
+
+    expect(replayBackendService.getReplayResponse).toHaveBeenCalledWith(
+      1,
+      'valid@test@other',
+      'unit-123',
+      'valid-token',
+      expect.any(String)
+    );
+    expect(replayBackendService.getReplayPayload).not.toHaveBeenCalled();
+    expect(replayComponent.reloadKey).toBe(initialReloadKey);
+    expect(component.responses).toEqual({
+      responses: [{ id: 'chunk', content: 'new person response' }]
+    });
+    expect(replayComponent.replayAttempt).not.toBe(initialAttempt);
+    expect(
+      replayComponent.replayAttempt.getClientTimings(performance.now())
+        .codingSessionMs
+    ).toBeNull();
+    expect(replayComponent.replayAttempt.getServerTimings()).toEqual({
+      responseTotalMs: 7
+    });
+  });
+
+  it('should fall back to a full payload when the loaded player is not ready to navigate', async () => {
+    replayBackendService.getReplayPayload.mockClear();
+    component.unitPlayerComponent = {
+      navigateToPage: jest.fn().mockReturnValue(false)
+    } as unknown as UnitPlayerComponent;
+
+    await component.handleUnitChanged({
+      id: 1,
+      name: 'unit-123',
+      alias: null,
+      bookletId: 0,
+      testPerson: 'valid@test@person',
+      variableId: 'VAR_2',
+      variableAnchor: 'ANCHOR_2',
+      variablePage: '2'
+    });
+
+    expect(replayBackendService.getReplayPayload).toHaveBeenCalledTimes(1);
   });
 
   it('should not change coding units when the code selector blocks leaving the current case', async () => {
@@ -1029,8 +1124,9 @@ describe('ReplayComponent', () => {
 
     expect(
       codingJobBackendServiceMock.getReplayCodingSession
-    ).toHaveBeenCalledWith(47, 77, 'valid-token', true);
-    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', true);
+    ).toHaveBeenCalledWith(47, 77, 'valid-token', true, expect.any(String));
+    expect(codingJobBackendServiceMock.getCodingJobUnits)
+      .toHaveBeenCalledWith(47, 77, 'valid-token', true, expect.any(String));
   });
 
   it('should initialize coding replay from one session request', async () => {
@@ -1100,7 +1196,7 @@ describe('ReplayComponent', () => {
 
     expect(
       codingJobBackendServiceMock.getReplayCodingSession
-    ).toHaveBeenCalledWith(47, 77, 'valid-token', true);
+    ).toHaveBeenCalledWith(47, 77, 'valid-token', true, expect.any(String));
     expect(codingJobBackendServiceMock.getCodingJobUnits).not.toHaveBeenCalled();
     expect(codingJobBackendServiceMock.getCodingProgress).not.toHaveBeenCalled();
     expect(codingJobBackendServiceMock.getCodingNotes).not.toHaveBeenCalled();
@@ -1125,10 +1221,9 @@ describe('ReplayComponent', () => {
       workspaceId: '47'
     };
     routeParamsSubject = new Subject<typeof routeParams>();
-    const sessionResponse = new Subject<ReplayCodingSessionDto>();
-    codingJobBackendServiceMock.getReplayCodingSession.mockReturnValue(
-      sessionResponse.asObservable()
-    );
+    const firstSessionResponse = new Subject<ReplayCodingSessionDto>();
+    codingJobBackendServiceMock.getReplayCodingSession
+      .mockReturnValueOnce(firstSessionResponse.asObservable());
 
     fixture.destroy();
     fixture = TestBed.createComponent(ReplayComponent);
@@ -1175,7 +1270,7 @@ describe('ReplayComponent', () => {
       codingJobBackendServiceMock.getReplayCodingSession
     ).toHaveBeenCalledTimes(1);
 
-    sessionResponse.next({
+    const replaySession: ReplayCodingSessionDto = {
       units: [
         {
           responseId: 1,
@@ -1218,12 +1313,12 @@ describe('ReplayComponent', () => {
       serverTimings: {
         totalMs: 15
       }
-    });
-    sessionResponse.complete();
+    };
+    firstSessionResponse.next(replaySession);
+    firstSessionResponse.complete();
     await Promise.resolve();
 
     releaseSecondRouterRun?.();
-    await fixture.whenStable();
     await new Promise<void>(resolve => {
       setTimeout(resolve, 0);
     });
@@ -1231,6 +1326,15 @@ describe('ReplayComponent', () => {
     expect(
       codingJobBackendServiceMock.getReplayCodingSession
     ).toHaveBeenCalledTimes(1);
+
+    const firstAttemptId =
+      codingJobBackendServiceMock.getReplayCodingSession.mock.calls[0][4];
+    expect(firstAttemptId).toEqual(expect.any(String));
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
     expect(component.unitId).toBe('unit-2');
     expect(component.page).toBe('1');
     expect(component.codingService.currentVariableId).toBe('VAR2');
@@ -1449,7 +1553,7 @@ describe('ReplayComponent', () => {
     ).toHaveBeenCalledTimes(1);
     expect(
       codingJobBackendServiceMock.getReplayCodingSession
-    ).toHaveBeenCalledWith(47, 77, 'fresh-token', false);
+    ).toHaveBeenCalledWith(47, 77, 'fresh-token', false, expect.any(String));
     expect(component.unitId).toBe('unit-2');
     expect(component.page).toBe('1');
     expect(component.codingService.currentVariableId).toBe('VAR2');
@@ -1574,7 +1678,7 @@ describe('ReplayComponent', () => {
 
     expect(
       codingJobBackendServiceMock.getReplayCodingSession
-    ).toHaveBeenCalledWith(47, 77, 'coding-token', false);
+    ).toHaveBeenCalledWith(47, 77, 'coding-token', false, expect.any(String));
     expect(component.unitId).toBe('unit-2');
     expect(component.codingService.currentVariableId).toBe('VAR2');
   });
@@ -1836,14 +1940,16 @@ describe('ReplayComponent', () => {
       'valid@test@person',
       'unit-new',
       'valid-token',
-      true
+      true,
+      expect.any(String)
     );
     expect(replayBackendService.getReplayPayload).not.toHaveBeenCalledWith(
       47,
       'valid@test@person',
       'unit-old',
       'valid-token',
-      true
+      true,
+      expect.any(String)
     );
     expect(component.unitId).toBe('unit-new');
     expect(component.codingService.currentVariableId).toBe('NEW_VAR');
@@ -1908,7 +2014,8 @@ describe('ReplayComponent', () => {
       1,
       ['replay:read', 'replay-statistics:write', 'coding-job:operate']
     );
-    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'fresh-workspace-token', false);
+    expect(codingJobBackendServiceMock.getCodingJobUnits)
+      .toHaveBeenCalledWith(47, 77, 'fresh-workspace-token', false, expect.any(String));
     expect(window.location.href).toContain('workspaceId=47');
     expect(window.location.href).not.toContain('auth=');
   });
@@ -1945,7 +2052,8 @@ describe('ReplayComponent', () => {
     });
 
     expect(appService.createOwnToken).not.toHaveBeenCalled();
-    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'invalid-token', false);
+    expect(codingJobBackendServiceMock.getCodingJobUnits)
+      .toHaveBeenCalledWith(47, 77, 'invalid-token', false, expect.any(String));
     expect(window.location.href).toContain('auth=invalid-token');
   });
 
@@ -1990,7 +2098,8 @@ describe('ReplayComponent', () => {
       47,
       77,
       expiredTokenFromOtherWorkspace,
-      false
+      false,
+      expect.any(String)
     );
     expect(window.location.href).toContain(`auth=${expiredTokenFromOtherWorkspace}`);
   });
@@ -2035,7 +2144,8 @@ describe('ReplayComponent', () => {
       47,
       77,
       expiredTokenWithoutWorkspace,
-      false
+      false,
+      expect.any(String)
     );
     expect(window.location.href).toContain(`auth=${expiredTokenWithoutWorkspace}`);
   });
@@ -2435,7 +2545,8 @@ describe('ReplayComponent', () => {
     expect(component.isReviewMode).toBe(true);
     expect(component.codingService.isReviewMode).toBe(true);
     expect(component.isCodingReadOnly()).toBe(true);
-    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', false);
+    expect(codingJobBackendServiceMock.getCodingJobUnits)
+      .toHaveBeenCalledWith(47, 77, 'valid-token', false, expect.any(String));
     expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
     expect(codingJobBackendServiceMock.resumeCodingJob).not.toHaveBeenCalled();
   });
@@ -2485,7 +2596,8 @@ describe('ReplayComponent', () => {
     expect(component.codingService.isReviewMode).toBe(false);
     expect(component.codingService.isCompletedJobReview).toBe(false);
     expect(component.isCodingReadOnly()).toBe(false);
-    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', false);
+    expect(codingJobBackendServiceMock.getCodingJobUnits)
+      .toHaveBeenCalledWith(47, 77, 'valid-token', false, expect.any(String));
     expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
     expect(codingJobBackendServiceMock.resumeCodingJob).not.toHaveBeenCalled();
   });
@@ -2712,6 +2824,70 @@ describe('ReplayComponent', () => {
     expect(component.unitId).toBe('');
     expect(component.player).toBe('');
   });
+
+  it('should clear stale replay state and finalize statistics once for a 404', () => {
+    replayBackendService.storeReplayStatistics.mockClear();
+    component.unitId = 'stale-unit';
+    component.player = 'stale-player';
+    component.unitDef = 'stale-unit-definition';
+    component.responses = [{ id: 'chunk', content: 'stale-response' }];
+
+    const privateComponent = component as unknown as {
+      catchError: (error: HttpErrorResponse) => void;
+    };
+    privateComponent.catchError(new HttpErrorResponse({
+      status: 404,
+      error: {
+        statusCode: 404,
+        code: 'REPLAY_UNIT_NOT_FOUND',
+        message: 'Replay unit was not found.'
+      }
+    }));
+    component.onResponseVisible();
+
+    expect(component.unitId).toBe('');
+    expect(component.player).toBe('');
+    expect(component.unitDef).toBe('');
+    expect(component.responses).toBeUndefined();
+    expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledTimes(1);
+    expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.objectContaining({
+        success: false
+      }),
+      'valid-token',
+      expect.any(String)
+    );
+  });
+
+  it('should not clear a newer replay when an old error snackbar is dismissed', () => {
+    const dismissed = new Subject<void>();
+    snackBar.open.mockReturnValueOnce({
+      afterDismissed: () => dismissed.asObservable()
+    });
+    const privateComponent = component as unknown as {
+      openErrorSnackBar: (message: string, action: string) => void;
+      routerRunId: number;
+    };
+    privateComponent.routerRunId = 1;
+    privateComponent.openErrorSnackBar('old replay error', 'Schließen');
+
+    privateComponent.routerRunId = 2;
+    component.unitId = 'latest-unit';
+    component.player = 'latest-player';
+    component.unitDef = 'latest-unit-definition';
+    component.responses = [{ id: 'chunk', content: 'latest-response' }];
+    dismissed.next();
+    dismissed.complete();
+
+    expect(component.unitId).toBe('latest-unit');
+    expect(component.player).toBe('latest-player');
+    expect(component.unitDef).toBe('latest-unit-definition');
+    expect(component.responses).toEqual([
+      { id: 'chunk', content: 'latest-response' }
+    ]);
+  });
+
   describe('onKeyDown', () => {
     const digitShortcutCodingScheme: CodingScheme = {
       version: '1.0',

@@ -5021,6 +5021,78 @@ describe('CodingJobService', () => {
     });
   });
 
+  it('builds response targets only from the bundle assigned to each case', () => {
+    const buildTargets = (
+      service as unknown as {
+        getCodingJobBundleTargets: (
+          units: CodingJobUnit[],
+          variableBundles: Map<number, VariableBundle>
+        ) => Array<{
+          login: string;
+          code: string;
+          person_group: string;
+          booklet_name: string;
+          unit_name: string;
+          variable_id: string;
+        }>;
+      }
+    ).getCodingJobBundleTargets.bind(service);
+    const firstCase = {
+      person_login: 'login-a',
+      person_code: 'code-a',
+      person_group: 'group-a',
+      booklet_name: 'booklet-a',
+      variable_bundle_id: 9
+    } as CodingJobUnit;
+    const secondCase = {
+      person_login: 'login-b',
+      person_code: 'code-b',
+      person_group: 'group-b',
+      booklet_name: 'booklet-b',
+      variable_bundle_id: 10
+    } as CodingJobUnit;
+    const firstBundleVariables = [{
+      unitName: 'unit-a',
+      variableId: 'VAR_A'
+    }];
+    const firstBundleVariablesGetter = jest.fn(() => firstBundleVariables);
+    const variableBundles = new Map<number, VariableBundle>([
+      [9, {
+        id: 9,
+        get variables() {
+          return firstBundleVariablesGetter();
+        }
+      } as VariableBundle],
+      [10, {
+        id: 10,
+        variables: [{ unitName: 'unit-b', variableId: 'VAR_B' }]
+      } as VariableBundle]
+    ]);
+
+    expect(buildTargets(
+      [firstCase, firstCase, secondCase],
+      variableBundles
+    )).toEqual([
+      {
+        login: 'login-a',
+        code: 'code-a',
+        person_group: 'group-a',
+        booklet_name: 'booklet-a',
+        unit_name: 'UNIT-A',
+        variable_id: 'VAR_A'
+      },
+      {
+        login: 'login-b',
+        code: 'code-b',
+        person_group: 'group-b',
+        booklet_name: 'booklet-b',
+        unit_name: 'UNIT-B',
+        variable_id: 'VAR_B'
+      }
+    ]);
+    expect(firstBundleVariablesGetter).toHaveBeenCalledTimes(1);
+  });
+
   it('uses all visible bundle units and prepared results for bundle context', async () => {
     const openUnit = {
       response_id: 99,

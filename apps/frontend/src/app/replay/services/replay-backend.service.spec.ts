@@ -97,11 +97,17 @@ describe('ReplayBackendService', () => {
         unitId: 'u1',
         durationMilliseconds: 1000
       };
-      service.storeReplayStatistics(1, data, 'url-token').subscribe();
+      service.storeReplayStatistics(
+        1,
+        data,
+        'url-token',
+        'attempt-1'
+      ).subscribe();
 
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/replay-statistics`);
       expect(req.request.method).toBe('POST');
       expect(req.request.headers.get('Authorization')).toBe('Bearer url-token');
+      expect(req.request.headers.get('X-Replay-Attempt-Id')).toBe('attempt-1');
       expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
       expect(req.request.context.get(SUPPRESS_AUTH_ERROR_REDIRECT)).toBe(true);
       req.flush({});

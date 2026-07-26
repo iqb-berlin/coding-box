@@ -26,6 +26,7 @@ import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
+import { ReplayResourceNotFoundError } from './replay-resource-not-found.error';
 
 const mockQueryBuilder = () => ({
   select: jest.fn().mockReturnThis(),
@@ -80,6 +81,7 @@ describe('WorkspaceTestResultsService', () => {
   let personsRepository: Repository<Persons>;
   let unitRepository: Repository<Unit>;
   let bookletRepository: Repository<Booklet>;
+  let bookletInfoRepository: Repository<BookletInfo>;
   let responseRepository: Repository<ResponseEntity>;
   let sessionRepository: Repository<Session>;
   let bookletLogRepository: Repository<BookletLog>;
@@ -154,6 +156,7 @@ describe('WorkspaceTestResultsService', () => {
 
     personsRepository = {
       count: jest.fn(),
+      findOne: jest.fn().mockResolvedValue({ id: 11 }),
       createQueryBuilder: jest.fn(() => mockQueryBuilder())
     } as unknown as Repository<Persons>;
 
@@ -162,8 +165,13 @@ describe('WorkspaceTestResultsService', () => {
     } as unknown as Repository<Unit>;
 
     bookletRepository = {
+      findOne: jest.fn().mockResolvedValue({ id: 31 }),
       createQueryBuilder: jest.fn(() => mockQueryBuilder())
     } as unknown as Repository<Booklet>;
+
+    bookletInfoRepository = {
+      findOne: jest.fn().mockResolvedValue({ id: 21 })
+    } as unknown as Repository<BookletInfo>;
 
     responseRepository = {
       createQueryBuilder: jest.fn(() => mockQueryBuilder()),
@@ -214,7 +222,7 @@ describe('WorkspaceTestResultsService', () => {
       unitRepository,
       bookletRepository,
       responseRepository,
-      {} as unknown as Repository<BookletInfo>,
+      bookletInfoRepository,
       bookletLogRepository,
       sessionRepository,
       unitLogRepository,
@@ -2119,6 +2127,19 @@ describe('WorkspaceTestResultsService', () => {
   });
 
   describe('findUnitResponse', () => {
+    const expectReplayError = async (
+      promise: Promise<unknown>,
+      code: string
+    ): Promise<void> => {
+      try {
+        await promise;
+        throw new Error('Expected ReplayResourceNotFoundError');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ReplayResourceNotFoundError);
+        expect((error as ReplayResourceNotFoundError).code).toBe(code);
+      }
+    };
+
     it('returns no replay responses for an ignored booklet without looking up the unit', async () => {
       (workspaceExclusionService.resolveExclusionsForQueries as jest.Mock).mockResolvedValue({
         globalIgnoredUnits: [],
@@ -2136,7 +2157,7 @@ describe('WorkspaceTestResultsService', () => {
       expect(unitRepository.createQueryBuilder).not.toHaveBeenCalled();
     });
 
-    it('should look up replay units by alias first', async () => {
+    it('should look up replay units by alias or name in one query and prefer aliases', async () => {
       const unitQb = mockQueryBuilder();
       (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
       unitQb.getRawOne.mockResolvedValue({ unitId: 77 });
@@ -2152,9 +2173,17 @@ describe('WorkspaceTestResultsService', () => {
       );
 
       expect(result).toEqual({ responses: [] });
-      expect(unitQb.andWhere).toHaveBeenCalledWith('unit.alias = :unitId', {
-        unitId: 'unit-original-id'
-      });
+      expect(unitQb.andWhere).toHaveBeenCalledWith(
+        '(unit.alias = :unitId OR unit.name = :unitId)',
+        {
+          unitId: 'unit-original-id'
+        }
+      );
+      expect(unitQb.orderBy).toHaveBeenCalledWith(
+        'CASE WHEN unit.alias = :unitId THEN 0 ELSE 1 END',
+        'ASC'
+      );
+      expect(unitQb.limit).toHaveBeenCalledWith(1);
       expect(unitRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
     });
 
@@ -2184,14 +2213,10 @@ describe('WorkspaceTestResultsService', () => {
       });
     });
 
-    it('should fall back to visible unit name when alias lookup misses', async () => {
-      const aliasQb = mockQueryBuilder();
-      const nameQb = mockQueryBuilder();
-      (unitRepository.createQueryBuilder as jest.Mock)
-        .mockReturnValueOnce(aliasQb)
-        .mockReturnValueOnce(nameQb);
-      aliasQb.getRawOne.mockResolvedValue(null);
-      nameQb.getRawOne.mockResolvedValue({ unitId: 77 });
+    it('should accept a visible unit name when no alias matches', async () => {
+      const unitQb = mockQueryBuilder();
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      unitQb.getRawOne.mockResolvedValue({ unitId: 77 });
 
       const responseQb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseQb);
@@ -2204,12 +2229,63 @@ describe('WorkspaceTestResultsService', () => {
       );
 
       expect(result).toEqual({ responses: [] });
-      expect(aliasQb.andWhere).toHaveBeenCalledWith('unit.alias = :unitId', {
-        unitId: 'unit-visible-id'
-      });
-      expect(nameQb.andWhere).toHaveBeenCalledWith('unit.name = :unitId', {
-        unitId: 'unit-visible-id'
-      });
+      expect(unitQb.andWhere).toHaveBeenCalledWith(
+        '(unit.alias = :unitId OR unit.name = :unitId)',
+        {
+          unitId: 'unit-visible-id'
+        }
+      );
+      expect(unitRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
+    });
+
+    it('should type a missing replay person', async () => {
+      (personsRepository.findOne as jest.Mock).mockResolvedValueOnce(null);
+
+      await expectReplayError(
+        service.findUnitResponse(
+          1,
+          'login-a@code-a@group-a@booklet-a',
+          'missing-unit'
+        ),
+        'REPLAY_PERSON_NOT_FOUND'
+      );
+    });
+
+    it('should type a missing replay booklet definition', async () => {
+      (bookletInfoRepository.findOne as jest.Mock).mockResolvedValueOnce(null);
+
+      await expectReplayError(
+        service.findUnitResponse(
+          1,
+          'login-a@code-a@group-a@booklet-a',
+          'missing-unit'
+        ),
+        'REPLAY_BOOKLET_NOT_FOUND'
+      );
+    });
+
+    it('should type a missing person-booklet assignment', async () => {
+      (bookletRepository.findOne as jest.Mock).mockResolvedValueOnce(null);
+
+      await expectReplayError(
+        service.findUnitResponse(
+          1,
+          'login-a@code-a@group-a@booklet-a',
+          'missing-unit'
+        ),
+        'REPLAY_BOOKLET_NOT_FOUND'
+      );
+    });
+
+    it('should type a missing replay unit', async () => {
+      await expectReplayError(
+        service.findUnitResponse(
+          1,
+          'login-a@code-a@group-a@booklet-a',
+          'missing-unit'
+        ),
+        'REPLAY_UNIT_NOT_FOUND'
+      );
     });
   });
 

@@ -1,8 +1,10 @@
 import {
   Controller,
   Get,
+  HttpException,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
   Param,
   Res,
   Req,
@@ -10,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  ApiNotFoundResponse,
   ApiOkResponse,
   ApiParam,
   ApiTags
@@ -28,9 +31,13 @@ import {
   WorkspaceFilesService,
   WorkspacePlayerService
 } from '../../database/services/workspace';
-import { WorkspaceTestResultsService } from '../../database/services/test-results';
+import {
+  ReplayResourceNotFoundError,
+  WorkspaceTestResultsService
+} from '../../database/services/test-results';
 import FileUpload from '../../database/entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
+import { ReplayErrorDto } from '../../../../../../api-dto/coding/replay-error.dto';
 
 interface ReplayUnitResponsePayload {
   responses: {
@@ -126,6 +133,10 @@ export class WorkspaceCodingReplayController {
   @ApiOkResponse({
     description: 'Replay payload retrieved successfully.'
   })
+  @ApiNotFoundResponse({
+    description: 'A required replay resource was not found.',
+    type: ReplayErrorDto
+  })
   async getReplayPayload(
     @WorkspaceId() workspaceId: number,
       @Param('testPerson') testPerson: string,
@@ -158,12 +169,13 @@ export class WorkspaceCodingReplayController {
       };
     } catch (error) {
       const totalMs = Number((performance.now() - startedAt).toFixed(2));
-      this.logger.warn(
-        `Replay payload failed ws=${workspaceId} unit=${unitId} after ${totalMs}ms: ${error.message}`
-      );
       this.setReplayNoStoreHeaders(res);
-      throw new InternalServerErrorException(
-        `Error retrieving replay payload: ${error.message}`
+      return this.handleReplayError(
+        error,
+        workspaceId,
+        unitId,
+        'payload',
+        totalMs
       );
     }
   }
@@ -180,6 +192,10 @@ export class WorkspaceCodingReplayController {
   })
   @ApiOkResponse({
     description: 'Replay unit assets retrieved successfully.'
+  })
+  @ApiNotFoundResponse({
+    description: 'A required replay asset was not found.',
+    type: ReplayErrorDto
   })
   async getReplayAssets(
     @WorkspaceId() workspaceId: number,
@@ -200,12 +216,13 @@ export class WorkspaceCodingReplayController {
       return assets;
     } catch (error) {
       const totalMs = Number((performance.now() - startedAt).toFixed(2));
-      this.logger.warn(
-        `Replay assets failed ws=${workspaceId} unit=${unitId} after ${totalMs}ms: ${error.message}`
-      );
       this.setReplayNoStoreHeaders(res);
-      throw new InternalServerErrorException(
-        `Error retrieving replay assets: ${error.message}`
+      return this.handleReplayError(
+        error,
+        workspaceId,
+        unitId,
+        'assets',
+        totalMs
       );
     }
   }
@@ -227,6 +244,10 @@ export class WorkspaceCodingReplayController {
   })
   @ApiOkResponse({
     description: 'Replay response retrieved successfully.'
+  })
+  @ApiNotFoundResponse({
+    description: 'A required replay response resource was not found.',
+    type: ReplayErrorDto
   })
   async getReplayResponse(
     @WorkspaceId() workspaceId: number,
@@ -256,12 +277,13 @@ export class WorkspaceCodingReplayController {
       };
     } catch (error) {
       const totalMs = Number((performance.now() - startedAt).toFixed(2));
-      this.logger.warn(
-        `Replay response failed ws=${workspaceId} unit=${unitId} after ${totalMs}ms: ${error.message}`
-      );
       this.setReplayNoStoreHeaders(res);
-      throw new InternalServerErrorException(
-        `Error retrieving replay response: ${error.message}`
+      return this.handleReplayError(
+        error,
+        workspaceId,
+        unitId,
+        'response',
+        totalMs
       );
     }
   }
@@ -288,10 +310,10 @@ export class WorkspaceCodingReplayController {
     ]);
 
     if (!unitDef?.length) {
-      throw new Error(`Unit definition not found for ${unitId}`);
+      throw new ReplayResourceNotFoundError('REPLAY_UNIT_DEFINITION_NOT_FOUND');
     }
     if (!unit?.length) {
-      throw new Error(`Unit file not found for ${unitId}`);
+      throw new ReplayResourceNotFoundError('REPLAY_UNIT_NOT_FOUND');
     }
 
     const playerName = await this.timed(
@@ -307,7 +329,7 @@ export class WorkspaceCodingReplayController {
     );
 
     if (!player?.length) {
-      throw new Error(`Player not found for ${playerName}`);
+      throw new ReplayResourceNotFoundError('REPLAY_PLAYER_NOT_FOUND');
     }
 
     return {
@@ -385,6 +407,39 @@ export class WorkspaceCodingReplayController {
   private setReplayNoStoreHeaders(res: Response): void {
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Vary', 'Authorization');
+  }
+
+  private handleReplayError(
+    error: unknown,
+    workspaceId: number,
+    unitId: string,
+    resourceKind: 'payload' | 'assets' | 'response',
+    totalMs: number
+  ): never {
+    if (error instanceof ReplayResourceNotFoundError) {
+      this.logger.warn(
+        `Replay ${resourceKind} resource missing ws=${workspaceId} ` +
+          `unit=${unitId} code=${error.code} after ${totalMs}ms`
+      );
+      throw new NotFoundException({
+        statusCode: 404,
+        code: error.code,
+        message: error.message
+      });
+    }
+
+    if (error instanceof HttpException) {
+      throw error;
+    }
+
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    this.logger.warn(
+      `Replay ${resourceKind} failed ws=${workspaceId} ` +
+        `unit=${unitId} after ${totalMs}ms: ${errorMessage}`
+    );
+    throw new InternalServerErrorException(
+      `Error retrieving replay ${resourceKind}: ${errorMessage}`
+    );
   }
 
   private async extractNormalizedPlayerIdFromUnit(

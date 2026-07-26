@@ -26,6 +26,12 @@ export interface ReplaySessionLoadRequest {
   codingJobId: number;
   authToken?: string;
   onlyOpen: boolean;
+  replayAttemptId?: string;
+}
+
+interface ReplaySessionLoadRequestEntry {
+  authToken?: string;
+  loadRequest: Promise<ReplaySessionLoadResult>;
 }
 
 export type ReplaySessionLoadSource = 'session' | 'legacy';
@@ -50,7 +56,7 @@ export type ReplaySessionLoadResult = ReplaySessionLoadResultBase & (
 @Injectable()
 export class ReplaySessionLoaderService {
   private codingJobBackendService = inject(CodingJobBackendService);
-  private readonly requests = new Map<string, Promise<ReplaySessionLoadResult>>();
+  private readonly requests = new Map<string, ReplaySessionLoadRequestEntry>();
 
   getRequestKey(request: ReplaySessionLoadRequest): string {
     return `${request.workspaceId}:${request.codingJobId}:${request.onlyOpen}`;
@@ -70,14 +76,18 @@ export class ReplaySessionLoaderService {
   }
 
   load(request: ReplaySessionLoadRequest): Promise<ReplaySessionLoadResult> {
-    const requestKey = this.retainOnly(request);
-    const pendingRequest = this.requests.get(requestKey);
-    if (pendingRequest) {
-      return pendingRequest;
+    this.retainOnly(request);
+    const requestKey = this.getRequestKey(request);
+    const pendingRequestEntry = this.requests.get(requestKey);
+    if (pendingRequestEntry && pendingRequestEntry.authToken === request.authToken) {
+      return pendingRequestEntry.loadRequest;
     }
 
     const loadRequest = this.loadSession(request);
-    this.requests.set(requestKey, loadRequest);
+    this.requests.set(requestKey, {
+      authToken: request.authToken,
+      loadRequest
+    });
     return loadRequest;
   }
 
@@ -86,7 +96,7 @@ export class ReplaySessionLoaderService {
     loadRequest: Promise<ReplaySessionLoadResult>
   ): void {
     const requestKey = this.getRequestKey(request);
-    if (this.requests.get(requestKey) === loadRequest) {
+    if (this.requests.get(requestKey)?.loadRequest === loadRequest) {
       this.requests.delete(requestKey);
     }
   }
@@ -106,7 +116,8 @@ export class ReplaySessionLoaderService {
           request.workspaceId,
           request.codingJobId,
           request.authToken,
-          request.onlyOpen
+          request.onlyOpen,
+          request.replayAttemptId
         )
       );
       const responseReceivedAt = performance.now();
@@ -138,7 +149,8 @@ export class ReplaySessionLoaderService {
             request.workspaceId,
             request.codingJobId,
             request.authToken,
-            request.onlyOpen
+            request.onlyOpen,
+            request.replayAttemptId
           )
         );
 

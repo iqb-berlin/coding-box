@@ -29,6 +29,28 @@ describe('ReplayStatisticsController', () => {
     );
   });
 
+  it('should store normalized request correlation identifiers', async () => {
+    await controller.storeReplayStatistics(
+      '7',
+      {
+        unitId: 'UNIT-1',
+        durationMilliseconds: 1000,
+        replayAttemptId: 'attempt-from-body'
+      },
+      {
+        requestId: 'request-1',
+        header: jest.fn().mockReturnValue('attempt-from-header')
+      }
+    );
+
+    expect(replayStatisticsService.storeReplayStatistics).toHaveBeenCalledWith(
+      expect.objectContaining({
+        replayAttemptId: 'attempt-from-body',
+        requestId: 'request-1'
+      })
+    );
+  });
+
   it('should remove sensitive replay query params before storing statistics', async () => {
     await controller.storeReplayStatistics('7', {
       unitId: 'UNIT-1',
