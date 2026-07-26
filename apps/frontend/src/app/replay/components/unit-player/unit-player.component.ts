@@ -71,9 +71,11 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     const unitDef = 'unitDef';
     const unitPlayer = 'unitPlayer';
     const unitResponses = 'unitResponses';
+    const pageId = 'pageId';
     const unitDefChange = changes[unitDef];
     const unitPlayerChange = changes[unitPlayer];
     const unitResponsesChange = changes[unitResponses];
+    const pageIdChange = changes[pageId];
 
     if (unitDefChange?.previousValue && !unitDefChange.currentValue) {
       this.currentPageId = '';
@@ -90,6 +92,9 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       this.hasEmittedResponseVisible = false;
       this.handleResponsesChange(unitResponsesChange.currentValue);
       this.sendUnitData();
+      this.restartPageValidation(this.pageId());
+    } else if (pageIdChange?.previousValue !== pageIdChange?.currentValue) {
+      this.restartPageValidation(pageIdChange.currentValue);
     }
   }
 
@@ -280,6 +285,15 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   private cleanupValidPagesSubscription(): void {
     this.validPagesSubscription?.unsubscribe();
     this.validPagesSubscription = null;
+  }
+
+  private restartPageValidation(requestedPageId?: string): void {
+    this.cleanupValidPagesSubscription();
+    if (this.lastPageError !== null) {
+      this.lastPageError = null;
+      this.invalidPage.emit(null);
+    }
+    this.subscribeForValidPages(requestedPageId);
   }
 
   private subscribeForMessages(): void {
@@ -574,12 +588,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
 
     const isCurrentPage = this.currentPageId === pageId;
     this.hasEmittedResponseVisible = false;
-    this.cleanupValidPagesSubscription();
-    if (this.lastPageError !== null) {
-      this.lastPageError = null;
-      this.invalidPage.emit(null);
-    }
-    this.subscribeForValidPages(pageId);
+    this.restartPageValidation(pageId);
     this.sendPageNavigationMessage(pageId);
     if (isCurrentPage) {
       this.notifyResponseVisible();

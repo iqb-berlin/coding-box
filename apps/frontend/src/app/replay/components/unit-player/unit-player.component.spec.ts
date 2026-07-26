@@ -269,6 +269,31 @@ describe('UnitPlayerComponent', () => {
     expect(emitSpy).toHaveBeenCalledWith('notInList');
   });
 
+  it('should validate a new page again after responses change', () => {
+    jest.useFakeTimers();
+    const emitSpy = jest.spyOn(component.invalidPage, 'emit');
+    const validPages = (component as unknown as {
+      validPages: Subject<{ pages: string[]; current: string }>;
+    }).validPages;
+
+    fixture.componentRef.setInput('pageId', 'page-1');
+    fixture.componentRef.setInput('unitResponses', { responses: [] });
+    fixture.detectChanges();
+    validPages.next({ pages: ['page-1'], current: 'page-1' });
+    jest.advanceTimersByTime(2000);
+    expect(emitSpy).not.toHaveBeenCalled();
+
+    fixture.componentRef.setInput('pageId', 'page-2');
+    fixture.componentRef.setInput('unitResponses', {
+      responses: [{ id: '1', content: 'new response' }]
+    });
+    fixture.detectChanges();
+    validPages.next({ pages: ['page-1'], current: 'page-1' });
+    jest.advanceTimersByTime(2000);
+
+    expect(emitSpy).toHaveBeenCalledWith('notInList');
+  });
+
   it('should not navigate before the player is ready', () => {
     component.postMessageTarget = undefined;
 
