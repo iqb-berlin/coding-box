@@ -93,6 +93,86 @@ describe('MissingsProfilesService', () => {
     )).rejects.toThrow("Missing profile 7 must define 'mci'");
   });
 
+  it.each([
+    [
+      'non-negative code',
+      [
+        {
+          id: 'mir', label: 'MIR', code: 0, score: 0
+        },
+        {
+          id: 'mci', label: 'MCI', code: -17, score: null
+        }
+      ],
+      "Missing 'mir' in profile 7 must define a negative integer code"
+    ],
+    [
+      'duplicate id',
+      [
+        {
+          id: 'mir', label: 'MIR', code: -18, score: 0
+        },
+        {
+          id: 'mir', label: 'MIR duplicate', code: -17, score: null
+        }
+      ],
+      "Duplicate missing id 'mir' in profile 7"
+    ],
+    [
+      'duplicate code',
+      [
+        {
+          id: 'mir', label: 'MIR', code: -18, score: 0
+        },
+        {
+          id: 'mci', label: 'MCI', code: -18, score: null
+        }
+      ],
+      "Duplicate missing code '-18' in profile 7"
+    ]
+  ] as const)(
+    'rejects an export profile with a %s',
+    async (_case, missings, error) => {
+      repo.findOne.mockResolvedValueOnce({
+        id: 7,
+        workspace_id: 1,
+        label: 'Invalid',
+        missings: JSON.stringify(missings)
+      });
+
+      await expect(service.getResolvedMissingsProfileForExport(
+        1,
+        7,
+        ['mir', 'mci']
+      )).rejects.toThrow(error);
+    }
+  );
+
+  it.each([-1, -2, -3, -4, -111])(
+    'rejects reserved technical code %s in an export profile',
+    async code => {
+      repo.findOne.mockResolvedValueOnce({
+        id: 7,
+        workspace_id: 1,
+        label: 'Reserved',
+        missings: JSON.stringify([
+          {
+            id: 'mir', label: 'MIR', code, score: 0
+          },
+          {
+            id: 'mci', label: 'MCI', code: -17, score: null
+          }
+        ])
+      });
+
+      await expect(service.getResolvedMissingsProfileForExport(
+        1,
+        7,
+        ['mir', 'mci']
+      )).rejects.toThrow(`reserved technical code '${code}'`);
+    }
+  );
+
   it('lists export profiles without creating or updating profiles', async () => {
     repo.find.mockResolvedValueOnce([
       { id: 7, label: 'Custom' },
@@ -315,7 +395,7 @@ describe('MissingsProfilesService', () => {
     ['empty array', []]
   ])('rejects missing entries when score is %s', async (_label, score) => {
     const missing = {
-      id: 'x', label: 'X', description: 'X', code: -1, score
+      id: 'x', label: 'X', description: 'X', code: -95, score
     };
     if (score === undefined) {
       delete (missing as { score?: unknown }).score;
@@ -329,6 +409,27 @@ describe('MissingsProfilesService', () => {
     await expect(service.createMissingsProfile(1, profile)).rejects.toThrow('score');
     expect(repo.save).not.toHaveBeenCalled();
   });
+
+  it.each([-1, -2, -3, -4, -111])(
+    'rejects reserved technical code %s when storing a profile',
+    async code => {
+      const profile = new MissingsProfilesDto();
+      profile.label = 'Reserved';
+      profile.setMissings([
+        {
+          id: 'mir', label: 'MIR', description: 'Invalid response', code, score: 0
+        },
+        {
+          id: 'mci', label: 'MCI', description: 'Coding impossible', code: -97, score: null
+        }
+      ]);
+
+      await expect(service.createMissingsProfile(1, profile)).rejects.toThrow(
+        `reserved technical code '${code}'`
+      );
+      expect(repo.save).not.toHaveBeenCalled();
+    }
+  );
 
   it('accepts explicit null as a fachlicher NA score', async () => {
     const profile = new MissingsProfilesDto();
