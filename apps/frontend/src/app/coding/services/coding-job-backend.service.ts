@@ -19,7 +19,8 @@ import type { PsychometricDomainCandidatesDto } from '../../../../../../api-dto/
 import type { ReplayCodingSessionDto } from '../../../../../../api-dto/coding/replay-coding-session.dto';
 import type {
   BackgroundExportRequest,
-  ItemDatasetOptionsDto
+  ItemDatasetOptionsDto,
+  ItemMatrixExportDiagnosticsDto
 } from '../../../../../../api-dto/coding/export-request.dto';
 import {
   CodingJob,
@@ -58,6 +59,41 @@ export interface CodingExportEstimate {
   unitVariableCount: number;
   worksheetLimit: number | null;
   exceedsWorksheetLimit: boolean;
+}
+
+export interface IncompleteItemMatrixDownload {
+  blob: Blob;
+  fileName?: string;
+}
+
+export function getDownloadFileName(
+  contentDisposition: string | null
+): string | undefined {
+  if (!contentDisposition) {
+    return undefined;
+  }
+
+  const encodedMatch = contentDisposition.match(
+    /filename\*\s*=\s*UTF-8''([^;]+)/i
+  );
+  const quotedMatch = contentDisposition.match(/filename\s*=\s*"([^"]+)"/i);
+  const plainMatch = contentDisposition.match(/filename\s*=\s*([^;]+)/i);
+  const rawFileName = encodedMatch?.[1] || quotedMatch?.[1] || plainMatch?.[1];
+  if (!rawFileName) {
+    return undefined;
+  }
+
+  let decodedFileName = rawFileName.trim().replace(/^"|"$/g, '');
+  if (encodedMatch) {
+    try {
+      decodedFileName = decodeURIComponent(decodedFileName);
+    } catch {
+      return undefined;
+    }
+  }
+
+  const safeFileName = decodedFileName.split(/[\\/]/).pop()?.trim();
+  return safeFileName && !/[\r\n]/.test(safeFileName) ? safeFileName : undefined;
 }
 
 interface JobDefinitionApiResponse {
@@ -1229,6 +1265,45 @@ export class CodingJobBackendService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}/download`;
     return this.http.get(url, {
       responseType: 'blob',
+      headers: this.authHeader
+    });
+  }
+
+  getItemMatrixExportDiagnostics(
+    workspaceId: number,
+    jobId: string
+  ): Observable<ItemMatrixExportDiagnosticsDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}/item-matrix-diagnostics`;
+    return this.http.get<ItemMatrixExportDiagnosticsDto>(url, {
+      headers: this.authHeader
+    });
+  }
+
+  downloadIncompleteItemMatrix(
+    workspaceId: number,
+    jobId: string
+  ): Observable<IncompleteItemMatrixDownload> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}/download-incomplete`;
+    return this.http.get(url, {
+      responseType: 'blob',
+      observe: 'response',
+      headers: this.authHeader
+    }).pipe(
+      map(response => ({
+        blob: response.body || new Blob(),
+        fileName: getDownloadFileName(
+          response.headers.get('content-disposition')
+        )
+      }))
+    );
+  }
+
+  deleteExportJob(
+    workspaceId: number,
+    jobId: string
+  ): Observable<{ success: boolean; message: string }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`;
+    return this.http.delete<{ success: boolean; message: string }>(url, {
       headers: this.authHeader
     });
   }

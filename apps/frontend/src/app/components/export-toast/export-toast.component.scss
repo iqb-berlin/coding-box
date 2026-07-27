@@ -187,6 +187,18 @@
         overflow-wrap: anywhere;
       }
     }
+
+    .item-matrix-error-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+
+      button {
+        white-space: normal;
+        line-height: 1.25;
+      }
+    }
   }
 
   .job-actions {

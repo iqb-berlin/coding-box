@@ -72,7 +72,80 @@
     "errors": {
       "too-many-worksheets-title": "Export zu groß",
       "too-many-worksheets-message": "Dieser Export würde {{actual}} Tabellenblätter erzeugen. Erlaubt sind aktuell {{max}}. Wählen Sie „Nach Variable, kompakt“ oder schränken Sie die Auswahl ein.",
+      "item-matrix-incomplete-title": "Itemdatensatz nicht vollständig exportierbar",
+      "item-matrix-incomplete-message": "{{total}} Zellen konnten nicht sicher aufgelöst werden. Der reguläre Export wurde abgelehnt. Sie können die Ursachen prüfen oder ein deutlich gekennzeichnetes unvollständiges Paket herunterladen.",
+      "item-matrix-incomplete-expired": "{{total}} Zellen konnten nicht sicher aufgelöst werden. Diagnose und unvollständiges Paket sind abgelaufen; starten Sie den Export erneut.",
+      "item-matrix-diagnostics-load-failed": "Die Matrixdiagnose konnte nicht geladen werden. Starten Sie den Export gegebenenfalls erneut.",
+      "item-matrix-incomplete-download-failed": "Das unvollständige Paket konnte nicht heruntergeladen werden. Falls es abgelaufen ist, starten Sie den Export erneut.",
+      "remove-failed": "Der Export konnte nicht vollständig gelöscht werden und bleibt deshalb in der Liste. Versuchen Sie es erneut.",
       "generic-title": "Export fehlgeschlagen"
+    },
+    "item-matrix-actions": {
+      "show-diagnostics": "Diagnose anzeigen",
+      "download-incomplete": "Unvollständigen Export herunterladen"
+    },
+    "incomplete-confirm": {
+      "title": "Unvollständigen Itemdatensatz herunterladen?",
+      "content": "Die Matrix enthält {{total}} leere Fehlerzellen und darf nicht als vollständiger Datensatz behandelt werden. Das ZIP enthält zusätzlich eine Diagnose und einen Warnhinweis.",
+      "confirm": "Unvollständiges ZIP herunterladen",
+      "cancel": "Abbrechen"
+    },
+    "item-matrix-diagnostics": {
+      "title": "Matrixdiagnose ({{count}} Zellen)",
+      "description": "Die Diagnose ist vollständig nach Ursache, Booklet und Spalte gruppiert. Sie enthält keine Personenkennungen; höchstens 20 Zeilennummern dienen als Beispiele.",
+      "search": "Diagnosen durchsuchen",
+      "reason": "Ursache",
+      "all-reasons": "Alle Ursachen",
+      "results": "{{filtered}} von {{total}} Diagnosegruppen",
+      "download": "Gefilterte Diagnose als CSV",
+      "booklet": "Booklet",
+      "column": "Spalte",
+      "count": "Betroffene Zellen",
+      "sample-rows": "Beispielzeilen",
+      "action": "Empfohlene Maßnahme",
+      "empty": "Keine Diagnosegruppe entspricht den Filtern.",
+      "reasons": {
+        "unresolved-cell": {
+          "label": "Zelle konnte nicht aufgelöst werden",
+          "action": "Prüfen Sie Status, Kodierung und Itemdefinition der betroffenen Spalte."
+        },
+        "unresolved-status": {
+          "label": "Status ohne exportierbaren Wert",
+          "action": "Schließen Sie die Verarbeitung oder Kodierung der betroffenen Antworten ab."
+        },
+        "derived-result-missing": {
+          "label": "Ergebnis einer abgeleiteten Variable fehlt",
+          "action": "Führen Sie die Ableitung erneut aus oder ergänzen Sie das erwartete Ergebnis."
+        },
+        "derived-cycle": {
+          "label": "Zyklische Variablenableitung",
+          "action": "Korrigieren Sie die gegenseitigen Abhängigkeiten der abgeleiteten Variablen."
+        },
+        "derived-source-unresolved": {
+          "label": "Quelle einer abgeleiteten Variable ist nicht auflösbar",
+          "action": "Prüfen Sie Quellvariablen, Variablenzuordnung und vorhandene Antwortdaten."
+        },
+        "derived-design-conflict": {
+          "label": "Widerspruch zwischen Booklet-Design und Ableitung",
+          "action": "Prüfen Sie die Ableitung auf eine Mischung aus nicht vorgelegten und vorgelegten Quellen."
+        },
+        "internal-resolution-missing": {
+          "label": "Interne Zellzuordnung fehlt",
+          "action": "Prüfen Sie die Item-Metadaten und starten Sie den Export erneut."
+        },
+        "invalid-code": {
+          "label": "Code ist nicht exportierbar",
+          "action": "Ersetzen Sie reservierte technische Codes durch ein fachliches Ergebnis oder Missing."
+        },
+        "missing-code": {
+          "label": "Code fehlt",
+          "action": "Ergänzen Sie den Code oder verwenden Sie eine Score-Matrix."
+        },
+        "missing-score": {
+          "label": "Score fehlt",
+          "action": "Ergänzen Sie den Score oder verwenden Sie eine Code-Matrix."
+        }
+      }
     },
     "types": {
       "aggregated": "Aggregierte Ansicht",
@@ -573,6 +646,11 @@
       "item-dataset-search": "Items durchsuchen",
       "item-dataset-items": "Items",
       "item-dataset-items-selected": "{{count}} Items ausgewählt",
+      "item-dataset-items-selected-total": "{{selected}} von {{total}} Items ausgewählt",
+      "item-dataset-select-all": "Alle auswählen",
+      "item-dataset-clear-all": "Auswahl aufheben",
+      "item-dataset-select-filtered": "Treffer auswählen",
+      "item-dataset-clear-filtered": "Treffer abwählen",
       "item-dataset-mnr-scope": "Reichweite für nicht erreichte Items",
       "item-dataset-mnr-scope-unit": "Pro Aufgabe",
       "item-dataset-mnr-scope-testlet": "Pro Testlet",
