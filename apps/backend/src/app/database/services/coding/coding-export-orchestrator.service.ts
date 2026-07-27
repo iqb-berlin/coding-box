@@ -9,7 +9,10 @@ import {
   ItemMatrixValue,
   ItemMatrixVersion
 } from './coding-item-matrix-export.service';
-import { ItemDatasetOptionsDto } from '../../../../../../../api-dto/coding/export-request.dto';
+import {
+  ItemDatasetOptionsDto,
+  ItemMatrixExportDiagnosticsDto
+} from '../../../../../../../api-dto/coding/export-request.dto';
 
 type CodingVersion = 'v1' | 'v2' | 'v3';
 
@@ -223,8 +226,23 @@ export class CodingExportOrchestratorService {
   exportItemMatrixAsExcelToFile(
     filePath: string,
     options: ItemMatrixExportOptions
-  ): Promise<void> {
+  ): Promise<ItemMatrixExportDiagnosticsDto> {
     return this.codingItemMatrixExportService.writeItemMatrixExcelToFile(
+      filePath,
+      options.workspaceId,
+      options.matrixValue || 'score',
+      options.version || 'v2',
+      this.getItemMatrixConfiguration(options),
+      options.onProgress,
+      options.checkCancellation
+    );
+  }
+
+  exportItemMatrixAsCsvToFile(
+    filePath: string,
+    options: ItemMatrixExportOptions
+  ): Promise<ItemMatrixExportDiagnosticsDto> {
+    return this.codingItemMatrixExportService.writeItemMatrixCsvToFile(
       filePath,
       options.workspaceId,
       options.matrixValue || 'score',

@@ -20,6 +20,44 @@ export type ExportVersion = 'v1' | 'v2' | 'v3';
 export type ExportFormat = 'csv' | 'json' | 'excel';
 export type ItemDatasetNotReachedScope = 'unit' | 'testlet' | 'booklet';
 
+export const ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE =
+  'ITEM_MATRIX_UNRESOLVED_CELLS' as const;
+
+export type ItemMatrixCellFailureReason =
+  | 'unresolved-cell'
+  | 'unresolved-status'
+  | 'derived-result-missing'
+  | 'derived-cycle'
+  | 'derived-source-unresolved'
+  | 'derived-design-conflict'
+  | 'internal-resolution-missing'
+  | 'invalid-code'
+  | 'missing-code'
+  | 'missing-score';
+
+export interface ItemMatrixExportDiagnosticGroupDto {
+  reasonCode: ItemMatrixCellFailureReason;
+  bookletName: string;
+  columnName: string;
+  count: number;
+  sampleRowNumbers: number[];
+}
+
+export interface ItemMatrixExportDiagnosticsDto {
+  total: number;
+  sampleLimit: number;
+  groups: ItemMatrixExportDiagnosticGroupDto[];
+}
+
+export interface ItemMatrixExportErrorDetailsDto {
+  total: number;
+  groupCount: number;
+  sampleLimit: number;
+  diagnosticsAvailable: boolean;
+  incompleteDownloadAvailable: boolean;
+  expiresAt?: number;
+}
+
 export interface ItemDatasetSelection {
   unitId: string;
   itemId: string;
