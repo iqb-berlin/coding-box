@@ -10,7 +10,9 @@ import {
   Param,
   Delete,
   Logger,
-  BadRequestException
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -21,6 +23,7 @@ import {
   ApiBody
 } from '@nestjs/swagger';
 import { Response, Request } from 'express';
+import * as fs from 'fs';
 import { Readable } from 'stream';
 import {
   JobQueueService,
@@ -43,8 +46,18 @@ import {
   BackgroundExportRequest,
   ExportRequestValidationError,
   ItemDatasetOptionsDto,
+  ItemMatrixExportDiagnosticsDto,
+  ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE,
   parseExportRequest
 } from '../../../../../../api-dto/coding/export-request.dto';
+import {
+  CachedItemMatrixDiagnostics,
+  getIncompleteItemMatrixResultCacheKey,
+  getItemMatrixDiagnosticsCacheKey
+} from '../../database/services/coding/item-matrix-export-diagnostics.util';
+import {
+  parseItemMatrixExportIncompleteError
+} from '../../database/services/coding/item-matrix-export-incomplete.error';
 
 type PublicExportJobResult = Omit<ExportJobResult, 'filePath'>;
 type PublicExportJobStatus =
@@ -153,10 +166,39 @@ export class WorkspaceCodingExportController {
     return userId;
   }
 
-  private getPublicExportErrorDetails(error?: string): {
-    errorCode?: string;
-    errorDetails?: Record<string, number | string | boolean>;
-  } {
+  private async getPublicExportErrorDetails(
+    jobId: string,
+    error?: string
+  ): Promise<{
+      errorCode?: string;
+      errorDetails?: Record<string, number | string | boolean>;
+    }> {
+    const itemMatrixError = parseItemMatrixExportIncompleteError(error);
+    if (itemMatrixError) {
+      const [cachedDiagnostics, incompleteResult] = await Promise.all([
+        this.cacheService.get<CachedItemMatrixDiagnostics>(
+          getItemMatrixDiagnosticsCacheKey(jobId)
+        ),
+        this.cacheService.get<ExportJobResult>(
+          getIncompleteItemMatrixResultCacheKey(jobId)
+        )
+      ]);
+      const diagnosticsAvailable = !!cachedDiagnostics;
+      const incompleteDownloadAvailable =
+        !!incompleteResult && fs.existsSync(incompleteResult.filePath);
+      return {
+        errorCode: ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE,
+        errorDetails: {
+          total: cachedDiagnostics?.diagnostics.total ||
+            itemMatrixError.total,
+          groupCount: cachedDiagnostics?.diagnostics.groups.length || 0,
+          sampleLimit: cachedDiagnostics?.diagnostics.sampleLimit || 20,
+          diagnosticsAvailable,
+          incompleteDownloadAvailable,
+          ...(cachedDiagnostics ? { expiresAt: cachedDiagnostics.expiresAt } : {})
+        }
+      };
+    }
     const worksheetLimitMatch = error?.match(
       /enthaelt\s+(\d+)\s+Unit-Variable-Kombinationen[\s\S]*Limit von\s+(\d+)\s+Tabellenblaettern/i
     );
@@ -1489,7 +1531,10 @@ export class WorkspaceCodingExportController {
         ...(status === 'failed' && failedReason ?
           {
             error: failedReason,
-            ...this.getPublicExportErrorDetails(failedReason)
+            ...await this.getPublicExportErrorDetails(
+              job.id?.toString() || jobId,
+              failedReason
+            )
           } :
           {})
       };
@@ -1557,7 +1602,6 @@ export class WorkspaceCodingExportController {
       }
 
       const filePath = metadata.filePath;
-      const fs = await import('fs');
 
       if (!fs.existsSync(filePath)) {
         res.status(404).json({ error: 'Export file not found on disk' });
@@ -1599,6 +1643,92 @@ export class WorkspaceCodingExportController {
       );
       res.status(500).json({ error: error.message });
     }
+  }
+
+  @Get(':workspace_id/coding/export/job/:jobId/item-matrix-diagnostics')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: String })
+  @ApiOkResponse({ description: 'Non-personal item matrix diagnostics' })
+  async getItemMatrixExportDiagnostics(
+    @WorkspaceId() workspace_id: number,
+      @Param('jobId') jobId: string
+  ): Promise<ItemMatrixExportDiagnosticsDto> {
+    const job = await this.jobQueueService.getExportJob(jobId);
+    if (!job) {
+      throw new NotFoundException('Export job not found');
+    }
+    if (job.data.workspaceId !== workspace_id) {
+      throw new ForbiddenException('Access denied to this export');
+    }
+    if (job.data.exportType !== 'item-matrix' || await job.getState() !== 'failed') {
+      throw new BadRequestException(
+        'Diagnostics are available only for failed item matrix exports'
+      );
+    }
+    const cached = await this.cacheService.get<CachedItemMatrixDiagnostics>(
+      getItemMatrixDiagnosticsCacheKey(jobId)
+    );
+    if (!cached) {
+      throw new NotFoundException('Item matrix diagnostics not found or expired');
+    }
+    return cached.diagnostics;
+  }
+
+  @Get(':workspace_id/coding/export/job/:jobId/download-incomplete')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: String })
+  @ApiOkResponse({
+    description: 'Explicitly requested incomplete item matrix package',
+    content: {
+      'application/zip': {
+        schema: { type: 'string', format: 'binary' }
+      }
+    }
+  })
+  async downloadIncompleteItemMatrix(
+    @WorkspaceId() workspace_id: number,
+      @Param('jobId') jobId: string,
+      @Res() res: Response
+  ): Promise<void> {
+    const job = await this.jobQueueService.getExportJob(jobId);
+    if (!job) {
+      res.status(404).json({ error: 'Export job not found' });
+      return;
+    }
+    if (job.data.workspaceId !== workspace_id) {
+      res.status(403).json({ error: 'Access denied to this export' });
+      return;
+    }
+    if (job.data.exportType !== 'item-matrix' || await job.getState() !== 'failed') {
+      res.status(400).json({
+        error: 'Incomplete downloads are available only for failed item matrix exports'
+      });
+      return;
+    }
+    const metadata = await this.cacheService.get<ExportJobResult>(
+      getIncompleteItemMatrixResultCacheKey(jobId)
+    );
+    if (!metadata || !fs.existsSync(metadata.filePath)) {
+      res.status(404).json({
+        error: 'Incomplete item matrix package not found or expired'
+      });
+      return;
+    }
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${metadata.fileName}"`
+    );
+    res.setHeader('Content-Length', metadata.fileSize);
+    await this.pipeExportStream(
+      fs.createReadStream(metadata.filePath),
+      res,
+      `Error streaming incomplete item matrix ${jobId} for workspace ${workspace_id}`
+    );
   }
 
   @Get(':workspace_id/coding/export/jobs')
@@ -1711,26 +1841,44 @@ export class WorkspaceCodingExportController {
         };
       }
 
-      const success = await this.jobQueueService.deleteExportJob(jobId);
-
-      if (success) {
-        const metadata = await this.cacheService.get<ExportJobResult>(
-          `export-result:${jobId}`
-        );
-        if (metadata && metadata.filePath) {
-          const fs = await import('fs');
-          if (fs.existsSync(metadata.filePath)) {
-            fs.unlinkSync(metadata.filePath);
+      const resultKeys = [
+        `export-result:${jobId}`,
+        getIncompleteItemMatrixResultCacheKey(jobId)
+      ];
+      const results = await Promise.all(resultKeys.map(key => (
+        this.cacheService.get<ExportJobResult>(key)
+      )));
+      for (const metadata of results) {
+        if (!metadata?.filePath) {
+          continue;
+        }
+        try {
+          fs.unlinkSync(metadata.filePath);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+            throw error;
           }
         }
-        await this.cacheService.delete(`export-result:${jobId}`);
+      }
 
+      const cacheResults = await Promise.all([
+        ...resultKeys.map(key => this.cacheService.delete(key)),
+        this.cacheService.delete(getItemMatrixDiagnosticsCacheKey(jobId))
+      ]);
+      if (cacheResults.some(deleted => !deleted)) {
+        return {
+          success: false,
+          message: 'Export artifacts could not be deleted completely'
+        };
+      }
+
+      const success = await this.jobQueueService.deleteExportJob(jobId);
+      if (success) {
         return {
           success: true,
           message: 'Export job deleted successfully'
         };
       }
-
       return {
         success: false,
         message: 'Export job not found'

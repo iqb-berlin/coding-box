@@ -60,3 +60,20 @@ manuelle Codes `-3` und `-4` werden als `mir` bzw. `mci` aufgelöst.
   einem fehlgeschlagenen Export mit begrenzten, nicht personenbezogenen
   Beispieldiagnosen.
 - Es gibt keinen stillen Fallback auf `0` oder das IQB-Standardprofil.
+
+## Bewusst unvollständiger Matrixexport
+
+Der reguläre Matrixexport bleibt auch dann fehlgeschlagen, wenn intern bereits
+eine Datei geschrieben wurde. Eine solche Datei darf nicht über den normalen
+Download bereitgestellt werden.
+
+Für diesen definierten Fehlerfall darf für höchstens eine Stunde ein gesondertes
+ZIP-Paket bereitgehalten werden. Der Download erfordert eine ausdrückliche
+Bestätigung und das Paket muss im Namen sowie in einer README als unvollständig
+gekennzeichnet sein. Nicht auflösbare Zellen bleiben darin leer; sie werden
+weder als `0` noch als `NA`, technischer Code oder Profil-Missing ausgegeben.
+
+Das ZIP enthält neben der Matrix eine vollständige, nicht personenbezogene und
+nach Ursache, Booklet und Spalte gruppierte `diagnose.csv`. Individuelle
+Zeilennummern sind auf 20 Beispiele begrenzt. Abgelaufene oder verworfene
+Artefakte werden gelöscht.

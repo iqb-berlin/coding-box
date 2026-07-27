@@ -1,8 +1,9 @@
+import type {
+  ItemMatrixCellFailureReason
+} from '../../../../../../../api-dto/coding/export-request.dto';
+
 export type ItemDatasetCellExportFailureReason =
-  | 'unresolved-cell'
-  | 'invalid-code'
-  | 'missing-code'
-  | 'missing-score';
+  ItemMatrixCellFailureReason;
 
 export class ItemDatasetCellExportError extends Error {
   readonly reason: ItemDatasetCellExportFailureReason;
