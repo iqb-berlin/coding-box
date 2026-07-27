@@ -1,0 +1,14 @@
+{
+  "items": [
+    {
+      "id": "ITEM-1",
+      "label": "Replay item 1",
+      "variableId": "answer_1"
+    },
+    {
+      "id": "ITEM-2",
+      "label": "Replay item 2",
+      "variableId": "answer_2"
+    }
+  ]
+}

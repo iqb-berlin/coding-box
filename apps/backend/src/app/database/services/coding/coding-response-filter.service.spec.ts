@@ -75,13 +75,53 @@ describe('CodingResponseFilterService', () => {
       givenResponsesOnly: true
     });
 
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+    const givenResponsesFilter = queryBuilder.andWhere.mock.calls
+      .map(([condition]) => condition)
+      .find(condition => condition instanceof Brackets) as Brackets;
+    givenResponsesFilter.whereFactory(queryBuilder as never);
+
+    expect(queryBuilder.where).toHaveBeenCalledWith(
       'response.status IN (:...givenStatuses)',
       { givenStatuses: [0, 1, 2, 3, 7, 9] }
     );
+    expect(queryBuilder.orWhere).toHaveBeenCalledWith(
+      'response.status_v1 = :derivePendingStatus',
+      { derivePendingStatus: 11 }
+    );
   });
 
-  it('preserves the existing raw response filter for v2 and v3', async () => {
+  it('includes partly displayed rows when requested by versioned exports', async () => {
+    const { service, queryBuilder } = createService();
+
+    await service.countResponses(1, {
+      version: 'v1',
+      givenResponsesOnly: true,
+      includePartlyDisplayed: true
+    });
+
+    const versionFilter = queryBuilder.where.mock.calls[0][0] as Brackets;
+    versionFilter.whereFactory(queryBuilder as never);
+
+    expect(queryBuilder.where).toHaveBeenCalledWith(
+      expect.stringContaining('NOT IN (:...statisticsIgnoredStatuses)'),
+      { statisticsIgnoredStatuses: [3, 10] }
+    );
+    expect(queryBuilder.orWhere).toHaveBeenCalledWith(
+      'response.status_v1 IN (:...versionedExportVisibleStatuses)',
+      { versionedExportVisibleStatuses: [0, 1, 2, 7, 9, 10, 11] }
+    );
+
+    const givenResponsesFilter = queryBuilder.andWhere.mock.calls
+      .map(([condition]) => condition)
+      .find(condition => condition instanceof Brackets) as Brackets;
+    givenResponsesFilter.whereFactory(queryBuilder as never);
+    expect(queryBuilder.where).toHaveBeenCalledWith(
+      'response.status IN (:...givenStatuses)',
+      { givenStatuses: [0, 1, 2, 3, 7, 9, 10] }
+    );
+  });
+
+  it('keeps raw statuses needed for v1 missing resolution in v2 and v3 exports', async () => {
     const { service, queryBuilder } = createService();
 
     await service.countResponses(1, {
@@ -89,9 +129,64 @@ describe('CodingResponseFilterService', () => {
       givenResponsesOnly: true
     });
 
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+    const givenResponsesFilter = queryBuilder.andWhere.mock.calls
+      .map(([condition]) => condition)
+      .find(condition => condition instanceof Brackets) as Brackets;
+    givenResponsesFilter.whereFactory(queryBuilder as never);
+
+    expect(queryBuilder.where).toHaveBeenCalledWith(
       'response.status IN (:...givenStatuses)',
-      { givenStatuses: [1, 2, 3] }
+      { givenStatuses: [0, 1, 2, 3, 7, 9] }
+    );
+  });
+
+  it('keeps v1 and v3 missing statuses before cumulative export resolution', async () => {
+    const { service, queryBuilder } = createService();
+
+    await service.countResponses(1, {
+      version: 'v3',
+      givenResponsesOnly: true,
+      includePartlyDisplayed: true
+    });
+
+    const versionFilter = queryBuilder.where.mock.calls[0][0] as Brackets;
+    versionFilter.whereFactory(queryBuilder as never);
+
+    expect(queryBuilder.orWhere).toHaveBeenCalledWith(
+      'response.status_v1 IN (:...versionedExportVisibleStatuses)',
+      { versionedExportVisibleStatuses: [0, 1, 2, 7, 9, 10, 11] }
+    );
+    expect(queryBuilder.orWhere).toHaveBeenCalledWith(
+      'response.status_v3 IN (:...versionedExportVisibleStatuses)',
+      { versionedExportVisibleStatuses: [0, 1, 2, 7, 9, 10, 11] }
+    );
+  });
+
+  it('keeps DERIVE_PENDING rows independently of their raw response status', async () => {
+    const { service, queryBuilder } = createService();
+
+    await service.countResponses(1, {
+      version: 'v3',
+      givenResponsesOnly: true,
+      includePartlyDisplayed: true
+    });
+
+    const givenResponsesFilter = queryBuilder.andWhere.mock.calls
+      .map(([condition]) => condition)
+      .find(condition => condition instanceof Brackets) as Brackets;
+    givenResponsesFilter.whereFactory(queryBuilder as never);
+
+    expect(queryBuilder.orWhere).toHaveBeenCalledWith(
+      'response.status_v1 = :derivePendingStatus',
+      { derivePendingStatus: 11 }
+    );
+    expect(queryBuilder.orWhere).toHaveBeenCalledWith(
+      'response.status_v2 = :derivePendingStatus',
+      { derivePendingStatus: 11 }
+    );
+    expect(queryBuilder.orWhere).toHaveBeenCalledWith(
+      'response.status_v3 = :derivePendingStatus',
+      { derivePendingStatus: 11 }
     );
   });
 

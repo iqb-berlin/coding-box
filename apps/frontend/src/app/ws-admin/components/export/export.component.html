@@ -52,7 +52,7 @@
           </mat-form-field>
 
           <mat-form-field
-            *ngIf="selectedFormat === 'results-by-version' && resultsVersion === 'v1'"
+            *ngIf="selectedFormat === 'results-by-version'"
             appearance="outline"
           >
             <mat-label>{{
@@ -148,6 +148,43 @@
               />
             </mat-form-field>
 
+            <div class="item-dataset-selection-actions">
+              <button
+                mat-stroked-button
+                type="button"
+                data-cy="item-dataset-select-all"
+                (click)="selectAllItemDatasetItems()"
+              >
+                {{ 'ws-admin.export-options.item-dataset-select-all' | translate }}
+              </button>
+              <button
+                mat-stroked-button
+                type="button"
+                data-cy="item-dataset-clear-all"
+                (click)="clearAllItemDatasetItems()"
+              >
+                {{ 'ws-admin.export-options.item-dataset-clear-all' | translate }}
+              </button>
+              <button
+                mat-stroked-button
+                type="button"
+                data-cy="item-dataset-select-filtered"
+                *ngIf="itemSearch.trim()"
+                (click)="selectFilteredItemDatasetItems()"
+              >
+                {{ 'ws-admin.export-options.item-dataset-select-filtered' | translate }}
+              </button>
+              <button
+                mat-stroked-button
+                type="button"
+                data-cy="item-dataset-clear-filtered"
+                *ngIf="itemSearch.trim()"
+                (click)="clearFilteredItemDatasetItems()"
+              >
+                {{ 'ws-admin.export-options.item-dataset-clear-filtered' | translate }}
+              </button>
+            </div>
+
             <mat-form-field appearance="outline">
               <mat-label>{{
                 'ws-admin.export-options.item-dataset-items' | translate
@@ -167,8 +204,12 @@
               </mat-select>
               <mat-hint>
                 {{
-                  'ws-admin.export-options.item-dataset-items-selected'
-                    | translate: { count: selectedItemKeys.length }
+                  'ws-admin.export-options.item-dataset-items-selected-total'
+                    | translate
+                      : {
+                          selected: selectedItemKeys.length,
+                          total: itemDatasetOptions.length
+                        }
                 }}
               </mat-hint>
             </mat-form-field>

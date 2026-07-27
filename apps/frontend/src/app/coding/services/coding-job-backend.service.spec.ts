@@ -833,5 +833,57 @@ describe('CodingJobBackendService', () => {
         mappingWarnings: []
       });
     });
+
+    it('loads diagnostics for a failed item matrix export', () => {
+      service.getItemMatrixExportDiagnostics(5, 'job-1')
+        .subscribe(result => expect(result.total).toBe(2));
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/5/coding/export/job/job-1/item-matrix-diagnostics`
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush({ total: 2, sampleLimit: 20, groups: [] });
+    });
+
+    it('downloads quarantined item matrix exports with the server filename', () => {
+      let download: { blob: Blob; fileName?: string } | undefined;
+      service.downloadIncompleteItemMatrix(5, 'job-1').subscribe(result => {
+        download = result;
+      });
+      const downloadRequest = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/5/coding/export/job/job-1/download-incomplete`
+      );
+      expect(downloadRequest.request.method).toBe('GET');
+      expect(downloadRequest.request.responseType).toBe('blob');
+      downloadRequest.flush(new Blob(['zip']), {
+        headers: {
+          'Content-Disposition':
+            'attachment; filename="Itemdatensatz-UNVOLLSTAENDIG-2026-07-24.zip"'
+        }
+      });
+      expect(download?.fileName).toBe(
+        'Itemdatensatz-UNVOLLSTAENDIG-2026-07-24.zip'
+      );
+      expect(download?.blob).toBeInstanceOf(Blob);
+
+      service.deleteExportJob(5, 'job-1').subscribe();
+      const deleteRequest = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/5/coding/export/job/job-1`
+      );
+      expect(deleteRequest.request.method).toBe('DELETE');
+      deleteRequest.flush({ success: true, message: 'deleted' });
+    });
+
+    it('falls back safely when an incomplete download has no filename header', () => {
+      let fileName: string | undefined = 'not-set';
+      service.downloadIncompleteItemMatrix(5, 'job-2').subscribe(result => {
+        fileName = result.fileName;
+      });
+      const request = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/5/coding/export/job/job-2/download-incomplete`
+      );
+      request.flush(new Blob(['zip']));
+      expect(fileName).toBeUndefined();
+    });
   });
 });

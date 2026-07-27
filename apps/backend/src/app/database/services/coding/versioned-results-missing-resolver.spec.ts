@@ -1,6 +1,9 @@
 import type { CodingItemVersionRow } from './coding-item-builder.service';
 import type { ResolvedMissingsProfile } from './missings-profiles.service';
-import { resolveV1ExportValue } from './versioned-results-missing-resolver';
+import {
+  resolveV1ExportValue,
+  resolveVersionedExportValues
+} from './versioned-results-missing-resolver';
 
 const createRow = (
   statusV1: number | null,
@@ -42,6 +45,9 @@ const profile: ResolvedMissingsProfile = {
     }],
     ['mnr', {
       id: 'mnr', label: 'MNR', code: -16, score: null
+    }],
+    ['mbd', {
+      id: 'mbd', label: 'MBD', code: -15, score: null
     }]
   ]),
   byCode: new Map()
@@ -73,10 +79,34 @@ describe('resolveV1ExportValue', () => {
     }
   );
 
-  it('does not map PARTLY_DISPLAYED in this export', () => {
+  it('maps PARTLY_DISPLAYED to omission', () => {
     expect(resolveV1ExportValue(createRow(10), profile)).toEqual({
-      code: '',
-      score: ''
+      code: -19,
+      score: 0
+    });
+  });
+
+  it('resolves cumulative v1 and v3 status values while preserving v2', () => {
+    const row = createRow(1);
+    row.statusV2 = 5;
+    row.codeV2 = -42;
+    row.scoreV2 = null;
+    row.statusV3 = 9;
+
+    expect(resolveVersionedExportValues(row, 'v3', profile)).toEqual({
+      v1: { code: -16, score: 'NA' },
+      v2: { code: -42, score: 'NA' },
+      v3: { code: -17, score: 'NA' }
+    });
+  });
+
+  it('keeps DERIVE_PENDING visible without inventing a missing value', () => {
+    const row = createRow(11);
+    row.statusV3 = 11;
+
+    expect(resolveVersionedExportValues(row, 'v3', profile)).toMatchObject({
+      v1: { code: '', score: '' },
+      v3: { code: '', score: '' }
     });
   });
 });

@@ -20,6 +20,116 @@ export type ExportVersion = 'v1' | 'v2' | 'v3';
 export type ExportFormat = 'csv' | 'json' | 'excel';
 export type ItemDatasetNotReachedScope = 'unit' | 'testlet' | 'booklet';
 
+export const ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE =
+  'ITEM_MATRIX_UNRESOLVED_CELLS' as const;
+
+export type ItemMatrixCellFailureReason =
+  | 'unresolved-cell'
+  | 'unresolved-status'
+  | 'derived-result-missing'
+  | 'derived-cycle'
+  | 'derived-source-unresolved'
+  | 'derived-design-conflict'
+  | 'internal-resolution-missing'
+  | 'invalid-code'
+  | 'missing-code'
+  | 'missing-score';
+
+export interface ItemMatrixExportDiagnosticGroupDto {
+  reasonCode: ItemMatrixCellFailureReason;
+  bookletName: string;
+  columnName: string;
+  count: number;
+  sampleRowNumbers: number[];
+}
+
+export interface ItemMatrixExportDiagnosticsDto {
+  total: number;
+  sampleLimit: number;
+  groups: ItemMatrixExportDiagnosticGroupDto[];
+}
+
+export interface ItemMatrixExportErrorDetailsDto {
+  total: number;
+  groupCount: number;
+  sampleLimit: number;
+  diagnosticsAvailable: boolean;
+  incompleteDownloadAvailable: boolean;
+  expiresAt?: number;
+}
+
+export interface ExportWorksheetLimitErrorDetailsDto {
+  actual: number;
+  max: number;
+}
+
+export interface ItemMatrixExportJobErrorDto {
+  errorCode: typeof ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE;
+  errorDetails: ItemMatrixExportErrorDetailsDto;
+}
+
+export interface ExportWorksheetLimitJobErrorDto {
+  errorCode: 'EXPORT_TOO_MANY_WORKSHEETS';
+  errorDetails: ExportWorksheetLimitErrorDetailsDto;
+}
+
+export interface ExportJobWithoutStructuredErrorDto {
+  errorCode?: undefined;
+  errorDetails?: undefined;
+}
+
+export type ExportJobErrorMetadataDto =
+  | ItemMatrixExportJobErrorDto
+  | ExportWorksheetLimitJobErrorDto
+  | ExportJobWithoutStructuredErrorDto;
+
+export type ExportJobProgressPhaseDto =
+  | 'preparing'
+  | 'counting'
+  | 'writing'
+  | 'finalizing'
+  | 'completed';
+
+export type ExportJobStateDto =
+  | 'pending'
+  | 'processing'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'paused';
+
+export interface ExportJobResultDto {
+  fileId: string;
+  fileName: string;
+  fileSize: number;
+  workspaceId: number;
+  userId: number;
+  exportType: string;
+  createdAt: number;
+}
+
+export interface ExportJobStatusBaseDto {
+  status: ExportJobStateDto;
+  progress: number;
+  progressPhase?: ExportJobProgressPhaseDto;
+  processedRows?: number;
+  totalRows?: number;
+  progressMessage?: string;
+  result?: ExportJobResultDto;
+  error?: string;
+}
+
+export type ExportJobStatusDto =
+  ExportJobStatusBaseDto & ExportJobErrorMetadataDto;
+
+export interface ExportJobStatusErrorDto {
+  error: string;
+}
+
+export type ExportJobStatusResponseDto =
+  | ExportJobStatusDto
+  | ExportJobStatusErrorDto;
+
 export interface ItemDatasetSelection {
   unitId: string;
   itemId: string;
@@ -85,7 +195,7 @@ export interface ResultsByVersionExportRequest extends ExportRequestTransportOpt
   exportType: 'results-by-version';
   version?: ExportVersion;
   format?: Exclude<ExportFormat, 'json'>;
-  missingsProfileId?: number;
+  missingsProfileId: number;
   includeResponseValues?: boolean;
   includeGeoGebraResponseValues?: boolean;
   includeGeoGebraFiles?: boolean;
@@ -232,21 +342,11 @@ export const parseExportRequest = (value: unknown): BackgroundExportRequest => {
       assertOptionalTabularFormat(value, value.exportType);
       assertOptionalVersion(value, value.exportType);
       if (
-        value.version === 'v1' &&
         (!Number.isSafeInteger(value.missingsProfileId) ||
           Number(value.missingsProfileId) <= 0)
       ) {
         throw new ExportRequestValidationError(
-          'results-by-version v1 exports require missingsProfileId to be a positive integer'
-        );
-      }
-      if (
-        value.missingsProfileId !== undefined &&
-        (!Number.isSafeInteger(value.missingsProfileId) ||
-          Number(value.missingsProfileId) <= 0)
-      ) {
-        throw new ExportRequestValidationError(
-          'results-by-version missingsProfileId must be a positive integer'
+          'results-by-version exports require missingsProfileId to be a positive integer'
         );
       }
       if (value.includeGeoGebraFiles && value.format !== 'excel') {

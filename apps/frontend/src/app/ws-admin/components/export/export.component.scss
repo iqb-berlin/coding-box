@@ -116,6 +116,16 @@
         min-width: 0;
       }
 
+      .item-dataset-selection-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+
+        button {
+          white-space: normal;
+        }
+      }
+
       .psychometric-info-block {
         background-color: #f8f9fa;
         border: 1px solid #e9ecef;

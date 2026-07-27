@@ -5,6 +5,7 @@ import { MissingsProfile } from '../../entities/missings-profile.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
 import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
+import { isReservedTechnicalCodingCode } from '../../../utils/coding-utils';
 
 export interface ResolvedMissingValue {
   id: string;
@@ -236,6 +237,12 @@ export class MissingsProfilesService {
         throw new BadRequestException(`Missing entry '${missing.id}' must define a negative code`);
       }
 
+      if (isReservedTechnicalCodingCode(code)) {
+        throw new BadRequestException(
+          `Missing entry '${missing.id}' must not use reserved technical code '${code}'`
+        );
+      }
+
       if (!this.hasExplicitScoreProperty(missing) || !this.hasExplicitValidScore(missing.score)) {
         throw new BadRequestException(`Missing entry '${missing.id}' must define a score`);
       }
@@ -394,6 +401,11 @@ export class MissingsProfilesService {
       if (!Number.isInteger(code) || code >= 0) {
         throw new BadRequestException(
           `Missing '${id}' in profile ${profileId} must define a negative integer code`
+        );
+      }
+      if (isReservedTechnicalCodingCode(code)) {
+        throw new BadRequestException(
+          `Missing '${id}' in profile ${profileId} must not use reserved technical code '${code}'`
         );
       }
       if (!this.hasExplicitScoreProperty(missing) ||

@@ -13,7 +13,8 @@ import {
   CodingExportService,
   CodingExportOrchestratorService,
   CodingListExportService,
-  CodingPsychometricExportService
+  CodingPsychometricExportService,
+  ExportArtifactService
 } from '../../database/services/coding';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
@@ -21,6 +22,22 @@ import { CacheService } from '../../cache/cache.service';
 jest.mock('../../database/services/workspace/workspace-files.service', () => ({
   WorkspaceFilesService: jest.fn()
 }));
+
+const createController = (
+  codingListExportService: CodingListExportService,
+  codingExportService: CodingExportService,
+  codingExportOrchestratorService: CodingExportOrchestratorService,
+  jobQueueService: JobQueueService,
+  cacheService: CacheService,
+  codingPsychometricExportService: CodingPsychometricExportService
+): WorkspaceCodingExportController => new WorkspaceCodingExportController(
+  codingListExportService,
+  codingExportService,
+  codingExportOrchestratorService,
+  jobQueueService,
+  codingPsychometricExportService,
+  new ExportArtifactService(cacheService)
+);
 
 const createWritableResponse = () => {
   const res = new PassThrough() as PassThrough & {
@@ -86,7 +103,7 @@ describe('WorkspaceCodingExportController', () => {
     const codingExportOrchestratorService = {
       getItemDatasetOptions: jest.fn().mockResolvedValue(options)
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       codingExportOrchestratorService as unknown as CodingExportOrchestratorService,
@@ -105,7 +122,7 @@ describe('WorkspaceCodingExportController', () => {
     const codingExportOrchestratorService = {
       exportResultsByVersionAsCsv: jest.fn().mockResolvedValue(csvStream)
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       codingExportOrchestratorService as unknown as CodingExportOrchestratorService,
@@ -123,7 +140,8 @@ describe('WorkspaceCodingExportController', () => {
       false,
       false,
       false,
-      res as never
+      res as never,
+      '7'
     );
     await new Promise(resolve => {
       setImmediate(resolve);
@@ -141,7 +159,8 @@ describe('WorkspaceCodingExportController', () => {
       serverUrl: 'http://server',
       includeReplayUrl: false,
       includeResponseValues: false,
-      includeGeoGebraResponseValues: false
+      includeGeoGebraResponseValues: false,
+      missingsProfileId: 7
     });
     expect(res.setHeader).toHaveBeenCalledWith(
       'Content-Type',
@@ -170,7 +189,7 @@ describe('WorkspaceCodingExportController', () => {
       })
     };
 
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -210,7 +229,7 @@ describe('WorkspaceCodingExportController', () => {
       const jobQueueService = {
         addExportJob: jest.fn()
       };
-      const controller = new WorkspaceCodingExportController(
+      const controller = createController(
         {} as CodingListExportService,
         {} as CodingExportService,
         {} as CodingExportOrchestratorService,
@@ -222,7 +241,8 @@ describe('WorkspaceCodingExportController', () => {
       await expect(
         controller.startExportJob(5, { user: { id: 2 } } as never, {
           exportType: 'results-by-version',
-          format: format as never
+          format: format as never,
+          missingsProfileId: 7
         })
       ).rejects.toThrow(BadRequestException);
 
@@ -234,7 +254,7 @@ describe('WorkspaceCodingExportController', () => {
     const jobQueueService = {
       addExportJob: jest.fn()
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -257,7 +277,7 @@ describe('WorkspaceCodingExportController', () => {
     const jobQueueService = {
       addExportJob: jest.fn()
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -280,7 +300,7 @@ describe('WorkspaceCodingExportController', () => {
     const jobQueueService = {
       addExportJob: jest.fn()
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -321,7 +341,7 @@ describe('WorkspaceCodingExportController', () => {
         mappingFallbackPreview: []
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -349,7 +369,7 @@ describe('WorkspaceCodingExportController', () => {
     const jobQueueService = {
       addExportJob: jest.fn().mockResolvedValue({ id: 'job-1' })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -380,7 +400,7 @@ describe('WorkspaceCodingExportController', () => {
         .fn()
         .mockResolvedValue(Buffer.from('xlsx'))
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       codingExportService as unknown as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -425,7 +445,7 @@ describe('WorkspaceCodingExportController', () => {
     const codingExportService = {
       exportCodingTimesReport: jest.fn().mockResolvedValue(Buffer.from('xlsx'))
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       codingExportService as unknown as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -464,7 +484,7 @@ describe('WorkspaceCodingExportController', () => {
         exceedsWorksheetLimit: true
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       codingExportService as unknown as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -502,7 +522,7 @@ describe('WorkspaceCodingExportController', () => {
         exceedsWorksheetLimit: false
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       codingExportService as unknown as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -538,7 +558,7 @@ describe('WorkspaceCodingExportController', () => {
     const codingExportService = {
       estimateCodingResultsByVariableExport: jest.fn()
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       codingExportService as unknown as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -576,7 +596,7 @@ describe('WorkspaceCodingExportController', () => {
         }
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -614,7 +634,7 @@ describe('WorkspaceCodingExportController', () => {
         failedReason
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -635,6 +655,254 @@ describe('WorkspaceCodingExportController', () => {
     });
   });
 
+  it('exposes diagnostics and the quarantined package only for failed item matrices', async () => {
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'item-matrix-incomplete-controller-')
+    );
+    const filePath = path.join(tempDir, 'incomplete.zip');
+    fs.writeFileSync(filePath, 'zip');
+    const diagnostics = {
+      total: 1933,
+      sampleLimit: 20,
+      groups: [{
+        reasonCode: 'derived-result-missing' as const,
+        bookletName: 'BOOKLET-1',
+        columnName: 'UNIT1_1',
+        count: 1933,
+        sampleRowNumbers: [2, 3]
+      }]
+    };
+    const job = {
+      id: 'job-1',
+      data: { workspaceId: 5, exportType: 'item-matrix' },
+      getState: jest.fn().mockResolvedValue('failed'),
+      progress: jest.fn().mockResolvedValue(90),
+      failedReason:
+        'ITEM_MATRIX_UNRESOLVED_CELLS:1933 ' +
+        'Itemdatensatz enthält 1933 nicht exportierbare Zellen.'
+    };
+    const jobQueueService = {
+      getExportJob: jest.fn().mockResolvedValue(job)
+    };
+    const cacheService = {
+      get: jest.fn((key: string) => {
+        if (key === 'item-matrix-diagnostics:job-1') {
+          return Promise.resolve({
+            diagnostics,
+            expiresAt: Date.now() + 3600000
+          });
+        }
+        if (key === 'item-matrix-incomplete-result:job-1') {
+          return Promise.resolve({
+            fileId: 'job-1',
+            fileName: 'Itemdatensatz-UNVOLLSTAENDIG-2026-07-26.zip',
+            filePath,
+            fileSize: 3,
+            workspaceId: 5,
+            userId: 2,
+            exportType: 'item-matrix',
+            createdAt: Date.now()
+          });
+        }
+        return Promise.resolve(undefined);
+      })
+    };
+    const controller = createController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      cacheService as unknown as CacheService,
+      codingPsychometricExportServiceMock
+    );
+
+    try {
+      const status = await controller.getExportJobStatus(5, 'job-1');
+      expect(status).toEqual(expect.objectContaining({
+        status: 'failed',
+        errorCode: 'ITEM_MATRIX_UNRESOLVED_CELLS',
+        errorDetails: expect.objectContaining({
+          total: 1933,
+          groupCount: 1,
+          sampleLimit: 20,
+          diagnosticsAvailable: true,
+          incompleteDownloadAvailable: true
+        })
+      }));
+      await expect(
+        controller.getItemMatrixExportDiagnostics(5, 'job-1')
+      ).resolves.toEqual(diagnostics);
+
+      const res = createWritableResponse();
+      res.resume();
+      await controller.downloadIncompleteItemMatrix(5, 'job-1', res as never);
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Type',
+        'application/zip'
+      );
+      expect(res.setHeader).toHaveBeenCalledWith(
+        'Content-Disposition',
+        'attachment; filename="Itemdatensatz-UNVOLLSTAENDIG-2026-07-26.zip"'
+      );
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects diagnostics for wrong workspaces, job types and expired data', async () => {
+    const job = {
+      id: 'job-1',
+      data: { workspaceId: 5, exportType: 'item-matrix' },
+      getState: jest.fn().mockResolvedValue('failed')
+    };
+    const jobQueueService = {
+      getExportJob: jest.fn().mockResolvedValue(job)
+    };
+    const cacheService = {
+      get: jest.fn().mockResolvedValue(undefined)
+    };
+    const controller = createController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      cacheService as unknown as CacheService,
+      codingPsychometricExportServiceMock
+    );
+
+    await expect(
+      controller.getItemMatrixExportDiagnostics(6, 'job-1')
+    ).rejects.toThrow('Access denied');
+
+    job.data.exportType = 'detailed';
+    await expect(
+      controller.getItemMatrixExportDiagnostics(5, 'job-1')
+    ).rejects.toThrow('only for failed item matrix exports');
+
+    job.data.exportType = 'item-matrix';
+    await expect(
+      controller.getItemMatrixExportDiagnostics(5, 'job-1')
+    ).rejects.toThrow('not found or expired');
+  });
+
+  it('deletes normal and quarantined files with their cache entries', async () => {
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'item-matrix-delete-controller-')
+    );
+    const normalPath = path.join(tempDir, 'normal.csv');
+    const incompletePath = path.join(tempDir, 'incomplete.zip');
+    fs.writeFileSync(normalPath, 'normal');
+    fs.writeFileSync(incompletePath, 'incomplete');
+    const jobQueueService = {
+      getExportJob: jest.fn().mockResolvedValue({
+        data: { workspaceId: 5, exportType: 'item-matrix' }
+      }),
+      deleteExportJob: jest.fn().mockResolvedValue(true)
+    };
+    const cacheService = {
+      get: jest.fn((key: string) => Promise.resolve(
+        key === 'export-result:job-1' ?
+          { filePath: normalPath } :
+          { filePath: incompletePath }
+      )),
+      delete: jest.fn().mockResolvedValue(true)
+    };
+    const controller = createController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      cacheService as unknown as CacheService,
+      codingPsychometricExportServiceMock
+    );
+
+    try {
+      await expect(controller.deleteExportJob(5, 'job-1')).resolves.toEqual({
+        success: true,
+        message: 'Export job deleted successfully'
+      });
+      expect(fs.existsSync(normalPath)).toBe(false);
+      expect(fs.existsSync(incompletePath)).toBe(false);
+      expect(cacheService.delete.mock.calls.map(([key]) => key)).toEqual(
+        expect.arrayContaining([
+          'export-result:job-1',
+          'item-matrix-incomplete-result:job-1',
+          'item-matrix-diagnostics:job-1'
+        ])
+      );
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps the export job when an artifact file cannot be deleted', async () => {
+    const jobQueueService = {
+      getExportJob: jest.fn().mockResolvedValue({
+        data: { workspaceId: 5, exportType: 'item-matrix' }
+      }),
+      deleteExportJob: jest.fn().mockResolvedValue(true)
+    };
+    const cacheService = {
+      get: jest.fn().mockResolvedValue({ filePath: '/tmp/locked-export.zip' }),
+      delete: jest.fn().mockResolvedValue(true)
+    };
+    const unlink = jest.spyOn(fs, 'unlinkSync').mockImplementation(() => {
+      const error = new Error('file is busy') as NodeJS.ErrnoException;
+      error.code = 'EBUSY';
+      throw error;
+    });
+    const controller = createController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      cacheService as unknown as CacheService,
+      codingPsychometricExportServiceMock
+    );
+
+    try {
+      await expect(controller.deleteExportJob(5, 'job-1')).resolves.toEqual({
+        success: false,
+        message: 'file is busy'
+      });
+      expect(cacheService.delete).not.toHaveBeenCalled();
+      expect(jobQueueService.deleteExportJob).not.toHaveBeenCalled();
+    } finally {
+      unlink.mockRestore();
+    }
+  });
+
+  it('keeps the export job when artifact cache cleanup is incomplete', async () => {
+    const jobQueueService = {
+      getExportJob: jest.fn().mockResolvedValue({
+        data: { workspaceId: 5, exportType: 'item-matrix' }
+      }),
+      deleteExportJob: jest.fn().mockResolvedValue(true)
+    };
+    const cacheService = {
+      get: jest.fn().mockResolvedValue(undefined),
+      delete: jest.fn()
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(true)
+    };
+    const controller = createController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      cacheService as unknown as CacheService,
+      codingPsychometricExportServiceMock
+    );
+
+    await expect(controller.deleteExportJob(5, 'job-1')).resolves.toEqual({
+      success: false,
+      message: 'Export artifacts could not be deleted completely'
+    });
+    expect(cacheService.delete).toHaveBeenCalledTimes(3);
+    expect(jobQueueService.deleteExportJob).not.toHaveBeenCalled();
+  });
+
   it('normalizes structured export progress details in job status', async () => {
     const jobQueueService = {
       getExportJob: jest.fn().mockResolvedValue({
@@ -649,7 +917,7 @@ describe('WorkspaceCodingExportController', () => {
         })
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -676,7 +944,7 @@ describe('WorkspaceCodingExportController', () => {
         progress: jest.fn().mockResolvedValue(55)
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -688,6 +956,29 @@ describe('WorkspaceCodingExportController', () => {
     await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
       status: 'cancelled',
       progress: 55
+    });
+  });
+
+  it('maps stuck export jobs to the public pending state', async () => {
+    const jobQueueService = {
+      getExportJob: jest.fn().mockResolvedValue({
+        data: { workspaceId: 5 },
+        getState: jest.fn().mockResolvedValue('stuck'),
+        progress: jest.fn().mockResolvedValue(0)
+      })
+    };
+    const controller = createController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService,
+      codingPsychometricExportServiceMock
+    );
+
+    await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
+      status: 'pending',
+      progress: 0
     });
   });
 
@@ -709,7 +1000,7 @@ describe('WorkspaceCodingExportController', () => {
         }
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -733,7 +1024,7 @@ describe('WorkspaceCodingExportController', () => {
         failedReason: 'Export job job-1 was cancelled'
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -779,7 +1070,7 @@ describe('WorkspaceCodingExportController', () => {
         }
       ])
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -827,7 +1118,7 @@ describe('WorkspaceCodingExportController', () => {
       get: jest.fn(),
       delete: jest.fn()
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -859,7 +1150,7 @@ describe('WorkspaceCodingExportController', () => {
       markExportJobCancelled: jest.fn().mockResolvedValue(true),
       cancelExportJob: jest.fn().mockResolvedValue(true)
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -888,7 +1179,7 @@ describe('WorkspaceCodingExportController', () => {
       markExportJobCancelled: jest.fn().mockResolvedValue(false),
       cancelExportJob: jest.fn().mockResolvedValue(false)
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -920,7 +1211,7 @@ describe('WorkspaceCodingExportController', () => {
       markExportJobCancelled: jest.fn().mockResolvedValue(true),
       cancelExportJob: jest.fn().mockResolvedValue(true)
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -946,7 +1237,7 @@ describe('WorkspaceCodingExportController', () => {
         data: { workspaceId: 9 }
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,

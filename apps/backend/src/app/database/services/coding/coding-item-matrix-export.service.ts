@@ -4,11 +4,15 @@ import * as ExcelJS from 'exceljs';
 import * as fastCsv from 'fast-csv';
 import * as fs from 'fs';
 import { PassThrough, Stream } from 'stream';
+import { once } from 'events';
+import { pipeline } from 'stream/promises';
 import { Repository } from 'typeorm';
 import {
   ItemDatasetNotReachedScope,
   ItemDatasetOptionsDto,
-  ItemDatasetSelection
+  ItemDatasetSelection,
+  ItemMatrixExportDiagnosticGroupDto,
+  ItemMatrixExportDiagnosticsDto
 } from '../../../../../../../api-dto/coding/export-request.dto';
 import {
   ItemDatasetResponseKey,
@@ -35,6 +39,11 @@ import {
   ItemDatasetResponseValue,
   ResolvedItemDatasetCell
 } from './item-dataset-cell-resolver';
+import {
+  ItemDatasetCellExportError,
+  ItemDatasetCellExportFailureReason
+} from './item-dataset-cell-export-error';
+import { ItemMatrixExportIncompleteError } from './item-matrix-export-incomplete.error';
 import {
   ItemDatasetColumnResolution,
   ItemDatasetMetadataService
@@ -68,12 +77,16 @@ interface RawResponseValueRow {
   bookletId: number | string;
   bookletName: string;
   unitName: string;
+  unitAlias: string | null;
   variableId: string;
   status: number | string | null;
+  statusV1: number | string | null;
   codeV1: number | string | null;
   scoreV1: number | string | null;
+  statusV2: number | string | null;
   codeV2: number | string | null;
   scoreV2: number | string | null;
+  statusV3: number | string | null;
   codeV3: number | string | null;
   scoreV3: number | string | null;
 }
@@ -94,6 +107,14 @@ interface MatrixContext {
   profile: ProfileDefinitions;
   derivedSources: Map<string, string[]>;
 }
+
+interface ItemMatrixDiagnosticsCollector {
+  total: number;
+  sampledRows: number;
+  groups: Map<string, ItemMatrixExportDiagnosticGroupDto>;
+}
+
+const itemMatrixDiagnosticSampleLimit = 20;
 
 const requiredMissingIds: IqbStandardMissingId[] = [
   'mir',
@@ -172,6 +193,7 @@ export class CodingItemMatrixExportService {
         matrixStream.on('error', error => outputStream.emit('error', error));
         matrixStream.pipe(outputStream);
 
+        const diagnosticsCollector = this.createDiagnosticsCollector();
         for await (const row of this.resolveRows(
           workspaceId,
           context,
@@ -179,7 +201,8 @@ export class CodingItemMatrixExportService {
           version,
           configuration,
           progressCallback,
-          checkCancellation
+          checkCancellation,
+          diagnosticsCollector
         )) {
           if (!matrixStream.write(row)) {
             await new Promise(resolve => {
@@ -189,6 +212,10 @@ export class CodingItemMatrixExportService {
           }
         }
         await checkCancellation?.();
+        const diagnostics = this.finalizeDiagnostics(diagnosticsCollector);
+        if (diagnostics.total > 0) {
+          throw new ItemMatrixExportIncompleteError(diagnostics);
+        }
         matrixStream.end();
       } catch (error) {
         const exportError = error as Error;
@@ -214,7 +241,7 @@ export class CodingItemMatrixExportService {
     const chunks: Buffer[] = [];
     const stream = new PassThrough();
     stream.on('data', (chunk: Buffer) => chunks.push(chunk));
-    await this.writeExcel(
+    const diagnostics = await this.writeExcel(
       stream,
       workspaceId,
       value,
@@ -223,7 +250,67 @@ export class CodingItemMatrixExportService {
       progressCallback,
       checkCancellation
     );
+    if (diagnostics.total > 0) {
+      throw new ItemMatrixExportIncompleteError(diagnostics);
+    }
     return Buffer.concat(chunks);
+  }
+
+  async writeItemMatrixCsvToFile(
+    filePath: string,
+    workspaceId: number,
+    value: ItemMatrixValue,
+    version: ItemMatrixVersion,
+    configuration: ItemMatrixExportConfiguration,
+    progressCallback?: (percentage: number) => Promise<void>,
+    checkCancellation?: () => Promise<void>
+  ): Promise<ItemMatrixExportDiagnosticsDto> {
+    let outputStream: fs.WriteStream | undefined;
+    let matrixStream: ReturnType<typeof fastCsv.format> | undefined;
+    let streamComplete: Promise<void> | undefined;
+    try {
+      const context = await this.buildMatrixContext(
+        workspaceId,
+        configuration,
+        checkCancellation
+      );
+      outputStream = fs.createWriteStream(filePath);
+      matrixStream = fastCsv.format({
+        headers: this.getHeaders(context.columns),
+        delimiter: ';',
+        alwaysWriteHeaders: true,
+        writeBOM: true
+      });
+      streamComplete = pipeline(matrixStream, outputStream);
+      streamComplete.catch(() => undefined);
+      const diagnosticsCollector = this.createDiagnosticsCollector();
+      for await (const row of this.resolveRows(
+        workspaceId,
+        context,
+        value,
+        version,
+        configuration,
+        progressCallback,
+        checkCancellation,
+        diagnosticsCollector
+      )) {
+        if (!matrixStream.write(row)) {
+          await Promise.race([
+            once(matrixStream, 'drain').then(() => undefined),
+            streamComplete
+          ]);
+          await checkCancellation?.();
+        }
+      }
+      matrixStream.end();
+      await streamComplete;
+      return this.finalizeDiagnostics(diagnosticsCollector);
+    } catch (error) {
+      matrixStream?.destroy(error as Error);
+      outputStream?.destroy(error as Error);
+      await streamComplete?.catch(() => undefined);
+      throw error;
+    }
   }
 
   async writeItemMatrixExcelToFile(
@@ -234,7 +321,7 @@ export class CodingItemMatrixExportService {
     configuration: ItemMatrixExportConfiguration,
     progressCallback?: (percentage: number) => Promise<void>,
     checkCancellation?: () => Promise<void>
-  ): Promise<void> {
+  ): Promise<ItemMatrixExportDiagnosticsDto> {
     const outputStream = fs.createWriteStream(filePath);
     const streamComplete = new Promise<void>((resolve, reject) => {
       outputStream.once('finish', resolve);
@@ -242,7 +329,7 @@ export class CodingItemMatrixExportService {
     });
     streamComplete.catch(() => undefined);
     try {
-      await this.writeExcel(
+      const diagnostics = await this.writeExcel(
         outputStream,
         workspaceId,
         value,
@@ -252,6 +339,7 @@ export class CodingItemMatrixExportService {
         checkCancellation
       );
       await streamComplete;
+      return diagnostics;
     } catch (error) {
       outputStream.destroy(error as Error);
       await streamComplete.catch(() => undefined);
@@ -272,7 +360,7 @@ export class CodingItemMatrixExportService {
     configuration: ItemMatrixExportConfiguration,
     progressCallback?: (percentage: number) => Promise<void>,
     checkCancellation?: () => Promise<void>
-  ): Promise<void> {
+  ): Promise<ItemMatrixExportDiagnosticsDto> {
     const context = await this.buildMatrixContext(
       workspaceId,
       configuration,
@@ -290,6 +378,7 @@ export class CodingItemMatrixExportService {
       width: header.length > 24 ? 28 : 18
     }));
 
+    const diagnosticsCollector = this.createDiagnosticsCollector();
     for await (const row of this.resolveRows(
       workspaceId,
       context,
@@ -297,7 +386,8 @@ export class CodingItemMatrixExportService {
       version,
       configuration,
       progressCallback,
-      checkCancellation
+      checkCancellation,
+      diagnosticsCollector
     )) {
       worksheet.addRow(row).commit();
     }
@@ -305,6 +395,7 @@ export class CodingItemMatrixExportService {
     await worksheet.commit();
     await workbook.commit();
     await checkCancellation?.();
+    return this.finalizeDiagnostics(diagnosticsCollector);
   }
 
   private async buildMatrixContext(
@@ -400,52 +491,15 @@ export class CodingItemMatrixExportService {
     profileId: number
   ): Promise<ProfileDefinitions> {
     const profile =
-      await this.missingsProfilesService.getMissingsProfileDetails(
+      await this.missingsProfilesService.getResolvedMissingsProfileForExport(
         workspaceId,
-        profileId
+        profileId,
+        requiredMissingIds
       );
-    if (!profile) {
-      throw new BadRequestException(
-        `Missing-Profil ${profileId} wurde nicht gefunden`
-      );
-    }
-    const entries = profile.parseMissings();
-    const byId = new Map<IqbStandardMissingId, ResolvedMissingValue>();
-    const byCode = new Map<number, ResolvedMissingValue>();
-
-    entries.forEach(entry => {
-      if (!Object.prototype.hasOwnProperty.call(entry, 'score')) {
-        throw new BadRequestException(
-          `Missing '${entry.id}' in Profil ${profileId} hat kein score-Property`
-        );
-      }
-      const resolved: ResolvedMissingValue = {
-        id: entry.id,
-        label: entry.label,
-        code: Number(entry.code),
-        score: entry.score === null ? null : Number(entry.score)
-      };
-      if (
-        !Number.isInteger(resolved.code) ||
-        (resolved.score !== null && !Number.isFinite(resolved.score))
-      ) {
-        throw new BadRequestException(
-          `Missing '${entry.id}' in Profil ${profileId} ist ungültig`
-        );
-      }
-      byCode.set(resolved.code, resolved);
-      if (requiredMissingIds.includes(entry.id as IqbStandardMissingId)) {
-        byId.set(entry.id as IqbStandardMissingId, resolved);
-      }
-    });
-
-    const missingIds = requiredMissingIds.filter(id => !byId.has(id));
-    if (missingIds.length > 0) {
-      throw new BadRequestException(
-        `Missing-Profil ${profileId} enthält nicht: ${missingIds.join(', ')}`
-      );
-    }
-    return { byId, byCode };
+    const byId = new Map<IqbStandardMissingId, ResolvedMissingValue>(
+      requiredMissingIds.map(id => [id, profile.byId.get(id)!])
+    );
+    return { byId, byCode: profile.byCode };
   }
 
   private async buildColumns(
@@ -539,7 +593,9 @@ export class CodingItemMatrixExportService {
     version: ItemMatrixVersion,
     configuration: ItemMatrixExportConfiguration,
     progressCallback?: (percentage: number) => Promise<void>,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    diagnosticsCollector: ItemMatrixDiagnosticsCollector =
+    this.createDiagnosticsCollector()
   ): AsyncGenerator<Record<string, string | number>> {
     const batchSize = 100;
     let written = 0;
@@ -592,12 +648,26 @@ export class CodingItemMatrixExportService {
         for (let index = 0; index < context.columns.length; index += 1) {
           await this.checkExportCancellationPoint(index, checkCancellation);
           const column = context.columns[index];
-          exportRow[column.header] = this.getExportValue(
-            cellsByItem.get(
-              this.getSelectionKey(column.unitId, column.itemId)
-            ) || this.unresolvedCell(),
-            requestedValue
-          );
+          try {
+            exportRow[column.header] = this.getExportValue(
+              cellsByItem.get(
+                this.getSelectionKey(column.unitId, column.itemId)
+              ) || this.unresolvedCell('internal-resolution-missing'),
+              requestedValue
+            );
+          } catch (error) {
+            if (!(error instanceof ItemDatasetCellExportError)) {
+              throw error;
+            }
+            this.addDiagnostic(
+              diagnosticsCollector,
+              start + rowIndex + 2,
+              row.bookletName,
+              column.header,
+              error.reason
+            );
+            exportRow[column.header] = '';
+          }
         }
         yield exportRow;
         written += 1;
@@ -609,6 +679,50 @@ export class CodingItemMatrixExportService {
       }
       await this.yieldToEventLoop();
     }
+  }
+
+  private createDiagnosticsCollector(): ItemMatrixDiagnosticsCollector {
+    return { total: 0, sampledRows: 0, groups: new Map() };
+  }
+
+  private addDiagnostic(
+    collector: ItemMatrixDiagnosticsCollector,
+    rowNumber: number,
+    bookletName: string,
+    columnName: string,
+    reasonCode: ItemDatasetCellExportFailureReason
+  ): void {
+    collector.total += 1;
+    const key = [reasonCode, bookletName, columnName].join('\u001F');
+    const group = collector.groups.get(key) || {
+      reasonCode,
+      bookletName,
+      columnName,
+      count: 0,
+      sampleRowNumbers: []
+    };
+    group.count += 1;
+    if (collector.sampledRows < itemMatrixDiagnosticSampleLimit) {
+      group.sampleRowNumbers.push(rowNumber);
+      collector.sampledRows += 1;
+    }
+    collector.groups.set(key, group);
+  }
+
+  private finalizeDiagnostics(
+    collector: ItemMatrixDiagnosticsCollector
+  ): ItemMatrixExportDiagnosticsDto {
+    const groups = Array.from(collector.groups.values()).sort((left, right) => (
+      right.count - left.count ||
+      left.reasonCode.localeCompare(right.reasonCode) ||
+      left.bookletName.localeCompare(right.bookletName, 'de') ||
+      left.columnName.localeCompare(right.columnName, 'de')
+    ));
+    return {
+      total: collector.total,
+      sampleLimit: itemMatrixDiagnosticSampleLimit,
+      groups
+    };
   }
 
   private async resolveRowCells(
@@ -639,8 +753,10 @@ export class CodingItemMatrixExportService {
     return step.value;
   }
 
-  private unresolvedCell(): ResolvedCell {
-    return this.cellResolver.unresolvedCell();
+  private unresolvedCell(
+    failureReason?: ItemDatasetCellExportFailureReason
+  ): ResolvedCell {
+    return this.cellResolver.unresolvedCell(failureReason);
   }
 
   private getExportValue(
@@ -680,12 +796,16 @@ export class CodingItemMatrixExportService {
       .addSelect('booklet.id', 'bookletId')
       .addSelect('bookletinfo.name', 'bookletName')
       .addSelect('unit.name', 'unitName')
+      .addSelect('unit.alias', 'unitAlias')
       .addSelect('response.variableid', 'variableId')
       .addSelect('response.status', 'status')
+      .addSelect('response.status_v1', 'statusV1')
       .addSelect('response.code_v1', 'codeV1')
       .addSelect('response.score_v1', 'scoreV1')
+      .addSelect('response.status_v2', 'statusV2')
       .addSelect('response.code_v2', 'codeV2')
       .addSelect('response.score_v2', 'scoreV2')
+      .addSelect('response.status_v3', 'statusV3')
       .addSelect('response.code_v3', 'codeV3')
       .addSelect('response.score_v3', 'scoreV3')
       .where('booklet.id IN (:...bookletIds)', {
@@ -710,11 +830,14 @@ export class CodingItemMatrixExportService {
       ) {
         continue;
       }
-      const key = this.getResponseKey(
-        response.unitName || '',
-        response.variableId || ''
-      );
-      if (!validPairs.has(key)) {
+      const key = [response.unitAlias, response.unitName]
+        .filter((unitId): unitId is string => !!unitId)
+        .map(unitId => this.getResponseKey(
+          unitId,
+          response.variableId || ''
+        ))
+        .find(candidate => validPairs.has(candidate));
+      if (!key) {
         continue;
       }
       const bookletId = Number(response.bookletId);
@@ -730,45 +853,42 @@ export class CodingItemMatrixExportService {
     version: ItemMatrixVersion
   ): ResponseValue {
     const hydrated = 'code_v1' in response;
-    const status = hydrated ?
-      response.status :
-      this.toNullableNumber(response.status);
     switch (version) {
       case 'v1':
         return hydrated ?
           {
             code: response.code_v1,
             score: response.score_v1,
-            status
+            status: response.status_v1
           } :
           {
             code: this.toNullableNumber(response.codeV1),
             score: this.toNullableNumber(response.scoreV1),
-            status
+            status: this.toNullableNumber(response.statusV1)
           };
       case 'v2':
         return hydrated ?
           {
             code: response.code_v2,
             score: response.score_v2,
-            status
+            status: response.status_v2
           } :
           {
             code: this.toNullableNumber(response.codeV2),
             score: this.toNullableNumber(response.scoreV2),
-            status
+            status: this.toNullableNumber(response.statusV2)
           };
       case 'v3':
         return hydrated ?
           {
             code: response.code_v3,
             score: response.score_v3,
-            status
+            status: response.status_v3
           } :
           {
             code: this.toNullableNumber(response.codeV3),
             score: this.toNullableNumber(response.scoreV3),
-            status
+            status: this.toNullableNumber(response.statusV3)
           };
       default:
         throw new Error(`Unsupported item dataset version: ${version}`);

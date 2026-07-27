@@ -158,7 +158,7 @@ describe('CodingExportService', () => {
   });
 
   it('should get coding results by version', () => {
-    service.getCodingResultsByVersion(1, 'v2', true, false).subscribe(res => {
+    service.getCodingResultsByVersion(1, 'v2', 7, true, false).subscribe(res => {
       expect(res).toBeDefined();
     });
 
@@ -172,7 +172,8 @@ describe('CodingExportService', () => {
       request.params.get('version') === 'v2' &&
       request.params.get('includeReplayUrls') === 'true' &&
       request.params.get('includeResponseValues') === 'false' &&
-      request.params.get('includeGeoGebraResponseValues') === 'false'
+      request.params.get('includeGeoGebraResponseValues') === 'false' &&
+      request.params.get('missingsProfileId') === '7'
     );
     expect(req.request.method).toBe('GET');
     req.flush(new Blob());
@@ -181,7 +182,7 @@ describe('CodingExportService', () => {
   it('should use the configured export replay token duration for coding results by version', () => {
     workspaceSettingsServiceMock.getReplayUrlExportTokenDurationDays.mockReturnValueOnce(of(30));
 
-    service.getCodingResultsByVersion(1, 'v2', true, false).subscribe(res => {
+    service.getCodingResultsByVersion(1, 'v2', 7, true, false).subscribe(res => {
       expect(res).toBeDefined();
     });
 
@@ -197,7 +198,7 @@ describe('CodingExportService', () => {
   });
 
   it('should pass GeoGebra response value option to direct result exports', () => {
-    service.getCodingResultsByVersion(1, 'v2', false, true, true).subscribe(res => {
+    service.getCodingResultsByVersion(1, 'v2', 7, false, true, true).subscribe(res => {
       expect(res).toBeDefined();
     });
 
@@ -209,17 +210,20 @@ describe('CodingExportService', () => {
     req.flush(new Blob());
   });
 
-  it('should pass the selected missing profile to direct v1 exports', () => {
-    service.getCodingResultsByVersion(1, 'v1', false, true, false, 7)
-      .subscribe();
+  it.each(['v1', 'v2', 'v3'] as const)(
+    'should pass the selected missing profile to direct %s exports',
+    version => {
+      service.getCodingResultsByVersion(1, version, 7, false, true, false)
+        .subscribe();
 
-    const req = httpMock.expectOne(request => (
-      request.url === `${mockServerUrl}admin/workspace/1/coding/results-by-version` &&
-      request.params.get('version') === 'v1' &&
-      request.params.get('missingsProfileId') === '7'
-    ));
-    req.flush(new Blob());
-  });
+      const req = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/1/coding/results-by-version` &&
+        request.params.get('version') === version &&
+        request.params.get('missingsProfileId') === '7'
+      ));
+      req.flush(new Blob());
+    }
+  );
 
   it('should pass response value option to export jobs', () => {
     service.startExportJob(1, 'results-by-version', 'v1', 'csv', false, undefined, false, false, false, 7).subscribe(res => {
@@ -264,7 +268,18 @@ describe('CodingExportService', () => {
   });
 
   it('should pass GeoGebra package option to Excel result export jobs', () => {
-    service.startExportJob(1, 'results-by-version', 'v2', 'excel', false, undefined, true, true).subscribe(res => {
+    service.startExportJob(
+      1,
+      'results-by-version',
+      'v2',
+      'excel',
+      false,
+      undefined,
+      true,
+      true,
+      false,
+      7
+    ).subscribe(res => {
       expect(res).toBeDefined();
     });
 
@@ -277,6 +292,7 @@ describe('CodingExportService', () => {
       includeResponseValues: true,
       includeGeoGebraFiles: true,
       includeGeoGebraResponseValues: false,
+      missingsProfileId: 7,
       authToken: ''
     });
     req.flush({ jobId: 'job-1', message: 'started' });
@@ -292,7 +308,8 @@ describe('CodingExportService', () => {
       undefined,
       true,
       false,
-      true
+      true,
+      7
     ).subscribe(res => {
       expect(res).toBeDefined();
     });
@@ -306,6 +323,7 @@ describe('CodingExportService', () => {
       includeResponseValues: true,
       includeGeoGebraFiles: false,
       includeGeoGebraResponseValues: true,
+      missingsProfileId: 7,
       authToken: ''
     });
     req.flush({ jobId: 'job-1', message: 'started' });

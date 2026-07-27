@@ -148,6 +148,12 @@ export interface ManualMissingCodeMapping {
   mciCode?: number | null;
 }
 
+const RESERVED_TECHNICAL_CODING_CODES = new Set([-1, -2, -3, -4, -111]);
+
+export function isReservedTechnicalCodingCode(code: number): boolean {
+  return RESERVED_TECHNICAL_CODING_CODES.has(code);
+}
+
 /**
  * Maps internal code values to export representation.
  *
@@ -164,7 +170,7 @@ export function mapCodeForExport(
   if (code === null || code === undefined) return null;
   if (code === -3) return manualMissingCodes?.mirCode ?? null;
   if (code === -4) return manualMissingCodes?.mciCode ?? null;
-  if (code === -1 || code === -2 || code === -111) return null;
+  if (isReservedTechnicalCodingCode(code)) return null;
   return code;
 }
 

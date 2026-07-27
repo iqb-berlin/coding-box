@@ -560,11 +560,11 @@ export class CodingManagementService {
   downloadCodingResults(
     version: StatisticsVersion,
     format: CodingResultsExportFormat,
+    missingsProfileId: number,
     includeReplayUrls: boolean,
     includeResponseValues: boolean = true,
     includeGeoGebraFiles: boolean = false,
-    includeGeoGebraResponseValues: boolean = false,
-    missingsProfileId?: number
+    includeGeoGebraResponseValues: boolean = false
   ): Promise<void> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return Promise.resolve();
@@ -573,11 +573,11 @@ export class CodingManagementService {
       workspaceId,
       version,
       format,
+      missingsProfileId,
       includeReplayUrls,
       includeResponseValues,
       includeGeoGebraFiles,
-      includeGeoGebraResponseValues,
-      missingsProfileId
+      includeGeoGebraResponseValues
     );
   }
 
@@ -587,11 +587,11 @@ export class CodingManagementService {
     workspaceId: number,
     version: StatisticsVersion,
     format: CodingResultsExportFormat,
+    missingsProfileId: number,
     includeReplayUrls: boolean,
     includeResponseValues: boolean,
     includeGeoGebraFiles: boolean,
-    includeGeoGebraResponseValues: boolean,
-    missingsProfileId?: number
+    includeGeoGebraResponseValues: boolean
   ): Promise<void> {
     this.downloadProgress$.next(0);
 
@@ -710,9 +710,20 @@ export class CodingManagementService {
 
       const subscription = timer(0, 2000).pipe(
         switchMap(() => this.exportService.getExportJobStatus(workspaceId, jobId)),
-        takeWhile(status => ['pending', 'processing'].includes(status.status), true)
+        takeWhile(
+          status => 'status' in status &&
+            ['pending', 'processing'].includes(status.status),
+          true
+        )
       ).subscribe({
         next: status => {
+          if (!('status' in status)) {
+            subscription.unsubscribe();
+            operation.pollingSubscription = undefined;
+            this.activeDownloads.delete(kind);
+            reject(new Error(status.error));
+            return;
+          }
           if (status.status === 'completed') {
             subscription.unsubscribe();
             operation.pollingSubscription = undefined;

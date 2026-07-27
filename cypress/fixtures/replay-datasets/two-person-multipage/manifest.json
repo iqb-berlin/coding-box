@@ -5,6 +5,7 @@
     "booklet": "BOOKLET-REPLAY.xml",
     "unit": "UNIT-REPLAY.xml",
     "unitDefinition": "UNIT-REPLAY.VOUD",
+    "itemMetadata": "UNIT-REPLAY-ALIAS.VOMD",
     "responses": "responses.csv"
   },
   "personA": {
