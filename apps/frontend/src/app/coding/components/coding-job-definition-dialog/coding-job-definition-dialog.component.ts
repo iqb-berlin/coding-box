@@ -56,6 +56,7 @@ import { CodingJobBulkCreationDialogComponent, BulkCreationData, BulkCreationRes
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import { JobDefinitionRefreshDialogComponent } from '../coding-job-definitions/job-definition-refresh-dialog.component';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
+import { getJobDefinitionDisplayLabel } from '../../utils/job-definition-display.util';
 
 export interface CodingJobDefinitionDialogData {
   codingJob?: CodingJob;
@@ -69,6 +70,8 @@ export interface CodingJobDefinitionDialogData {
 
 export interface JobDefinition {
   id?: number;
+  name?: string;
+  description?: string | null;
   status?: 'draft' | 'pending_review' | 'approved';
   assignedVariables?: Variable[];
   assignedVariableBundles?: VariableBundle[];
@@ -419,6 +422,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     const formValue = this.codingJobForm.getRawValue();
     const hasFormChanges = this.codingJobForm.dirty && (
+      ((formValue.name as string | undefined)?.trim().length ?? 0) > 0 ||
+      ((formValue.description as string | undefined)?.trim().length ?? 0) > 0 ||
       formValue.durationSeconds !== 1 ||
       formValue.maxCodingCases !== null ||
       (formValue.doubleCodingAbsolute ?? 0) !== 0 ||
@@ -870,6 +875,11 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     };
 
     if (this.data.mode === 'definition') {
+      formFields.name = [
+        this.data.codingJob?.name || '',
+        [Validators.required, Validators.pattern(/\S/), Validators.maxLength(255)]
+      ];
+      formFields.description = [this.data.codingJob?.description || '', []];
       formFields.missingsProfileId = [
         this.data.codingJob?.missingsProfileId ?? this.data.codingJob?.missings_profile_id ?? 0,
         [Validators.min(0)]
@@ -2372,6 +2382,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const selectedCoderConfigs = this.getSelectedCoderConfigs();
 
     const jobDefinition: JobDefinition = {
+      name: this.codingJobForm.value.name.trim(),
+      description: this.sanitizeDescription(this.codingJobForm.value.description),
       status: 'draft',
       assignedVariables: this.getSelectedDefinitionVariables(),
       assignedVariableBundles: this.getSelectedDefinitionVariableBundles(),
@@ -2409,6 +2421,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const selectedCoderConfigs = this.getSelectedCoderConfigs();
 
     const jobDefinition: Partial<JobDefinition> = {
+      name: this.codingJobForm.value.name.trim(),
+      description: this.sanitizeDescription(this.codingJobForm.value.description),
       assignedVariables: this.getSelectedDefinitionVariables(),
       assignedVariableBundles: this.getSelectedDefinitionVariableBundles(),
       assignedCoders: selectedCoderIds,
@@ -2436,6 +2450,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     jobDefinition: Partial<JobDefinition>
   ): Partial<JobDefinition> {
     return {
+      name: jobDefinition.name,
+      description: jobDefinition.description,
       durationSeconds: jobDefinition.durationSeconds,
       showScore: jobDefinition.showScore,
       allowComments: jobDefinition.allowComments,
@@ -2583,6 +2599,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         maxWidth: '95vw',
         data: {
           definitionId: jobDefinitionId,
+          definitionLabel: getJobDefinitionDisplayLabel({
+            id: jobDefinitionId,
+            name: jobDefinition.name
+          }),
           preview,
           mode: 'update'
         },
@@ -2728,6 +2748,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const selectedCoderConfigs = this.getSelectedCoderConfigs();
 
     const jobDefinition: JobDefinition = {
+      name: this.codingJobForm.value.name.trim(),
+      description: this.sanitizeDescription(this.codingJobForm.value.description),
       status: 'pending_review', // Submit for review
       assignedVariables: this.getSelectedDefinitionVariables(),
       assignedVariableBundles: this.getSelectedDefinitionVariableBundles(),
@@ -2775,6 +2797,15 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
     const num = Number(value);
     return Number.isNaN(num) ? undefined : num;
+  }
+
+  private sanitizeDescription(value: unknown): string | null {
+    if (typeof value !== 'string') {
+      return null;
+    }
+
+    const description = value.trim();
+    return description.length > 0 ? description : null;
   }
 
   private getErrorMessage(error: unknown): string {

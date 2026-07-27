@@ -36,6 +36,7 @@ import {
   VariableConfig
 } from '../coder-training/coder-training.component';
 import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-trainings-list.component';
+import { getJobDefinitionDisplayLabel } from '../../utils/job-definition-display.util';
 import { CoderTraining } from '../../models/coder-training.model';
 import {
   ImportComparisonDialogComponent,
@@ -388,6 +389,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         variableKey: string;
         conflictingDefinitions: Array<{
           id: number;
+          name?: string;
           status: string;
         }>;
       }>;
@@ -1598,7 +1600,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         const status = jobDefinition.status ? ` (${jobDefinition.status})` : '';
         return {
           id: jobDefinition.id as number,
-          label: `Definition #${jobDefinition.id}${status}: ${variableCount} Variablen, ${bundleCount} Bündel`
+          label: `${getJobDefinitionDisplayLabel(jobDefinition)}${status}: ${variableCount} Variablen, ${bundleCount} Bündel`
         };
       });
   }
@@ -3894,6 +3896,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
               variableKey: string;
               conflictingDefinitions: Array<{
                 id: number;
+                name?: string;
                 status: string;
               }>;
             }>;
@@ -4480,6 +4483,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       default:
         return status;
     }
+  }
+
+  getJobDefinitionIdentityLabel(definition: { id: number; name?: string }): string {
+    return getJobDefinitionDisplayLabel(definition);
   }
 
   private loadResponseMatchingMode(): void {

@@ -577,6 +577,7 @@ export class WorkspaceCodingService {
         variableKey: string;
         conflictingDefinitions: Array<{
           id: number;
+          name?: string;
           status: string;
         }>;
       }>;

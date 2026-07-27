@@ -6,12 +6,13 @@ import {
   IsBoolean,
   IsNumber,
   IsString,
+  IsNotEmpty,
   MaxLength,
   Max,
   Min,
   ValidateNested
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { JobDefinitionStatus, CaseOrderingMode } from '../../../database/entities/job-definition.entity';
 import {
   JobDefinitionVariableDto,
@@ -23,6 +24,36 @@ import { JobDefinitionCoderConfigDto } from './job-definition-coder-config.dto';
  * DTO for creating a job definition
  */
 export class CreateJobDefinitionDto {
+  @ApiProperty({
+    description: 'User-facing name of the job definition',
+    example: 'Lesen Klasse 4',
+    maxLength: 255
+  })
+  @Transform(({ value }) => (
+    typeof value === 'string' ? value.trim() : value
+  ))
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+    name: string;
+
+  @ApiProperty({
+    description: 'Optional user-facing description of the job definition',
+    example: 'Variablen für die erste Kodierwelle',
+    required: false,
+    nullable: true
+  })
+  @Transform(({ value }) => {
+    if (typeof value !== 'string') {
+      return value;
+    }
+    const trimmedValue = value.trim();
+    return trimmedValue.length > 0 ? trimmedValue : null;
+  })
+  @IsString()
+  @IsOptional()
+    description?: string | null;
+
   @ApiProperty({
     description: 'Status of the job definition',
     enum: ['draft', 'pending_review', 'approved'],

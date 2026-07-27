@@ -1176,6 +1176,7 @@ export class TestPersonCodingService {
         variableKey: string;
         conflictingDefinitions: Array<{
           id: number;
+          name?: string;
           status: string;
         }>;
       }>;
@@ -1205,6 +1206,7 @@ export class TestPersonCodingService {
           variableKey: string;
           conflictingDefinitions: Array<{
             id: number;
+            name?: string;
             status: string;
           }>;
         }>;

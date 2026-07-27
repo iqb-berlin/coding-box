@@ -5,7 +5,7 @@
 
 <mat-dialog-content class="distribution-content">
   <div class="definition-meta">
-    <span>{{ 'coding-job-definitions.distribution-summary.definition-label' | translate:{id: data.definitionId} }}</span>
+    <span>{{ data.definitionLabel || ('coding-job-definitions.distribution-summary.definition-label' | translate:{id: data.definitionId}) }}</span>
     @if (snapshot) {
       <span>{{ getSourceLabelKey() | translate }}</span>
       <span>{{ getSnapshotDate() }}</span>

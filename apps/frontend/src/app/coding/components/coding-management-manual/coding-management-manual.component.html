@@ -1392,7 +1392,7 @@
                       "
                       class="conflict-definition"
                     >
-                      Definition #{{ def.id }} ({{
+                      {{ getJobDefinitionIdentityLabel(def) }} ({{
                         getStatusLabel(def.status)
                       }}){{ !last ? ', ' : '' }}
                     </span>

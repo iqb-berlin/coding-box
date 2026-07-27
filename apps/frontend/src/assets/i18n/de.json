@@ -1141,7 +1141,7 @@
     "job-definition-none": "Keine Jobdefinitionen verfügbar",
     "job-definition-picker-title": "Jobdefinition auswählen",
     "job-definition-picker-search": "Jobdefinitionen suchen",
-    "job-definition-picker-search-placeholder": "ID, Status, Gruppe oder Umfang",
+    "job-definition-picker-search-placeholder": "Name, ID, Status, Gruppe oder Umfang",
     "job-definition-picker-clear-search": "Suche leeren",
     "job-definition-picker-clear": "Jobdefinition-Filter entfernen",
     "job-definition-picker-apply": "Auswahl übernehmen",
@@ -2421,6 +2421,12 @@
       }
     },
     "form-fields": {
+      "name-label": "Name",
+      "name-placeholder": "z.B. Lesen Klasse 4",
+      "name-required": "Ein Name für die Jobdefinition ist erforderlich",
+      "name-maxlength": "Der Name darf höchstens 255 Zeichen lang sein",
+      "description-label": "Beschreibung",
+      "description-placeholder": "Optionale Beschreibung der Jobdefinition",
       "status-label": "Status",
       "duration-label": "Dauer für eine Kodieraufgabe (Sekunden)",
       "duration-placeholder": "z.B. 300 (5 Minuten)",
@@ -2595,6 +2601,7 @@
     "bulk-creation-in-progress": "Kodier-Jobs werden erstellt...",
     "table-headers": {
       "id": "ID",
+      "name": "Jobdefinition",
       "status": "Status",
       "variables": "Variablen",
       "coders": "Kodierer",
@@ -2627,10 +2634,10 @@
     },
     "workflow": {
       "definition": "Definition",
-      "jobs-count-unavailable": "Definition #{{id}} · Jobstatus nicht geladen",
-      "no-jobs": "Definition #{{id}} · Noch keine Kodierjobs erstellt",
-      "one-job": "Definition #{{id}} · 1 Kodierjob erstellt",
-      "many-jobs": "Definition #{{id}} · {{count}} Kodierjobs erstellt"
+      "jobs-count-unavailable": "{{label}} · Jobstatus nicht geladen",
+      "no-jobs": "{{label}} · Noch keine Kodierjobs erstellt",
+      "one-job": "{{label}} · 1 Kodierjob erstellt",
+      "many-jobs": "{{label}} · {{count}} Kodierjobs erstellt"
     },
     "refresh-dialog": {
       "title": {
