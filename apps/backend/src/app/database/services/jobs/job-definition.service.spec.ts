@@ -263,11 +263,13 @@ describe('JobDefinitionService', () => {
 
   it('rejects definitions without coders or assigned variables/bundles', async () => {
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: []
     }, 7)).rejects.toBeInstanceOf(BadRequestException);
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [],
       assignedVariableBundles: [],
       assignedCoders: [1]
@@ -276,6 +278,7 @@ describe('JobDefinitionService', () => {
 
   it('rejects invalid double coding settings', async () => {
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [1],
       doubleCodingAbsolute: 2,
@@ -283,6 +286,7 @@ describe('JobDefinitionService', () => {
     }, 7)).rejects.toBeInstanceOf(BadRequestException);
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [1],
       doubleCodingPercentage: 101
@@ -291,6 +295,7 @@ describe('JobDefinitionService', () => {
 
   it('rejects double coding with fewer than two coders', async () => {
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [1],
       doubleCodingAbsolute: 1
@@ -299,6 +304,7 @@ describe('JobDefinitionService', () => {
 
   it('uses the persisted distribution seed when checking and saving new definitions', async () => {
     const result = await service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [1],
       maxCodingCases: 2
@@ -321,8 +327,28 @@ describe('JobDefinitionService', () => {
     ]));
   });
 
+  it('persists the user-facing name and optional description', async () => {
+    await expect(service.createJobDefinition({
+      name: 'Lesen Klasse 4',
+      description: 'Erste Kodierwelle',
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1]
+    }, 7)).resolves.toMatchObject({
+      name: 'Lesen Klasse 4',
+      description: 'Erste Kodierwelle'
+    });
+
+    expect(jobDefinitionRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Lesen Klasse 4',
+        description: 'Erste Kodierwelle'
+      })
+    );
+  });
+
   it('uses a provided distribution seed when creating a definition', async () => {
     const result = await service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [1],
       maxCodingCases: 2,
@@ -353,6 +379,7 @@ describe('JobDefinitionService', () => {
     ]);
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }],
       assignedVariableBundles: [{ id: 9, name: 'Bundle' }],
       assignedCoders: [1],
@@ -384,6 +411,7 @@ describe('JobDefinitionService', () => {
     ]);
 
     await service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [
         { unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true },
         { unitName: 'Unit 1', variableId: 'Var 1' }
@@ -407,6 +435,7 @@ describe('JobDefinitionService', () => {
 
   it('deduplicates duplicate unbundled variables when planning usage', async () => {
     await service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [
         { unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true },
         { unitName: 'Unit 1', variableId: 'Var 1' }
@@ -442,6 +471,7 @@ describe('JobDefinitionService', () => {
     );
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1', includeDeriveError: true }],
       assignedCoders: [1],
       maxCodingCases: 3
@@ -470,6 +500,7 @@ describe('JobDefinitionService', () => {
     );
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'MMB022', variableId: '01b' }],
       assignedCoders: [1],
       maxCodingCases: null
@@ -491,6 +522,7 @@ describe('JobDefinitionService', () => {
     );
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'MMB022', variableId: '01b' }],
       assignedCoders: [1],
       maxCodingCases: 7
@@ -526,6 +558,7 @@ describe('JobDefinitionService', () => {
     );
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'MMB022', variableId: '01b' }],
       assignedCoders: [1],
       maxCodingCases: 7
@@ -557,6 +590,7 @@ describe('JobDefinitionService', () => {
     );
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [1],
       maxCodingCases: 5
@@ -597,6 +631,7 @@ describe('JobDefinitionService', () => {
     );
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [1],
       maxCodingCases: 5
@@ -627,6 +662,7 @@ describe('JobDefinitionService', () => {
     ]);
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [1],
       maxCodingCases: 1
@@ -678,6 +714,7 @@ describe('JobDefinitionService', () => {
     ]);
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [1],
       maxCodingCases: 1
@@ -705,6 +742,7 @@ describe('JobDefinitionService', () => {
     ]);
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariableBundles: [{ id: 9, name: 'Bundle' }],
       assignedCoders: [1],
       maxCodingCases: 5
@@ -728,6 +766,7 @@ describe('JobDefinitionService', () => {
     ]);
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariableBundles: [{ id: 9, name: 'Bundle' }],
       assignedCoders: [1],
       maxCodingCases: 17
@@ -762,6 +801,7 @@ describe('JobDefinitionService', () => {
     ]);
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [1],
       maxCodingCases: 6
@@ -796,6 +836,7 @@ describe('JobDefinitionService', () => {
     ]);
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [1],
       maxCodingCases: 8
@@ -827,6 +868,7 @@ describe('JobDefinitionService', () => {
     ]);
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [1],
       maxCodingCases: 75
@@ -868,6 +910,7 @@ describe('JobDefinitionService', () => {
     ]));
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [1],
       maxCodingCases: 6
@@ -903,6 +946,7 @@ describe('JobDefinitionService', () => {
     ]);
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [1],
       maxCodingCases: 3
@@ -1035,6 +1079,7 @@ describe('JobDefinitionService', () => {
     codingJobService.calculateDistributionVariableUsageByStatusBatch.mockClear();
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [1],
       maxCodingCases: 5
@@ -1068,6 +1113,7 @@ describe('JobDefinitionService', () => {
     ]);
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 2', variableId: 'Var 2' }],
       assignedCoders: [1],
       maxCodingCases: 60
@@ -1076,6 +1122,7 @@ describe('JobDefinitionService', () => {
 
   it('persists coding display options on job definitions', async () => {
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [1],
       showScore: true,
@@ -1091,6 +1138,7 @@ describe('JobDefinitionService', () => {
 
   it('normalizes missing profiles on job definitions', async () => {
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [1]
     }, 7)).resolves.toMatchObject({
@@ -1098,6 +1146,7 @@ describe('JobDefinitionService', () => {
     });
 
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [1],
       missingsProfileId: 77
@@ -1131,6 +1180,7 @@ describe('JobDefinitionService', () => {
     jobDefinitionRepository.findOne.mockResolvedValue({
       id: 42,
       workspace_id: 7,
+      name: '=Lesen Klasse 4',
       assigned_variable_bundles: [],
       distribution_snapshots: [
         {
@@ -1217,8 +1267,8 @@ describe('JobDefinitionService', () => {
       }
     });
     expect(usersRepository.find).toHaveBeenCalledWith({ where: { id: In([1, 2]) } });
-    expect(csv).toContain('Job-Definition-ID;Snapshot-Zeitpunkt;Quelle;Typ;Variable/Buendel;Coder-ID;Coder;Fallzahl');
-    expect(csv).toContain("Neuverteilung;Variable;'=UNIT -> +VAR;1;'=Ada;2;2;1;1;1");
+    expect(csv).toContain('Job-Definition-ID;Job-Definition-Name;Snapshot-Zeitpunkt;Quelle;Typ;Variable/Buendel;Coder-ID;Coder;Fallzahl');
+    expect(csv).toContain("42;'=Lesen Klasse 4;2026-01-02T00:00:00.000Z;Neuverteilung;Variable;'=UNIT -> +VAR;1;'=Ada;2;2;1;1;1");
     expect(csv).toContain("Neuverteilung;Variable;Legacy -> Var;1;'=Ada;2;2;1;1;1");
     expect(csv).toContain("Neuverteilung;Buendel;'@Bundle;2;Bob;3;3;0;3;0");
     expect(csv).not.toContain('Old::Var');
@@ -1238,6 +1288,7 @@ describe('JobDefinitionService', () => {
 
   it('persists coder capacity configs and derives assigned coder ids from them', async () => {
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [99],
       assignedCoderConfigs: [
@@ -1285,6 +1336,46 @@ describe('JobDefinitionService', () => {
       ]
     });
     expect(codingJobService.assertCodersCanCodeInWorkspace).toHaveBeenCalledWith([2, 3], 7);
+  });
+
+  it('updates metadata directly even when coding jobs already exist', async () => {
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      name: 'Alter Name',
+      description: 'Alt',
+      status: 'approved',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'seed-2'
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(
+      new Map([[2, 3]])
+    );
+
+    await expect(service.updateJobDefinition(2, 7, {
+      name: 'Neuer Name',
+      description: null
+    })).resolves.toMatchObject({
+      id: 2,
+      name: 'Neuer Name',
+      description: null
+    });
+
+    expect(jobDefinitionRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Neuer Name',
+        description: null
+      })
+    );
+    expect(codingJobService.refreshDistributedCodingJobs).not.toHaveBeenCalled();
   });
 
   it('preserves DERIVE_ERROR bundle variable options when updating the same bundle selection', async () => {
@@ -1418,6 +1509,7 @@ describe('JobDefinitionService', () => {
 
   it('rejects invalid coder capacity configs', async () => {
     await expect(service.createJobDefinition({
+      name: 'Definition',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoderConfigs: [{ coderId: 1, capacityPercent: 0 }]
     }, 7)).rejects.toBeInstanceOf(BadRequestException);

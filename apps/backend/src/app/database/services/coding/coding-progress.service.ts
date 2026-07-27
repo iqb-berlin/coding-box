@@ -130,6 +130,7 @@ interface VariableReferenceFilterQuery {
 
 interface VariableDefinitionReference {
   id: number;
+  name?: string;
   status: string;
 }
 
@@ -172,6 +173,7 @@ interface CrossDefinitionCaseRow {
   variableId: string;
   responseId: number | string;
   definitionId: number | string;
+  definitionName?: string;
   definitionStatus: string;
 }
 
@@ -955,6 +957,7 @@ export class CodingProgressService {
         variableKey: string;
         conflictingDefinitions: Array<{
           id: number;
+          name?: string;
           status: string;
         }>;
       }>;
@@ -1098,7 +1101,7 @@ export class CodingProgressService {
 
       const variableToDefinitions = new Map<
       string,
-      Array<{ id: number; status: string }>
+      Array<{ id: number; name?: string; status: string }>
       >();
 
       for (const definition of jobDefinitions) {
@@ -1148,6 +1151,7 @@ export class CodingProgressService {
           }
           variableToDefinitions.get(variableKey)!.push({
             id: definition.id,
+            ...(definition.name ? { name: definition.name } : {}),
             status: definition.status
           });
         });
@@ -1612,6 +1616,7 @@ export class CodingProgressService {
       .addSelect('cju.variable_id', 'variableId')
       .addSelect('cju.response_id', 'responseId')
       .addSelect('job_definition.id', 'definitionId')
+      .addSelect('job_definition.name', 'definitionName')
       .addSelect('job_definition.status', 'definitionStatus')
       .innerJoin('cju.coding_job', 'coding_job')
       .innerJoin('coding_job.jobDefinition', 'job_definition')
@@ -1660,6 +1665,7 @@ export class CodingProgressService {
 
       caseDefinitions.set(definitionId, {
         id: definitionId,
+        ...(row.definitionName ? { name: row.definitionName } : {}),
         status: row.definitionStatus
       });
       definitionsByCaseKey.set(caseKey, caseDefinitions);
