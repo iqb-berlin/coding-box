@@ -134,7 +134,7 @@ describe('ExportJobService', () => {
     it('should keep structured progress details from polling', fakeAsync(() => {
       codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
       codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({
-        status: 'active',
+        status: 'processing',
         progress: 55,
         progressPhase: 'writing',
         processedRows: 100,
@@ -172,6 +172,8 @@ describe('ExportJobService', () => {
         errorCode: 'ITEM_MATRIX_UNRESOLVED_CELLS',
         errorDetails: {
           total: 2,
+          groupCount: 1,
+          sampleLimit: 20,
           diagnosticsAvailable: true,
           incompleteDownloadAvailable: true,
           expiresAt: Date.now() + 2500
@@ -491,6 +493,8 @@ describe('ExportJobService', () => {
       errorCode: 'ITEM_MATRIX_UNRESOLVED_CELLS',
       errorDetails: {
         total: 2,
+        groupCount: 1,
+        sampleLimit: 20,
         diagnosticsAvailable: true,
         incompleteDownloadAvailable: true,
         expiresAt: Date.now() + 3600000

@@ -31,19 +31,22 @@ import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-s
 import type { PsychometricDomainCandidatesDto } from '../../../../../../../api-dto/coding/psychometric-discrimination.dto';
 import {
   BackgroundExportRequest,
+  ExportJobErrorMetadataDto,
+  ExportJobProgressPhaseDto,
+  ExportJobStateDto,
+  ExportJobStatusDto,
   ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE,
   ItemDatasetOptionsDto,
   ItemMatrixExportDiagnosticsDto
 } from '../../../../../../../api-dto/coding/export-request.dto';
 
-export interface ExportJob {
+interface ExportJobBase {
   jobId: string;
   workspaceId: number;
   status:
   'waiting' | 'active' | 'downloading' | 'completed' | 'failed' | 'cancelled';
   progress: number;
-  progressPhase?:
-  'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
+  progressPhase?: ExportJobProgressPhaseDto;
   processedRows?: number;
   totalRows?: number;
   progressMessage?: string;
@@ -55,10 +58,10 @@ export interface ExportJob {
     fileSize: number;
   };
   error?: string;
-  errorCode?: string;
-  errorDetails?: Record<string, number | string | boolean>;
   createdAt?: number;
 }
+
+export type ExportJob = ExportJobBase & ExportJobErrorMetadataDto;
 
 export type ExportJobConfig = BackgroundExportRequest & {
   userId?: number;
@@ -258,11 +261,14 @@ export class ExportJobService implements OnDestroy {
     this.jobsSubject.next([...currentJobs, job]);
   }
 
-  private updateJob(jobId: string, updates: Partial<ExportJob>): void {
+  private updateJob(
+    jobId: string,
+    updates: Partial<ExportJobBase> & ExportJobErrorMetadataDto
+  ): void {
     const currentJobs = this.jobsSubject.value;
     const updatedJobs = currentJobs.map(job => {
       if (job.jobId === jobId) {
-        return { ...job, ...updates };
+        return { ...job, ...updates } as ExportJob;
       }
       return job;
     });
@@ -281,53 +287,36 @@ export class ExportJobService implements OnDestroy {
         )
       )
       .subscribe({
-        next: (status: unknown) => {
-          const statusAny = status as unknown as {
-            status?: string;
-            progress?: number;
-            progressPhase?: ExportJob['progressPhase'];
-            processedRows?: number;
-            totalRows?: number;
-            progressMessage?: string;
-            result?: { fileName?: string; fileSize?: number };
-            error?: string;
-            errorCode?: string;
-            errorDetails?: Record<string, number | string | boolean>;
-          };
-
-          if (!statusAny.status && statusAny.error) {
+        next: status => {
+          if (!('status' in status)) {
             this.updateJob(jobId, {
               status: 'failed',
-              error: statusAny.error
+              error: status.error
             });
             this.stopPollingForJob(jobId);
             return;
           }
 
-          const mappedStatus = this.mapStatus(statusAny.status || '');
-          const result = statusAny.result ?
+          const mappedStatus = this.mapStatus(status.status);
+          const result = status.result ?
             {
-              fileName: statusAny.result.fileName || '',
-              fileSize: statusAny.result.fileSize || 0
+              fileName: status.result.fileName,
+              fileSize: status.result.fileSize
             } :
             undefined;
+          const errorMetadata = this.getExportJobErrorMetadata(status);
           this.updateJob(jobId, {
             status: mappedStatus,
-            progress: statusAny.progress || 0,
-            progressPhase: statusAny.progressPhase,
-            processedRows: statusAny.processedRows,
-            totalRows: statusAny.totalRows,
-            progressMessage: statusAny.progressMessage,
+            progress: status.progress,
+            progressPhase: status.progressPhase,
+            processedRows: status.processedRows,
+            totalRows: status.totalRows,
+            progressMessage: status.progressMessage,
             result,
-            error: statusAny.error,
-            errorCode: statusAny.errorCode,
-            errorDetails: statusAny.errorDetails
+            error: status.error,
+            ...errorMetadata
           });
-          this.scheduleItemMatrixArtifactExpiration(
-            jobId,
-            statusAny.errorCode,
-            statusAny.errorDetails
-          );
+          this.scheduleItemMatrixArtifactExpiration(jobId, status);
 
           // Stop polling when job is done
           if (
@@ -350,16 +339,11 @@ export class ExportJobService implements OnDestroy {
     this.pollingSubscriptions.set(jobId, subscription);
   }
 
-  private mapStatus(status: string): ExportJob['status'] {
+  private mapStatus(status: ExportJobStateDto): ExportJob['status'] {
     switch (status) {
       case 'pending':
         return 'waiting';
       case 'processing':
-        return 'active';
-      case 'waiting':
-      case 'delayed':
-        return 'waiting';
-      case 'active':
         return 'active';
       case 'completed':
         return 'completed';
@@ -370,7 +354,7 @@ export class ExportJobService implements OnDestroy {
       case 'paused':
         return 'waiting';
       default:
-        return 'waiting';
+        return status;
     }
   }
 
@@ -538,14 +522,13 @@ export class ExportJobService implements OnDestroy {
 
   private scheduleItemMatrixArtifactExpiration(
     jobId: string,
-    errorCode?: string,
-    errorDetails?: Record<string, number | string | boolean>
+    status: ExportJobStatusDto
   ): void {
     this.clearItemMatrixExpirationTimer(jobId);
-    if (errorCode !== ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE) {
+    if (status.errorCode !== ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE) {
       return;
     }
-    const expiresAt = Number(errorDetails?.expiresAt);
+    const expiresAt = Number(status.errorDetails.expiresAt);
     if (!Number.isFinite(expiresAt)) {
       return;
     }
@@ -575,7 +558,11 @@ export class ExportJobService implements OnDestroy {
     if (!job) {
       return;
     }
+    if (job.errorCode !== ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE) {
+      return;
+    }
     this.updateJob(jobId, {
+      errorCode: ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE,
       errorDetails: {
         ...job.errorDetails,
         diagnosticsAvailable: false,
@@ -590,6 +577,24 @@ export class ExportJobService implements OnDestroy {
       clearTimeout(timer);
       this.itemMatrixExpirationTimers.delete(jobId);
     }
+  }
+
+  private getExportJobErrorMetadata(
+    status: ExportJobStatusDto
+  ): ExportJobErrorMetadataDto {
+    if (status.errorCode === ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE) {
+      return {
+        errorCode: status.errorCode,
+        errorDetails: status.errorDetails
+      };
+    }
+    if (status.errorCode === 'EXPORT_TOO_MANY_WORKSHEETS') {
+      return {
+        errorCode: status.errorCode,
+        errorDetails: status.errorDetails
+      };
+    }
+    return { errorCode: undefined, errorDetails: undefined };
   }
 
   private getDownloadExtension(exportType: string, fileName?: string): string {

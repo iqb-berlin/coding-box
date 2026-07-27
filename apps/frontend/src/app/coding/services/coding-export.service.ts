@@ -6,6 +6,9 @@ import {
 import { SERVER_URL } from '../../injection-tokens';
 import { AppService, WorkspaceTokenPolicy } from '../../core/services/app.service';
 import { CodeBookContentSetting } from '../../../../../../api-dto/coding/codebook-content-setting';
+import type {
+  ExportJobStatusResponseDto
+} from '../../../../../../api-dto/coding/export-request.dto';
 import {
   DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
   EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
@@ -341,34 +344,8 @@ export class CodingExportService {
   getExportJobStatus(
     workspaceId: number,
     jobId: string
-  ): Observable<{
-      status: string;
-      progress: number;
-      result?: {
-        fileId: string;
-        fileName: string;
-        fileSize: number;
-        workspaceId: number;
-        userId: number;
-        exportType: string;
-        createdAt: number;
-      };
-      error?: string;
-    }> {
-    return this.http.get<{
-      status: string;
-      progress: number;
-      result?: {
-        fileId: string;
-        fileName: string;
-        fileSize: number;
-        workspaceId: number;
-        userId: number;
-        exportType: string;
-        createdAt: number;
-      };
-      error?: string;
-    }>(
+  ): Observable<ExportJobStatusResponseDto> {
+    return this.http.get<ExportJobStatusResponseDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`
     );
   }

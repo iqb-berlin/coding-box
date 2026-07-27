@@ -221,7 +221,7 @@ describe('ExportToastComponent', () => {
   });
 
   it('turns worksheet limit failures into actionable copy', () => {
-    const job = {
+    const job: ExportJob = {
       ...jobs[3],
       error: 'Technical worksheet limit details',
       errorCode: 'EXPORT_TOO_MANY_WORKSHEETS',
@@ -240,7 +240,7 @@ describe('ExportToastComponent', () => {
 
   it('offers diagnostics and a confirmed incomplete download for matrix failures', () => {
     const diagnostics = { total: 1933, sampleLimit: 20, groups: [] };
-    const job = {
+    const job: ExportJob = {
       ...jobs[3],
       exportType: 'item-matrix',
       error: 'Itemdatensatz enthält 1933 nicht exportierbare Zellen.',
@@ -275,7 +275,7 @@ describe('ExportToastComponent', () => {
   });
 
   it('keeps the explanation but disables actions after artifacts expire', () => {
-    const job = {
+    const job: ExportJob = {
       ...jobs[3],
       exportType: 'item-matrix',
       error: 'Itemdatensatz enthält 1933 nicht exportierbare Zellen.',
@@ -311,12 +311,14 @@ describe('ExportToastComponent', () => {
   });
 
   it('shows a message when the incomplete download fails', () => {
-    const job = {
+    const job: ExportJob = {
       ...jobs[3],
       exportType: 'item-matrix',
       errorCode: 'ITEM_MATRIX_UNRESOLVED_CELLS',
       errorDetails: {
         total: 2,
+        groupCount: 1,
+        sampleLimit: 20,
         diagnosticsAvailable: true,
         incompleteDownloadAvailable: true
       }

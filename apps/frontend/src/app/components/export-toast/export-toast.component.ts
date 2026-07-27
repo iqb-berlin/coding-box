@@ -20,7 +20,10 @@ import {
   ConfirmDialogComponent,
   ConfirmDialogData
 } from '../../shared/dialogs/confirm-dialog.component';
-import { ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE } from '../../../../../../api-dto/coding/export-request.dto';
+import {
+  ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE,
+  ItemMatrixExportJobErrorDto
+} from '../../../../../../api-dto/coding/export-request.dto';
 import { ItemMatrixDiagnosticsDialogComponent } from './item-matrix-diagnostics-dialog.component';
 
 @Component({
@@ -254,7 +257,9 @@ export class ExportToastComponent implements OnInit, OnDestroy {
     this.exportJobService.cancelJob(job);
   }
 
-  isItemMatrixResolutionError(job: ExportJob): boolean {
+  isItemMatrixResolutionError(
+    job: ExportJob
+  ): job is ExportJob & ItemMatrixExportJobErrorDto {
     return job.errorCode === ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE;
   }
 
@@ -345,9 +350,11 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   private getWorksheetLimitError(
     job: ExportJob
   ): { actual: number; max: number } | null {
-    if (job.errorCode === 'EXPORT_TOO_MANY_WORKSHEETS') {
-      const actual = Number(job.errorDetails?.actual);
-      const max = Number(job.errorDetails?.max);
+    if (
+      job.errorCode === 'EXPORT_TOO_MANY_WORKSHEETS'
+    ) {
+      const actual = Number(job.errorDetails.actual);
+      const max = Number(job.errorDetails.max);
       if (Number.isFinite(actual) && Number.isFinite(max)) {
         return { actual, max };
       }
@@ -370,12 +377,19 @@ export class ExportToastComponent implements OnInit, OnDestroy {
     );
   }
 
-  private getNumberDetail(job: ExportJob, key: string): number {
-    const value = Number(job.errorDetails?.[key]);
+  private getNumberDetail(job: ExportJob, key: 'total'): number {
+    const value = Number(
+      this.isItemMatrixResolutionError(job) ?
+        job.errorDetails[key] :
+        undefined
+    );
     return Number.isFinite(value) ? value : 0;
   }
 
-  private getBooleanDetail(job: ExportJob, key: string): boolean {
-    return job.errorDetails?.[key] === true;
+  private getBooleanDetail(
+    job: ExportJob,
+    key: 'diagnosticsAvailable' | 'incompleteDownloadAvailable'
+  ): boolean {
+    return this.isItemMatrixResolutionError(job) && job.errorDetails[key];
   }
 }
