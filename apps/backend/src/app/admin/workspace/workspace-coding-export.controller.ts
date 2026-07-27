@@ -30,7 +30,6 @@ import {
   ExportJobProgress,
   ExportJobResult
 } from '../../job-queue/job-queue.service';
-import { CacheService } from '../../cache/cache.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
@@ -39,11 +38,17 @@ import {
   CodingExportService,
   CodingExportOrchestratorService,
   CodingListExportService,
-  CodingPsychometricExportService
+  CodingPsychometricExportService,
+  ExportArtifactService
 } from '../../database/services/coding';
 import { PsychometricDomainCandidatesDto } from '../../../../../../api-dto/coding/psychometric-discrimination.dto';
 import {
   BackgroundExportRequest,
+  ExportJobErrorMetadataDto,
+  ExportJobProgressPhaseDto,
+  ExportJobResultDto,
+  ExportJobStateDto,
+  ExportJobStatusResponseDto,
   ExportRequestValidationError,
   ItemDatasetOptionsDto,
   ItemMatrixExportDiagnosticsDto,
@@ -51,29 +56,9 @@ import {
   parseExportRequest
 } from '../../../../../../api-dto/coding/export-request.dto';
 import {
-  CachedItemMatrixDiagnostics,
-  getIncompleteItemMatrixResultCacheKey,
-  getItemMatrixDiagnosticsCacheKey
-} from '../../database/services/coding/item-matrix-export-diagnostics.util';
-import {
   parseItemMatrixExportIncompleteError
 } from '../../database/services/coding/item-matrix-export-incomplete.error';
 
-type PublicExportJobResult = Omit<ExportJobResult, 'filePath'>;
-type PublicExportJobStatus =
-  | {
-    status: string;
-    progress: number;
-    progressPhase?: string;
-    processedRows?: number;
-    totalRows?: number;
-    progressMessage?: string;
-    result?: PublicExportJobResult;
-    error?: string;
-    errorCode?: string;
-    errorDetails?: Record<string, number | string | boolean>;
-  }
-  | { error: string };
 type RequestUser = { id?: number | string; userId?: number | string };
 type ByVariableExportEstimateResponse = {
   exportType: 'by-variable' | 'by-variable-compact';
@@ -93,8 +78,8 @@ export class WorkspaceCodingExportController {
     private codingExportService: CodingExportService,
     private codingExportOrchestratorService: CodingExportOrchestratorService,
     private jobQueueService: JobQueueService,
-    private cacheService: CacheService,
-    private codingPsychometricExportService: CodingPsychometricExportService
+    private codingPsychometricExportService: CodingPsychometricExportService,
+    private readonly exportArtifactService: ExportArtifactService
   ) {}
 
   private parseVersionedExportMissingsProfileId(
@@ -118,7 +103,7 @@ export class WorkspaceCodingExportController {
   private mapExportJobState(
     state: string,
     job: { data?: { isCancelled?: boolean }; failedReason?: string }
-  ): string {
+  ): ExportJobStateDto {
     const failedReason = job.failedReason;
     const failedBecauseCancelled =
       typeof failedReason === 'string' &&
@@ -143,15 +128,19 @@ export class WorkspaceCodingExportController {
     switch (state) {
       case 'completed':
         return 'completed';
+      case 'failed':
+        return 'failed';
       case 'active':
         return 'processing';
       case 'waiting':
       case 'delayed':
+      case 'stuck':
         return 'pending';
       case 'paused':
         return 'paused';
       default:
-        return state;
+        this.logger.warn(`Unknown export job state "${state}"; using pending`);
+        return 'pending';
     }
   }
 
@@ -169,34 +158,15 @@ export class WorkspaceCodingExportController {
   private async getPublicExportErrorDetails(
     jobId: string,
     error?: string
-  ): Promise<{
-      errorCode?: string;
-      errorDetails?: Record<string, number | string | boolean>;
-    }> {
+  ): Promise<ExportJobErrorMetadataDto> {
     const itemMatrixError = parseItemMatrixExportIncompleteError(error);
     if (itemMatrixError) {
-      const [cachedDiagnostics, incompleteResult] = await Promise.all([
-        this.cacheService.get<CachedItemMatrixDiagnostics>(
-          getItemMatrixDiagnosticsCacheKey(jobId)
-        ),
-        this.cacheService.get<ExportJobResult>(
-          getIncompleteItemMatrixResultCacheKey(jobId)
-        )
-      ]);
-      const diagnosticsAvailable = !!cachedDiagnostics;
-      const incompleteDownloadAvailable =
-        !!incompleteResult && fs.existsSync(incompleteResult.filePath);
       return {
         errorCode: ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE,
-        errorDetails: {
-          total: cachedDiagnostics?.diagnostics.total ||
-            itemMatrixError.total,
-          groupCount: cachedDiagnostics?.diagnostics.groups.length || 0,
-          sampleLimit: cachedDiagnostics?.diagnostics.sampleLimit || 20,
-          diagnosticsAvailable,
-          incompleteDownloadAvailable,
-          ...(cachedDiagnostics ? { expiresAt: cachedDiagnostics.expiresAt } : {})
-        }
+        errorDetails: await this.exportArtifactService.getErrorDetails(
+          jobId,
+          itemMatrixError.total
+        )
       };
     }
     const worksheetLimitMatch = error?.match(
@@ -217,7 +187,7 @@ export class WorkspaceCodingExportController {
 
   private toPublicExportProgress(progress: unknown): {
     progress: number;
-    progressPhase?: string;
+    progressPhase?: ExportJobProgressPhaseDto;
     processedRows?: number;
     totalRows?: number;
     progressMessage?: string;
@@ -1464,7 +1434,14 @@ export class WorkspaceCodingExportController {
       properties: {
         status: {
           type: 'string',
-          enum: ['pending', 'processing', 'completed', 'failed', 'cancelled'],
+          enum: [
+            'pending',
+            'processing',
+            'completed',
+            'failed',
+            'cancelled',
+            'paused'
+          ],
           description: 'Current status of the export job'
         },
         progress: {
@@ -1503,7 +1480,7 @@ export class WorkspaceCodingExportController {
   async getExportJobStatus(
     @WorkspaceId() workspace_id: number,
       @Param('jobId') jobId: string
-  ): Promise<PublicExportJobStatus> {
+  ): Promise<ExportJobStatusResponseDto> {
     try {
       const job = await this.jobQueueService.getExportJob(jobId);
       if (!job) {
@@ -1549,7 +1526,7 @@ export class WorkspaceCodingExportController {
 
   private toPublicExportJobResult(
     result: ExportJobResult
-  ): PublicExportJobResult {
+  ): ExportJobResultDto {
     return {
       fileId: result.fileId,
       fileName: result.fileName,
@@ -1587,9 +1564,7 @@ export class WorkspaceCodingExportController {
       @Res() res: Response
   ): Promise<void> {
     try {
-      const metadata = await this.cacheService.get<ExportJobResult>(
-        `export-result:${jobId}`
-      );
+      const metadata = await this.exportArtifactService.getArtifact(jobId);
 
       if (!metadata) {
         res.status(404).json({ error: 'Export file not found or expired' });
@@ -1602,11 +1577,6 @@ export class WorkspaceCodingExportController {
       }
 
       const filePath = metadata.filePath;
-
-      if (!fs.existsSync(filePath)) {
-        res.status(404).json({ error: 'Export file not found on disk' });
-        return;
-      }
 
       const normalizedFileName = metadata.fileName.toLowerCase();
       const isCsv =
@@ -1667,13 +1637,12 @@ export class WorkspaceCodingExportController {
         'Diagnostics are available only for failed item matrix exports'
       );
     }
-    const cached = await this.cacheService.get<CachedItemMatrixDiagnostics>(
-      getItemMatrixDiagnosticsCacheKey(jobId)
-    );
-    if (!cached) {
+    const diagnostics =
+      await this.exportArtifactService.getDiagnostics(jobId);
+    if (!diagnostics) {
       throw new NotFoundException('Item matrix diagnostics not found or expired');
     }
-    return cached.diagnostics;
+    return diagnostics;
   }
 
   @Get(':workspace_id/coding/export/job/:jobId/download-incomplete')
@@ -1709,10 +1678,9 @@ export class WorkspaceCodingExportController {
       });
       return;
     }
-    const metadata = await this.cacheService.get<ExportJobResult>(
-      getIncompleteItemMatrixResultCacheKey(jobId)
-    );
-    if (!metadata || !fs.existsSync(metadata.filePath)) {
+    const metadata =
+      await this.exportArtifactService.getIncompleteArtifact(jobId);
+    if (!metadata) {
       res.status(404).json({
         error: 'Incomplete item matrix package not found or expired'
       });
@@ -1743,7 +1711,17 @@ export class WorkspaceCodingExportController {
         type: 'object',
         properties: {
           jobId: { type: 'string' },
-          status: { type: 'string' },
+          status: {
+            type: 'string',
+            enum: [
+              'pending',
+              'processing',
+              'completed',
+              'failed',
+              'cancelled',
+              'paused'
+            ]
+          },
           progress: { type: 'number' },
           progressPhase: {
             type: 'string',
@@ -1767,9 +1745,9 @@ export class WorkspaceCodingExportController {
   async getExportJobs(@WorkspaceId() workspace_id: number): Promise<
   Array<{
     jobId: string;
-    status: string;
+    status: ExportJobStateDto;
     progress: number;
-    progressPhase?: string;
+    progressPhase?: ExportJobProgressPhaseDto;
     processedRows?: number;
     totalRows?: number;
     progressMessage?: string;
@@ -1841,36 +1819,7 @@ export class WorkspaceCodingExportController {
         };
       }
 
-      const resultKeys = [
-        `export-result:${jobId}`,
-        getIncompleteItemMatrixResultCacheKey(jobId)
-      ];
-      const results = await Promise.all(resultKeys.map(key => (
-        this.cacheService.get<ExportJobResult>(key)
-      )));
-      for (const metadata of results) {
-        if (!metadata?.filePath) {
-          continue;
-        }
-        try {
-          fs.unlinkSync(metadata.filePath);
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-            throw error;
-          }
-        }
-      }
-
-      const cacheResults = await Promise.all([
-        ...resultKeys.map(key => this.cacheService.delete(key)),
-        this.cacheService.delete(getItemMatrixDiagnosticsCacheKey(jobId))
-      ]);
-      if (cacheResults.some(deleted => !deleted)) {
-        return {
-          success: false,
-          message: 'Export artifacts could not be deleted completely'
-        };
-      }
+      await this.exportArtifactService.deleteArtifacts(jobId);
 
       const success = await this.jobQueueService.deleteExportJob(jobId);
       if (success) {

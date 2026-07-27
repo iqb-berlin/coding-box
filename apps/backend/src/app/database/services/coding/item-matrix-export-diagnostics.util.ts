@@ -7,20 +7,10 @@ import type {
 } from '../../../../../../../api-dto/coding/export-request.dto';
 import type { ExportJobResult } from '../../../job-queue/job-queue.service';
 
-export const itemMatrixArtifactTtlSeconds = 3600;
-
 export interface CachedItemMatrixDiagnostics {
   diagnostics: ItemMatrixExportDiagnosticsDto;
   expiresAt: number;
 }
-
-export const getItemMatrixDiagnosticsCacheKey = (jobId: string): string => (
-  `item-matrix-diagnostics:${jobId}`
-);
-
-export const getIncompleteItemMatrixResultCacheKey = (
-  jobId: string
-): string => `item-matrix-incomplete-result:${jobId}`;
 
 const diagnosticTexts: Record<
 ItemMatrixCellFailureReason,

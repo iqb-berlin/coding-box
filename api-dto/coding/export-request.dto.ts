@@ -58,6 +58,78 @@ export interface ItemMatrixExportErrorDetailsDto {
   expiresAt?: number;
 }
 
+export interface ExportWorksheetLimitErrorDetailsDto {
+  actual: number;
+  max: number;
+}
+
+export interface ItemMatrixExportJobErrorDto {
+  errorCode: typeof ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE;
+  errorDetails: ItemMatrixExportErrorDetailsDto;
+}
+
+export interface ExportWorksheetLimitJobErrorDto {
+  errorCode: 'EXPORT_TOO_MANY_WORKSHEETS';
+  errorDetails: ExportWorksheetLimitErrorDetailsDto;
+}
+
+export interface ExportJobWithoutStructuredErrorDto {
+  errorCode?: undefined;
+  errorDetails?: undefined;
+}
+
+export type ExportJobErrorMetadataDto =
+  | ItemMatrixExportJobErrorDto
+  | ExportWorksheetLimitJobErrorDto
+  | ExportJobWithoutStructuredErrorDto;
+
+export type ExportJobProgressPhaseDto =
+  | 'preparing'
+  | 'counting'
+  | 'writing'
+  | 'finalizing'
+  | 'completed';
+
+export type ExportJobStateDto =
+  | 'pending'
+  | 'processing'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'paused';
+
+export interface ExportJobResultDto {
+  fileId: string;
+  fileName: string;
+  fileSize: number;
+  workspaceId: number;
+  userId: number;
+  exportType: string;
+  createdAt: number;
+}
+
+export interface ExportJobStatusBaseDto {
+  status: ExportJobStateDto;
+  progress: number;
+  progressPhase?: ExportJobProgressPhaseDto;
+  processedRows?: number;
+  totalRows?: number;
+  progressMessage?: string;
+  result?: ExportJobResultDto;
+  error?: string;
+}
+
+export type ExportJobStatusDto =
+  ExportJobStatusBaseDto & ExportJobErrorMetadataDto;
+
+export interface ExportJobStatusErrorDto {
+  error: string;
+}
+
+export type ExportJobStatusResponseDto =
+  | ExportJobStatusDto
+  | ExportJobStatusErrorDto;
+
 export interface ItemDatasetSelection {
   unitId: string;
   itemId: string;
