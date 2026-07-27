@@ -1,11 +1,14 @@
 import { createHash, createHmac } from 'node:crypto';
+import { spawn } from 'node:child_process';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import AdmZip from 'adm-zip';
 
 const REQUIRED_ENV = [
   'REPLAY_E2E_API_URL',
   'REPLAY_E2E_BASE_URL',
   'REPLAY_E2E_CACHE_DIR',
+  'REPLAY_E2E_COMPOSE_PROJECT',
   'REPLAY_E2E_FIXTURE_DIR',
   'REPLAY_E2E_JWT_SECRET',
   'REPLAY_E2E_RUN_ID',
@@ -35,6 +38,15 @@ export function createReplayHarness(environment = process.env) {
       return activeState.browser;
     },
 
+    async verifyItemMatrix() {
+      if (!activeState) {
+        activeState = await setupReplayWorkspace(config);
+      }
+      activeState.itemMatrixAcceptance ||=
+        await verifyIncompleteItemMatrix(activeState);
+      return activeState.itemMatrixAcceptance;
+    },
+
     async cleanup() {
       const workspaceId = activeState?.workspaceId;
       if (workspaceId) {
@@ -55,6 +67,12 @@ function createExistingReplayHarness(setupFile) {
     async setup() {
       browser ||= await readJson(setupFile);
       return browser;
+    },
+
+    async verifyItemMatrix() {
+      throw new Error(
+        'The item matrix acceptance test requires the isolated live harness.'
+      );
     },
 
     async cleanup() {
@@ -154,7 +172,9 @@ async function setupReplayWorkspace(config) {
     });
 
     return {
+      config,
       workspaceId,
+      adminToken,
       browser: {
         apiUrl: config.apiUrl,
         baseUrl: config.baseUrl,
@@ -198,6 +218,12 @@ async function uploadReplayFiles(
     `${manifest.unit.alias}.VOUD`,
     'application/octet-stream'
   );
+  await appendFile(
+    form,
+    path.join(config.fixtureDir, manifest.files.itemMetadata),
+    manifest.files.itemMetadata,
+    'application/octet-stream'
+  );
   await appendFile(form, playerPath, playerSource.fileName, 'text/html');
 
   const uploadResult = await apiJson(
@@ -209,12 +235,267 @@ async function uploadReplayFiles(
   if (
     uploadResult.failed !== 0 ||
     uploadResult.uploaded !== uploadResult.total ||
-    uploadResult.uploaded !== 4
+    uploadResult.uploaded !== 5
   ) {
     throw new Error(
-      `Replay file upload failed (${uploadResult.uploaded || 0}/${uploadResult.total || 4} uploaded).`
+      `Replay file upload failed (${uploadResult.uploaded || 0}/${uploadResult.total || 5} uploaded).`
     );
   }
+}
+
+async function verifyIncompleteItemMatrix(state) {
+  const { adminToken, config, workspaceId } = state;
+  await seedIncompleteItemMatrixFixture(config, workspaceId);
+  const profile = await apiJson(
+    config,
+    `/admin/workspace/${workspaceId}/missings-profiles`,
+    {
+      method: 'POST',
+      token: adminToken,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        label: `matrix-e2e-${config.runId}`,
+        missings: JSON.stringify([
+          missing('mir', 'MIR', -98, 0),
+          missing('mbi_mbo', 'MBO', -99, 0),
+          missing('mnr', 'MNR', -96, null),
+          missing('mci', 'MCI', -97, null),
+          missing('mbd', 'MBD', -94, null)
+        ])
+      })
+    }
+  );
+  if (!Number.isInteger(profile?.id) || profile.id <= 0) {
+    throw new Error('The matrix acceptance profile has no valid id.');
+  }
+
+  const options = await apiJson(
+    config,
+    `/admin/workspace/${workspaceId}/coding/export/item-dataset-options`,
+    { token: adminToken }
+  );
+  if (options?.mappingIssues?.length || options?.items?.length !== 2) {
+    throw new Error(
+      `The matrix fixture mapping is invalid: ${JSON.stringify(options?.mappingIssues || [])}`
+    );
+  }
+
+  const statuses = [];
+  for (const matrixValue of ['score', 'code']) {
+    const started = await apiJson(
+      config,
+      `/admin/workspace/${workspaceId}/coding/export/start`,
+      {
+        method: 'POST',
+        token: adminToken,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          exportType: 'item-matrix',
+          version: 'v2',
+          format: 'csv',
+          matrixValue,
+          missingsProfileId: profile.id,
+          items: options.items.map(({ unitId, itemId }) => ({
+            unitId,
+            itemId
+          }))
+        })
+      }
+    );
+    if (!started?.jobId) {
+      throw new Error(`The ${matrixValue} matrix job did not return an id.`);
+    }
+    statuses.push({
+      matrixValue,
+      jobId: started.jobId,
+      status: await pollExportJob(
+        config,
+        workspaceId,
+        adminToken,
+        started.jobId
+      )
+    });
+  }
+
+  for (const result of statuses) {
+    const details = result.status?.errorDetails;
+    if (
+      result.status?.status !== 'failed' ||
+      result.status?.errorCode !== 'ITEM_MATRIX_UNRESOLVED_CELLS' ||
+      !details?.diagnosticsAvailable ||
+      !details?.incompleteDownloadAvailable ||
+      details.total <= 0
+    ) {
+      throw new Error(
+        `The ${result.matrixValue} matrix did not fail with downloadable diagnostics: ${safeJobMessage(result.status)}`
+      );
+    }
+  }
+
+  const scoreResult = statuses[0];
+  const diagnostics = await apiJson(
+    config,
+    `/admin/workspace/${workspaceId}/coding/export/job/${scoreResult.jobId}/item-matrix-diagnostics`,
+    { token: adminToken }
+  );
+  assertNonPersonalDiagnostics(diagnostics);
+
+  const response = await apiResponse(
+    config,
+    `/admin/workspace/${workspaceId}/coding/export/job/${scoreResult.jobId}/download-incomplete`,
+    { token: adminToken }
+  );
+  const contentDisposition = response.headers.get('content-disposition') || '';
+  const fileName = contentDisposition.match(/filename="([^"]+)"/i)?.[1];
+  if (!fileName) {
+    throw new Error('The incomplete download has no server filename.');
+  }
+
+  const zip = new AdmZip(Buffer.from(await response.arrayBuffer()));
+  const entries = zip.getEntries().map((entry) => entry.entryName).sort();
+  const matrixEntry = entries.find((entry) =>
+    /^Itemdatensatz-UNVOLLSTAENDIG-\d{4}-\d{2}-\d{2}\.csv$/.test(entry)
+  );
+  if (
+    entries.length !== 3 ||
+    !entries.includes('diagnose.csv') ||
+    !entries.includes('README.txt') ||
+    !matrixEntry
+  ) {
+    throw new Error(`Unexpected incomplete ZIP entries: ${entries.join(', ')}`);
+  }
+
+  const matrix = zip.readAsText(matrixEntry).replace(/^\uFEFF/, '');
+  const matrixRows = matrix.split(/\r?\n/).filter(Boolean);
+  if (matrixRows.length !== 3) {
+    throw new Error(`The matrix fixture produced ${matrixRows.length - 1} rows.`);
+  }
+  matrixRows.slice(1).forEach((row) => {
+    const cells = row.split(';');
+    const itemCells = cells.slice(4);
+    if (
+      cells.length !== 6 ||
+      itemCells.filter((cell) => cell === '').length !== 1 ||
+      itemCells.filter((cell) => cell === 'NA').length !== 1
+    ) {
+      throw new Error(
+        'The ZIP does not preserve the empty error cell and the resolved missing cell.'
+      );
+    }
+  });
+
+  const diagnosis = zip.readAsText('diagnose.csv');
+  if (
+    !diagnosis.includes('unresolved-status') ||
+    fixtureIdentityValues().some((value) => diagnosis.includes(value))
+  ) {
+    throw new Error('diagnose.csv is incomplete or contains personal fields.');
+  }
+  const readme = zip.readAsText('README.txt');
+  if (
+    !readme.includes('ACHTUNG: UNVOLLSTÄNDIGER ITEMDATENSATZ') ||
+    !readme.includes('nicht auflösbare Zellen leer') ||
+    !readme.includes('Matrixwert: Score')
+  ) {
+    throw new Error('README.txt does not contain the required warning.');
+  }
+
+  return {
+    matrixValues: statuses.map(({ matrixValue }) => matrixValue),
+    total: diagnostics.total,
+    groupCount: diagnostics.groups.length,
+    zipEntries: entries,
+    fileName
+  };
+}
+
+async function seedIncompleteItemMatrixFixture(config, workspaceId) {
+  const sql = `
+    WITH target_units AS (
+      SELECT unit.id
+      FROM unit
+      JOIN booklet ON booklet.id = unit.bookletid
+      JOIN persons ON persons.id = booklet.personid
+      WHERE persons.workspace_id = ${workspaceId}
+        AND unit.name = 'UNIT-REPLAY'
+    ), updated_responses AS (
+      UPDATE response
+      SET status_v2 = 5, code_v2 = NULL, score_v2 = NULL
+      WHERE variableid = 'answer_1'
+        AND unitid IN (SELECT id FROM target_units)
+      RETURNING id
+    )
+    SELECT COUNT(*) FROM updated_responses;
+  `;
+  const output = await runCapture('docker', [
+    'exec',
+    '-i',
+    `${config.composeProject}-db-1`,
+    'psql',
+    '--username=replay_e2e',
+    '--dbname=replay_e2e',
+    '--tuples-only',
+    '--no-align',
+    '--command',
+    sql
+  ]);
+  if (output.trim() !== '2') {
+    throw new Error(
+      `The incomplete matrix fixture updated ${output.trim() || 'no'} responses instead of 2.`
+    );
+  }
+}
+
+function missing(id, label, code, score) {
+  return { id, label, description: label, code, score };
+}
+
+function assertNonPersonalDiagnostics(diagnostics) {
+  if (
+    !Number.isInteger(diagnostics?.total) ||
+    diagnostics.total <= 0 ||
+    !Array.isArray(diagnostics?.groups) ||
+    diagnostics.groups.length === 0 ||
+    diagnostics.groups.some((group) =>
+      !group.reasonCode ||
+      !group.bookletName ||
+      !group.columnName ||
+      !Number.isInteger(group.count) ||
+      !Array.isArray(group.sampleRowNumbers)
+    ) ||
+    fixtureIdentityValues().some((value) =>
+      JSON.stringify(diagnostics).includes(value)
+    )
+  ) {
+    throw new Error('The matrix diagnostics are invalid or personal.');
+  }
+}
+
+function fixtureIdentityValues() {
+  return [
+    'replay-login-a',
+    'replay-login-b',
+    'replay-code-a',
+    'replay-code-b',
+    'REPLAY-GROUP'
+  ];
+}
+
+async function pollExportJob(config, workspaceId, token, jobId) {
+  const deadline = Date.now() + 120_000;
+  let lastStatus;
+  while (Date.now() < deadline) {
+    lastStatus = await apiJson(
+      config,
+      `/admin/workspace/${workspaceId}/coding/export/job/${encodeURIComponent(jobId)}`,
+      { token }
+    );
+    if (lastStatus.status === 'failed' || lastStatus.status === 'completed') {
+      return lastStatus;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`Matrix export timed out: ${safeJobMessage(lastStatus)}`);
 }
 
 async function importResponses(config, workspaceId, token, manifest) {
@@ -387,6 +668,12 @@ async function deleteWorkspace(config, workspaceId) {
 }
 
 async function apiJson(config, endpoint, options = {}) {
+  const response = await apiResponse(config, endpoint, options);
+  const text = await response.text();
+  return text ? JSON.parse(text) : undefined;
+}
+
+async function apiResponse(config, endpoint, options = {}) {
   const headers = new Headers(options.headers);
   if (options.token) {
     headers.set('authorization', `Bearer ${options.token}`);
@@ -401,9 +688,7 @@ async function apiJson(config, endpoint, options = {}) {
       `Replay E2E API request failed with HTTP ${response.status}.`
     );
   }
-
-  const text = await response.text();
-  return text ? JSON.parse(text) : undefined;
+  return response;
 }
 
 async function appendFile(form, filePath, fileName, mimeType) {
@@ -468,11 +753,38 @@ function readConfig(environment) {
     apiUrl: environment.REPLAY_E2E_API_URL,
     baseUrl: environment.REPLAY_E2E_BASE_URL,
     cacheDir: path.resolve(environment.REPLAY_E2E_CACHE_DIR),
+    composeProject: environment.REPLAY_E2E_COMPOSE_PROJECT,
     fixtureDir: path.resolve(environment.REPLAY_E2E_FIXTURE_DIR),
     jwtSecret: environment.REPLAY_E2E_JWT_SECRET,
     runId: environment.REPLAY_E2E_RUN_ID,
     stateFile: path.resolve(environment.REPLAY_E2E_STATE_FILE)
   };
+}
+
+function runCapture(command, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+    });
+    child.on('error', reject);
+    child.on('exit', (code) => {
+      if (code === 0) {
+        resolve(stdout);
+      } else {
+        reject(
+          new Error(
+            `${command} exited with code ${code}: ${stderr.trim() || 'no error output'}`
+          )
+        );
+      }
+    });
+  });
 }
 
 async function readJson(filePath) {

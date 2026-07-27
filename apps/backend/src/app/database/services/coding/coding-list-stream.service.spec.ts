@@ -173,8 +173,13 @@ describe('CodingListStreamService', () => {
 
     service = module.get<CodingListStreamService>(CodingListStreamService);
     (service as unknown as {
-      loadV1ExportProfile: jest.Mock
-    }).loadV1ExportProfile = jest.fn().mockResolvedValue(undefined);
+      loadVersionedExportProfile: jest.Mock
+    }).loadVersionedExportProfile = jest.fn().mockResolvedValue({
+      id: 7,
+      label: 'Test',
+      byId: new Map(),
+      byCode: new Map()
+    });
   });
 
   afterEach(() => {
@@ -273,6 +278,7 @@ describe('CodingListStreamService', () => {
       const stream = await service.getCodingResultsByVersionCsvStream(
         1,
         'v1',
+        1,
         'token',
         'http://server'
       );
@@ -293,6 +299,7 @@ describe('CodingListStreamService', () => {
       const stream = await service.getCodingResultsByVersionCsvStream(
         1,
         'v1',
+        1,
         'token',
         'http://server',
         false,
@@ -318,6 +325,7 @@ describe('CodingListStreamService', () => {
       const stream = await service.getCodingResultsByVersionCsvStream(
         1,
         'v1',
+        1,
         'token',
         'http://server'
       );
@@ -362,6 +370,9 @@ describe('CodingListStreamService', () => {
           }],
           ['mnr', {
             id: 'mnr', label: 'MNR', code: -16, score: null
+          }],
+          ['mbd', {
+            id: 'mbd', label: 'MBD', code: -15, score: null
           }]
         ]),
         byCode: new Map()
@@ -396,14 +407,14 @@ describe('CodingListStreamService', () => {
       const stream = await integrationService.getCodingResultsByVersionCsvStream(
         1,
         'v1',
+        7,
         '',
         'http://server',
         false,
         undefined,
         true,
         false,
-        undefined,
-        7
+        undefined
       );
       const chunks: Buffer[] = [];
       stream.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
@@ -414,7 +425,11 @@ describe('CodingListStreamService', () => {
       });
 
       expect(missingsProfilesService.getResolvedMissingsProfileForExport)
-        .toHaveBeenCalledWith(1, 7, ['mir', 'mci', 'mbi_mbo', 'mnr']);
+        .toHaveBeenCalledWith(
+          1,
+          7,
+          ['mir', 'mci', 'mbi_mbo', 'mnr', 'mbd']
+        );
       expect(Buffer.concat(chunks).toString()).toContain(
         ';NOT_REACHED;-16;NA'
       );
@@ -445,6 +460,7 @@ describe('CodingListStreamService', () => {
       const stream = await service.getCodingResultsByVersionCsvStream(
         1,
         'v1',
+        1,
         'token',
         'http://server',
         true
@@ -471,7 +487,8 @@ describe('CodingListStreamService', () => {
         true,
         true,
         false,
-        expect.any(Map)
+        expect.any(Map),
+        { v1: { code: '', score: '' } }
       );
     });
 
@@ -498,6 +515,7 @@ describe('CodingListStreamService', () => {
       const stream = await service.getCodingResultsByVersionCsvStream(
         1,
         'v1',
+        1,
         'token',
         'http://server',
         false,
@@ -512,7 +530,8 @@ describe('CodingListStreamService', () => {
       const versionExportOptions = {
         version: 'v1',
         validCodingVariablesOnly: true,
-        givenResponsesOnly: true
+        givenResponsesOnly: true,
+        includePartlyDisplayed: true
       };
       expect(mockResponseFilterService.countResponses).toHaveBeenCalledWith(
         1,
@@ -533,7 +552,8 @@ describe('CodingListStreamService', () => {
         false,
         false,
         false,
-        expect.any(Map)
+        expect.any(Map),
+        { v1: { code: '', score: '' } }
       );
     });
 
@@ -567,6 +587,7 @@ describe('CodingListStreamService', () => {
       const stream = await service.getCodingResultsByVersionCsvStream(
         1,
         'v1',
+        1,
         'token',
         'http://server',
         false,
@@ -760,6 +781,7 @@ describe('CodingListStreamService', () => {
       const result = await service.getCodingResultsByVersionAsExcel(
         1,
         'v1',
+        1,
         'token',
         'http://server'
       );
@@ -798,6 +820,7 @@ describe('CodingListStreamService', () => {
           filePath,
           1,
           'v1',
+          1,
           'token',
           'http://server'
         );
@@ -844,6 +867,7 @@ describe('CodingListStreamService', () => {
           filePath,
           1,
           'v1',
+          1,
           'token',
           'http://server',
           false,
@@ -914,6 +938,7 @@ describe('CodingListStreamService', () => {
           filePath,
           1,
           'v1',
+          1,
           'token',
           'http://server',
           false,
@@ -943,6 +968,7 @@ describe('CodingListStreamService', () => {
       await service.getCodingResultsByVersionAsExcel(
         1,
         'v1',
+        1,
         'token',
         'http://server',
         false,
@@ -956,7 +982,8 @@ describe('CodingListStreamService', () => {
         {
           version: 'v1',
           validCodingVariablesOnly: true,
-          givenResponsesOnly: true
+          givenResponsesOnly: true,
+          includePartlyDisplayed: true
         }
       );
     });
@@ -974,6 +1001,7 @@ describe('CodingListStreamService', () => {
       await service.getCodingResultsByVersionAsExcel(
         1,
         'v1',
+        1,
         'token',
         'http://server'
       );
@@ -985,7 +1013,8 @@ describe('CodingListStreamService', () => {
         {
           version: 'v1',
           validCodingVariablesOnly: true,
-          givenResponsesOnly: true
+          givenResponsesOnly: true,
+          includePartlyDisplayed: true
         }
       );
     });
@@ -1047,6 +1076,7 @@ describe('CodingListStreamService', () => {
       const result = await service.getCodingResultsByVersionAsGeoGebraZip(
         1,
         'v1',
+        1,
         'token',
         'http://server'
       );
@@ -1109,6 +1139,7 @@ describe('CodingListStreamService', () => {
           filePath,
           1,
           'v1',
+          1,
           'token',
           'http://server'
         );
@@ -1161,6 +1192,7 @@ describe('CodingListStreamService', () => {
       await expect(service.getCodingResultsByVersionAsGeoGebraZip(
         1,
         'v1',
+        1,
         'token',
         'http://server'
       )).rejects.toThrow(
@@ -1197,6 +1229,7 @@ describe('CodingListStreamService', () => {
       await expect(service.getCodingResultsByVersionAsGeoGebraZip(
         1,
         'v1',
+        1,
         'token',
         'http://server'
       )).rejects.toThrow(

@@ -2,6 +2,7 @@ import {
   calculateModalValue,
   formatModalCandidates,
   getModalTieLabel,
+  isReservedTechnicalCodingCode,
   mapCodeForExport
 } from './coding-utils';
 
@@ -18,6 +19,13 @@ describe('coding utils', () => {
     expect(mapCodeForExport(-1)).toBeNull();
     expect(mapCodeForExport(7)).toBe(7);
   });
+
+  it.each([-1, -2, -3, -4, -111])(
+    'classifies %s as a reserved technical coding code',
+    code => {
+      expect(isReservedTechnicalCodingCode(code)).toBe(true);
+    }
+  );
 
   it('selects the smallest modal code deterministically when counts tie', () => {
     expect(calculateModalValue([9, 6, 9, 6, 8])).toEqual({

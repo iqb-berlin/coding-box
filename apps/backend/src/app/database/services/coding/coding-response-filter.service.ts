@@ -59,9 +59,21 @@ export interface ResponseFilterOptions {
   considerOnly?: boolean;
   validCodingVariablesOnly?: boolean;
   givenResponsesOnly?: boolean;
+  includePartlyDisplayed?: boolean;
   manualCodingCandidatesOnly?: boolean;
   deriveErrorManualCodingPairKeys?: string[];
 }
+
+const VERSIONED_EXPORT_MISSING_STATUSES = [
+  statusStringToNumber('UNSET') ?? 0,
+  statusStringToNumber('NOT_REACHED') ?? 1,
+  statusStringToNumber('DISPLAYED') ?? 2,
+  statusStringToNumber('INVALID') ?? 7,
+  statusStringToNumber('CODING_ERROR') ?? 9,
+  statusStringToNumber('PARTLY_DISPLAYED') ?? 10
+];
+
+const DERIVE_PENDING_STATUS = statusStringToNumber('DERIVE_PENDING') ?? 11;
 
 /**
  * Service responsible for filtering and validating responses for coding eligibility.
@@ -157,11 +169,46 @@ export class CodingResponseFilterService {
     // Establish base conditions
     if (version) {
       const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
-      const ignoredStatuses = version === 'v1' ? [3, 10] : STATISTICS_IGNORED_STATUSES;
-      queryBuilder.where(
-        `${effectiveStatusExpression} NOT IN (:...statisticsIgnoredStatuses)`,
-        { statisticsIgnoredStatuses: ignoredStatuses }
-      );
+      const defaultIgnoredStatuses = version === 'v1' ?
+        [3, 10] :
+        STATISTICS_IGNORED_STATUSES;
+      const statisticsCondition =
+        `${effectiveStatusExpression} NOT IN (:...statisticsIgnoredStatuses)`;
+      if (options.includePartlyDisplayed) {
+        queryBuilder.where(new Brackets(qb => {
+          qb.where(statisticsCondition, {
+            statisticsIgnoredStatuses: defaultIgnoredStatuses
+          }).orWhere(
+            'response.status_v1 IN (:...versionedExportVisibleStatuses)',
+            {
+              versionedExportVisibleStatuses: [
+                ...VERSIONED_EXPORT_MISSING_STATUSES,
+                DERIVE_PENDING_STATUS
+              ]
+            }
+          );
+          if (version === 'v2' || version === 'v3') {
+            qb.orWhere('response.status_v2 = :derivePendingStatus', {
+              derivePendingStatus: DERIVE_PENDING_STATUS
+            });
+          }
+          if (version === 'v3') {
+            qb.orWhere(
+              'response.status_v3 IN (:...versionedExportVisibleStatuses)',
+              {
+                versionedExportVisibleStatuses: [
+                  ...VERSIONED_EXPORT_MISSING_STATUSES,
+                  DERIVE_PENDING_STATUS
+                ]
+              }
+            );
+          }
+        }));
+      } else {
+        queryBuilder.where(statisticsCondition, {
+          statisticsIgnoredStatuses: defaultIgnoredStatuses
+        });
+      }
     } else if (options.manualCodingCandidatesOnly) {
       const deriveErrorManualCodingPairKeys =
         options.deriveErrorManualCodingPairKeys || [];
@@ -205,21 +252,36 @@ export class CodingResponseFilterService {
     }
 
     if (options.givenResponsesOnly) {
-      const givenStatuses = version === 'v1' ?
-        [
-          statusStringToNumber('UNSET') ?? 0,
-          statusStringToNumber('NOT_REACHED') ?? 1,
-          statusStringToNumber('DISPLAYED') ?? 2,
-          statusStringToNumber('VALUE_CHANGED') ?? 3,
-          statusStringToNumber('INVALID') ?? 7,
-          statusStringToNumber('CODING_ERROR') ?? 9
-        ] :
-        [
-          statusStringToNumber('NOT_REACHED') ?? 1,
-          statusStringToNumber('DISPLAYED') ?? 2,
-          statusStringToNumber('VALUE_CHANGED') ?? 3
-        ];
-      queryBuilder.andWhere('response.status IN (:...givenStatuses)', { givenStatuses });
+      const partlyDisplayedStatuses = options.includePartlyDisplayed ?
+        [statusStringToNumber('PARTLY_DISPLAYED') ?? 10] :
+        [];
+      const givenStatuses = [
+        statusStringToNumber('UNSET') ?? 0,
+        statusStringToNumber('NOT_REACHED') ?? 1,
+        statusStringToNumber('DISPLAYED') ?? 2,
+        statusStringToNumber('VALUE_CHANGED') ?? 3,
+        statusStringToNumber('INVALID') ?? 7,
+        statusStringToNumber('CODING_ERROR') ?? 9,
+        ...partlyDisplayedStatuses
+      ];
+      queryBuilder.andWhere(new Brackets(qb => {
+        qb.where('response.status IN (:...givenStatuses)', { givenStatuses });
+        if (version) {
+          qb.orWhere('response.status_v1 = :derivePendingStatus', {
+            derivePendingStatus: DERIVE_PENDING_STATUS
+          });
+        }
+        if (version === 'v2' || version === 'v3') {
+          qb.orWhere('response.status_v2 = :derivePendingStatus', {
+            derivePendingStatus: DERIVE_PENDING_STATUS
+          });
+        }
+        if (version === 'v3') {
+          qb.orWhere('response.status_v3 = :derivePendingStatus', {
+            derivePendingStatus: DERIVE_PENDING_STATUS
+          });
+        }
+      }));
     }
 
     const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);

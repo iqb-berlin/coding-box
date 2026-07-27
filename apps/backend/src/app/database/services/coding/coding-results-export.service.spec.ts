@@ -237,31 +237,31 @@ describe('CodingResultsExportService', () => {
   it('delegates versioned CSV and Excel exports with fallback strings', async () => {
     const { service, codingListService } = createService();
 
-    await expect(service.exportCodingResultsByVersionAsCsv(1, 'v2', '', '', true)).resolves.toBeInstanceOf(Readable);
-    await expect(service.exportCodingResultsByVersionAsExcel(1, 'v3', '', '', false)).resolves.toEqual(Buffer.from('xlsx'));
+    await expect(service.exportCodingResultsByVersionAsCsv(1, 'v2', 7, '', '', true)).resolves.toBeInstanceOf(Readable);
+    await expect(service.exportCodingResultsByVersionAsExcel(1, 'v3', 7, '', '', false)).resolves.toEqual(Buffer.from('xlsx'));
 
     expect(codingListService.getCodingResultsByVersionCsvStream).toHaveBeenCalledWith(
       1,
       'v2',
+      7,
       '',
       '',
       true,
       undefined,
       true,
       false,
-      undefined,
       undefined
     );
     expect(codingListService.getCodingResultsByVersionAsExcel).toHaveBeenCalledWith(
       1,
       'v3',
+      7,
       '',
       '',
       false,
       undefined,
       true,
       false,
-      undefined,
       undefined
     );
   });
@@ -275,28 +275,28 @@ describe('CodingResultsExportService', () => {
       '/tmp/export.xlsx',
       1,
       'v3',
+      7,
       '',
       '',
       false,
       onProgress,
       true,
       true,
-      checkCancellation,
-      undefined
+      checkCancellation
     )).resolves.toBeUndefined();
 
     expect(codingListService.writeCodingResultsByVersionExcelToFile).toHaveBeenCalledWith(
       '/tmp/export.xlsx',
       1,
       'v3',
+      7,
       '',
       '',
       false,
       onProgress,
       true,
       true,
-      checkCancellation,
-      undefined
+      checkCancellation
     );
   });
 
@@ -305,17 +305,25 @@ describe('CodingResultsExportService', () => {
     const onProgress = jest.fn();
 
     await expect(
-      service.exportCodingResultsByVersionAsGeoGebraZip(1, 'v2', '', '', true, onProgress)
+      service.exportCodingResultsByVersionAsGeoGebraZip(
+        1,
+        'v2',
+        7,
+        '',
+        '',
+        true,
+        onProgress
+      )
     ).resolves.toEqual(Buffer.from('zip'));
 
     expect(codingListService.getCodingResultsByVersionAsGeoGebraZip).toHaveBeenCalledWith(
       1,
       'v2',
+      7,
       '',
       '',
       true,
       onProgress,
-      undefined,
       undefined
     );
   });
@@ -330,6 +338,7 @@ describe('CodingResultsExportService', () => {
         '/tmp/geogebra.zip',
         1,
         'v2',
+        7,
         '',
         '',
         true,
@@ -342,12 +351,12 @@ describe('CodingResultsExportService', () => {
       '/tmp/geogebra.zip',
       1,
       'v2',
+      7,
       '',
       '',
       true,
       onProgress,
-      checkCancellation,
-      undefined
+      checkCancellation
     );
   });
 

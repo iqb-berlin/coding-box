@@ -184,7 +184,8 @@ describe('ExportComponent', () => {
   it('defaults to final result exports', () => {
     expect(component.selectedFormat).toBe('results-by-version');
     expect(getMissingsProfiles).not.toHaveBeenCalled();
-    expect(getExportMissingsProfiles).not.toHaveBeenCalled();
+    expect(getExportMissingsProfiles).toHaveBeenCalledWith(5);
+    expect(component.selectedResultsMissingsProfileId).toBe(4);
     expect(getPsychometricDomainCandidates).not.toHaveBeenCalled();
   });
 
@@ -323,7 +324,8 @@ describe('ExportComponent', () => {
         version: 'v2',
         format: 'excel',
         includeResponseValues: true,
-        includeReplayUrl: false
+        includeReplayUrl: false,
+        missingsProfileId: 4
       })
     );
     const config = startJob.mock.calls[0][1];
@@ -338,30 +340,33 @@ describe('ExportComponent', () => {
     );
   });
 
-  it('requires and submits the selected missing profile for v1 result exports', () => {
-    component.resultsVersion = 'v1';
+  it.each(['v1', 'v2', 'v3'] as const)(
+    'requires and submits the selected missing profile for %s result exports',
+    version => {
+      component.resultsVersion = version;
 
-    component.onResultsVersionChange();
+      component.onResultsVersionChange();
 
-    expect(getExportMissingsProfiles).toHaveBeenCalledWith(5);
-    expect(component.selectedResultsMissingsProfileId).toBe(4);
-    expect(component.isExportDisabled).toBe(false);
+      expect(getExportMissingsProfiles).toHaveBeenCalledWith(5);
+      expect(component.selectedResultsMissingsProfileId).toBe(4);
+      expect(component.isExportDisabled).toBe(false);
 
-    component.onExport();
+      component.onExport();
 
-    expect(startJob).toHaveBeenCalledWith(
-      5,
-      expect.objectContaining({
-        exportType: 'results-by-version',
-        version: 'v1',
-        missingsProfileId: 4
-      })
-    );
+      expect(startJob).toHaveBeenCalledWith(
+        5,
+        expect.objectContaining({
+          exportType: 'results-by-version',
+          version,
+          missingsProfileId: 4
+        })
+      );
 
-    component.selectedResultsMissingsProfileId = null;
+      component.selectedResultsMissingsProfileId = null;
 
-    expect(component.isExportDisabled).toBe(true);
-  });
+      expect(component.isExportDisabled).toBe(true);
+    }
+  );
 
   it('starts item matrix exports with matrix options', () => {
     component.selectedFormat = 'item-matrix';
@@ -572,6 +577,38 @@ describe('ExportComponent', () => {
     component.onItemDatasetSelectionChange([]);
 
     expect(component.selectedItemKeys).toEqual(['UNIT1\u001FITEM1']);
+  });
+
+  it('supports bulk selection for all items and filtered search results', () => {
+    component.itemDatasetOptions = [
+      {
+        unitId: 'UNIT1',
+        unitLabel: 'Aufgabe 1',
+        itemId: 'ITEM1',
+        itemLabel: 'Lesen',
+        columnName: 'Aufgabe1_ITEM1'
+      },
+      {
+        unitId: 'UNIT2',
+        unitLabel: 'Aufgabe 2',
+        itemId: 'ITEM2',
+        itemLabel: 'Mathematik',
+        columnName: 'Aufgabe2_ITEM2'
+      }
+    ];
+
+    component.selectAllItemDatasetItems();
+    expect(component.selectedItemKeys).toEqual([
+      'UNIT1\u001FITEM1', 'UNIT2\u001FITEM2'
+    ]);
+    component.clearAllItemDatasetItems();
+    expect(component.selectedItemKeys).toEqual([]);
+
+    component.itemSearch = 'Mathematik';
+    component.selectFilteredItemDatasetItems();
+    expect(component.selectedItemKeys).toEqual(['UNIT2\u001FITEM2']);
+    component.clearFilteredItemDatasetItems();
+    expect(component.selectedItemKeys).toEqual([]);
   });
 
   it('keeps item profiles available when psychometric profile loading fails', () => {
