@@ -49,9 +49,12 @@ import {
   JobDefinitionDistributionSummaryDialogComponent
 } from './job-definition-distribution-summary-dialog.component';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
+import { getJobDefinitionDisplayLabel } from '../../utils/job-definition-display.util';
 
 interface JobDefinition {
   id?: number;
+  name?: string;
+  description?: string | null;
   status?: 'draft' | 'pending_review' | 'approved';
   assignedVariables?: Variable[];
   assignedVariableBundles?: VariableBundle[];
@@ -124,6 +127,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
   displayedColumns: string[] = [
     'actions',
+    'identity',
     'status',
     'variables',
     'codersCount',
@@ -337,6 +341,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
   getDefinitionWorkflowLabel(definition: JobDefinition): string {
     const createdJobsCount = this.getCreatedJobsCount(definition);
+    const label = this.getDefinitionDisplayLabel(definition);
 
     if (!definition.id) {
       return this.translateService.instant(
@@ -347,27 +352,27 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     if (createdJobsCount === undefined) {
       return this.translateService.instant(
         'coding-job-definitions.workflow.jobs-count-unavailable',
-        { id: definition.id }
+        { label }
       );
     }
 
     if (createdJobsCount === 0) {
       return this.translateService.instant(
         'coding-job-definitions.workflow.no-jobs',
-        { id: definition.id }
+        { label }
       );
     }
 
     if (createdJobsCount === 1) {
       return this.translateService.instant(
         'coding-job-definitions.workflow.one-job',
-        { id: definition.id }
+        { label }
       );
     }
 
     return this.translateService.instant(
       'coding-job-definitions.workflow.many-jobs',
-      { id: definition.id, count: createdJobsCount }
+      { label, count: createdJobsCount }
     );
   }
 
@@ -388,7 +393,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return actionLabel;
     }
 
-    return `${actionLabel}: Definition ${definition.id}`;
+    return `${actionLabel}: ${this.getDefinitionDisplayLabel(definition)}`;
+  }
+
+  getDefinitionDisplayLabel(definition: JobDefinition): string {
+    return getJobDefinitionDisplayLabel(definition);
   }
 
   getCreatedJobsCount(definition: JobDefinition): number | undefined {
@@ -559,7 +568,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       codingJob: {
         id: definition.id!,
         workspace_id: workspaceId,
-        name: `Definition ${definition.id!}`,
+        name: definition.name || `Definition #${definition.id!}`,
+        description: definition.description || undefined,
         status: definition.status!,
         assignedVariables: definition.assignedVariables,
         assignedVariableBundles: definition.assignedVariableBundles,
@@ -816,6 +826,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         maxWidth: '95vw',
         data: {
           definitionId: definition.id,
+          definitionLabel: this.getDefinitionDisplayLabel(definition),
           preview
         },
         autoFocus: false
@@ -847,6 +858,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       maxWidth: '95vw',
       data: {
         definitionId: definition.id,
+        definitionLabel: this.getDefinitionDisplayLabel(definition),
         snapshot: this.getLatestDistributionSnapshot(definition),
         snapshots: definition.distributionSnapshots || [],
         coders: this.coders,

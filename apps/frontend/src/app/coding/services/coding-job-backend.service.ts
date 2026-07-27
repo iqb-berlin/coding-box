@@ -99,6 +99,8 @@ export function getDownloadFileName(
 
 interface JobDefinitionApiResponse {
   id?: number;
+  name?: string;
+  description?: string | null;
   status?: 'draft' | 'pending_review' | 'approved';
   assigned_variables?: import('../models/coding-job.model').Variable[];
   assigned_variable_bundles?: import('../models/coding-job.model').VariableBundle[];
@@ -194,6 +196,8 @@ export interface JobDefinitionDistributionSnapshot {
 
 export interface JobDefinition {
   id?: number;
+  name?: string;
+  description?: string | null;
   status?: 'draft' | 'pending_review' | 'approved';
   assignedVariables?: import('../models/coding-job.model').Variable[];
   assignedVariableBundles?: import('../models/coding-job.model').VariableBundle[];
@@ -1024,6 +1028,8 @@ export class CodingJobBackendService {
       .pipe(
         map((definitions: JobDefinitionApiResponse[]) => definitions.map(def => ({
           id: def.id,
+          name: def.name,
+          description: def.description,
           status: def.status,
           assignedVariables: def.assigned_variables,
           assignedVariableBundles: def.assigned_variable_bundles,

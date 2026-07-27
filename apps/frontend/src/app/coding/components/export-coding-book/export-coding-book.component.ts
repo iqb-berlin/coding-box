@@ -38,6 +38,7 @@ import { MissingsProfileService } from '../../services/missings-profile.service'
 import { FileService } from '../../../shared/services/file/file.service';
 import { AppService } from '../../../core/services/app.service';
 import { ValidationStateService, ValidationProgress } from '../../services/validation-state.service';
+import { getJobDefinitionDisplayLabel } from '../../utils/job-definition-display.util';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import {
   CodebookJobDefinitionOption,
@@ -298,7 +299,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   }
 
   private getJobDefinitionLabel(jobDefinition: JobDefinition): string {
-    return `${this.translateService.instant('coding.job-definition-label', { id: jobDefinition.id })} · ${this.getJobDefinitionStatusLabel(jobDefinition)}`;
+    return `${getJobDefinitionDisplayLabel(jobDefinition)} · ${this.getJobDefinitionStatusLabel(jobDefinition)}`;
   }
 
   private getJobDefinitionMeta(jobDefinition: JobDefinition): string {
