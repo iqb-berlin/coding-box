@@ -7,10 +7,21 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
-import { ExportJob, ExportJobService } from '../../shared/services/file/export-job.service';
+import { take, takeUntil } from 'rxjs/operators';
+import {
+  ExportJob,
+  ExportJobService
+} from '../../shared/services/file/export-job.service';
+import {
+  ConfirmDialogComponent,
+  ConfirmDialogData
+} from '../../shared/dialogs/confirm-dialog.component';
+import { ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE } from '../../../../../../api-dto/coding/export-request.dto';
+import { ItemMatrixDiagnosticsDialogComponent } from './item-matrix-diagnostics-dialog.component';
 
 @Component({
   selector: 'coding-box-export-toast',
@@ -22,6 +33,8 @@ import { ExportJob, ExportJobService } from '../../shared/services/file/export-j
     MatIconModule,
     MatProgressBarModule,
     MatTooltipModule,
+    MatDialogModule,
+    MatSnackBarModule,
     TranslateModule
   ],
   templateUrl: './export-toast.component.html',
@@ -30,6 +43,8 @@ import { ExportJob, ExportJobService } from '../../shared/services/file/export-j
 export class ExportToastComponent implements OnInit, OnDestroy {
   private exportJobService = inject(ExportJobService);
   private translateService = inject(TranslateService);
+  private dialog = inject(MatDialog);
+  private snackBar = inject(MatSnackBar);
   private destroy$ = new Subject<void>();
   private readonly exportTypeLabelKeys: Record<string, string> = {
     aggregated: 'export-toast.types.aggregated',
@@ -64,7 +79,11 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   }
 
   get activeJobCount(): number {
-    return this.jobs.filter(j => j.status === 'waiting' || j.status === 'active' || j.status === 'downloading').length;
+    return this.jobs.filter(
+      j => j.status === 'waiting' ||
+        j.status === 'active' ||
+        j.status === 'downloading'
+    ).length;
   }
 
   get completedJobCount(): number {
@@ -167,6 +186,11 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   }
 
   getErrorTitle(job: ExportJob): string {
+    if (this.isItemMatrixResolutionError(job)) {
+      return this.translateService.instant(
+        'export-toast.errors.item-matrix-incomplete-title'
+      );
+    }
     if (this.getWorksheetLimitError(job)) {
       return this.translateService.instant(
         'export-toast.errors.too-many-worksheets-title'
@@ -176,6 +200,14 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   }
 
   getErrorMessage(job: ExportJob): string {
+    if (this.isItemMatrixResolutionError(job)) {
+      const key = this.hasItemMatrixArtifacts(job) ?
+        'export-toast.errors.item-matrix-incomplete-message' :
+        'export-toast.errors.item-matrix-incomplete-expired';
+      return this.translateService.instant(key, {
+        total: this.getNumberDetail(job, 'total')
+      });
+    }
     const worksheetLimitError = this.getWorksheetLimitError(job);
     if (worksheetLimitError) {
       return this.translateService.instant(
@@ -187,6 +219,9 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   }
 
   hasTechnicalDetails(job: ExportJob): boolean {
+    if (this.isItemMatrixResolutionError(job)) {
+      return false;
+    }
     return !!job.error && this.getErrorMessage(job) !== job.error;
   }
 
@@ -201,11 +236,101 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   }
 
   removeJob(job: ExportJob): void {
-    this.exportJobService.removeJob(job.jobId);
+    this.exportJobService
+      .removeJob(job.jobId)
+      .pipe(take(1), takeUntil(this.destroy$))
+      .subscribe(removed => {
+        if (!removed) {
+          this.snackBar.open(
+            this.translateService.instant('export-toast.errors.remove-failed'),
+            this.translateService.instant('close'),
+            { duration: 5000 }
+          );
+        }
+      });
   }
 
   cancelJob(job: ExportJob): void {
     this.exportJobService.cancelJob(job);
+  }
+
+  isItemMatrixResolutionError(job: ExportJob): boolean {
+    return job.errorCode === ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE;
+  }
+
+  canShowItemMatrixDiagnostics(job: ExportJob): boolean {
+    return (
+      this.isItemMatrixResolutionError(job) &&
+      this.getBooleanDetail(job, 'diagnosticsAvailable')
+    );
+  }
+
+  canDownloadIncompleteItemMatrix(job: ExportJob): boolean {
+    return (
+      this.isItemMatrixResolutionError(job) &&
+      this.getBooleanDetail(job, 'incompleteDownloadAvailable')
+    );
+  }
+
+  openItemMatrixDiagnostics(job: ExportJob): void {
+    this.exportJobService
+      .getItemMatrixDiagnostics(job)
+      .pipe(take(1), takeUntil(this.destroy$))
+      .subscribe({
+        next: diagnostics => this.dialog.open(ItemMatrixDiagnosticsDialogComponent, {
+          data: diagnostics,
+          maxWidth: '95vw',
+          maxHeight: '85vh',
+          width: '1000px'
+        }),
+        error: () => this.snackBar.open(
+          this.translateService.instant(
+            'export-toast.errors.item-matrix-diagnostics-load-failed'
+          ),
+          this.translateService.instant('close'),
+          { duration: 5000 }
+        )
+      });
+  }
+
+  confirmIncompleteItemMatrixDownload(job: ExportJob): void {
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: <ConfirmDialogData>{
+        title: this.translateService.instant(
+          'export-toast.incomplete-confirm.title'
+        ),
+        content: this.translateService.instant(
+          'export-toast.incomplete-confirm.content',
+          { total: this.getNumberDetail(job, 'total') }
+        ),
+        confirmButtonLabel: this.translateService.instant(
+          'export-toast.incomplete-confirm.confirm'
+        ),
+        cancelButtonLabel: this.translateService.instant(
+          'export-toast.incomplete-confirm.cancel'
+        ),
+        showCancel: true
+      }
+    });
+    dialogRef
+      .afterClosed()
+      .pipe(take(1), takeUntil(this.destroy$))
+      .subscribe(confirmed => {
+        if (confirmed === true) {
+          this.exportJobService
+            .downloadIncompleteItemMatrix(job)
+            .pipe(take(1), takeUntil(this.destroy$))
+            .subscribe({
+              error: () => this.snackBar.open(
+                this.translateService.instant(
+                  'export-toast.errors.item-matrix-incomplete-download-failed'
+                ),
+                this.translateService.instant('close'),
+                { duration: 5000 }
+              )
+            });
+        }
+      });
   }
 
   clearCompleted(): void {
@@ -214,7 +339,7 @@ export class ExportToastComponent implements OnInit, OnDestroy {
         j.status === 'failed' ||
         j.status === 'cancelled'
     );
-    completedJobs.forEach(job => this.exportJobService.removeJob(job.jobId));
+    completedJobs.forEach(job => this.removeJob(job));
   }
 
   private getWorksheetLimitError(
@@ -236,5 +361,21 @@ export class ExportToastComponent implements OnInit, OnDestroy {
       actual: Number(match[1]),
       max: Number(match[2])
     };
+  }
+
+  private hasItemMatrixArtifacts(job: ExportJob): boolean {
+    return (
+      this.canShowItemMatrixDiagnostics(job) ||
+      this.canDownloadIncompleteItemMatrix(job)
+    );
+  }
+
+  private getNumberDetail(job: ExportJob, key: string): number {
+    const value = Number(job.errorDetails?.[key]);
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  private getBooleanDetail(job: ExportJob, key: string): boolean {
+    return job.errorDetails?.[key] === true;
   }
 }

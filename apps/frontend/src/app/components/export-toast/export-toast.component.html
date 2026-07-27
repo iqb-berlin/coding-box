@@ -42,6 +42,30 @@
               <summary>{{ 'export-toast.error-details' | translate }}</summary>
               <code>{{ job.error }}</code>
             </details>
+            <div
+              class="item-matrix-error-actions"
+              *ngIf="isItemMatrixResolutionError(job)"
+            >
+              <button
+                mat-stroked-button
+                data-cy="item-matrix-show-diagnostics"
+                [disabled]="!canShowItemMatrixDiagnostics(job)"
+                (click)="openItemMatrixDiagnostics(job)"
+              >
+                <mat-icon>troubleshoot</mat-icon>
+                {{ 'export-toast.item-matrix-actions.show-diagnostics' | translate }}
+              </button>
+              <button
+                mat-stroked-button
+                color="warn"
+                data-cy="item-matrix-download-incomplete"
+                [disabled]="!canDownloadIncompleteItemMatrix(job)"
+                (click)="confirmIncompleteItemMatrixDownload(job)"
+              >
+                <mat-icon>warning</mat-icon>
+                {{ 'export-toast.item-matrix-actions.download-incomplete' | translate }}
+              </button>
+            </div>
           </div>
 
           <div class="job-actions">

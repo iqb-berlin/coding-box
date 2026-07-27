@@ -579,6 +579,38 @@ describe('ExportComponent', () => {
     expect(component.selectedItemKeys).toEqual(['UNIT1\u001FITEM1']);
   });
 
+  it('supports bulk selection for all items and filtered search results', () => {
+    component.itemDatasetOptions = [
+      {
+        unitId: 'UNIT1',
+        unitLabel: 'Aufgabe 1',
+        itemId: 'ITEM1',
+        itemLabel: 'Lesen',
+        columnName: 'Aufgabe1_ITEM1'
+      },
+      {
+        unitId: 'UNIT2',
+        unitLabel: 'Aufgabe 2',
+        itemId: 'ITEM2',
+        itemLabel: 'Mathematik',
+        columnName: 'Aufgabe2_ITEM2'
+      }
+    ];
+
+    component.selectAllItemDatasetItems();
+    expect(component.selectedItemKeys).toEqual([
+      'UNIT1\u001FITEM1', 'UNIT2\u001FITEM2'
+    ]);
+    component.clearAllItemDatasetItems();
+    expect(component.selectedItemKeys).toEqual([]);
+
+    component.itemSearch = 'Mathematik';
+    component.selectFilteredItemDatasetItems();
+    expect(component.selectedItemKeys).toEqual(['UNIT2\u001FITEM2']);
+    component.clearFilteredItemDatasetItems();
+    expect(component.selectedItemKeys).toEqual([]);
+  });
+
   it('keeps item profiles available when psychometric profile loading fails', () => {
     fixture.destroy();
     getMissingsProfiles

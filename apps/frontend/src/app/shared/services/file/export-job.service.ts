@@ -1,6 +1,9 @@
 import { Injectable, OnDestroy } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   BehaviorSubject,
+  defer,
+  EMPTY,
   Observable,
   Subject,
   Subscription,
@@ -10,7 +13,7 @@ import {
   throwError
 } from 'rxjs';
 import {
-  map, switchMap, takeUntil, tap
+  finalize, map, switchMap, takeUntil, tap
 } from 'rxjs/operators';
 import {
   CodingExportEstimate,
@@ -26,9 +29,11 @@ import {
 } from '../../../core/services/auth-session.config';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import type { PsychometricDomainCandidatesDto } from '../../../../../../../api-dto/coding/psychometric-discrimination.dto';
-import type {
+import {
   BackgroundExportRequest,
-  ItemDatasetOptionsDto
+  ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE,
+  ItemDatasetOptionsDto,
+  ItemMatrixExportDiagnosticsDto
 } from '../../../../../../../api-dto/coding/export-request.dto';
 
 export interface ExportJob {
@@ -97,6 +102,12 @@ export class ExportJobService implements OnDestroy {
   private jobsSubject = new BehaviorSubject<ExportJob[]>([]);
   private pollingSubscriptions = new Map<string, Subscription>();
   private downloadSubscriptions = new Map<string, Subscription>();
+  private incompleteDownloadCancellations = new Map<string, Subject<void>>();
+  private itemMatrixExpirationTimers = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+  >();
+
   private stopPolling$ = new Subject<void>();
 
   readonly jobs$ = this.jobsSubject.asObservable();
@@ -312,6 +323,11 @@ export class ExportJobService implements OnDestroy {
             errorCode: statusAny.errorCode,
             errorDetails: statusAny.errorDetails
           });
+          this.scheduleItemMatrixArtifactExpiration(
+            jobId,
+            statusAny.errorCode,
+            statusAny.errorDetails
+          );
 
           // Stop polling when job is done
           if (
@@ -366,11 +382,30 @@ export class ExportJobService implements OnDestroy {
     }
   }
 
-  removeJob(jobId: string): void {
-    this.stopPollingForJob(jobId);
-    this.stopDownloadForJob(jobId);
+  removeJob(jobId: string): Observable<boolean> {
     const currentJobs = this.jobsSubject.value;
-    this.jobsSubject.next(currentJobs.filter(job => job.jobId !== jobId));
+    const job = currentJobs.find(candidate => candidate.jobId === jobId);
+    if (!job) {
+      return of(false);
+    }
+
+    return this.codingJobBackendService
+      .deleteExportJob(job.workspaceId, job.jobId)
+      .pipe(
+        map(response => {
+          if (!response.success) {
+            return false;
+          }
+          this.stopPollingForJob(jobId);
+          this.stopDownloadForJob(jobId);
+          this.clearItemMatrixExpirationTimer(jobId);
+          this.jobsSubject.next(
+            this.jobsSubject.value.filter(candidate => candidate.jobId !== jobId)
+          );
+          return true;
+        }),
+        catchError(() => of(false))
+      );
   }
 
   cancelJob(job: ExportJob): void {
@@ -438,11 +473,122 @@ export class ExportJobService implements OnDestroy {
     }
   }
 
+  getItemMatrixDiagnostics(
+    job: ExportJob
+  ): Observable<ItemMatrixExportDiagnosticsDto> {
+    return this.codingJobBackendService
+      .getItemMatrixExportDiagnostics(job.workspaceId, job.jobId)
+      .pipe(
+        catchError(error => {
+          this.expireItemMatrixArtifactsOnNotFound(job.jobId, error);
+          return throwError(() => error);
+        })
+      );
+  }
+
+  downloadIncompleteItemMatrix(job: ExportJob): Observable<void> {
+    return defer(() => {
+      if (this.incompleteDownloadCancellations.has(job.jobId)) {
+        return EMPTY;
+      }
+      const cancellation$ = new Subject<void>();
+      this.incompleteDownloadCancellations.set(job.jobId, cancellation$);
+      return this.codingJobBackendService
+        .downloadIncompleteItemMatrix(job.workspaceId, job.jobId)
+        .pipe(
+          tap(download => {
+            const { blob, fileName } = download;
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName || 'Itemdatensatz-UNVOLLSTAENDIG.zip';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+          }),
+          map(() => undefined),
+          catchError(error => {
+            this.expireItemMatrixArtifactsOnNotFound(job.jobId, error);
+            return throwError(() => error);
+          }),
+          takeUntil(cancellation$),
+          finalize(() => {
+            cancellation$.complete();
+            this.incompleteDownloadCancellations.delete(job.jobId);
+          })
+        );
+    });
+  }
+
   private stopDownloadForJob(jobId: string): void {
     const subscription = this.downloadSubscriptions.get(jobId);
     if (subscription) {
       subscription.unsubscribe();
       this.downloadSubscriptions.delete(jobId);
+    }
+    const incompleteCancellation =
+      this.incompleteDownloadCancellations.get(jobId);
+    if (incompleteCancellation) {
+      incompleteCancellation.next();
+      incompleteCancellation.complete();
+      this.incompleteDownloadCancellations.delete(jobId);
+    }
+  }
+
+  private scheduleItemMatrixArtifactExpiration(
+    jobId: string,
+    errorCode?: string,
+    errorDetails?: Record<string, number | string | boolean>
+  ): void {
+    this.clearItemMatrixExpirationTimer(jobId);
+    if (errorCode !== ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE) {
+      return;
+    }
+    const expiresAt = Number(errorDetails?.expiresAt);
+    if (!Number.isFinite(expiresAt)) {
+      return;
+    }
+    const expire = () => this.markItemMatrixArtifactsExpired(jobId);
+    const delay = expiresAt - Date.now();
+    if (delay <= 0) {
+      expire();
+      return;
+    }
+    this.itemMatrixExpirationTimers.set(jobId, setTimeout(expire, delay));
+  }
+
+  private expireItemMatrixArtifactsOnNotFound(
+    jobId: string,
+    error: unknown
+  ): void {
+    if (error instanceof HttpErrorResponse && error.status === 404) {
+      this.markItemMatrixArtifactsExpired(jobId);
+    }
+  }
+
+  private markItemMatrixArtifactsExpired(jobId: string): void {
+    this.clearItemMatrixExpirationTimer(jobId);
+    const job = this.jobsSubject.value.find(
+      candidate => candidate.jobId === jobId
+    );
+    if (!job) {
+      return;
+    }
+    this.updateJob(jobId, {
+      errorDetails: {
+        ...job.errorDetails,
+        diagnosticsAvailable: false,
+        incompleteDownloadAvailable: false
+      }
+    });
+  }
+
+  private clearItemMatrixExpirationTimer(jobId: string): void {
+    const timer = this.itemMatrixExpirationTimers.get(jobId);
+    if (timer) {
+      clearTimeout(timer);
+      this.itemMatrixExpirationTimers.delete(jobId);
     }
   }
 
@@ -466,5 +612,12 @@ export class ExportJobService implements OnDestroy {
     this.pollingSubscriptions.clear();
     this.downloadSubscriptions.forEach(sub => sub.unsubscribe());
     this.downloadSubscriptions.clear();
+    this.incompleteDownloadCancellations.forEach(cancellation => {
+      cancellation.next();
+      cancellation.complete();
+    });
+    this.incompleteDownloadCancellations.clear();
+    this.itemMatrixExpirationTimers.forEach(timer => clearTimeout(timer));
+    this.itemMatrixExpirationTimers.clear();
   }
 }

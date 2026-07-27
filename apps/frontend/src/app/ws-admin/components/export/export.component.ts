@@ -533,6 +533,35 @@ export class ExportComponent {
       ));
   }
 
+  selectAllItemDatasetItems(): void {
+    this.selectedItemKeys = this.itemDatasetOptions.map(item => (
+      this.getItemDatasetKey(item)
+    ));
+  }
+
+  clearAllItemDatasetItems(): void {
+    this.selectedItemKeys = [];
+  }
+
+  selectFilteredItemDatasetItems(): void {
+    const selected = new Set(this.selectedItemKeys);
+    this.filteredItemDatasetOptions.forEach(item => (
+      selected.add(this.getItemDatasetKey(item))
+    ));
+    this.selectedItemKeys = this.itemDatasetOptions
+      .map(item => this.getItemDatasetKey(item))
+      .filter(key => selected.has(key));
+  }
+
+  clearFilteredItemDatasetItems(): void {
+    const filtered = new Set(this.filteredItemDatasetOptions.map(item => (
+      this.getItemDatasetKey(item)
+    )));
+    this.selectedItemKeys = this.selectedItemKeys.filter(key => (
+      !filtered.has(key)
+    ));
+  }
+
   openItemDatasetMappingDiagnostics(
     severity: ItemDatasetMappingSeverity
   ): void {
