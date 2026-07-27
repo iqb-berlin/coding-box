@@ -58,3 +58,18 @@ CREATE INDEX "replay_statistics_attempt_idx"
 -- rollback DROP INDEX IF EXISTS "public"."replay_statistics_attempt_idx";
 -- rollback ALTER TABLE "public"."replay_statistics" DROP COLUMN IF EXISTS "request_id";
 -- rollback ALTER TABLE "public"."replay_statistics" DROP COLUMN IF EXISTS "replay_attempt_id";
+
+-- changeset iqb:839-job-definition-name-description
+-- comment: Add user-facing names and descriptions to job definitions
+ALTER TABLE "public"."job_definitions"
+  ADD COLUMN "name" VARCHAR(255),
+  ADD COLUMN "description" TEXT;
+
+UPDATE "public"."job_definitions"
+SET "name" = 'Definition #' || "id";
+
+ALTER TABLE "public"."job_definitions"
+  ALTER COLUMN "name" SET NOT NULL;
+
+-- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "description";
+-- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "name";
