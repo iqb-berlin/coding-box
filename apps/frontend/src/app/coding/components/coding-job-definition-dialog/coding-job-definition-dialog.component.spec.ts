@@ -205,7 +205,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
   const createComponent = (
     dataOverride?: Partial<CodingJobDefinitionDialogData>,
-    includeDeriveErrorInManualCoding = false
+    includeDeriveErrorInManualCoding = false,
+    provideValidDefinitionName = true
   ) => {
     (mockWorkspaceSettingsService.getIncludeDeriveErrorInManualCoding as jest.Mock)
       .mockReturnValue(of(includeDeriveErrorInManualCoding));
@@ -213,6 +214,13 @@ describe('CodingJobDefinitionDialogComponent', () => {
     fixture = TestBed.createComponent(CodingJobDefinitionDialogComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+    if (
+      provideValidDefinitionName &&
+      component.data.mode === 'definition' &&
+      !component.codingJobForm.get('name')?.value
+    ) {
+      component.codingJobForm.get('name')?.setValue('Testdefinition', { emitEvent: false });
+    }
   };
 
   afterEach(() => {
@@ -259,13 +267,27 @@ describe('CodingJobDefinitionDialogComponent', () => {
   });
 
   it('should initialize form with default values', () => {
-    createComponent();
+    createComponent(undefined, false, false);
     expect(component.codingJobForm).toBeDefined();
+    expect(component.codingJobForm.get('name')?.value).toBe('');
+    expect(component.codingJobForm.get('description')?.value).toBe('');
+    expect(component.codingJobForm.get('name')?.hasError('required')).toBe(true);
     expect(component.codingJobForm.get('durationSeconds')?.value).toBe(1);
     expect(component.codingJobForm.get('caseOrderingMode')?.value).toBe('continuous');
     expect(component.codingJobForm.get('missingsProfileId')?.value).toBe(7);
     expect(component.codingJobForm.get('showScore')?.value).toBe(false);
     expect(component.codingJobForm.get('allowComments')?.value).toBe(true);
+  });
+
+  it('validates the definition name length', () => {
+    createComponent(undefined, false, false);
+
+    component.codingJobForm.get('name')?.setValue('   ');
+    expect(component.codingJobForm.get('name')?.hasError('pattern')).toBe(true);
+
+    component.codingJobForm.get('name')?.setValue('A'.repeat(256));
+
+    expect(component.codingJobForm.get('name')?.hasError('maxlength')).toBe(true);
   });
 
   it('should initialize an edited definition with its camel-case missings profile id', () => {
@@ -644,7 +666,11 @@ describe('CodingJobDefinitionDialogComponent', () => {
     });
     (mockCodingJobBackendService.updateJobDefinition as jest.Mock).mockReturnValue(of({ id: 55 }));
 
-    component.codingJobForm.patchValue({ showScore: true });
+    component.codingJobForm.patchValue({
+      name: '  Neuer Anzeigename  ',
+      description: '   ',
+      showScore: true
+    });
     component.onSubmit();
     tick();
 
@@ -652,6 +678,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
       1,
       55,
       expect.objectContaining({
+        name: 'Neuer Anzeigename',
+        description: null,
         showScore: true
       })
     );
@@ -920,11 +948,17 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
     component.selectedCoders.select(mockCoders[0]);
     component.selectedVariables.select(mockVariables[0]);
-    component.codingJobForm.patchValue({ missingsProfileId: 9 });
+    component.codingJobForm.patchValue({
+      name: '  Lesen Klasse 4  ',
+      description: '  Erste Erhebung  ',
+      missingsProfileId: 9
+    });
 
     await component.onSubmit();
 
     expect(mockCodingJobBackendService.createJobDefinition).toHaveBeenCalledWith(1, expect.objectContaining({
+      name: 'Lesen Klasse 4',
+      description: 'Erste Erhebung',
       missingsProfileId: 9
     }));
   });
@@ -1616,6 +1650,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
     const selectedBundle = component.variableBundles[0];
 
     component.codingJobForm.patchValue({
+      name: 'Lesen Klasse 4',
+      description: 'Erste Erhebung',
       durationSeconds: 90,
       maxCodingCases: 4,
       doubleCodingAbsolute: 2,
@@ -1641,6 +1677,10 @@ describe('CodingJobDefinitionDialogComponent', () => {
       workspaceId: 1,
       mode: 'definition',
       isEdit: false,
+      formValue: expect.objectContaining({
+        name: 'Lesen Klasse 4',
+        description: 'Erste Erhebung'
+      }),
       selectedCoderConfigs: [{ coderId: 1, capacityPercent: 150 }],
       unitNameFilter: 'Unit',
       variableIdFilter: 'Var',
@@ -1655,6 +1695,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
     component = fixture.componentInstance;
     fixture.detectChanges();
 
+    expect(component.codingJobForm.get('name')?.value).toBe('Lesen Klasse 4');
+    expect(component.codingJobForm.get('description')?.value).toBe('Erste Erhebung');
     expect(component.codingJobForm.get('durationSeconds')?.value).toBe(90);
     expect(component.codingJobForm.get('maxCodingCases')?.value).toBe(4);
     expect(component.codingJobForm.get('doubleCodingAbsolute')?.value).toBe(2);

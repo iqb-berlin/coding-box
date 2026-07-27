@@ -261,6 +261,8 @@ describe('CodingJobBackendService', () => {
         expect(definitions).toEqual([
           expect.objectContaining({
             id: 7,
+            name: 'Lesen Klasse 4',
+            description: 'Erste Erhebung',
             createdJobsCount: 3,
             blockingCreatedJobsCount: 1,
             showScore: true,
@@ -295,6 +297,8 @@ describe('CodingJobBackendService', () => {
       req.flush([
         {
           id: 7,
+          name: 'Lesen Klasse 4',
+          description: 'Erste Erhebung',
           status: 'approved',
           created_jobs_count: 3,
           blocking_created_jobs_count: 1,
