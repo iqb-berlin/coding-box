@@ -8,7 +8,7 @@
         {{ getApplyTitleKey() | translate }}
       </h2>
       <p class="definition-label">
-        {{ 'coding-job-definitions.refresh-dialog.definition-label' | translate: { id: data.definitionId } }}
+        {{ data.definitionLabel || ('coding-job-definitions.refresh-dialog.definition-label' | translate: { id: data.definitionId }) }}
       </p>
     </div>
   </div>

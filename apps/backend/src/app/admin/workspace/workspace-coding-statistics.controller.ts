@@ -1824,6 +1824,10 @@ export class WorkspaceCodingStatisticsController {
                           type: 'number',
                           description: 'Job definition ID'
                         },
+                        name: {
+                          type: 'string',
+                          description: 'User-facing job definition name'
+                        },
                         status: {
                           type: 'string',
                           description: 'Job definition status'
@@ -1871,6 +1875,7 @@ export class WorkspaceCodingStatisticsController {
             variableKey: string;
             conflictingDefinitions: Array<{
               id: number;
+              name?: string;
               status: string;
             }>;
           }>;

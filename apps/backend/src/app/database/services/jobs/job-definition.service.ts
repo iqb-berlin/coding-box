@@ -211,6 +211,7 @@ const MIN_CODER_CAPACITY_PERCENT = 10;
 const MAX_CODER_CAPACITY_PERCENT = 300;
 const JOB_DEFINITION_DISTRIBUTION_CSV_HEADERS = [
   'Job-Definition-ID',
+  'Job-Definition-Name',
   'Snapshot-Zeitpunkt',
   'Quelle',
   'Typ',
@@ -1064,6 +1065,8 @@ export class JobDefinitionService {
 
     const jobDefinition = this.jobDefinitionRepository.create({
       workspace_id: workspaceId,
+      name: createDto.name,
+      description: createDto.description ?? null,
       status: createDto.status ?? 'draft',
       assigned_variables: createDto.assignedVariables,
       assigned_variable_bundles: this.toStoredAssignedVariableBundles(
@@ -1123,6 +1126,7 @@ export class JobDefinitionService {
     const coderNamesById = await this.getCoderNamesById(coderIds);
     const rows = this.createDistributionCsvRows(
       jobDefinition.id,
+      jobDefinition.name,
       snapshot,
       coderIds,
       coderNamesById
@@ -1166,6 +1170,7 @@ export class JobDefinitionService {
 
   private createDistributionCsvRows(
     jobDefinitionId: number,
+    jobDefinitionName: string,
     snapshot: JobDefinitionDistributionSnapshot,
     coderIds: number[],
     coderNamesById: Map<number, string>
@@ -1186,6 +1191,7 @@ export class JobDefinitionService {
 
         return coderIds.map(coderId => ({
           'Job-Definition-ID': jobDefinitionId,
+          'Job-Definition-Name': sanitizeCsvText(jobDefinitionName),
           'Snapshot-Zeitpunkt': sanitizeCsvText(snapshot.createdAt),
           Quelle: sanitizeCsvText(this.getSnapshotSourceLabel(snapshot.source)),
           Typ: sanitizeCsvText(this.getSnapshotItemType(itemKey)),
@@ -1694,6 +1700,13 @@ export class JobDefinitionService {
         nextState.assignedVariableBundles
       )
     } as JobDefinition;
+
+    if (updateDto.name !== undefined) {
+      updatedDefinition.name = updateDto.name;
+    }
+    if (updateDto.description !== undefined) {
+      updatedDefinition.description = updateDto.description;
+    }
 
     if (updateDto.status !== undefined) {
       updatedDefinition.status = updateDto.status;

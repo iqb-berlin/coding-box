@@ -39,6 +39,7 @@ import {
   normalizeReplayUrlToCurrentOrigin
 } from '../../utils/replay-url.util';
 import { ReviewCodeSelection } from '../../../replay/services/units-replay.service';
+import { getJobDefinitionDisplayLabel } from '../../utils/job-definition-display.util';
 
 interface CoderResult {
   coderId: number;
@@ -324,11 +325,10 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   private getJobDefinitionLabel(definition: JobDefinition): string {
-    const definitionId = definition.id ?? 0;
     const statusLabel = this.getJobDefinitionStatusLabel(definition.status);
     const status = statusLabel ? ` (${statusLabel})` : '';
     const jobsCount = definition.createdJobsCount ?? 0;
-    return `Definition #${definitionId}${status}, ${jobsCount} ${this.getJobCountLabel(jobsCount)}`;
+    return `${getJobDefinitionDisplayLabel(definition)}${status}, ${jobsCount} ${this.getJobCountLabel(jobsCount)}`;
   }
 
   private getCoderTrainingLabel(training: CoderTraining): string {
@@ -387,7 +387,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   private getScopeLabel(scope: string): string {
     if (scope.startsWith('job_')) {
       const scopeId = parseInt(scope.replace('job_', ''), 10);
-      return this.availableJobDefinitions.find(definition => definition.id === scopeId)?.label || `Definition #${scopeId}`;
+      return this.availableJobDefinitions.find(definition => definition.id === scopeId)?.label ||
+        getJobDefinitionDisplayLabel({ id: scopeId });
     }
 
     if (scope.startsWith('training_')) {
