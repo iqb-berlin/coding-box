@@ -13,6 +13,7 @@ import {
   Query
 } from '@nestjs/common';
 import {
+  ApiCreatedResponse,
   ApiOkResponse,
   ApiParam,
   ApiTags,
@@ -421,7 +422,7 @@ export class WorkspaceCodingJobDefinitionController {
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
-  @ApiOkResponse({
+  @ApiCreatedResponse({
     description: 'Distributed coding jobs created successfully from job definition.'
   })
   async createCodingJobFromDefinition(
