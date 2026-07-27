@@ -10,6 +10,9 @@ export function getJobDefinitionDisplayLabel(
   const hasId = typeof definition.id === 'number' && Number.isFinite(definition.id);
 
   if (name && hasId) {
+    if (name === `Definition #${definition.id}`) {
+      return name;
+    }
     return `${name} (#${definition.id})`;
   }
 
