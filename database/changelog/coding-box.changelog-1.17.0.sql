@@ -59,7 +59,7 @@ CREATE INDEX "replay_statistics_attempt_idx"
 -- rollback ALTER TABLE "public"."replay_statistics" DROP COLUMN IF EXISTS "request_id";
 -- rollback ALTER TABLE "public"."replay_statistics" DROP COLUMN IF EXISTS "replay_attempt_id";
 
--- changeset iqb:839-job-definition-name-description
+-- changeset jurei733:839-job-definition-name-description
 -- comment: Add user-facing names and descriptions to job definitions
 ALTER TABLE "public"."job_definitions"
   ADD COLUMN "name" VARCHAR(255),
