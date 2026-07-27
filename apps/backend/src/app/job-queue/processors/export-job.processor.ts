@@ -23,22 +23,17 @@ import {
   CodingExportService,
   CodingPsychometricExportService
 } from '../../database/services/coding';
+import {
+  ExportArtifactService
+} from '../../database/services/coding/export-artifact.service';
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
 import { CacheService } from '../../cache/cache.service';
 import { ExportJobCancelledException } from '../exceptions/export-job-cancelled.exception';
 import { parseExportRequest } from '../../../../../../api-dto/coding/export-request.dto';
 import type {
-  ItemMatrixExportDiagnosticsDto,
-  ItemMatrixExportRequest
+  ItemMatrixExportDiagnosticsDto
 } from '../../../../../../api-dto/coding/export-request.dto';
 import { ItemMatrixExportIncompleteError } from '../../database/services/coding/item-matrix-export-incomplete.error';
-import {
-  CachedItemMatrixDiagnostics,
-  getIncompleteItemMatrixResultCacheKey,
-  getItemMatrixDiagnosticsCacheKey,
-  itemMatrixArtifactTtlSeconds,
-  writeIncompleteItemMatrixPackage
-} from '../../database/services/coding/item-matrix-export-diagnostics.util';
 
 @Injectable()
 @Processor('data-export')
@@ -63,7 +58,8 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
     private workspaceTestResultsService: WorkspaceTestResultsService,
     private cacheService: CacheService,
     private jobQueueService: JobQueueService,
-    private codingPsychometricExportService: CodingPsychometricExportService
+    private codingPsychometricExportService: CodingPsychometricExportService,
+    private exportArtifactService: ExportArtifactService
   ) { }
 
   async onModuleInit(): Promise<void> {
@@ -191,18 +187,6 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private publishExportArtifact(
-    workingFilePath: string,
-    tempDir: string
-  ): string {
-    const publishedFilePath = path.join(
-      tempDir,
-      path.basename(workingFilePath)
-    );
-    fs.renameSync(workingFilePath, publishedFilePath);
-    return publishedFilePath;
-  }
-
   private async checkCancellation(
     job: Job<ExportJobData>,
     filePath?: string
@@ -240,19 +224,13 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
 
   private async cleanupExpiredExportFiles(tempDir: string): Promise<void> {
     try {
-      const expiresBefore = Date.now() - itemMatrixArtifactTtlSeconds * 1000;
+      this.exportArtifactService.cleanupExpiredArtifacts(tempDir);
+      const expiresBefore = Date.now() -
+        ExportArtifactService.ttlSeconds * 1000;
       const entries = fs.readdirSync(tempDir, { withFileTypes: true });
       for (const entry of entries) {
         const expiredPath = path.join(tempDir, entry.name);
         try {
-          if (
-            entry.isFile() &&
-            /^export_.+\.(csv|xlsx|json|zip)$/i.test(entry.name) &&
-            fs.statSync(expiredPath).mtimeMs < expiresBefore
-          ) {
-            fs.unlinkSync(expiredPath);
-            continue;
-          }
           if (
             !entry.isDirectory() ||
             !entry.name.startsWith(
@@ -282,88 +260,6 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
       this.logger.warn(
         `Failed to clean up expired export files: ${error.message}`
       );
-    }
-  }
-
-  private async quarantineIncompleteItemMatrix(
-    job: Job<ExportJobData & ItemMatrixExportRequest>,
-    matrixPath: string,
-    matrixExtension: 'csv' | 'xlsx',
-    diagnostics: ItemMatrixExportDiagnosticsDto
-  ): Promise<void> {
-    const jobId = job.id.toString();
-    const createdAt = Date.now();
-    const date = new Date(createdAt).toISOString().slice(0, 10);
-    const packageWorkingPath = matrixPath.replace(
-      /\.(csv|xlsx)$/i,
-      '-incomplete.zip'
-    );
-    let packagePath: string | undefined;
-    const packageFileName = `Itemdatensatz-UNVOLLSTAENDIG-${date}.zip`;
-    const matrixFileName = `Itemdatensatz-UNVOLLSTAENDIG-${date}.${matrixExtension}`;
-    try {
-      await this.updateJobProgress(job, 90, { phase: 'finalizing' });
-      await this.checkCancellation(job, matrixPath);
-      await writeIncompleteItemMatrixPackage(
-        packageWorkingPath,
-        matrixPath,
-        matrixFileName,
-        {
-          diagnostics,
-          version: job.data.version || 'v2',
-          matrixValue: job.data.matrixValue || 'score',
-          missingsProfileId: job.data.missingsProfileId,
-          createdAt
-        }
-      );
-      await this.checkCancellation(job, matrixPath);
-      packagePath = this.publishExportArtifact(
-        packageWorkingPath,
-        this.getExportTempDir()
-      );
-      await this.checkCancellation(job, matrixPath);
-      const result: ExportJobResult = {
-        fileId: jobId,
-        fileName: packageFileName,
-        filePath: packagePath,
-        fileSize: fs.statSync(packagePath).size,
-        workspaceId: job.data.workspaceId,
-        userId: job.data.userId,
-        exportType: job.data.exportType,
-        createdAt
-      };
-      const expiresAt = Date.now() + itemMatrixArtifactTtlSeconds * 1000;
-      const cachedDiagnostics: CachedItemMatrixDiagnostics = {
-        diagnostics,
-        expiresAt
-      };
-      const [incompleteResultCached, diagnosticsCached] = await Promise.all([
-        this.cacheService.set(
-          getIncompleteItemMatrixResultCacheKey(jobId),
-          result,
-          itemMatrixArtifactTtlSeconds
-        ),
-        this.cacheService.set(
-          getItemMatrixDiagnosticsCacheKey(jobId),
-          cachedDiagnostics,
-          itemMatrixArtifactTtlSeconds
-        )
-      ]);
-      if (!incompleteResultCached || !diagnosticsCached) {
-        throw new Error(
-          'Unvollständiger Itemmatrix-Export konnte nicht vollständig veröffentlicht werden.'
-        );
-      }
-      await this.checkCancellation(job, matrixPath);
-      this.cleanupPartialExportFile(matrixPath, true);
-    } catch (error) {
-      this.cleanupPartialExportFile(packageWorkingPath);
-      this.cleanupPartialExportFile(packagePath);
-      await Promise.allSettled([
-        this.cacheService.delete(getIncompleteItemMatrixResultCacheKey(jobId)),
-        this.cacheService.delete(getItemMatrixDiagnosticsCacheKey(jobId))
-      ]);
-      throw error;
     }
   }
 
@@ -678,12 +574,21 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
               );
           }
           if (diagnostics.total > 0) {
-            await this.quarantineIncompleteItemMatrix(
-              job as Job<ExportJobData & ItemMatrixExportRequest>,
-              filePath,
-              job.data.format === 'excel' ? 'xlsx' : 'csv',
-              diagnostics
-            );
+            await this.updateJobProgress(job, 90, { phase: 'finalizing' });
+            await this.exportArtifactService.publishIncompleteArtifact({
+              jobId,
+              matrixPath: filePath,
+              matrixExtension: job.data.format === 'excel' ? 'xlsx' : 'csv',
+              tempDir,
+              workspaceId: job.data.workspaceId,
+              userId: job.data.userId,
+              exportType: job.data.exportType,
+              version: job.data.version || 'v2',
+              matrixValue: job.data.matrixValue || 'score',
+              missingsProfileId: job.data.missingsProfileId,
+              diagnostics,
+              checkCancellation: () => this.checkCancellation(job, filePath)
+            });
             throw new ItemMatrixExportIncompleteError(diagnostics);
           }
           break;
@@ -900,46 +805,32 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
       }
 
       await this.checkCancellation(job, filePath);
-      filePath = this.publishExportArtifact(filePath, tempDir);
-      await this.checkCancellation(job, filePath);
       const generationFinishedAt = Date.now();
 
       await this.updateJobProgress(job, 90, { phase: 'finalizing' });
 
-      const fileWriteFinishedAt = Date.now();
-
-      await this.checkCancellation(job, filePath);
-
-      const stats = fs.statSync(filePath);
-      const fileSize = stats.size;
       const finalFileName =
         job.data.exportType === 'item-matrix' ?
           `Itemdatensatz-${new Date().toISOString().slice(0, 10)}.${fileExt}` :
           path.basename(filePath);
-
-      this.logger.log(
-        `Export file generated successfully: ${finalFileName} (${fileSize} bytes) ` +
-        `in ${fileWriteFinishedAt - startedAt}ms ` +
-        `(generation: ${generationFinishedAt - generationStartedAt}ms, ` +
-        `file write: ${fileWriteFinishedAt - generationFinishedAt}ms)`
-      );
-
-      // Cache file metadata in Redis with 1 hour TTL
-      const metadata: ExportJobResult = {
-        fileId: job.id.toString(),
+      const metadata = await this.exportArtifactService.publishArtifact({
+        jobId: job.id.toString(),
+        workingFilePath: filePath,
+        tempDir,
         fileName: finalFileName,
-        filePath,
-        fileSize,
         workspaceId: job.data.workspaceId,
         userId: job.data.userId,
         exportType: job.data.exportType,
-        createdAt: Date.now()
-      };
+        checkCancellation: () => this.checkCancellation(job)
+      });
+      filePath = metadata.filePath;
+      const fileWriteFinishedAt = Date.now();
 
-      await this.cacheService.set(
-        `export-result:${job.id}`,
-        metadata,
-        3600 // 1 hour TTL
+      this.logger.log(
+        `Export file generated successfully: ${finalFileName} (${metadata.fileSize} bytes) ` +
+        `in ${fileWriteFinishedAt - startedAt}ms ` +
+        `(generation: ${generationFinishedAt - generationStartedAt}ms, ` +
+        `file write: ${fileWriteFinishedAt - generationFinishedAt}ms)`
       );
 
       await this.updateJobProgress(job, 100, { phase: 'completed' });

@@ -13,7 +13,8 @@ import {
   CodingExportService,
   CodingExportOrchestratorService,
   CodingListExportService,
-  CodingPsychometricExportService
+  CodingPsychometricExportService,
+  ExportArtifactService
 } from '../../database/services/coding';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
@@ -21,6 +22,22 @@ import { CacheService } from '../../cache/cache.service';
 jest.mock('../../database/services/workspace/workspace-files.service', () => ({
   WorkspaceFilesService: jest.fn()
 }));
+
+const createController = (
+  codingListExportService: CodingListExportService,
+  codingExportService: CodingExportService,
+  codingExportOrchestratorService: CodingExportOrchestratorService,
+  jobQueueService: JobQueueService,
+  cacheService: CacheService,
+  codingPsychometricExportService: CodingPsychometricExportService
+): WorkspaceCodingExportController => new WorkspaceCodingExportController(
+  codingListExportService,
+  codingExportService,
+  codingExportOrchestratorService,
+  jobQueueService,
+  codingPsychometricExportService,
+  new ExportArtifactService(cacheService)
+);
 
 const createWritableResponse = () => {
   const res = new PassThrough() as PassThrough & {
@@ -86,7 +103,7 @@ describe('WorkspaceCodingExportController', () => {
     const codingExportOrchestratorService = {
       getItemDatasetOptions: jest.fn().mockResolvedValue(options)
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       codingExportOrchestratorService as unknown as CodingExportOrchestratorService,
@@ -105,7 +122,7 @@ describe('WorkspaceCodingExportController', () => {
     const codingExportOrchestratorService = {
       exportResultsByVersionAsCsv: jest.fn().mockResolvedValue(csvStream)
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       codingExportOrchestratorService as unknown as CodingExportOrchestratorService,
@@ -172,7 +189,7 @@ describe('WorkspaceCodingExportController', () => {
       })
     };
 
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -212,7 +229,7 @@ describe('WorkspaceCodingExportController', () => {
       const jobQueueService = {
         addExportJob: jest.fn()
       };
-      const controller = new WorkspaceCodingExportController(
+      const controller = createController(
         {} as CodingListExportService,
         {} as CodingExportService,
         {} as CodingExportOrchestratorService,
@@ -237,7 +254,7 @@ describe('WorkspaceCodingExportController', () => {
     const jobQueueService = {
       addExportJob: jest.fn()
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -260,7 +277,7 @@ describe('WorkspaceCodingExportController', () => {
     const jobQueueService = {
       addExportJob: jest.fn()
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -283,7 +300,7 @@ describe('WorkspaceCodingExportController', () => {
     const jobQueueService = {
       addExportJob: jest.fn()
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -324,7 +341,7 @@ describe('WorkspaceCodingExportController', () => {
         mappingFallbackPreview: []
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -352,7 +369,7 @@ describe('WorkspaceCodingExportController', () => {
     const jobQueueService = {
       addExportJob: jest.fn().mockResolvedValue({ id: 'job-1' })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -383,7 +400,7 @@ describe('WorkspaceCodingExportController', () => {
         .fn()
         .mockResolvedValue(Buffer.from('xlsx'))
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       codingExportService as unknown as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -428,7 +445,7 @@ describe('WorkspaceCodingExportController', () => {
     const codingExportService = {
       exportCodingTimesReport: jest.fn().mockResolvedValue(Buffer.from('xlsx'))
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       codingExportService as unknown as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -467,7 +484,7 @@ describe('WorkspaceCodingExportController', () => {
         exceedsWorksheetLimit: true
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       codingExportService as unknown as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -505,7 +522,7 @@ describe('WorkspaceCodingExportController', () => {
         exceedsWorksheetLimit: false
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       codingExportService as unknown as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -541,7 +558,7 @@ describe('WorkspaceCodingExportController', () => {
     const codingExportService = {
       estimateCodingResultsByVariableExport: jest.fn()
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       codingExportService as unknown as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -579,7 +596,7 @@ describe('WorkspaceCodingExportController', () => {
         }
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -617,7 +634,7 @@ describe('WorkspaceCodingExportController', () => {
         failedReason
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -690,7 +707,7 @@ describe('WorkspaceCodingExportController', () => {
         return Promise.resolve(undefined);
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -744,7 +761,7 @@ describe('WorkspaceCodingExportController', () => {
     const cacheService = {
       get: jest.fn().mockResolvedValue(undefined)
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -790,7 +807,7 @@ describe('WorkspaceCodingExportController', () => {
       )),
       delete: jest.fn().mockResolvedValue(true)
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -834,7 +851,7 @@ describe('WorkspaceCodingExportController', () => {
       error.code = 'EBUSY';
       throw error;
     });
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -869,7 +886,7 @@ describe('WorkspaceCodingExportController', () => {
         .mockResolvedValueOnce(false)
         .mockResolvedValueOnce(true)
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -900,7 +917,7 @@ describe('WorkspaceCodingExportController', () => {
         })
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -927,7 +944,7 @@ describe('WorkspaceCodingExportController', () => {
         progress: jest.fn().mockResolvedValue(55)
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -939,6 +956,29 @@ describe('WorkspaceCodingExportController', () => {
     await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
       status: 'cancelled',
       progress: 55
+    });
+  });
+
+  it('maps stuck export jobs to the public pending state', async () => {
+    const jobQueueService = {
+      getExportJob: jest.fn().mockResolvedValue({
+        data: { workspaceId: 5 },
+        getState: jest.fn().mockResolvedValue('stuck'),
+        progress: jest.fn().mockResolvedValue(0)
+      })
+    };
+    const controller = createController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService,
+      codingPsychometricExportServiceMock
+    );
+
+    await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
+      status: 'pending',
+      progress: 0
     });
   });
 
@@ -960,7 +1000,7 @@ describe('WorkspaceCodingExportController', () => {
         }
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -984,7 +1024,7 @@ describe('WorkspaceCodingExportController', () => {
         failedReason: 'Export job job-1 was cancelled'
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -1030,7 +1070,7 @@ describe('WorkspaceCodingExportController', () => {
         }
       ])
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -1078,7 +1118,7 @@ describe('WorkspaceCodingExportController', () => {
       get: jest.fn(),
       delete: jest.fn()
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -1110,7 +1150,7 @@ describe('WorkspaceCodingExportController', () => {
       markExportJobCancelled: jest.fn().mockResolvedValue(true),
       cancelExportJob: jest.fn().mockResolvedValue(true)
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -1139,7 +1179,7 @@ describe('WorkspaceCodingExportController', () => {
       markExportJobCancelled: jest.fn().mockResolvedValue(false),
       cancelExportJob: jest.fn().mockResolvedValue(false)
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -1171,7 +1211,7 @@ describe('WorkspaceCodingExportController', () => {
       markExportJobCancelled: jest.fn().mockResolvedValue(true),
       cancelExportJob: jest.fn().mockResolvedValue(true)
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,
@@ -1197,7 +1237,7 @@ describe('WorkspaceCodingExportController', () => {
         data: { workspaceId: 9 }
       })
     };
-    const controller = new WorkspaceCodingExportController(
+    const controller = createController(
       {} as CodingListExportService,
       {} as CodingExportService,
       {} as CodingExportOrchestratorService,

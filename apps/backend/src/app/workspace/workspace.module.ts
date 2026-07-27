@@ -82,7 +82,8 @@ import {
   CodebookGenerationService,
   CodingResponseQueryService,
   CodingFreshnessService,
-  CodingItemMatrixExportService
+  CodingItemMatrixExportService,
+  ExportArtifactService
 } from '../database/services/coding';
 import {
   JobService,
@@ -181,6 +182,7 @@ import { CodingModule } from '../coding/coding.module';
     CodingResponseQueryService,
     CodingFreshnessService,
     CodingItemMatrixExportService,
+    ExportArtifactService,
     UnitInfoService,
     BookletInfoService,
     WorkspaceExclusionService
@@ -224,6 +226,7 @@ import { CodingModule } from '../coding/coding.module';
     CodingResponseQueryService,
     CodingFreshnessService,
     CodingItemMatrixExportService,
+    ExportArtifactService,
     UnitInfoService,
     BookletInfoService,
     WorkspaceExclusionService

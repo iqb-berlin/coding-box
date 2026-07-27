@@ -9,6 +9,9 @@ import {
   CodingExportService,
   CodingPsychometricExportService
 } from '../../database/services/coding';
+import {
+  ExportArtifactService
+} from '../../database/services/coding/export-artifact.service';
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
 import { CacheService } from '../../cache/cache.service';
 import { ExportJobData, JobQueueService } from '../job-queue.service';
@@ -100,7 +103,10 @@ describe('ExportJobProcessor', () => {
       {} as WorkspaceTestResultsService,
       cacheService as unknown as CacheService,
       jobQueueService as unknown as JobQueueService,
-      codingPsychometricExportService as unknown as CodingPsychometricExportService
+      codingPsychometricExportService as unknown as CodingPsychometricExportService,
+      new ExportArtifactService(
+        cacheService as unknown as CacheService
+      )
     );
 
     return {
