@@ -19,6 +19,7 @@ import type { PsychometricDomainCandidatesDto } from '../../../../../../api-dto/
 import type { ReplayCodingSessionDto } from '../../../../../../api-dto/coding/replay-coding-session.dto';
 import type {
   BackgroundExportRequest,
+  ExportJobStatusResponseDto,
   ItemDatasetOptionsDto,
   ItemMatrixExportDiagnosticsDto
 } from '../../../../../../api-dto/coding/export-request.dto';
@@ -1214,49 +1215,9 @@ export class CodingJobBackendService {
   getExportJobStatus(
     workspaceId: number,
     jobId: string
-  ): Observable<{
-      status: string;
-      progress: number;
-      progressPhase?:
-      'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
-      processedRows?: number;
-      totalRows?: number;
-      progressMessage?: string;
-      result?: {
-        fileId: string;
-        fileName: string;
-        fileSize: number;
-        workspaceId: number;
-        userId: number;
-        exportType: string;
-        createdAt: number;
-      };
-      error?: string;
-      errorCode?: string;
-      errorDetails?: Record<string, number | string | boolean>;
-    }> {
+  ): Observable<ExportJobStatusResponseDto> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`;
-    return this.http.get<{
-      status: string;
-      progress: number;
-      progressPhase?:
-      'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
-      processedRows?: number;
-      totalRows?: number;
-      progressMessage?: string;
-      result?: {
-        fileId: string;
-        fileName: string;
-        fileSize: number;
-        workspaceId: number;
-        userId: number;
-        exportType: string;
-        createdAt: number;
-      };
-      error?: string;
-      errorCode?: string;
-      errorDetails?: Record<string, number | string | boolean>;
-    }>(url, {
+    return this.http.get<ExportJobStatusResponseDto>(url, {
       headers: this.authHeader
     });
   }

@@ -710,9 +710,20 @@ export class CodingManagementService {
 
       const subscription = timer(0, 2000).pipe(
         switchMap(() => this.exportService.getExportJobStatus(workspaceId, jobId)),
-        takeWhile(status => ['pending', 'processing'].includes(status.status), true)
+        takeWhile(
+          status => 'status' in status &&
+            ['pending', 'processing'].includes(status.status),
+          true
+        )
       ).subscribe({
         next: status => {
+          if (!('status' in status)) {
+            subscription.unsubscribe();
+            operation.pollingSubscription = undefined;
+            this.activeDownloads.delete(kind);
+            reject(new Error(status.error));
+            return;
+          }
           if (status.status === 'completed') {
             subscription.unsubscribe();
             operation.pollingSubscription = undefined;

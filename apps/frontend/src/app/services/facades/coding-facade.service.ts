@@ -1,5 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import type {
+  ExportJobStatusResponseDto
+} from '../../../../../../api-dto/coding/export-request.dto';
 import {
   CodingJob,
   VariableBundle
@@ -102,24 +105,7 @@ export interface BulkApplyCodingResultsResponse {
   results: BulkApplyResultItem[];
 }
 
-export interface ExportJobStatus {
-  status: string;
-  progress: number;
-  progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
-  processedRows?: number;
-  totalRows?: number;
-  progressMessage?: string;
-  result?: {
-    fileId: string;
-    fileName: string;
-    fileSize: number;
-    workspaceId: number;
-    userId: number;
-    exportType: string;
-    createdAt: number;
-  };
-  error?: string;
-}
+export type ExportJobStatus = ExportJobStatusResponseDto;
 
 interface DistributedCodingDisplayOptions {
   showScore?: boolean;
