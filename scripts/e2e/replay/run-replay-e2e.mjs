@@ -34,6 +34,7 @@ const replayEnvironment = {
   REPLAY_E2E_API_URL: `http://127.0.0.1:${apiPort}`,
   REPLAY_E2E_BASE_URL: `http://127.0.0.1:${frontendPort}`,
   REPLAY_E2E_CACHE_DIR: path.join(repoDir, 'cache', 'replay-player'),
+  REPLAY_E2E_COMPOSE_PROJECT: projectName,
   REPLAY_E2E_FIXTURE_DIR: path.join(
     repoDir,
     'cypress',

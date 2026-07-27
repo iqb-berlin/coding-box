@@ -274,4 +274,146 @@ describe('Itemdatensatz-Export', () => {
     cy.get('[data-cy="item-dataset-diagnostics-download"]').click();
     cy.get('@diagnosticDownload').should('have.been.calledOnce');
   });
+
+  it('offers a diagnosed and confirmed incomplete export while keeping the job failed', () => {
+    const groups = Array.from({ length: 26 }, (_, index) => ({
+      reasonCode: index === 25 ?
+        'derived-result-missing' :
+        'unresolved-status',
+      bookletName: `BOOKLET-${index + 1}`,
+      columnName: `COLUMN-${index + 1}`,
+      count: 1,
+      sampleRowNumbers: index < 20 ? [index + 2] : []
+    }));
+
+    cy.mockKeycloakAuthentication();
+    cy.stubWorkspace({ workspaceId: 5 });
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/missings-profiles', {
+      body: [{ id: 4, label: 'IQB-Standard' }]
+    });
+    cy.intercept(
+      'GET',
+      '**/api/admin/workspace/5/coding/export/item-dataset-options',
+      {
+        body: {
+          items: [
+            {
+              unitId: 'UNIT1',
+              unitLabel: 'Aufgabe 1',
+              itemId: 'ITEM1',
+              itemLabel: 'Item 1',
+              columnName: 'Aufgabe1_ITEM1'
+            },
+            {
+              unitId: 'UNIT2',
+              unitLabel: 'Aufgabe 2',
+              itemId: 'ITEM2',
+              itemLabel: 'Item 2',
+              columnName: 'Aufgabe2_ITEM2'
+            }
+          ],
+          mappingIssues: [],
+          mappingWarnings: []
+        }
+      }
+    );
+    cy.intercept(
+      'POST',
+      '**/api/admin/workspace/5/coding/export/start',
+      { body: { jobId: 'export-incomplete', message: 'started' } }
+    ).as('startIncompleteExport');
+    cy.intercept(
+      'GET',
+      '**/api/admin/workspace/5/coding/export/job/export-incomplete',
+      {
+        body: {
+          status: 'failed',
+          progress: 100,
+          error: 'Itemdatensatz enthält 26 nicht exportierbare Zellen.',
+          errorCode: 'ITEM_MATRIX_UNRESOLVED_CELLS',
+          errorDetails: {
+            total: 26,
+            groupCount: 26,
+            diagnosticsAvailable: true,
+            incompleteDownloadAvailable: true,
+            expiresAt: Date.now() + 60 * 60 * 1000
+          }
+        }
+      }
+    ).as('incompleteJobStatus');
+    cy.intercept(
+      'GET',
+      '**/api/admin/workspace/5/coding/export/job/export-incomplete/item-matrix-diagnostics',
+      { body: { total: 26, sampleLimit: 20, groups } }
+    ).as('matrixDiagnostics');
+    cy.intercept(
+      'GET',
+      '**/api/admin/workspace/5/coding/export/job/export-incomplete/download-incomplete',
+      {
+        body: Cypress.Buffer.from('incomplete zip'),
+        headers: {
+          'content-type': 'application/zip',
+          'content-disposition':
+            'attachment; filename="Itemdatensatz-UNVOLLSTAENDIG.zip"'
+        }
+      }
+    ).as('incompleteDownload');
+
+    cy.visit('/');
+    cy.wait('@authData');
+    cy.window().then((window) => {
+      window.location.hash = '/workspace-admin/5/export';
+    });
+    cy.get('[data-cy="export-type"]').click();
+    cy.contains('mat-option', 'Itemdatensatz').click();
+
+    cy.get('[data-cy="item-dataset-clear-all"]').click();
+    cy.contains('0 von 2 Items ausgewählt').should('be.visible');
+    cy.get('[data-cy="item-dataset-search"]').type('Aufgabe1');
+    cy.get('[data-cy="item-dataset-select-filtered"]').click();
+    cy.contains('1 von 2 Items ausgewählt').should('be.visible');
+    cy.get('[data-cy="item-dataset-clear-filtered"]').click();
+    cy.contains('0 von 2 Items ausgewählt').should('be.visible');
+    cy.get('[data-cy="item-dataset-select-all"]').click();
+    cy.contains('2 von 2 Items ausgewählt').should('be.visible');
+
+    cy.get('[data-cy="start-export"]').click();
+    cy.wait('@startIncompleteExport');
+    cy.wait('@incompleteJobStatus');
+    cy.get('coding-box-export-toast')
+      .should('contain.text', 'Itemdatensatz nicht vollständig exportierbar')
+      .and('contain.text', '26 Zellen konnten nicht sicher aufgelöst werden');
+
+    cy.get('[data-cy="item-matrix-show-diagnostics"]').click();
+    cy.wait('@matrixDiagnostics');
+    cy.get('coding-box-item-matrix-diagnostics-dialog')
+      .should('contain.text', '26 von 26 Diagnosegruppen')
+      .find('mat-expansion-panel')
+      .should('have.length', 25);
+    cy.get('coding-box-item-matrix-diagnostics-dialog mat-paginator')
+      .should('contain.text', '1 - 25 von 26');
+    cy.get('[data-cy="item-matrix-diagnostics-search"]')
+      .type('COLUMN-26');
+    cy.get('[data-cy="item-matrix-diagnostics-result-count"]')
+      .should('contain.text', '1 von 26 Diagnosegruppen');
+    cy.contains('mat-dialog-actions button', 'Schließen').click();
+
+    cy.window().then((window) => {
+      cy.stub(window.URL, 'createObjectURL').returns('blob:incomplete');
+      cy.stub(window.URL, 'revokeObjectURL');
+      cy.stub(window.HTMLAnchorElement.prototype, 'click').as(
+        'incompleteAnchorClick'
+      );
+    });
+    cy.get('[data-cy="item-matrix-download-incomplete"]').click();
+    cy.get('mat-dialog-container')
+      .should('contain.text', '26 leere Fehlerzellen')
+      .and('contain.text', 'nicht als vollständiger Datensatz');
+    cy.contains('mat-dialog-actions button', 'Unvollständiges ZIP herunterladen')
+      .click();
+    cy.wait('@incompleteDownload');
+    cy.get('@incompleteAnchorClick').should('have.been.calledOnce');
+    cy.get('coding-box-export-toast')
+      .should('contain.text', 'Itemdatensatz nicht vollständig exportierbar');
+  });
 });
