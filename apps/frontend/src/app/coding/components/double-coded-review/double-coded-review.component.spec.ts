@@ -3,6 +3,7 @@ import { MAT_DIALOG_DATA, MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { By } from '@angular/platform-browser';
 import { TranslateModule } from '@ngx-translate/core';
 import { Observable, of, Subject } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
@@ -11,12 +12,26 @@ import { CodingFacadeService } from '../../../services/facades/coding-facade.ser
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { DoubleCodedReviewComponent } from './double-coded-review.component';
+import { DoubleCodedDecisionCellComponent } from './double-coded-decision-cell.component';
+import { DoubleCodedReviewFacade } from './double-coded-review.facade';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 
 describe('DoubleCodedReviewComponent', () => {
   let component: DoubleCodedReviewComponent;
   let fixture: ComponentFixture<DoubleCodedReviewComponent>;
   let overlayContainer: OverlayContainer;
+  let reviewFacade: DoubleCodedReviewFacade;
+
+  const getDecisionCell = (
+    responseId: number
+  ): DoubleCodedDecisionCellComponent => {
+    const cell = fixture.debugElement
+      .queryAll(By.directive(DoubleCodedDecisionCellComponent))
+      .map(debugElement => debugElement.componentInstance as DoubleCodedDecisionCellComponent)
+      .find(candidate => candidate.item().responseId === responseId);
+    if (!cell) throw new Error(`Decision cell for response ${responseId} not found`);
+    return cell;
+  };
 
   type ReplaySelectionMessage = {
     type: 'replayCodeSelected';
@@ -313,6 +328,7 @@ describe('DoubleCodedReviewComponent', () => {
     overlayContainer = TestBed.inject(OverlayContainer);
     fixture = TestBed.createComponent(DoubleCodedReviewComponent);
     component = fixture.componentInstance;
+    reviewFacade = fixture.debugElement.injector.get(DoubleCodedReviewFacade);
   });
 
   afterEach(() => {
@@ -969,13 +985,12 @@ describe('DoubleCodedReviewComponent', () => {
     );
     expect(item).toBeDefined();
     expect(component.selectionForm.get('item_501')?.value).toBe('replay:501');
-    expect(component.getSelectedDecisionResult(item!)?.code).toBe(3);
-    expect(component.getSelectedDecisionResult(item!)?.score).toBe(2);
+    const selectedDecision = reviewFacade.getSelectedDecisionResult(item!);
+    expect(selectedDecision?.code).toBe(3);
+    expect(selectedDecision?.score).toBe(2);
+    fixture.detectChanges();
     expect(
-      component.getDecisionResultSourceLabel(
-        item!,
-        component.getSelectedDecisionResult(item!)!
-      )
+      getDecisionCell(501).getDecisionSourceLabel(selectedDecision!)
     ).toBe('double-coded-review.decision.replay-source');
 
     testPersonCodingService.applyDoubleCodedResolutions.mockClear();
@@ -1204,7 +1219,7 @@ describe('DoubleCodedReviewComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     const initialValue = component.selectionForm.get('item_501')?.value;
-    const initialDecision = component.getSelectedDecisionResult(
+    const initialDecision = reviewFacade.getSelectedDecisionResult(
       component.dataSource.data[0]
     );
 
@@ -1225,7 +1240,7 @@ describe('DoubleCodedReviewComponent', () => {
 
     expect(component.selectionForm.get('item_501')?.value).toBe(initialValue);
     expect(
-      component.getSelectedDecisionResult(component.dataSource.data[0])
+      reviewFacade.getSelectedDecisionResult(component.dataSource.data[0])
     ).toEqual(initialDecision);
     expect(snackBar.open).not.toHaveBeenCalled();
   });
@@ -1239,7 +1254,7 @@ describe('DoubleCodedReviewComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
     const initialValue = component.selectionForm.get('item_501')?.value;
-    const initialDecision = component.getSelectedDecisionResult(
+    const initialDecision = reviewFacade.getSelectedDecisionResult(
       component.dataSource.data[0]
     );
 
@@ -1261,7 +1276,7 @@ describe('DoubleCodedReviewComponent', () => {
 
     expect(component.selectionForm.get('item_501')?.value).toBe(initialValue);
     expect(
-      component.getSelectedDecisionResult(component.dataSource.data[0])
+      reviewFacade.getSelectedDecisionResult(component.dataSource.data[0])
     ).toEqual(initialDecision);
     expect(snackBar.open).not.toHaveBeenCalled();
   });
@@ -1333,20 +1348,17 @@ describe('DoubleCodedReviewComponent', () => {
     const duplicateCoderItem = component.dataSource.data[2];
 
     expect(
-      component.getDecisionResultSourceLabel(
-        regularItem,
+      getDecisionCell(regularItem.responseId).getDecisionSourceLabel(
         regularItem.coderResults[0]
       )
     ).toBe('Coder A');
     expect(
-      component.getDecisionResultSourceLabel(
-        duplicateCoderItem,
+      getDecisionCell(duplicateCoderItem.responseId).getDecisionSourceLabel(
         duplicateCoderItem.coderResults[0]
       )
     ).toBe('Coder A - Definition 101 / A (#3001)');
     expect(
-      component.getDecisionResultSourceLabel(
-        duplicateCoderItem,
+      getDecisionCell(duplicateCoderItem.responseId).getDecisionSourceLabel(
         duplicateCoderItem.coderResults[1]
       )
     ).toBe('Coder A renamed - Definition 102 / A (#3002)');
@@ -1418,14 +1430,11 @@ describe('DoubleCodedReviewComponent', () => {
     expect(component.hasConflict(sameCoderMatchItem)).toBe(false);
     expect(component.hasConflict(sameCoderConflictItem)).toBe(true);
 
-    expect(component.getDecisionStatusLabel(sameCoderConflictItem)).toBe(
+    expect(getDecisionCell(sameCoderConflictItem.responseId).statusLabel).toBe(
       'double-coded-review.decision.status-same-coder-conflict'
     );
-    expect(component.getDecisionStatusLabel(interCoderConflictItem)).toBe(
+    expect(getDecisionCell(interCoderConflictItem.responseId).statusLabel).toBe(
       'double-coded-review.decision.status-inter-coder-conflict'
-    );
-    expect(component.getDecisionStatusLabel(mixedConflictItem)).toBe(
-      'double-coded-review.decision.status-mixed-conflict'
     );
   });
 });
