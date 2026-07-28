@@ -73,3 +73,63 @@ ALTER TABLE "public"."job_definitions"
 
 -- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "description";
 -- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "name";
+
+-- changeset jurei733:838-double-coding-review-decisions
+-- comment: Persist manager drafts and immutable decisions for double-coding review
+CREATE TABLE "public"."double_coding_review_decision" (
+  "id" SERIAL PRIMARY KEY,
+  "workspace_id" INTEGER NOT NULL,
+  "response_id" INTEGER NOT NULL,
+  "manager_user_id" INTEGER NULL,
+  "manager_name" VARCHAR(255) NOT NULL,
+  "state" VARCHAR(16) NOT NULL,
+  "code" BIGINT NULL,
+  "score" BIGINT NULL,
+  "comment" TEXT NULL,
+  "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+  "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+  "finalized_at" TIMESTAMP WITH TIME ZONE NULL,
+  CONSTRAINT "double_coding_review_decision_state_check"
+    CHECK ("state" IN ('draft', 'applied', 'superseded')),
+  CONSTRAINT "double_coding_review_decision_workspace_fk"
+    FOREIGN KEY ("workspace_id") REFERENCES "public"."workspace" ("id") ON DELETE CASCADE,
+  CONSTRAINT "double_coding_review_decision_response_fk"
+    FOREIGN KEY ("response_id") REFERENCES "public"."response" ("id") ON DELETE CASCADE,
+  CONSTRAINT "double_coding_review_decision_manager_fk"
+    FOREIGN KEY ("manager_user_id") REFERENCES "public"."user" ("id") ON DELETE SET NULL
+);
+
+CREATE INDEX "double_coding_review_decision_response_idx"
+  ON "public"."double_coding_review_decision" ("workspace_id", "response_id");
+
+CREATE UNIQUE INDEX "double_coding_review_decision_open_draft_idx"
+  ON "public"."double_coding_review_decision" ("workspace_id", "response_id", "manager_user_id")
+  WHERE "state" = 'draft';
+
+-- rollback DROP TABLE IF EXISTS "public"."double_coding_review_decision";
+
+-- changeset jurei733:838-double-coding-review-manager-key
+-- comment: Preserve a stable manager identity when the referenced user is deleted
+ALTER TABLE "public"."double_coding_review_decision"
+  ADD COLUMN "manager_key" VARCHAR(255) NULL;
+
+UPDATE "public"."double_coding_review_decision"
+SET "manager_key" = CASE
+  WHEN "manager_user_id" IS NOT NULL THEN "manager_user_id"::text
+  ELSE 'decision_' || "id"::text
+END;
+
+ALTER TABLE "public"."double_coding_review_decision"
+  ALTER COLUMN "manager_key" SET NOT NULL;
+
+-- rollback ALTER TABLE "public"."double_coding_review_decision" DROP COLUMN IF EXISTS "manager_key";
+
+-- changeset jurei733:838-double-coding-review-selected-code
+-- comment: Preserve the manager's original selection alongside the profile-resolved final code
+ALTER TABLE "public"."double_coding_review_decision"
+  ADD COLUMN "selected_code" BIGINT NULL;
+
+UPDATE "public"."double_coding_review_decision"
+SET "selected_code" = "code";
+
+-- rollback ALTER TABLE "public"."double_coding_review_decision" DROP COLUMN IF EXISTS "selected_code";

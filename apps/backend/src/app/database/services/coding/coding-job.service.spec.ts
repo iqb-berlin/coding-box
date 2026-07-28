@@ -3467,6 +3467,36 @@ describe('CodingJobService', () => {
     }
   );
 
+  it('rejects review codes without visible manual instructions', async () => {
+    const unit = {
+      unit_name: 'UNIT',
+      unit_alias: 'ALIAS',
+      variable_id: 'VAR'
+    };
+    mockCodingScheme({
+      codeId: 7,
+      score: 2,
+      manualInstruction: '<p style="min-height: 1em"></p>'
+    });
+
+    await expect(
+      service.getSelectableReviewCodeForUnit(unit as CodingJobUnit, 3, 7)
+    ).rejects.toThrow('Code is not available for manual review: 7');
+  });
+
+  it('returns the server-derived score for a manually selectable review code', async () => {
+    const unit = {
+      unit_name: 'UNIT',
+      unit_alias: 'ALIAS',
+      variable_id: 'VAR'
+    };
+    mockCodingScheme({ codeId: 7, score: 2, manualInstruction: '<p>Review</p>' });
+
+    await expect(
+      service.getSelectableReviewCodeForUnit(unit as CodingJobUnit, 3, 7)
+    ).resolves.toEqual({ code: 7, label: 'Code 7', score: 2 });
+  });
+
   it('uses the coding scheme score instead of a client-provided score', async () => {
     const job = { id: 1, workspace_id: 3 };
     const unit = {

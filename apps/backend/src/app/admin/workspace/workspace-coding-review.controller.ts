@@ -1,11 +1,17 @@
 import {
   Controller,
+  Delete,
   Get,
+  UnauthorizedException,
+  Param,
   Post,
+  Put,
   Query,
   UseGuards,
-  Body
+  Body,
+  Req
 } from '@nestjs/common';
+import { Request } from 'express';
 import {
   ApiOkResponse,
   ApiParam,
@@ -22,16 +28,60 @@ import {
   DoubleCodedReviewResponse,
   DoubleCodedResolutionResponse
 } from './dto/workspace-coding.interfaces';
+import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
+import { SaveDoubleCodedReviewDraftDto } from '../../../../../../api-dto/coding/double-coded-review.dto';
+
+const doubleCodedManagerDecisionSchema = {
+  type: 'object' as const,
+  properties: {
+    id: { type: 'number' as const, nullable: true },
+    responseId: { type: 'number' as const },
+    managerUserId: { type: 'number' as const, nullable: true },
+    managerKey: { type: 'string' as const, nullable: true },
+    managerName: { type: 'string' as const },
+    state: {
+      type: 'string' as const,
+      enum: ['draft', 'applied', 'superseded']
+    },
+    code: { type: 'number' as const, nullable: true },
+    selectedCode: { type: 'number' as const, nullable: true },
+    score: { type: 'number' as const, nullable: true },
+    comment: { type: 'string' as const, nullable: true },
+    createdAt: { type: 'string' as const, format: 'date-time', nullable: true },
+    updatedAt: { type: 'string' as const, format: 'date-time', nullable: true },
+    finalizedAt: {
+      type: 'string' as const,
+      format: 'date-time',
+      nullable: true
+    },
+    legacy: { type: 'boolean' as const }
+  },
+  required: [
+    'id',
+    'responseId',
+    'managerUserId',
+    'managerKey',
+    'managerName',
+    'state',
+    'code',
+    'selectedCode',
+    'score',
+    'comment',
+    'createdAt',
+    'updatedAt',
+    'finalizedAt',
+    'legacy'
+  ]
+};
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
 export class WorkspaceCodingReviewController {
-  constructor(
-    private codingReviewService: CodingReviewService
-  ) { }
+  constructor(private codingReviewService: CodingReviewService) {}
 
   @Get(':workspace_id/coding/double-coded-review')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -49,13 +99,15 @@ export class WorkspaceCodingReviewController {
   @ApiQuery({
     name: 'excludeTrainings',
     required: false,
-    description: 'Exclude coder trainings from the review list (default: false)',
+    description:
+      'Exclude coder trainings from the review list (default: false)',
     type: Boolean
   })
   @ApiQuery({
     name: 'search',
     required: false,
-    description: 'Search string to filter by unit name, variable id, person login or person code',
+    description:
+      'Search string to filter by unit name, variable id, person login or person code',
     type: String
   })
   @ApiQuery({
@@ -99,6 +151,11 @@ export class WorkspaceCodingReviewController {
             type: 'object',
             properties: {
               responseId: { type: 'number', description: 'Response ID' },
+              sourceUnitId: {
+                type: 'number',
+                description:
+                  'Coding job unit used as the authoritative review-code source'
+              },
               unitName: { type: 'string', description: 'Name of the unit' },
               variableId: { type: 'string', description: 'Variable ID' },
               personLogin: { type: 'string', description: 'Person login' },
@@ -108,7 +165,10 @@ export class WorkspaceCodingReviewController {
                 type: 'string',
                 description: 'The given answer by the test person'
               },
-              isResolved: { type: 'boolean', description: 'Whether the variable is already resolved' },
+              isResolved: {
+                type: 'boolean',
+                description: 'Whether the variable is already resolved'
+              },
               appliedCode: {
                 type: 'number',
                 nullable: true,
@@ -122,7 +182,33 @@ export class WorkspaceCodingReviewController {
               appliedComment: {
                 type: 'string',
                 nullable: true,
-                description: 'Optional supervisor comment saved with the applied decision'
+                description:
+                  'Optional supervisor comment saved with the applied decision'
+              },
+              availableCodes: {
+                type: 'array',
+                description:
+                  'Codes currently selectable for the final review decision',
+                items: {
+                  type: 'object',
+                  properties: {
+                    code: { type: 'number' },
+                    label: { type: 'string' },
+                    score: { type: 'number', nullable: true },
+                    source: { type: 'string', enum: ['schema', 'general'] },
+                    commentRequired: { type: 'boolean' }
+                  }
+                }
+              },
+              managerDrafts: {
+                type: 'array',
+                description: 'Current shared manager drafts',
+                items: doubleCodedManagerDecisionSchema
+              },
+              managerHistory: {
+                type: 'array',
+                description: 'Finalized manager decisions',
+                items: doubleCodedManagerDecisionSchema
               },
               coderResults: {
                 type: 'array',
@@ -132,7 +218,10 @@ export class WorkspaceCodingReviewController {
                     coderId: { type: 'number', description: 'Coder user ID' },
                     coderName: { type: 'string', description: 'Coder name' },
                     jobId: { type: 'number', description: 'Coding job ID' },
-                    jobName: { type: 'string', description: 'Name of the coding job' },
+                    jobName: {
+                      type: 'string',
+                      description: 'Name of the coding job'
+                    },
                     code: {
                       type: 'number',
                       nullable: true,
@@ -141,7 +230,8 @@ export class WorkspaceCodingReviewController {
                     codingIssueOption: {
                       type: 'number',
                       nullable: true,
-                      description: 'General coding issue option selected by the coder'
+                      description:
+                        'General coding issue option selected by the coder'
                     },
                     score: {
                       type: 'number',
@@ -225,7 +315,8 @@ export class WorkspaceCodingReviewController {
   }
 
   @Post(':workspace_id/coding/double-coded-review/apply-resolutions')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -242,17 +333,25 @@ export class WorkspaceCodingReviewController {
               selectedJobId: {
                 type: 'number',
                 nullable: true,
-                description: 'Selected coding job ID for an existing coder result'
+                description:
+                  'Selected coding job ID for an existing coder result'
+              },
+              sourceUnitId: {
+                type: 'number',
+                description:
+                  'Authoritative review-code source for every selection'
               },
               code: {
                 type: 'number',
                 nullable: true,
-                description: 'Explicit final replay code when no coder result is selected'
+                description:
+                  'Explicit final replay code when no coder result is selected'
               },
               score: {
                 type: 'number',
                 nullable: true,
-                description: 'Replay score echoed by the client; regular-code scores are validated and derived from the coding scheme'
+                description:
+                  'Replay score echoed by the client; regular-code scores are validated and derived from the coding scheme'
               },
               resolutionComment: {
                 type: 'string',
@@ -260,7 +359,7 @@ export class WorkspaceCodingReviewController {
                 description: 'Optional resolution comment'
               }
             },
-            required: ['responseId']
+            required: ['responseId', 'sourceUnitId']
           }
         }
       },
@@ -288,7 +387,23 @@ export class WorkspaceCodingReviewController {
           type: 'number',
           description: 'Number of resolutions skipped'
         },
-        message: { type: 'string', description: 'Summary message' }
+        message: { type: 'string', description: 'Summary message' },
+        results: {
+          type: 'array',
+          description: 'Per-response apply result',
+          items: {
+            type: 'object',
+            properties: {
+              responseId: { type: 'number' },
+              status: {
+                type: 'string',
+                enum: ['applied', 'failed', 'skipped']
+              },
+              message: { type: 'string', nullable: true }
+            },
+            required: ['responseId', 'status']
+          }
+        }
       }
     }
   })
@@ -297,11 +412,115 @@ export class WorkspaceCodingReviewController {
       @Body()
                    body: {
                      decisions: DoubleCodedResolutionDecision[];
-                   }
+                   },
+                   @Req() req: Request
   ): Promise<DoubleCodedResolutionResponse> {
+    const manager = this.getRequestManager(req);
     return this.codingReviewService.applyDoubleCodedResolutions(
       workspace_id,
-      body.decisions
+      body.decisions,
+      manager
     );
+  }
+
+  @Put(':workspace_id/coding/double-coded-review/:responseId/draft')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'responseId', type: Number })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        sourceUnitId: {
+          type: 'number',
+          description:
+            'Authoritative review-code source returned with the review row'
+        },
+        code: { type: 'number', description: 'Selected final code' },
+        score: {
+          type: 'number',
+          nullable: true,
+          description:
+            'Client score; the server derives the authoritative schema score'
+        },
+        comment: { type: 'string', nullable: true }
+      },
+      required: ['sourceUnitId', 'code']
+    }
+  })
+  @ApiOkResponse({
+    description: 'Shared manager draft saved',
+    schema: doubleCodedManagerDecisionSchema
+  })
+  async saveDoubleCodedReviewDraft(
+  @WorkspaceId() workspace_id: number,
+    @Param('responseId') responseId: number,
+    @Body() body: SaveDoubleCodedReviewDraftDto,
+    @Req() req: Request
+  ) {
+    const manager = this.getRequestManager(req);
+    return this.codingReviewService.saveDoubleCodedReviewDraft(
+      workspace_id,
+      Number(responseId),
+      manager.userId,
+      manager.name,
+      body
+    );
+  }
+
+  @Delete(':workspace_id/coding/double-coded-review/:responseId/draft')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'responseId', type: Number })
+  @ApiOkResponse({
+    description: 'Own manager draft deleted',
+    schema: {
+      type: 'object',
+      properties: { success: { type: 'boolean' } },
+      required: ['success']
+    }
+  })
+  async deleteDoubleCodedReviewDraft(
+  @WorkspaceId() workspace_id: number,
+    @Param('responseId') responseId: number,
+    @Req() req: Request
+  ) {
+    const manager = this.getRequestManager(req);
+    return this.codingReviewService.deleteDoubleCodedReviewDraft(
+      workspace_id,
+      Number(responseId),
+      manager.userId
+    );
+  }
+
+  private getRequestManager(req: Request): { userId: number; name: string } {
+    const user = (
+      req as Request & {
+        user?: {
+          id?: string | number;
+          username?: string;
+          preferred_username?: string;
+          name?: string;
+        };
+      }
+    ).user;
+    const userId = Number(user?.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new UnauthorizedException(
+        'Authenticated manager identity is missing'
+      );
+    }
+    return {
+      userId,
+      name:
+        user?.preferred_username ||
+        user?.username ||
+        user?.name ||
+        `Manager ${userId}`
+    };
   }
 }

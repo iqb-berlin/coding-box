@@ -22,6 +22,7 @@ import { VariableAnalysisItemDto } from '../../../../../../../api-dto/coding/var
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { ResponseAnalysisDto } from '../../../../../../../api-dto/coding/response-analysis.dto';
+import { DoubleCodedResolutionDecisionDto } from '../../../../../../../api-dto/coding/double-coded-review.dto';
 
 @Injectable()
 export class WorkspaceCodingService {
@@ -631,13 +632,7 @@ export class WorkspaceCodingService {
 
   async applyDoubleCodedResolutions(
     workspaceId: number,
-    decisions: Array<{
-      responseId: number;
-      selectedJobId?: number | null;
-      code?: number | null;
-      score?: number | null;
-      resolutionComment?: string;
-    }>
+    decisions: DoubleCodedResolutionDecisionDto[]
   ): Promise<{
       success: boolean;
       appliedCount: number;
