@@ -49,6 +49,7 @@ import {
   finalize
 } from 'rxjs';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
+import { DoubleCodedReviewApiService } from '../../services/double-coded-review-api.service';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
@@ -133,6 +134,7 @@ interface DoubleCodedReviewDialogData {
 })
 export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   private testPersonCodingService = inject(TestPersonCodingService);
+  private doubleCodedReviewApi = inject(DoubleCodedReviewApiService);
   private appService: AppService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
@@ -1021,7 +1023,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.testPersonCodingService
+    this.doubleCodedReviewApi
       .getDoubleCodedVariablesForReview(
         workspaceId,
         this.currentPage,
@@ -1244,7 +1246,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     decisions: DoubleCodedResolutionDecisionDto[]
   ): void {
     this.isLoading = true;
-    this.testPersonCodingService
+    this.doubleCodedReviewApi
       .applyDoubleCodedResolutions(workspaceId, { decisions })
       .subscribe({
         next: response => {

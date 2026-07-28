@@ -3273,7 +3273,7 @@ describe('CodingManagementManualComponent', () => {
       codingJobBackendService: {
         getCodingJobs: jest.Mock;
       };
-      testPersonCodingService: {
+      doubleCodedReviewApi: {
         getDoubleCodedVariablesForReview: jest.Mock;
       };
       openDoubleCodingConflictCount: number;
@@ -3296,7 +3296,7 @@ describe('CodingManagementManualComponent', () => {
         }]
       }))
     };
-    componentInternals.testPersonCodingService = {
+    componentInternals.doubleCodedReviewApi = {
       getDoubleCodedVariablesForReview
     };
     component.isLoadingDoubleCodingConflictSummary = true;

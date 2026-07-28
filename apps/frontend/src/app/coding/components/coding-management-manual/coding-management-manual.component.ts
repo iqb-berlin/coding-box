@@ -66,6 +66,7 @@ import {
   CodingProgressOverview,
   TestPersonCodingService
 } from '../../services/test-person-coding.service';
+import { DoubleCodedReviewApiService } from '../../services/double-coded-review-api.service';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 import { ExternalCodingImportResultDto } from '../../../../../../../api-dto/coding/external-coding-import-result.dto';
 import { AppService } from '../../../core/services/app.service';
@@ -210,6 +211,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     coderTrainingsListComponent?: CoderTrainingsListComponent;
 
   private testPersonCodingService = inject(TestPersonCodingService);
+  private doubleCodedReviewApi = inject(DoubleCodedReviewApiService);
   private codingJobBackendService = inject(CodingJobBackendService);
   private missingsProfileService = inject(MissingsProfileService);
   private statisticsService = inject(CodingStatisticsService);
@@ -3761,7 +3763,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingDoubleCodingConflictSummary = true;
-    this.testPersonCodingService
+    this.doubleCodedReviewApi
       .getDoubleCodedVariablesForReview(
         workspaceId,
         1,
