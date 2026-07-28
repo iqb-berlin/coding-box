@@ -560,6 +560,7 @@ export class CodingManagementService {
   downloadCodingResults(
     version: StatisticsVersion,
     format: CodingResultsExportFormat,
+    missingsProfileId: number,
     includeReplayUrls: boolean,
     includeResponseValues: boolean = true,
     includeGeoGebraFiles: boolean = false,
@@ -572,6 +573,7 @@ export class CodingManagementService {
       workspaceId,
       version,
       format,
+      missingsProfileId,
       includeReplayUrls,
       includeResponseValues,
       includeGeoGebraFiles,
@@ -585,6 +587,7 @@ export class CodingManagementService {
     workspaceId: number,
     version: StatisticsVersion,
     format: CodingResultsExportFormat,
+    missingsProfileId: number,
     includeReplayUrls: boolean,
     includeResponseValues: boolean,
     includeGeoGebraFiles: boolean,
@@ -603,7 +606,8 @@ export class CodingManagementService {
         undefined,
         includeResponseValues,
         includeGeoGebraFiles,
-        includeGeoGebraResponseValues
+        includeGeoGebraResponseValues,
+        missingsProfileId
       ).toPromise();
 
       if (!jobStartResult) {
@@ -625,10 +629,7 @@ export class CodingManagementService {
         this.showInfoSnackbar(this.translateService.instant('coding-management.download-dialog.download-cancelled'));
         return;
       }
-      this.showErrorSnackbar(
-        this.translateService.instant('coding-management.download-dialog.download-failed', { error: (error as Error).message || error }),
-        false
-      );
+      this.showErrorSnackbar(this.getDownloadFailureMessage(error), false);
     } finally {
       this.clearActiveDownload('coding-results');
       this.downloadProgress$.next(null);
@@ -685,10 +686,7 @@ export class CodingManagementService {
         this.showInfoSnackbar(this.translateService.instant('coding-management.download-dialog.download-cancelled'));
         return;
       }
-      this.showErrorSnackbar(
-        this.translateService.instant('coding-management.download-dialog.download-failed', { error: (error as Error).message || error }),
-        false
-      );
+      this.showErrorSnackbar(this.getDownloadFailureMessage(error), false);
     } finally {
       this.clearActiveDownload('coding-list');
       this.codingListDownloadProgress$.next(null);
@@ -712,9 +710,20 @@ export class CodingManagementService {
 
       const subscription = timer(0, 2000).pipe(
         switchMap(() => this.exportService.getExportJobStatus(workspaceId, jobId)),
-        takeWhile(status => ['pending', 'processing'].includes(status.status), true)
+        takeWhile(
+          status => 'status' in status &&
+            ['pending', 'processing'].includes(status.status),
+          true
+        )
       ).subscribe({
         next: status => {
+          if (!('status' in status)) {
+            subscription.unsubscribe();
+            operation.pollingSubscription = undefined;
+            this.activeDownloads.delete(kind);
+            reject(new Error(status.error));
+            return;
+          }
           if (status.status === 'completed') {
             subscription.unsubscribe();
             operation.pollingSubscription = undefined;
@@ -882,6 +891,20 @@ export class CodingManagementService {
 
   private showInfoSnackbar(msg: string): void {
     this.snackBar.open(msg, 'Schließen', { duration: 3000 });
+  }
+
+  private getDownloadFailureMessage(error: unknown): string {
+    const summary = this.translateService.instant(
+      'coding-management.download-dialog.download-failed'
+    );
+    let details = '';
+    if (error instanceof Error) {
+      details = error.message.trim();
+    } else if (typeof error === 'string') {
+      details = error.trim();
+    }
+
+    return details ? `${summary}: ${details}` : summary;
   }
 
   private getDateString(): string {

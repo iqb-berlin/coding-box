@@ -3,6 +3,7 @@ import { SimpleChange } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { HttpClientModule } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { Subject } from 'rxjs';
 import { UnitPlayerComponent } from './unit-player.component';
 import { environment } from '../../../../environments/environment';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -34,6 +35,11 @@ describe('UnitPlayerComponent', () => {
     fixture = TestBed.createComponent(UnitPlayerComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
   });
 
   it('should create', () => {
@@ -80,6 +86,51 @@ describe('UnitPlayerComponent', () => {
     emitPlayerStateChanged();
 
     expect(emitSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('should forward key events only once after repeated iframe loads', () => {
+    const iframe = component.hostingIframe.nativeElement as HTMLIFrameElement;
+    const contentWindow = iframe.contentWindow as Window;
+    const dispatchSpy = jest.spyOn(window, 'dispatchEvent');
+    const updateIframeContent = component as unknown as {
+      updateIframeContent: (content: string) => void;
+    };
+
+    updateIframeContent.updateIframeContent('<html>first player</html>');
+    iframe.dispatchEvent(new Event('load'));
+    contentWindow.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+
+    expect(dispatchSpy).toHaveBeenCalledTimes(1);
+
+    updateIframeContent.updateIframeContent('<html>second player</html>');
+    iframe.dispatchEvent(new Event('load'));
+    contentWindow.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }));
+
+    expect(dispatchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('should clean up iframe listeners and the pending height timeout on destroy', () => {
+    fixture.destroy();
+    jest.useFakeTimers();
+    fixture = TestBed.createComponent(UnitPlayerComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    const iframe = component.hostingIframe.nativeElement as HTMLIFrameElement;
+    const contentWindow = iframe.contentWindow as Window;
+    const dispatchSpy = jest.spyOn(window, 'dispatchEvent');
+    const componentWithPrivateMethods = component as unknown as {
+      calculateIFrameHeight: () => number | undefined;
+    };
+    const calculateHeightSpy = jest.spyOn(componentWithPrivateMethods, 'calculateIFrameHeight');
+
+    iframe.dispatchEvent(new Event('load'));
+    fixture.destroy();
+    contentWindow.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+    jest.advanceTimersByTime(500);
+
+    expect(dispatchSpy).not.toHaveBeenCalled();
+    expect(calculateHeightSpy).not.toHaveBeenCalled();
   });
 
   it('should normalize math text array values in replay data parts', () => {
@@ -139,5 +190,113 @@ describe('UnitPlayerComponent', () => {
     }).evaluatePageError('1', { pages: ['0'], current: '0' });
 
     expect(emitSpy).toHaveBeenCalledWith('notInList');
+  });
+
+  it('should navigate directly without restarting the player', () => {
+    const postMessage = jest.fn();
+    component.postMessageTarget = { postMessage } as unknown as Window;
+    component.playerApiVersion = 3;
+
+    expect(component.navigateToPage('page-2')).toBe(true);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'vopPageNavigationCommand',
+      sessionId: '',
+      target: 'page-2'
+    }, '*');
+  });
+
+  it('should emit responseVisible again when navigating to the current page', () => {
+    const emitSpy = jest.spyOn(component.responseVisible, 'emit');
+    const appService = TestBed.inject(AppService);
+    const source = component.hostingIframe.nativeElement.contentWindow;
+    component.postMessageTarget = source;
+
+    appService.postMessage$.next(new MessageEvent('message', {
+      data: {
+        type: 'vopStateChangedNotification',
+        playerState: {
+          validPages: ['page-1'],
+          currentPage: 'page-1'
+        }
+      },
+      source
+    }));
+    expect(emitSpy).toHaveBeenCalledTimes(1);
+    expect(component.pageList).toEqual([]);
+
+    expect(component.navigateToPage('page-1')).toBe(true);
+
+    expect(emitSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('should handle a player state without a current page', () => {
+    const appService = TestBed.inject(AppService);
+    const source = component.hostingIframe.nativeElement.contentWindow;
+
+    expect(() => {
+      appService.postMessage$.next(new MessageEvent('message', {
+        data: {
+          type: 'vopStateChangedNotification',
+          playerState: {
+            validPages: ['page-1'],
+            currentPage: null
+          }
+        },
+        source
+      }));
+    }).not.toThrow();
+
+    expect(
+      (component as unknown as { currentPageId: string }).currentPageId
+    ).toBe('');
+  });
+
+  it('should validate the requested page again after direct navigation', () => {
+    jest.useFakeTimers();
+    const emitSpy = jest.spyOn(component.invalidPage, 'emit');
+    component.postMessageTarget = { postMessage: jest.fn() } as unknown as Window;
+
+    (component as unknown as {
+      validPages: Subject<{ pages: string[]; current: string }>;
+    }).validPages.next({
+      pages: ['page-1'],
+      current: 'page-1'
+    });
+
+    expect(component.navigateToPage('page-2')).toBe(true);
+    jest.advanceTimersByTime(2000);
+
+    expect(emitSpy).toHaveBeenCalledWith('notInList');
+  });
+
+  it('should validate a new page again after responses change', () => {
+    jest.useFakeTimers();
+    const emitSpy = jest.spyOn(component.invalidPage, 'emit');
+    const validPages = (component as unknown as {
+      validPages: Subject<{ pages: string[]; current: string }>;
+    }).validPages;
+
+    fixture.componentRef.setInput('pageId', 'page-1');
+    fixture.componentRef.setInput('unitResponses', { responses: [] });
+    fixture.detectChanges();
+    validPages.next({ pages: ['page-1'], current: 'page-1' });
+    jest.advanceTimersByTime(2000);
+    expect(emitSpy).not.toHaveBeenCalled();
+
+    fixture.componentRef.setInput('pageId', 'page-2');
+    fixture.componentRef.setInput('unitResponses', {
+      responses: [{ id: '1', content: 'new response' }]
+    });
+    fixture.detectChanges();
+    validPages.next({ pages: ['page-1'], current: 'page-1' });
+    jest.advanceTimersByTime(2000);
+
+    expect(emitSpy).toHaveBeenCalledWith('notInList');
+  });
+
+  it('should not navigate before the player is ready', () => {
+    component.postMessageTarget = undefined;
+
+    expect(component.navigateToPage('page-2')).toBe(false);
   });
 });

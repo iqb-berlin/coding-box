@@ -39,6 +39,8 @@ type UnitCodingJobMetadata = {
   groupNames?: string;
 };
 
+const CODING_INCOMPLETE_STATUS = statusStringToNumber('CODING_INCOMPLETE');
+
 @Injectable()
 export class CodingProcessService {
   private readonly logger = new Logger(CodingProcessService.name);
@@ -287,10 +289,7 @@ export class CodingProcessService {
       return statistics;
     }
 
-    const queryRunner =
-      this.responseRepository.manager.connection.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction('READ COMMITTED');
+    let queryRunner: QueryRunner | undefined;
 
     try {
       // Step 1: Get persons - 10% progress
@@ -300,7 +299,6 @@ export class CodingProcessService {
 
       if (!persons || persons.length === 0) {
         this.logger.warn('Keine Personen gefunden mit den angegebenen IDs.');
-        await queryRunner.release();
         return statistics;
       }
 
@@ -316,7 +314,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after getting persons`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -329,7 +326,6 @@ export class CodingProcessService {
         this.logger.log(
           'Keine Booklets für die angegebenen Personen gefunden.'
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -345,7 +341,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after getting booklets`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -358,7 +353,6 @@ export class CodingProcessService {
         this.logger.log(
           'Keine Aufgaben für die angegebenen Testhefte gefunden.'
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -372,7 +366,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after getting units`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -401,7 +394,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after processing units`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -409,14 +401,12 @@ export class CodingProcessService {
       const responseQueryStart = Date.now();
       const allResponses = await this.fetchResponses(
         unitIdsArray,
-        queryRunner,
         resolvedAutoCoderRun
       );
       metrics.responseQuery = Date.now() - responseQueryStart;
 
       if (!allResponses || allResponses.length === 0) {
         this.logger.log('Keine zu kodierenden Antworten gefunden.');
-        await queryRunner.release();
         return statistics;
       }
 
@@ -430,7 +420,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after getting responses`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -449,7 +438,6 @@ export class CodingProcessService {
 
       if (filteredResponses.length === 0) {
         this.logger.log('Keine kodierbaren Antworten nach Readiness-Filter gefunden.');
-        await queryRunner.release();
         return statistics;
       }
 
@@ -457,7 +445,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after filtering responses`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -480,7 +467,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after processing responses`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -503,7 +489,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after getting test files`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -516,8 +501,7 @@ export class CodingProcessService {
         await this.extractCodingSchemeReferences(
           units,
           fileIdToTestFileMap,
-          jobId,
-          queryRunner
+          jobId
         );
       metrics.schemeExtract = Date.now() - schemeExtractStart;
 
@@ -531,7 +515,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after extracting scheme references`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -540,8 +523,7 @@ export class CodingProcessService {
       const fileIdToCodingSchemeMap = await this.getCodingSchemeFiles(
         workspace_id,
         codingSchemeRefs,
-        jobId,
-        queryRunner
+        jobId
       );
       metrics.schemeQuery = Date.now() - schemeQueryStart;
       // No separate parsing step needed as it's handled by the cache helper
@@ -562,7 +544,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after parsing coding schemes`
         );
-        await queryRunner.release();
         return statistics;
       }
 
@@ -578,7 +559,6 @@ export class CodingProcessService {
         statistics,
         resolvedAutoCoderRun,
         jobId,
-        queryRunner,
         progressCallback
       );
 
@@ -589,11 +569,15 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused after coding responses`
         );
-        await queryRunner.release();
         return statistics;
       }
 
       // Step 12: Update responses in database - 100% progress
+      queryRunner =
+        this.responseRepository.manager.connection.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction('READ COMMITTED');
+
       const updateSuccess =
         await this.responseManagementService.updateResponsesInDatabase(
           workspace_id,
@@ -643,11 +627,18 @@ export class CodingProcessService {
       this.logger.error(
         `Error while processing test persons in batch: ${error.message} \n ${error.stack}`
       );
-      await queryRunner.rollbackTransaction();
-      return statistics;
+      throw error;
     } finally {
-      if (!queryRunner.isReleased) {
-        await queryRunner.release();
+      if (queryRunner && !queryRunner.isReleased) {
+        try {
+          if (queryRunner.isTransactionActive) {
+            await queryRunner.rollbackTransaction();
+          }
+        } finally {
+          if (!queryRunner.isReleased) {
+            await queryRunner.release();
+          }
+        }
       }
     }
   }
@@ -693,11 +684,9 @@ export class CodingProcessService {
 
   private async fetchResponses(
     unitIds: number[],
-    queryRunner: QueryRunner,
     autoCoderRun: number
   ): Promise<ResponseEntity[]> {
-    const responseRepo = queryRunner.manager.getRepository(ResponseEntity);
-    const query = responseRepo
+    const query = this.responseRepository
       .createQueryBuilder('ResponseEntity')
       .select([
         'ResponseEntity.id',
@@ -931,7 +920,6 @@ export class CodingProcessService {
     statistics: CodingStatistics,
     autoCoderRun: number = 1,
     jobId?: string,
-    queryRunner?: import('typeorm').QueryRunner,
     progressCallback?: (progress: number) => void
   ): Promise<{
       allCodedResponses: CodedResponse[];
@@ -956,26 +944,36 @@ export class CodingProcessService {
           fileIdToCodingSchemeMap.get(codingSchemeRef) || emptyScheme :
           emptyScheme;
 
-        const variableAliasToIdMap = new Map<string, string>();
-        if (Array.isArray(scheme.variableCodings)) {
-          scheme.variableCodings.forEach((vc: VariableCodingData) => {
-            const key = (vc.alias ?? vc.id) as string | undefined;
-            const value = vc.id as string | undefined;
-            if (key && value) {
-              variableAliasToIdMap.set(key, value);
-            }
-          });
-        }
+        const technicalIdFallbackByAlias =
+          this.createUnambiguousTechnicalIdFallbacks(
+            scheme.variableCodings || []
+          );
 
         const inputResponses = responses.map(response => {
           let inputStatus = response.status;
           let inputCode: number | undefined;
           let inputScore: number | undefined;
           if (autoCoderRun === 2) {
-            inputStatus =
-              response.status_v2 ?? response.status_v1 ?? response.status;
-            inputCode = response.code_v2 ?? response.code_v1 ?? undefined;
-            inputScore = response.score_v2 ?? response.score_v1 ?? undefined;
+            const isOpenV2Placeholder =
+              response.status_v2 === CODING_INCOMPLETE_STATUS &&
+              response.code_v2 === null &&
+              response.score_v2 === null;
+            const hasV2Result =
+              !isOpenV2Placeholder && (
+                response.status_v2 !== null ||
+                response.code_v2 !== null ||
+                response.score_v2 !== null
+              );
+            if (hasV2Result) {
+              inputStatus =
+                response.status_v2 ?? response.status_v1 ?? response.status;
+              inputCode = response.code_v2 ?? undefined;
+              inputScore = response.score_v2 ?? undefined;
+            } else {
+              inputStatus = response.status_v1 ?? response.status;
+              inputCode = response.code_v1 ?? undefined;
+              inputScore = response.score_v1 ?? undefined;
+            }
           }
           let responseValue = response.value as import('@iqbspecs/response/response.interface').ResponseValueType;
           const isArrayString = /^\[.*]$/.test(response.value);
@@ -1008,27 +1006,13 @@ export class CodingProcessService {
           }
           statistics.statusCounts[codedStatus] += 1;
 
-          const mappedIdFromAlias = variableAliasToIdMap.get(codedResult.id);
-          const possibleVariableIds = new Set<string>([codedResult.id]);
-          if (mappedIdFromAlias) {
-            possibleVariableIds.add(mappedIdFromAlias);
-          }
-          const possibleVariableIdsNormalized = new Set(
-            Array.from(possibleVariableIds).map(v => String(v).toUpperCase())
-          );
           const codedSubform = codedResult.subform || '';
-
-          // Prefer updates for the same variable + subform to avoid generating
-          // duplicates on repeated autocoder runs (especially for derived vars).
-          const matchingResponses = responses
-            .filter(
-              r => possibleVariableIdsNormalized.has(
-                String(r.variableid).toUpperCase()
-              ) &&
-                String(r.subform || '') === codedSubform
-            )
-            .sort((a, b) => b.id - a.id);
-          const existingResponse = matchingResponses[0];
+          const existingResponse = this.findExistingResponseForAutocoderResult(
+            responses,
+            codedResult.id,
+            codedSubform,
+            technicalIdFallbackByAlias
+          );
 
           const codedResponse: CodedResponse = {
             id: existingResponse ? existingResponse.id : -1
@@ -1076,14 +1060,12 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused during response processing`
         );
-        if (queryRunner) {
-          await queryRunner.release();
-        }
         return { allCodedResponses, statistics };
       }
     }
 
     allCodedResponses.length = responseIndex;
+    this.assertUniqueAutocoderPersistenceTargets(allCodedResponses);
 
     if (progressCallback) {
       progressCallback(95);
@@ -1092,11 +1074,127 @@ export class CodingProcessService {
     return { allCodedResponses, statistics };
   }
 
+  private createUnambiguousTechnicalIdFallbacks(
+    variableCodings: VariableCodingData[]
+  ): Map<string, string> {
+    const outputVariableIds = new Set(
+      variableCodings
+        .map(coding => this.normalizeVariableId(coding.alias || coding.id))
+        .filter(Boolean)
+    );
+    const technicalIdFallbackByAlias = new Map<string, string>();
+
+    variableCodings.forEach(coding => {
+      const alias = coding.alias || coding.id;
+      const technicalId = coding.id;
+      if (!alias || !technicalId) {
+        return;
+      }
+
+      const normalizedAlias = this.normalizeVariableId(alias);
+      const normalizedTechnicalId = this.normalizeVariableId(technicalId);
+
+      // A technical ID that is also another coding's output alias is
+      // ambiguous and must never be used as a compatibility fallback.
+      if (
+        normalizedAlias === normalizedTechnicalId ||
+        outputVariableIds.has(normalizedTechnicalId)
+      ) {
+        return;
+      }
+
+      technicalIdFallbackByAlias.set(normalizedAlias, technicalId);
+    });
+
+    return technicalIdFallbackByAlias;
+  }
+
+  private findExistingResponseForAutocoderResult(
+    responses: ResponseEntity[],
+    codedResultId: string,
+    codedSubform: string,
+    technicalIdFallbackByAlias: Map<string, string>
+  ): ResponseEntity | undefined {
+    const normalizedResultId = this.normalizeVariableId(codedResultId);
+    const hasMatchingSubform = (response: ResponseEntity) => (
+      String(response.subform || '') === codedSubform
+    );
+    const newestResponse = (matchingResponses: ResponseEntity[]) => (
+      matchingResponses.sort((a, b) => b.id - a.id)[0]
+    );
+
+    // Test-result response IDs use the variable alias. An exact alias match
+    // must win even when that alias is also another variable's technical ID.
+    const exactAliasMatch = responses
+      .filter(response => (
+        this.normalizeVariableId(response.variableid) === normalizedResultId &&
+        hasMatchingSubform(response)
+      ))
+      .sort((a, b) => (
+        Number(a.is_autocoder_generated) -
+          Number(b.is_autocoder_generated) ||
+        b.id - a.id
+      ))[0];
+    if (exactAliasMatch) {
+      return exactAliasMatch;
+    }
+
+    const mappedTechnicalId = technicalIdFallbackByAlias.get(
+      normalizedResultId
+    );
+    if (
+      !mappedTechnicalId ||
+      this.normalizeVariableId(mappedTechnicalId) === normalizedResultId
+    ) {
+      return undefined;
+    }
+
+    // Older runs may have persisted generated derived responses under the
+    // technical ID. Keep that compatibility fallback strictly limited to
+    // generated rows so an imported response with a colliding alias can never
+    // receive another variable's result.
+    return newestResponse(
+      responses.filter(response => (
+        response.is_autocoder_generated === true &&
+        this.normalizeVariableId(response.variableid) ===
+          this.normalizeVariableId(mappedTechnicalId) &&
+        hasMatchingSubform(response)
+      ))
+    );
+  }
+
+  private assertUniqueAutocoderPersistenceTargets(
+    codedResponses: CodedResponse[]
+  ): void {
+    const targetIndexes = new Map<string, number>();
+
+    codedResponses.forEach((response, index) => {
+      const target = response.isNew ?
+        `generated:${response.unitid}:${this.normalizeVariableId(
+          response.variableid
+        )}:${String(response.subform || '')}` :
+        `response:${response.id}`;
+      const previousIndex = targetIndexes.get(target);
+
+      if (previousIndex !== undefined) {
+        throw new Error(
+          `Autocoder produced multiple updates for ${target} ` +
+          `(results ${previousIndex + 1} and ${index + 1}).`
+        );
+      }
+
+      targetIndexes.set(target, index);
+    });
+  }
+
+  private normalizeVariableId(variableId: unknown): string {
+    return String(variableId ?? '').toUpperCase();
+  }
+
   private async getCodingSchemeFiles(
     workspaceId: number,
     codingSchemeRefs: Set<string>,
-    jobId?: string,
-    queryRunner?: import('typeorm').QueryRunner
+    jobId?: string
   ): Promise<Map<string, CodingScheme>> {
     const fileIdToCodingSchemeMap = await this.getCodingSchemesWithCache(
       workspaceId,
@@ -1106,9 +1204,6 @@ export class CodingProcessService {
       this.logger.log(
         `Job ${jobId} was cancelled or paused after getting coding scheme files`
       );
-      if (queryRunner) {
-        await queryRunner.release();
-      }
       return fileIdToCodingSchemeMap;
     }
 
@@ -1118,8 +1213,7 @@ export class CodingProcessService {
   private async extractCodingSchemeReferences(
     units: Unit[],
     fileIdToTestFileMap: Map<string, FileUpload>,
-    jobId?: string,
-    queryRunner?: import('typeorm').QueryRunner
+    jobId?: string
   ): Promise<{
       codingSchemeRefs: Set<string>;
       unitToCodingSchemeRefMap: Map<number, string>;
@@ -1165,9 +1259,6 @@ export class CodingProcessService {
         this.logger.log(
           `Job ${jobId} was cancelled or paused during scheme extraction`
         );
-        if (queryRunner) {
-          await queryRunner.release();
-        }
         return {
           codingSchemeRefs,
           unitToCodingSchemeRefMap

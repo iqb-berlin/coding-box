@@ -1082,10 +1082,29 @@ export class ExternalCodingImportService {
         };
       }
 
+      const hasScore = Object.prototype.hasOwnProperty.call(
+        codeDefinition,
+        'score'
+      );
+      const rawScore = (codeDefinition as { score?: unknown }).score;
+      if (
+        !hasScore ||
+        (rawScore !== null &&
+          (typeof rawScore !== 'number' || !Number.isFinite(rawScore)))
+      ) {
+        return {
+          isValid: false,
+          score: null,
+          status: 'CODING_INCOMPLETE',
+          reason: `Code '${code}' definiert im Kodierschema für Variable '${variableId}' keinen gültigen Score.`
+        };
+      }
+      const score = rawScore as number | null;
+
       // Code is valid, return the score and CODING_COMPLETE status
       return {
         isValid: true,
-        score: codeDefinition.score || 0,
+        score,
         status: 'CODING_COMPLETE'
       };
     } catch (error) {

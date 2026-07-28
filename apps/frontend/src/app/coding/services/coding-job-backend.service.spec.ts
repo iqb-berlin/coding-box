@@ -17,7 +17,11 @@ describe('CodingJobBackendService', () => {
   let service: CodingJobBackendService;
   let httpMock: HttpTestingController;
   let validationTaskStateServiceMock: { invalidateWorkspace: jest.Mock };
-  let keycloak: { authenticated: boolean; token?: string; updateToken: jest.Mock };
+  let keycloak: {
+    authenticated: boolean;
+    token?: string;
+    updateToken: jest.Mock;
+  };
   let fetchMock: jest.Mock;
   let originalFetch: typeof globalThis.fetch | undefined;
 
@@ -123,39 +127,43 @@ describe('CodingJobBackendService', () => {
         done();
       });
 
-      const firstRequest = httpMock.expectOne(request => (
-        request.url === `${mockServerUrl}admin/workspace/1/variable-bundle` &&
-        request.params.get('page') === '1' &&
-        request.params.get('limit') === '100'
-      ));
+      const firstRequest = httpMock.expectOne(
+        request => request.url === `${mockServerUrl}admin/workspace/1/variable-bundle` &&
+          request.params.get('page') === '1' &&
+          request.params.get('limit') === '100'
+      );
       expect(firstRequest.request.method).toBe('GET');
       firstRequest.flush({
-        data: [{
-          id: 1,
-          name: 'Bundle 1',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          variables: []
-        }],
+        data: [
+          {
+            id: 1,
+            name: 'Bundle 1',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            variables: []
+          }
+        ],
         total: 101,
         page: 1,
         limit: 100
       });
 
-      const secondRequest = httpMock.expectOne(request => (
-        request.url === `${mockServerUrl}admin/workspace/1/variable-bundle` &&
-        request.params.get('page') === '2' &&
-        request.params.get('limit') === '100'
-      ));
+      const secondRequest = httpMock.expectOne(
+        request => request.url === `${mockServerUrl}admin/workspace/1/variable-bundle` &&
+          request.params.get('page') === '2' &&
+          request.params.get('limit') === '100'
+      );
       expect(secondRequest.request.method).toBe('GET');
       secondRequest.flush({
-        data: [{
-          id: 2,
-          name: 'Bundle 2',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          variables: []
-        }],
+        data: [
+          {
+            id: 2,
+            name: 'Bundle 2',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            variables: []
+          }
+        ],
         total: 101,
         page: 2,
         limit: 100
@@ -239,7 +247,10 @@ describe('CodingJobBackendService', () => {
       );
       expect(req.request.method).toBe('GET');
       req.flush({
-        data: [], total: 0, page: 2, limit: 25
+        data: [],
+        total: 0,
+        page: 2,
+        limit: 25
       });
     });
   });
@@ -250,6 +261,8 @@ describe('CodingJobBackendService', () => {
         expect(definitions).toEqual([
           expect.objectContaining({
             id: 7,
+            name: 'Lesen Klasse 4',
+            description: 'Erste Erhebung',
             createdJobsCount: 3,
             blockingCreatedJobsCount: 1,
             showScore: true,
@@ -284,6 +297,8 @@ describe('CodingJobBackendService', () => {
       req.flush([
         {
           id: 7,
+          name: 'Lesen Klasse 4',
+          description: 'Erste Erhebung',
           status: 'approved',
           created_jobs_count: 3,
           blocking_created_jobs_count: 1,
@@ -490,10 +505,12 @@ describe('CodingJobBackendService', () => {
     it('should preview a job definition update refresh with the proposed definition', () => {
       const update = { maxCodingCases: 4 };
 
-      service.previewJobDefinitionUpdateRefresh(1, 42, update).subscribe(response => {
-        expect(response.plannedCases).toBe(4);
-        expect(response.canApply).toBe(true);
-      });
+      service
+        .previewJobDefinitionUpdateRefresh(1, 42, update)
+        .subscribe(response => {
+          expect(response.plannedCases).toBe(4);
+          expect(response.canApply).toBe(true);
+        });
 
       const req = httpMock.expectOne(
         `${mockServerUrl}admin/workspace/1/coding/job-definitions/42/update-refresh-preview`
@@ -518,10 +535,12 @@ describe('CodingJobBackendService', () => {
     it('should apply a job definition update refresh and invalidate validation state', () => {
       const update = { maxCodingCases: 4 };
 
-      service.applyJobDefinitionUpdateRefresh(1, 42, update).subscribe(response => {
-        expect(response.success).toBe(true);
-        expect(response.jobsCreated).toBe(2);
-      });
+      service
+        .applyJobDefinitionUpdateRefresh(1, 42, update)
+        .subscribe(response => {
+          expect(response.success).toBe(true);
+          expect(response.jobsCreated).toBe(2);
+        });
 
       const req = httpMock.expectOne(
         `${mockServerUrl}admin/workspace/1/coding/job-definitions/42/update-refresh-apply`
@@ -560,13 +579,15 @@ describe('CodingJobBackendService', () => {
           expect(response).toEqual([]);
         });
 
-      const req = httpMock.expectOne(request => request.url ===
-          `${mockServerUrl}admin/workspace/1/coding/incomplete-variables` &&
-        request.params.get('unitName') === 'Unit 1' &&
-        request.params.get('trainingRequired') === 'false' &&
-        request.params.get('includeDeriveErrorOnly') === 'true' &&
-        request.params.get('excludeJobDefinitionId') === '55' &&
-        request.params.has('_t'));
+      const req = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/1/coding/incomplete-variables` &&
+          request.params.get('unitName') === 'Unit 1' &&
+          request.params.get('trainingRequired') === 'false' &&
+          request.params.get('includeDeriveErrorOnly') === 'true' &&
+          request.params.get('excludeJobDefinitionId') === '55' &&
+          request.params.has('_t')
+      );
       expect(req.request.method).toBe('GET');
       req.flush([]);
     });
@@ -593,6 +614,29 @@ describe('CodingJobBackendService', () => {
       expect(req.request.method).toBe('GET');
       expect(req.request.headers.get('Authorization')).toBe('Bearer url-token');
       req.flush([]);
+    });
+
+    it('should load a replay session with the supplied token and onlyOpen flag', () => {
+      service.getReplayCodingSession(47, 123, 'url-token', true).subscribe();
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}wsg-admin/workspace/47/coding-job/123/replay-session?onlyOpen=true`
+      );
+      expect(req.request.method).toBe('GET');
+      expect(req.request.headers.get('Authorization')).toBe('Bearer url-token');
+      req.flush({
+        units: [],
+        progress: {},
+        notes: {},
+        job: {
+          status: 'active',
+          comment: null,
+          showScore: false,
+          allowComments: true,
+          suppressGeneralInstructions: false
+        },
+        serverTimings: {}
+      });
     });
 
     it('should prepare coding job reviews through the read-only endpoint', () => {
@@ -631,17 +675,22 @@ describe('CodingJobBackendService', () => {
       ['pauseCodingJob', 'pause'],
       ['resumeCodingJob', 'resume'],
       ['submitCodingJob', 'submit']
-    ] as const)('should use the %s endpoint with auth token override', (methodName, path) => {
-      service[methodName](47, 123, 'url-token').subscribe();
+    ] as const)(
+      'should use the %s endpoint with auth token override',
+      (methodName, path) => {
+        service[methodName](47, 123, 'url-token').subscribe();
 
-      const req = httpMock.expectOne(
-        `${mockServerUrl}wsg-admin/workspace/47/coding-job/123/${path}`
-      );
-      expect(req.request.method).toBe('POST');
-      expect(req.request.body).toEqual({});
-      expect(req.request.headers.get('Authorization')).toBe('Bearer url-token');
-      req.flush({});
-    });
+        const req = httpMock.expectOne(
+          `${mockServerUrl}wsg-admin/workspace/47/coding-job/123/${path}`
+        );
+        expect(req.request.method).toBe('POST');
+        expect(req.request.body).toEqual({});
+        expect(req.request.headers.get('Authorization')).toBe(
+          'Bearer url-token'
+        );
+        req.flush({});
+      }
+    );
 
     it('should use the supplied auth token when saving coding progress', () => {
       service
@@ -728,6 +777,117 @@ describe('CodingJobBackendService', () => {
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual({});
       req.flush(null);
+    });
+  });
+
+  describe('psychometric exports', () => {
+    it('loads VOMD domain candidates for the workspace', () => {
+      service.getPsychometricDomainCandidates(5).subscribe(result => {
+        expect(result.candidates[0].entryId).toBe('domain');
+        expect(result.mappingIssueCount).toBe(0);
+      });
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/5/coding/export/psychometric-domain-candidates`
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush({
+        candidates: [
+          {
+            scope: 'ITEM',
+            profileId: 'profile',
+            entryId: 'domain',
+            label: 'Domäne',
+            coverage: 2,
+            itemCount: 2,
+            singleValued: true,
+            selectable: true
+          }
+        ],
+        itemCount: 2,
+        mappingIssueCount: 0,
+        mappingFallbackCount: 0,
+        mappingIssuePreview: [],
+        mappingFallbackPreview: []
+      });
+    });
+  });
+
+  describe('item dataset exports', () => {
+    it('loads selectable VOMD items and mapping issues', () => {
+      service.getItemDatasetOptions(5).subscribe(result => {
+        expect(result.items[0].columnName).toBe('Aufgabe1_ITEM1');
+        expect(result.mappingIssues).toEqual([]);
+        expect(result.mappingWarnings).toEqual([]);
+      });
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/5/coding/export/item-dataset-options`
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush({
+        items: [{
+          unitId: 'UNIT1',
+          unitLabel: 'Aufgabe 1',
+          itemId: 'ITEM1',
+          itemLabel: 'Item 1',
+          columnName: 'Aufgabe1_ITEM1'
+        }],
+        mappingIssues: [],
+        mappingWarnings: []
+      });
+    });
+
+    it('loads diagnostics for a failed item matrix export', () => {
+      service.getItemMatrixExportDiagnostics(5, 'job-1')
+        .subscribe(result => expect(result.total).toBe(2));
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/5/coding/export/job/job-1/item-matrix-diagnostics`
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush({ total: 2, sampleLimit: 20, groups: [] });
+    });
+
+    it('downloads quarantined item matrix exports with the server filename', () => {
+      let download: { blob: Blob; fileName?: string } | undefined;
+      service.downloadIncompleteItemMatrix(5, 'job-1').subscribe(result => {
+        download = result;
+      });
+      const downloadRequest = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/5/coding/export/job/job-1/download-incomplete`
+      );
+      expect(downloadRequest.request.method).toBe('GET');
+      expect(downloadRequest.request.responseType).toBe('blob');
+      downloadRequest.flush(new Blob(['zip']), {
+        headers: {
+          'Content-Disposition':
+            'attachment; filename="Itemdatensatz-UNVOLLSTAENDIG-2026-07-24.zip"'
+        }
+      });
+      expect(download?.fileName).toBe(
+        'Itemdatensatz-UNVOLLSTAENDIG-2026-07-24.zip'
+      );
+      expect(download?.blob).toBeInstanceOf(Blob);
+
+      service.deleteExportJob(5, 'job-1').subscribe();
+      const deleteRequest = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/5/coding/export/job/job-1`
+      );
+      expect(deleteRequest.request.method).toBe('DELETE');
+      deleteRequest.flush({ success: true, message: 'deleted' });
+    });
+
+    it('falls back safely when an incomplete download has no filename header', () => {
+      let fileName: string | undefined = 'not-set';
+      service.downloadIncompleteItemMatrix(5, 'job-2').subscribe(result => {
+        fileName = result.fileName;
+      });
+      const request = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/5/coding/export/job/job-2/download-incomplete`
+      );
+      request.flush(new Blob(['zip']));
+      expect(fileName).toBeUndefined();
     });
   });
 });

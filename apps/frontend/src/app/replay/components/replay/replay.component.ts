@@ -12,7 +12,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ActivatedRoute, Params, Router } from '@angular/router';
 import {
-  firstValueFrom, of, Subject, Subscription, catchError, debounceTime
+  firstValueFrom, of, Subject, Subscription, catchError, debounceTime, takeUntil
 } from 'rxjs';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
 import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
@@ -21,7 +21,6 @@ import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 import { FileService } from '../../../shared/services/file/file.service';
 import {
   ReplayBackendService,
-  ReplayClientTimings,
   ReplayServerTimings
 } from '../../services/replay-backend.service';
 import { AppService } from '../../../core/services/app.service';
@@ -41,7 +40,6 @@ import { CodingJobCommentDialogComponent } from '../../../coding/components/codi
 import { NavigateCodingCasesDialogComponent, NavigateCodingCasesDialogData } from '../navigate-coding-cases-dialog/navigate-coding-cases-dialog.component';
 import { ReplayCodingRecoverySnapshot, ReplayCodingService, SavedCode } from '../../services/replay-coding.service';
 import { base64ToUtf8 } from '../../../shared/utils/common-utils';
-import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { hasManualInstruction } from '../../../coding/utils/manual-coding.util';
 import { findVariableCodingByPublicId } from '../../../coding/utils/coding-scheme.util';
 import {
@@ -50,6 +48,17 @@ import {
   WorkspaceTokenScope
 } from '../../../core/services/auth-session.config';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
+import { CodingScheme } from '../../../models/coding-interfaces';
+import {
+  ReplaySessionLoadError,
+  ReplaySessionLoadRequest,
+  ReplaySessionLoaderService
+} from '../../services/replay-session-loader.service';
+import { ReplayAttemptContext } from '../../utils/replay-attempt-context';
+import {
+  decideReplayNavigationStrategy,
+  ReplayNavigationContext
+} from '../../utils/replay-navigation-strategy';
 
 interface ReplayUnitPayload {
   unitDef: FilesDto[];
@@ -61,12 +70,17 @@ interface ReplayUnitPayload {
   };
   player: FilesDto[];
   vocs: FilesDto[];
+  codingScheme?: CodingScheme | null;
   serverTimings?: ReplayServerTimings;
 }
 
 interface PendingReplayNotesCommit {
   variableId: string;
   notes: string;
+}
+
+interface PendingReplayTokenRefresh {
+  request: Promise<string | null>;
 }
 
 type ReplayRecoveryMode = 'coding' | 'coding-decision';
@@ -85,7 +99,7 @@ interface ReplayRecoveryDraft {
 }
 
 @Component({
-  providers: [ReplayCodingService],
+  providers: [ReplayCodingService, ReplaySessionLoaderService],
   selector: 'coding-box-replay',
   imports: [
     MatFormFieldModule,
@@ -116,7 +130,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private dialog = inject(MatDialog);
   private translateService = inject(TranslateService);
   codingService = inject(ReplayCodingService);
-  private codingJobBackendService = inject(CodingJobBackendService);
+  private replaySessionLoader = inject(ReplaySessionLoaderService);
   private sessionRecoveryService = inject(SessionRecoveryService);
 
   player: string = '';
@@ -131,6 +145,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   unitId: string = '';
   isCodingMode: boolean = false;
   isCodingDecisionMode: boolean = false;
+  isCodingDecisionReadOnly: boolean = false;
   isBookletReplayMode: boolean = false; // for replays without coding features
   isReviewMode: boolean = false;
   isCodingIssueReviewMode: boolean = false;
@@ -141,6 +156,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private errorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
   private pageErrorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
   private routerSubscription: Subscription | null = null;
+  private routerRunId = 0;
+
+  private readonly replayTokenRefreshRequests =
+    new Map<string, PendingReplayTokenRefresh>();
+
   readonly testPersonInput = input<string>();
   readonly unitIdInput = input<string>();
   protected unitsData: UnitsReplay | null = null;
@@ -153,7 +173,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private unregisterRecoveryProvider: (() => void) | null = null;
   private readonly replayNotesCommitSubject = new Subject<PendingReplayNotesCommit>();
   private replayReAuthenticationPending = false;
-  private replayTokenRefreshRunning = false;
   private replayRecoveryRestorePromise: Promise<void> | null = null;
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
   @ViewChild(CodeSelectorComponent) codeSelectorComponent: CodeSelectorComponent | undefined;
@@ -163,14 +182,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.setupWatermarkObserver();
   }
 
-  private replayStartTime: number = 0; // Track when replay viewing starts
-  private routeStartTime: number = 0;
-  private loadStartTime: number = 0;
-  private payloadRequestStartTime: number = 0;
-  private payloadResponseTime: number = 0;
-  private playerReadyTime: number = 0;
-  private serverTimings: ReplayServerTimings | null = null;
-  private successStoredForCurrentReplay: boolean = false;
+  private replayAttempt = new ReplayAttemptContext();
   protected reloadKey: number = 0;
   workspaceId: number = 0;
   originResponseId: number | null = null;
@@ -181,6 +193,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private anchorHighlightTimeout: ReturnType<typeof setTimeout> | null = null;
   private anchorHighlightRunId = 0;
   private unitPayloadRunId = 0;
+  private unitPayloadCancellation: Subject<void> | undefined = new Subject<void>();
+
+  private appliedReplayContext: ReplayNavigationContext | null = null;
+
   private readonly ANCHOR_HIGHLIGHT_RETRY_DELAY_MS = 100;
   private readonly ANCHOR_HIGHLIGHT_MAX_ATTEMPTS = 40;
   private readonly REPLAY_NOTES_COMMIT_DEBOUNCE_MS = 750;
@@ -198,7 +214,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private readonly MAX_PANEL_WIDTH_RATIO = 0.6;
 
   ngOnInit(): void {
-    this.replayStartTime = performance.now();
     this.unregisterRecoveryProvider = this.sessionRecoveryService.registerProvider({
       key: this.replayRecoveryKey,
       capture: () => this.createReplayRecoveryDraft()
@@ -223,10 +238,18 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private openErrorSnackBar(message: string, action: string) {
-    this.errorSnackbarRef = this.errorSnackBar
+    const routerRunId = this.routerRunId;
+    const snackbarRef = this.errorSnackBar
       .open(message, action, { panelClass: ['snackbar-error'] });
-    this.errorSnackbarRef.afterDismissed().subscribe(() => {
+    this.errorSnackbarRef = snackbarRef;
+    snackbarRef.afterDismissed().subscribe(() => {
+      if (this.errorSnackbarRef !== snackbarRef) {
+        return;
+      }
       this.errorSnackbarRef = null;
+      if (!this.isCurrentRouterRun(routerRunId)) {
+        return;
+      }
       this.resetUnitData();
       this.setIsLoaded();
     });
@@ -237,12 +260,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       this.pageErrorSnackbarRef = this.pageErrorSnackBar
         .open(message, action, { panelClass: ['snackbar-error'] });
     }
-  }
-
-  private async getAuthToken(): Promise<string> {
-    const queryParams = await firstValueFrom(this.route.queryParams);
-    const { auth } = queryParams;
-    return auth;
   }
 
   private getWorkspaceIdFromAuthToken(authToken?: string): number {
@@ -290,19 +307,36 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return tokenWorkspaceId === workspaceId;
   }
 
-  private async refreshExpiredReplayAuthToken(workspaceId: number): Promise<void> {
+  private async refreshExpiredReplayAuthToken(
+    workspaceId: number,
+    routerRunId?: number,
+    scopes: WorkspaceTokenScope[] = this.getReplayTokenScopes()
+  ): Promise<void> {
     const tokenValidation: ReturnType<typeof validateToken> = this.authToken ?
       validateToken(this.authToken) :
       { isValid: false, errorType: 'token_invalid' };
-    if (tokenValidation.isValid || tokenValidation.errorType !== 'token_expired') {
+    const shouldRefresh = !tokenValidation.isValid &&
+      tokenValidation.errorType === 'token_expired' &&
+      this.canRefreshReplayAuthTokenForWorkspace(
+        workspaceId,
+        tokenValidation
+      );
+    this.pruneReplayTokenRefreshRequests(
+      shouldRefresh ?
+        this.getReplayTokenRefreshCacheKey(workspaceId, scopes) :
+        null
+    );
+    if (!shouldRefresh) {
       return;
     }
 
-    if (!this.canRefreshReplayAuthTokenForWorkspace(workspaceId, tokenValidation)) {
-      return;
-    }
-
-    await this.refreshReplayAuthTokenForWorkspace(workspaceId);
+    await this.refreshReplayAuthTokenForWorkspace(
+      workspaceId,
+      routerRunId === undefined ?
+        undefined :
+        () => this.isCurrentRouterRun(routerRunId),
+      scopes
+    );
   }
 
   private async refreshReplayAuthTokenAfterReAuthentication(): Promise<void> {
@@ -332,32 +366,91 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  private async refreshReplayAuthTokenForWorkspace(workspaceId: number): Promise<boolean> {
-    if (this.replayTokenRefreshRunning || !this.appService.hasStoredAuthToken()) {
-      return false;
+  private getReplayTokenRefreshRequest(
+    workspaceId: number,
+    scopes: WorkspaceTokenScope[]
+  ): PendingReplayTokenRefresh {
+    const cacheKey = this.getReplayTokenRefreshCacheKey(workspaceId, scopes);
+    const pendingRequest = this.replayTokenRefreshRequests.get(cacheKey);
+    if (pendingRequest) {
+      return pendingRequest;
     }
 
-    this.replayTokenRefreshRunning = true;
-    try {
-      const token = await firstValueFrom(this.appService.createOwnToken(
+    const requestEntry: PendingReplayTokenRefresh = {
+      request: firstValueFrom(this.appService.createOwnToken(
         workspaceId,
         1,
-        this.getReplayTokenScopes()
-      ));
-      if (!token) {
-        return false;
-      }
+        scopes
+      ))
+        .then(token => token || null)
+        .catch(() => null)
+    };
+    this.replayTokenRefreshRequests.set(cacheKey, requestEntry);
+    return requestEntry;
+  }
 
-      this.authToken = token;
-      this.workspaceId = workspaceId;
-      this.codingService.setAuthToken(token);
-      this.removeReplayAuthTokenFromUrl(token);
-      return true;
-    } catch (error) {
-      return false;
-    } finally {
-      this.replayTokenRefreshRunning = false;
+  private clearReplayTokenRefreshRequest(
+    workspaceId: number,
+    scopes: WorkspaceTokenScope[],
+    requestEntry: PendingReplayTokenRefresh
+  ): void {
+    const cacheKey = this.getReplayTokenRefreshCacheKey(workspaceId, scopes);
+    if (this.replayTokenRefreshRequests.get(cacheKey) === requestEntry) {
+      this.replayTokenRefreshRequests.delete(cacheKey);
     }
+  }
+
+  private async refreshReplayAuthTokenForWorkspace(
+    workspaceId: number,
+    canApply: (() => boolean) | undefined = undefined,
+    scopes: WorkspaceTokenScope[] = this.getReplayTokenScopes()
+  ): Promise<boolean> {
+    if (!this.appService.hasStoredAuthToken()) {
+      return false;
+    }
+
+    const requestEntry = this.getReplayTokenRefreshRequest(workspaceId, scopes);
+    const token = await requestEntry.request;
+    const cacheKey = this.getReplayTokenRefreshCacheKey(workspaceId, scopes);
+    if (
+      this.replayTokenRefreshRequests.get(cacheKey) !== requestEntry ||
+      (canApply && !canApply())
+    ) {
+      return false;
+    }
+    this.clearReplayTokenRefreshRequest(workspaceId, scopes, requestEntry);
+    if (!token) {
+      return false;
+    }
+
+    this.authToken = token;
+    this.workspaceId = workspaceId;
+    this.codingService.setAuthToken(token);
+    this.removeReplayAuthTokenFromUrl(token);
+    return true;
+  }
+
+  private getReplayTokenRefreshCacheKey(
+    workspaceId: number,
+    scopes: WorkspaceTokenScope[]
+  ): string {
+    const normalizedScopes = [...new Set(scopes)].sort();
+    return `${workspaceId}:${normalizedScopes.join(',')}`;
+  }
+
+  private pruneReplayTokenRefreshRequests(cacheKey: string | null): void {
+    this.replayTokenRefreshRequests.forEach((_requestEntry, requestCacheKey) => {
+      if (requestCacheKey !== cacheKey) {
+        this.replayTokenRefreshRequests.delete(requestCacheKey);
+      }
+    });
+  }
+
+  private getReplayTokenScopesForQueryParams(queryParams: Params): WorkspaceTokenScope[] {
+    const mode = String(queryParams.mode || '');
+    return queryParams.codingJobId || mode.startsWith('coding') ?
+      CODING_JOB_WORKSPACE_TOKEN_SCOPES :
+      REPLAY_WORKSPACE_TOKEN_SCOPES;
   }
 
   private getReplayTokenScopes(): WorkspaceTokenScope[] {
@@ -409,6 +502,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     } catch (error) {
       return null;
     }
+  }
+
+  private isCurrentRouterRun(runId: number): boolean {
+    return runId === this.routerRunId;
   }
 
   private deserializeReviewCodeSelections(value: unknown): ReviewCodeSelection[] {
@@ -466,25 +563,61 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   subscribeRouter(): void {
+    this.routerSubscription?.unsubscribe();
     this.routerSubscription = this.route.params
       ?.subscribe(async params => {
-        this.routeStartTime = performance.now();
+        this.routerRunId += 1;
+        const routerRunId = this.routerRunId;
+        const replayAttempt = this.beginReplayAttempt(performance.now());
         this.resetSnackBars();
-        this.resetUnitData();
-        this.authToken = await this.getAuthToken();
+        this.invalidateUnitPayloadRequests();
+        this.cancelPendingAnchorHighlight();
         const queryParams = await firstValueFrom(this.route.queryParams);
+        if (!this.isCurrentRouterRun(routerRunId)) {
+          return;
+        }
+        this.authToken = queryParams.auth;
+        const cachedJobId = Number(queryParams.codingJobId);
+        const cachedWorkspaceId = Number(queryParams.workspaceId);
+        const cachedOnlyOpen = queryParams.onlyOpen === 'true';
+        const incomingSessionRequest: ReplaySessionLoadRequest | null =
+          queryParams.codingJobId &&
+          queryParams.workspaceId &&
+          !queryParams.unitsData ?
+            {
+              workspaceId: cachedWorkspaceId,
+              codingJobId: cachedJobId,
+              authToken: this.authToken,
+              onlyOpen: cachedOnlyOpen,
+              replayAttemptId: replayAttempt.id
+            } :
+            null;
+        const incomingUnitsCacheKey =
+          this.replaySessionLoader.retainOnly(incomingSessionRequest);
+        const preserveCodingData = incomingUnitsCacheKey !== null &&
+          this.unitsData?.id === cachedJobId &&
+          this.loadedCodingJobUnitsKey === incomingUnitsCacheKey;
+        this.resetUnitData(preserveCodingData);
         let restoredReplayRecovery = false;
         this.workspaceId = this.getWorkspaceIdFromQueryParams(queryParams) ||
           this.getWorkspaceIdFromAuthToken(this.authToken);
         if (this.workspaceId > 0) {
           this.appService.selectedWorkspaceId = this.workspaceId;
         }
-        await this.refreshExpiredReplayAuthToken(this.workspaceId);
+        await this.refreshExpiredReplayAuthToken(
+          this.workspaceId,
+          routerRunId,
+          this.getReplayTokenScopesForQueryParams(queryParams)
+        );
+        if (!this.isCurrentRouterRun(routerRunId)) {
+          return;
+        }
         this.codingService.setAuthToken(this.authToken);
         const workspace = this.workspaceId ? String(this.workspaceId) : undefined;
         this.isReviewMode = queryParams.mode === 'coding-review';
         this.isCodingIssueReviewMode = queryParams.mode === 'coding-issue-review';
         this.isCodingDecisionMode = queryParams.mode === 'coding-decision';
+        this.isCodingDecisionReadOnly = queryParams.decisionReadOnly === 'true';
         this.codingService.isReviewMode = this.isReviewMode;
         this.codingService.isCodingIssueReviewMode = this.isCodingIssueReviewMode;
         this.isCodingMode = queryParams.mode === 'coding' ||
@@ -506,39 +639,58 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             const jobId = Number(queryParams.codingJobId);
             const wsId = Number(queryParams.workspaceId);
             const onlyOpen = queryParams.onlyOpen === 'true';
-            const unitsCacheKey = `${wsId}:${jobId}:${onlyOpen}`;
-            try {
-              if (this.unitsData?.id === jobId && this.loadedCodingJobUnitsKey === unitsCacheKey) {
-                deserializedUnits = this.unitsData;
-              } else {
-                const apiUnits = await firstValueFrom(
-                  this.codingJobBackendService.getCodingJobUnits(wsId, jobId, this.authToken, onlyOpen)
+            const sessionRequest: ReplaySessionLoadRequest = {
+              workspaceId: wsId,
+              codingJobId: jobId,
+              authToken: this.authToken,
+              onlyOpen,
+              replayAttemptId: replayAttempt.id
+            };
+            const unitsCacheKey =
+              this.replaySessionLoader.getRequestKey(sessionRequest);
+            if (this.unitsData?.id === jobId && this.loadedCodingJobUnitsKey === unitsCacheKey) {
+              deserializedUnits = this.unitsData;
+            } else {
+              const sessionLoad =
+                this.replaySessionLoader.load(sessionRequest);
+              try {
+                const result = await sessionLoad;
+                if (!this.isCurrentRouterRun(routerRunId)) {
+                  return;
+                }
+                this.replaySessionLoader.discard(
+                  sessionRequest,
+                  sessionLoad
                 );
-                if (apiUnits && apiUnits.length > 0) {
-                  deserializedUnits = {
-                    id: jobId,
-                    name: `Coding-Job: ${jobId}`,
-                    units: apiUnits.map((item, idx) => ({
-                      id: idx,
-                      name: item.unitName,
-                      alias: item.unitAlias,
-                      bookletId: 0,
-                      testPerson: item.personGroup ?
-                        `${item.personLogin}@${item.personCode}@${item.personGroup}@${item.bookletName}` :
-                        `${item.personLogin}@${item.personCode}@${item.bookletName}`,
-                      variableId: item.variableId,
-                      variableAnchor: item.variableAnchor,
-                      variablePage: item.variablePage,
-                      variableBundleId: item.variableBundleId,
-                      bundleContext: item.bundleContext
-                    })),
-                    currentUnitIndex: 0
-                  };
+                replayAttempt.recordCodingSession(result.timings);
+                if (result.source === 'session') {
+                  this.codingService.applyReplayCodingSession(result.session);
+                  this.codingProgressLoadedForJobKey = `${wsId}:${jobId}`;
+                }
+                deserializedUnits = result.unitsData;
+                if (deserializedUnits) {
                   this.loadedCodingJobUnitsKey = unitsCacheKey;
                 }
+              } catch (error) {
+                if (!this.isCurrentRouterRun(routerRunId)) {
+                  return;
+                }
+                this.replaySessionLoader.discard(
+                  sessionRequest,
+                  sessionLoad
+                );
+                const loadError = error instanceof ReplaySessionLoadError ?
+                  error :
+                  null;
+                if (loadError) {
+                  replayAttempt.recordCodingSession(loadError.timings);
+                }
+                this.setIsLoaded();
+                this.catchError(
+                  (loadError?.requestError ?? error) as HttpErrorResponse
+                );
+                return;
               }
-            } catch (e) {
-              // ignore fetch errors — unitsData stays null
             }
           } else if (queryParams.bookletKey) {
             const key = queryParams.bookletKey as string;
@@ -584,9 +736,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
                 const jobKey = `${this.workspaceId}:${jobId}`;
                 if (this.codingProgressLoadedForJobKey !== jobKey) {
                   await this.codingService.loadSavedCodingProgress(this.workspaceId, jobId);
+                  if (!this.isCurrentRouterRun(routerRunId)) {
+                    return;
+                  }
                   this.codingProgressLoadedForJobKey = jobKey;
                 }
                 restoredReplayRecovery = await this.restoreReplayRecoveryDraft();
+                if (!this.isCurrentRouterRun(routerRunId)) {
+                  return;
+                }
                 if (!this.isReviewMode &&
                   !this.isCodingIssueReviewMode &&
                   !this.codingService.isCompletedJobReview &&
@@ -669,6 +827,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             ReplayComponent.throwError('ParamsError');
           }
         } catch (error) {
+          if (!this.isCurrentRouterRun(routerRunId)) {
+            return;
+          }
           this.setIsLoaded();
           this.catchError(error as HttpErrorResponse);
         }
@@ -721,6 +882,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
 
     if (changes.unitIdInput) {
+      this.beginReplayAttempt();
       this.resetUnitData();
       this.resetSnackBars();
 
@@ -743,7 +905,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
       const { unitIdInput } = changes;
       try {
-        this.routeStartTime = 0;
         this.unitId = unitIdInput.currentValue;
         this.setTestPerson(this.testPersonInput() || '');
         await this.loadAndApplyUnitData(this.appService.selectedWorkspaceId, this.getReplayRequestAuthToken());
@@ -756,51 +917,169 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return Promise.resolve();
   }
 
-  private setUnitProperties(unitData: ReplayUnitPayload, unitPayloadRunId: number) {
+  private setUnitProperties(
+    unitData: ReplayUnitPayload,
+    unitPayloadRunId: number,
+    context?: ReplayNavigationContext,
+    replayAttempt: ReplayAttemptContext = this.replayAttempt
+  ) {
     this.cancelPendingAnchorHighlight();
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
     this.reloadKey += 1;
     this.responses = unitData.response;
-    this.serverTimings = unitData.serverTimings ?? null;
+    replayAttempt.recordPayloadServerTimings(unitData.serverTimings);
+    this.appliedReplayContext = context ?? {
+      workspaceId: this.workspaceId || this.appService.selectedWorkspaceId,
+      testPerson: this.testPerson,
+      unitId: this.unitId
+    };
 
-    if (this.isCodingMode && unitData.vocs && unitData.vocs[0] && unitData.vocs[0].data) {
-      this.codingService.setCodingSchemeFromVocsData(unitData.vocs[0].data);
+    const vocsData = unitData.vocs[0]?.data;
+    if (this.isCodingMode && unitData.codingScheme !== undefined) {
+      this.codingService.setParsedCodingScheme(unitData.codingScheme, vocsData);
+    } else if (this.isCodingMode && vocsData) {
+      this.codingService.setCodingSchemeFromVocsData(vocsData);
     } else if (this.isCodingMode && !this.codingService.codingScheme) {
       this.loadCodingSchemeForCodingJob(unitPayloadRunId);
     }
   }
 
   private nextUnitPayloadRunId(): number {
+    this.cancelActiveUnitPayloadRequest();
     this.unitPayloadRunId += 1;
     return this.unitPayloadRunId;
   }
 
   private invalidateUnitPayloadRequests(): void {
+    this.cancelActiveUnitPayloadRequest();
     this.unitPayloadRunId += 1;
+  }
+
+  private cancelActiveUnitPayloadRequest(): void {
+    this.unitPayloadCancellation?.next();
+  }
+
+  private getUnitPayloadCancellation(): Subject<void> {
+    this.unitPayloadCancellation ??= new Subject<void>();
+    return this.unitPayloadCancellation;
   }
 
   private isCurrentUnitPayloadRun(runId: number): boolean {
     return runId === this.unitPayloadRunId;
   }
 
+  private beginReplayAttempt(routeStartedAt: number = 0): ReplayAttemptContext {
+    this.replayAttempt = new ReplayAttemptContext(routeStartedAt);
+    return this.replayAttempt;
+  }
+
+  private isCurrentReplayAttempt(replayAttempt: ReplayAttemptContext): boolean {
+    return replayAttempt === this.replayAttempt;
+  }
+
   private async loadAndApplyUnitData(workspace: number, authToken?: string): Promise<boolean> {
     const runId = this.nextUnitPayloadRunId();
+    const replayAttempt = this.replayAttempt;
+    const context: ReplayNavigationContext = {
+      workspaceId: workspace,
+      testPerson: this.testPerson,
+      unitId: this.unitId
+    };
 
     try {
-      const unitData = await this.getUnitData(workspace, authToken, runId);
-      if (!this.isCurrentUnitPayloadRun(runId)) {
+      const unitData = await this.getUnitData(
+        context,
+        replayAttempt,
+        authToken,
+        runId
+      );
+      if (
+        !unitData ||
+        !this.isCurrentUnitPayloadRun(runId) ||
+        !this.isCurrentReplayAttempt(replayAttempt)
+      ) {
         return false;
       }
 
-      this.setUnitProperties(unitData, runId);
+      this.setUnitProperties(unitData, runId, context, replayAttempt);
       return true;
     } catch (error) {
-      if (!this.isCurrentUnitPayloadRun(runId)) {
+      if (
+        !this.isCurrentUnitPayloadRun(runId) ||
+        !this.isCurrentReplayAttempt(replayAttempt)
+      ) {
         return false;
       }
       throw error;
     }
+  }
+
+  private async loadAndApplyReplayResponse(
+    workspace: number,
+    authToken?: string
+  ): Promise<boolean> {
+    const runId = this.nextUnitPayloadRunId();
+    const replayAttempt = this.replayAttempt;
+    const context: ReplayNavigationContext = {
+      workspaceId: workspace,
+      testPerson: this.testPerson,
+      unitId: this.unitId
+    };
+    replayAttempt.startPayloadLoad(performance.now());
+    this.isLoaded.next(false);
+
+    try {
+      const responsePayload = await firstValueFrom(
+        this.replayBackendService.getReplayResponse(
+          workspace,
+          context.testPerson,
+          context.unitId,
+          authToken,
+          replayAttempt.id
+        ).pipe(takeUntil(this.getUnitPayloadCancellation())),
+        { defaultValue: null }
+      );
+      if (
+        !responsePayload ||
+        !this.isCurrentUnitPayloadRun(runId) ||
+        !this.isCurrentReplayAttempt(replayAttempt)
+      ) {
+        return false;
+      }
+
+      this.responses = responsePayload.response;
+      replayAttempt.recordPayloadResponse(
+        performance.now(),
+        this.prefixResponseServerTimings(responsePayload.serverTimings)
+      );
+      this.appliedReplayContext = context;
+      this.setIsLoaded();
+      return true;
+    } catch (error) {
+      if (
+        !this.isCurrentUnitPayloadRun(runId) ||
+        !this.isCurrentReplayAttempt(replayAttempt)
+      ) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  private prefixResponseServerTimings(
+    timings?: ReplayServerTimings
+  ): ReplayServerTimings | null {
+    if (!timings) {
+      return null;
+    }
+
+    return Object.entries(timings).reduce<ReplayServerTimings>((acc, [key, value]) => {
+      if (typeof value === 'number' || value === null) {
+        acc[`response${key.charAt(0).toUpperCase()}${key.slice(1)}`] = value;
+      }
+      return acc;
+    }, {});
   }
 
   static getNormalizedPlayerId(name: string): string {
@@ -820,28 +1099,32 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private async getUnitData(
-    workspace: number,
+    context: ReplayNavigationContext,
+    replayAttempt: ReplayAttemptContext,
     authToken?: string,
     unitPayloadRunId?: number
-  ): Promise<ReplayUnitPayload> {
-    this.replayStartTime = performance.now();
-    this.loadStartTime = this.replayStartTime;
-    this.payloadRequestStartTime = this.replayStartTime;
-    this.payloadResponseTime = 0;
-    this.playerReadyTime = 0;
-    this.serverTimings = null;
-    this.successStoredForCurrentReplay = false;
+  ): Promise<ReplayUnitPayload | null> {
+    replayAttempt.startPayloadLoad(performance.now());
     this.isLoaded.next(false);
     const unitData = await firstValueFrom(
       this.replayBackendService.getReplayPayload(
-        workspace,
-        this.testPerson,
-        this.unitId,
-        authToken
-      )
+        context.workspaceId,
+        context.testPerson,
+        context.unitId,
+        authToken,
+        this.isCodingMode,
+        replayAttempt.id
+      ).pipe(takeUntil(this.getUnitPayloadCancellation())),
+      { defaultValue: null }
     );
-    if (!unitPayloadRunId || this.isCurrentUnitPayloadRun(unitPayloadRunId)) {
-      this.payloadResponseTime = performance.now();
+    if (!unitData) {
+      return null;
+    }
+    if (
+      (!unitPayloadRunId || this.isCurrentUnitPayloadRun(unitPayloadRunId)) &&
+      this.isCurrentReplayAttempt(replayAttempt)
+    ) {
+      replayAttempt.recordPayloadResponse(performance.now());
       this.setIsLoaded();
     }
     return {
@@ -849,6 +1132,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       response: unitData.response,
       vocs: unitData.vocs,
       player: unitData.player,
+      codingScheme: unitData.codingScheme,
       serverTimings: unitData.serverTimings
     };
   }
@@ -888,55 +1172,44 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private storeErrorInStatistics(errorMessage: string): void {
-    const duration = this.replayStartTime ? Math.round(performance.now() - this.replayStartTime) : 0;
-    this.storeReplayStatistics(false, duration, errorMessage);
+    const replayAttempt = this.replayAttempt;
+    if (!replayAttempt.tryFinalizeStatistics()) {
+      return;
+    }
+
+    const now = performance.now();
+    this.storeReplayStatistics(
+      replayAttempt,
+      false,
+      replayAttempt.getDurationMilliseconds(now),
+      errorMessage,
+      now
+    );
   }
 
   onPlayerReady(): void {
-    if (!this.playerReadyTime) {
-      this.playerReadyTime = performance.now();
-    }
+    this.replayAttempt.recordPlayerReady(performance.now());
   }
 
   onResponseVisible(): void {
     this.scheduleAnchorHighlight();
 
-    if (this.successStoredForCurrentReplay) {
+    const replayAttempt = this.replayAttempt;
+    if (!replayAttempt.tryFinalizeStatistics()) {
       return;
     }
     const now = performance.now();
-    const duration = this.replayStartTime ? Math.round(performance.now() - this.replayStartTime) : 0;
-    this.storeReplayStatistics(true, duration, undefined, now);
-    this.successStoredForCurrentReplay = true;
-  }
-
-  private getClientTimings(visibleTime: number = performance.now()): ReplayClientTimings {
-    return {
-      routeToVisibleMs: this.routeStartTime ? this.getElapsedMs(this.routeStartTime, visibleTime) : null,
-      loadToVisibleMs: this.loadStartTime ? this.getElapsedMs(this.loadStartTime, visibleTime) : null,
-      routeToPayloadRequestMs: (this.routeStartTime && this.payloadRequestStartTime) ?
-        this.getElapsedMs(this.routeStartTime, this.payloadRequestStartTime) :
-        null,
-      payloadMs: (this.payloadRequestStartTime && this.payloadResponseTime) ?
-        this.getElapsedMs(this.payloadRequestStartTime, this.payloadResponseTime) :
-        null,
-      payloadToVisibleMs: this.payloadResponseTime ?
-        this.getElapsedMs(this.payloadResponseTime, visibleTime) :
-        null,
-      payloadToPlayerReadyMs: (this.payloadResponseTime && this.playerReadyTime) ?
-        this.getElapsedMs(this.payloadResponseTime, this.playerReadyTime) :
-        null,
-      playerReadyToVisibleMs: this.playerReadyTime ?
-        this.getElapsedMs(this.playerReadyTime, visibleTime) :
-        null
-    };
-  }
-
-  private getElapsedMs(startTime: number, endTime: number): number {
-    return Math.max(0, Math.round(endTime - startTime));
+    this.storeReplayStatistics(
+      replayAttempt,
+      true,
+      replayAttempt.getDurationMilliseconds(now),
+      undefined,
+      now
+    );
   }
 
   private storeReplayStatistics(
+    replayAttempt: ReplayAttemptContext,
     success: boolean,
     duration: number,
     errorMessage?: string,
@@ -961,9 +1234,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       replayUrl,
       success,
       errorMessage,
-      clientTimings: this.getClientTimings(visibleTime),
-      serverTimings: this.serverTimings ?? undefined
-    }, this.getReplayRequestAuthToken()).subscribe({
+      clientTimings: replayAttempt.getClientTimings(visibleTime),
+      serverTimings: replayAttempt.getServerTimings(),
+      replayAttemptId: replayAttempt.id
+    }, this.getReplayRequestAuthToken(), replayAttempt.id).subscribe({
       error: () => undefined
     });
   }
@@ -1044,7 +1318,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private async applyUnitChanged(unit: UnitsReplayUnit): Promise<void> {
     if (!unit) return;
     this.cancelPendingAnchorHighlight();
-    this.routeStartTime = 0;
+    const replayAttempt = this.beginReplayAttempt(performance.now());
     const unitAny = unit as unknown as {
       name: string;
       testPerson?: string;
@@ -1073,7 +1347,42 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     let isCurrentUnitPayload = true;
     const workspaceId = this.workspaceId || this.getWorkspaceIdFromAuthToken(this.authToken);
     if (this.canLoadReplayWithCurrentAuth(workspaceId)) {
-      isCurrentUnitPayload = await this.loadAndApplyUnitData(workspaceId, this.getReplayRequestAuthToken());
+      const targetContext = {
+        workspaceId,
+        testPerson: this.testPerson,
+        unitId: this.unitId
+      };
+      const strategy = decideReplayNavigationStrategy(
+        this.appliedReplayContext,
+        targetContext
+      );
+
+      switch (strategy) {
+        case 'direct-page-navigation':
+          this.invalidateUnitPayloadRequests();
+          replayAttempt.startDirectPageNavigation();
+          if (this.page && !this.unitPlayerComponent?.navigateToPage(this.page)) {
+            isCurrentUnitPayload = await this.loadAndApplyUnitData(
+              workspaceId,
+              this.getReplayRequestAuthToken()
+            );
+          }
+          break;
+        case 'load-responses':
+          isCurrentUnitPayload = await this.loadAndApplyReplayResponse(
+            workspaceId,
+            this.getReplayRequestAuthToken()
+          );
+          break;
+        case 'load-full-payload':
+          isCurrentUnitPayload = await this.loadAndApplyUnitData(
+            workspaceId,
+            this.getReplayRequestAuthToken()
+          );
+          break;
+        default:
+          throw new Error(`Unsupported replay navigation strategy: ${strategy}`);
+      }
     }
 
     if (!isCurrentUnitPayload) {
@@ -1112,7 +1421,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (this.pageErrorSnackbarRef) this.pageErrorSnackBar.dismiss();
   }
 
-  private resetUnitData() {
+  private resetUnitData(preserveCodingData = false) {
     this.invalidateUnitPayloadRequests();
     this.cancelPendingAnchorHighlight();
     this.unitId = '';
@@ -1120,9 +1429,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.unitDef = '';
     this.page = undefined;
     this.responses = undefined;
-    this.serverTimings = null;
+    this.appliedReplayContext = null;
     this.reviewCodeSelections = [];
-    this.codingService.resetCodingData();
+    if (!preserveCodingData) {
+      this.codingService.resetCodingData();
+    }
   }
 
   private createReplayRecoveryDraft(): ReplayRecoveryDraft | null {
@@ -1312,6 +1623,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   ngOnDestroy(): void {
+    this.routerRunId += 1;
+    this.replaySessionLoader.clear();
+    this.replayTokenRefreshRequests.clear();
+    this.invalidateUnitPayloadRequests();
+    this.unitPayloadCancellation?.complete();
+    this.unitPayloadCancellation = undefined;
     this.routerSubscription?.unsubscribe();
     this.authBootstrapSubscription?.unsubscribe();
     this.sessionRecoverySubscription?.unsubscribe();
@@ -1515,7 +1832,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   isCodingReadOnly(): boolean {
-    return (!this.isCodingDecisionMode && this.appService.needsReAuthentication) ||
+    return this.isCodingDecisionReadOnly ||
+      (!this.isCodingDecisionMode && this.appService.needsReAuthentication) ||
       this.isReviewMode ||
       (this.codingService.isCompletedJobReview && !this.isCodingIssueReviewMode) ||
       this.codingService.isCodingJobFinalized;
@@ -1538,6 +1856,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   getPreSelectedCodeId(variableId: string): number | null {
     return this.codingService.getPreSelectedCodeId(this.testPerson, this.unitId, variableId);
+  }
+
+  getCurrentCodingCaseKey(): string {
+    const variableId = this.codingService.currentVariableId;
+    if (!this.testPerson || !this.unitId || !variableId) {
+      return '';
+    }
+
+    return this.codingService.generateCompositeKey(this.testPerson, this.unitId, variableId);
   }
 
   getPreSelectedCodingIssueOptionId(variableId: string): number | null {

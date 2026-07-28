@@ -8,10 +8,12 @@ import {
   UseGuards,
   Body,
   ValidationPipe,
+  ParseIntPipe,
   Res,
   Query
 } from '@nestjs/common';
 import {
+  ApiCreatedResponse,
   ApiOkResponse,
   ApiParam,
   ApiTags,
@@ -214,6 +216,8 @@ export class WorkspaceCodingJobDefinitionController {
         type: 'object',
         properties: {
           id: { type: 'number' },
+          name: { type: 'string', maxLength: 255 },
+          description: { type: 'string', nullable: true },
           status: { type: 'string' },
           assigned_variables: { type: 'array' },
           assigned_variable_bundles: { type: 'array' },
@@ -270,6 +274,8 @@ export class WorkspaceCodingJobDefinitionController {
         type: 'object',
         properties: {
           id: { type: 'number' },
+          name: { type: 'string', maxLength: 255 },
+          description: { type: 'string', nullable: true },
           assigned_variables: { type: 'array' },
           assigned_variable_bundles: { type: 'array' },
           assigned_coders: { type: 'array' },
@@ -359,7 +365,7 @@ export class WorkspaceCodingJobDefinitionController {
   })
   async updateJobDefinition(
     @WorkspaceId() workspace_id: number,
-      @Param('id') id: number,
+      @Param('id', ParseIntPipe) id: number,
       @Body(new ValidationPipe({ transform: true, whitelist: true })) updateDto: UpdateJobDefinitionDto
   ): Promise<JobDefinition> {
     return this.jobDefinitionService.updateJobDefinition(id, workspace_id, updateDto);
@@ -416,7 +422,7 @@ export class WorkspaceCodingJobDefinitionController {
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
-  @ApiOkResponse({
+  @ApiCreatedResponse({
     description: 'Distributed coding jobs created successfully from job definition.'
   })
   async createCodingJobFromDefinition(

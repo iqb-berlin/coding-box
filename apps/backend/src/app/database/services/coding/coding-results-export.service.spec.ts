@@ -237,12 +237,13 @@ describe('CodingResultsExportService', () => {
   it('delegates versioned CSV and Excel exports with fallback strings', async () => {
     const { service, codingListService } = createService();
 
-    await expect(service.exportCodingResultsByVersionAsCsv(1, 'v2', '', '', true)).resolves.toBeInstanceOf(Readable);
-    await expect(service.exportCodingResultsByVersionAsExcel(1, 'v3', '', '', false)).resolves.toEqual(Buffer.from('xlsx'));
+    await expect(service.exportCodingResultsByVersionAsCsv(1, 'v2', 7, '', '', true)).resolves.toBeInstanceOf(Readable);
+    await expect(service.exportCodingResultsByVersionAsExcel(1, 'v3', 7, '', '', false)).resolves.toEqual(Buffer.from('xlsx'));
 
     expect(codingListService.getCodingResultsByVersionCsvStream).toHaveBeenCalledWith(
       1,
       'v2',
+      7,
       '',
       '',
       true,
@@ -254,6 +255,7 @@ describe('CodingResultsExportService', () => {
     expect(codingListService.getCodingResultsByVersionAsExcel).toHaveBeenCalledWith(
       1,
       'v3',
+      7,
       '',
       '',
       false,
@@ -273,6 +275,7 @@ describe('CodingResultsExportService', () => {
       '/tmp/export.xlsx',
       1,
       'v3',
+      7,
       '',
       '',
       false,
@@ -286,6 +289,7 @@ describe('CodingResultsExportService', () => {
       '/tmp/export.xlsx',
       1,
       'v3',
+      7,
       '',
       '',
       false,
@@ -301,12 +305,21 @@ describe('CodingResultsExportService', () => {
     const onProgress = jest.fn();
 
     await expect(
-      service.exportCodingResultsByVersionAsGeoGebraZip(1, 'v2', '', '', true, onProgress)
+      service.exportCodingResultsByVersionAsGeoGebraZip(
+        1,
+        'v2',
+        7,
+        '',
+        '',
+        true,
+        onProgress
+      )
     ).resolves.toEqual(Buffer.from('zip'));
 
     expect(codingListService.getCodingResultsByVersionAsGeoGebraZip).toHaveBeenCalledWith(
       1,
       'v2',
+      7,
       '',
       '',
       true,
@@ -325,6 +338,7 @@ describe('CodingResultsExportService', () => {
         '/tmp/geogebra.zip',
         1,
         'v2',
+        7,
         '',
         '',
         true,
@@ -337,6 +351,7 @@ describe('CodingResultsExportService', () => {
       '/tmp/geogebra.zip',
       1,
       'v2',
+      7,
       '',
       '',
       true,
@@ -369,9 +384,12 @@ describe('CodingResultsExportService', () => {
     });
 
     const csv = (await service.exportCodingResultsDetailed(1)).toString('utf-8');
+    const firstRowFields = csv.trim().split('\n')[1].split(';');
 
     expect(csv).toContain('"Code";"Code-Hinweis"');
     expect(csv).toContain('"7";"Code-Vergabe unsicher"');
+    expect(firstRowFields[6]).toBe('"needs review"');
+    expect(firstRowFields[9]).toBe('"Code-Vergabe unsicher"');
     expect(csv).toContain('"0";""');
     expect(csv).toContain('"zero-code note"');
     expect(csv).not.toContain('skipped');

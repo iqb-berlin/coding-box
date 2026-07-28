@@ -7,11 +7,24 @@ describe('StoreReplayStatisticsDto', () => {
     const dto = plainToInstance(StoreReplayStatisticsDto, {
       unitId: 'UNIT-1',
       durationMilliseconds: 1000,
+      replayAttemptId: 'attempt-1',
       clientTimings: { payloadMs: 10 },
       serverTimings: { responseTotalMs: 5 }
     });
 
     await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('should reject oversized replay attempt identifiers', async () => {
+    const dto = plainToInstance(StoreReplayStatisticsDto, {
+      unitId: 'UNIT-1',
+      durationMilliseconds: 1000,
+      replayAttemptId: 'a'.repeat(129)
+    });
+
+    const errors = await validate(dto);
+
+    expect(errors.some(error => error.property === 'replayAttemptId')).toBe(true);
   });
 
   it('should reject non-object timing maps', async () => {

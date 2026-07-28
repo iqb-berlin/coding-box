@@ -1,11 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import {
-  forkJoin, Observable, of
-} from 'rxjs';
-import {
-  map, switchMap, tap
-} from 'rxjs/operators';
+import { forkJoin, Observable, of } from 'rxjs';
+import { map, switchMap, tap } from 'rxjs/operators';
 import Keycloak from 'keycloak-js';
 import { SERVER_URL } from '../../injection-tokens';
 import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
@@ -19,6 +15,14 @@ import type {
   JobDefinitionRefreshPreviewDto
 } from '../../../../../../api-dto/coding/job-refresh.dto';
 import type { ManualCodeAvailabilityValidationDto } from '../../../../../../api-dto/coding/manual-code-availability.dto';
+import type { PsychometricDomainCandidatesDto } from '../../../../../../api-dto/coding/psychometric-discrimination.dto';
+import type { ReplayCodingSessionDto } from '../../../../../../api-dto/coding/replay-coding-session.dto';
+import type {
+  BackgroundExportRequest,
+  ExportJobStatusResponseDto,
+  ItemDatasetOptionsDto,
+  ItemMatrixExportDiagnosticsDto
+} from '../../../../../../api-dto/coding/export-request.dto';
 import {
   CodingJob,
   DistributionVariableUsageByStatus,
@@ -27,6 +31,8 @@ import {
   VariableBundle
 } from '../models/coding-job.model';
 import type { BundleContext } from '../../replay/services/units-replay.service';
+import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
+import { withReplayAttemptHeader } from '../../replay/utils/replay-request-correlation';
 
 export interface CodingJobUnitDto {
   responseId: number;
@@ -45,42 +51,9 @@ export interface CodingJobUnitDto {
   otherCoders: string[];
 }
 
-export interface CodingExportConfig {
-  exportType:
-  | 'aggregated'
-  | 'by-coder'
-  | 'by-variable'
-  | 'by-variable-compact'
-  | 'detailed'
-  | 'coding-times'
-  | 'results-by-version'
-  | 'item-matrix';
+export type CodingExportConfig = BackgroundExportRequest & {
   userId?: number;
-  version?: 'v1' | 'v2' | 'v3';
-  format?: 'csv' | 'excel';
-  matrixValue?: 'code' | 'score';
-  outputCommentsInsteadOfCodes?: boolean;
-  includeReplayUrl?: boolean;
-  includeResponseValues?: boolean;
-  includeGeoGebraResponseValues?: boolean;
-  includeGeoGebraFiles?: boolean;
-  anonymizeCoders?: boolean;
-  usePseudoCoders?: boolean;
-  doubleCodingMethod?:
-  | 'new-row-per-variable'
-  | 'new-column-per-coder'
-  | 'most-frequent';
-  includeComments?: boolean;
-  includeModalValue?: boolean;
-  includeDoubleCoded?: boolean;
-  excludeAutoCoded?: boolean;
-  trainingRequired?: boolean;
-  jobDefinitionIds?: number[];
-  coderTrainingIds?: number[];
-  coderIds?: number[];
-  authToken?: string;
-  serverUrl?: string;
-}
+};
 
 export interface CodingExportEstimate {
   exportType: 'by-variable' | 'by-variable-compact';
@@ -89,8 +62,45 @@ export interface CodingExportEstimate {
   exceedsWorksheetLimit: boolean;
 }
 
+export interface IncompleteItemMatrixDownload {
+  blob: Blob;
+  fileName?: string;
+}
+
+export function getDownloadFileName(
+  contentDisposition: string | null
+): string | undefined {
+  if (!contentDisposition) {
+    return undefined;
+  }
+
+  const encodedMatch = contentDisposition.match(
+    /filename\*\s*=\s*UTF-8''([^;]+)/i
+  );
+  const quotedMatch = contentDisposition.match(/filename\s*=\s*"([^"]+)"/i);
+  const plainMatch = contentDisposition.match(/filename\s*=\s*([^;]+)/i);
+  const rawFileName = encodedMatch?.[1] || quotedMatch?.[1] || plainMatch?.[1];
+  if (!rawFileName) {
+    return undefined;
+  }
+
+  let decodedFileName = rawFileName.trim().replace(/^"|"$/g, '');
+  if (encodedMatch) {
+    try {
+      decodedFileName = decodeURIComponent(decodedFileName);
+    } catch {
+      return undefined;
+    }
+  }
+
+  const safeFileName = decodedFileName.split(/[\\/]/).pop()?.trim();
+  return safeFileName && !/[\r\n]/.test(safeFileName) ? safeFileName : undefined;
+}
+
 interface JobDefinitionApiResponse {
   id?: number;
+  name?: string;
+  description?: string | null;
   status?: 'draft' | 'pending_review' | 'approved';
   assigned_variables?: import('../models/coding-job.model').Variable[];
   assigned_variable_bundles?: import('../models/coding-job.model').VariableBundle[];
@@ -105,8 +115,14 @@ interface JobDefinitionApiResponse {
   distributionSeed?: string;
   planned_variable_usage?: Record<string, number>;
   plannedVariableUsage?: Record<string, number>;
-  planned_variable_usage_by_status?: Record<string, DistributionVariableUsageByStatus>;
-  plannedVariableUsageByStatus?: Record<string, DistributionVariableUsageByStatus>;
+  planned_variable_usage_by_status?: Record<
+  string,
+  DistributionVariableUsageByStatus
+  >;
+  plannedVariableUsageByStatus?: Record<
+  string,
+  DistributionVariableUsageByStatus
+  >;
   duration_seconds?: number;
   max_coding_cases?: number | null;
   double_coding_absolute?: number;
@@ -180,6 +196,8 @@ export interface JobDefinitionDistributionSnapshot {
 
 export interface JobDefinition {
   id?: number;
+  name?: string;
+  description?: string | null;
   status?: 'draft' | 'pending_review' | 'approved';
   assignedVariables?: import('../models/coding-job.model').Variable[];
   assignedVariableBundles?: import('../models/coding-job.model').VariableBundle[];
@@ -189,7 +207,10 @@ export interface JobDefinition {
   missingsProfileId?: number | null;
   distributionSeed?: string;
   plannedVariableUsage?: Record<string, number>;
-  plannedVariableUsageByStatus?: Record<string, DistributionVariableUsageByStatus>;
+  plannedVariableUsageByStatus?: Record<
+  string,
+  DistributionVariableUsageByStatus
+  >;
   durationSeconds?: number;
   maxCodingCases?: number | null;
   doubleCodingAbsolute?: number;
@@ -260,10 +281,7 @@ export interface BulkApplyCodingResultsResponse {
     jobName: string;
     hasIssues: boolean;
     skipped: boolean;
-    skippedReason?:
-    | 'training-job'
-    | 'not-completed'
-    | 'freshness-stale';
+    skippedReason?: 'training-job' | 'not-completed' | 'freshness-stale';
     result?: {
       success: boolean;
       updatedResponsesCount: number;
@@ -310,25 +328,29 @@ export class CodingJobBackendService {
       return this.getAuthHeader(authToken);
     }
 
-    const token = this.keycloak?.authenticated ? this.keycloak.token : undefined;
+    const token = this.keycloak?.authenticated ?
+      this.keycloak.token :
+      undefined;
     return this.getAuthHeader(token);
   }
 
   getVariableBundles(workspaceId: number): Observable<VariableBundle[]> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/variable-bundle`;
     const limit = 100;
-    const getPage = (page: number): Observable<PaginatedResponse<VariableBundle>> => (
-      this.http.get<PaginatedResponse<VariableBundle>>(url, {
-        headers: this.authHeader,
-        params: new HttpParams()
-          .set('page', page.toString())
-          .set('limit', limit.toString())
-      })
-    );
+    const getPage = (
+      page: number
+    ): Observable<PaginatedResponse<VariableBundle>> => this.http.get<PaginatedResponse<VariableBundle>>(url, {
+      headers: this.authHeader,
+      params: new HttpParams()
+        .set('page', page.toString())
+        .set('limit', limit.toString())
+    });
 
     return getPage(1).pipe(
       switchMap(firstPage => {
-        const pageCount = Math.ceil((firstPage.total || firstPage.data.length) / limit);
+        const pageCount = Math.ceil(
+          (firstPage.total || firstPage.data.length) / limit
+        );
         if (pageCount <= 1) {
           return of(firstPage.data);
         }
@@ -409,9 +431,7 @@ export class CodingJobBackendService {
       freshnessStatus: (apiJob.freshnessStatus ??
         apiJob.freshness_status) as CodingJob['freshnessStatus'],
       freshnessReason: (apiJob.freshnessReason ?? apiJob.freshness_reason) as
-        | string
-        | null
-        | undefined,
+        string | null | undefined,
       freshnessUpdatedAt: (apiJob.freshnessUpdatedAt ??
         apiJob.freshness_updated_at) as string | Date | null | undefined,
       freshnessAffectedUnits: (apiJob.freshnessAffectedUnits ??
@@ -422,13 +442,11 @@ export class CodingJobBackendService {
       issueSummary: apiJob.issueSummary as CodingJob['issueSummary'],
       showScore: (apiJob.showScore ?? apiJob.show_score) as boolean | undefined,
       allowComments: (apiJob.allowComments ?? apiJob.allow_comments) as
-        | boolean
-        | undefined,
+        boolean | undefined,
       suppressGeneralInstructions: (apiJob.suppressGeneralInstructions ??
         apiJob.suppress_general_instructions) as boolean | undefined,
       jobDefinitionId: (apiJob.jobDefinitionId ?? apiJob.job_definition_id) as
-        | number
-        | undefined,
+        number | undefined,
       created_at: (apiJob.created_at ?? apiJob.createdAt) as Date,
       updated_at: (apiJob.updated_at ?? apiJob.updatedAt) as Date,
       workspace_id: (apiJob.workspace_id ?? apiJob.workspaceId) as number
@@ -489,9 +507,10 @@ export class CodingJobBackendService {
     }
 
     return this.http
-      .get<
-    PaginatedResponse<unknown>
-    >(url, { params, headers: this.authHeader })
+      .get<PaginatedResponse<unknown>>(url, {
+      params,
+      headers: this.authHeader
+    })
       .pipe(
         map(response => ({
           ...response,
@@ -575,9 +594,13 @@ export class CodingJobBackendService {
     authToken?: string
   ): Observable<CodingJob> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/pause`;
-    return this.http.post<CodingJob>(url, {}, {
-      headers: this.getAuthHeader(authToken)
-    });
+    return this.http.post<CodingJob>(
+      url,
+      {},
+      {
+        headers: this.getAuthHeader(authToken)
+      }
+    );
   }
 
   resumeCodingJob(
@@ -586,9 +609,13 @@ export class CodingJobBackendService {
     authToken?: string
   ): Observable<CodingJob> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/resume`;
-    return this.http.post<CodingJob>(url, {}, {
-      headers: this.getAuthHeader(authToken)
-    });
+    return this.http.post<CodingJob>(
+      url,
+      {},
+      {
+        headers: this.getAuthHeader(authToken)
+      }
+    );
   }
 
   submitCodingJob(
@@ -597,9 +624,13 @@ export class CodingJobBackendService {
     authToken?: string
   ): Observable<CodingJob> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/submit`;
-    return this.http.post<CodingJob>(url, {}, {
-      headers: this.getAuthHeader(authToken)
-    });
+    return this.http.post<CodingJob>(
+      url,
+      {},
+      {
+        headers: this.getAuthHeader(authToken)
+      }
+    );
   }
 
   prepareCodingJobReview(
@@ -863,17 +894,40 @@ export class CodingJobBackendService {
     workspaceId: number,
     codingJobId: number,
     authToken?: string,
-    onlyOpen: boolean = false
+    onlyOpen: boolean = false,
+    replayAttemptId?: string
   ): Observable<CodingJobUnitDto[]> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/units`;
     let params = new HttpParams();
     if (onlyOpen) {
       params = params.set('onlyOpen', 'true');
     }
-    return this.http.get<CodingJobUnitDto[]>(
-      url,
-      { headers: this.getAuthHeader(authToken), params }
-    );
+    return this.http.get<CodingJobUnitDto[]>(url, {
+      headers: withReplayAttemptHeader(
+        this.getAuthHeader(authToken),
+        replayAttemptId
+      ),
+      params
+    });
+  }
+
+  getReplayCodingSession(
+    workspaceId: number,
+    codingJobId: number,
+    authToken?: string,
+    onlyOpen: boolean = false,
+    replayAttemptId?: string
+  ): Observable<ReplayCodingSessionDto> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/replay-session`;
+    const params = new HttpParams().set('onlyOpen', String(onlyOpen));
+    return this.http.get<ReplayCodingSessionDto>(url, {
+      headers: withReplayAttemptHeader(
+        this.getAuthHeader(authToken),
+        replayAttemptId
+      ),
+      params,
+      context: suppressGlobalHttpErrorContext()
+    });
   }
 
   applyCodingResults(
@@ -967,10 +1021,15 @@ export class CodingJobBackendService {
       new HttpParams().set('includePlannedUsage', 'true') :
       undefined;
     return this.http
-      .get<JobDefinitionApiResponse[]>(url, { headers: this.authHeader, params })
+      .get<JobDefinitionApiResponse[]>(url, {
+      headers: this.authHeader,
+      params
+    })
       .pipe(
         map((definitions: JobDefinitionApiResponse[]) => definitions.map(def => ({
           id: def.id,
+          name: def.name,
+          description: def.description,
           status: def.status,
           assignedVariables: def.assigned_variables,
           assignedVariableBundles: def.assigned_variable_bundles,
@@ -1100,11 +1159,9 @@ export class CodingJobBackendService {
   ): Observable<JobDefinitionRefreshApplyResultDto> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}/update-refresh-apply`;
     return this.http
-      .post<JobDefinitionRefreshApplyResultDto>(
-      url,
-      jobDefinition,
-      { headers: this.authHeader }
-    )
+      .post<JobDefinitionRefreshApplyResultDto>(url, jobDefinition, {
+      headers: this.authHeader
+    })
       .pipe(
         tap(result => {
           if (result.success) {
@@ -1133,6 +1190,24 @@ export class CodingJobBackendService {
     );
   }
 
+  getPsychometricDomainCandidates(
+    workspaceId: number
+  ): Observable<PsychometricDomainCandidatesDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/psychometric-domain-candidates`;
+    return this.http.get<PsychometricDomainCandidatesDto>(url, {
+      headers: this.authHeader
+    });
+  }
+
+  getItemDatasetOptions(
+    workspaceId: number
+  ): Observable<ItemDatasetOptionsDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/item-dataset-options`;
+    return this.http.get<ItemDatasetOptionsDto>(url, {
+      headers: this.authHeader
+    });
+  }
+
   estimateExportJob(
     workspaceId: number,
     exportConfig: CodingExportConfig
@@ -1146,47 +1221,9 @@ export class CodingJobBackendService {
   getExportJobStatus(
     workspaceId: number,
     jobId: string
-  ): Observable<{
-      status: string;
-      progress: number;
-      progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
-      processedRows?: number;
-      totalRows?: number;
-      progressMessage?: string;
-      result?: {
-        fileId: string;
-        fileName: string;
-        fileSize: number;
-        workspaceId: number;
-        userId: number;
-        exportType: string;
-        createdAt: number;
-      };
-      error?: string;
-      errorCode?: string;
-      errorDetails?: Record<string, number | string | boolean>;
-    }> {
+  ): Observable<ExportJobStatusResponseDto> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`;
-    return this.http.get<{
-      status: string;
-      progress: number;
-      progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
-      processedRows?: number;
-      totalRows?: number;
-      progressMessage?: string;
-      result?: {
-        fileId: string;
-        fileName: string;
-        fileSize: number;
-        workspaceId: number;
-        userId: number;
-        exportType: string;
-        createdAt: number;
-      };
-      error?: string;
-      errorCode?: string;
-      errorDetails?: Record<string, number | string | boolean>;
-    }>(url, {
+    return this.http.get<ExportJobStatusResponseDto>(url, {
       headers: this.authHeader
     });
   }
@@ -1195,6 +1232,45 @@ export class CodingJobBackendService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}/download`;
     return this.http.get(url, {
       responseType: 'blob',
+      headers: this.authHeader
+    });
+  }
+
+  getItemMatrixExportDiagnostics(
+    workspaceId: number,
+    jobId: string
+  ): Observable<ItemMatrixExportDiagnosticsDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}/item-matrix-diagnostics`;
+    return this.http.get<ItemMatrixExportDiagnosticsDto>(url, {
+      headers: this.authHeader
+    });
+  }
+
+  downloadIncompleteItemMatrix(
+    workspaceId: number,
+    jobId: string
+  ): Observable<IncompleteItemMatrixDownload> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}/download-incomplete`;
+    return this.http.get(url, {
+      responseType: 'blob',
+      observe: 'response',
+      headers: this.authHeader
+    }).pipe(
+      map(response => ({
+        blob: response.body || new Blob(),
+        fileName: getDownloadFileName(
+          response.headers.get('content-disposition')
+        )
+      }))
+    );
+  }
+
+  deleteExportJob(
+    workspaceId: number,
+    jobId: string
+  ): Observable<{ success: boolean; message: string }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`;
+    return this.http.delete<{ success: boolean; message: string }>(url, {
       headers: this.authHeader
     });
   }

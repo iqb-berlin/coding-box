@@ -56,9 +56,14 @@ import {
   WithinTrainingComparisonCoderDto
 } from '../../../../../../../api-dto/coding/training-comparison.dto';
 import {
+  KappaCalculationLevel,
+  TrainingKappaStatisticsDto
+} from '../../../../../../../api-dto/coding/training-kappa-statistics.dto';
+import {
   CodingStatisticsService,
   KappaCalculationResult
 } from './coding-statistics.service';
+import { calculateMetricMean } from './interrater-reliability.calculator';
 
 interface CoderTrainingResponse {
   responseId: number;
@@ -212,39 +217,9 @@ type TrainingComparisonPageOptions = {
   selectedJobIds?: number[];
 };
 
-type TrainingKappaCalculationLevel = 'code' | 'score';
+type TrainingKappaCalculationLevel = KappaCalculationLevel;
 
-export type TrainingCohensKappaStatistics = {
-  variables: Array<{
-    unitName: string;
-    variableId: string;
-    meanKappa: number | null;
-    meanAgreement: number | null;
-    caseCount: number;
-    validPairCount: number;
-    coderPairCount: number;
-    coderPairs: Array<{
-      coder1Id: number;
-      coder1Name: string;
-      coder2Id: number;
-      coder2Name: string;
-      kappa: number | null;
-      agreement: number;
-      totalItems: number;
-      validPairs: number;
-      interpretation: string;
-    }>;
-  }>;
-  workspaceSummary: {
-    totalDoubleCodedResponses: number;
-    totalCoderPairs: number;
-    averageKappa: number | null;
-    variablesIncluded: number;
-    codersIncluded: number;
-    weightingMethod: 'weighted' | 'unweighted';
-    calculationLevel: TrainingKappaCalculationLevel;
-  };
-};
+export type TrainingCohensKappaStatistics = TrainingKappaStatisticsDto;
 
 type TrainingKappaOptions = {
   weightedMean?: boolean;
@@ -324,6 +299,12 @@ type KappaCoderValue = {
   code: number | null;
   score: number | null;
 };
+
+type TrainingFleissKappaByVariable = Map<string, {
+  fleissKappa: number | null;
+  completeCaseCount: number;
+  possibleCaseCount: number;
+}>;
 
 type TrainingKappaCoderPairInput = {
   coder1Id: number;
@@ -1978,6 +1959,24 @@ export class CoderTrainingService {
     return Number.isNaN(parsed) ? null : parsed;
   }
 
+  private buildTrainingKappaValuesByResponseAndJob(
+    valueRows: WithinTrainingKappaValueRow[],
+    selectedJobIds: number[]
+  ): Map<string, KappaCoderValue> {
+    const selectedJobIdSet = new Set(selectedJobIds);
+    const values = new Map<string, KappaCoderValue>();
+    valueRows.forEach(row => {
+      const responseId = this.toNullableScore(row.responseId);
+      const jobId = this.toNullableScore(row.jobId);
+      if (responseId === null || jobId === null || !selectedJobIdSet.has(jobId)) return;
+      values.set(
+        this.getTrainingKappaValueKey(responseId, row.unitName, row.variableId, jobId),
+        { code: this.toKappaCode(row.code), score: this.toNullableScore(row.score) }
+      );
+    });
+    return values;
+  }
+
   private buildWithinTrainingKappaCoderPairs(
     cases: WithinTrainingKappaCase[],
     valueRows: WithinTrainingKappaValueRow[],
@@ -1985,28 +1984,10 @@ export class CoderTrainingService {
       codingJobCoders?: Array<{ user?: { username?: string | null } | null }> | null;
     }>
   ): TrainingKappaCoderPairInput[] {
-    const selectedJobIds = new Set(selectedJobs.map(job => job.id));
-    const valuesByResponseAndJob = new Map<string, KappaCoderValue>();
-    valueRows.forEach(row => {
-      const responseId = this.toNullableScore(row.responseId);
-      const jobId = this.toNullableScore(row.jobId);
-      if (responseId === null || jobId === null || !selectedJobIds.has(jobId)) {
-        return;
-      }
-
-      valuesByResponseAndJob.set(
-        this.getTrainingKappaValueKey(
-          responseId,
-          row.unitName,
-          row.variableId,
-          jobId
-        ),
-        {
-          code: this.toKappaCode(row.code),
-          score: this.toNullableScore(row.score)
-        }
-      );
-    });
+    const valuesByResponseAndJob = this.buildTrainingKappaValuesByResponseAndJob(
+      valueRows,
+      selectedJobs.map(job => job.id)
+    );
 
     const casesByVariable = new Map<string, WithinTrainingKappaCase[]>();
     cases.forEach(item => {
@@ -2076,6 +2057,39 @@ export class CoderTrainingService {
     });
 
     return coderPairs;
+  }
+
+  private calculateWithinTrainingFleissKappa(
+    cases: WithinTrainingKappaCase[],
+    valueRows: WithinTrainingKappaValueRow[],
+    selectedJobIds: number[],
+    calculationLevel: TrainingKappaCalculationLevel
+  ): TrainingFleissKappaByVariable {
+    const valuesByResponseAndJob = this.buildTrainingKappaValuesByResponseAndJob(
+      valueRows,
+      selectedJobIds
+    );
+
+    const ratingsByVariable = new Map<string, Array<Array<number | null>>>();
+    cases.forEach(item => {
+      const key = this.getTrainingKappaVariableKey(item.unitName, item.variableId);
+      if (!ratingsByVariable.has(key)) ratingsByVariable.set(key, []);
+      ratingsByVariable.get(key)!.push(selectedJobIds.map(jobId => {
+        const value = valuesByResponseAndJob.get(
+          this.getTrainingKappaValueKey(item.responseId, item.unitName, item.variableId, jobId)
+        );
+        return calculationLevel === 'score' ? value?.score ?? null : value?.code ?? null;
+      }));
+    });
+
+    return new Map(Array.from(ratingsByVariable.entries()).map(([key, ratings]) => {
+      const result = this.codingStatisticsService.calculateFleissKappa(ratings);
+      return [key, {
+        fleissKappa: result.fleissKappa,
+        completeCaseCount: result.completeCaseCount,
+        possibleCaseCount: ratings.length
+      }];
+    }));
   }
 
   private mapDisplayCodeAndScore(
@@ -4270,10 +4284,17 @@ export class CoderTrainingService {
 
     const kappaResults = this.codingStatisticsService.calculateCohensKappa(coderPairs, calculationLevel);
     const caseCountsByVariable = this.calculateTrainingKappaCaseCountsByVariable(cases);
+    const fleissKappaByVariable = this.calculateWithinTrainingFleissKappa(
+      cases,
+      valueRows,
+      selectedJobIds,
+      calculationLevel
+    );
 
     return this.createTrainingKappaStatistics(
       kappaResults,
       caseCountsByVariable,
+      fleissKappaByVariable,
       useWeightedMean,
       calculationLevel
     );
@@ -4302,6 +4323,7 @@ export class CoderTrainingService {
         totalDoubleCodedResponses: 0,
         totalCoderPairs: 0,
         averageKappa: null,
+        averageBrennanPredigerKappa: null,
         variablesIncluded: 0,
         codersIncluded: 0,
         weightingMethod: useWeightedMean ? 'weighted' : 'unweighted',
@@ -4328,6 +4350,7 @@ export class CoderTrainingService {
   private createTrainingKappaStatistics(
     kappaResults: KappaCalculationResult[],
     caseCountsByVariable: Map<string, number>,
+    fleissKappaByVariable: TrainingFleissKappaByVariable,
     useWeightedMean: boolean,
     calculationLevel: TrainingKappaCalculationLevel
   ): TrainingCohensKappaStatistics {
@@ -4354,38 +4377,38 @@ export class CoderTrainingService {
     const variables = Array.from(variableMap.entries())
       .map(([key, variable]) => ({
         ...variable,
+        coderPairs: variable.coderPairs.map(result => (
+          this.codingStatisticsService.roundKappaCalculationResult(result)
+        )),
         caseCount: caseCountsByVariable.get(key) ?? 0,
-        ...this.codingStatisticsService.calculateKappaVariableSummary(variable.coderPairs)
+        fleissKappa: fleissKappaByVariable.get(key)?.fleissKappa ?? null,
+        fleissCaseCount: fleissKappaByVariable.get(key)?.completeCaseCount ?? 0,
+        fleissPossibleCaseCount: fleissKappaByVariable.get(key)?.possibleCaseCount ?? 0,
+        ...this.codingStatisticsService.calculateKappaVariableSummary(
+          variable.coderPairs,
+          useWeightedMean
+        )
       }));
 
-    let totalWeightedKappa = 0;
-    let totalWeight = 0;
-    let totalKappa = 0;
-    let validKappaCount = 0;
     const uniqueCoders = new Set<number>();
 
     kappaResults.forEach(result => {
       uniqueCoders.add(result.coder1Id);
       uniqueCoders.add(result.coder2Id);
-
-      if (result.kappa !== null && !Number.isNaN(result.kappa)) {
-        if (useWeightedMean) {
-          const weight = result.validPairs;
-          totalWeightedKappa += result.kappa * weight;
-          totalWeight += weight;
-        } else {
-          totalKappa += result.kappa;
-          validKappaCount += 1;
-        }
-      }
     });
 
-    let averageKappa: number | null;
-    if (useWeightedMean) {
-      averageKappa = totalWeight > 0 ? totalWeightedKappa / totalWeight : null;
-    } else {
-      averageKappa = validKappaCount > 0 ? totalKappa / validKappaCount : null;
-    }
+    const averageKappa = calculateMetricMean(
+      kappaResults,
+      result => result.kappa,
+      result => result.validPairs,
+      useWeightedMean
+    );
+    const averageBrennanPredigerKappa = calculateMetricMean(
+      kappaResults,
+      result => result.brennanPredigerKappa,
+      result => result.validPairs,
+      useWeightedMean
+    );
     const totalDoubleCodedResponses = Array.from(caseCountsByVariable.values())
       .reduce((sum, caseCount) => sum + caseCount, 0);
 
@@ -4395,6 +4418,7 @@ export class CoderTrainingService {
         totalDoubleCodedResponses,
         totalCoderPairs: kappaResults.length,
         averageKappa,
+        averageBrennanPredigerKappa,
         variablesIncluded: variableMap.size,
         codersIncluded: uniqueCoders.size,
         weightingMethod: useWeightedMean ? 'weighted' : 'unweighted',

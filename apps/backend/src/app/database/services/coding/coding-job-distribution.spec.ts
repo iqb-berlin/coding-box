@@ -3,6 +3,8 @@ import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
 import { DERIVE_ERROR_STATUS } from '../../utils/manual-coding-candidate.util';
+import { CodingAggregationPeerService } from './coding-aggregation-peer.service';
+import { statusStringToNumber } from '../../utils/response-status-converter';
 
 jest.mock('../workspace/workspace-files.service', () => ({
   WorkspaceFilesService: class {}
@@ -13,6 +15,7 @@ type SlimResponseForTest = {
   variableid: string;
   value: string | null;
   statusV1?: number | null;
+  statusV2?: number | null;
   unitName: string;
   unitAlias: string | null;
   bookletName: string;
@@ -20,6 +23,19 @@ type SlimResponseForTest = {
   personCode: string;
   personGroup: string;
   variableBundleId?: number;
+};
+
+type DistributionPlanForTest = {
+  distributionByCoderId: Record<string, Record<string, number>>;
+  doubleCodingInfo: Record<string, {
+    doubleCodedCasesPerCoderId: Record<string, number>;
+  }>;
+  plannedCases: Array<{
+    item: { itemKey: string };
+    isDoubleCoded: boolean;
+    assignedCoderIds: number[];
+  }>;
+  tasksPerCoder: Record<string, number>;
 };
 
 const createRepo = () => ({
@@ -142,7 +158,8 @@ describe('CodingJobService distribution from job definitions', () => {
       cacheService as never,
       workspaceFilesService as never,
       workspaceExclusionService as never,
-      usersService as never
+      usersService as never,
+      new CodingAggregationPeerService(responseRepository as never)
     );
 
     jest.spyOn(
@@ -160,10 +177,20 @@ describe('CodingJobService distribution from job definitions', () => {
   });
 
   function mockResponses(responses: SlimResponseForTest[]): void {
-    jest.spyOn(service, 'getSlimResponsesForVariables').mockImplementation(async (_workspaceId, variables) => responses.filter(response => variables.some(variable => variable.unitName === response.unitName &&
+    const responsesForVariables = (
+      variables: Array<{ unitName: string; variableId: string }>
+    ) => responses.filter(response => variables.some(variable => (
+      variable.unitName.toUpperCase() === response.unitName.toUpperCase() &&
       variable.variableId === response.variableid
-    ))
-    );
+    )));
+    jest.spyOn(service, 'getSlimResponsesForVariables')
+      .mockImplementation(async (_workspaceId, variables) => (
+        responsesForVariables(variables)
+      ));
+    jest.spyOn(service, 'getSlimResponsesForVariableCoverage')
+      .mockImplementation(async (_workspaceId, variables) => (
+        responsesForVariables(variables)
+      ));
     jest.spyOn(
       service as unknown as { getVariableCasesInJobs: () => Promise<Map<string, number>> },
       'getVariableCasesInJobs'
@@ -172,6 +199,38 @@ describe('CodingJobService distribution from job definitions', () => {
       service as unknown as { getAssignedResponseIdsForVariables: () => Promise<Set<number>> },
       'getAssignedResponseIdsForVariables'
     ).mockResolvedValue(new Set());
+  }
+
+  function buildDistributionPlanForTest(
+    request: unknown
+  ): Promise<DistributionPlanForTest> {
+    return (
+      service as unknown as {
+        buildDistributionPlan: (
+          workspaceId: number,
+          planRequest: unknown
+        ) => Promise<DistributionPlanForTest>;
+      }
+    ).buildDistributionPlan(5, request);
+  }
+
+  function getDoubleCodingPairCounts(
+    plan: DistributionPlanForTest,
+    itemKey: string
+  ): Record<string, number> {
+    const pairCounts = new Map<string, number>();
+    plan.plannedCases
+      .filter(plannedCase => (
+        plannedCase.item.itemKey === itemKey && plannedCase.isDoubleCoded
+      ))
+      .forEach(plannedCase => {
+        const pairKey = [...plannedCase.assignedCoderIds]
+          .sort((a, b) => a - b)
+          .join('-');
+        pairCounts.set(pairKey, (pairCounts.get(pairKey) || 0) + 1);
+      });
+
+    return Object.fromEntries(pairCounts);
   }
 
   it('keeps preview distribution and created jobs aligned for capped double-coded mixed definitions', async () => {
@@ -241,8 +300,8 @@ describe('CodingJobService distribution from job definitions', () => {
 
     expect(result.success).toBe(true);
     expect(cacheService.incr).toHaveBeenCalledWith('coding_incomplete_variables_version:5');
-    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v8:5');
-    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_scope_v1:5');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v9:5');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_scope_v2:5');
     expect(result.distribution).toEqual(preview.distribution);
     expect(result.doubleCodingInfo).toEqual(preview.doubleCodingInfo);
     expect(result.jobsCreated).toBe(createdJobCalls.length);
@@ -280,6 +339,86 @@ describe('CodingJobService distribution from job definitions', () => {
     });
     expect([...assignedResponseCounts.values()].filter(count => count === 2)).toHaveLength(2);
     expect(Math.max(...assignedResponseCounts.values())).toBe(2);
+  });
+
+  it('uses all unit-name case variants in preview, usage and created jobs', async () => {
+    const responses = [
+      makeResponse(1, 'Unit A', 'Var 1'),
+      makeResponse(2, 'Unit A', 'Var 1'),
+      makeResponse(3, 'UNIT A', 'Var 1'),
+      makeResponse(4, 'UNIT A', 'Var 1')
+    ];
+    const createdSubsets: SlimResponseForTest[][] = [];
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode')
+      .mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+    jest.spyOn(
+      service as unknown as {
+        createCodingJobWithUnitSubsetInManager: (
+          workspaceId: number,
+          dto: unknown,
+          subset: SlimResponseForTest[]
+        ) => Promise<CodingJob>
+      },
+      'createCodingJobWithUnitSubsetInManager'
+    ).mockImplementation(async (_workspaceId, _dto, subset) => {
+      createdSubsets.push(subset as SlimResponseForTest[]);
+      return { id: 900 + createdSubsets.length } as CodingJob;
+    });
+
+    const request = {
+      selectedVariables: [{ unitName: 'Unit A', variableId: 'Var 1' }],
+      selectedCoders: [{ id: 1, name: 'Ada', username: 'ada' }],
+      caseOrderingMode: 'continuous' as const,
+      distributionSeed: 'unit-case-variants'
+    };
+    const preview = await service.calculateDistribution(5, request);
+    const usage = await service.calculateDistributionVariableUsage(5, request);
+    const result = await service.createDistributedCodingJobs(5, {
+      ...request,
+      jobDefinitionId: 91
+    });
+
+    expect(preview.distribution['Unit A::Var 1']).toEqual({ Ada: 4 });
+    expect(Object.fromEntries(usage)).toEqual({ 'Unit A::Var 1': 4 });
+    expect(result.distribution).toEqual(preview.distribution);
+    expect(createdSubsets.flat().map(response => response.id).sort())
+      .toEqual([1, 2, 3, 4]);
+  });
+
+  it('does not redistribute an open sibling covered by a completed aggregation peer', async () => {
+    const completedResponse = {
+      ...makeResponse(1, 'Unit A', 'Var 1', 'same answer'),
+      statusV2: statusStringToNumber('CODING_COMPLETE')
+    };
+    const activeResponse = {
+      ...makeResponse(2, 'UNIT A', 'Var 1', 'same answer'),
+      statusV2: null
+    };
+    mockResponses([completedResponse, activeResponse]);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(2);
+
+    const request = {
+      selectedVariables: [{ unitName: 'Unit A', variableId: 'Var 1' }],
+      selectedCoders: [{ id: 1, name: 'Ada', username: 'ada' }],
+      distributionSeed: 'completed-peer-coverage'
+    };
+
+    const preview = await service.calculateDistribution(5, request);
+    const usage = await service.calculateDistributionVariableUsage(5, request);
+    const result = await service.createDistributedCodingJobs(5, request);
+
+    expect(preview.distribution['Unit A::Var 1']).toEqual({ Ada: 0 });
+    expect(preview.aggregationInfo['Unit A::Var 1']).toEqual({
+      uniqueCases: 0,
+      totalResponses: 0
+    });
+    expect(usage).toEqual(new Map());
+    expect(result.jobsCreated).toBe(0);
+    expect(result.jobs).toEqual([]);
   });
 
   it('skips cases already assigned by an earlier definition when creating later jobs', async () => {
@@ -535,6 +674,208 @@ describe('CodingJobService distribution from job definitions', () => {
     ).toBe(35);
   });
 
+  it('balances coder loads and double-coding pairs within every variable', async () => {
+    const variables = [
+      { unitName: 'Unit 1', variableId: 'Var 1' },
+      { unitName: 'Unit 2', variableId: 'Var 2' },
+      { unitName: 'Unit 3', variableId: 'Var 3' }
+    ];
+    const responses = variables.flatMap((variable, variableIndex) => Array.from(
+      { length: 30 },
+      (_, caseIndex) => makeResponse(
+        variableIndex * 100 + caseIndex + 1,
+        variable.unitName,
+        variable.variableId
+      )
+    ));
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+
+    const plan = await buildDistributionPlanForTest({
+      selectedVariables: variables,
+      selectedCoders: [
+        { id: 1, name: 'Ada', username: 'ada' },
+        { id: 2, name: 'Bea', username: 'bea' },
+        { id: 3, name: 'Chris', username: 'chris' }
+      ],
+      doubleCodingPercentage: 20,
+      caseOrderingMode: 'continuous',
+      distributionSeed: 'job-definition:1'
+    });
+
+    variables.forEach(variable => {
+      const itemKey = `${variable.unitName}::${variable.variableId}`;
+      expect(plan.distributionByCoderId[itemKey]).toEqual({
+        1: 12,
+        2: 12,
+        3: 12
+      });
+      expect(
+        plan.doubleCodingInfo[itemKey].doubleCodedCasesPerCoderId
+      ).toEqual({
+        1: 4,
+        2: 4,
+        3: 4
+      });
+
+      expect(getDoubleCodingPairCounts(plan, itemKey)).toEqual({
+        '1-2': 2,
+        '1-3': 2,
+        '2-3': 2
+      });
+    });
+    expect(plan.tasksPerCoder).toEqual({ 1: 36, 2: 36, 3: 36 });
+  });
+
+  it('balances unavoidable double-coding remainders across variables', async () => {
+    const variables = [
+      { unitName: 'Unit 1', variableId: 'Var 1' },
+      { unitName: 'Unit 2', variableId: 'Var 2' },
+      { unitName: 'Unit 3', variableId: 'Var 3' }
+    ];
+    const responses = variables.map((variable, index) => makeResponse(
+      index + 1,
+      variable.unitName,
+      variable.variableId
+    ));
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+
+    const plan = await buildDistributionPlanForTest({
+      selectedVariables: variables,
+      selectedCoders: [
+        { id: 1, name: 'Ada', username: 'ada' },
+        { id: 2, name: 'Bea', username: 'bea' },
+        { id: 3, name: 'Chris', username: 'chris' }
+      ],
+      doubleCodingAbsolute: 1,
+      caseOrderingMode: 'continuous',
+      distributionSeed: 'small-items'
+    });
+
+    variables.forEach(variable => {
+      const itemKey = `${variable.unitName}::${variable.variableId}`;
+      expect(
+        Object.values(plan.distributionByCoderId[itemKey]).sort((a, b) => a - b)
+      ).toEqual([0, 1, 1]);
+    });
+    expect(plan.tasksPerCoder).toEqual({ 1: 2, 2: 2, 3: 2 });
+    expect(
+      plan.plannedCases
+        .map(plannedCase => [...plannedCase.assignedCoderIds]
+          .sort((a, b) => a - b)
+          .join('-'))
+        .sort()
+    ).toEqual(['1-2', '1-3', '2-3']);
+  });
+
+  it.each([
+    [
+      '300 cases, three coders and 10 percent double coding',
+      300,
+      3,
+      { doubleCodingPercentage: 10 },
+      [110, 110, 110],
+      [10, 10, 10]
+    ],
+    [
+      '30 cases, three coders and 20 percent double coding',
+      30,
+      3,
+      { doubleCodingPercentage: 20 },
+      [12, 12, 12],
+      [2, 2, 2]
+    ],
+    [
+      '300 cases, four coders and 50 double-coded cases',
+      300,
+      4,
+      { doubleCodingAbsolute: 50 },
+      [87, 87, 88, 88],
+      [8, 8, 8, 8, 9, 9]
+    ]
+  ])('matches the issue distribution example: %s', async (
+    _label,
+    caseCount,
+    coderCount,
+    doubleCoding,
+    expectedCoderLoads,
+    expectedPairCounts
+  ) => {
+    const itemKey = 'Unit 1::Var 1';
+    const responses = Array.from(
+      { length: caseCount as number },
+      (_, index) => makeResponse(index + 1, 'Unit 1', 'Var 1')
+    );
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+
+    const plan = await buildDistributionPlanForTest({
+      selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      selectedCoders: Array.from(
+        { length: coderCount as number },
+        (_, index) => ({
+          id: index + 1,
+          name: `Coder ${index + 1}`,
+          username: `coder-${index + 1}`
+        })
+      ),
+      ...(doubleCoding as Record<string, number>),
+      caseOrderingMode: 'continuous',
+      distributionSeed: 'issue-896-examples'
+    });
+
+    expect(
+      Object.values(plan.distributionByCoderId[itemKey]).sort((a, b) => a - b)
+    ).toEqual(expectedCoderLoads);
+    expect(
+      Object.values(getDoubleCodingPairCounts(plan, itemKey))
+        .sort((a, b) => a - b)
+    ).toEqual(expectedPairCounts);
+  });
+
+  it('balances pair quotas when six coders double-code six cases', async () => {
+    const itemKey = 'Unit 1::Var 1';
+    const responses = Array.from(
+      { length: 6 },
+      (_, index) => makeResponse(index + 1, 'Unit 1', 'Var 1')
+    );
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+
+    const plan = await buildDistributionPlanForTest({
+      selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      selectedCoders: Array.from({ length: 6 }, (_, index) => ({
+        id: index + 1,
+        name: `Coder ${index + 1}`,
+        username: `coder-${index + 1}`
+      })),
+      doubleCodingAbsolute: 6,
+      caseOrderingMode: 'continuous',
+      distributionSeed: 'six-coder-pair-balance'
+    });
+    const pairCounts = getDoubleCodingPairCounts(plan, itemKey);
+
+    expect(plan.distributionByCoderId[itemKey]).toEqual({
+      1: 2,
+      2: 2,
+      3: 2,
+      4: 2,
+      5: 2,
+      6: 2
+    });
+    expect(Object.keys(pairCounts)).toHaveLength(6);
+    expect(Object.values(pairCounts)).toEqual([1, 1, 1, 1, 1, 1]);
+  });
+
   it('ignores unsupported requests for more than two coders per double-coded case', async () => {
     const responses = Array.from({ length: 4 }, (_, index) => makeResponse(index + 1, 'Unit 1', 'Var 1'));
     const createdJobCalls: Array<{ subset: SlimResponseForTest[] }> = [];
@@ -639,6 +980,40 @@ describe('CodingJobService distribution from job definitions', () => {
     expect(preview.tasksPerCoder['1'] + preview.tasksPerCoder['2']).toBe(8);
     expect(preview.tasksPerCoder['2']).toBeGreaterThan(preview.tasksPerCoder['1']);
     expect(preview.coderWeights).toEqual({ 1: 1, 2: 3 });
+  });
+
+  it('applies coder weights within each selected variable', async () => {
+    const responses = [
+      ...Array.from({ length: 8 }, (_, index) => makeResponse(index + 1, 'Unit 1', 'Var 1')),
+      ...Array.from({ length: 8 }, (_, index) => makeResponse(index + 101, 'Unit 2', 'Var 2'))
+    ];
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+
+    const preview = await service.calculateDistribution(5, {
+      selectedVariables: [
+        { unitName: 'Unit 1', variableId: 'Var 1' },
+        { unitName: 'Unit 2', variableId: 'Var 2' }
+      ],
+      selectedCoders: [
+        {
+          id: 1, name: 'Ada', username: 'ada', weight: 1
+        },
+        {
+          id: 2, name: 'Bea', username: 'bea', weight: 3
+        }
+      ],
+      caseOrderingMode: 'continuous',
+      distributionSeed: 'weighted-per-variable'
+    });
+
+    expect(preview.distributionByCoderId).toEqual({
+      'Unit 1::Var 1': { 1: 2, 2: 6 },
+      'Unit 2::Var 2': { 1: 2, 2: 6 }
+    });
+    expect(preview.tasksPerCoder).toEqual({ 1: 4, 2: 12 });
   });
 
   it.each([
@@ -1076,7 +1451,7 @@ describe('CodingJobService distribution from job definitions', () => {
     const matchingSpy = jest.spyOn(service, 'getResponseMatchingMode')
       .mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
     const thresholdSpy = jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
-    const slimResponsesSpy = service.getSlimResponsesForVariables as jest.Mock;
+    const slimResponsesSpy = service.getSlimResponsesForVariableCoverage as jest.Mock;
     const assignedResponseIdsSpy = (
       service as unknown as { getAssignedResponseIdsForVariables: jest.Mock }
     ).getAssignedResponseIdsForVariables;
@@ -1112,7 +1487,7 @@ describe('CodingJobService distribution from job definitions', () => {
     expect(slimResponsesSpy).toHaveBeenCalledWith(5, [
       { unitName: 'Unit 1', variableId: 'Var 1' },
       { unitName: 'Unit 2', variableId: 'Var 2' }
-    ]);
+    ], [ResponseMatchingFlag.NO_AGGREGATION], null, expect.any(Map));
   });
 
   it('calculates batched variable usage split by regular and DERIVE_ERROR cases', async () => {

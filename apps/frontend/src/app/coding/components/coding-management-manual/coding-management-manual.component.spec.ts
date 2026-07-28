@@ -747,7 +747,7 @@ describe('CodingManagementManualComponent', () => {
     expect(component.isPreparationReady()).toBe(true);
   });
 
-  it('should flag response analysis as outdated when the status pool count changed', () => {
+  it('should flag response analysis as outdated when the analysis candidate count changed', () => {
     component.responseAnalysis = {
       emptyResponses: { total: 0, totalUncoded: 0, items: [] },
       duplicateValues: {
@@ -772,6 +772,7 @@ describe('CodingManagementManualComponent', () => {
     component.appliedResultsOverview!.rawTotalIncompleteResponses = 973;
     setCodingProgress(973, 8);
     component.codingProgressOverview!.statusTotalCasesToCode = 973;
+    component.codingProgressOverview!.responseAnalysisRawCases = 973;
 
     expect(component.getCurrentRawManualResponses()).toBe(973);
     expect(component.getResponseAnalysisReferenceRawCases()).toBe(973);
@@ -801,10 +802,12 @@ describe('CodingManagementManualComponent', () => {
     };
     setCodingProgress(16606, 12000);
     component.codingProgressOverview!.rawTotalCasesToCode = 17705;
-    component.codingProgressOverview!.statusTotalCasesToCode = 21606;
+    component.codingProgressOverview!.statusTotalCasesToCode = 21948;
+    component.codingProgressOverview!.responseAnalysisRawCases = 21606;
     setAppliedResults(17705, 3901, 13804);
 
     expect(component.getCurrentRawManualResponses()).toBe(17705);
+    expect(component.getManualStatusPoolCount()).toBe(21948);
     expect(component.getResponseAnalysisReferenceRawCases()).toBe(21606);
     expect(component.isResponseAnalysisOutdated()).toBe(false);
     expect(component.hasResponseAnalysisRestScopeDifference()).toBe(true);
@@ -2354,11 +2357,15 @@ describe('CodingManagementManualComponent', () => {
     );
   });
 
-  it('should start execution exports with cached job definition scope when the dialog keeps defaults', () => {
+  it('should start execution exports with cached job definition scope when no explicit result scope is provided', () => {
     const exportJobService = TestBed.inject(ExportJobService);
     const dialog = {
       open: jest.fn().mockReturnValue({
-        afterClosed: () => of({ exportType: 'detailed', includeReplayUrl: true })
+        afterClosed: () => of({
+          exportType: 'detailed',
+          includeReplayUrl: true,
+          includeResponseValues: true
+        })
       })
     };
     const componentInternals = component as unknown as {
@@ -2401,7 +2408,6 @@ describe('CodingManagementManualComponent', () => {
       ManualCodingExportDialogComponent,
       expect.objectContaining({
         data: expect.objectContaining({
-          defaultJobDefinitionIds: [11],
           jobDefinitions: [
             expect.objectContaining({
               id: 11
@@ -2416,6 +2422,7 @@ describe('CodingManagementManualComponent', () => {
         exportType: 'detailed',
         userId: 9,
         includeReplayUrl: true,
+        includeResponseValues: true,
         excludeAutoCoded: true,
         jobDefinitionIds: [11]
       })
@@ -3269,7 +3276,7 @@ describe('CodingManagementManualComponent', () => {
       codingJobBackendService: {
         getCodingJobs: jest.Mock;
       };
-      testPersonCodingService: {
+      doubleCodedReviewApi: {
         getDoubleCodedVariablesForReview: jest.Mock;
       };
       openDoubleCodingConflictCount: number;
@@ -3292,7 +3299,7 @@ describe('CodingManagementManualComponent', () => {
         }]
       }))
     };
-    componentInternals.testPersonCodingService = {
+    componentInternals.doubleCodedReviewApi = {
       getDoubleCodedVariablesForReview
     };
     component.isLoadingDoubleCodingConflictSummary = true;

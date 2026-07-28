@@ -456,6 +456,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   overview: TestResultsOverviewResponse | null = null;
   isLoadingOverview: boolean = false;
   showTestResultsLogAnomalies: boolean = false;
+  enableRegexSearch: boolean = false;
   logAnomalySummary: LogAnomalyDashboardSummary | null = null;
   isLoadingLogAnomalySummary: boolean = false;
   logAnomalySummaryLoadFailed: boolean = false;
@@ -536,6 +537,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
 
     this.loadTestResultsLogAnomalySetting();
+    this.loadRegexSearchSetting();
     this.loadCodingStatusAutoRefreshSetting();
     this.createTestResultsList(0, this.pageSize);
     this.loadWorkspaceOverview();
@@ -1268,6 +1270,20 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .getShowTestResultsLogAnomalies(workspaceId)
       .subscribe(enabled => {
         this.setShowTestResultsLogAnomalies(enabled);
+      });
+  }
+
+  private loadRegexSearchSetting(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.enableRegexSearch = false;
+      return;
+    }
+
+    this.workspaceSettingsService
+      .getEnableRegexSearch(workspaceId)
+      .subscribe(enabled => {
+        this.enableRegexSearch = enabled;
       });
   }
 

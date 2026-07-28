@@ -12,7 +12,8 @@ export { CodingReplayAnchorService } from './coding-replay-anchor.service';
 export { CodingReplayService } from './coding-replay.service';
 export { CodingResponseQueryService } from './coding-response-query.service';
 export { CodingResultsService } from './coding-results.service';
-export { CodingReviewService } from './coding-review.service';
+export { DoubleCodingReviewQueryService } from './double-coding-review-query.service';
+export { DoubleCodingReviewDecisionService } from './double-coding-review-decision.service';
 export { CodingStatisticsService } from './coding-statistics.service';
 export { CodingReadinessService } from './coding-readiness.service';
 export { CodingValidationService } from './coding-validation.service';
@@ -22,11 +23,24 @@ export { CodingExportService } from './coding-export.service';
 export { CodingExportOrchestratorService } from './coding-export-orchestrator.service';
 export { CodingFreshnessService } from './coding-freshness.service';
 export { CodingItemMatrixExportService } from './coding-item-matrix-export.service';
+export { ExportArtifactService } from './export-artifact.service';
+export { ItemDatasetMetadataService } from './item-dataset-metadata.service';
+export {
+  CodingPsychometricExportService,
+  type PsychometricExportServiceOptions
+} from './coding-psychometric-export.service';
+export { PsychometricMetadataResolver } from './psychometric-metadata-resolver.service';
+export { PsychometricResponseReader } from './psychometric-response-reader.service';
+export { PsychometricAnalysisEngine } from './psychometric-analysis-engine';
+export { PsychometricExportWriter } from './psychometric-export-writer.service';
 export { CodingListExportService } from './coding-list-export.service';
 export { CodingResultsExportService } from './coding-results-export.service';
 export { CodingTimesExportService } from './coding-times-export.service';
 export { CodebookGenerationService } from './codebook-generation.service';
-export { CoderTrainingService } from './coder-training.service';
+export {
+  CoderTrainingService,
+  type TrainingCohensKappaStatistics
+} from './coder-training.service';
 export { CoderTrainingResultsApplyService } from './coder-training-results-apply.service';
 export { ExternalCodingImportService } from './external-coding-import.service';
 export { MissingsProfilesService } from './missings-profiles.service';
