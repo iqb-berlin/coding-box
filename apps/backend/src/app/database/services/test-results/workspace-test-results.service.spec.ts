@@ -1845,6 +1845,159 @@ describe('WorkspaceTestResultsService', () => {
         .toEqual([1001]);
     });
 
+    it('should fully process each booklet batch before starting the next', async () => {
+      const bookletIds = Array.from({ length: 2001 }, (_, index) => index + 1);
+      let resolveFirstBookletBatch: ((rows: BookletLog[]) => void) | undefined;
+      const firstBookletBatch = new Promise<BookletLog[]>(resolve => {
+        resolveFirstBookletBatch = resolve;
+      });
+      const bookletLogQbs: Array<ReturnType<typeof mockQueryBuilder>> = [];
+      const sessionQbs: Array<ReturnType<typeof mockQueryBuilder>> = [];
+      const unitQbs: Array<ReturnType<typeof mockQueryBuilder>> = [];
+
+      (bookletLogRepository.createQueryBuilder as jest.Mock)
+        .mockImplementation(() => {
+          const qb = mockQueryBuilder();
+          if (bookletLogQbs.length === 0) {
+            qb.getMany.mockReturnValue(firstBookletBatch);
+          }
+          bookletLogQbs.push(qb);
+          return qb;
+        });
+      (sessionRepository.createQueryBuilder as jest.Mock)
+        .mockImplementation(() => {
+          const qb = mockQueryBuilder();
+          sessionQbs.push(qb);
+          return qb;
+        });
+      (unitRepository.createQueryBuilder as jest.Mock)
+        .mockImplementation(() => {
+          const qb = mockQueryBuilder();
+          unitQbs.push(qb);
+          return qb;
+        });
+
+      const serviceWithLogAnomalyLookup =
+        service as unknown as WorkspaceTestResultsServiceWithLogAnomalyLookup;
+      const resultPromise =
+        serviceWithLogAnomalyLookup.findLogAnomaliesForBooklets(
+          bookletIds,
+          thresholds
+        );
+      await Promise.resolve();
+
+      expect(bookletLogQbs).toHaveLength(1);
+      expect(sessionQbs).toHaveLength(1);
+      expect(unitQbs).toHaveLength(1);
+
+      resolveFirstBookletBatch?.([]);
+      await resultPromise;
+
+      expect(bookletLogQbs).toHaveLength(3);
+      expect(sessionQbs).toHaveLength(3);
+      expect(unitQbs).toHaveLength(3);
+      expect(bookletLogQbs[2].where.mock.calls[0][1].bookletIds)
+        .toEqual([2001]);
+    });
+
+    it('should stop after a failed batch and log its context', async () => {
+      const bookletIds = Array.from({ length: 2001 }, (_, index) => index + 1);
+      const failure = new Error('database unavailable');
+      const bookletLogQbs: Array<ReturnType<typeof mockQueryBuilder>> = [];
+      const loggerError = jest.mocked(Logger.prototype.error);
+      loggerError.mockClear();
+
+      (bookletLogRepository.createQueryBuilder as jest.Mock)
+        .mockImplementation(() => {
+          const qb = mockQueryBuilder();
+          if (bookletLogQbs.length === 1) {
+            qb.getMany.mockRejectedValue(failure);
+          }
+          bookletLogQbs.push(qb);
+          return qb;
+        });
+
+      const serviceWithLogAnomalyLookup =
+        service as unknown as WorkspaceTestResultsServiceWithLogAnomalyLookup;
+      await expect(
+        serviceWithLogAnomalyLookup.findLogAnomaliesForBooklets(
+          bookletIds,
+          thresholds
+        )
+      ).rejects.toBe(failure);
+
+      expect(bookletLogQbs).toHaveLength(2);
+      expect(loggerError).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'Log anomaly batch 2/3 failed for 1000 booklet(s) during load-and-analysis'
+        ),
+        expect.any(String)
+      );
+    });
+
+    it('should aggregate the summary from completed batches', async () => {
+      const bookletQb = mockQueryBuilder();
+      const bookletRows = Array.from({ length: 2001 }, (_, index) => ({
+        id: index + 1
+      }));
+      (bookletRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValue(bookletQb);
+      bookletQb.getRawMany.mockResolvedValue(bookletRows);
+
+      const batchService = service as unknown as {
+        findLogAnomaliesForBookletBatch: (
+          bookletIds: number[],
+          logThresholds: typeof thresholds,
+          exclusions?: unknown
+        ) => Promise<Map<number, Array<{
+          code: string;
+          severity: 'critical' | 'warning' | 'info';
+          label: string;
+          evidence: string;
+          count: number;
+        }>>>;
+      };
+      jest.spyOn(batchService, 'findLogAnomaliesForBookletBatch')
+        .mockResolvedValueOnce(new Map([[1, [{
+          code: 'controller_error',
+          severity: 'critical',
+          label: 'Controller-Fehler',
+          evidence: 'error',
+          count: 1
+        }]]]))
+        .mockResolvedValueOnce(new Map([[1001, [{
+          code: 'connection_lost',
+          severity: 'critical',
+          label: 'Verbindung verloren',
+          evidence: 'lost',
+          count: 3
+        }]]]))
+        .mockResolvedValueOnce(new Map([[2001, [{
+          code: 'orphan_logs',
+          severity: 'info',
+          label: 'Logs ohne Start',
+          evidence: 'orphan',
+          count: 1
+        }]]]));
+
+      await expect(service.getLogAnomalySummary(1)).resolves.toEqual({
+        totalBooklets: 2001,
+        affectedBooklets: 3,
+        criticalBooklets: 2,
+        warningBooklets: 0,
+        infoBooklets: 1,
+        totalAnomalyRules: 3,
+        totalAnomalyEvents: 5,
+        byCode: {
+          controller_error: 1,
+          connection_lost: 1,
+          orphan_logs: 1
+        }
+      });
+      expect(batchService.findLogAnomaliesForBookletBatch)
+        .toHaveBeenCalledTimes(3);
+    });
+
     it('should split unit log lookups into batches', async () => {
       const bookletLogQb = mockQueryBuilder();
       const sessionQb = mockQueryBuilder();
