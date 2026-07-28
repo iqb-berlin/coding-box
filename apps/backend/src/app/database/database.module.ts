@@ -41,6 +41,7 @@ import { CoderTrainingCoder } from './entities/coder-training-coder.entity';
 import { CoderTrainingDiscussionResult } from './entities/coder-training-discussion-result.entity';
 import { CodingUnitFreshness } from './entities/coding-unit-freshness.entity';
 import { SystemNotification } from './entities/system-notification.entity';
+import { DoubleCodingReviewDecision } from './entities/double-coding-review-decision.entity';
 import { RuntimeConfigModule } from '../config/runtime-config.module';
 import {
   RuntimeConfigService,
@@ -130,7 +131,8 @@ export function buildPostgresConnectionOptions(
           CoderTrainingDiscussionResult,
           CodingUnitFreshness,
           MissingsProfile,
-          SystemNotification
+          SystemNotification,
+          DoubleCodingReviewDecision
         ],
         synchronize: false,
         extra: {
