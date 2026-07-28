@@ -1,4 +1,4 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
@@ -22,12 +22,18 @@ import {
 import { CodingJobService } from './coding-job.service';
 import {
   DoubleCodedManagerDecisionDto,
-  DoubleCodedReviewCodeDto
+  DoubleCodedReviewCodeDto,
+  DoubleCodedReviewQuery,
+  DoubleCodedReviewResponseDto
 } from '../../../../../../../api-dto/coding/double-coded-review.dto';
 
 type JobDefinitionBundleScope = {
   bundleIds: number[];
   variableKeysByBundleId: Map<number, Set<string>>;
+};
+
+type DoubleCodedReviewFilters = DoubleCodedReviewQuery & {
+  includeRelations?: boolean;
 };
 
 type ReviewCoderResult = {
@@ -97,11 +103,9 @@ export class DoubleCodingReviewQueryService {
     private codingStatisticsService: CodingStatisticsService,
     private workspaceExclusionService: WorkspaceExclusionService,
     private codingJobService: CodingJobService,
-    @Optional()
-    private missingsProfilesService?: MissingsProfilesService,
-    @Optional()
+    private missingsProfilesService: MissingsProfilesService,
     @InjectRepository(DoubleCodingReviewDecision)
-    private reviewDecisionRepository?: Repository<DoubleCodingReviewDecision>
+    private reviewDecisionRepository: Repository<DoubleCodingReviewDecision>
   ) { }
 
   private async resolveManualMissingForReview(
@@ -111,7 +115,7 @@ export class DoubleCodingReviewQueryService {
   ): Promise<{ code: number | null; score: number | null }> {
     const missingId = this.manualMissingIdsByIssueOptionId.get(unit.code ?? 0) ??
       this.manualMissingIdsByIssueOptionId.get(unit.coding_issue_option ?? 0);
-    if (!missingId || !this.missingsProfilesService) {
+    if (!missingId) {
       return {
         code: unit.code,
         score: unit.score
@@ -144,23 +148,18 @@ export class DoubleCodingReviewQueryService {
     const profileId = unit.coding_job?.missings_profile_id ?? null;
 
     return Promise.all(definitions.map(async definition => {
-      let score: number | null = null;
-      if (this.missingsProfilesService) {
-        const missing = await this.getCachedReviewMissing(
-          workspaceId,
-          profileId,
-          definition.missingId,
-          cache
-        );
-        score = missing.score;
-      }
+      const missing = await this.getCachedReviewMissing(
+        workspaceId,
+        profileId,
+        definition.missingId,
+        cache
+      );
 
       return {
         code: definition.code,
         label: definition.label,
-        score,
-        source: 'general' as const,
-        commentRequired: false
+        score: missing.score,
+        source: 'general' as const
       };
     }));
   }
@@ -177,7 +176,7 @@ export class DoubleCodingReviewQueryService {
       return cached;
     }
 
-    const pending = this.missingsProfilesService!.getMissingByIdForProfileOrDefault(
+    const pending = this.missingsProfilesService.getMissingByIdForProfileOrDefault(
       workspaceId,
       profileId,
       missingId
@@ -203,7 +202,7 @@ export class DoubleCodingReviewQueryService {
 
     const missingId = this.manualMissingIdsByIssueOptionId.get(code ?? 0) ??
       this.manualMissingIdsByIssueOptionId.get(codingIssueOption ?? 0);
-    if (missingId && this.missingsProfilesService) {
+    if (missingId) {
       const cacheKey = `${missingsProfileId ?? 'default'}:id:${missingId}`;
       let missing = cache.get(cacheKey);
       if (!missing) {
@@ -220,7 +219,7 @@ export class DoubleCodingReviewQueryService {
       };
     }
 
-    if (code !== null && code < 0 && this.missingsProfilesService) {
+    if (code !== null && code < 0) {
       const cacheKey = `${missingsProfileId ?? 'default'}:code:${code}`;
       let missing = cache.get(cacheKey);
       if (!missing) {
@@ -242,56 +241,22 @@ export class DoubleCodingReviewQueryService {
 
   async getDoubleCodedVariablesForReview(
     workspaceId: number,
-    page: number = 1,
-    limit: number = 50,
-    onlyConflicts: boolean = false,
-    excludeTrainings: boolean = false,
-    search?: string,
-    coderId?: number,
-    statusFilter?: string,
-    resolvedFilter?: string,
-    agreementFilter?: 'all' | 'match' | 'differ',
-    jobDefinitionIds?: number[],
-    coderTrainingIds?: number[],
-    includeRelations: boolean = true
-  ): Promise<{
-      data: Array<{
-        responseId: number;
-        sourceUnitId: number;
-        unitName: string;
-        variableId: string;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        bookletName: string;
-        givenAnswer: string;
-        isResolved: boolean;
-        appliedCode: number | null;
-        appliedScore: number | null;
-        appliedComment: string | null;
-        availableCodes: DoubleCodedReviewCodeDto[];
-        managerDrafts: DoubleCodedManagerDecisionDto[];
-        managerHistory: DoubleCodedManagerDecisionDto[];
-        coderResults: Array<{
-          coderId: number;
-          coderName: string;
-          jobId: number;
-          jobName: string;
-          jobDefinitionId: number | null;
-          trainingId: number | null;
-          trainingLabel: string | null;
-          code: number | null;
-          codingIssueOption: number | null;
-          score: number | null;
-          notes: string | null;
-          supervisorComment: string | null;
-          codedAt: Date;
-        }>;
-      }>;
-      total: number;
-      page: number;
-      limit: number;
-    }> {
+    filters: DoubleCodedReviewFilters = {}
+  ): Promise<DoubleCodedReviewResponseDto> {
+    const {
+      page = 1,
+      limit = 50,
+      onlyConflicts = false,
+      excludeTrainings = false,
+      search,
+      coderId,
+      statusFilter,
+      resolvedFilter,
+      agreementFilter,
+      jobDefinitionIds,
+      coderTrainingIds,
+      includeRelations = true
+    } = filters;
     try {
       this.logger.log(
         `Getting double-coded variables for review in workspace ${workspaceId} (onlyConflicts=${onlyConflicts}, agreementFilter=${agreementFilter}, resolvedFilter=${resolvedFilter}, jobDefinitionFilters=${jobDefinitionIds?.length || 0}, trainingFilters=${coderTrainingIds?.length || 0})`
@@ -717,7 +682,7 @@ export class DoubleCodingReviewQueryService {
           await this.getGeneralReviewCodes(workspaceId, representativeUnit, manualMissingCache) :
           [];
         group.availableCodes = [
-          ...schemaCodes.map(code => ({ ...code, source: 'schema' as const, commentRequired: false })),
+          ...schemaCodes.map(code => ({ ...code, source: 'schema' as const })),
           ...generalCodes
         ];
       }));
@@ -728,7 +693,13 @@ export class DoubleCodingReviewQueryService {
       );
 
       return {
-        data,
+        data: data.map(group => ({
+          ...group,
+          coderResults: group.coderResults.map(result => ({
+            ...result,
+            codedAt: this.toIsoString(result.codedAt)
+          }))
+        })),
         total,
         page,
         limit
@@ -756,7 +727,7 @@ export class DoubleCodingReviewQueryService {
       managerHistory: DoubleCodedManagerDecisionDto[];
     }>
   ): Promise<void> {
-    if (!this.reviewDecisionRepository || groups.length === 0) {
+    if (groups.length === 0) {
       groups.forEach(group => this.addLegacyManagerHistory(group));
       return;
     }
@@ -810,7 +781,7 @@ export class DoubleCodingReviewQueryService {
       managerKey: null,
       managerName: 'Manager unbekannt',
       state: 'applied',
-      code: group.appliedCode,
+      effectiveCode: group.appliedCode,
       selectedCode: null,
       score: group.appliedScore,
       comment: group.appliedComment,
@@ -829,15 +800,24 @@ export class DoubleCodingReviewQueryService {
       managerKey: decision.manager_key,
       managerName: decision.manager_name,
       state: decision.state,
-      code: this.toNullableNumber(decision.code),
+      effectiveCode: this.toNullableNumber(decision.effective_code),
       selectedCode: this.toNullableNumber(decision.selected_code),
       score: this.toNullableNumber(decision.score),
       comment: decision.comment,
-      createdAt: decision.created_at,
-      updatedAt: decision.updated_at,
-      finalizedAt: decision.finalized_at,
+      createdAt: this.toIsoString(decision.created_at),
+      updatedAt: this.toIsoString(decision.updated_at),
+      finalizedAt: this.toIsoString(decision.finalized_at),
       legacy: false
     };
+  }
+
+  private toIsoString(value: Date | string): string;
+  private toIsoString(value: Date | string | null): string | null;
+  private toIsoString(value: Date | string | null): string | null {
+    if (value === null) {
+      return null;
+    }
+    return value instanceof Date ? value.toISOString() : value;
   }
 
   async getCodedVariablesForKappa(
@@ -1471,18 +1451,15 @@ export class DoubleCodingReviewQueryService {
       while (hasMore) {
         const doubleCodedData = await this.getDoubleCodedVariablesForReview(
           workspaceId,
-          currentPage,
-          batchSize,
-          false, // onlyConflicts = false
-          excludeTrainings,
-          undefined, // search
-          undefined, // coderId
-          undefined, // statusFilter
-          undefined, // resolvedFilter
-          undefined, // agreementFilter
-          jobDefinitionIds,
-          coderTrainingIds,
-          false // includeRelations = false
+          {
+            page: currentPage,
+            limit: batchSize,
+            onlyConflicts: false,
+            excludeTrainings,
+            jobDefinitionIds,
+            coderTrainingIds,
+            includeRelations: false
+          }
         );
 
         if (coderIds.length > 0) {

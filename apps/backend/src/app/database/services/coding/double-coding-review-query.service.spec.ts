@@ -58,6 +58,11 @@ describe('DoubleCodingReviewQueryService', () => {
     getCodingSchemeScoreForUnitCode: jest.Mock;
     getSelectableReviewCodeForUnit: jest.Mock;
   };
+  let defaultMissingsProfilesService: {
+    getMissingByIdForProfileOrDefault: jest.Mock;
+    getMissingByCodeForProfileOrDefault: jest.Mock;
+  };
+  let reviewDecisionRepository: { find: jest.Mock };
   let service: DoubleCodingReviewQueryService;
 
   const makeCodingJobUnit = (
@@ -200,6 +205,24 @@ describe('DoubleCodingReviewQueryService', () => {
         })
       )
     };
+    defaultMissingsProfilesService = {
+      getMissingByIdForProfileOrDefault: jest.fn().mockImplementation(
+        async (_workspaceId: number, _profileId: number | null, missingId: string) => ({
+          id: missingId,
+          label: missingId,
+          code: missingId === 'mir' ? -3 : -4,
+          score: null
+        })
+      ),
+      getMissingByCodeForProfileOrDefault: jest.fn().mockImplementation(
+        async (_workspaceId: number, _profileId: number | null, code: number) => ({
+          id: String(code), label: String(code), code, score: null
+        })
+      )
+    };
+    reviewDecisionRepository = {
+      find: jest.fn().mockResolvedValue([])
+    };
 
     service = new DoubleCodingReviewQueryService(
       codingJobUnitRepository as never,
@@ -209,7 +232,9 @@ describe('DoubleCodingReviewQueryService', () => {
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
       } as never,
-      codingJobService as never
+      codingJobService as never,
+      defaultMissingsProfilesService as never,
+      reviewDecisionRepository as never
     );
   });
 
@@ -269,17 +294,7 @@ describe('DoubleCodingReviewQueryService', () => {
 
     const result = await service.getDoubleCodedVariablesForReview(
       workspaceId,
-      1,
-      50,
-      false,
-      false,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'differ',
-      [11],
-      undefined
+      { agreementFilter: 'differ', jobDefinitionIds: [11] }
     );
 
     expect(queryBuilder.andHaving).toHaveBeenCalledWith(expect.stringContaining('deduped_review_results.code IS NOT NULL'));
@@ -321,7 +336,7 @@ describe('DoubleCodingReviewQueryService', () => {
         variableId: 'VAR_1',
         coderResults: [
           {
-            coderId: 1, jobId: 100, code: 1, codingIssueOption: -3
+            coderId: 1, jobId: 100, code: -3, codingIssueOption: -3
           },
           {
             coderId: 2, jobId: 101, code: 1, score: 1
@@ -375,7 +390,8 @@ describe('DoubleCodingReviewQueryService', () => {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
       } as never,
       codingJobService as never,
-      missingsProfilesService as never
+      missingsProfilesService as never,
+      reviewDecisionRepository as never
     );
 
     codingJobUnitRepository.find.mockResolvedValueOnce([
@@ -444,7 +460,8 @@ describe('DoubleCodingReviewQueryService', () => {
       {} as never,
       {} as never,
       codingJobService as never,
-      missingsProfilesService as never
+      missingsProfilesService as never,
+      reviewDecisionRepository as never
     );
     const unit = makeCodingJobUnit({
       coding_job: {
@@ -516,16 +533,7 @@ describe('DoubleCodingReviewQueryService', () => {
 
     const result = await service.getDoubleCodedVariablesForReview(
       workspaceId,
-      1,
-      50,
-      false,
-      false,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      [11]
+      { jobDefinitionIds: [11] }
     );
 
     expect(selectableCodesSpy).toHaveBeenCalledWith([olderUnit], workspaceId);
@@ -535,15 +543,7 @@ describe('DoubleCodingReviewQueryService', () => {
   it('applies the match agreement filter', async () => {
     await service.getDoubleCodedVariablesForReview(
       workspaceId,
-      1,
-      50,
-      false,
-      false,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'match'
+      { agreementFilter: 'match' }
     );
 
     expect(queryBuilder.andHaving).toHaveBeenCalledWith(expect.stringContaining('COUNT(DISTINCT deduped_review_results.signature)'));
@@ -554,9 +554,7 @@ describe('DoubleCodingReviewQueryService', () => {
   it('keeps legacy only-conflicts behavior for older clients', async () => {
     await service.getDoubleCodedVariablesForReview(
       workspaceId,
-      1,
-      50,
-      true
+      { onlyConflicts: true }
     );
 
     expect(queryBuilder.andHaving).toHaveBeenCalledWith(expect.stringContaining('deduped_review_results.code IS NOT NULL'));
@@ -677,6 +675,9 @@ describe('DoubleCodingReviewQueryService', () => {
 
     expect(result.total).toBe(2);
     expect(result.data).toHaveLength(2);
+    expect(result.data[0].coderResults[0].codedAt).toBe(
+      '2026-05-18T00:00:00.000Z'
+    );
     expect(result.data[0]).toMatchObject({
       responseId: 10,
       isResolved: false,
@@ -825,14 +826,7 @@ describe('DoubleCodingReviewQueryService', () => {
   it('applies resolved and coding-status filters independently', async () => {
     await service.getDoubleCodedVariablesForReview(
       workspaceId,
-      1,
-      50,
-      false,
-      false,
-      undefined,
-      undefined,
-      'done',
-      'resolved'
+      { statusFilter: 'done', resolvedFilter: 'resolved' }
     );
 
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
@@ -847,17 +841,11 @@ describe('DoubleCodingReviewQueryService', () => {
   it('combines job-definition and coder-training scopes with OR', async () => {
     await service.getDoubleCodedVariablesForReview(
       workspaceId,
-      1,
-      50,
-      false,
-      false,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'all',
-      [11],
-      [21]
+      {
+        agreementFilter: 'all',
+        jobDefinitionIds: [11],
+        coderTrainingIds: [21]
+      }
     );
 
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
@@ -1017,12 +1005,7 @@ describe('DoubleCodingReviewQueryService', () => {
   it('applies coder filters only through single-distinct-coder jobs', async () => {
     await service.getDoubleCodedVariablesForReview(
       workspaceId,
-      1,
-      50,
-      false,
-      false,
-      undefined,
-      1
+      { coderId: 1 }
     );
 
     const coderFilterFactory = queryBuilder.andWhere.mock.calls
@@ -1200,16 +1183,7 @@ describe('DoubleCodingReviewQueryService', () => {
 
     const result = await service.getDoubleCodedVariablesForReview(
       workspaceId,
-      1,
-      50,
-      false,
-      false,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'all',
-      [11]
+      { agreementFilter: 'all', jobDefinitionIds: [11] }
     );
 
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
@@ -1447,7 +1421,8 @@ describe('DoubleCodingReviewQueryService', () => {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
       } as never,
       codingJobService as never,
-      missingsProfilesService as never
+      missingsProfilesService as never,
+      reviewDecisionRepository as never
     );
     queryBuilder.getRawMany.mockResolvedValueOnce([
       {
@@ -1779,7 +1754,9 @@ describe('DoubleCodingReviewQueryService', () => {
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
       } as never,
-      codingJobService as never
+      codingJobService as never,
+      defaultMissingsProfilesService as never,
+      reviewDecisionRepository as never
     );
     const getDoubleCodedVariablesForReviewSpy = jest
       .spyOn(service, 'getDoubleCodedVariablesForReview')
@@ -1816,7 +1793,7 @@ describe('DoubleCodingReviewQueryService', () => {
                 score: 1,
                 notes: null,
                 supervisorComment: null,
-                codedAt: new Date('2026-05-18T00:00:00.000Z')
+                codedAt: '2026-05-18T00:00:00.000Z'
               },
               {
                 coderId: 32,
@@ -1831,7 +1808,7 @@ describe('DoubleCodingReviewQueryService', () => {
                 score: 1,
                 notes: null,
                 supervisorComment: null,
-                codedAt: new Date('2026-05-18T00:00:00.000Z')
+                codedAt: '2026-05-18T00:00:00.000Z'
               },
               {
                 coderId: 33,
@@ -1846,7 +1823,7 @@ describe('DoubleCodingReviewQueryService', () => {
                 score: 1,
                 notes: null,
                 supervisorComment: null,
-                codedAt: new Date('2026-05-18T00:00:00.000Z')
+                codedAt: '2026-05-18T00:00:00.000Z'
               }
             ]
           }
@@ -1867,18 +1844,15 @@ describe('DoubleCodingReviewQueryService', () => {
 
     expect(getDoubleCodedVariablesForReviewSpy).toHaveBeenCalledWith(
       workspaceId,
-      1,
-      1000,
-      false,
-      true,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      [],
-      [],
-      false
+      {
+        page: 1,
+        limit: 1000,
+        onlyConflicts: false,
+        excludeTrainings: true,
+        jobDefinitionIds: [],
+        coderTrainingIds: [],
+        includeRelations: false
+      }
     );
     expect(codingStatisticsService.calculateCohensKappa).toHaveBeenCalledWith([
       expect.objectContaining({

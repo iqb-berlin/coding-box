@@ -81,9 +81,11 @@ CREATE TABLE "public"."double_coding_review_decision" (
   "workspace_id" INTEGER NOT NULL,
   "response_id" INTEGER NOT NULL,
   "manager_user_id" INTEGER NULL,
+  "manager_key" VARCHAR(255) NOT NULL,
   "manager_name" VARCHAR(255) NOT NULL,
   "state" VARCHAR(16) NOT NULL,
-  "code" BIGINT NULL,
+  "selected_code" BIGINT NULL,
+  "effective_code" BIGINT NULL,
   "score" BIGINT NULL,
   "comment" TEXT NULL,
   "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
@@ -107,29 +109,3 @@ CREATE UNIQUE INDEX "double_coding_review_decision_open_draft_idx"
   WHERE "state" = 'draft';
 
 -- rollback DROP TABLE IF EXISTS "public"."double_coding_review_decision";
-
--- changeset jurei733:838-double-coding-review-manager-key
--- comment: Preserve a stable manager identity when the referenced user is deleted
-ALTER TABLE "public"."double_coding_review_decision"
-  ADD COLUMN "manager_key" VARCHAR(255) NULL;
-
-UPDATE "public"."double_coding_review_decision"
-SET "manager_key" = CASE
-  WHEN "manager_user_id" IS NOT NULL THEN "manager_user_id"::text
-  ELSE 'decision_' || "id"::text
-END;
-
-ALTER TABLE "public"."double_coding_review_decision"
-  ALTER COLUMN "manager_key" SET NOT NULL;
-
--- rollback ALTER TABLE "public"."double_coding_review_decision" DROP COLUMN IF EXISTS "manager_key";
-
--- changeset jurei733:838-double-coding-review-selected-code
--- comment: Preserve the manager's original selection alongside the profile-resolved final code
-ALTER TABLE "public"."double_coding_review_decision"
-  ADD COLUMN "selected_code" BIGINT NULL;
-
-UPDATE "public"."double_coding_review_decision"
-SET "selected_code" = "code";
-
--- rollback ALTER TABLE "public"."double_coding_review_decision" DROP COLUMN IF EXISTS "selected_code";

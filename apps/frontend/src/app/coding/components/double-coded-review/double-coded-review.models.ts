@@ -1,39 +1,16 @@
 import type { PostMessage } from '../../../core/services/post-message.service';
 import type {
-  DoubleCodedManagerDecisionDto,
-  DoubleCodedReviewCodeDto
+  DoubleCodedReviewCoderResultDto,
+  DoubleCodedReviewItemDto
 } from '../../../../../../../api-dto/coding/double-coded-review.dto';
 
-export interface CoderResult {
-  coderId: number;
-  coderName: string;
-  jobId: number;
-  jobName: string;
-  code: number | null;
+export interface CoderResult
+  extends Omit<DoubleCodedReviewCoderResultDto, 'codingIssueOption'> {
   codingIssueOption?: number | null;
-  score: number | null;
-  notes: string | null;
-  supervisorComment: string | null;
-  codedAt: string;
   currentSelectionMatch?: boolean;
 }
 
-export interface DoubleCodedItem {
-  responseId: number;
-  sourceUnitId: number;
-  unitName: string;
-  variableId: string;
-  personLogin: string;
-  personCode: string;
-  bookletName: string;
-  givenAnswer: string;
-  isResolved: boolean;
-  appliedCode: number | null;
-  appliedScore: number | null;
-  appliedComment: string | null;
-  availableCodes: DoubleCodedReviewCodeDto[];
-  managerDrafts: DoubleCodedManagerDecisionDto[];
-  managerHistory: DoubleCodedManagerDecisionDto[];
+export interface DoubleCodedItem extends Omit<DoubleCodedReviewItemDto, 'coderResults'> {
   coderResults: CoderResult[];
   selectedCoderResult?: CoderResult;
   currentSelectionCode?: number | null;

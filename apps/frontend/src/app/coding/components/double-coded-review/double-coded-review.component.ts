@@ -181,8 +181,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   agreementControl = new FormControl<'all' | 'match' | 'differ'>('all');
   searchControl = new FormControl('');
   coderControl = new FormControl<number | null>(null);
-  statusControl = new FormControl<string>('all');
-  resolvedControl = new FormControl<string>('all');
+  statusControl = new FormControl<'all' | 'done' | 'pending'>('all');
+  resolvedControl = new FormControl<'all' | 'resolved' | 'unresolved'>('all');
   scopeControl = new FormControl<string[]>([]);
   availableCoders: { id: number; name: string }[] = [];
   availableJobDefinitions: Array<{ id: number; label: string }> = [];
@@ -669,7 +669,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   getManagerDecisionDisplayCode(
     decision: DoubleCodedManagerDecisionDto
   ): string {
-    const selectedCode = decision.selectedCode ?? decision.code;
+    const selectedCode = decision.selectedCode ?? decision.effectiveCode;
     return (
       this.getCodeLabel(selectedCode) ||
       (selectedCode === null ? '' : String(selectedCode))
@@ -1026,17 +1026,19 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     this.doubleCodedReviewApi
       .getDoubleCodedVariablesForReview(
         workspaceId,
-        this.currentPage,
-        this.pageSize,
-        this.showOnlyConflicts,
-        false,
-        this.searchControl.value || undefined,
-        this.coderControl.value || undefined,
-        this.statusControl.value || undefined,
-        this.resolvedControl.value || undefined,
-        agreementFilter,
-        this.getSelectedJobDefinitionIds(),
-        this.getSelectedCoderTrainingIds()
+        {
+          page: this.currentPage,
+          limit: this.pageSize,
+          onlyConflicts: this.showOnlyConflicts,
+          excludeTrainings: false,
+          search: this.searchControl.value || undefined,
+          coderId: this.coderControl.value || undefined,
+          statusFilter: this.statusControl.value || undefined,
+          resolvedFilter: this.resolvedControl.value || undefined,
+          agreementFilter,
+          jobDefinitionIds: this.getSelectedJobDefinitionIds(),
+          coderTrainingIds: this.getSelectedCoderTrainingIds()
+        }
       )
       .subscribe({
         next: response => {
@@ -1222,8 +1224,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
           code,
           label: this.getCodeLabel(code) || String(code),
           score: result.score,
-          source: code < 0 ? 'general' : 'schema',
-          commentRequired: false
+          source: code < 0 ? 'general' : 'schema'
         });
       });
     });
@@ -1233,8 +1234,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
           code,
           label: this.getCodeLabel(code),
           score: null,
-          source: 'general',
-          commentRequired: false
+          source: 'general'
         });
       }
     });

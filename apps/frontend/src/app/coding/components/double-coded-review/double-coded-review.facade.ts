@@ -119,7 +119,9 @@ export class DoubleCodedReviewFacade {
       const ownDraft = this.getOwnManagerDraft(item);
       const modeCode = this.getModeCode(item);
       const defaultCode =
-        ownDraft?.code ?? (item.isResolved ? item.appliedCode : modeCode);
+        ownDraft?.selectedCode ??
+        ownDraft?.effectiveCode ??
+        (item.isResolved ? item.appliedCode : modeCode);
       const selectedValue =
         defaultCode === null || defaultCode === undefined ?
           '' :

@@ -9,7 +9,9 @@ import {
   Query,
   UseGuards,
   Body,
-  Req
+  Req,
+  ParseIntPipe,
+  ValidationPipe
 } from '@nestjs/common';
 import { Request } from 'express';
 import {
@@ -27,12 +29,21 @@ import {
   DoubleCodingReviewQueryService
 } from '../../database/services/coding';
 import {
-  DoubleCodedResolutionDecision,
   DoubleCodedReviewResponse,
   DoubleCodedResolutionResponse
 } from './dto/workspace-coding.interfaces';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
-import { SaveDoubleCodedReviewDraftDto } from '../../../../../../api-dto/coding/double-coded-review.dto';
+import {
+  ApplyDoubleCodedResolutionsRequestDto,
+  DoubleCodedReviewQueryDto,
+  SaveDoubleCodedReviewDraftRequestDto
+} from './dto/double-coded-review-request.dto';
+
+const requestValidationPipe = new ValidationPipe({
+  transform: true,
+  whitelist: true,
+  forbidNonWhitelisted: true
+});
 
 const doubleCodedManagerDecisionSchema = {
   type: 'object' as const,
@@ -46,7 +57,7 @@ const doubleCodedManagerDecisionSchema = {
       type: 'string' as const,
       enum: ['draft', 'applied', 'superseded']
     },
-    code: { type: 'number' as const, nullable: true },
+    effectiveCode: { type: 'number' as const, nullable: true },
     selectedCode: { type: 'number' as const, nullable: true },
     score: { type: 'number' as const, nullable: true },
     comment: { type: 'string' as const, nullable: true },
@@ -66,7 +77,7 @@ const doubleCodedManagerDecisionSchema = {
     'managerKey',
     'managerName',
     'state',
-    'code',
+    'effectiveCode',
     'selectedCode',
     'score',
     'comment',
@@ -166,6 +177,7 @@ export class WorkspaceCodingReviewController {
               variableId: { type: 'string', description: 'Variable ID' },
               personLogin: { type: 'string', description: 'Person login' },
               personCode: { type: 'string', description: 'Person code' },
+              personGroup: { type: 'string', description: 'Person group' },
               bookletName: { type: 'string', description: 'Booklet name' },
               givenAnswer: {
                 type: 'string',
@@ -201,9 +213,9 @@ export class WorkspaceCodingReviewController {
                     code: { type: 'number' },
                     label: { type: 'string' },
                     score: { type: 'number', nullable: true },
-                    source: { type: 'string', enum: ['schema', 'general'] },
-                    commentRequired: { type: 'boolean' }
-                  }
+                    source: { type: 'string', enum: ['schema', 'general'] }
+                  },
+                  required: ['code', 'label', 'score', 'source']
                 }
               },
               managerDrafts: {
@@ -228,6 +240,21 @@ export class WorkspaceCodingReviewController {
                       type: 'string',
                       description: 'Name of the coding job'
                     },
+                    jobDefinitionId: {
+                      type: 'number',
+                      nullable: true,
+                      description: 'Coding job definition ID'
+                    },
+                    trainingId: {
+                      type: 'number',
+                      nullable: true,
+                      description: 'Coder training ID'
+                    },
+                    trainingLabel: {
+                      type: 'string',
+                      nullable: true,
+                      description: 'Coder training label'
+                    },
                     code: {
                       type: 'number',
                       nullable: true,
@@ -249,16 +276,55 @@ export class WorkspaceCodingReviewController {
                       nullable: true,
                       description: 'Notes from the coder'
                     },
+                    supervisorComment: {
+                      type: 'string',
+                      nullable: true,
+                      description: 'Supervisor comment for this coding result'
+                    },
                     codedAt: {
                       type: 'string',
                       format: 'date-time',
                       description: 'When the coding was done'
                     }
-                  }
+                  },
+                  required: [
+                    'coderId',
+                    'coderName',
+                    'jobId',
+                    'jobName',
+                    'jobDefinitionId',
+                    'trainingId',
+                    'trainingLabel',
+                    'code',
+                    'codingIssueOption',
+                    'score',
+                    'notes',
+                    'supervisorComment',
+                    'codedAt'
+                  ]
                 },
                 description: 'Results from all coders who coded this variable'
               }
-            }
+            },
+            required: [
+              'responseId',
+              'sourceUnitId',
+              'unitName',
+              'variableId',
+              'personLogin',
+              'personCode',
+              'personGroup',
+              'bookletName',
+              'givenAnswer',
+              'isResolved',
+              'appliedCode',
+              'appliedScore',
+              'appliedComment',
+              'availableCodes',
+              'managerDrafts',
+              'managerHistory',
+              'coderResults'
+            ]
           }
         },
         total: {
@@ -267,57 +333,18 @@ export class WorkspaceCodingReviewController {
         },
         page: { type: 'number', description: 'Current page number' },
         limit: { type: 'number', description: 'Number of items per page' }
-      }
+      },
+      required: ['data', 'total', 'page', 'limit']
     }
   })
   async getDoubleCodedVariablesForReview(
     @WorkspaceId() workspace_id: number,
-                   @Query('page') page: number = 1,
-                   @Query('limit') limit: number = 50,
-                   @Query('onlyConflicts') onlyConflicts?: string,
-                   @Query('excludeTrainings') excludeTrainings?: string,
-                   @Query('search') search?: string,
-                   @Query('coderId') coderId?: number,
-                   @Query('statusFilter') statusFilter?: string,
-                   @Query('resolvedFilter') resolvedFilter?: string,
-                   @Query('agreementFilter') agreementFilter?: 'all' | 'match' | 'differ',
-                   @Query('jobDefinitionIds') jobDefinitionIds?: string,
-                   @Query('coderTrainingIds') coderTrainingIds?: string
+      @Query(requestValidationPipe) query: DoubleCodedReviewQueryDto
   ): Promise<DoubleCodedReviewResponse> {
-    const validPage = Math.max(1, page);
-    const validLimit = Math.min(Math.max(1, limit), 100); // Max 100 items per page for review
-    const isOnlyConflicts = onlyConflicts === 'true';
-    const isExcludeTrainings = excludeTrainings === 'true';
-    const selectedJobDefinitionIds = this.parseIdList(jobDefinitionIds);
-    const selectedCoderTrainingIds = this.parseIdList(coderTrainingIds);
-
     return this.doubleCodingReviewQueryService.getDoubleCodedVariablesForReview(
       workspace_id,
-      validPage,
-      validLimit,
-      isOnlyConflicts,
-      isExcludeTrainings,
-      search,
-      coderId,
-      statusFilter,
-      resolvedFilter,
-      agreementFilter,
-      selectedJobDefinitionIds,
-      selectedCoderTrainingIds
+      query
     );
-  }
-
-  private parseIdList(rawIds?: string): number[] | undefined {
-    if (!rawIds) {
-      return undefined;
-    }
-
-    const parsedIds = rawIds
-      .split(',')
-      .map(id => parseInt(id.trim(), 10))
-      .filter(id => !Number.isNaN(id));
-
-    return parsedIds.length > 0 ? parsedIds : undefined;
   }
 
   @Post(':workspace_id/coding/double-coded-review/apply-resolutions')
@@ -334,6 +361,10 @@ export class WorkspaceCodingReviewController {
           type: 'array',
           items: {
             type: 'object',
+            oneOf: [
+              { required: ['selectedJobId'] },
+              { required: ['code'] }
+            ],
             properties: {
               responseId: { type: 'number', description: 'Response ID' },
               selectedJobId: {
@@ -415,10 +446,8 @@ export class WorkspaceCodingReviewController {
   })
   async applyDoubleCodedResolutions(
     @WorkspaceId() workspace_id: number,
-      @Body()
-                   body: {
-                     decisions: DoubleCodedResolutionDecision[];
-                   },
+      @Body(requestValidationPipe)
+                   body: ApplyDoubleCodedResolutionsRequestDto,
                    @Req() req: Request
   ): Promise<DoubleCodedResolutionResponse> {
     const manager = this.getRequestManager(req);
@@ -462,14 +491,14 @@ export class WorkspaceCodingReviewController {
   })
   async saveDoubleCodedReviewDraft(
   @WorkspaceId() workspace_id: number,
-    @Param('responseId') responseId: number,
-    @Body() body: SaveDoubleCodedReviewDraftDto,
+    @Param('responseId', ParseIntPipe) responseId: number,
+    @Body(requestValidationPipe) body: SaveDoubleCodedReviewDraftRequestDto,
     @Req() req: Request
   ) {
     const manager = this.getRequestManager(req);
     return this.doubleCodingReviewDecisionService.saveDoubleCodedReviewDraft(
       workspace_id,
-      Number(responseId),
+      responseId,
       manager.userId,
       manager.name,
       body
@@ -492,13 +521,13 @@ export class WorkspaceCodingReviewController {
   })
   async deleteDoubleCodedReviewDraft(
   @WorkspaceId() workspace_id: number,
-    @Param('responseId') responseId: number,
+    @Param('responseId', ParseIntPipe) responseId: number,
     @Req() req: Request
   ) {
     const manager = this.getRequestManager(req);
     return this.doubleCodingReviewDecisionService.deleteDoubleCodedReviewDraft(
       workspace_id,
-      Number(responseId),
+      responseId,
       manager.userId
     );
   }
