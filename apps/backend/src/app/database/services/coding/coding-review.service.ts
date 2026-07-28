@@ -1,12 +1,22 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, In, Repository } from 'typeorm';
+import {
+  EntityManager, In, IsNull, Not, Repository
+} from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
+import { DoubleCodingReviewDecision } from '../../entities/double-coding-review-decision.entity';
 import { CodingStatisticsService } from './coding-statistics.service';
 import {
   applyResolvedExclusionsToQuery,
@@ -16,11 +26,19 @@ import {
 import { MissingsProfilesService, ResolvedMissingValue } from './missings-profiles.service';
 import {
   applyNonCodingIssueReviewJobFilter,
+  CODING_JOB_TYPE_CODING_ISSUE_REVIEW,
   isCodingIssueReviewJobType
 } from './coding-job-type.util';
 import { CodingJobService } from './coding-job.service';
 import { CodingAnalysisService } from './coding-analysis.service';
 import { CodingValidationService } from './coding-validation.service';
+import {
+  DoubleCodedManagerDecisionDto,
+  DoubleCodedResolutionDecisionDto,
+  DoubleCodedResolutionResultDto,
+  DoubleCodedReviewCodeDto,
+  SaveDoubleCodedReviewDraftDto
+} from '../../../../../../../api-dto/coding/double-coded-review.dto';
 
 type JobDefinitionBundleScope = {
   bundleIds: number[];
@@ -51,18 +69,16 @@ type AppliedReviewResult = {
 
 type KappaCalculationLevel = 'code' | 'score';
 
-type DoubleCodedResolutionDecision = {
-  responseId: number;
-  selectedJobId?: number | null;
-  code?: number | null;
-  score?: number | null;
-  resolutionComment?: string;
-};
-
 type ResolvedDoubleCodedResolution = {
   response: ResponseEntity;
   sourceUnit: CodingJobUnit;
+  selectionCode: number;
   code: number | null;
+  score: number | null;
+};
+
+type ResolvedReviewSelection = {
+  code: number;
   score: number | null;
 };
 
@@ -94,7 +110,7 @@ type KappaCodedVariableRow = {
 @Injectable()
 export class CodingReviewService {
   private readonly logger = new Logger(CodingReviewService.name);
-  private readonly allowedCodingIssueCodes = new Set([-1, -2, -3, -4]);
+  private readonly allowedCodingIssueCodes = new Set([-3, -4]);
   private readonly manualMissingIdsByIssueOptionId = new Map<number, string>([
     [-3, 'mir'],
     [-4, 'mci']
@@ -115,13 +131,16 @@ export class CodingReviewService {
     private workspaceExclusionService: WorkspaceExclusionService,
     private codingJobService: CodingJobService,
     @Optional()
-    private missingsProfilesService?: MissingsProfilesService
+    private missingsProfilesService?: MissingsProfilesService,
+    @Optional()
+    @InjectRepository(DoubleCodingReviewDecision)
+    private reviewDecisionRepository?: Repository<DoubleCodingReviewDecision>
   ) { }
 
   private async resolveManualMissingForReview(
     workspaceId: number,
     unit: CodingJobUnit,
-    cache: Map<string, ResolvedMissingValue>
+    cache: Map<string, Promise<ResolvedMissingValue>>
   ): Promise<{ code: number | null; score: number | null }> {
     const missingId = this.manualMissingIdsByIssueOptionId.get(unit.code ?? 0) ??
       this.manualMissingIdsByIssueOptionId.get(unit.coding_issue_option ?? 0);
@@ -133,21 +152,74 @@ export class CodingReviewService {
     }
 
     const profileId = unit.coding_job?.missings_profile_id ?? null;
-    const cacheKey = `${profileId ?? 'default'}:${missingId}`;
-    let missing = cache.get(cacheKey);
-    if (!missing) {
-      missing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
-        workspaceId,
-        profileId,
-        missingId
-      );
-      cache.set(cacheKey, missing);
-    }
+    const missing = await this.getCachedReviewMissing(
+      workspaceId,
+      profileId,
+      missingId,
+      cache
+    );
 
     return {
       code: missing.code,
       score: missing.score
     };
+  }
+
+  private async getGeneralReviewCodes(
+    workspaceId: number,
+    unit: CodingJobUnit,
+    cache: Map<string, Promise<ResolvedMissingValue>>
+  ): Promise<DoubleCodedReviewCodeDto[]> {
+    const definitions = [
+      { code: -3, missingId: 'mir', label: '(mir) Ungültig (Spaßantwort)' },
+      { code: -4, missingId: 'mci', label: '(mci) Technische Probleme' }
+    ];
+    const profileId = unit.coding_job?.missings_profile_id ?? null;
+
+    return Promise.all(definitions.map(async definition => {
+      let score: number | null = null;
+      if (this.missingsProfilesService) {
+        const missing = await this.getCachedReviewMissing(
+          workspaceId,
+          profileId,
+          definition.missingId,
+          cache
+        );
+        score = missing.score;
+      }
+
+      return {
+        code: definition.code,
+        label: definition.label,
+        score,
+        source: 'general' as const,
+        commentRequired: false
+      };
+    }));
+  }
+
+  private getCachedReviewMissing(
+    workspaceId: number,
+    profileId: number | null,
+    missingId: string,
+    cache: Map<string, Promise<ResolvedMissingValue>>
+  ): Promise<ResolvedMissingValue> {
+    const cacheKey = `${profileId ?? 'default'}:${missingId}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const pending = this.missingsProfilesService!.getMissingByIdForProfileOrDefault(
+      workspaceId,
+      profileId,
+      missingId
+    ).catch(error => {
+      cache.delete(cacheKey);
+      throw error;
+    });
+    cache.set(cacheKey, pending);
+    return pending;
   }
 
   private async resolveKappaCodeAndScore(
@@ -218,6 +290,7 @@ export class CodingReviewService {
   ): Promise<{
       data: Array<{
         responseId: number;
+        sourceUnitId: number;
         unitName: string;
         variableId: string;
         personLogin: string;
@@ -229,6 +302,9 @@ export class CodingReviewService {
         appliedCode: number | null;
         appliedScore: number | null;
         appliedComment: string | null;
+        availableCodes: DoubleCodedReviewCodeDto[];
+        managerDrafts: DoubleCodedManagerDecisionDto[];
+        managerHistory: DoubleCodedManagerDecisionDto[];
         coderResults: Array<{
           coderId: number;
           coderName: string;
@@ -524,6 +600,7 @@ export class CodingReviewService {
       number,
       {
         responseId: number;
+        sourceUnitId: number;
         unitName: string;
         variableId: string;
         personLogin: string;
@@ -535,6 +612,9 @@ export class CodingReviewService {
         appliedCode: number | null;
         appliedScore: number | null;
         appliedComment: string | null;
+        availableCodes: DoubleCodedReviewCodeDto[];
+        managerDrafts: DoubleCodedManagerDecisionDto[];
+        managerHistory: DoubleCodedManagerDecisionDto[];
         coderResults: Array<{
           coderId: number;
           coderName: string;
@@ -553,7 +633,7 @@ export class CodingReviewService {
       }
       >();
       const coderResultIndexByResponseId = new Map<number, Map<number, number>>();
-      const manualMissingCache = new Map<string, ResolvedMissingValue>();
+      const manualMissingCache = new Map<string, Promise<ResolvedMissingValue>>();
 
       for (const unit of finalCodingJobUnits) {
         const responseId = unit.response_id;
@@ -567,6 +647,7 @@ export class CodingReviewService {
           );
           responseGroups.set(responseId, {
             responseId: responseId,
+            sourceUnitId: unit.id,
             unitName: unit.unit_name || unit.response?.unit?.name || '',
             variableId: unit.variable_id,
             personLogin: unit.person_login || unit.response?.unit?.booklet?.person?.login || '',
@@ -576,6 +657,9 @@ export class CodingReviewService {
             givenAnswer: unit.response?.value || '',
             isResolved,
             ...appliedResult,
+            availableCodes: [],
+            managerDrafts: [],
+            managerHistory: [],
             coderResults: []
           });
         }
@@ -645,6 +729,33 @@ export class CodingReviewService {
       const data = Array.from(responseGroups.values())
         .filter(group => group.coderResults.length > 1);
 
+      const representativeUnitByResponseId = new Map<number, CodingJobUnit>();
+      finalCodingJobUnits.forEach(unit => {
+        const current = representativeUnitByResponseId.get(unit.response_id);
+        if (responseGroups.has(unit.response_id) && (!current || unit.id < current.id)) {
+          representativeUnitByResponseId.set(unit.response_id, unit);
+        }
+      });
+      const representativeUnits = [...representativeUnitByResponseId.values()];
+      const selectableCodesByUnit = typeof this.codingJobService.getSelectableReviewCodesForUnits === 'function' ?
+        await this.codingJobService.getSelectableReviewCodesForUnits(representativeUnits, workspaceId) :
+        new Map<CodingJobUnit, Array<{ code: number; label: string; score: number | null }>>();
+      await Promise.all(data.map(async group => {
+        const representativeUnit = representativeUnitByResponseId.get(group.responseId);
+        if (representativeUnit) {
+          group.sourceUnitId = representativeUnit.id;
+        }
+        const schemaCodes = representativeUnit ? selectableCodesByUnit.get(representativeUnit) || [] : [];
+        const generalCodes = representativeUnit ?
+          await this.getGeneralReviewCodes(workspaceId, representativeUnit, manualMissingCache) :
+          [];
+        group.availableCodes = [
+          ...schemaCodes.map(code => ({ ...code, source: 'schema' as const, commentRequired: false })),
+          ...generalCodes
+        ];
+      }));
+      await this.attachManagerDecisions(workspaceId, data);
+
       this.logger.log(
         `Found ${total} double-coded variables for review in workspace ${workspaceId}, returning page ${page} with ${data.length} items`
       );
@@ -664,6 +775,234 @@ export class CodingReviewService {
         'Could not get double-coded variables for review. Please check the database connection.'
       );
     }
+  }
+
+  private async attachManagerDecisions(
+    workspaceId: number,
+    groups: Array<{
+      responseId: number;
+      isResolved: boolean;
+      appliedCode: number | null;
+      appliedScore: number | null;
+      appliedComment: string | null;
+      managerDrafts: DoubleCodedManagerDecisionDto[];
+      managerHistory: DoubleCodedManagerDecisionDto[];
+    }>
+  ): Promise<void> {
+    if (!this.reviewDecisionRepository || groups.length === 0) {
+      groups.forEach(group => this.addLegacyManagerHistory(group));
+      return;
+    }
+
+    const responseIds = groups.map(group => group.responseId);
+    const decisions = await this.reviewDecisionRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        response_id: In(responseIds)
+      },
+      order: {
+        created_at: 'ASC',
+        id: 'ASC'
+      }
+    });
+    const decisionsByResponseId = new Map<number, DoubleCodingReviewDecision[]>();
+    decisions.forEach(decision => {
+      const responseDecisions = decisionsByResponseId.get(decision.response_id) || [];
+      responseDecisions.push(decision);
+      decisionsByResponseId.set(decision.response_id, responseDecisions);
+    });
+
+    groups.forEach(group => {
+      const responseDecisions = decisionsByResponseId.get(group.responseId) || [];
+      group.managerDrafts = responseDecisions
+        .filter(decision => decision.state === 'draft')
+        .map(decision => this.toManagerDecisionDto(decision));
+      group.managerHistory = responseDecisions
+        .filter(decision => decision.state !== 'draft')
+        .map(decision => this.toManagerDecisionDto(decision));
+      this.addLegacyManagerHistory(group);
+    });
+  }
+
+  private addLegacyManagerHistory(group: {
+    responseId: number;
+    isResolved: boolean;
+    appliedCode: number | null;
+    appliedScore: number | null;
+    appliedComment: string | null;
+    managerHistory: DoubleCodedManagerDecisionDto[];
+  }): void {
+    if (!group.isResolved || group.managerHistory.some(decision => decision.state === 'applied')) {
+      return;
+    }
+
+    group.managerHistory.push({
+      id: null,
+      responseId: group.responseId,
+      managerUserId: null,
+      managerKey: null,
+      managerName: 'Manager unbekannt',
+      state: 'applied',
+      code: group.appliedCode,
+      selectedCode: null,
+      score: group.appliedScore,
+      comment: group.appliedComment,
+      createdAt: null,
+      updatedAt: null,
+      finalizedAt: null,
+      legacy: true
+    });
+  }
+
+  private toManagerDecisionDto(decision: DoubleCodingReviewDecision): DoubleCodedManagerDecisionDto {
+    return {
+      id: decision.id,
+      responseId: decision.response_id,
+      managerUserId: decision.manager_user_id,
+      managerKey: decision.manager_key,
+      managerName: decision.manager_name,
+      state: decision.state,
+      code: this.toNullableNumber(decision.code),
+      selectedCode: this.toNullableNumber(decision.selected_code),
+      score: this.toNullableNumber(decision.score),
+      comment: decision.comment,
+      createdAt: decision.created_at,
+      updatedAt: decision.updated_at,
+      finalizedAt: decision.finalized_at,
+      legacy: false
+    };
+  }
+
+  async saveDoubleCodedReviewDraft(
+    workspaceId: number,
+    responseId: number,
+    managerUserId: number,
+    managerName: string,
+    draft: SaveDoubleCodedReviewDraftDto
+  ): Promise<DoubleCodedManagerDecisionDto> {
+    this.getReviewDecisionRepository();
+    return this.responseRepository.manager.transaction(async entityManager => {
+      const sourceUnitId = this.normalizeExplicitReplayInteger(draft.sourceUnitId);
+      if (sourceUnitId === undefined || sourceUnitId <= 0) {
+        throw new BadRequestException('A valid review source unit is required');
+      }
+      const sourceUnit = await this.getReviewSourceUnit(
+        entityManager,
+        workspaceId,
+        responseId,
+        sourceUnitId
+      );
+      if (!sourceUnit || !await this.isResolutionSourceAllowed(workspaceId, sourceUnit)) {
+        throw new NotFoundException('Review case not found');
+      }
+
+      const response = await entityManager.findOne(ResponseEntity, {
+        where: { id: sourceUnit.response.id },
+        lock: { mode: 'pessimistic_write' }
+      });
+      if (!response) {
+        throw new NotFoundException('Review response not found');
+      }
+      if (response.status_v2 === statusStringToNumber('CODING_COMPLETE')) {
+        throw new ConflictException('Applied review cases cannot be reopened');
+      }
+
+      const code = this.normalizeExplicitReplayInteger(draft.code);
+      if (code === undefined) {
+        throw new BadRequestException('A valid final code is required');
+      }
+      const resolvedSelection = await this.resolveReviewSelection(workspaceId, sourceUnit, code);
+      if (!resolvedSelection) {
+        throw new BadRequestException('Code is not selectable for this review case');
+      }
+
+      const normalizedName = managerName.trim() || `Manager ${managerUserId}`;
+      const normalizedComment = draft.comment?.trim() || null;
+      const repository = entityManager.getRepository(DoubleCodingReviewDecision);
+      await repository.upsert({
+        workspace_id: workspaceId,
+        response_id: responseId,
+        manager_user_id: managerUserId,
+        manager_key: String(managerUserId),
+        manager_name: normalizedName,
+        state: 'draft',
+        code,
+        selected_code: code,
+        score: resolvedSelection.score,
+        comment: normalizedComment,
+        finalized_at: null
+      }, {
+        conflictPaths: ['workspace_id', 'response_id', 'manager_user_id'],
+        indexPredicate: '"state" = \'draft\'',
+        skipUpdateIfNoValuesChanged: true
+      });
+      const saved = await repository.findOneOrFail({
+        where: {
+          workspace_id: workspaceId,
+          response_id: responseId,
+          manager_user_id: managerUserId,
+          state: 'draft'
+        }
+      });
+      return this.toManagerDecisionDto(saved);
+    });
+  }
+
+  private async getReviewSourceUnit(
+    manager: EntityManager,
+    workspaceId: number,
+    responseId: number,
+    sourceUnitId: number
+  ): Promise<CodingJobUnit | null> {
+    const sourceUnit = await manager.findOne(CodingJobUnit, {
+      where: [
+        {
+          id: sourceUnitId,
+          response_id: responseId,
+          coding_job: {
+            workspace_id: workspaceId,
+            job_type: IsNull()
+          }
+        },
+        {
+          id: sourceUnitId,
+          response_id: responseId,
+          coding_job: {
+            workspace_id: workspaceId,
+            job_type: Not(CODING_JOB_TYPE_CODING_ISSUE_REVIEW)
+          }
+        }
+      ],
+      relations: ['response', 'coding_job', 'coding_job.codingJobCoders']
+    });
+    if (!sourceUnit || this.getDistinctCodingJobCoders(
+      sourceUnit.coding_job?.codingJobCoders || []
+    ).length !== 1) {
+      return null;
+    }
+    return sourceUnit;
+  }
+
+  async deleteDoubleCodedReviewDraft(
+    workspaceId: number,
+    responseId: number,
+    managerUserId: number
+  ): Promise<{ success: boolean }> {
+    const repository = this.getReviewDecisionRepository();
+    const result = await repository.delete({
+      workspace_id: workspaceId,
+      response_id: responseId,
+      manager_user_id: managerUserId,
+      state: 'draft'
+    });
+    return { success: (result.affected || 0) > 0 };
+  }
+
+  private getReviewDecisionRepository(): Repository<DoubleCodingReviewDecision> {
+    if (!this.reviewDecisionRepository) {
+      throw new Error('Double-coding review decision repository is unavailable');
+    }
+    return this.reviewDecisionRepository;
   }
 
   async getCodedVariablesForKappa(
@@ -1229,13 +1568,15 @@ export class CodingReviewService {
 
   async applyDoubleCodedResolutions(
     workspaceId: number,
-    decisions: DoubleCodedResolutionDecision[]
+    decisions: DoubleCodedResolutionDecisionDto[],
+    manager?: { userId: number; name: string }
   ): Promise<{
       success: boolean;
       appliedCount: number;
       failedCount: number;
       skippedCount: number;
       message: string;
+      results: DoubleCodedResolutionResultDto[];
     }> {
     try {
       this.logger.log(
@@ -1245,63 +1586,34 @@ export class CodingReviewService {
       let appliedCount = 0;
       let failedCount = 0;
       let skippedCount = 0;
+      const results: DoubleCodedResolutionResultDto[] = [];
 
-      await this.responseRepository.manager.transaction(async transactionalEntityManager => {
-        for (const decision of decisions) {
-          try {
-            const resolvedDecision = await this.resolveDoubleCodedResolution(
+      for (const decision of decisions) {
+        try {
+          const result = await this.responseRepository.manager.transaction(
+            transactionalEntityManager => this.applyDoubleCodedResolutionInTransaction(
               transactionalEntityManager,
               workspaceId,
-              decision
-            );
-
-            if (!resolvedDecision) {
-              skippedCount += 1;
-              continue;
-            }
-
-            const response = resolvedDecision.response;
-            if (!response) {
-              this.logger.warn(
-                `Could not find response for responseId ${decision.responseId}`
-              );
-              skippedCount += 1;
-              continue;
-            }
-
-            const updatedValue = this.getOriginalResponseValue(response.value);
-
-            await this.clearWorkspaceSupervisorComments(
-              transactionalEntityManager,
-              workspaceId,
-              decision.responseId
-            );
-
-            if (decision.resolutionComment && decision.resolutionComment.trim()) {
-              resolvedDecision.sourceUnit.supervisor_comment = decision.resolutionComment.trim();
-              await transactionalEntityManager.save(CodingJobUnit, resolvedDecision.sourceUnit);
-            }
-
-            response.status_v2 = statusStringToNumber('CODING_COMPLETE');
-            response.code_v2 = resolvedDecision.code;
-            response.score_v2 = resolvedDecision.score;
-            response.value = updatedValue;
-
-            await transactionalEntityManager.save(ResponseEntity, response);
-            appliedCount += 1;
-
-            this.logger.debug(
-              `Applied resolution for responseId ${decision.responseId}: code=${resolvedDecision.code}, score=${resolvedDecision.score}`
-            );
-          } catch (error) {
-            this.logger.error(
-              `Error applying resolution for responseId ${decision.responseId}: ${error.message}`,
-              error.stack
-            );
-            failedCount += 1;
-          }
+              decision,
+              manager
+            )
+          );
+          results.push(result);
+          if (result.status === 'applied') appliedCount += 1;
+          if (result.status === 'skipped') skippedCount += 1;
+        } catch (error) {
+          this.logger.error(
+            `Error applying resolution for responseId ${decision.responseId}: ${error.message}`,
+            error.stack
+          );
+          failedCount += 1;
+          results.push({
+            responseId: decision.responseId,
+            status: 'failed',
+            message: error.message
+          });
         }
-      });
+      }
 
       if (appliedCount > 0 && typeof this.codingStatisticsService.invalidateCache === 'function') {
         await this.codingStatisticsService.invalidateCache(workspaceId);
@@ -1325,7 +1637,8 @@ export class CodingReviewService {
         appliedCount,
         failedCount,
         skippedCount,
-        message
+        message,
+        results
       };
     } catch (error) {
       this.logger.error(
@@ -1338,10 +1651,141 @@ export class CodingReviewService {
     }
   }
 
+  private async applyDoubleCodedResolutionInTransaction(
+    transactionalEntityManager: EntityManager,
+    workspaceId: number,
+    decision: DoubleCodedResolutionDecisionDto,
+    manager?: { userId: number; name: string }
+  ): Promise<DoubleCodedResolutionResultDto> {
+    const resolvedDecision = await this.resolveDoubleCodedResolution(
+      transactionalEntityManager,
+      workspaceId,
+      decision
+    );
+    if (!resolvedDecision) {
+      return {
+        responseId: decision.responseId,
+        status: 'skipped',
+        message: 'Decision is not valid for this review case'
+      };
+    }
+
+    const response = await transactionalEntityManager.findOne(ResponseEntity, {
+      where: { id: resolvedDecision.response.id },
+      lock: { mode: 'pessimistic_write' }
+    });
+    if (!response) {
+      return { responseId: decision.responseId, status: 'skipped', message: 'Response not found' };
+    }
+    if (response.status_v2 === statusStringToNumber('CODING_COMPLETE')) {
+      return {
+        responseId: decision.responseId,
+        status: 'skipped',
+        message: 'Applied review cases cannot be reopened'
+      };
+    }
+    if (resolvedDecision.code === -1 || resolvedDecision.code === -2) {
+      return {
+        responseId: decision.responseId,
+        status: 'skipped',
+        message: 'Workflow markers cannot be applied as final codes'
+      };
+    }
+
+    await this.clearWorkspaceSupervisorComments(
+      transactionalEntityManager,
+      workspaceId,
+      decision.responseId
+    );
+    if (decision.resolutionComment?.trim()) {
+      resolvedDecision.sourceUnit.supervisor_comment = decision.resolutionComment.trim();
+      await transactionalEntityManager.save(CodingJobUnit, resolvedDecision.sourceUnit);
+    }
+
+    response.status_v2 = statusStringToNumber('CODING_COMPLETE');
+    response.code_v2 = resolvedDecision.code;
+    response.score_v2 = resolvedDecision.score;
+    response.value = this.getOriginalResponseValue(response.value);
+    await transactionalEntityManager.save(ResponseEntity, response);
+    await this.persistAppliedManagerDecision(
+      transactionalEntityManager,
+      workspaceId,
+      decision.responseId,
+      manager,
+      resolvedDecision.selectionCode,
+      resolvedDecision.code,
+      resolvedDecision.score,
+      decision.resolutionComment?.trim() || null
+    );
+    this.logger.debug(
+      `Applied resolution for responseId ${decision.responseId}: code=${resolvedDecision.code}, score=${resolvedDecision.score}`
+    );
+    return { responseId: decision.responseId, status: 'applied' };
+  }
+
+  private async persistAppliedManagerDecision(
+    entityManager: EntityManager,
+    workspaceId: number,
+    responseId: number,
+    manager: { userId: number; name: string } | undefined,
+    selectionCode: number,
+    code: number | null,
+    score: number | null,
+    comment: string | null
+  ): Promise<void> {
+    if (!this.reviewDecisionRepository || !manager || !Number.isInteger(manager.userId) || manager.userId <= 0) {
+      return;
+    }
+
+    const repository = entityManager.getRepository(DoubleCodingReviewDecision);
+    const drafts = await repository.find({
+      where: {
+        workspace_id: workspaceId,
+        response_id: responseId,
+        state: 'draft'
+      },
+      lock: { mode: 'pessimistic_write' }
+    });
+    const finalizedAt = new Date();
+    let appliedDecision = drafts.find(draft => draft.manager_user_id === manager.userId);
+
+    drafts.forEach(draft => {
+      draft.state = draft.manager_user_id === manager.userId ? 'applied' : 'superseded';
+      draft.finalized_at = finalizedAt;
+    });
+    if (drafts.length > 0) {
+      await repository.save(drafts);
+    }
+
+    if (!appliedDecision) {
+      appliedDecision = repository.create({
+        workspace_id: workspaceId,
+        response_id: responseId,
+        manager_user_id: manager.userId,
+        manager_key: String(manager.userId),
+        manager_name: manager.name.trim() || `Manager ${manager.userId}`,
+        state: 'applied',
+        code,
+        selected_code: selectionCode,
+        score,
+        comment,
+        finalized_at: finalizedAt
+      });
+    } else {
+      appliedDecision.manager_key = String(manager.userId);
+      appliedDecision.manager_name = manager.name.trim() || appliedDecision.manager_name;
+      appliedDecision.code = code;
+      appliedDecision.selected_code = selectionCode;
+      appliedDecision.score = score;
+      appliedDecision.comment = comment;
+    }
+    await repository.save(appliedDecision);
+  }
+
   private async resolveDoubleCodedResolution(
     manager: EntityManager,
     workspaceId: number,
-    decision: DoubleCodedResolutionDecision
+    decision: DoubleCodedResolutionDecisionDto
   ): Promise<ResolvedDoubleCodedResolution | null> {
     if (this.hasSelectedCodingJobDecision(decision)) {
       return this.resolveSelectedCodingJobResolution(manager, workspaceId, decision);
@@ -1350,15 +1794,21 @@ export class CodingReviewService {
     return this.resolveExplicitReplayResolution(manager, workspaceId, decision);
   }
 
-  private hasSelectedCodingJobDecision(decision: DoubleCodedResolutionDecision): boolean {
+  private hasSelectedCodingJobDecision(decision: DoubleCodedResolutionDecisionDto): boolean {
     return this.normalizeExplicitReplayInteger(decision.selectedJobId) !== undefined;
   }
 
   private async resolveSelectedCodingJobResolution(
     manager: EntityManager,
     workspaceId: number,
-    decision: DoubleCodedResolutionDecision
+    decision: DoubleCodedResolutionDecisionDto
   ): Promise<ResolvedDoubleCodedResolution | null> {
+    const sourceUnitId = this.normalizeExplicitReplayInteger(decision.sourceUnitId);
+    if (sourceUnitId === undefined || sourceUnitId <= 0) {
+      this.logger.warn(`Missing review source unit for responseId ${decision.responseId}`);
+      return null;
+    }
+
     const selectedJobId = this.normalizeExplicitReplayInteger(decision.selectedJobId);
     if (selectedJobId === undefined) {
       this.logger.warn(`Invalid selected job ID for responseId ${decision.responseId}`);
@@ -1385,18 +1835,56 @@ export class CodingReviewService {
       return null;
     }
 
+    const selectedIssueOption = selectedCodingJobUnit.coding_issue_option;
+    if (selectedIssueOption === -1 || selectedIssueOption === -2) {
+      this.logger.warn(
+        `Skipped internal workflow marker for responseId ${decision.responseId} and jobId ${selectedJobId}`
+      );
+      return null;
+    }
+
+    const selectedCode = this.allowedCodingIssueCodes.has(selectedIssueOption ?? 0) ?
+      selectedIssueOption :
+      selectedCodingJobUnit.code;
+    if (selectedCode === null || selectedCode === undefined) {
+      this.logger.warn(
+        `Skipped empty coding result for responseId ${decision.responseId} and jobId ${selectedJobId}`
+      );
+      return null;
+    }
+
+    const sourceUnit = await this.getReviewSourceUnit(
+      manager,
+      workspaceId,
+      decision.responseId,
+      sourceUnitId
+    );
+    if (!sourceUnit || !await this.isResolutionSourceAllowed(workspaceId, sourceUnit)) {
+      this.logger.warn(`Skipped unavailable review source for responseId ${decision.responseId}`);
+      return null;
+    }
+
+    const resolvedSelection = await this.resolveReviewSelection(workspaceId, sourceUnit, selectedCode);
+    if (!resolvedSelection) {
+      this.logger.warn(
+        `Skipped unavailable coding result for responseId ${decision.responseId} and jobId ${selectedJobId}`
+      );
+      return null;
+    }
+
     return {
-      response: selectedCodingJobUnit.response,
-      sourceUnit: selectedCodingJobUnit,
-      code: selectedCodingJobUnit.code,
-      score: selectedCodingJobUnit.score
+      response: sourceUnit.response,
+      sourceUnit,
+      selectionCode: selectedCode,
+      code: resolvedSelection.code,
+      score: resolvedSelection.score
     };
   }
 
   private async resolveExplicitReplayResolution(
     manager: EntityManager,
     workspaceId: number,
-    decision: DoubleCodedResolutionDecision
+    decision: DoubleCodedResolutionDecisionDto
   ): Promise<ResolvedDoubleCodedResolution | null> {
     if (decision.code === null || decision.code === undefined) {
       this.logger.warn(`Missing replay code for responseId ${decision.responseId}`);
@@ -1414,16 +1902,18 @@ export class CodingReviewService {
       return null;
     }
 
-    const sourceUnit = await manager.findOne(CodingJobUnit, {
-      where: {
-        response_id: decision.responseId,
-        coding_job: { workspace_id: workspaceId }
-      },
-      relations: ['response', 'coding_job'],
-      order: {
-        id: 'ASC'
-      }
-    });
+    const sourceUnitId = this.normalizeExplicitReplayInteger(decision.sourceUnitId);
+    if (sourceUnitId === undefined || sourceUnitId <= 0) {
+      this.logger.warn(`Missing review source unit for replay responseId ${decision.responseId}`);
+      return null;
+    }
+
+    const sourceUnit = await this.getReviewSourceUnit(
+      manager,
+      workspaceId,
+      decision.responseId,
+      sourceUnitId
+    );
 
     if (!sourceUnit) {
       this.logger.warn(`Could not find workspace coding_job_unit for replay responseId ${decision.responseId}`);
@@ -1435,8 +1925,8 @@ export class CodingReviewService {
       return null;
     }
 
-    const score = await this.resolveExplicitReplayScore(workspaceId, sourceUnit, code);
-    if (score === undefined) {
+    const resolvedSelection = await this.resolveReviewSelection(workspaceId, sourceUnit, code);
+    if (!resolvedSelection) {
       this.logger.warn(`Unsupported replay code for responseId ${decision.responseId}: ${code}`);
       return null;
     }
@@ -1444,26 +1934,46 @@ export class CodingReviewService {
     return {
       response: sourceUnit.response,
       sourceUnit,
-      code,
-      score
+      selectionCode: code,
+      code: resolvedSelection.code,
+      score: resolvedSelection.score
     };
   }
 
-  private async resolveExplicitReplayScore(
+  private async resolveReviewSelection(
     workspaceId: number,
     sourceUnit: CodingJobUnit,
     code: number
-  ): Promise<number | null | undefined> {
+  ): Promise<ResolvedReviewSelection | undefined> {
     if (code < 0) {
-      return this.allowedCodingIssueCodes.has(code) ? null : undefined;
+      if (!this.allowedCodingIssueCodes.has(code) || !this.missingsProfilesService) {
+        return undefined;
+      }
+      const missingId = this.manualMissingIdsByIssueOptionId.get(code);
+      if (!missingId) {
+        return undefined;
+      }
+      const missing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
+        workspaceId,
+        sourceUnit.coding_job?.missings_profile_id ?? null,
+        missingId
+      );
+      return {
+        code: missing.code,
+        score: missing.score
+      };
     }
 
     try {
-      return await this.codingJobService.getCodingSchemeScoreForUnitCode(
+      const selectableCode = await this.codingJobService.getSelectableReviewCodeForUnit(
         sourceUnit,
         workspaceId,
         code
       );
+      return {
+        code: selectableCode.code,
+        score: selectableCode.score
+      };
     } catch (error) {
       this.logger.warn(
         `Could not validate replay code ${code} for responseId ${sourceUnit.response_id}: ${error.message}`

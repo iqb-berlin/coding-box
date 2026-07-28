@@ -1,3 +1,10 @@
+import {
+  DoubleCodedManagerDecisionDto,
+  DoubleCodedResolutionDecisionDto,
+  DoubleCodedResolutionResultDto,
+  DoubleCodedReviewCodeDto
+} from '../../../../../../../api-dto/coding/double-coded-review.dto';
+
 export interface CohensKappaSummary {
   coderPairs: Array<{
     coder1Id: number;
@@ -21,6 +28,7 @@ export interface CohensKappaSummary {
 
 export interface DoubleCodedReviewItem {
   responseId: number;
+  sourceUnitId: number;
   unitName: string;
   variableId: string;
   personLogin: string;
@@ -31,6 +39,9 @@ export interface DoubleCodedReviewItem {
   appliedCode: number | null;
   appliedScore: number | null;
   appliedComment: string | null;
+  availableCodes: DoubleCodedReviewCodeDto[];
+  managerDrafts: DoubleCodedManagerDecisionDto[];
+  managerHistory: DoubleCodedManagerDecisionDto[];
   coderResults: Array<{
     coderId: number;
     coderName: string;
@@ -55,13 +66,7 @@ export interface DoubleCodedReviewResponse {
   limit: number;
 }
 
-export interface DoubleCodedResolutionDecision {
-  responseId: number;
-  selectedJobId?: number | null;
-  code?: number | null;
-  score?: number | null;
-  resolutionComment?: string;
-}
+export type DoubleCodedResolutionDecision = DoubleCodedResolutionDecisionDto;
 
 export interface DoubleCodedResolutionResponse {
   success: boolean;
@@ -69,4 +74,5 @@ export interface DoubleCodedResolutionResponse {
   failedCount: number;
   skippedCount: number;
   message: string;
+  results: DoubleCodedResolutionResultDto[];
 }

@@ -1467,6 +1467,7 @@ describe('WorkspaceCodingService', () => {
         const decisions = [
           {
             responseId: 1,
+            sourceUnitId: 101,
             selectedJobId: 1,
             resolutionComment: 'Resolution note'
           }
