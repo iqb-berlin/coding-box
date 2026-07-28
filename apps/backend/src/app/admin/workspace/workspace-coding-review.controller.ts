@@ -22,7 +22,10 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { CodingReviewService } from '../../database/services/coding';
+import {
+  DoubleCodingReviewDecisionService,
+  DoubleCodingReviewQueryService
+} from '../../database/services/coding';
 import {
   DoubleCodedResolutionDecision,
   DoubleCodedReviewResponse,
@@ -77,7 +80,10 @@ const doubleCodedManagerDecisionSchema = {
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
 export class WorkspaceCodingReviewController {
-  constructor(private codingReviewService: CodingReviewService) {}
+  constructor(
+    private doubleCodingReviewQueryService: DoubleCodingReviewQueryService,
+    private doubleCodingReviewDecisionService: DoubleCodingReviewDecisionService
+  ) {}
 
   @Get(':workspace_id/coding/double-coded-review')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
@@ -285,7 +291,7 @@ export class WorkspaceCodingReviewController {
     const selectedJobDefinitionIds = this.parseIdList(jobDefinitionIds);
     const selectedCoderTrainingIds = this.parseIdList(coderTrainingIds);
 
-    return this.codingReviewService.getDoubleCodedVariablesForReview(
+    return this.doubleCodingReviewQueryService.getDoubleCodedVariablesForReview(
       workspace_id,
       validPage,
       validLimit,
@@ -416,7 +422,7 @@ export class WorkspaceCodingReviewController {
                    @Req() req: Request
   ): Promise<DoubleCodedResolutionResponse> {
     const manager = this.getRequestManager(req);
-    return this.codingReviewService.applyDoubleCodedResolutions(
+    return this.doubleCodingReviewDecisionService.applyDoubleCodedResolutions(
       workspace_id,
       body.decisions,
       manager
@@ -461,7 +467,7 @@ export class WorkspaceCodingReviewController {
     @Req() req: Request
   ) {
     const manager = this.getRequestManager(req);
-    return this.codingReviewService.saveDoubleCodedReviewDraft(
+    return this.doubleCodingReviewDecisionService.saveDoubleCodedReviewDraft(
       workspace_id,
       Number(responseId),
       manager.userId,
@@ -490,7 +496,7 @@ export class WorkspaceCodingReviewController {
     @Req() req: Request
   ) {
     const manager = this.getRequestManager(req);
-    return this.codingReviewService.deleteDoubleCodedReviewDraft(
+    return this.doubleCodingReviewDecisionService.deleteDoubleCodedReviewDraft(
       workspace_id,
       Number(responseId),
       manager.userId

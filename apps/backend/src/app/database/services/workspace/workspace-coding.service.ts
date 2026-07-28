@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { CodingProcessService } from '../coding/coding-process.service';
 import { CodingValidationService } from '../coding/coding-validation.service';
-import { CodingReviewService } from '../coding/coding-review.service';
+import { DoubleCodingReviewQueryService } from '../coding/double-coding-review-query.service';
+import { DoubleCodingReviewDecisionService } from '../coding/double-coding-review-decision.service';
 import { CodingAnalysisService } from '../coding/coding-analysis.service';
 import { CodingProgressService } from '../coding/coding-progress.service';
 import { CodingReplayService } from '../coding/coding-replay.service';
@@ -35,7 +36,8 @@ export class WorkspaceCodingService {
     private codingExportService: CodingExportService,
     private codingProcessService: CodingProcessService,
     private codingValidationService: CodingValidationService,
-    private codingReviewService: CodingReviewService,
+    private doubleCodingReviewQueryService: DoubleCodingReviewQueryService,
+    private doubleCodingReviewDecisionService: DoubleCodingReviewDecisionService,
     private codingAnalysisService: CodingAnalysisService,
     private codingProgressService: CodingProgressService,
     private codingReplayService: CodingReplayService,
@@ -621,7 +623,7 @@ export class WorkspaceCodingService {
       page: number;
       limit: number;
     }> {
-    return this.codingReviewService.getDoubleCodedVariablesForReview(
+    return this.doubleCodingReviewQueryService.getDoubleCodedVariablesForReview(
       workspaceId,
       page,
       limit,
@@ -641,7 +643,7 @@ export class WorkspaceCodingService {
       message: string;
     }> {
     await this.codingProgressService.invalidateAppliedResultsOverviewCache(workspaceId);
-    return this.codingReviewService.applyDoubleCodedResolutions(
+    return this.doubleCodingReviewDecisionService.applyDoubleCodedResolutions(
       workspaceId,
       decisions
     );
@@ -681,7 +683,10 @@ export class WorkspaceCodingService {
         weightingMethod: 'weighted' | 'unweighted';
       };
     }> {
-    return this.codingReviewService.getWorkspaceCohensKappaSummary(workspaceId, weightedMean);
+    return this.doubleCodingReviewQueryService.getWorkspaceCohensKappaSummary(
+      workspaceId,
+      weightedMean
+    );
   }
 
   async resetCodingVersion(
