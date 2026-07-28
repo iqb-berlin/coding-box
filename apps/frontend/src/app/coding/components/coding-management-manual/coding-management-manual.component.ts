@@ -2165,7 +2165,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   getResponseAnalysisReferenceRawCases(): number {
-    return this.getManualStatusPoolCount();
+    return this.codingProgressOverview?.responseAnalysisRawCases ??
+      this.caseCoverageOverview?.responseAnalysisRawCases ??
+      this.appliedResultsOverview?.responseAnalysisRawCases ??
+      this.getManualStatusPoolCount();
   }
 
   getManualStatusPoolCount(): number {

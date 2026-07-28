@@ -1426,6 +1426,11 @@ export class WorkspaceCodingStatisticsController {
           description:
             'Raw status total before covered source variables are excluded'
         },
+        responseAnalysisRawCases: {
+          type: 'number',
+          description:
+            'Raw response count covered by response analysis statuses'
+        },
         coveredSourceVariableCount: {
           type: 'number',
           description:
@@ -1478,6 +1483,7 @@ export class WorkspaceCodingStatisticsController {
   ): Promise<{
         totalCasesToCode: number;
         statusTotalCasesToCode: number;
+        responseAnalysisRawCases: number;
         coveredSourceVariableCount: number;
         coveredSourceResponseCount: number;
         completedCases: number;
@@ -1510,6 +1516,11 @@ export class WorkspaceCodingStatisticsController {
           type: 'number',
           description:
             'Raw status total before covered source variables are excluded'
+        },
+        responseAnalysisRawCases: {
+          type: 'number',
+          description:
+            'Raw response count covered by response analysis statuses'
         },
         coveredSourceVariableCount: {
           type: 'number',
@@ -1586,6 +1597,7 @@ export class WorkspaceCodingStatisticsController {
   ): Promise<{
         totalIncompleteResponses: number;
         statusTotalIncompleteResponses: number;
+        responseAnalysisRawCases: number;
         coveredSourceVariableCount: number;
         coveredSourceResponseCount: number;
         appliedResponses: number;
@@ -1623,6 +1635,11 @@ export class WorkspaceCodingStatisticsController {
           type: 'number',
           description:
             'Raw status total before covered source variables are excluded'
+        },
+        responseAnalysisRawCases: {
+          type: 'number',
+          description:
+            'Raw response count covered by response analysis statuses'
         },
         coveredSourceVariableCount: {
           type: 'number',
@@ -1689,6 +1706,7 @@ export class WorkspaceCodingStatisticsController {
   async getCaseCoverageOverview(@WorkspaceId() workspace_id: number): Promise<{
     totalCasesToCode: number;
     statusTotalCasesToCode: number;
+    responseAnalysisRawCases: number;
     coveredSourceVariableCount: number;
     coveredSourceResponseCount: number;
     effectiveTotalCasesToCode: number;
