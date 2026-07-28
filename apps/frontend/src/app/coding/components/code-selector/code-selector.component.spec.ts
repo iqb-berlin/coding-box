@@ -580,6 +580,27 @@ describe('CodeSelectorComponent', () => {
     });
   });
 
+  it('clears the local selection when the coding case changes', () => {
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.codingCaseKey = 'case-1';
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false),
+      codingCaseKey: new SimpleChange('', 'case-1', true)
+    });
+    component.onSelect(1);
+
+    component.codingCaseKey = 'case-2';
+    component.ngOnChanges({
+      codingCaseKey: new SimpleChange('case-1', 'case-2', false)
+    });
+
+    expect(component.selectedCode).toBeNull();
+    expect(component.selectedCodingIssueOption).toBeNull();
+    expect(component.legacySelectedCode).toBeNull();
+  });
+
   it('nextUnit should navigate to immediate next case for interleaved variables', () => {
     component.unitsData = {
       ...interleavedUnitsData,
@@ -590,6 +611,51 @@ describe('CodeSelectorComponent', () => {
 
     component.nextUnit();
 
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
+  });
+
+  it('blocks nextUnit until the current selection has been saved', () => {
+    const isUnitCoded = jest.fn().mockReturnValue(false);
+    component.codingService = { isUnitCoded } as never;
+    component.unitsData = {
+      ...interleavedUnitsData,
+      currentUnitIndex: 0
+    };
+    component.selectedCode = 1;
+    const emitSpy = jest.spyOn(component.unitChanged, 'emit');
+
+    expect(component.hasNextUnit()).toBe(false);
+    component.nextUnit();
+    expect(emitSpy).not.toHaveBeenCalled();
+
+    isUnitCoded.mockReturnValue(true);
+
+    expect(component.hasNextUnit()).toBe(true);
+    component.nextUnit();
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
+  });
+
+  it('blocks nextUnit while an updated selection is still being saved', () => {
+    const isUnitSavePending = jest.fn().mockReturnValue(true);
+    component.codingService = {
+      isUnitCoded: jest.fn().mockReturnValue(true),
+      isUnitSavePending
+    } as never;
+    component.unitsData = {
+      ...interleavedUnitsData,
+      currentUnitIndex: 0
+    };
+    component.selectedCode = 1;
+    const emitSpy = jest.spyOn(component.unitChanged, 'emit');
+
+    expect(component.hasNextUnit()).toBe(false);
+    component.nextUnit();
+    expect(emitSpy).not.toHaveBeenCalled();
+
+    isUnitSavePending.mockReturnValue(false);
+
+    expect(component.hasNextUnit()).toBe(true);
+    component.nextUnit();
     expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
   });
 

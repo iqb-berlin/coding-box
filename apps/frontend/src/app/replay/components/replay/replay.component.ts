@@ -1858,6 +1858,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return this.codingService.getPreSelectedCodeId(this.testPerson, this.unitId, variableId);
   }
 
+  getCurrentCodingCaseKey(): string {
+    const variableId = this.codingService.currentVariableId;
+    if (!this.testPerson || !this.unitId || !variableId) {
+      return '';
+    }
+
+    return this.codingService.generateCompositeKey(this.testPerson, this.unitId, variableId);
+  }
+
   getPreSelectedCodingIssueOptionId(variableId: string): number | null {
     return this.codingService.getPreSelectedCodingIssueOptionId(this.testPerson, this.unitId, variableId);
   }
