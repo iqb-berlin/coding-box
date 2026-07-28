@@ -377,9 +377,11 @@ describe('DoubleCodedReviewComponent', () => {
     fixture.detectChanges();
     await fixture.whenStable();
 
-    const options = Array.from(
-      overlayContainer.getContainerElement().querySelectorAll('mat-option')
-    ) as HTMLElement[];
+    const options = (
+      Array.from(
+        overlayContainer.getContainerElement().querySelectorAll('mat-option')
+      ) as HTMLElement[]
+    ).filter(option => option.style.display !== 'none');
 
     expect(options).toHaveLength(3);
 
@@ -884,6 +886,42 @@ describe('DoubleCodedReviewComponent', () => {
       'close',
       expect.objectContaining({ panelClass: ['success-snackbar'] })
     );
+  });
+
+  it('shows a replay-only decision immediately in the open review dialog', async () => {
+    const replaySource = {} as MessageEventSource;
+    const harness = component as unknown as ReplaySelectionHarness;
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    harness.replayWindowByResponseId.set(501, replaySource);
+    harness.handleReplayCodeSelected(
+      {
+        type: 'replayCodeSelected',
+        testPerson: 'person-1@P001@Booklet 1',
+        unitId: 'Unit A',
+        variableId: 'VAR_1',
+        code: '3',
+        score: 2,
+        responseId: 501
+      },
+      replaySource
+    );
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(getDecisionCell(501).replayDecision).toMatchObject({
+      code: 3,
+      score: 2
+    });
+    const replayTrigger = fixture.debugElement
+      .queryAll(By.css('.decision-trigger'))
+      .find(debugElement => debugElement.nativeElement.textContent.includes(
+        'double-coded-review.decision.replay-source'
+      ));
+    expect(replayTrigger?.nativeElement.textContent).toContain('3');
+    expect(replayTrigger?.nativeElement.textContent).toContain('(2)');
   });
 
   it('clears a transferred replay note when the replay sends empty notes', async () => {

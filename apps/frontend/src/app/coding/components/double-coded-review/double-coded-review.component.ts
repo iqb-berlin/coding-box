@@ -1,4 +1,5 @@
 import {
+  ChangeDetectorRef,
   Component,
   OnInit,
   OnDestroy,
@@ -144,6 +145,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   private codingStatisticsService = inject(CodingStatisticsService);
   private reviewFacade = inject(DoubleCodedReviewFacade);
   private replayDecisionBridge = inject(ReplayDecisionBridgeService);
+  private changeDetectorRef = inject(ChangeDetectorRef);
   selectionForm: FormGroup = this.reviewFacade.selectionForm;
 
   constructor(
@@ -917,6 +919,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       selection.hasNotes
     );
     this.refreshReviewRows(item);
+    this.changeDetectorRef.detectChanges();
     this.showSuccess(
       this.translateService.instant(
         'double-coded-review.success.replay-code-selected'

@@ -52,6 +52,24 @@
         [formControl]="itemControl"
         (selectionChange)="selectionChanged.emit($event.value)"
       >
+        <mat-option
+          [value]="replayControlValue"
+          [style.display]="replayDecision ? null : 'none'"
+        >
+          @if (replayDecision; as replay) {
+            <span class="decision-option">
+              <span class="decision-option-code">{{
+                getDecisionDisplayCode(replay)
+              }}</span>
+              <span class="decision-option-source">{{
+                getDecisionSourceLabel(replay)
+              }}</span>
+              @if (replay.score !== null) {
+                <span class="decision-option-score">({{ replay.score }})</span>
+              }
+            </span>
+          }
+        </mat-option>
         <mat-select-trigger>
           @if (selectedDecision; as selected) {
             <span class="decision-trigger">
