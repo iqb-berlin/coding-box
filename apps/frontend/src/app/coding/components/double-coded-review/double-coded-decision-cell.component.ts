@@ -60,6 +60,15 @@ export class DoubleCodedDecisionCellComponent {
     return this.facade.getSelectedDecisionResult(this.item());
   }
 
+  get replayDecision(): ReplayDecisionResult | undefined {
+    const selected = this.selectedDecision;
+    return selected && this.isReplayDecision(selected) ? selected : undefined;
+  }
+
+  get replayControlValue(): string {
+    return `replay:${this.item().responseId}`;
+  }
+
   get appliedResult(): AppliedReviewResult | null {
     return this.facade.getAppliedReviewResult(this.item());
   }
