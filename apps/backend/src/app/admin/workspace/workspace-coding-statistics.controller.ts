@@ -29,7 +29,7 @@ import {
   CodingStatisticsService,
   CodingJobService,
   CodingProgressService,
-  CodingReviewService,
+  DoubleCodingReviewQueryService,
   CodingFreshnessService,
   CodingProcessService,
   CodingReadinessService,
@@ -252,7 +252,7 @@ export class WorkspaceCodingStatisticsController {
     private codingJobService: CodingJobService,
     private personService: PersonService,
     private codingProgressService: CodingProgressService,
-    private codingReviewService: CodingReviewService,
+    private doubleCodingReviewQueryService: DoubleCodingReviewQueryService,
     private codingFreshnessService: CodingFreshnessService,
     private codingProcessService: CodingProcessService,
     private codingReadinessService: CodingReadinessService,
@@ -769,7 +769,7 @@ export class WorkspaceCodingStatisticsController {
       }${options.variableId ? `, variable: ${options.variableId}` : ''}`
     );
 
-    const allCodedItems = (await this.codingReviewService.getCodedVariablesForKappa(
+    const allCodedItems = (await this.doubleCodingReviewQueryService.getCodedVariablesForKappa(
       workspaceId,
       options.excludeTrainings,
       options.jobDefinitionIds,
@@ -2592,7 +2592,7 @@ export class WorkspaceCodingStatisticsController {
       coderTrainingIds,
       coderIds
     });
-    return this.codingReviewService.getWorkspaceCohensKappaSummary(
+    return this.doubleCodingReviewQueryService.getWorkspaceCohensKappaSummary(
       workspace_id,
       options.weightedMean,
       options.excludeTrainings,

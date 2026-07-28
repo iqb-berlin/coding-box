@@ -17,7 +17,8 @@ import {
   CodingReplayService,
   CodingResponseQueryService,
   CodingResultsService,
-  CodingReviewService,
+  DoubleCodingReviewDecisionService,
+  DoubleCodingReviewQueryService,
   CodingStatisticsService,
   CodingValidationService,
   CodingVersionService,
@@ -158,10 +159,13 @@ describe('WorkspaceCodingService', () => {
     getVariableCasesInJobs: jest.fn()
   };
 
-  const mockCodingReviewService = {
+  const mockDoubleCodingReviewQueryService = {
     getCohensKappaStatistics: jest.fn(),
     getWorkspaceCohensKappaSummary: jest.fn(),
-    getDoubleCodedVariablesForReview: jest.fn(),
+    getDoubleCodedVariablesForReview: jest.fn()
+  };
+
+  const mockDoubleCodingReviewDecisionService = {
     applyDoubleCodedResolutions: jest.fn()
   };
 
@@ -270,7 +274,14 @@ describe('WorkspaceCodingService', () => {
           provide: CodingValidationService,
           useValue: mockCodingValidationService
         },
-        { provide: CodingReviewService, useValue: mockCodingReviewService },
+        {
+          provide: DoubleCodingReviewQueryService,
+          useValue: mockDoubleCodingReviewQueryService
+        },
+        {
+          provide: DoubleCodingReviewDecisionService,
+          useValue: mockDoubleCodingReviewDecisionService
+        },
         { provide: CodingAnalysisService, useValue: mockCodingAnalysisService },
         { provide: CodingProgressService, useValue: mockCodingProgressService },
         { provide: CodingReplayService, useValue: mockCodingReplayService },
@@ -1012,7 +1023,7 @@ describe('WorkspaceCodingService', () => {
   describe('Cohens Kappa Statistics', () => {
     const workspaceId = 1;
 
-    it('should delegate to CodingReviewService for workspace summary', async () => {
+    it('should delegate to DoubleCodingReviewQueryService for workspace summary', async () => {
       const expectedResult = {
         coderPairs: [
           {
@@ -1035,14 +1046,14 @@ describe('WorkspaceCodingService', () => {
           codersIncluded: 4
         }
       };
-      mockCodingReviewService.getWorkspaceCohensKappaSummary.mockResolvedValue(
+      mockDoubleCodingReviewQueryService.getWorkspaceCohensKappaSummary.mockResolvedValue(
         expectedResult
       );
 
       const result = await service.getWorkspaceCohensKappaSummary(workspaceId);
 
       expect(
-        mockCodingReviewService.getWorkspaceCohensKappaSummary
+        mockDoubleCodingReviewQueryService.getWorkspaceCohensKappaSummary
       ).toHaveBeenCalledWith(workspaceId, true);
       expect(result).toEqual(expectedResult);
     });
@@ -1058,7 +1069,7 @@ describe('WorkspaceCodingService', () => {
           codersIncluded: 0
         }
       };
-      mockCodingReviewService.getWorkspaceCohensKappaSummary.mockResolvedValue(
+      mockDoubleCodingReviewQueryService.getWorkspaceCohensKappaSummary.mockResolvedValue(
         expectedResult
       );
 
@@ -1408,7 +1419,7 @@ describe('WorkspaceCodingService', () => {
     });
 
     describe('getDoubleCodedVariablesForReview', () => {
-      it('should delegate to CodingReviewService', async () => {
+      it('should delegate to DoubleCodingReviewQueryService', async () => {
         const expectedResult = {
           data: [
             {
@@ -1445,7 +1456,7 @@ describe('WorkspaceCodingService', () => {
           page: 1,
           limit: 50
         };
-        mockCodingReviewService.getDoubleCodedVariablesForReview.mockResolvedValue(
+        mockDoubleCodingReviewQueryService.getDoubleCodedVariablesForReview.mockResolvedValue(
           expectedResult
         );
 
@@ -1456,14 +1467,14 @@ describe('WorkspaceCodingService', () => {
         );
 
         expect(
-          mockCodingReviewService.getDoubleCodedVariablesForReview
+          mockDoubleCodingReviewQueryService.getDoubleCodedVariablesForReview
         ).toHaveBeenCalledWith(workspaceId, 1, 50, false, false);
         expect(result).toEqual(expectedResult);
       });
     });
 
     describe('applyDoubleCodedResolutions', () => {
-      it('should delegate to CodingReviewService', async () => {
+      it('should delegate to DoubleCodingReviewDecisionService', async () => {
         const decisions = [
           {
             responseId: 1,
@@ -1479,7 +1490,7 @@ describe('WorkspaceCodingService', () => {
           skippedCount: 0,
           message: 'Successfully applied 1 resolution(s)'
         };
-        mockCodingReviewService.applyDoubleCodedResolutions.mockResolvedValue(
+        mockDoubleCodingReviewDecisionService.applyDoubleCodedResolutions.mockResolvedValue(
           expectedResult
         );
 
@@ -1489,7 +1500,7 @@ describe('WorkspaceCodingService', () => {
         );
 
         expect(
-          mockCodingReviewService.applyDoubleCodedResolutions
+          mockDoubleCodingReviewDecisionService.applyDoubleCodedResolutions
         ).toHaveBeenCalledWith(workspaceId, decisions);
         expect(result).toEqual(expectedResult);
       });
@@ -1664,7 +1675,7 @@ describe('WorkspaceCodingService', () => {
     });
 
     it('should handle Kappa statistics errors', async () => {
-      mockCodingReviewService.getWorkspaceCohensKappaSummary.mockRejectedValue(
+      mockDoubleCodingReviewQueryService.getWorkspaceCohensKappaSummary.mockRejectedValue(
         new Error('Kappa calculation failed')
       );
 
