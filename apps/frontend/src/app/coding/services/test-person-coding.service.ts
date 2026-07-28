@@ -201,6 +201,7 @@ export interface CaseCoverageOverview {
   aggregationThreshold: number | null;
   aggregatedDuplicateCases: number;
   statusTotalCasesToCode?: number;
+  responseAnalysisRawCases?: number;
   coveredSourceVariableCount?: number;
   coveredSourceResponseCount?: number;
 }
@@ -216,6 +217,7 @@ export interface CodingProgressOverview {
   aggregationThreshold: number | null;
   aggregatedDuplicateCases: number;
   statusTotalCasesToCode?: number;
+  responseAnalysisRawCases?: number;
   coveredSourceVariableCount?: number;
   coveredSourceResponseCount?: number;
 }
@@ -232,6 +234,7 @@ export interface AppliedResultsOverview {
   aggregationThreshold: number | null;
   aggregatedDuplicateCases: number;
   statusTotalIncompleteResponses?: number;
+  responseAnalysisRawCases?: number;
   coveredSourceVariableCount?: number;
   coveredSourceResponseCount?: number;
   deriveErrorTotalResponses?: number;

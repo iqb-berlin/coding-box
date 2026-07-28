@@ -747,7 +747,7 @@ describe('CodingManagementManualComponent', () => {
     expect(component.isPreparationReady()).toBe(true);
   });
 
-  it('should flag response analysis as outdated when the status pool count changed', () => {
+  it('should flag response analysis as outdated when the analysis candidate count changed', () => {
     component.responseAnalysis = {
       emptyResponses: { total: 0, totalUncoded: 0, items: [] },
       duplicateValues: {
@@ -772,6 +772,7 @@ describe('CodingManagementManualComponent', () => {
     component.appliedResultsOverview!.rawTotalIncompleteResponses = 973;
     setCodingProgress(973, 8);
     component.codingProgressOverview!.statusTotalCasesToCode = 973;
+    component.codingProgressOverview!.responseAnalysisRawCases = 973;
 
     expect(component.getCurrentRawManualResponses()).toBe(973);
     expect(component.getResponseAnalysisReferenceRawCases()).toBe(973);
@@ -801,10 +802,12 @@ describe('CodingManagementManualComponent', () => {
     };
     setCodingProgress(16606, 12000);
     component.codingProgressOverview!.rawTotalCasesToCode = 17705;
-    component.codingProgressOverview!.statusTotalCasesToCode = 21606;
+    component.codingProgressOverview!.statusTotalCasesToCode = 21948;
+    component.codingProgressOverview!.responseAnalysisRawCases = 21606;
     setAppliedResults(17705, 3901, 13804);
 
     expect(component.getCurrentRawManualResponses()).toBe(17705);
+    expect(component.getManualStatusPoolCount()).toBe(21948);
     expect(component.getResponseAnalysisReferenceRawCases()).toBe(21606);
     expect(component.isResponseAnalysisOutdated()).toBe(false);
     expect(component.hasResponseAnalysisRestScopeDifference()).toBe(true);
