@@ -201,6 +201,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   dataSource = new MatTableDataSource<CodingJob>([]);
   selection = new SelectionModel<CodingJob>(true, []);
   isLoading = false;
+  hasLoadedJobs = false;
 
   coderTrainings: CoderTraining[] = [];
   selectedTrainingId: number | string | null = null;
@@ -319,6 +320,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.isLoading = false;
+      this.hasLoadedJobs = true;
       return;
     }
 
@@ -340,12 +342,14 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
           this.updateCoderNamesMap(processedData);
 
           this.jobDetailsCache.clear();
+          this.hasLoadedJobs = true;
           this.isLoading = false;
         },
         error: () => {
           this.snackBar.open('Fehler beim Laden der Kodierjobs', 'Schließen', {
             duration: 3000
           });
+          this.hasLoadedJobs = true;
           this.isLoading = false;
         }
       });
@@ -1310,7 +1314,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       maxWidth: '100vw',
       height: '95vh',
       maxHeight: '100vh',
-      data: {}
+      data: { canApplyResults: this.canApplyResults }
     });
 
     dialogRef.afterClosed().subscribe(result => {

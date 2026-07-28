@@ -1729,6 +1729,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     const dialogRef = this.dialog.open(DownloadCodingResultsDialogComponent, {
       width: '550px',
       data: {
+        workspaceId,
         currentVersion: this.selectedStatisticsVersion,
         hasGeoGebraResponses: this.isGeogebraAvailable
       }
@@ -1741,6 +1742,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       includeResponseValues: boolean;
       includeGeoGebraFiles: boolean;
       includeGeoGebraResponseValues: boolean;
+      missingsProfileId: number;
     } | undefined) => {
       if (result) {
         const {
@@ -1749,11 +1751,13 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
           includeReplayUrls,
           includeResponseValues,
           includeGeoGebraFiles,
-          includeGeoGebraResponseValues
+          includeGeoGebraResponseValues,
+          missingsProfileId
         } = result;
         this.codingManagementService.downloadCodingResults(
           version,
           format,
+          missingsProfileId,
           includeReplayUrls,
           includeResponseValues,
           includeGeoGebraFiles,

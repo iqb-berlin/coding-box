@@ -12,13 +12,28 @@ import { JobQueueModule } from './job-queue/job-queue.module';
 import { HealthModule } from './health/health.module';
 import { CacheModule } from './cache/cache.module';
 import { WsgAdminModule } from './wsg-admin/wsg-admin.module';
+import { RuntimeConfigModule } from './config/runtime-config.module';
 
 @Module({
-  imports: [ConfigModule.forRoot({
-    isGlobal: true,
-    envFilePath: '.env.dev',
-    cache: true
-  }), AuthModule, DatabaseModule, UserModule, CodingModule, WorkspaceModule, AdminModule, HttpModule, JobQueueModule, HealthModule, CacheModule, WsgAdminModule],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env.dev',
+      cache: true
+    }),
+    RuntimeConfigModule,
+    AuthModule,
+    DatabaseModule,
+    UserModule,
+    CodingModule,
+    WorkspaceModule,
+    AdminModule,
+    HttpModule,
+    JobQueueModule,
+    HealthModule,
+    CacheModule,
+    WsgAdminModule
+  ],
   controllers: [AppController]
 })
 export class AppModule { }

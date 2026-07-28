@@ -1,6 +1,9 @@
 import { Injectable, OnDestroy } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   BehaviorSubject,
+  defer,
+  EMPTY,
   Observable,
   Subject,
   Subscription,
@@ -10,25 +13,40 @@ import {
   throwError
 } from 'rxjs';
 import {
-  map,
-  switchMap,
-  takeUntil,
-  tap
+  finalize, map, switchMap, takeUntil, tap
 } from 'rxjs/operators';
-import { CodingExportEstimate, CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
-import { AppService, WorkspaceTokenPolicy } from '../../../core/services/app.service';
+import {
+  CodingExportEstimate,
+  CodingJobBackendService
+} from '../../../coding/services/coding-job-backend.service';
+import {
+  AppService,
+  WorkspaceTokenPolicy
+} from '../../../core/services/app.service';
 import {
   DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
   EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
 } from '../../../core/services/auth-session.config';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import type { PsychometricDomainCandidatesDto } from '../../../../../../../api-dto/coding/psychometric-discrimination.dto';
+import {
+  BackgroundExportRequest,
+  ExportJobErrorMetadataDto,
+  ExportJobProgressPhaseDto,
+  ExportJobStateDto,
+  ExportJobStatusDto,
+  ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE,
+  ItemDatasetOptionsDto,
+  ItemMatrixExportDiagnosticsDto
+} from '../../../../../../../api-dto/coding/export-request.dto';
 
-export interface ExportJob {
+interface ExportJobBase {
   jobId: string;
   workspaceId: number;
-  status: 'waiting' | 'active' | 'downloading' | 'completed' | 'failed' | 'cancelled';
+  status:
+  'waiting' | 'active' | 'downloading' | 'completed' | 'failed' | 'cancelled';
   progress: number;
-  progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
+  progressPhase?: ExportJobProgressPhaseDto;
   processedRows?: number;
   totalRows?: number;
   progressMessage?: string;
@@ -40,48 +58,16 @@ export interface ExportJob {
     fileSize: number;
   };
   error?: string;
-  errorCode?: string;
-  errorDetails?: Record<string, number | string | boolean>;
   createdAt?: number;
 }
 
-export interface ExportJobConfig {
-  exportType:
-  | 'aggregated'
-  | 'by-coder'
-  | 'by-variable'
-  | 'by-variable-compact'
-  | 'detailed'
-  | 'coding-times'
-  | 'results-by-version'
-  | 'item-matrix';
+export type ExportJob = ExportJobBase & ExportJobErrorMetadataDto;
+
+export type ExportJobConfig = BackgroundExportRequest & {
   userId?: number;
-  version?: 'v1' | 'v2' | 'v3';
-  format?: 'csv' | 'excel';
-  matrixValue?: 'code' | 'score';
-  outputCommentsInsteadOfCodes?: boolean;
-  includeReplayUrl?: boolean;
-  includeResponseValues?: boolean;
-  includeGeoGebraResponseValues?: boolean;
-  includeGeoGebraFiles?: boolean;
-  anonymizeCoders?: boolean;
-  usePseudoCoders?: boolean;
-  doubleCodingMethod?:
-  | 'new-row-per-variable'
-  | 'new-column-per-coder'
-  | 'most-frequent';
-  includeComments?: boolean;
-  includeModalValue?: boolean;
-  includeDoubleCoded?: boolean;
-  excludeAutoCoded?: boolean;
-  jobDefinitionIds?: number[];
-  coderTrainingIds?: number[];
-  coderIds?: number[];
-  authToken?: string;
-  serverUrl?: string;
   displayLabelKey?: string;
   downloadFilePrefix?: string;
-}
+};
 
 export const REPLAY_AUTH_TOKEN_ERROR_CODE = 'replay-auth-token-failed';
 
@@ -90,17 +76,26 @@ export type ReplayAuthTokenError = Error & {
   originalError?: unknown;
 };
 
-export function createReplayAuthTokenError(originalError?: unknown): ReplayAuthTokenError {
-  const error = new Error('Replay auth token could not be created.') as ReplayAuthTokenError;
+export function createReplayAuthTokenError(
+  originalError?: unknown
+): ReplayAuthTokenError {
+  const error = new Error(
+    'Replay auth token could not be created.'
+  ) as ReplayAuthTokenError;
   error.name = 'ReplayAuthTokenError';
   error.code = REPLAY_AUTH_TOKEN_ERROR_CODE;
   error.originalError = originalError;
   return error;
 }
 
-export function isReplayAuthTokenError(error: unknown): error is ReplayAuthTokenError {
-  return error instanceof Error &&
-    (error as Partial<ReplayAuthTokenError>).code === REPLAY_AUTH_TOKEN_ERROR_CODE;
+export function isReplayAuthTokenError(
+  error: unknown
+): error is ReplayAuthTokenError {
+  return (
+    error instanceof Error &&
+    (error as Partial<ReplayAuthTokenError>).code ===
+      REPLAY_AUTH_TOKEN_ERROR_CODE
+  );
 }
 
 @Injectable({
@@ -110,6 +105,12 @@ export class ExportJobService implements OnDestroy {
   private jobsSubject = new BehaviorSubject<ExportJob[]>([]);
   private pollingSubscriptions = new Map<string, Subscription>();
   private downloadSubscriptions = new Map<string, Subscription>();
+  private incompleteDownloadCancellations = new Map<string, Subject<void>>();
+  private itemMatrixExpirationTimers = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+  >();
+
   private stopPolling$ = new Subject<void>();
 
   readonly jobs$ = this.jobsSubject.asObservable();
@@ -118,11 +119,13 @@ export class ExportJobService implements OnDestroy {
     private codingJobBackendService: CodingJobBackendService,
     private appService: AppService,
     private workspaceSettingsService: WorkspaceSettingsService
-  ) { }
+  ) {}
 
   get activeJobs(): ExportJob[] {
     return this.jobsSubject.value.filter(
-      job => job.status === 'waiting' || job.status === 'active' || job.status === 'downloading'
+      job => job.status === 'waiting' ||
+        job.status === 'active' ||
+        job.status === 'downloading'
     );
   }
 
@@ -138,13 +141,19 @@ export class ExportJobService implements OnDestroy {
     return this.jobsSubject.value.filter(job => job.status === 'cancelled');
   }
 
-  startJob(workspaceId: number, config: ExportJobConfig): Observable<ExportJob> {
+  startJob(
+    workspaceId: number,
+    config: ExportJobConfig
+  ): Observable<ExportJob> {
     return this.withReplayAuthToken(workspaceId, config).pipe(
       switchMap(preparedConfig => {
         const requestConfig = { ...preparedConfig };
         delete requestConfig.displayLabelKey;
         delete requestConfig.downloadFilePrefix;
-        return this.codingJobBackendService.startExportJob(workspaceId, requestConfig);
+        return this.codingJobBackendService.startExportJob(
+          workspaceId,
+          requestConfig
+        );
       }),
       map((response: { jobId: string }) => ({
         jobId: response.jobId,
@@ -163,8 +172,25 @@ export class ExportJobService implements OnDestroy {
     );
   }
 
-  estimateJob(workspaceId: number, config: ExportJobConfig): Observable<CodingExportEstimate> {
+  estimateJob(
+    workspaceId: number,
+    config: ExportJobConfig
+  ): Observable<CodingExportEstimate> {
     return this.codingJobBackendService.estimateExportJob(workspaceId, config);
+  }
+
+  getPsychometricDomainCandidates(
+    workspaceId: number
+  ): Observable<PsychometricDomainCandidatesDto> {
+    return this.codingJobBackendService.getPsychometricDomainCandidates(
+      workspaceId
+    );
+  }
+
+  getItemDatasetOptions(
+    workspaceId: number
+  ): Observable<ItemDatasetOptionsDto> {
+    return this.codingJobBackendService.getItemDatasetOptions(workspaceId);
   }
 
   private withReplayAuthToken(
@@ -175,7 +201,8 @@ export class ExportJobService implements OnDestroy {
       return of(config);
     }
 
-    return this.workspaceSettingsService.getReplayUrlExportMode(workspaceId)
+    return this.workspaceSettingsService
+      .getReplayUrlExportMode(workspaceId)
       .pipe(
         switchMap(mode => {
           if (mode === 'workspaceId') {
@@ -191,7 +218,8 @@ export class ExportJobService implements OnDestroy {
               authToken,
               serverUrl: config.serverUrl || window.location.origin
             })),
-            catchError(error => throwError(() => createReplayAuthTokenError(error)))
+            catchError(error => throwError(() => createReplayAuthTokenError(error))
+            )
           );
         })
       );
@@ -203,19 +231,25 @@ export class ExportJobService implements OnDestroy {
       switchMap(maxDurationDays => this.workspaceSettingsService.getReplayUrlExportTokenDurationDays(
         workspaceId,
         maxDurationDays
-      )),
+      )
+      ),
       switchMap(durationDays => this.appService.createOwnToken(
         workspaceId,
         durationDays,
         EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
-      ))
+      )
+      )
     );
   }
 
-  private getExternalReplayTokenMaxDurationDays(policy: WorkspaceTokenPolicy): number {
-    const maxDurations = EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
-      .map(scope => policy.scopes[scope]?.maxDurationDays)
-      .filter((duration): duration is number => Number.isInteger(duration) && duration >= 1);
+  private getExternalReplayTokenMaxDurationDays(
+    policy: WorkspaceTokenPolicy
+  ): number {
+    const maxDurations = EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES.map(
+      scope => policy.scopes[scope]?.maxDurationDays
+    ).filter(
+      (duration): duration is number => Number.isInteger(duration) && duration >= 1
+    );
 
     return maxDurations.length ?
       Math.min(...maxDurations) :
@@ -227,11 +261,14 @@ export class ExportJobService implements OnDestroy {
     this.jobsSubject.next([...currentJobs, job]);
   }
 
-  private updateJob(jobId: string, updates: Partial<ExportJob>): void {
+  private updateJob(
+    jobId: string,
+    updates: Partial<ExportJobBase> & ExportJobErrorMetadataDto
+  ): void {
     const currentJobs = this.jobsSubject.value;
     const updatedJobs = currentJobs.map(job => {
       if (job.jobId === jobId) {
-        return { ...job, ...updates };
+        return { ...job, ...updates } as ExportJob;
       }
       return job;
     });
@@ -250,48 +287,36 @@ export class ExportJobService implements OnDestroy {
         )
       )
       .subscribe({
-        next: (status: unknown) => {
-          const statusAny = status as unknown as {
-            status?: string;
-            progress?: number;
-            progressPhase?: ExportJob['progressPhase'];
-            processedRows?: number;
-            totalRows?: number;
-            progressMessage?: string;
-            result?: { fileName?: string; fileSize?: number };
-            error?: string;
-            errorCode?: string;
-            errorDetails?: Record<string, number | string | boolean>;
-          };
-
-          if (!statusAny.status && statusAny.error) {
+        next: status => {
+          if (!('status' in status)) {
             this.updateJob(jobId, {
               status: 'failed',
-              error: statusAny.error
+              error: status.error
             });
             this.stopPollingForJob(jobId);
             return;
           }
 
-          const mappedStatus = this.mapStatus(statusAny.status || '');
-          const result = statusAny.result ?
+          const mappedStatus = this.mapStatus(status.status);
+          const result = status.result ?
             {
-              fileName: statusAny.result.fileName || '',
-              fileSize: statusAny.result.fileSize || 0
+              fileName: status.result.fileName,
+              fileSize: status.result.fileSize
             } :
             undefined;
+          const errorMetadata = this.getExportJobErrorMetadata(status);
           this.updateJob(jobId, {
             status: mappedStatus,
-            progress: statusAny.progress || 0,
-            progressPhase: statusAny.progressPhase,
-            processedRows: statusAny.processedRows,
-            totalRows: statusAny.totalRows,
-            progressMessage: statusAny.progressMessage,
+            progress: status.progress,
+            progressPhase: status.progressPhase,
+            processedRows: status.processedRows,
+            totalRows: status.totalRows,
+            progressMessage: status.progressMessage,
             result,
-            error: statusAny.error,
-            errorCode: statusAny.errorCode,
-            errorDetails: statusAny.errorDetails
+            error: status.error,
+            ...errorMetadata
           });
+          this.scheduleItemMatrixArtifactExpiration(jobId, status);
 
           // Stop polling when job is done
           if (
@@ -314,16 +339,11 @@ export class ExportJobService implements OnDestroy {
     this.pollingSubscriptions.set(jobId, subscription);
   }
 
-  private mapStatus(status: string): ExportJob['status'] {
+  private mapStatus(status: ExportJobStateDto): ExportJob['status'] {
     switch (status) {
       case 'pending':
         return 'waiting';
       case 'processing':
-        return 'active';
-      case 'waiting':
-      case 'delayed':
-        return 'waiting';
-      case 'active':
         return 'active';
       case 'completed':
         return 'completed';
@@ -334,7 +354,7 @@ export class ExportJobService implements OnDestroy {
       case 'paused':
         return 'waiting';
       default:
-        return 'waiting';
+        return status;
     }
   }
 
@@ -346,11 +366,30 @@ export class ExportJobService implements OnDestroy {
     }
   }
 
-  removeJob(jobId: string): void {
-    this.stopPollingForJob(jobId);
-    this.stopDownloadForJob(jobId);
+  removeJob(jobId: string): Observable<boolean> {
     const currentJobs = this.jobsSubject.value;
-    this.jobsSubject.next(currentJobs.filter(job => job.jobId !== jobId));
+    const job = currentJobs.find(candidate => candidate.jobId === jobId);
+    if (!job) {
+      return of(false);
+    }
+
+    return this.codingJobBackendService
+      .deleteExportJob(job.workspaceId, job.jobId)
+      .pipe(
+        map(response => {
+          if (!response.success) {
+            return false;
+          }
+          this.stopPollingForJob(jobId);
+          this.stopDownloadForJob(jobId);
+          this.clearItemMatrixExpirationTimer(jobId);
+          this.jobsSubject.next(
+            this.jobsSubject.value.filter(candidate => candidate.jobId !== jobId)
+          );
+          return true;
+        }),
+        catchError(() => of(false))
+      );
   }
 
   cancelJob(job: ExportJob): void {
@@ -360,20 +399,22 @@ export class ExportJobService implements OnDestroy {
       return;
     }
 
-    this.codingJobBackendService.cancelExportJob(job.workspaceId, job.jobId).subscribe({
-      next: (response: { success: boolean }) => {
-        if (response.success) {
-          // Stop polling for this job
+    this.codingJobBackendService
+      .cancelExportJob(job.workspaceId, job.jobId)
+      .subscribe({
+        next: (response: { success: boolean }) => {
+          if (response.success) {
+            // Stop polling for this job
+            this.stopPollingForJob(job.jobId);
+            // Update job status to cancelled
+            this.updateJob(job.jobId, { status: 'cancelled' });
+          }
+        },
+        error: () => {
+          // On error, still try to stop polling
           this.stopPollingForJob(job.jobId);
-          // Update job status to cancelled
-          this.updateJob(job.jobId, { status: 'cancelled' });
         }
-      },
-      error: () => {
-        // On error, still try to stop polling
-        this.stopPollingForJob(job.jobId);
-      }
-    });
+      });
   }
 
   downloadFile(
@@ -388,30 +429,80 @@ export class ExportJobService implements OnDestroy {
     }
 
     this.updateJob(jobId, { status: 'downloading', progress: 0 });
-    const subscription = this.codingJobBackendService.downloadExportFile(workspaceId, jobId).subscribe({
-      next: (blob: Blob) => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const ext = this.getDownloadExtension(exportType, fileName);
-        const date = new Date().toISOString().slice(0, 10);
-        a.download = `export-${downloadFilePrefix || exportType}-${date}.${ext}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-        this.downloadSubscriptions.delete(jobId);
-        this.updateJob(jobId, { status: 'completed', progress: 100 });
-      },
-      error: () => {
-        this.downloadSubscriptions.delete(jobId);
-        this.updateJob(jobId, { status: 'completed', progress: 100 });
-      }
-    });
+    const subscription = this.codingJobBackendService
+      .downloadExportFile(workspaceId, jobId)
+      .subscribe({
+        next: (blob: Blob) => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          const ext = this.getDownloadExtension(exportType, fileName);
+          const date = new Date().toISOString().slice(0, 10);
+          a.download = `export-${downloadFilePrefix || exportType}-${date}.${ext}`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+          this.downloadSubscriptions.delete(jobId);
+          this.updateJob(jobId, { status: 'completed', progress: 100 });
+        },
+        error: () => {
+          this.downloadSubscriptions.delete(jobId);
+          this.updateJob(jobId, { status: 'completed', progress: 100 });
+        }
+      });
     this.downloadSubscriptions.set(jobId, subscription);
     if (subscription.closed) {
       this.downloadSubscriptions.delete(jobId);
     }
+  }
+
+  getItemMatrixDiagnostics(
+    job: ExportJob
+  ): Observable<ItemMatrixExportDiagnosticsDto> {
+    return this.codingJobBackendService
+      .getItemMatrixExportDiagnostics(job.workspaceId, job.jobId)
+      .pipe(
+        catchError(error => {
+          this.expireItemMatrixArtifactsOnNotFound(job.jobId, error);
+          return throwError(() => error);
+        })
+      );
+  }
+
+  downloadIncompleteItemMatrix(job: ExportJob): Observable<void> {
+    return defer(() => {
+      if (this.incompleteDownloadCancellations.has(job.jobId)) {
+        return EMPTY;
+      }
+      const cancellation$ = new Subject<void>();
+      this.incompleteDownloadCancellations.set(job.jobId, cancellation$);
+      return this.codingJobBackendService
+        .downloadIncompleteItemMatrix(job.workspaceId, job.jobId)
+        .pipe(
+          tap(download => {
+            const { blob, fileName } = download;
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName || 'Itemdatensatz-UNVOLLSTAENDIG.zip';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+          }),
+          map(() => undefined),
+          catchError(error => {
+            this.expireItemMatrixArtifactsOnNotFound(job.jobId, error);
+            return throwError(() => error);
+          }),
+          takeUntil(cancellation$),
+          finalize(() => {
+            cancellation$.complete();
+            this.incompleteDownloadCancellations.delete(job.jobId);
+          })
+        );
+    });
   }
 
   private stopDownloadForJob(jobId: string): void {
@@ -420,14 +511,103 @@ export class ExportJobService implements OnDestroy {
       subscription.unsubscribe();
       this.downloadSubscriptions.delete(jobId);
     }
+    const incompleteCancellation =
+      this.incompleteDownloadCancellations.get(jobId);
+    if (incompleteCancellation) {
+      incompleteCancellation.next();
+      incompleteCancellation.complete();
+      this.incompleteDownloadCancellations.delete(jobId);
+    }
+  }
+
+  private scheduleItemMatrixArtifactExpiration(
+    jobId: string,
+    status: ExportJobStatusDto
+  ): void {
+    this.clearItemMatrixExpirationTimer(jobId);
+    if (status.errorCode !== ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE) {
+      return;
+    }
+    const expiresAt = Number(status.errorDetails.expiresAt);
+    if (!Number.isFinite(expiresAt)) {
+      return;
+    }
+    const expire = () => this.markItemMatrixArtifactsExpired(jobId);
+    const delay = expiresAt - Date.now();
+    if (delay <= 0) {
+      expire();
+      return;
+    }
+    this.itemMatrixExpirationTimers.set(jobId, setTimeout(expire, delay));
+  }
+
+  private expireItemMatrixArtifactsOnNotFound(
+    jobId: string,
+    error: unknown
+  ): void {
+    if (error instanceof HttpErrorResponse && error.status === 404) {
+      this.markItemMatrixArtifactsExpired(jobId);
+    }
+  }
+
+  private markItemMatrixArtifactsExpired(jobId: string): void {
+    this.clearItemMatrixExpirationTimer(jobId);
+    const job = this.jobsSubject.value.find(
+      candidate => candidate.jobId === jobId
+    );
+    if (!job) {
+      return;
+    }
+    if (job.errorCode !== ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE) {
+      return;
+    }
+    this.updateJob(jobId, {
+      errorCode: ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE,
+      errorDetails: {
+        ...job.errorDetails,
+        diagnosticsAvailable: false,
+        incompleteDownloadAvailable: false
+      }
+    });
+  }
+
+  private clearItemMatrixExpirationTimer(jobId: string): void {
+    const timer = this.itemMatrixExpirationTimers.get(jobId);
+    if (timer) {
+      clearTimeout(timer);
+      this.itemMatrixExpirationTimers.delete(jobId);
+    }
+  }
+
+  private getExportJobErrorMetadata(
+    status: ExportJobStatusDto
+  ): ExportJobErrorMetadataDto {
+    if (status.errorCode === ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE) {
+      return {
+        errorCode: status.errorCode,
+        errorDetails: status.errorDetails
+      };
+    }
+    if (status.errorCode === 'EXPORT_TOO_MANY_WORKSHEETS') {
+      return {
+        errorCode: status.errorCode,
+        errorDetails: status.errorDetails
+      };
+    }
+    return { errorCode: undefined, errorDetails: undefined };
   }
 
   private getDownloadExtension(exportType: string, fileName?: string): string {
     const fileExtension = fileName?.split('.').pop()?.toLowerCase();
-    if (fileExtension && ['csv', 'xlsx', 'json', 'zip'].includes(fileExtension)) {
+    if (
+      fileExtension &&
+      ['csv', 'xlsx', 'json', 'zip'].includes(fileExtension)
+    ) {
       return fileExtension;
     }
-    return exportType === 'detailed' || exportType === 'by-variable-compact' ? 'csv' : 'xlsx';
+    return exportType === 'detailed' || exportType === 'by-variable-compact' ?
+      'csv' :
+      'xlsx';
   }
 
   ngOnDestroy(): void {
@@ -437,5 +617,12 @@ export class ExportJobService implements OnDestroy {
     this.pollingSubscriptions.clear();
     this.downloadSubscriptions.forEach(sub => sub.unsubscribe());
     this.downloadSubscriptions.clear();
+    this.incompleteDownloadCancellations.forEach(cancellation => {
+      cancellation.next();
+      cancellation.complete();
+    });
+    this.incompleteDownloadCancellations.clear();
+    this.itemMatrixExpirationTimers.forEach(timer => clearTimeout(timer));
+    this.itemMatrixExpirationTimers.clear();
   }
 }

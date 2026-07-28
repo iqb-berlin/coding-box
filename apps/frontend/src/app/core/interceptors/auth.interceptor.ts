@@ -40,8 +40,15 @@ export const authInterceptor: HttpInterceptorFn = (
   const serverUrl = inject(SERVER_URL);
   let httpErrorInfo: AppHttpError | null = null;
   let suppressGlobalErrorMessage = false;
+  const requestWithId = addRequestId(req, serverUrl);
 
-  return getRequestWithAuthHeader(req, authService, appService, router, serverUrl)
+  return getRequestWithAuthHeader(
+    requestWithId,
+    authService,
+    appService,
+    router,
+    serverUrl
+  )
     .pipe(
       switchMap(modifiedReq => next(modifiedReq)
         .pipe(
@@ -97,6 +104,35 @@ export const authInterceptor: HttpInterceptorFn = (
         ))
     );
 };
+
+function addRequestId(
+  req: HttpRequest<unknown>,
+  serverUrl: string
+): HttpRequest<unknown> {
+  if (!isBackendRequest(req.url, serverUrl) ||
+    req.headers.has('X-Request-Id')) {
+    return req;
+  }
+
+  return req.clone({
+    setHeaders: {
+      'X-Request-Id': createOpaqueRequestId()
+    }
+  });
+}
+
+function createOpaqueRequestId(): string {
+  const cryptoApi = globalThis.crypto as Crypto & {
+    randomUUID?: () => string;
+  };
+  if (typeof cryptoApi?.randomUUID === 'function') {
+    return cryptoApi.randomUUID();
+  }
+
+  const bytes = new Uint8Array(16);
+  cryptoApi.getRandomValues(bytes);
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+}
 
 function getRequestWithAuthHeader(
   req: HttpRequest<unknown>,

@@ -35,7 +35,10 @@ export class ReplayStatisticsService {
     'payloadMs',
     'payloadToVisibleMs',
     'payloadToPlayerReadyMs',
-    'playerReadyToVisibleMs'
+    'playerReadyToVisibleMs',
+    'codingSessionMs',
+    'routeToCodingSessionRequestMs',
+    'codingSessionResponseToPayloadRequestMs'
   ]);
 
   private static readonly SERVER_TIMING_KEYS = new Set([
@@ -53,7 +56,15 @@ export class ReplayStatisticsService {
     'payloadExtractPlayerIdMs',
     'payloadFindPlayerMs',
     'payloadFindUnitResponseMs',
-    'payloadTotalMs'
+    'payloadTotalMs',
+    'codingSessionLoadJobMs',
+    'codingSessionLoadContextMs',
+    'codingSessionReviewOverlaysMs',
+    'codingSessionBuildUnitsMs',
+    'codingSessionBuildProgressMs',
+    'codingSessionBuildNotesMs',
+    'codingSessionFinalizeResponseMs',
+    'codingSessionTotalMs'
   ]);
 
   private applyTimeFilters(
@@ -99,6 +110,8 @@ export class ReplayStatisticsService {
   async storeReplayStatistics(data: {
     workspaceId: number;
     unitId: string;
+    replayAttemptId?: string;
+    requestId?: string;
     bookletId?: string;
     testPersonLogin?: string;
     testPersonCode?: string;
@@ -117,6 +130,14 @@ export class ReplayStatisticsService {
           data.unitId,
           ReplayStatisticsService.MAX_IDENTIFIER_LENGTH
         ) || 'unknown',
+        replay_attempt_id: this.truncateString(
+          data.replayAttemptId,
+          128
+        ),
+        request_id: this.truncateString(
+          data.requestId,
+          128
+        ),
         booklet_id: this.truncateString(
           data.bookletId,
           ReplayStatisticsService.MAX_IDENTIFIER_LENGTH

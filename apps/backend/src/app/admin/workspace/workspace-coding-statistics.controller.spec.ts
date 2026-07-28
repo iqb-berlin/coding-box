@@ -8,7 +8,10 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceCodingStatisticsController } from './workspace-coding-statistics.controller';
 
 describe('WorkspaceCodingStatisticsController', () => {
-  let codingStatisticsService: { calculateCohensKappa: jest.Mock };
+  let codingStatisticsService: {
+    calculateCohensKappa: jest.Mock;
+    roundKappaCalculationResult: jest.Mock;
+  };
   let codingJobService: { createDistributedCodingJobs: jest.Mock };
   let codingReviewService: {
     getDoubleCodedVariablesForReview: jest.Mock;
@@ -27,7 +30,12 @@ describe('WorkspaceCodingStatisticsController', () => {
 
   beforeEach(() => {
     codingStatisticsService = {
-      calculateCohensKappa: jest.fn()
+      calculateCohensKappa: jest.fn(),
+      roundKappaCalculationResult: jest.fn(result => ({
+        ...result,
+        kappa: result.kappa === null ? null : Math.round(result.kappa * 1000) / 1000,
+        agreement: Math.round(result.agreement * 1000) / 1000
+      }))
     };
     codingJobService = {
       createDistributedCodingJobs: jest.fn().mockResolvedValue({
@@ -234,6 +242,7 @@ describe('WorkspaceCodingStatisticsController', () => {
         coder2Id: 2,
         coder2Name: 'Coder 2',
         kappa: 0.5,
+        brennanPredigerKappa: 0.6,
         agreement: 0.75,
         totalItems: 10,
         validPairs: 10,
@@ -281,6 +290,7 @@ describe('WorkspaceCodingStatisticsController', () => {
     expect(result.variables[0].doubleCodedRate).toBe(0.5);
     expect(result.variables[0].validPairCount).toBe(15);
     expect(result.variables[0].coderPairCount).toBe(2);
+    expect(result.variables[0].coderPairs[0]).not.toHaveProperty('brennanPredigerKappa');
     expect(result.workspaceSummary.averageKappa).toBe(0.667);
     expect(result.workspaceSummary.meanAgreement).toBe(0.833);
     expect(result.workspaceSummary.totalCodedResponses).toBe(2);

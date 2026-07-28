@@ -1,5 +1,6 @@
 import {
   excludedCodingVariableFragments,
+  getCodingResponseValueCandidateSql,
   getCodingVariableIdCandidateSql,
   isCodingResponseCandidateByPattern,
   isCodingVariableIdCandidate
@@ -24,6 +25,13 @@ describe('coding response candidate utils', () => {
   it('keeps the stricter response-candidate helper value-aware', () => {
     expect(isCodingResponseCandidateByPattern('var1', 'answer')).toBe(true);
     expect(isCodingResponseCandidateByPattern('var1', '   ')).toBe(false);
+    expect(isCodingResponseCandidateByPattern('var1', '\t\n')).toBe(false);
     expect(isCodingResponseCandidateByPattern('image_1', 'answer')).toBe(false);
+  });
+
+  it('uses a SQL value filter that rejects every whitespace-only value', () => {
+    expect(getCodingResponseValueCandidateSql('response')).toBe(
+      "response.value IS NOT NULL AND response.value ~ '[^[:space:]]'"
+    );
   });
 });

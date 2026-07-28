@@ -1,4 +1,4 @@
-import { CodingReviewService } from './coding-review.service';
+import { DoubleCodingReviewQueryService } from './double-coding-review-query.service';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
 import { applyResolvedExclusionsToQuery } from '../workspace/workspace-exclusion.service';
 
@@ -12,7 +12,7 @@ jest.mock('../workspace/workspace-exclusion.service', () => ({
   WorkspaceExclusionService: jest.fn()
 }));
 
-describe('CodingReviewService', () => {
+describe('DoubleCodingReviewQueryService', () => {
   const workspaceId = 123;
   const emptyExclusions = {
     globalIgnoredUnits: [],
@@ -46,6 +46,7 @@ describe('CodingReviewService', () => {
     createQueryBuilder: jest.Mock;
     query: jest.Mock;
     find: jest.Mock;
+    findOne: jest.Mock;
   };
   let jobDefinitionRepository: {
     find: jest.Mock;
@@ -55,12 +56,19 @@ describe('CodingReviewService', () => {
   };
   let codingJobService: {
     getCodingSchemeScoreForUnitCode: jest.Mock;
+    getSelectableReviewCodeForUnit: jest.Mock;
   };
-  let service: CodingReviewService;
+  let defaultMissingsProfilesService: {
+    getMissingByIdForProfileOrDefault: jest.Mock;
+    getMissingByCodeForProfileOrDefault: jest.Mock;
+  };
+  let reviewDecisionRepository: { find: jest.Mock };
+  let service: DoubleCodingReviewQueryService;
 
   const makeCodingJobUnit = (
     overrides: Record<string, unknown> = {}
   ): Record<string, unknown> => ({
+    id: 1,
     response_id: 10,
     variable_id: 'VAR_1',
     coding_job_id: 100,
@@ -132,6 +140,7 @@ describe('CodingReviewService', () => {
     codingJobUnitRepository = {
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
       query: jest.fn().mockResolvedValue([{ total: '1' }]),
+      findOne: jest.fn(),
       find: jest.fn().mockResolvedValue([
         makeCodingJobUnit(),
         makeCodingJobUnit({
@@ -187,21 +196,45 @@ describe('CodingReviewService', () => {
       find: jest.fn().mockResolvedValue([])
     };
     codingJobService = {
-      getCodingSchemeScoreForUnitCode: jest.fn().mockResolvedValue(1)
+      getCodingSchemeScoreForUnitCode: jest.fn().mockResolvedValue(1),
+      getSelectableReviewCodeForUnit: jest.fn().mockImplementation(
+        async (_unit, _workspaceId, code: number) => ({
+          code,
+          label: `Code ${code}`,
+          score: 1
+        })
+      )
+    };
+    defaultMissingsProfilesService = {
+      getMissingByIdForProfileOrDefault: jest.fn().mockImplementation(
+        async (_workspaceId: number, _profileId: number | null, missingId: string) => ({
+          id: missingId,
+          label: missingId,
+          code: missingId === 'mir' ? -3 : -4,
+          score: null
+        })
+      ),
+      getMissingByCodeForProfileOrDefault: jest.fn().mockImplementation(
+        async (_workspaceId: number, _profileId: number | null, code: number) => ({
+          id: String(code), label: String(code), code, score: null
+        })
+      )
+    };
+    reviewDecisionRepository = {
+      find: jest.fn().mockResolvedValue([])
     };
 
-    service = new CodingReviewService(
-      {} as never,
+    service = new DoubleCodingReviewQueryService(
       codingJobUnitRepository as never,
       jobDefinitionRepository as never,
       variableBundleRepository as never,
       {} as never,
-      {} as never,
-      {} as never,
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
       } as never,
-      codingJobService as never
+      codingJobService as never,
+      defaultMissingsProfilesService as never,
+      reviewDecisionRepository as never
     );
   });
 
@@ -261,17 +294,7 @@ describe('CodingReviewService', () => {
 
     const result = await service.getDoubleCodedVariablesForReview(
       workspaceId,
-      1,
-      50,
-      false,
-      false,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'differ',
-      [11],
-      undefined
+      { agreementFilter: 'differ', jobDefinitionIds: [11] }
     );
 
     expect(queryBuilder.andHaving).toHaveBeenCalledWith(expect.stringContaining('deduped_review_results.code IS NOT NULL'));
@@ -313,7 +336,7 @@ describe('CodingReviewService', () => {
         variableId: 'VAR_1',
         coderResults: [
           {
-            coderId: 1, jobId: 100, code: 1, codingIssueOption: -3
+            coderId: 1, jobId: 100, code: -3, codingIssueOption: -3
           },
           {
             coderId: 2, jobId: 101, code: 1, score: 1
@@ -358,19 +381,17 @@ describe('CodingReviewService', () => {
             }
         ))
     };
-    service = new CodingReviewService(
-      {} as never,
+    service = new DoubleCodingReviewQueryService(
       codingJobUnitRepository as never,
       jobDefinitionRepository as never,
       variableBundleRepository as never,
-      {} as never,
-      {} as never,
       {} as never,
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
       } as never,
       codingJobService as never,
-      missingsProfilesService as never
+      missingsProfilesService as never,
+      reviewDecisionRepository as never
     );
 
     codingJobUnitRepository.find.mockResolvedValueOnce([
@@ -411,24 +432,118 @@ describe('CodingReviewService', () => {
 
     expect(missingsProfilesService.getMissingByIdForProfileOrDefault).toHaveBeenCalledWith(workspaceId, 77, 'mir');
     expect(missingsProfilesService.getMissingByIdForProfileOrDefault).toHaveBeenCalledWith(workspaceId, 77, 'mci');
+    expect(missingsProfilesService.getMissingByIdForProfileOrDefault).toHaveBeenCalledTimes(2);
     expect(result.data[0].coderResults).toMatchObject([
       { coderId: 1, code: -123, score: 0 },
       { coderId: 2, code: -124, score: 0 }
     ]);
+    expect(result.data[0].availableCodes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: -3, score: 0, source: 'general' }),
+      expect.objectContaining({ code: -4, score: 0, source: 'general' })
+    ]));
+  });
+
+  it('deduplicates concurrent missing lookups for review rows sharing a profile', async () => {
+    const missingsProfilesService = {
+      getMissingByIdForProfileOrDefault: jest.fn()
+        .mockImplementation(async (_workspaceId: number, _profileId: number | null, missingId: string) => ({
+          id: missingId,
+          label: missingId,
+          code: missingId === 'mir' ? -98 : -99,
+          score: 0
+        }))
+    };
+    const localService = new DoubleCodingReviewQueryService(
+      codingJobUnitRepository as never,
+      jobDefinitionRepository as never,
+      variableBundleRepository as never,
+      {} as never,
+      {} as never,
+      codingJobService as never,
+      missingsProfilesService as never,
+      reviewDecisionRepository as never
+    );
+    const unit = makeCodingJobUnit({
+      coding_job: {
+        workspace_id: workspaceId,
+        missings_profile_id: 77
+      }
+    });
+    const harness = localService as unknown as {
+      getGeneralReviewCodes: (
+        selectedWorkspaceId: number,
+        sourceUnit: unknown,
+        cache: Map<string, Promise<unknown>>
+      ) => Promise<unknown>;
+    };
+    const cache = new Map<string, Promise<unknown>>();
+
+    await Promise.all(Array.from({ length: 20 }, () => (
+      harness.getGeneralReviewCodes(workspaceId, unit, cache)
+    )));
+
+    expect(missingsProfilesService.getMissingByIdForProfileOrDefault).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses the oldest scoped coding job as the authoritative review source', async () => {
+    const newerUnit = makeCodingJobUnit({
+      id: 20,
+      coding_job_id: 100,
+      coding_job: {
+        workspace_id: workspaceId,
+        missings_profile_id: 88,
+        job_definition_id: 11,
+        training_id: null,
+        name: 'Newer job',
+        codingJobCoders: [{ user_id: 1, user: { username: 'Coder 1' } }]
+      }
+    });
+    const olderUnit = makeCodingJobUnit({
+      id: 10,
+      coding_job_id: 101,
+      coding_job: {
+        workspace_id: workspaceId,
+        missings_profile_id: 77,
+        job_definition_id: 11,
+        training_id: null,
+        name: 'Older job',
+        codingJobCoders: [{ user_id: 2, user: { username: 'Coder 2' } }]
+      }
+    });
+    const olderOutOfScopeUnit = makeCodingJobUnit({
+      id: 5,
+      coding_job_id: 102,
+      coding_job: {
+        workspace_id: workspaceId,
+        missings_profile_id: 66,
+        job_definition_id: 99,
+        training_id: null,
+        name: 'Older out-of-scope job',
+        codingJobCoders: [{ user_id: 3, user: { username: 'Coder 3' } }]
+      }
+    });
+    codingJobUnitRepository.find.mockResolvedValueOnce([
+      newerUnit,
+      olderUnit,
+      olderOutOfScopeUnit
+    ]);
+    const selectableCodesSpy = jest.fn(async (units: unknown[]) => new Map(units.map(unit => [unit, []])));
+    (codingJobService as unknown as { getSelectableReviewCodesForUnits: jest.Mock })
+      .getSelectableReviewCodesForUnits = selectableCodesSpy;
+
+    const result = await service.getDoubleCodedVariablesForReview(
+      workspaceId,
+      { jobDefinitionIds: [11] }
+    );
+
+    expect(selectableCodesSpy).toHaveBeenCalledWith([olderUnit], workspaceId);
+    expect(result.data[0].sourceUnitId).toBe(10);
   });
 
   it('applies the match agreement filter', async () => {
     await service.getDoubleCodedVariablesForReview(
       workspaceId,
-      1,
-      50,
-      false,
-      false,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'match'
+      { agreementFilter: 'match' }
     );
 
     expect(queryBuilder.andHaving).toHaveBeenCalledWith(expect.stringContaining('COUNT(DISTINCT deduped_review_results.signature)'));
@@ -439,9 +554,7 @@ describe('CodingReviewService', () => {
   it('keeps legacy only-conflicts behavior for older clients', async () => {
     await service.getDoubleCodedVariablesForReview(
       workspaceId,
-      1,
-      50,
-      true
+      { onlyConflicts: true }
     );
 
     expect(queryBuilder.andHaving).toHaveBeenCalledWith(expect.stringContaining('deduped_review_results.code IS NOT NULL'));
@@ -562,6 +675,9 @@ describe('CodingReviewService', () => {
 
     expect(result.total).toBe(2);
     expect(result.data).toHaveLength(2);
+    expect(result.data[0].coderResults[0].codedAt).toBe(
+      '2026-05-18T00:00:00.000Z'
+    );
     expect(result.data[0]).toMatchObject({
       responseId: 10,
       isResolved: false,
@@ -710,14 +826,7 @@ describe('CodingReviewService', () => {
   it('applies resolved and coding-status filters independently', async () => {
     await service.getDoubleCodedVariablesForReview(
       workspaceId,
-      1,
-      50,
-      false,
-      false,
-      undefined,
-      undefined,
-      'done',
-      'resolved'
+      { statusFilter: 'done', resolvedFilter: 'resolved' }
     );
 
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
@@ -732,17 +841,11 @@ describe('CodingReviewService', () => {
   it('combines job-definition and coder-training scopes with OR', async () => {
     await service.getDoubleCodedVariablesForReview(
       workspaceId,
-      1,
-      50,
-      false,
-      false,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'all',
-      [11],
-      [21]
+      {
+        agreementFilter: 'all',
+        jobDefinitionIds: [11],
+        coderTrainingIds: [21]
+      }
     );
 
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
@@ -902,12 +1005,7 @@ describe('CodingReviewService', () => {
   it('applies coder filters only through single-distinct-coder jobs', async () => {
     await service.getDoubleCodedVariablesForReview(
       workspaceId,
-      1,
-      50,
-      false,
-      false,
-      undefined,
-      1
+      { coderId: 1 }
     );
 
     const coderFilterFactory = queryBuilder.andWhere.mock.calls
@@ -1085,16 +1183,7 @@ describe('CodingReviewService', () => {
 
     const result = await service.getDoubleCodedVariablesForReview(
       workspaceId,
-      1,
-      50,
-      false,
-      false,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      'all',
-      [11]
+      { agreementFilter: 'all', jobDefinitionIds: [11] }
     );
 
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
@@ -1232,7 +1321,9 @@ describe('CodingReviewService', () => {
     expect(queryBuilder.leftJoin).toHaveBeenCalledWith('cj.training', 'training');
     expect(queryBuilder.select).toHaveBeenCalledWith('cju.response_id', 'responseId');
     expect(queryBuilder.addSelect).toHaveBeenCalledWith('cju.variable_anchor', 'variableAnchor');
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith('cju.code IS NOT NULL');
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(cju.code IS NOT NULL OR cju.coding_issue_option IN (-3, -4))'
+    );
     expect(queryBuilder.andWhere).toHaveBeenCalledWith('cj.training_id IS NULL');
     expect(queryBuilder.addOrderBy).toHaveBeenCalledWith('cju.id', 'ASC');
     expect(queryBuilder.addOrderBy).toHaveBeenCalledWith('cjc.id', 'ASC');
@@ -1288,17 +1379,221 @@ describe('CodingReviewService', () => {
 
     await service.getCodedVariablesForKappa(workspaceId, false);
 
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith('cju.code IS NOT NULL');
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(cju.code IS NOT NULL OR cju.coding_issue_option IN (-3, -4))'
+    );
     expect(queryBuilder.andWhere).not.toHaveBeenCalledWith('cj.training_id IS NULL');
   });
 
-  it('uses score values as the database filter for score-level kappa data', async () => {
+  it('loads raw missing values for profile-aware score-level kappa normalization', async () => {
     queryBuilder.getRawMany.mockResolvedValueOnce([]);
 
     await service.getCodedVariablesForKappa(workspaceId, true, [], [], [], 'score');
 
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith('cju.score IS NOT NULL');
-    expect(queryBuilder.andWhere).not.toHaveBeenCalledWith('cju.code IS NOT NULL');
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(cju.score IS NOT NULL OR cju.code < 0 OR cju.coding_issue_option IN (-3, -4))'
+    );
+  });
+
+  it('normalizes general missing codes before filtering score-level kappa data', async () => {
+    const missingsProfilesService = {
+      getMissingByIdForProfileOrDefault: jest.fn()
+        .mockImplementation(async (_workspaceId: number, _profileId: number | null, missingId: string) => (
+          missingId === 'mir' ?
+            {
+              id: 'mir', label: 'Missing invalid response', code: -98, score: 0
+            } :
+            {
+              id: 'mci', label: 'Missing coding impossible', code: -97, score: null
+            }
+        )),
+      getMissingByCodeForProfileOrDefault: jest.fn()
+        .mockResolvedValue({
+          id: 'mbi_mbo', label: 'Missing by omission', code: -99, score: 0
+        })
+    };
+    service = new DoubleCodingReviewQueryService(
+      codingJobUnitRepository as never,
+      jobDefinitionRepository as never,
+      variableBundleRepository as never,
+      {} as never,
+      {
+        resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
+      } as never,
+      codingJobService as never,
+      missingsProfilesService as never,
+      reviewDecisionRepository as never
+    );
+    queryBuilder.getRawMany.mockResolvedValueOnce([
+      {
+        responseId: 10,
+        unitName: 'UNIT_1',
+        variableId: 'VAR_1',
+        variableAnchor: 'ANCHOR_1',
+        personLogin: 'person-1',
+        personCode: 'P001',
+        personGroup: 'GROUP_1',
+        bookletName: 'BOOKLET_1',
+        coderId: 1,
+        coderName: 'Coder 1',
+        jobId: 100,
+        jobName: 'Training job 1',
+        jobDefinitionId: null,
+        trainingId: 60,
+        trainingLabel: 'Training A',
+        missingsProfileId: 77,
+        code: -3,
+        codingIssueOption: -3,
+        score: null,
+        notes: null,
+        supervisorComment: null,
+        codedAt: new Date('2026-05-18T00:00:00.000Z')
+      },
+      {
+        responseId: 10,
+        unitName: 'UNIT_1',
+        variableId: 'VAR_1',
+        variableAnchor: 'ANCHOR_1',
+        personLogin: 'person-1',
+        personCode: 'P001',
+        personGroup: 'GROUP_1',
+        bookletName: 'BOOKLET_1',
+        coderId: 2,
+        coderName: 'Coder 2',
+        jobId: 101,
+        jobName: 'Training job 2',
+        jobDefinitionId: null,
+        trainingId: 60,
+        trainingLabel: 'Training A',
+        missingsProfileId: 77,
+        code: -99,
+        codingIssueOption: null,
+        score: null,
+        notes: null,
+        supervisorComment: null,
+        codedAt: new Date('2026-05-18T00:00:00.000Z')
+      },
+      {
+        responseId: 11,
+        unitName: 'UNIT_1',
+        variableId: 'VAR_1',
+        variableAnchor: 'ANCHOR_1',
+        personLogin: 'person-2',
+        personCode: 'P002',
+        personGroup: 'GROUP_1',
+        bookletName: 'BOOKLET_1',
+        coderId: 1,
+        coderName: 'Coder 1',
+        jobId: 100,
+        jobName: 'Training job 1',
+        jobDefinitionId: null,
+        trainingId: 60,
+        trainingLabel: 'Training A',
+        missingsProfileId: 77,
+        code: -4,
+        codingIssueOption: -4,
+        score: null,
+        notes: null,
+        supervisorComment: null,
+        codedAt: new Date('2026-05-18T00:00:00.000Z')
+      }
+    ]);
+
+    const result = await service.getCodedVariablesForKappa(
+      workspaceId,
+      false,
+      [],
+      [60],
+      [],
+      'score'
+    );
+
+    expect(missingsProfilesService.getMissingByIdForProfileOrDefault)
+      .toHaveBeenCalledWith(workspaceId, 77, 'mir');
+    expect(missingsProfilesService.getMissingByIdForProfileOrDefault)
+      .toHaveBeenCalledWith(workspaceId, 77, 'mci');
+    expect(missingsProfilesService.getMissingByCodeForProfileOrDefault)
+      .toHaveBeenCalledWith(workspaceId, 77, -99);
+    expect(result).toEqual([
+      expect.objectContaining({
+        responseId: 10,
+        coderResults: [
+          expect.objectContaining({ coderId: 1, code: -98, score: 0 }),
+          expect.objectContaining({ coderId: 2, code: -99, score: 0 })
+        ]
+      })
+    ]);
+  });
+
+  it('excludes internal issue marker codes from code-level kappa data', async () => {
+    queryBuilder.getRawMany.mockResolvedValueOnce([
+      {
+        responseId: 10,
+        unitName: 'UNIT_1',
+        variableId: 'VAR_1',
+        variableAnchor: 'ANCHOR_1',
+        personLogin: 'person-1',
+        personCode: 'P001',
+        personGroup: 'GROUP_1',
+        bookletName: 'BOOKLET_1',
+        coderId: 1,
+        coderName: 'Coder 1',
+        jobId: 100,
+        jobName: 'Issue marker job',
+        jobDefinitionId: null,
+        trainingId: 60,
+        trainingLabel: 'Training A',
+        missingsProfileId: 77,
+        code: -1,
+        codingIssueOption: -1,
+        score: null,
+        notes: null,
+        supervisorComment: null,
+        codedAt: new Date('2026-05-18T00:00:00.000Z')
+      },
+      {
+        responseId: 11,
+        unitName: 'UNIT_1',
+        variableId: 'VAR_1',
+        variableAnchor: 'ANCHOR_1',
+        personLogin: 'person-2',
+        personCode: 'P002',
+        personGroup: 'GROUP_1',
+        bookletName: 'BOOKLET_1',
+        coderId: 1,
+        coderName: 'Coder 1',
+        jobId: 100,
+        jobName: 'Provisional regular code',
+        jobDefinitionId: null,
+        trainingId: 60,
+        trainingLabel: 'Training A',
+        missingsProfileId: 77,
+        code: 1,
+        codingIssueOption: -1,
+        score: 1,
+        notes: null,
+        supervisorComment: null,
+        codedAt: new Date('2026-05-18T00:00:00.000Z')
+      }
+    ]);
+
+    const result = await service.getCodedVariablesForKappa(
+      workspaceId,
+      false,
+      [],
+      [60],
+      [],
+      'code'
+    );
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        responseId: 11,
+        coderResults: [
+          expect.objectContaining({ coderId: 1, code: 1, score: 1 })
+        ]
+      })
+    ]);
   });
 
   it('deduplicates kappa rows by score availability when score-level kappa data is loaded', async () => {
@@ -1405,217 +1700,6 @@ describe('CodingReviewService', () => {
     expect(queryBuilder.setParameter).toHaveBeenCalledWith('kappaCoderTrainingIds', [21]);
   });
 
-  it('applies an explicit replay code with the score derived from the coding scheme', async () => {
-    codingJobService.getCodingSchemeScoreForUnitCode.mockResolvedValueOnce(7);
-    const response = {
-      value: 'supervisor note\n\n--- ORIGINAL RESPONSE ---\noriginal answer',
-      status_v2: null,
-      code_v2: null,
-      score_v2: null
-    };
-    const sourceUnit = makeCodingJobUnit({
-      id: 77,
-      response_id: 10,
-      coding_job_id: 100,
-      code: 1,
-      score: 0,
-      supervisor_comment: 'old comment',
-      response
-    });
-    const clearCommentsQueryBuilder = {
-      innerJoin: jest.fn().mockReturnThis(),
-      select: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      andWhere: jest.fn().mockReturnThis(),
-      getRawMany: jest.fn().mockResolvedValue([{ id: 77 }])
-    };
-    const transactionalEntityManager = {
-      findOne: jest.fn().mockResolvedValue(sourceUnit),
-      save: jest.fn().mockResolvedValue(undefined),
-      update: jest.fn().mockResolvedValue(undefined),
-      getRepository: jest.fn().mockReturnValue({
-        createQueryBuilder: jest.fn().mockReturnValue(clearCommentsQueryBuilder)
-      })
-    };
-    const responseRepository = {
-      manager: {
-        transaction: jest.fn(async (callback: (manager: typeof transactionalEntityManager) => Promise<void>) => (
-          callback(transactionalEntityManager)
-        ))
-      }
-    };
-    const codingStatisticsService = {
-      invalidateCache: jest.fn().mockResolvedValue(undefined)
-    };
-    const codingAnalysisService = {
-      invalidateCache: jest.fn().mockResolvedValue(undefined)
-    };
-    const codingValidationService = {
-      invalidateIncompleteVariablesCache: jest.fn().mockResolvedValue(undefined)
-    };
-    const localService = new CodingReviewService(
-      responseRepository as never,
-      codingJobUnitRepository as never,
-      jobDefinitionRepository as never,
-      variableBundleRepository as never,
-      codingStatisticsService as never,
-      codingAnalysisService as never,
-      codingValidationService as never,
-      {
-        resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
-      } as never,
-      codingJobService as never
-    );
-
-    const result = await localService.applyDoubleCodedResolutions(workspaceId, [{
-      responseId: 10,
-      code: 3,
-      score: 999,
-      resolutionComment: 'Replay checked'
-    }]);
-
-    expect(transactionalEntityManager.findOne).toHaveBeenCalledWith(
-      expect.any(Function),
-      expect.objectContaining({
-        where: {
-          response_id: 10,
-          coding_job: { workspace_id: workspaceId }
-        },
-        relations: ['response', 'coding_job'],
-        order: {
-          id: 'ASC'
-        }
-      })
-    );
-    expect(codingJobService.getCodingSchemeScoreForUnitCode).toHaveBeenCalledWith(
-      sourceUnit,
-      workspaceId,
-      3
-    );
-    expect(sourceUnit.supervisor_comment).toBe('Replay checked');
-    expect(response.code_v2).toBe(3);
-    expect(response.score_v2).toBe(7);
-    expect(response.value).toBe('original answer');
-    expect(transactionalEntityManager.update).toHaveBeenCalled();
-    expect(transactionalEntityManager.save).toHaveBeenCalledWith(
-      expect.any(Function),
-      sourceUnit
-    );
-    expect(transactionalEntityManager.save).toHaveBeenCalledWith(
-      expect.any(Function),
-      response
-    );
-    expect(result).toMatchObject({
-      success: true,
-      appliedCount: 1,
-      failedCount: 0,
-      skippedCount: 0
-    });
-    expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
-    expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(workspaceId);
-    expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
-  });
-
-  it('skips explicit replay decisions with codes unsupported by the coding scheme', async () => {
-    const sourceUnit = makeCodingJobUnit({
-      response_id: 10,
-      coding_job_id: 100
-    });
-    const transactionalEntityManager = {
-      findOne: jest.fn().mockResolvedValue(sourceUnit),
-      save: jest.fn(),
-      update: jest.fn(),
-      getRepository: jest.fn()
-    };
-    const responseRepository = {
-      manager: {
-        transaction: jest.fn(async (callback: (manager: typeof transactionalEntityManager) => Promise<void>) => (
-          callback(transactionalEntityManager)
-        ))
-      }
-    };
-    codingJobService.getCodingSchemeScoreForUnitCode.mockRejectedValueOnce(new Error('Unsupported code'));
-    const localService = new CodingReviewService(
-      responseRepository as never,
-      codingJobUnitRepository as never,
-      jobDefinitionRepository as never,
-      variableBundleRepository as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {
-        resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
-      } as never,
-      codingJobService as never
-    );
-
-    const result = await localService.applyDoubleCodedResolutions(workspaceId, [{
-      responseId: 10,
-      code: 999,
-      score: 1
-    }]);
-
-    expect(codingJobService.getCodingSchemeScoreForUnitCode).toHaveBeenCalledWith(
-      sourceUnit,
-      workspaceId,
-      999
-    );
-    expect(transactionalEntityManager.save).not.toHaveBeenCalled();
-    expect(transactionalEntityManager.update).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      success: false,
-      appliedCount: 0,
-      failedCount: 0,
-      skippedCount: 1
-    });
-  });
-
-  it('skips explicit replay decisions with invalid code or score values', async () => {
-    const transactionalEntityManager = {
-      findOne: jest.fn(),
-      save: jest.fn(),
-      update: jest.fn(),
-      getRepository: jest.fn()
-    };
-    const responseRepository = {
-      manager: {
-        transaction: jest.fn(async (callback: (manager: typeof transactionalEntityManager) => Promise<void>) => (
-          callback(transactionalEntityManager)
-        ))
-      }
-    };
-    const localService = new CodingReviewService(
-      responseRepository as never,
-      codingJobUnitRepository as never,
-      jobDefinitionRepository as never,
-      variableBundleRepository as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {
-        resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
-      } as never,
-      codingJobService as never
-    );
-
-    const result = await localService.applyDoubleCodedResolutions(workspaceId, [
-      { responseId: 10, code: '' },
-      { responseId: 11, code: 1, score: ' ' },
-      { responseId: 12, code: true },
-      { responseId: 13, code: 1, score: [2] },
-      { responseId: 14, selectedJobId: true }
-    ] as never);
-
-    expect(transactionalEntityManager.findOne).not.toHaveBeenCalled();
-    expect(transactionalEntityManager.save).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      success: false,
-      appliedCount: 0,
-      failedCount: 0,
-      skippedCount: 5
-    });
-  });
-
   it('returns an empty workspace kappa summary for a single selected coder', async () => {
     const getDoubleCodedVariablesForReviewSpy = jest.spyOn(
       service,
@@ -1655,24 +1739,24 @@ describe('CodingReviewService', () => {
           coder2Name: 'Coder 32',
           kappa: 1,
           agreement: 1,
-          totalSharedResponses: 1,
+          totalItems: 1,
           validPairs: 1,
           interpretation: 'Sehr gut'
         }
-      ])
+      ]),
+      roundKappaCalculationResult: jest.fn(result => result)
     };
-    service = new CodingReviewService(
-      {} as never,
+    service = new DoubleCodingReviewQueryService(
       codingJobUnitRepository as never,
       jobDefinitionRepository as never,
       variableBundleRepository as never,
       codingStatisticsService as never,
-      {} as never,
-      {} as never,
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
       } as never,
-      codingJobService as never
+      codingJobService as never,
+      defaultMissingsProfilesService as never,
+      reviewDecisionRepository as never
     );
     const getDoubleCodedVariablesForReviewSpy = jest
       .spyOn(service, 'getDoubleCodedVariablesForReview')
@@ -1680,6 +1764,7 @@ describe('CodingReviewService', () => {
         data: [
           {
             responseId: 10,
+            sourceUnitId: 1,
             unitName: 'UNIT_1',
             variableId: 'VAR_1',
             personLogin: 'person-1',
@@ -1691,6 +1776,9 @@ describe('CodingReviewService', () => {
             appliedCode: null,
             appliedScore: null,
             appliedComment: null,
+            availableCodes: [],
+            managerDrafts: [],
+            managerHistory: [],
             coderResults: [
               {
                 coderId: 31,
@@ -1705,7 +1793,7 @@ describe('CodingReviewService', () => {
                 score: 1,
                 notes: null,
                 supervisorComment: null,
-                codedAt: new Date('2026-05-18T00:00:00.000Z')
+                codedAt: '2026-05-18T00:00:00.000Z'
               },
               {
                 coderId: 32,
@@ -1720,7 +1808,7 @@ describe('CodingReviewService', () => {
                 score: 1,
                 notes: null,
                 supervisorComment: null,
-                codedAt: new Date('2026-05-18T00:00:00.000Z')
+                codedAt: '2026-05-18T00:00:00.000Z'
               },
               {
                 coderId: 33,
@@ -1735,7 +1823,7 @@ describe('CodingReviewService', () => {
                 score: 1,
                 notes: null,
                 supervisorComment: null,
-                codedAt: new Date('2026-05-18T00:00:00.000Z')
+                codedAt: '2026-05-18T00:00:00.000Z'
               }
             ]
           }
@@ -1756,18 +1844,15 @@ describe('CodingReviewService', () => {
 
     expect(getDoubleCodedVariablesForReviewSpy).toHaveBeenCalledWith(
       workspaceId,
-      1,
-      1000,
-      false,
-      true,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      [],
-      [],
-      false
+      {
+        page: 1,
+        limit: 1000,
+        onlyConflicts: false,
+        excludeTrainings: true,
+        jobDefinitionIds: [],
+        coderTrainingIds: [],
+        includeRelations: false
+      }
     );
     expect(codingStatisticsService.calculateCohensKappa).toHaveBeenCalledWith([
       expect.objectContaining({

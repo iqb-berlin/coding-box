@@ -10,3 +10,4 @@ export * from './response-management.service';
 export * from './variable-analysis-replay.service';
 export * from './variable-analysis.service';
 export * from './replay-statistics.service';
+export * from './replay-resource-not-found.error';

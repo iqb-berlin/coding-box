@@ -14,6 +14,7 @@ import { JobDefinition } from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
+import { CodingAggregationPeerService } from './coding-aggregation-peer.service';
 
 jest.mock('../workspace/workspace-files.service', () => ({
   WorkspaceFilesService: class {}
@@ -42,6 +43,7 @@ const createQueryBuilder = (result: unknown = []) => {
     'innerJoinAndSelect',
     'where',
     'andWhere',
+    'distinct',
     'groupBy',
     'addGroupBy',
     'orderBy',
@@ -259,6 +261,7 @@ describe('CodingJobService', () => {
       workspaceFilesService as never,
       workspaceExclusionService as never,
       usersService as never,
+      new CodingAggregationPeerService(responseRepository as never),
       codingFreshnessService as never,
       codingFileCacheService as never,
       missingsProfilesService as never,
@@ -528,7 +531,7 @@ describe('CodingJobService', () => {
         {
           id: 123,
           variableid: 'VAR',
-          unitName: 'UNIT',
+          unitName: 'unit',
           unitAlias: 'ALIAS',
           bookletName: 'BOOKLET',
           personLogin: 'coder-login',
@@ -1761,10 +1764,10 @@ describe('CodingJobService', () => {
       'coding_incomplete_variables_version:7'
     );
     expect(cacheService.delete).toHaveBeenCalledWith(
-      'coding_incomplete_variables_v8:7'
+      'coding_incomplete_variables_v9:7'
     );
     expect(cacheService.delete).toHaveBeenCalledWith(
-      'coding_incomplete_variables_scope_v1:7'
+      'coding_incomplete_variables_scope_v2:7'
     );
   });
 
@@ -2276,6 +2279,192 @@ describe('CodingJobService', () => {
     ).resolves.toEqual([]);
 
     expectManualCodingCandidateStatusFilter(qb);
+    expect(qb.addSelect).toHaveBeenCalledWith(
+      'response.status_v2',
+      'statusV2'
+    );
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      '((UPPER(unit.name) = UPPER(:slimUnitName0) AND response.variableid = :slimVariableId0))',
+      {
+        slimUnitName0: 'UNIT',
+        slimVariableId0: 'VAR'
+      }
+    );
+  });
+
+  it('matches assigned responses across unit-name case variants', async () => {
+    const qb = createQueryBuilder([{ responseId: '42' }]);
+    codingJobUnitRepository.createQueryBuilder.mockReturnValue(qb);
+
+    const result = await (
+      service as unknown as {
+        getAssignedResponseIdsForVariables: (
+          workspaceId: number,
+          variables: Array<{ unitName: string; variableId: string }>
+        ) => Promise<Set<number>>;
+      }
+    ).getAssignedResponseIdsForVariables(3, [
+      { unitName: 'Unit', variableId: 'VAR' }
+    ]);
+
+    expect(result).toEqual(new Set([42]));
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      '((UPPER(cju.unit_name) = UPPER(:assignedUnitName0) AND cju.variable_id = :assignedVariableId0))',
+      {
+        assignedUnitName0: 'Unit',
+        assignedVariableId0: 'VAR'
+      }
+    );
+  });
+
+  it('loads completed aggregation peers only for normalized active response values', async () => {
+    const activeQuery = createQueryBuilder([
+      {
+        id: '2',
+        variableid: 'VAR',
+        value: 'Same\u00a0answer',
+        statusV1: statusStringToNumber('CODING_INCOMPLETE'),
+        statusV2: null,
+        unitName: 'UNIT',
+        unitAlias: null,
+        bookletName: 'BOOKLET',
+        personLogin: 'person-2',
+        personCode: 'code-2',
+        personGroup: 'group'
+      }
+    ]);
+    const peerQuery = createQueryBuilder([
+      {
+        id: '1',
+        variableid: 'VAR',
+        value: ' sameanswer ',
+        statusV1: statusStringToNumber('CODING_INCOMPLETE'),
+        statusV2: statusStringToNumber('CODING_COMPLETE'),
+        unitName: 'UNIT',
+        unitAlias: null,
+        bookletName: 'BOOKLET',
+        personLogin: 'person-1',
+        personCode: 'code-1',
+        personGroup: 'group'
+      },
+      {
+        id: '3',
+        variableid: 'VAR',
+        value: 'Different answer',
+        statusV1: statusStringToNumber('CODING_INCOMPLETE'),
+        statusV2: statusStringToNumber('CODING_COMPLETE'),
+        unitName: 'UNIT',
+        unitAlias: null,
+        bookletName: 'BOOKLET',
+        personLogin: 'person-3',
+        personCode: 'code-3',
+        personGroup: 'group'
+      }
+    ]);
+    const peerValueQuery = createQueryBuilder([
+      { unitName: 'UNIT', variableId: 'VAR', value: ' sameanswer ' },
+      { unitName: 'Unit', variableId: 'VAR', value: 'Same answer' }
+    ]);
+    responseRepository.createQueryBuilder
+      .mockReturnValueOnce(activeQuery)
+      .mockReturnValueOnce(peerValueQuery)
+      .mockReturnValueOnce(peerQuery);
+
+    const result = await service.getSlimResponsesForVariableCoverage(
+      3,
+      [{ unitName: 'UNIT', variableId: 'VAR' }],
+      [ResponseMatchingFlag.IGNORE_CASE, ResponseMatchingFlag.IGNORE_WHITESPACE],
+      2,
+      new Map()
+    );
+
+    expect(result.map(response => response.id)).toEqual([2, 1]);
+    expect(peerQuery.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('jsonb_to_recordset'),
+      expect.objectContaining({
+        aggregationPeerKeys: expect.stringContaining('sameanswer')
+      })
+    );
+    expect(peerValueQuery.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('aggregation_peer_variable'),
+      {
+        aggregationPeerVariables: JSON.stringify([
+          { unitName: 'UNIT', variableId: 'VAR' }
+        ])
+      }
+    );
+    expect(peerQuery.andWhere).toHaveBeenCalledWith(
+      'response.status_v2 = :completedV2Status',
+      { completedV2Status: statusStringToNumber('CODING_COMPLETE') }
+    );
+    expect(peerQuery.andWhere).toHaveBeenCalledWith(
+      '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
+      { aggregatedCode: -111, defaultMirCode: 99 }
+    );
+    const peerLookupCondition = peerQuery.andWhere.mock.calls.find(
+      ([condition]) => typeof condition === 'string' &&
+        condition.includes('jsonb_to_recordset')
+    )?.[0] as string;
+    expect(peerLookupCondition).toContain(
+      'aggregation_peer."value" = response.value'
+    );
+    expect(peerLookupCondition).not.toContain('UPPER(unit.name)');
+    expect(peerLookupCondition).toContain(
+      'aggregation_peer."unitName" = unit.name'
+    );
+    expect(peerQuery.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('jsonb_to_recordset'),
+      expect.objectContaining({
+        aggregationPeerKeys: expect.stringContaining('"unitName":"Unit"')
+      })
+    );
+  });
+
+  it('filters completed aggregation peers by value in SQL for exact matching', async () => {
+    const activeQuery = createQueryBuilder([{
+      id: '2',
+      variableid: 'VAR',
+      value: 'exact answer',
+      statusV1: statusStringToNumber('CODING_INCOMPLETE'),
+      statusV2: null,
+      unitName: 'UNIT',
+      unitAlias: null,
+      bookletName: 'BOOKLET',
+      personLogin: 'person-2',
+      personCode: 'code-2',
+      personGroup: 'group'
+    }]);
+    const peerValueQuery = createQueryBuilder([
+      { unitName: 'UNIT', variableId: 'VAR', value: 'exact answer' }
+    ]);
+    const peerQuery = createQueryBuilder([]);
+    responseRepository.createQueryBuilder
+      .mockReturnValueOnce(activeQuery)
+      .mockReturnValueOnce(peerValueQuery)
+      .mockReturnValueOnce(peerQuery);
+
+    await service.getSlimResponsesForVariableCoverage(
+      3,
+      [{ unitName: 'UNIT', variableId: 'VAR' }],
+      [],
+      2,
+      new Map()
+    );
+
+    const peerLookupCondition = peerQuery.andWhere.mock.calls.find(
+      ([condition]) => typeof condition === 'string' &&
+        condition.includes('jsonb_to_recordset')
+    )?.[0] as string;
+    expect(peerLookupCondition).toContain(
+      'aggregation_peer."value" = response.value'
+    );
+    const peerValueCondition = peerValueQuery.andWhere.mock.calls.find(
+      ([condition]) => typeof condition === 'string' &&
+        condition.includes('aggregation_peer_value')
+    )?.[0] as string;
+    expect(peerValueCondition).toContain(
+      'aggregation_peer_value."normalizedValue" = response.value'
+    );
   });
 
   it('includes DERIVE_ERROR responses for job-definition variables that opt into manual coding', async () => {
@@ -2285,7 +2474,7 @@ describe('CodingJobService', () => {
     await expect(
       service.getResponsesForVariables(3, [
         {
-          unitName: 'UNIT',
+          unitName: 'Unit',
           variableId: 'VAR',
           includeDeriveError: true
         }
@@ -2313,7 +2502,7 @@ describe('CodingJobService', () => {
       }
     );
     expect(bracketBuilder.orWhere).toHaveBeenCalledWith(
-      expect.stringContaining('response.status_v1 = :deriveErrorStatus'),
+      expect.stringContaining('CONCAT(UPPER(unit.name), CHR(31), response.variableid)'),
       {
         deriveErrorStatus: statusStringToNumber('DERIVE_ERROR'),
         deriveErrorManualCodingPairKeys: ['UNIT\u001FVAR']
@@ -3277,6 +3466,36 @@ describe('CodingJobService', () => {
       expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
     }
   );
+
+  it('rejects review codes without visible manual instructions', async () => {
+    const unit = {
+      unit_name: 'UNIT',
+      unit_alias: 'ALIAS',
+      variable_id: 'VAR'
+    };
+    mockCodingScheme({
+      codeId: 7,
+      score: 2,
+      manualInstruction: '<p style="min-height: 1em"></p>'
+    });
+
+    await expect(
+      service.getSelectableReviewCodeForUnit(unit as CodingJobUnit, 3, 7)
+    ).rejects.toThrow('Code is not available for manual review: 7');
+  });
+
+  it('returns the server-derived score for a manually selectable review code', async () => {
+    const unit = {
+      unit_name: 'UNIT',
+      unit_alias: 'ALIAS',
+      variable_id: 'VAR'
+    };
+    mockCodingScheme({ codeId: 7, score: 2, manualInstruction: '<p>Review</p>' });
+
+    await expect(
+      service.getSelectableReviewCodeForUnit(unit as CodingJobUnit, 3, 7)
+    ).resolves.toEqual({ code: 7, label: 'Code 7', score: 2 });
+  });
 
   it('uses the coding scheme score instead of a client-provided score', async () => {
     const job = { id: 1, workspace_id: 3 };
@@ -4561,6 +4780,93 @@ describe('CodingJobService', () => {
     }
   });
 
+  it('builds a replay session from one visible-unit scan without peer lookup', async () => {
+    const createUnit = (
+      responseId: number,
+      personLogin: string,
+      isOpen: boolean,
+      code: number | null,
+      notes: string | null
+    ) => ({
+      response_id: responseId,
+      coding_job_id: 10,
+      unit_name: 'UNIT',
+      unit_alias: 'ALIAS',
+      variable_id: 'VAR',
+      variable_anchor: 'VAR',
+      booklet_name: 'BOOKLET',
+      person_login: personLogin,
+      person_code: 'code',
+      person_group: 'group',
+      notes,
+      variable_bundle_id: null,
+      code,
+      score: code === null ? null : 2,
+      is_open: isOpen,
+      coding_issue_option: null
+    });
+    codingJobRepository.findOne.mockResolvedValue({
+      id: 10,
+      workspace_id: 3,
+      status: 'active',
+      comment: 'Training',
+      showScore: true,
+      allowComments: false,
+      suppressGeneralInstructions: true,
+      job_type: 'regular',
+      case_ordering_mode: 'continuous'
+    });
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+    codingJobUnitRepository.find.mockResolvedValue([
+      createUnit(1, 'open', true, null, null),
+      createUnit(2, 'coded-a', false, 7, 'First note'),
+      createUnit(3, 'coded-b', false, 7, 'Second note')
+    ]);
+    codingFileCacheService.getVariablePageMap.mockResolvedValue(
+      new Map([['VAR', '0']])
+    );
+    mockCodingScheme();
+    const extractCodingSchemeRefSpy = jest.spyOn(
+      service as unknown as {
+        extractCodingSchemeRef: (
+          unitFile: { file_id: string; data: unknown }
+        ) => string | null;
+      },
+      'extractCodingSchemeRef'
+    );
+
+    const result = await service.getCodingJobReplaySession(10, 3, true);
+
+    expect(codingJobUnitRepository.find).toHaveBeenCalledTimes(1);
+    expect(codingJobUnitRepository.find).toHaveBeenCalledWith({
+      where: { coding_job_id: 10 }
+    });
+    expect(result.units).toHaveLength(1);
+    expect(result.units[0]).toMatchObject({
+      responseId: 1,
+      personLogin: 'open',
+      variablePage: '0'
+    });
+    expect(result.units[0]).not.toHaveProperty('otherCoders');
+    expect(result.units[0]).not.toHaveProperty('isDoubleCoded');
+    expect(Object.values(result.progress).filter(entry => entry?.id === 7))
+      .toHaveLength(2);
+    expect(Object.values(result.notes)).toEqual([
+      'First note',
+      'Second note'
+    ]);
+    expect(result.job).toEqual({
+      status: 'active',
+      comment: 'Training',
+      showScore: true,
+      allowComments: false,
+      suppressGeneralInstructions: true
+    });
+    expect(extractCodingSchemeRefSpy).toHaveBeenCalledTimes(1);
+    expect(fileUploadRepository.find).toHaveBeenCalledTimes(2);
+    expect(result.serverTimings.totalMs).toEqual(expect.any(Number));
+  });
+
   it('filters current coder and unrelated scopes from double-coding markers', async () => {
     codingJobRepository.findOne.mockResolvedValue({
       id: 10,
@@ -4673,7 +4979,151 @@ describe('CodingJobService', () => {
     });
   });
 
-  it('uses all visible bundle units for bundle context when only open units are returned', async () => {
+  it('prefers a prepared response result over an open bundle job unit', () => {
+    const resolveStatus = (
+      service as unknown as {
+        getCodingJobBundleVariableStatus: (
+          response: ResponseEntity,
+          manualUnit: CodingJobUnit
+        ) => {
+          status: string;
+          code: number | null;
+          score: number | null;
+          source: string;
+        };
+      }
+    ).getCodingJobBundleVariableStatus.bind(service);
+    const response = {
+      code_v1: null,
+      score_v1: null,
+      code_v2: -98,
+      score_v2: 0,
+      code_v3: null,
+      score_v3: null,
+      is_autocoder_generated: false
+    } as ResponseEntity;
+
+    expect(resolveStatus(response, {
+      code: null,
+      score: null,
+      is_open: true
+    } as CodingJobUnit)).toEqual({
+      status: 'auto-coded',
+      code: -98,
+      score: 0,
+      source: 'auto'
+    });
+  });
+
+  it('keeps a manual bundle decision authoritative over a response result', () => {
+    const resolveStatus = (
+      service as unknown as {
+        getCodingJobBundleVariableStatus: (
+          response: ResponseEntity,
+          manualUnit: CodingJobUnit
+        ) => {
+          status: string;
+          code: number | null;
+          score: number | null;
+          source: string;
+        };
+      }
+    ).getCodingJobBundleVariableStatus.bind(service);
+    const response = {
+      code_v1: null,
+      score_v1: null,
+      code_v2: -98,
+      score_v2: 0,
+      code_v3: null,
+      score_v3: null,
+      is_autocoder_generated: false
+    } as ResponseEntity;
+
+    expect(resolveStatus(response, {
+      code: 7,
+      score: 2,
+      is_open: false
+    } as CodingJobUnit)).toEqual({
+      status: 'manual-coded',
+      code: 7,
+      score: 2,
+      source: 'manual'
+    });
+  });
+
+  it('builds response targets only from the bundle assigned to each case', () => {
+    const buildTargets = (
+      service as unknown as {
+        getCodingJobBundleTargets: (
+          units: CodingJobUnit[],
+          variableBundles: Map<number, VariableBundle>
+        ) => Array<{
+          login: string;
+          code: string;
+          person_group: string;
+          booklet_name: string;
+          unit_name: string;
+          variable_id: string;
+        }>;
+      }
+    ).getCodingJobBundleTargets.bind(service);
+    const firstCase = {
+      person_login: 'login-a',
+      person_code: 'code-a',
+      person_group: 'group-a',
+      booklet_name: 'booklet-a',
+      variable_bundle_id: 9
+    } as CodingJobUnit;
+    const secondCase = {
+      person_login: 'login-b',
+      person_code: 'code-b',
+      person_group: 'group-b',
+      booklet_name: 'booklet-b',
+      variable_bundle_id: 10
+    } as CodingJobUnit;
+    const firstBundleVariables = [{
+      unitName: 'unit-a',
+      variableId: 'VAR_A'
+    }];
+    const firstBundleVariablesGetter = jest.fn(() => firstBundleVariables);
+    const variableBundles = new Map<number, VariableBundle>([
+      [9, {
+        id: 9,
+        get variables() {
+          return firstBundleVariablesGetter();
+        }
+      } as VariableBundle],
+      [10, {
+        id: 10,
+        variables: [{ unitName: 'unit-b', variableId: 'VAR_B' }]
+      } as VariableBundle]
+    ]);
+
+    expect(buildTargets(
+      [firstCase, firstCase, secondCase],
+      variableBundles
+    )).toEqual([
+      {
+        login: 'login-a',
+        code: 'code-a',
+        person_group: 'group-a',
+        booklet_name: 'booklet-a',
+        unit_name: 'UNIT-A',
+        variable_id: 'VAR_A'
+      },
+      {
+        login: 'login-b',
+        code: 'code-b',
+        person_group: 'group-b',
+        booklet_name: 'booklet-b',
+        unit_name: 'UNIT-B',
+        variable_id: 'VAR_B'
+      }
+    ]);
+    expect(firstBundleVariablesGetter).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses all visible bundle units and prepared results for bundle context', async () => {
     const openUnit = {
       response_id: 99,
       unit_name: 'UNIT_A',
@@ -4705,6 +5155,22 @@ describe('CodingJobService', () => {
       code: 7,
       score: 2,
       is_open: false
+    };
+    const preparedBundleUnit = {
+      response_id: 102,
+      unit_name: 'UNIT_C',
+      unit_alias: 'Unit C',
+      variable_id: 'VAR_C',
+      variable_anchor: 'VAR_C',
+      booklet_name: 'BOOKLET',
+      person_login: 'login',
+      person_code: 'code',
+      person_group: 'group',
+      notes: null,
+      variable_bundle_id: 9,
+      code: null,
+      score: null,
+      is_open: true
     };
     const responseQueryBuilder: Record<string, jest.Mock> = {};
     [
@@ -4752,6 +5218,45 @@ describe('CodingJobService', () => {
             person: { login: 'login', code: 'code', group: 'group' }
           }
         }
+      },
+      {
+        id: 101,
+        variableid: 'VAR_A',
+        is_autocoder_generated: false,
+        status_v1: null,
+        code_v1: null,
+        score_v1: null,
+        code_v2: null,
+        score_v2: null,
+        code_v3: null,
+        score_v3: null,
+        unit: {
+          name: 'unit_a',
+          booklet: {
+            bookletinfo: { name: 'BOOKLET' },
+            person: { login: 'login', code: 'code', group: 'group' }
+          }
+        }
+      },
+      {
+        id: 102,
+        variableid: 'VAR_C',
+        is_autocoder_generated: false,
+        status_v1: 3,
+        code_v1: null,
+        score_v1: null,
+        status_v2: 5,
+        code_v2: -98,
+        score_v2: 0,
+        code_v3: null,
+        score_v3: null,
+        unit: {
+          name: 'UNIT_C',
+          booklet: {
+            bookletinfo: { name: 'BOOKLET' },
+            person: { login: 'login', code: 'code', group: 'group' }
+          }
+        }
       }
     ]);
 
@@ -4775,29 +5280,38 @@ describe('CodingJobService', () => {
         workspace_id: 3,
         name: 'Bundle',
         variables: [
-          { unitName: 'UNIT_A', variableId: 'VAR_A' },
-          { unitName: 'UNIT_B', variableId: 'VAR_B' }
+          { unitName: 'unit_a', variableId: 'VAR_A' },
+          { unitName: 'UNIT_B', variableId: 'VAR_B' },
+          { unitName: 'UNIT_C', variableId: 'VAR_C' }
         ]
       }
     ]);
     codingJobUnitRepository.find
-      .mockResolvedValueOnce([openUnit])
-      .mockResolvedValueOnce([openUnit, closedBundleUnit])
+      .mockResolvedValueOnce([
+        openUnit,
+        closedBundleUnit,
+        preparedBundleUnit
+      ])
       .mockResolvedValueOnce([]);
     responseRepository.createQueryBuilder.mockReturnValue(responseQueryBuilder);
-    codingFileCacheService.getVariablePageMap.mockImplementation(async (unitName: string) => new Map([
-      [unitName === 'UNIT_A' ? 'VAR_A' : 'VAR_B', unitName === 'UNIT_A' ? '0' : '1']
-    ]));
+    codingFileCacheService.getVariablePageMap.mockImplementation(async (unitName: string) => {
+      const variableId = unitName.replace('UNIT_', 'VAR_');
+      const pageByUnit: Record<string, string> = {
+        UNIT_A: '0',
+        UNIT_B: '1',
+        UNIT_C: '2'
+      };
+      return new Map([[variableId, pageByUnit[unitName]]]);
+    });
 
     const result = await service.getCodingJobUnits(10, true);
 
-    expect(result).toHaveLength(1);
-    expect(codingJobUnitRepository.find).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        where: { coding_job_id: 10 }
-      })
-    );
+    expect(result).toHaveLength(2);
+    expect(codingJobUnitRepository.find).toHaveBeenCalledTimes(2);
+    expect(codingJobUnitRepository.find).toHaveBeenNthCalledWith(1, {
+      where: { coding_job_id: 10 },
+      select: expect.any(Array)
+    });
     expect(result[0].bundleContext?.caseKey).toBe('login\u0000code\u0000group\u0000BOOKLET');
     expect(result[0].bundleContext?.variables).toEqual([
       expect.objectContaining({
@@ -4816,6 +5330,16 @@ describe('CodingJobService', () => {
         score: 2,
         source: 'manual',
         variablePage: '1'
+      }),
+      expect.objectContaining({
+        responseId: 102,
+        unitName: 'UNIT_C',
+        variableId: 'VAR_C',
+        status: 'auto-coded',
+        code: -98,
+        score: 0,
+        source: 'auto',
+        variablePage: '2'
       })
     ]);
   });

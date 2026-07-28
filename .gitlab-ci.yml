@@ -12,11 +12,13 @@ stages:
   - test
   - test-db
   - test-units
+  - test-replay
   - lint
   - audit
   - scan-dependencies
   - build-images
   - scan-images
+  - publish-images
 
 image: ${DOCKER_HUB_PROXY}${BASE_IMAGE}
 

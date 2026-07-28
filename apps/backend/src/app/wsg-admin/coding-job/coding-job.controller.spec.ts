@@ -17,6 +17,7 @@ describe('WsgCodingJobController', () => {
     getCodingJobs: jest.Mock;
     getCodingJob: jest.Mock;
     getCodingJobUnits: jest.Mock;
+    getCodingJobReplaySession: jest.Mock;
     getBulkCodingProgress: jest.Mock;
     createCodingJob: jest.Mock;
     updateCodingJob: jest.Mock;
@@ -54,6 +55,19 @@ describe('WsgCodingJobController', () => {
       }),
       getCodingJob: jest.fn().mockResolvedValue({ codingJob: { id: 123 } }),
       getCodingJobUnits: jest.fn().mockResolvedValue([]),
+      getCodingJobReplaySession: jest.fn().mockResolvedValue({
+        units: [],
+        progress: {},
+        notes: {},
+        job: {
+          status: 'active',
+          comment: null,
+          showScore: false,
+          allowComments: true,
+          suppressGeneralInstructions: false
+        },
+        serverTimings: {}
+      }),
       getBulkCodingProgress: jest.fn().mockResolvedValue({}),
       createCodingJob: jest.fn().mockResolvedValue({ id: 124 }),
       updateCodingJob: jest.fn(),
@@ -104,7 +118,8 @@ describe('WsgCodingJobController', () => {
   it.each([
     'pauseCodingJob',
     'resumeCodingJob',
-    'submitCodingJob'
+    'submitCodingJob',
+    'getCodingJobReplaySession'
   ] as const)('uses coder access guards for %s', methodName => {
     const handler = WsgCodingJobController.prototype[methodName];
 
@@ -131,6 +146,55 @@ describe('WsgCodingJobController', () => {
     await controller.getCodingJobUnits(47, 123, req);
 
     expect(codingJobService.getCodingJobUnits).toHaveBeenCalledWith(123, false);
+  });
+
+  it('starts a replay session after one coding-job access check', async () => {
+    const result = await controller.getCodingJobReplaySession(
+      47,
+      123,
+      req,
+      'true'
+    );
+
+    expect(codingJobService.assertUserCanAccessCodingJob).toHaveBeenCalledWith(
+      123,
+      47,
+      5
+    );
+    expect(codingJobService.getCodingJobReplaySession).toHaveBeenCalledWith(
+      123,
+      47,
+      true
+    );
+    expect(codingJobService.getCodingJob).not.toHaveBeenCalled();
+    expect(result.job.status).toBe('active');
+  });
+
+  it('documents the replay-session response body in OpenAPI', () => {
+    const handler = WsgCodingJobController.prototype.getCodingJobReplaySession;
+    const responses = Reflect.getMetadata(
+      'swagger/apiResponse',
+      handler
+    ) as Record<string, { schema?: Record<string, unknown> }>;
+    const schema = responses['200']?.schema as {
+      required?: string[];
+      properties?: Record<string, unknown>;
+    };
+
+    expect(schema.required).toEqual([
+      'units',
+      'progress',
+      'notes',
+      'job',
+      'serverTimings'
+    ]);
+    expect(schema.properties).toEqual(expect.objectContaining({
+      units: expect.any(Object),
+      progress: expect.any(Object),
+      notes: expect.any(Object),
+      job: expect.any(Object),
+      serverTimings: expect.any(Object)
+    }));
   });
 
   it('changes completed jobs back to active when starting them again', async () => {

@@ -1,0 +1,41 @@
+.diagnostic-filters,
+.diagnostic-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.diagnostic-filters mat-form-field {
+  flex: 1 1 280px;
+}
+
+.diagnostic-toolbar {
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+}
+
+dt {
+  font-weight: 600;
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.suggested-action {
+  margin-bottom: 0;
+}
+
+.empty {
+  text-align: center;
+  color: #666;
+  padding: 24px;
+}

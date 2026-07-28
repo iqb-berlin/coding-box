@@ -27,6 +27,10 @@ export function isCodingResponseCandidateByPattern(
   return hasCodingResponseValue(value) && isCodingVariableIdCandidate(variableId);
 }
 
+export function getCodingResponseValueCandidateSql(alias: string): string {
+  return `${alias}.value IS NOT NULL AND ${alias}.value ~ '[^[:space:]]'`;
+}
+
 export function getCodingVariableIdCandidateSql(alias: string): string {
   return excludedCodingVariableFragments
     .map(fragment => {

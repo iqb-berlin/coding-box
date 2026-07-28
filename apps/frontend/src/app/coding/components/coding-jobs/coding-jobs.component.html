@@ -1,8 +1,8 @@
 <div class="fx-column-start-start fx-gap-10 container">
-  @if (isLoading) {
+  @if (isLoading && !hasLoadedJobs) {
     <mat-spinner></mat-spinner>
   }
-  @if (!isLoading) {
+  @if (hasLoadedJobs) {
     <div class="fx-row-center-center-stretch fx-gap-16 header-row">
       <div class="fx-row-center-center fx-gap-16 filters-row">
         <mat-form-field appearance="outline" class="filter-field">
@@ -121,6 +121,13 @@
         </div>
       </div>
     </div>
+
+    @if (isLoading) {
+      <div class="coding-jobs-refresh-indicator" aria-live="polite">
+        <mat-spinner diameter="20"></mat-spinner>
+        <span>{{ 'coding.jobs.refreshing' | translate }}</span>
+      </div>
+    }
 
     <mat-table
       [dataSource]="dataSource"

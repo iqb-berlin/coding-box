@@ -1,0 +1,33 @@
+<section
+  class="system-notification"
+  [class]="'system-notification severity-' + notification.severity"
+  role="status"
+  [attr.aria-label]="'system-notifications.banner-label' | translate">
+  <mat-icon aria-hidden="true">{{ icon() }}</mat-icon>
+  <div class="notification-content">
+    <strong>{{ notification.title }}</strong>
+    <span class="message">{{ notification.message }}</span>
+    @if (notification.startsAt || notification.endsAt) {
+      <span class="time-window">
+        @if (notification.startsAt) {
+          {{ notification.startsAt | date:'short' }}
+        }
+        @if (notification.startsAt && notification.endsAt) {
+          –
+        }
+        @if (notification.endsAt) {
+          {{ notification.endsAt | date:'short' }}
+        }
+      </span>
+    }
+  </div>
+  @if (notification.dismissible && !preview) {
+    <button
+      mat-icon-button
+      type="button"
+      (click)="dismissed.emit(notification)"
+      [attr.aria-label]="'system-notifications.dismiss' | translate">
+      <mat-icon>close</mat-icon>
+    </button>
+  }
+</section>

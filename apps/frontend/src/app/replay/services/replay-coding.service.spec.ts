@@ -5,6 +5,7 @@ import { of, Subject, throwError } from 'rxjs';
 import { CodingJobBackendService } from '../../coding/services/coding-job-backend.service';
 import { ReplayCodingService } from './replay-coding.service';
 import { CodingJob } from '../../coding/models/coding-job.model';
+import { CodingScheme } from '../../models/coding-interfaces';
 
 describe('ReplayCodingService', () => {
   let service: ReplayCodingService;
@@ -49,6 +50,40 @@ describe('ReplayCodingService', () => {
 
   it('should be created', () => {
     expect(service).toBeTruthy();
+  });
+
+  it('should reuse consecutively parsed standalone VOCS data', () => {
+    const vocsData = JSON.stringify({
+      id: 'scheme-1',
+      label: 'Scheme',
+      variableCodings: []
+    });
+
+    service.setCodingSchemeFromVocsData(vocsData);
+    const parsedCodingScheme = service.codingScheme;
+    service.setCodingSchemeFromVocsData(vocsData);
+
+    expect(service.codingScheme).toBe(parsedCodingScheme);
+
+    service.resetCodingData();
+    service.setCodingSchemeFromVocsData(vocsData);
+    expect(service.codingScheme).not.toBe(parsedCodingScheme);
+  });
+
+  it('should accept an asset-cache coding scheme without parsing its raw source', () => {
+    const parsedCodingScheme: CodingScheme = {
+      version: '1.0',
+      variableCodings: []
+    };
+    const parseSpy = jest.spyOn(JSON, 'parse');
+
+    service.setParsedCodingScheme(
+      parsedCodingScheme,
+      '{"version":"1.0","variableCodings":[]}'
+    );
+
+    expect(service.codingScheme).toBe(parsedCodingScheme);
+    expect(parseSpy).not.toHaveBeenCalled();
   });
 
   describe('updateCodingJobStatus', () => {
@@ -165,6 +200,56 @@ describe('ReplayCodingService', () => {
       codingJobBackendServiceMock.getCodingProgress.mockReturnValue(of({}));
       await service.loadSavedCodingProgress(1, 100);
       expect(service.selectedCodes.size).toBe(0);
+    });
+  });
+
+  describe('applyReplayCodingSession', () => {
+    it('applies progress, open markers, notes, and slim job metadata', () => {
+      service.applyReplayCodingSession({
+        units: [],
+        progress: {
+          coded: {
+            id: 7,
+            code: '7',
+            label: 'Code 7',
+            score: 2,
+            codingIssueOption: -1
+          },
+          'open-key:open': {
+            id: -1,
+            code: '',
+            label: 'OPEN'
+          }
+        },
+        notes: {
+          coded: 'Check this response'
+        },
+        job: {
+          status: 'review',
+          comment: 'Training hint',
+          showScore: true,
+          allowComments: false,
+          suppressGeneralInstructions: true
+        },
+        serverTimings: {
+          totalMs: 12
+        }
+      });
+
+      expect(service.selectedCodes.get('coded')).toEqual({
+        id: 7,
+        code: '7',
+        label: 'Code 7',
+        score: 2,
+        codingIssueOption: -1
+      });
+      expect(service.openUnitKeys).toContain('open-key');
+      expect(service.notes.get('coded')).toBe('Check this response');
+      expect(service.codingJobComment).toBe('Training hint');
+      expect(service.showScore).toBe(true);
+      expect(service.allowComments).toBe(false);
+      expect(service.suppressGeneralInstructions).toBe(true);
+      expect(service.isCompletedJobReview).toBe(true);
     });
   });
 
@@ -363,6 +448,31 @@ describe('ReplayCodingService', () => {
       await flushPromise;
 
       expect(didFlush).toBe(true);
+    });
+
+    it('reports a pending save for the affected coding unit', async () => {
+      const pendingSave = new Subject<CodingJob>();
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValueOnce(pendingSave.asObservable());
+      const unit = {
+        id: 1,
+        name: 'u1',
+        alias: null,
+        bookletId: 0,
+        testPerson: 'p1',
+        variableId: 'v1'
+      };
+
+      const savePromise = service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'one' });
+      await Promise.resolve();
+
+      expect(service.isUnitSavePending(unit)).toBe(true);
+
+      pendingSave.next({} as CodingJob);
+      pendingSave.complete();
+      await savePromise;
+      await Promise.resolve();
+
+      expect(service.isUnitSavePending(unit)).toBe(false);
     });
 
     it('rejects a flush when a pending row mutation fails', async () => {

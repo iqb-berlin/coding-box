@@ -79,6 +79,16 @@
   min-width: 0;
 }
 
+.coding-jobs-refresh-indicator {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 8px;
+  min-height: 28px;
+  color: #455a64;
+  font-size: 13px;
+}
+
 .button-create-coding-job {
   display: flex;
   align-items: center;

@@ -1,0 +1,35 @@
+.notifications-admin {
+  display: grid;
+  gap: 20px;
+  padding: 20px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.options,
+.actions {
+  display: flex;
+  gap: 16px;
+  margin: 8px 0 16px;
+}
+
+.form-error {
+  color: #f44336;
+}
+
+table {
+  width: 100%;
+}
+
+@media (max-width: 700px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .wide { grid-column: auto; }
+}

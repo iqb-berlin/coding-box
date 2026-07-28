@@ -580,6 +580,27 @@ describe('CodeSelectorComponent', () => {
     });
   });
 
+  it('clears the local selection when the coding case changes', () => {
+    component.codingScheme = mixedCodingScheme;
+    component.variableId = 'VAR1';
+    component.codingCaseKey = 'case-1';
+    component.ngOnChanges({
+      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
+      variableId: new SimpleChange(null, 'VAR1', false),
+      codingCaseKey: new SimpleChange('', 'case-1', true)
+    });
+    component.onSelect(1);
+
+    component.codingCaseKey = 'case-2';
+    component.ngOnChanges({
+      codingCaseKey: new SimpleChange('case-1', 'case-2', false)
+    });
+
+    expect(component.selectedCode).toBeNull();
+    expect(component.selectedCodingIssueOption).toBeNull();
+    expect(component.legacySelectedCode).toBeNull();
+  });
+
   it('nextUnit should navigate to immediate next case for interleaved variables', () => {
     component.unitsData = {
       ...interleavedUnitsData,
@@ -590,6 +611,51 @@ describe('CodeSelectorComponent', () => {
 
     component.nextUnit();
 
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
+  });
+
+  it('blocks nextUnit until the current selection has been saved', () => {
+    const isUnitCoded = jest.fn().mockReturnValue(false);
+    component.codingService = { isUnitCoded } as never;
+    component.unitsData = {
+      ...interleavedUnitsData,
+      currentUnitIndex: 0
+    };
+    component.selectedCode = 1;
+    const emitSpy = jest.spyOn(component.unitChanged, 'emit');
+
+    expect(component.hasNextUnit()).toBe(false);
+    component.nextUnit();
+    expect(emitSpy).not.toHaveBeenCalled();
+
+    isUnitCoded.mockReturnValue(true);
+
+    expect(component.hasNextUnit()).toBe(true);
+    component.nextUnit();
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
+  });
+
+  it('blocks nextUnit while an updated selection is still being saved', () => {
+    const isUnitSavePending = jest.fn().mockReturnValue(true);
+    component.codingService = {
+      isUnitCoded: jest.fn().mockReturnValue(true),
+      isUnitSavePending
+    } as never;
+    component.unitsData = {
+      ...interleavedUnitsData,
+      currentUnitIndex: 0
+    };
+    component.selectedCode = 1;
+    const emitSpy = jest.spyOn(component.unitChanged, 'emit');
+
+    expect(component.hasNextUnit()).toBe(false);
+    component.nextUnit();
+    expect(emitSpy).not.toHaveBeenCalled();
+
+    isUnitSavePending.mockReturnValue(false);
+
+    expect(component.hasNextUnit()).toBe(true);
+    component.nextUnit();
     expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
   });
 
@@ -892,6 +958,69 @@ describe('CodeSelectorComponent', () => {
     expect(chips[1].classList.contains('auto-coded')).toBe(true);
     expect(chips[1].disabled).toBe(true);
     expect(fixture.nativeElement.querySelector('.variable-trigger-btn')).toBeNull();
+  });
+
+  it('resolves bundle variables by response id across unit-name case variants', () => {
+    const bundleContext = {
+      bundleId: 9,
+      bundleName: 'Bundle',
+      caseKey: 'case-1',
+      caseOrderingMode: 'alternating' as const,
+      variables: [
+        {
+          responseId: 1,
+          unitName: 'Unit_A',
+          variableId: 'VAR1',
+          variableAnchor: 'VAR1',
+          variablePage: '0',
+          status: 'manual-open' as const,
+          code: null,
+          score: null,
+          source: 'manual' as const
+        },
+        {
+          responseId: 2,
+          unitName: 'unit_a',
+          variableId: 'VAR2',
+          variableAnchor: 'VAR2',
+          variablePage: '0',
+          status: 'manual-open' as const,
+          code: null,
+          score: null,
+          source: 'manual' as const
+        }
+      ]
+    };
+    component.unitsData = {
+      id: 1,
+      name: 'Job',
+      currentUnitIndex: 0,
+      units: [
+        {
+          id: 1,
+          name: 'UNIT_A',
+          alias: 'UNIT_A',
+          bookletId: 0,
+          variableId: 'VAR1',
+          variableBundleId: 9,
+          bundleContext
+        },
+        {
+          id: 2,
+          name: 'UNIT_A',
+          alias: 'UNIT_A',
+          bookletId: 0,
+          variableId: 'VAR2',
+          variableBundleId: 9,
+          bundleContext
+        }
+      ]
+    };
+
+    const secondVariable = component.bundleVariableNavigationItems[1];
+
+    expect(secondVariable.targetUnit?.id).toBe(2);
+    expect(secondVariable.disabled).toBe(false);
   });
 
   it('keeps the navigation dropdown visible for bundle jobs and lists one entry per bundle', () => {

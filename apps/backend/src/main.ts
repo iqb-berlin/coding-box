@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { DataSource } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AppModule } from './app/app.module';
@@ -11,12 +12,13 @@ import { ExportWorkerModule } from './app/export-worker/export-worker.module';
 import { isExportWorkerProcess } from './app/export-worker/export-worker-role';
 import { GlobalHttpExceptionFilter } from './app/http/global-http-exception.filter';
 import {
-  SLOW_REQUEST_THRESHOLD_ENV,
-  createRequestMonitoringMiddleware,
-  parseSlowRequestThresholdMs
+  createRequestMonitoringMiddleware
 } from './app/http/request-monitoring.middleware';
 import { REQUEST_ID_HEADER } from './app/http/request-id';
 import { requestIdMiddleware } from './app/http/request-id.middleware';
+import { createPostgresPoolSnapshotProvider } from './app/database/postgres-pool-monitor';
+import { releaseCacheStartupWarmups } from './app/cache/cache-startup-warmup.queue';
+import { RuntimeConfigService } from './app/config/runtime-config.service';
 
 async function bootstrap() {
   if (isExportWorkerProcess()) {
@@ -28,11 +30,12 @@ async function bootstrap() {
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
+  const runtimeConfig = app.get(RuntimeConfigService);
   const host = configService.get('API_HOST') || 'localhost';
   const port = 3333;
   const globalPrefix = 'api';
-  const slowRequestThresholdMs = parseSlowRequestThresholdMs(
-    configService.get(SLOW_REQUEST_THRESHOLD_ENV)
+  const getPoolSnapshot = createPostgresPoolSnapshotProvider(
+    app.get(DataSource)
   );
 
   app.use(requestIdMiddleware);
@@ -44,7 +47,12 @@ async function bootstrap() {
     req.url = query ? `${normalizedPathname}?${query}` : normalizedPathname;
     next();
   });
-  app.use(createRequestMonitoringMiddleware({ slowRequestThresholdMs }));
+  app.use(createRequestMonitoringMiddleware({
+    getPoolSnapshot,
+    inFlightRequestThresholdMs: runtimeConfig.inFlightRequestThresholdMs,
+    logStartedRequests: runtimeConfig.requestStartLogging,
+    slowRequestThresholdMs: runtimeConfig.slowRequestThresholdMs
+  }));
 
   const packagesRoot = path.resolve('./packages');
   const packageDirectoryMap = new Map<string, string>();
@@ -104,5 +112,6 @@ async function bootstrap() {
   Logger.log(
     `📚 Swagger documentation available at: http://${host}:${port}/${globalPrefix}/docs`
   );
+  releaseCacheStartupWarmups();
 }
 bootstrap();

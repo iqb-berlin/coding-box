@@ -6,6 +6,7 @@ import { JobQueueClientModule } from '../job-queue/job-queue-client.module';
 import { CodingModule } from '../coding/coding.module';
 import { WorkspaceModule } from '../workspace/workspace.module';
 import { ExportJobProcessor } from '../job-queue/processors/export-job.processor';
+import { RuntimeConfigModule } from '../config/runtime-config.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { ExportJobProcessor } from '../job-queue/processors/export-job.processor
       envFilePath: '.env.dev',
       cache: true
     }),
+    RuntimeConfigModule,
     DatabaseModule,
     CacheClientModule,
     JobQueueClientModule,

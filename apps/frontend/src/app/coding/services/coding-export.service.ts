@@ -6,6 +6,9 @@ import {
 import { SERVER_URL } from '../../injection-tokens';
 import { AppService, WorkspaceTokenPolicy } from '../../core/services/app.service';
 import { CodeBookContentSetting } from '../../../../../../api-dto/coding/codebook-content-setting';
+import type {
+  ExportJobStatusResponseDto
+} from '../../../../../../api-dto/coding/export-request.dto';
 import {
   DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
   EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
@@ -72,6 +75,7 @@ export class CodingExportService {
   getCodingResultsByVersion(
     workspace_id: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     includeReplayUrls: boolean = false,
     includeResponseValues: boolean = true,
     includeGeoGebraResponseValues: boolean = false
@@ -82,13 +86,14 @@ export class CodingExportService {
       () => this.createExternalReplayToken(workspace_id)
     ).pipe(
       switchMap(token => {
-        const params = new HttpParams()
+        let params = new HttpParams()
           .set('authToken', token)
           .set('serverUrl', window.location.origin)
           .set('version', version)
           .set('includeReplayUrls', includeReplayUrls ? 'true' : 'false')
           .set('includeResponseValues', includeResponseValues ? 'true' : 'false')
           .set('includeGeoGebraResponseValues', includeGeoGebraResponseValues ? 'true' : 'false');
+        params = params.set('missingsProfileId', missingsProfileId.toString());
         return this.http.get(
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/results-by-version`,
           {
@@ -103,6 +108,7 @@ export class CodingExportService {
   getCodingResultsByVersionAsExcel(
     workspace_id: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     includeReplayUrls: boolean = false,
     includeResponseValues: boolean = true,
     includeGeoGebraFiles: boolean = false,
@@ -114,7 +120,7 @@ export class CodingExportService {
       () => this.createExternalReplayToken(workspace_id)
     ).pipe(
       switchMap(token => {
-        const params = new HttpParams()
+        let params = new HttpParams()
           .set('authToken', token)
           .set('serverUrl', window.location.origin)
           .set('version', version)
@@ -122,6 +128,7 @@ export class CodingExportService {
           .set('includeResponseValues', includeResponseValues ? 'true' : 'false')
           .set('includeGeoGebraFiles', includeGeoGebraFiles ? 'true' : 'false')
           .set('includeGeoGebraResponseValues', includeGeoGebraResponseValues ? 'true' : 'false');
+        params = params.set('missingsProfileId', missingsProfileId.toString());
         return this.http.get(
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/results-by-version/excel`,
           {
@@ -228,14 +235,41 @@ export class CodingExportService {
 
   startExportJob(
     workspaceId: number,
-    exportType: string,
+    exportType: 'results-by-version',
+    version: 'v1' | 'v2' | 'v3',
+    format: 'csv' | 'excel',
+    includeReplayUrls: boolean,
+    trainingRequired: undefined,
+    includeResponseValues: boolean,
+    includeGeoGebraFiles: boolean,
+    includeGeoGebraResponseValues: boolean,
+    missingsProfileId: number
+  ): Observable<{ jobId: string; message: string }>;
+
+  startExportJob(
+    workspaceId: number,
+    exportType: 'coding-list',
+    version?: undefined,
+    format?: 'csv' | 'json' | 'excel',
+    includeReplayUrls?: boolean,
+    trainingRequired?: boolean,
+    includeResponseValues?: boolean,
+    includeGeoGebraFiles?: boolean,
+    includeGeoGebraResponseValues?: boolean,
+    missingsProfileId?: number
+  ): Observable<{ jobId: string; message: string }>;
+
+  startExportJob(
+    workspaceId: number,
+    exportType: 'results-by-version' | 'coding-list',
     version?: 'v1' | 'v2' | 'v3',
     format?: 'csv' | 'json' | 'excel',
     includeReplayUrls: boolean = false,
     trainingRequired?: boolean,
     includeResponseValues: boolean = true,
     includeGeoGebraFiles: boolean = false,
-    includeGeoGebraResponseValues: boolean = false
+    includeGeoGebraResponseValues: boolean = false,
+    missingsProfileId?: number
   ): Observable<{ jobId: string; message: string }> {
     const authToken$ = this.getReplayExportAuthToken(
       workspaceId,
@@ -253,6 +287,7 @@ export class CodingExportService {
           includeResponseValues,
           includeGeoGebraFiles,
           includeGeoGebraResponseValues,
+          missingsProfileId,
           trainingRequired,
           authToken: token,
           serverUrl: window.location.origin
@@ -309,34 +344,8 @@ export class CodingExportService {
   getExportJobStatus(
     workspaceId: number,
     jobId: string
-  ): Observable<{
-      status: string;
-      progress: number;
-      result?: {
-        fileId: string;
-        fileName: string;
-        fileSize: number;
-        workspaceId: number;
-        userId: number;
-        exportType: string;
-        createdAt: number;
-      };
-      error?: string;
-    }> {
-    return this.http.get<{
-      status: string;
-      progress: number;
-      result?: {
-        fileId: string;
-        fileName: string;
-        fileSize: number;
-        workspaceId: number;
-        userId: number;
-        exportType: string;
-        createdAt: number;
-      };
-      error?: string;
-    }>(
+  ): Observable<ExportJobStatusResponseDto> {
+    return this.http.get<ExportJobStatusResponseDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`
     );
   }

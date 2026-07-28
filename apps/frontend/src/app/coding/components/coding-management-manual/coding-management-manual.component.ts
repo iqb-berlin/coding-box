@@ -36,6 +36,7 @@ import {
   VariableConfig
 } from '../coder-training/coder-training.component';
 import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-trainings-list.component';
+import { getJobDefinitionDisplayLabel } from '../../utils/job-definition-display.util';
 import { CoderTraining } from '../../models/coder-training.model';
 import {
   ImportComparisonDialogComponent,
@@ -65,6 +66,7 @@ import {
   CodingProgressOverview,
   TestPersonCodingService
 } from '../../services/test-person-coding.service';
+import { DoubleCodedReviewApiService } from '../../services/double-coded-review-api.service';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 import { ExternalCodingImportResultDto } from '../../../../../../../api-dto/coding/external-coding-import-result.dto';
 import { AppService } from '../../../core/services/app.service';
@@ -209,6 +211,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     coderTrainingsListComponent?: CoderTrainingsListComponent;
 
   private testPersonCodingService = inject(TestPersonCodingService);
+  private doubleCodedReviewApi = inject(DoubleCodedReviewApiService);
   private codingJobBackendService = inject(CodingJobBackendService);
   private missingsProfileService = inject(MissingsProfileService);
   private statisticsService = inject(CodingStatisticsService);
@@ -388,6 +391,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         variableKey: string;
         conflictingDefinitions: Array<{
           id: number;
+          name?: string;
           status: string;
         }>;
       }>;
@@ -1373,9 +1377,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         context,
         coders: this.coders,
         jobDefinitions: context === 'execution' ? this.getJobDefinitionExportOptions() : undefined,
-        coderTrainings: context === 'training' ? this.getCoderTrainingsForExport() : undefined,
-        defaultJobDefinitionIds: context === 'execution' ? this.getJobDefinitionIds() : undefined,
-        defaultCoderTrainingIds: context === 'training' ? this.getCoderTrainingIds() : undefined
+        coderTrainings: context === 'training' ? this.getCoderTrainingsForExport() : undefined
       }
     }).afterClosed()
       .pipe(takeUntil(this.destroy$))
@@ -1404,6 +1406,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       userId: this.appService.userId,
       ...this.getManualCodingExportDisplayMetadata(result),
       includeReplayUrl: result.includeReplayUrl ?? false,
+      includeResponseValues: result.includeResponseValues ?? false,
       outputCommentsInsteadOfCodes: result.outputCommentsInsteadOfCodes,
       anonymizeCoders: result.anonymizeCoders,
       usePseudoCoders: result.usePseudoCoders,
@@ -1599,7 +1602,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         const status = jobDefinition.status ? ` (${jobDefinition.status})` : '';
         return {
           id: jobDefinition.id as number,
-          label: `Definition #${jobDefinition.id}${status}: ${variableCount} Variablen, ${bundleCount} Bündel`
+          label: `${getJobDefinitionDisplayLabel(jobDefinition)}${status}: ${variableCount} Variablen, ${bundleCount} Bündel`
         };
       });
   }
@@ -2162,7 +2165,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   getResponseAnalysisReferenceRawCases(): number {
-    return this.getManualStatusPoolCount();
+    return this.codingProgressOverview?.responseAnalysisRawCases ??
+      this.caseCoverageOverview?.responseAnalysisRawCases ??
+      this.appliedResultsOverview?.responseAnalysisRawCases ??
+      this.getManualStatusPoolCount();
   }
 
   getManualStatusPoolCount(): number {
@@ -3397,7 +3403,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       maxWidth: '100vw',
       height: '95vh',
       maxHeight: '100vh',
-      data: {}
+      data: { canApplyResults: this.canApplyManualCodingResults }
     });
 
     dialogRef.afterClosed().subscribe(result => {
@@ -3760,18 +3766,17 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingDoubleCodingConflictSummary = true;
-    this.testPersonCodingService
+    this.doubleCodedReviewApi
       .getDoubleCodedVariablesForReview(
         workspaceId,
-        1,
-        1,
-        true,
-        true,
-        undefined,
-        undefined,
-        undefined,
-        'unresolved',
-        'differ'
+        {
+          page: 1,
+          limit: 1,
+          onlyConflicts: true,
+          excludeTrainings: true,
+          resolvedFilter: 'unresolved',
+          agreementFilter: 'differ'
+        }
       )
       .pipe(
         takeUntil(this.destroy$),
@@ -3895,6 +3900,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
               variableKey: string;
               conflictingDefinitions: Array<{
                 id: number;
+                name?: string;
                 status: string;
               }>;
             }>;
@@ -4481,6 +4487,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       default:
         return status;
     }
+  }
+
+  getJobDefinitionIdentityLabel(definition: { id: number; name?: string }): string {
+    return getJobDefinitionDisplayLabel(definition);
   }
 
   private loadResponseMatchingMode(): void {

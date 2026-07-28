@@ -54,12 +54,14 @@ describe('CodingExportOrchestratorService', () => {
       serverUrl: 'http://app.example',
       includeReplayUrl: true,
       includeResponseValues: false,
+      missingsProfileId: 7,
       onProgress
     })).resolves.toBe(csvStream);
 
     expect(codingListService.getCodingResultsByVersionCsvStream).toHaveBeenCalledWith(
       7,
       'v3',
+      7,
       'token',
       'http://app.example',
       true,
@@ -78,6 +80,7 @@ describe('CodingExportOrchestratorService', () => {
     await expect(service.exportResultsByVersionAsExcel({
       workspaceId: 7,
       version: 'v2',
+      missingsProfileId: 7,
       includeResponseValues: true,
       includeGeoGebraResponseValues: true
     })).resolves.toBe(buffer);
@@ -85,6 +88,7 @@ describe('CodingExportOrchestratorService', () => {
     expect(codingListService.getCodingResultsByVersionAsExcel).toHaveBeenCalledWith(
       7,
       'v2',
+      7,
       '',
       '',
       false,
@@ -108,12 +112,14 @@ describe('CodingExportOrchestratorService', () => {
       serverUrl: 'http://app.example',
       includeReplayUrl: true,
       includeGeoGebraFiles: true,
+      missingsProfileId: 7,
       onProgress
     })).resolves.toBe(buffer);
 
     expect(codingListService.getCodingResultsByVersionAsGeoGebraZip).toHaveBeenCalledWith(
       7,
       'v2',
+      7,
       'token',
       'http://app.example',
       true,
@@ -136,6 +142,7 @@ describe('CodingExportOrchestratorService', () => {
       includeReplayUrl: true,
       includeResponseValues: false,
       includeGeoGebraResponseValues: true,
+      missingsProfileId: 7,
       onProgress,
       checkCancellation
     })).resolves.toBeUndefined();
@@ -144,6 +151,7 @@ describe('CodingExportOrchestratorService', () => {
       '/tmp/export.xlsx',
       7,
       'v3',
+      7,
       'token',
       'http://app.example',
       true,
@@ -166,6 +174,7 @@ describe('CodingExportOrchestratorService', () => {
       serverUrl: 'http://app.example',
       includeReplayUrl: true,
       includeGeoGebraFiles: true,
+      missingsProfileId: 7,
       onProgress,
       checkCancellation
     })).resolves.toBeUndefined();
@@ -174,6 +183,7 @@ describe('CodingExportOrchestratorService', () => {
       '/tmp/export.zip',
       7,
       'v2',
+      7,
       'token',
       'http://app.example',
       true,
@@ -192,6 +202,7 @@ describe('CodingExportOrchestratorService', () => {
 
     await expect(service.exportItemMatrixAsCsv({
       workspaceId: 7,
+      missingsProfileId: 3,
       matrixValue: 'code',
       version: 'v1',
       onProgress,
@@ -202,6 +213,12 @@ describe('CodingExportOrchestratorService', () => {
       7,
       'code',
       'v1',
+      {
+        missingsProfileId: 3,
+        notReachedScope: 'unit',
+        recodeTrailingOmissions: false,
+        items: undefined
+      },
       onProgress,
       checkCancellation
     );
@@ -214,6 +231,7 @@ describe('CodingExportOrchestratorService', () => {
 
     await expect(service.exportItemMatrixAsExcel({
       workspaceId: 7,
+      missingsProfileId: 3,
       matrixValue: 'score',
       version: 'v2'
     })).resolves.toBe(buffer);
@@ -222,6 +240,12 @@ describe('CodingExportOrchestratorService', () => {
       7,
       'score',
       'v2',
+      {
+        missingsProfileId: 3,
+        notReachedScope: 'unit',
+        recodeTrailingOmissions: false,
+        items: undefined
+      },
       undefined,
       undefined
     );
@@ -234,6 +258,7 @@ describe('CodingExportOrchestratorService', () => {
 
     await expect(service.exportItemMatrixAsExcelToFile('/tmp/matrix.xlsx', {
       workspaceId: 7,
+      missingsProfileId: 3,
       matrixValue: 'score',
       version: 'v2',
       onProgress,
@@ -245,6 +270,12 @@ describe('CodingExportOrchestratorService', () => {
       7,
       'score',
       'v2',
+      {
+        missingsProfileId: 3,
+        notReachedScope: 'unit',
+        recodeTrailingOmissions: false,
+        items: undefined
+      },
       onProgress,
       checkCancellation
     );
@@ -282,7 +313,8 @@ describe('CodingExportOrchestratorService', () => {
       undefined,
       undefined,
       undefined,
-      ''
+      '',
+      false
     );
   });
 
@@ -296,6 +328,7 @@ describe('CodingExportOrchestratorService', () => {
       workspaceId: 5,
       outputCommentsInsteadOfCodes: true,
       includeReplayUrl: true,
+      includeResponseValues: true,
       anonymizeCoders: true,
       usePseudoCoders: false,
       authToken: 'token',
@@ -320,7 +353,8 @@ describe('CodingExportOrchestratorService', () => {
       [1],
       [2],
       [3],
-      'http://app.example'
+      'http://app.example',
+      true
     );
   });
 
@@ -348,7 +382,8 @@ describe('CodingExportOrchestratorService', () => {
       undefined,
       undefined,
       undefined,
-      'http://app.example'
+      'http://app.example',
+      false
     );
   });
 
@@ -385,7 +420,8 @@ describe('CodingExportOrchestratorService', () => {
       [1],
       [2],
       [3],
-      'http://app.example'
+      'http://app.example',
+      false
     );
   });
 });

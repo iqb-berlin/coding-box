@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, Inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -7,13 +7,16 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
 import { MatCardModule } from '@angular/material/card';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
+import { MissingsProfileService } from '../../../services/missings-profile.service';
 
 export type CodingResultsExportFormat = 'csv' | 'excel';
 
 export interface DownloadCodingResultsDialogData {
+  workspaceId: number;
   currentVersion: 'v1' | 'v2' | 'v3';
   hasGeoGebraResponses?: boolean;
 }
@@ -29,6 +32,7 @@ export interface DownloadCodingResultsDialogData {
     MatDividerModule,
     MatRadioModule,
     MatFormFieldModule,
+    MatSelectModule,
     MatCardModule,
     FormsModule,
     ReactiveFormsModule,
@@ -51,7 +55,7 @@ export interface DownloadCodingResultsDialogData {
           <mat-card-title>{{ 'coding-management.download-dialog.select-version' | translate }}</mat-card-title>
         </mat-card-header>
         <mat-card-content>
-          <mat-radio-group [(ngModel)]="selectedVersion" class="radio-group">
+          <mat-radio-group [(ngModel)]="selectedVersion" (ngModelChange)="onVersionChange()" class="radio-group">
             <mat-radio-button value="v1" class="radio-option">
               <div class="radio-content">
                 <span class="option-title">{{ 'coding-management.statistics.first-autocode-run' | translate }}</span>
@@ -74,6 +78,29 @@ export interface DownloadCodingResultsDialogData {
             </mat-radio-button>
           </mat-radio-group>
         </mat-card-content>
+      </mat-card>
+
+      <mat-card class="section-card">
+          <mat-card-header>
+            <mat-card-title>{{ 'coding-management.download-dialog.select-missings-profile' | translate }}</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <mat-form-field appearance="outline" class="profile-select">
+              <mat-label>{{ 'coding-management.download-dialog.missings-profile' | translate }}</mat-label>
+              <mat-select [(ngModel)]="selectedMissingsProfileId" [disabled]="isLoadingMissingsProfiles">
+                @for (profile of missingsProfiles; track profile.id) {
+                  <mat-option [value]="profile.id">{{ profile.label }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            @if (isLoadingMissingsProfiles) {
+              <p class="profile-hint">{{ 'coding-management.download-dialog.loading-missings-profiles' | translate }}</p>
+            } @else if (missingsProfilesError) {
+              <p class="profile-error">{{ 'coding-management.download-dialog.missings-profiles-error' | translate }}</p>
+            } @else if (!missingsProfiles.length) {
+              <p class="profile-error">{{ 'coding-management.download-dialog.no-missings-profiles' | translate }}</p>
+            }
+          </mat-card-content>
       </mat-card>
 
       <mat-card class="section-card format-card">
@@ -164,7 +191,8 @@ export interface DownloadCodingResultsDialogData {
       <button mat-button (click)="onCancel()">
         {{ 'common.cancel' | translate }}
       </button>
-      <button mat-raised-button color="primary" (click)="onDownload()">
+      <button mat-raised-button color="primary" (click)="onDownload()"
+        [disabled]="isDownloadDisabled">
         <mat-icon>download</mat-icon>
         {{ 'coding-management.download-dialog.download-button' | translate }}
       </button>
@@ -347,21 +375,89 @@ export interface DownloadCodingResultsDialogData {
         }
       }
     }
+
+    .profile-select {
+      width: 100%;
+    }
+
+    .profile-hint,
+    .profile-error {
+      margin: 0;
+      font-size: 12px;
+    }
+
+    .profile-error {
+      color: #b00020;
+    }
   `]
 })
-export class DownloadCodingResultsDialogComponent {
+export class DownloadCodingResultsDialogComponent implements OnInit {
   selectedVersion: 'v1' | 'v2' | 'v3' = 'v1';
   selectedFormat: CodingResultsExportFormat = 'csv';
   includeReplayUrls: boolean = false;
   includeResponseValues: boolean = true;
   includeGeoGebraFiles: boolean = false;
   includeGeoGebraResponseValues: boolean = false;
+  missingsProfiles: { label: string; id: number }[] = [];
+  selectedMissingsProfileId: number | null = null;
+  isLoadingMissingsProfiles = false;
+  missingsProfilesError = false;
+  private hasLoadedMissingsProfiles = false;
 
   constructor(
     public dialogRef: MatDialogRef<DownloadCodingResultsDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: DownloadCodingResultsDialogData
+    @Inject(MAT_DIALOG_DATA) public data: DownloadCodingResultsDialogData,
+    private readonly missingsProfileService: MissingsProfileService
   ) {
     this.selectedVersion = data.currentVersion;
+  }
+
+  ngOnInit(): void {
+    this.loadMissingsProfiles();
+  }
+
+  get isDownloadDisabled(): boolean {
+    return (
+      this.isLoadingMissingsProfiles ||
+      this.missingsProfilesError ||
+      this.selectedMissingsProfileId === null
+    );
+  }
+
+  onVersionChange(): void {
+    this.loadMissingsProfiles();
+  }
+
+  private loadMissingsProfiles(): void {
+    if (
+      this.isLoadingMissingsProfiles ||
+      this.hasLoadedMissingsProfiles
+    ) {
+      return;
+    }
+
+    this.missingsProfilesError = false;
+    this.isLoadingMissingsProfiles = true;
+    this.missingsProfileService
+      .getExportMissingsProfilesOrThrow(this.data.workspaceId)
+      .subscribe({
+        next: profiles => {
+          this.missingsProfiles = profiles.filter(profile => (
+            Number.isSafeInteger(profile.id) && profile.id > 0
+          ));
+          const standard = this.missingsProfiles.find(profile => (
+            profile.label === 'IQB-Standard'
+          ));
+          this.selectedMissingsProfileId = standard?.id ??
+            this.missingsProfiles[0]?.id ?? null;
+          this.hasLoadedMissingsProfiles = true;
+          this.isLoadingMissingsProfiles = false;
+        },
+        error: () => {
+          this.missingsProfilesError = true;
+          this.isLoadingMissingsProfiles = false;
+        }
+      });
   }
 
   onIncludeResponseValuesChange(): void {
@@ -387,13 +483,18 @@ export class DownloadCodingResultsDialogComponent {
 
   onDownload(): void {
     this.clearUnsupportedGeoGebraOption();
+    const missingsProfileId = this.selectedMissingsProfileId;
+    if (this.isDownloadDisabled || missingsProfileId === null) {
+      return;
+    }
     this.dialogRef.close({
       version: this.selectedVersion,
       format: this.selectedFormat,
       includeReplayUrls: this.includeReplayUrls,
       includeResponseValues: this.includeResponseValues,
       includeGeoGebraFiles: this.includeGeoGebraFiles,
-      includeGeoGebraResponseValues: this.includeGeoGebraResponseValues
+      includeGeoGebraResponseValues: this.includeGeoGebraResponseValues,
+      missingsProfileId
     });
   }
 

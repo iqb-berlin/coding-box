@@ -1156,6 +1156,7 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
         alias: 'base_alias',
         sourceType: 'BASE',
         type: 'string',
+        processing: ['TAKE_EMPTY_AS_VALID'],
         codes: []
       },
       {
@@ -1307,6 +1308,7 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
       isDerived: false,
       multiple: true,
       nullable: false,
+      processing: ['TAKE_EMPTY_AS_VALID'],
       valuesComplete: true,
       values: [
         { value: 'A', label: 'Alpha' },

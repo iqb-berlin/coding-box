@@ -5,12 +5,20 @@ import { MissingsProfile } from '../../entities/missings-profile.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
 import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
+import { isReservedTechnicalCodingCode } from '../../../utils/coding-utils';
 
 export interface ResolvedMissingValue {
   id: string;
   label: string;
   code: number;
   score: number | null;
+}
+
+export interface ResolvedMissingsProfile {
+  id: number;
+  label: string;
+  byId: Map<string, ResolvedMissingValue>;
+  byCode: Map<number, ResolvedMissingValue>;
 }
 
 export type IqbStandardMissingId = 'mir' | 'mbi_mbo' | 'mnr' | 'mci' | 'mbd';
@@ -69,6 +77,20 @@ export class MissingsProfilesService {
       this.logger.error(`Error getting missings profiles for workspace ${workspaceId}: ${error.message}`, error.stack);
       return [];
     }
+  }
+
+  async getMissingsProfilesForExport(
+    workspaceId: number
+  ): Promise<{ label: string; id: number }[]> {
+    this.logger.log(
+      `Getting read-only export missings profiles for workspace ${workspaceId}`
+    );
+    const profiles = await this.missingsProfileRepository.find({
+      where: { workspace_id: workspaceId },
+      select: ['id', 'label']
+    });
+
+    return profiles.map(profile => ({ label: profile.label, id: profile.id }));
   }
 
   async getMissingsProfileByLabel(workspaceId: number, label: string): Promise<MissingsProfilesDto | null> {
@@ -215,6 +237,12 @@ export class MissingsProfilesService {
         throw new BadRequestException(`Missing entry '${missing.id}' must define a negative code`);
       }
 
+      if (isReservedTechnicalCodingCode(code)) {
+        throw new BadRequestException(
+          `Missing entry '${missing.id}' must not use reserved technical code '${code}'`
+        );
+      }
+
       if (!this.hasExplicitScoreProperty(missing) || !this.hasExplicitValidScore(missing.score)) {
         throw new BadRequestException(`Missing entry '${missing.id}' must define a score`);
       }
@@ -309,6 +337,113 @@ export class MissingsProfilesService {
       label: missing.label,
       code,
       score
+    };
+  }
+
+  async getResolvedMissingsProfileForExport(
+    workspaceId: number,
+    profileId: number,
+    requiredIds: readonly string[]
+  ): Promise<ResolvedMissingsProfile> {
+    if (!Number.isSafeInteger(profileId) || profileId <= 0) {
+      throw new BadRequestException(
+        'missingsProfileId must be a positive integer'
+      );
+    }
+
+    const entity = await this.missingsProfileRepository.findOne({
+      where: { id: profileId, workspace_id: workspaceId }
+    });
+    if (!entity) {
+      throw new BadRequestException(
+        `Missing profile ${profileId} not found in workspace ${workspaceId}`
+      );
+    }
+
+    let rawMissings: unknown;
+    try {
+      rawMissings = typeof entity.missings === 'string' ?
+        JSON.parse(entity.missings) :
+        entity.missings;
+    } catch {
+      throw new BadRequestException(
+        `Missing profile ${profileId} must contain valid JSON`
+      );
+    }
+    if (!Array.isArray(rawMissings)) {
+      throw new BadRequestException(
+        `Missing profile ${profileId} must contain a missings array`
+      );
+    }
+
+    const byId = new Map<string, ResolvedMissingValue>();
+    const byCode = new Map<number, ResolvedMissingValue>();
+    rawMissings.forEach((rawMissing, index) => {
+      if (!rawMissing || typeof rawMissing !== 'object') {
+        throw new BadRequestException(
+          `Missing entry ${index + 1} in profile ${profileId} is invalid`
+        );
+      }
+      const missing = rawMissing as MissingDto;
+      const id = typeof missing.id === 'string' ? missing.id.trim() : '';
+      const label = typeof missing.label === 'string' ? missing.label.trim() : '';
+      const code = Number(missing.code);
+      if (!id) {
+        throw new BadRequestException(
+          `Missing entry ${index + 1} in profile ${profileId} must define an id`
+        );
+      }
+      if (!label) {
+        throw new BadRequestException(
+          `Missing '${id}' in profile ${profileId} must define a label`
+        );
+      }
+      if (!Number.isInteger(code) || code >= 0) {
+        throw new BadRequestException(
+          `Missing '${id}' in profile ${profileId} must define a negative integer code`
+        );
+      }
+      if (isReservedTechnicalCodingCode(code)) {
+        throw new BadRequestException(
+          `Missing '${id}' in profile ${profileId} must not use reserved technical code '${code}'`
+        );
+      }
+      if (!this.hasExplicitScoreProperty(missing) ||
+          !this.hasExplicitValidScore(missing.score)) {
+        throw new BadRequestException(
+          `Missing '${id}' in profile ${profileId} must define a score`
+        );
+      }
+      if (byId.has(id)) {
+        throw new BadRequestException(
+          `Duplicate missing id '${id}' in profile ${profileId}`
+        );
+      }
+      if (byCode.has(code)) {
+        throw new BadRequestException(
+          `Duplicate missing code '${code}' in profile ${profileId}`
+        );
+      }
+      const resolved = {
+        id,
+        label,
+        code,
+        score: this.normalizeScore(missing.score)
+      };
+      byId.set(id, resolved);
+      byCode.set(code, resolved);
+    });
+
+    requiredIds.forEach(requiredId => {
+      if (!byId.has(requiredId)) {
+        throw new BadRequestException(
+          `Missing profile ${profileId} must define '${requiredId}'`
+        );
+      }
+    });
+
+    return {
+      id: entity.id, label: entity.label, byId, byCode
     };
   }
 

@@ -209,6 +209,7 @@ export class CodingResultsExportService {
   async exportCodingResultsByVersionAsCsv(
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     authToken: string,
     serverUrl: string,
     includeReplayUrls: boolean,
@@ -220,6 +221,7 @@ export class CodingResultsExportService {
     return this.codingListService.getCodingResultsByVersionCsvStream(
       workspaceId,
       version,
+      missingsProfileId,
       authToken || '',
       serverUrl || '',
       includeReplayUrls,
@@ -233,6 +235,7 @@ export class CodingResultsExportService {
   async exportCodingResultsByVersionAsExcel(
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     authToken: string,
     serverUrl: string,
     includeReplayUrls: boolean,
@@ -244,6 +247,7 @@ export class CodingResultsExportService {
     return this.codingListService.getCodingResultsByVersionAsExcel(
       workspaceId,
       version,
+      missingsProfileId,
       authToken || '',
       serverUrl || '',
       includeReplayUrls,
@@ -258,6 +262,7 @@ export class CodingResultsExportService {
     filePath: string,
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     authToken: string,
     serverUrl: string,
     includeReplayUrls: boolean,
@@ -270,6 +275,7 @@ export class CodingResultsExportService {
       filePath,
       workspaceId,
       version,
+      missingsProfileId,
       authToken || '',
       serverUrl || '',
       includeReplayUrls,
@@ -283,6 +289,7 @@ export class CodingResultsExportService {
   async exportCodingResultsByVersionAsGeoGebraZip(
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     authToken: string,
     serverUrl: string,
     includeReplayUrls: boolean,
@@ -292,6 +299,7 @@ export class CodingResultsExportService {
     return this.codingListService.getCodingResultsByVersionAsGeoGebraZip(
       workspaceId,
       version,
+      missingsProfileId,
       authToken || '',
       serverUrl || '',
       includeReplayUrls,
@@ -304,6 +312,7 @@ export class CodingResultsExportService {
     filePath: string,
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     authToken: string,
     serverUrl: string,
     includeReplayUrls: boolean,
@@ -314,6 +323,7 @@ export class CodingResultsExportService {
       filePath,
       workspaceId,
       version,
+      missingsProfileId,
       authToken || '',
       serverUrl || '',
       includeReplayUrls,
@@ -2078,10 +2088,7 @@ export class CodingResultsExportService {
           const timestamp = unit.updated_at ?
             new Date(unit.updated_at).toLocaleString('de-DE').replace(',', '') : '';
 
-          let commentValue = unit.notes || '';
-          if (!outputCommentsInsteadOfCodes && unit.coding_issue_option) {
-            commentValue = this.getCodingIssueText(unit.coding_issue_option) || commentValue;
-          }
+          const commentValue = unit.notes || '';
 
           const mapped = await this.mapCodeAndScoreForExport(
             workspaceId,

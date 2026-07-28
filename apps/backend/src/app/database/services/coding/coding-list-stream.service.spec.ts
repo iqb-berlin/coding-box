@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import * as ExcelJS from 'exceljs';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -11,7 +12,13 @@ import { CodingItemBuilderService, CodingItemVersionRow } from './coding-item-bu
 import { CodingFileCacheService } from './coding-file-cache.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { ResponseEntity } from '../../entities/response.entity';
+import { Setting } from '../../entities/setting.entity';
 import { CodingReplayAnchorService } from './coding-replay-anchor.service';
+import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
+import type {
+  MissingsProfilesService,
+  ResolvedMissingsProfile
+} from './missings-profiles.service';
 
 jest.mock('libxmljs2', () => ({}));
 
@@ -22,6 +29,8 @@ describe('CodingListStreamService', () => {
   let mockFileCacheService: jest.Mocked<CodingFileCacheService>;
   let mockConfigService: jest.Mocked<ConfigService>;
   let mockReplayAnchorService: jest.Mocked<CodingReplayAnchorService>;
+  let mockWorkspaceFilesService: jest.Mocked<WorkspaceFilesService>;
+  let mockSettingRepository: { findOne: jest.Mock };
 
   const createMockResponse = (id: number): ResponseEntity => ({
     id,
@@ -133,6 +142,15 @@ describe('CodingListStreamService', () => {
     mockReplayAnchorService = {
       getVariableAnchorMaps: jest.fn().mockResolvedValue(new Map())
     } as unknown as jest.Mocked<CodingReplayAnchorService>;
+    mockWorkspaceFilesService = {
+      getCoderTrainingRequiredVariableMap: jest.fn().mockResolvedValue(new Map()),
+      getUnitVariableMap: jest.fn().mockResolvedValue(new Map()),
+      getManualInstructionVariableMap: jest.fn().mockResolvedValue(new Map()),
+      getDerivedVariablesBySourceMap: jest.fn().mockResolvedValue(new Map())
+    } as unknown as jest.Mocked<WorkspaceFilesService>;
+    mockSettingRepository = {
+      findOne: jest.fn().mockResolvedValue(null)
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -147,14 +165,21 @@ describe('CodingListStreamService', () => {
         { provide: CodingReplayAnchorService, useValue: mockReplayAnchorService },
         {
           provide: WorkspaceFilesService,
-          useValue: {
-            getCoderTrainingRequiredVariableMap: jest.fn().mockResolvedValue(new Map())
-          }
-        }
+          useValue: mockWorkspaceFilesService
+        },
+        { provide: getRepositoryToken(Setting), useValue: mockSettingRepository }
       ]
     }).compile();
 
     service = module.get<CodingListStreamService>(CodingListStreamService);
+    (service as unknown as {
+      loadVersionedExportProfile: jest.Mock
+    }).loadVersionedExportProfile = jest.fn().mockResolvedValue({
+      id: 7,
+      label: 'Test',
+      byId: new Map(),
+      byCode: new Map()
+    });
   });
 
   afterEach(() => {
@@ -162,6 +187,66 @@ describe('CodingListStreamService', () => {
   });
 
   describe('Stream creation', () => {
+    it('forwards the workspace DERIVE_ERROR scope through CSV, Excel and JSON exports', async () => {
+      mockSettingRepository.findOne.mockResolvedValue({
+        key: 'workspace-1-include-derive-error-in-manual-coding',
+        content: JSON.stringify({ enabled: true })
+      });
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([[
+        'UNIT1',
+        new Set(['SOURCE_VAR', 'DERIVED_VAR'])
+      ]]));
+      mockWorkspaceFilesService.getManualInstructionVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['DERIVED_VAR'])]])
+      );
+      mockWorkspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(
+        new Map([[
+          getManualCodingScopeKey('UNIT1', 'SOURCE_VAR'),
+          new Set(['DERIVED_VAR'])
+        ]])
+      );
+
+      const expectedFilterOptions = {
+        manualCodingCandidatesOnly: true,
+        deriveErrorManualCodingPairKeys: ['UNIT1\u001FDERIVED_VAR']
+      };
+      mockResponseFilterService.getResponsesBatch
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+
+      const csvStream = await service.getCodingListCsvStream(
+        1,
+        'token',
+        'http://server'
+      );
+      csvStream.on('data', () => {});
+      await new Promise<void>(resolve => {
+        csvStream.on('end', resolve);
+      });
+
+      await service.getCodingListAsExcel(1, 'token', 'http://server');
+
+      const jsonStream = service.getCodingListJsonStream(
+        1,
+        'token',
+        'http://server'
+      );
+      await new Promise<void>(resolve => {
+        jsonStream.on('end', resolve);
+        jsonStream.on('data', () => {});
+      });
+
+      expect(mockResponseFilterService.countResponses).toHaveBeenCalledTimes(3);
+      expect(mockResponseFilterService.getResponsesBatch).toHaveBeenCalledTimes(3);
+      mockResponseFilterService.countResponses.mock.calls.forEach(call => {
+        expect(call).toEqual([1, expectedFilterOptions]);
+      });
+      mockResponseFilterService.getResponsesBatch.mock.calls.forEach(call => {
+        expect(call).toEqual([1, 0, 500, expectedFilterOptions]);
+      });
+    });
+
     it('should create CSV stream', async () => {
       mockResponseFilterService.getResponsesBatch.mockResolvedValueOnce([]);
 
@@ -193,6 +278,7 @@ describe('CodingListStreamService', () => {
       const stream = await service.getCodingResultsByVersionCsvStream(
         1,
         'v1',
+        1,
         'token',
         'http://server'
       );
@@ -213,6 +299,7 @@ describe('CodingListStreamService', () => {
       const stream = await service.getCodingResultsByVersionCsvStream(
         1,
         'v1',
+        1,
         'token',
         'http://server',
         false,
@@ -238,6 +325,7 @@ describe('CodingListStreamService', () => {
       const stream = await service.getCodingResultsByVersionCsvStream(
         1,
         'v1',
+        1,
         'token',
         'http://server'
       );
@@ -266,6 +354,87 @@ describe('CodingListStreamService', () => {
       expect(mockItemBuilderService.getHeadersForVersion).toHaveBeenCalledWith('v1', true);
     });
 
+    it('resolves NOT_REACHED through the selected profile in v1 CSV exports', async () => {
+      const profile: ResolvedMissingsProfile = {
+        id: 7,
+        label: 'Custom',
+        byId: new Map([
+          ['mir', {
+            id: 'mir', label: 'MIR', code: -18, score: 0
+          }],
+          ['mci', {
+            id: 'mci', label: 'MCI', code: -17, score: null
+          }],
+          ['mbi_mbo', {
+            id: 'mbi_mbo', label: 'MBO', code: -19, score: 0
+          }],
+          ['mnr', {
+            id: 'mnr', label: 'MNR', code: -16, score: null
+          }],
+          ['mbd', {
+            id: 'mbd', label: 'MBD', code: -15, score: null
+          }]
+        ]),
+        byCode: new Map()
+      };
+      const missingsProfilesService = {
+        getResolvedMissingsProfileForExport: jest.fn().mockResolvedValue(profile)
+      };
+      const realItemBuilderService = new CodingItemBuilderService(
+        mockFileCacheService,
+        mockReplayAnchorService
+      );
+      const integrationService = new CodingListStreamService(
+        mockResponseFilterService,
+        realItemBuilderService,
+        mockFileCacheService,
+        {} as WorkspaceFilesService,
+        mockConfigService,
+        mockReplayAnchorService,
+        missingsProfilesService as unknown as MissingsProfilesService
+      );
+      mockFileCacheService.loadVoudData.mockResolvedValue(new Map([
+        ['var1', '1']
+      ]));
+      mockResponseFilterService.countResponses.mockResolvedValueOnce(1);
+      mockResponseFilterService.getVersionedResponsesBatchRaw
+        .mockResolvedValueOnce([{
+          ...createMockVersionRow(1),
+          statusV1: 1
+        }])
+        .mockResolvedValueOnce([]);
+
+      const stream = await integrationService.getCodingResultsByVersionCsvStream(
+        1,
+        'v1',
+        7,
+        '',
+        'http://server',
+        false,
+        undefined,
+        true,
+        false,
+        undefined
+      );
+      const chunks: Buffer[] = [];
+      stream.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+
+      await new Promise<void>((resolve, reject) => {
+        stream.on('end', resolve);
+        stream.on('error', reject);
+      });
+
+      expect(missingsProfilesService.getResolvedMissingsProfileForExport)
+        .toHaveBeenCalledWith(
+          1,
+          7,
+          ['mir', 'mci', 'mbi_mbo', 'mnr', 'mbd']
+        );
+      expect(Buffer.concat(chunks).toString()).toContain(
+        ';NOT_REACHED;-16;NA'
+      );
+    });
+
     it('should include replay URL column in versioned CSV exports when requested', async () => {
       const versionRow = createMockVersionRow(1);
       mockResponseFilterService.getVersionedResponsesBatchRaw
@@ -291,6 +460,7 @@ describe('CodingListStreamService', () => {
       const stream = await service.getCodingResultsByVersionCsvStream(
         1,
         'v1',
+        1,
         'token',
         'http://server',
         true
@@ -317,7 +487,8 @@ describe('CodingListStreamService', () => {
         true,
         true,
         false,
-        expect.any(Map)
+        expect.any(Map),
+        { v1: { code: '', score: '' } }
       );
     });
 
@@ -344,6 +515,7 @@ describe('CodingListStreamService', () => {
       const stream = await service.getCodingResultsByVersionCsvStream(
         1,
         'v1',
+        1,
         'token',
         'http://server',
         false,
@@ -358,7 +530,8 @@ describe('CodingListStreamService', () => {
       const versionExportOptions = {
         version: 'v1',
         validCodingVariablesOnly: true,
-        givenResponsesOnly: true
+        givenResponsesOnly: true,
+        includePartlyDisplayed: true
       };
       expect(mockResponseFilterService.countResponses).toHaveBeenCalledWith(
         1,
@@ -379,7 +552,8 @@ describe('CodingListStreamService', () => {
         false,
         false,
         false,
-        expect.any(Map)
+        expect.any(Map),
+        { v1: { code: '', score: '' } }
       );
     });
 
@@ -413,6 +587,7 @@ describe('CodingListStreamService', () => {
       const stream = await service.getCodingResultsByVersionCsvStream(
         1,
         'v1',
+        1,
         'token',
         'http://server',
         false,
@@ -606,6 +781,7 @@ describe('CodingListStreamService', () => {
       const result = await service.getCodingResultsByVersionAsExcel(
         1,
         'v1',
+        1,
         'token',
         'http://server'
       );
@@ -644,6 +820,7 @@ describe('CodingListStreamService', () => {
           filePath,
           1,
           'v1',
+          1,
           'token',
           'http://server'
         );
@@ -690,6 +867,7 @@ describe('CodingListStreamService', () => {
           filePath,
           1,
           'v1',
+          1,
           'token',
           'http://server',
           false,
@@ -760,6 +938,7 @@ describe('CodingListStreamService', () => {
           filePath,
           1,
           'v1',
+          1,
           'token',
           'http://server',
           false,
@@ -789,6 +968,7 @@ describe('CodingListStreamService', () => {
       await service.getCodingResultsByVersionAsExcel(
         1,
         'v1',
+        1,
         'token',
         'http://server',
         false,
@@ -802,7 +982,8 @@ describe('CodingListStreamService', () => {
         {
           version: 'v1',
           validCodingVariablesOnly: true,
-          givenResponsesOnly: true
+          givenResponsesOnly: true,
+          includePartlyDisplayed: true
         }
       );
     });
@@ -820,6 +1001,7 @@ describe('CodingListStreamService', () => {
       await service.getCodingResultsByVersionAsExcel(
         1,
         'v1',
+        1,
         'token',
         'http://server'
       );
@@ -831,7 +1013,8 @@ describe('CodingListStreamService', () => {
         {
           version: 'v1',
           validCodingVariablesOnly: true,
-          givenResponsesOnly: true
+          givenResponsesOnly: true,
+          includePartlyDisplayed: true
         }
       );
     });
@@ -893,6 +1076,7 @@ describe('CodingListStreamService', () => {
       const result = await service.getCodingResultsByVersionAsGeoGebraZip(
         1,
         'v1',
+        1,
         'token',
         'http://server'
       );
@@ -955,6 +1139,7 @@ describe('CodingListStreamService', () => {
           filePath,
           1,
           'v1',
+          1,
           'token',
           'http://server'
         );
@@ -1007,6 +1192,7 @@ describe('CodingListStreamService', () => {
       await expect(service.getCodingResultsByVersionAsGeoGebraZip(
         1,
         'v1',
+        1,
         'token',
         'http://server'
       )).rejects.toThrow(
@@ -1043,6 +1229,7 @@ describe('CodingListStreamService', () => {
       await expect(service.getCodingResultsByVersionAsGeoGebraZip(
         1,
         'v1',
+        1,
         'token',
         'http://server'
       )).rejects.toThrow(

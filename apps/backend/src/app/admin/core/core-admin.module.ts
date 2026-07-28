@@ -29,6 +29,10 @@ import { ContentPoolIntegrationService } from '../content-pool/content-pool-inte
 import { LegalNoticeController } from '../legal-notice/legal-notice.controller';
 import { LegalNoticeService } from '../legal-notice/legal-notice.service';
 import { getEnabledProcessorNames } from '../../job-queue/job-queue-processor-selection';
+import { SystemNotification } from '../../database/entities/system-notification.entity';
+import { PublicSystemNotificationController } from '../system-notifications/system-notification.controller';
+import { AdminSystemNotificationController } from '../system-notifications/admin-system-notification.controller';
+import { SystemNotificationService } from '../system-notifications/system-notification.service';
 
 const processorProviders = {
   'database-export': DatabaseExportProcessor
@@ -54,7 +58,7 @@ export function getEnabledCoreAdminProcessors(
     AuthModule,
     CodingModule,
     HttpModule,
-    TypeOrmModule.forFeature([Setting, FileUpload]),
+    TypeOrmModule.forFeature([Setting, FileUpload, SystemNotification]),
     BullModule.registerQueue({
       name: 'database-export'
     }),
@@ -74,13 +78,16 @@ export function getEnabledCoreAdminProcessors(
     CodingJobsController,
     DatabaseAdminController,
     ContentPoolSettingsController,
-    LegalNoticeController
+    LegalNoticeController,
+    PublicSystemNotificationController,
+    AdminSystemNotificationController
   ],
   providers: [
     DatabaseExportService,
     ...getEnabledCoreAdminProcessors(),
     ContentPoolIntegrationService,
-    LegalNoticeService
+    LegalNoticeService,
+    SystemNotificationService
   ]
 })
 export class CoreAdminModule { }

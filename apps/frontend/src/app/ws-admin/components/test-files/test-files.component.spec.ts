@@ -118,6 +118,15 @@ describe('TestFilesComponent', () => {
     });
   });
 
+  describe('regex filter validation', () => {
+    it('should reject invalid regex syntax before requesting files', () => {
+      component.enableRegexSearch = true;
+      component.textFilterValue = '[';
+
+      expect(component.isTextFilterRegexInvalid()).toBe(true);
+    });
+  });
+
   describe('showFileContent', () => {
     it('should open XML files with XML formatting enabled', () => {
       fileService.downloadFile.mockReturnValue(of({

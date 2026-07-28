@@ -44,13 +44,14 @@ function createServiceWithDetailedMocks(
     discussionResults?: Record<string, unknown>[],
     users?: Record<string, unknown>[],
     totalCount?: number,
+    notes?: string,
     missingsProfilesService?: { getMissingByIdForProfileOrDefault: jest.Mock }
   } = {}
 ) {
   const defaultUnit = {
     code: 7,
     coding_issue_option: codingIssueOption,
-    notes: '',
+    notes: overrides.notes ?? '',
     updated_at: new Date('2026-04-14T10:00:00.000Z'),
     response_id: 123,
     unit_name: 'U1',
@@ -85,6 +86,7 @@ function createServiceWithDetailedMocks(
     } | undefined;
     const response = unit.response as {
       status_v1?: number | null;
+      value?: string | null;
       unit?: {
         name?: string;
         booklet?: {
@@ -117,7 +119,8 @@ function createServiceWithDetailedMocks(
       bookletName: response?.unit?.booklet?.bookletinfo?.name ?? null,
       personLogin: response?.unit?.booklet?.person?.login ?? null,
       personCode: response?.unit?.booklet?.person?.code ?? null,
-      personGroup: response?.unit?.booklet?.person?.group ?? null
+      personGroup: response?.unit?.booklet?.person?.group ?? null,
+      responseValue: response?.value ?? null
     };
   };
 
@@ -356,14 +359,20 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     expect(manualJobVariablesQuery.andWhere).not.toHaveBeenCalledWith('cj.training_id IS NULL');
   });
 
-  it('keeps code value and writes code hint when coding_issue_option is set', async () => {
-    const { service, totalCountQueryBuilder, unitsBatchQueryBuilder } = createServiceWithDetailedMocks(1);
+  it('keeps comment and code value and writes code hint when coding_issue_option is set', async () => {
+    const { service, totalCountQueryBuilder, unitsBatchQueryBuilder } = createServiceWithDetailedMocks(
+      1,
+      { notes: 'Coder comment' }
+    );
 
     const buffer = await service.exportCodingResultsDetailed(1, false, false, false, false);
     const csv = buffer.toString('utf-8');
+    const rowFields = csv.trim().split('\n')[1].split(';');
 
     expect(csv).toContain('"Code";"Code-Hinweis"');
     expect(csv).toContain('"7";"Code-Vergabe unsicher"');
+    expect(rowFields[6]).toBe('"Coder comment"');
+    expect(rowFields[9]).toBe('"Code-Vergabe unsicher"');
     expect(totalCountQueryBuilder.leftJoin).toHaveBeenCalledWith('cju.response', 'countResp');
     expect(totalCountQueryBuilder.andWhere).toHaveBeenCalledWith(
       '(countResp.status_v1 IS NULL OR countResp.status_v1 NOT IN (:...excludedStatuses))',
@@ -373,6 +382,63 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       '(resp.status_v1 IS NULL OR resp.status_v1 NOT IN (:...excludedStatuses))',
       { excludedStatuses: [0, 1, 2, 10] }
     );
+  });
+
+  it('adds response values to detailed exports only when requested', async () => {
+    const { service, unitsBatchQueryBuilder } = createServiceWithDetailedMocks(1, {
+      unit: {
+        code: 7,
+        coding_issue_option: 1,
+        notes: 'Coder comment',
+        updated_at: new Date('2026-04-14T10:00:00.000Z'),
+        response_id: 123,
+        unit_name: 'U1',
+        variable_id: 'V1',
+        coding_job: {
+          training_id: null,
+          codingJobCoders: [{ user: { username: 'coder1' } }]
+        },
+        response: {
+          status_v1: 8,
+          value: '{"answer":"A"}',
+          unit: {
+            name: 'U1',
+            booklet: {
+              person: {
+                login: 'p-login',
+                code: 'p-code',
+                group: 'G1'
+              },
+              bookletinfo: {
+                name: 'B1'
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const buffer = await service.exportCodingResultsDetailed(
+      1,
+      false,
+      false,
+      false,
+      false,
+      '',
+      undefined,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      '',
+      true
+    );
+    const [header, row] = buffer.toString('utf-8').trim().split('\n');
+
+    expect(header).toContain('"Variable";"value";"Kommentar"');
+    expect(row).toContain('"V1";"{""answer"":""A""}";"Coder comment"');
+    expect(unitsBatchQueryBuilder.addSelect).toHaveBeenCalledWith('resp.value', 'responseValue');
   });
 
   it('paginates detailed raw export batches without repeating rows', async () => {
@@ -1144,7 +1210,8 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       jobId: '1',
       trainingId: null,
       missingsProfileId: '77',
-      responseId: '100'
+      responseId: '100',
+      responseValue: '{"answer":"A"}'
     }]);
     const coderRecordsQuery = createQueryBuilder([{ userName: 'Coder A' }]);
     const autoVariablesQuery = createQueryBuilder([]);
@@ -1205,7 +1272,18 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       false,
       false,
       false,
-      'new-row-per-variable'
+      'new-row-per-variable',
+      false,
+      false,
+      '',
+      undefined,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      '',
+      true
     );
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer);
@@ -1213,10 +1291,13 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     const headerValues = worksheet.getRow(1).values as unknown[];
     const codeColumn = headerValues.findIndex(value => value === 'Coder A Code');
     const scoreColumn = headerValues.findIndex(value => value === 'Coder A Score');
+    const responseValueColumn = headerValues.findIndex(value => value === 'value');
 
     expect(missingsProfilesService.getMissingByIdForProfileOrDefault).toHaveBeenCalledWith(7, 77, 'mir');
     expect(worksheet.getRow(2).getCell(codeColumn).value).toBe('-97');
     expect(worksheet.getRow(2).getCell(scoreColumn).value).toBe('NA');
+    expect(worksheet.getRow(2).getCell(responseValueColumn).value).toBe('{"answer":"A"}');
+    expect(manualCodingQuery.addSelect).toHaveBeenCalledWith('resp.value', 'responseValue');
   });
 
   it('does not fall back to response scores for discussion manager rows without stored score', async () => {

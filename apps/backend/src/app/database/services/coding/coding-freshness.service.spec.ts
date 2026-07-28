@@ -1004,7 +1004,15 @@ describe('CodingFreshnessService', () => {
       [1, [10], 'stale_source', 'RESULT_ADDED']
     );
     expect(connection.query).toHaveBeenCalledWith(
-      expect.stringContaining('variable_bundle.variables @>'),
+      expect.stringContaining(
+        'UPPER(coding_job_variable.unit_name) = UPPER(added_responses.unit_name)'
+      ),
+      [1, [10], 'stale_source', 'RESULT_ADDED']
+    );
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'FROM jsonb_array_elements(variable_bundle.variables) bundle_variable'
+      ),
       [1, [10], 'stale_source', 'RESULT_ADDED']
     );
   });
@@ -1062,6 +1070,18 @@ describe('CodingFreshnessService', () => {
     expect((freshnessRepository.upsert as jest.Mock).mock.calls[0][0]).toHaveLength(4);
     expect(connection.query).toHaveBeenCalledWith(
       expect.stringContaining('response.id = ANY($2::int[])'),
+      [1, [100, 101, 102], 'stale_source', 'RESULT_ADDED']
+    );
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'UPPER(coding_job_variable.unit_name) = UPPER(added_responses.unit_name)'
+      ),
+      [1, [100, 101, 102], 'stale_source', 'RESULT_ADDED']
+    );
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "UPPER(bundle_variable ->> 'unitName') = UPPER(added_responses.unit_name)"
+      ),
       [1, [100, 101, 102], 'stale_source', 'RESULT_ADDED']
     );
   });

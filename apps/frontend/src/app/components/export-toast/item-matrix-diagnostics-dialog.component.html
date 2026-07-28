@@ -1,0 +1,94 @@
+<h2 mat-dialog-title>
+  {{ 'export-toast.item-matrix-diagnostics.title' | translate: { count: data.total } }}
+</h2>
+
+<mat-dialog-content>
+  <p>{{ 'export-toast.item-matrix-diagnostics.description' | translate }}</p>
+
+  <div class="diagnostic-filters">
+    <mat-form-field appearance="outline">
+      <mat-label>{{ 'export-toast.item-matrix-diagnostics.search' | translate }}</mat-label>
+      <input
+        matInput
+        data-cy="item-matrix-diagnostics-search"
+        [(ngModel)]="search"
+        (ngModelChange)="onFiltersChange()"
+      />
+      <mat-icon matSuffix>search</mat-icon>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>{{ 'export-toast.item-matrix-diagnostics.reason' | translate }}</mat-label>
+      <mat-select
+        data-cy="item-matrix-diagnostics-reason"
+        [(ngModel)]="selectedReason"
+        (ngModelChange)="onFiltersChange()"
+      >
+        <mat-option value="">{{ 'export-toast.item-matrix-diagnostics.all-reasons' | translate }}</mat-option>
+        <mat-option *ngFor="let option of reasonOptions" [value]="option.reasonCode">
+          {{ getReasonLabel(option.reasonCode) }} ({{ option.count }})
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+  </div>
+
+  <div class="diagnostic-toolbar">
+    <span data-cy="item-matrix-diagnostics-result-count">
+      {{ 'export-toast.item-matrix-diagnostics.results' | translate: { filtered: filteredGroups.length, total: data.groups.length } }}
+    </span>
+    <button
+      mat-stroked-button
+      data-cy="item-matrix-diagnostics-download"
+      [disabled]="filteredGroups.length === 0"
+      (click)="downloadCsv()"
+    >
+      <mat-icon>download</mat-icon>
+      {{ 'export-toast.item-matrix-diagnostics.download' | translate }}
+    </button>
+  </div>
+
+  <mat-accordion multi>
+    <mat-expansion-panel
+      *ngFor="let group of visibleGroups; trackBy: trackGroup"
+    >
+      <mat-expansion-panel-header>
+        <mat-panel-title>{{ getReasonLabel(group.reasonCode) }}</mat-panel-title>
+        <mat-panel-description>{{ group.count }}</mat-panel-description>
+      </mat-expansion-panel-header>
+      <dl>
+        <dt>{{ 'export-toast.item-matrix-diagnostics.booklet' | translate }}</dt>
+        <dd>{{ group.bookletName }}</dd>
+        <dt>{{ 'export-toast.item-matrix-diagnostics.column' | translate }}</dt>
+        <dd>{{ group.columnName }}</dd>
+        <dt>{{ 'export-toast.item-matrix-diagnostics.count' | translate }}</dt>
+        <dd>{{ group.count }}</dd>
+        <ng-container *ngIf="group.sampleRowNumbers.length > 0">
+          <dt>{{ 'export-toast.item-matrix-diagnostics.sample-rows' | translate }}</dt>
+          <dd>{{ group.sampleRowNumbers.join(', ') }}</dd>
+        </ng-container>
+      </dl>
+      <p class="suggested-action">
+        <strong>{{ 'export-toast.item-matrix-diagnostics.action' | translate }}:</strong>
+        {{ getSuggestedAction(group.reasonCode) }}
+      </p>
+    </mat-expansion-panel>
+  </mat-accordion>
+
+  <p class="empty" *ngIf="filteredGroups.length === 0">
+    {{ 'export-toast.item-matrix-diagnostics.empty' | translate }}
+  </p>
+
+  <mat-paginator
+    *ngIf="filteredGroups.length > pageSizeOptions[0]"
+    [length]="filteredGroups.length"
+    [pageIndex]="pageIndex"
+    [pageSize]="pageSize"
+    [pageSizeOptions]="pageSizeOptions"
+    [showFirstLastButtons]="true"
+    (page)="onPageChange($event)"
+  ></mat-paginator>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="close()">{{ 'close' | translate }}</button>
+</mat-dialog-actions>

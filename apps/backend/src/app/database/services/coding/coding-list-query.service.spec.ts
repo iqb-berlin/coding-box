@@ -1,6 +1,7 @@
 import { Repository } from 'typeorm';
 import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
+import { Setting } from '../../entities/setting.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { WorkspaceFilesService, WorkspaceCoreService } from '../workspace';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
@@ -35,6 +36,8 @@ type CreateServiceOptions = {
   derivedVariablesBySourceMap?: Map<string, Set<string>>;
   manualInstructionMap?: Map<string, Set<string>>;
   replayAnchorMap?: Map<string, string>;
+  includeDeriveErrorInManualCoding?: boolean;
+  onQueryBuilderCreated?: (queryBuilder: QueryBuilderMock) => void;
 };
 
 describe('CodingListQueryService', () => {
@@ -95,6 +98,7 @@ describe('CodingListQueryService', () => {
       responses.length,
       options.rawVariableRows
     );
+    options.onQueryBuilderCreated?.(queryBuilder);
     const responseRepository = {
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder)
     } as unknown as Repository<ResponseEntity>;
@@ -132,6 +136,16 @@ describe('CodingListQueryService', () => {
         )
       )
     } as unknown as CodingReplayAnchorService;
+    const settingRepository = {
+      findOne: jest.fn().mockResolvedValue(
+        options.includeDeriveErrorInManualCoding ?
+          {
+            key: 'workspace-1-include-derive-error-in-manual-coding',
+            content: JSON.stringify({ enabled: true })
+          } :
+          null
+      )
+    } as unknown as Repository<Setting>;
 
     return new CodingListQueryService(
       responseRepository,
@@ -139,7 +153,8 @@ describe('CodingListQueryService', () => {
       workspaceFilesService,
       {} as unknown as WorkspaceCoreService,
       workspaceExclusionService,
-      replayAnchorService
+      replayAnchorService,
+      settingRepository
     );
   }
 
@@ -349,6 +364,70 @@ describe('CodingListQueryService', () => {
     expect(result.items.map(item => item.variable_id)).toEqual(['INCOMPLETE_VAR']);
   });
 
+  it('includes scoped DERIVE_ERROR responses when manual coding is enabled', async () => {
+    const unitVariableMap = new Map([[
+      'UNIT',
+      new Set(['SOURCE_VAR', 'DERIVED_VAR'])
+    ]]);
+    const derivedVariablesBySourceMap = new Map([
+      [getManualCodingScopeKey('UNIT', 'SOURCE_VAR'), new Set(['DERIVED_VAR'])]
+    ]);
+    const manualInstructionMap = new Map([[
+      'UNIT',
+      new Set(['DERIVED_VAR'])
+    ]]);
+    const createResponse = (
+      id: number,
+      variableId: string
+    ): ResponseEntity => ({
+      id,
+      variableid: variableId,
+      value: 'O',
+      status_v1: statusStringToNumber('DERIVE_ERROR'),
+      unit: {
+        name: 'UNIT',
+        alias: 'Unit Alias',
+        booklet: {
+          person: {
+            login: 'login',
+            code: 'code',
+            group: 'group'
+          },
+          bookletinfo: {
+            name: 'BOOKLET'
+          }
+        }
+      }
+    }) as unknown as ResponseEntity;
+    const service = createService(
+      [
+        createResponse(1, 'SOURCE_VAR'),
+        createResponse(2, 'DERIVED_VAR')
+      ],
+      createFileRepository({}),
+      {
+        unitVariableMap,
+        derivedVariablesBySourceMap,
+        manualInstructionMap,
+        includeDeriveErrorInManualCoding: true
+      }
+    );
+
+    const result = await service.getCodingList(
+      1,
+      'token',
+      'https://iqb-kodierbox.de'
+    );
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        variable_id: 'DERIVED_VAR',
+        status_v1: 'DERIVE_ERROR'
+      })
+    ]);
+    expect(result.total).toBe(1);
+  });
+
   it('excludes intended incomplete coding-list responses without manual instruction', async () => {
     const unitVariableMap = new Map([[
       'UNIT',
@@ -490,5 +569,57 @@ describe('CodingListQueryService', () => {
     await expect(service.getCodingListVariables(1)).resolves.toEqual([
       { unitName: 'UNIT', variableId: 'INCOMPLETE_VAR' }
     ]);
+  });
+
+  it('includes DERIVE_ERROR variables when manual coding is enabled', async () => {
+    const unitVariableMap = new Map([[
+      'UNIT',
+      new Set(['DERIVE_VAR', 'INCOMPLETE_VAR'])
+    ]]);
+    const rawVariableRows = [
+      {
+        unitName: 'UNIT',
+        variableId: 'DERIVE_VAR',
+        statusV1: statusStringToNumber('DERIVE_ERROR')
+      },
+      {
+        unitName: 'UNIT',
+        variableId: 'INCOMPLETE_VAR',
+        statusV1: statusStringToNumber('CODING_INCOMPLETE')
+      }
+    ];
+    const service = createService([], createFileRepository({}), {
+      rawVariableRows,
+      unitVariableMap,
+      includeDeriveErrorInManualCoding: true
+    });
+
+    await expect(service.getCodingListVariables(1)).resolves.toEqual([
+      { unitName: 'UNIT', variableId: 'DERIVE_VAR' },
+      { unitName: 'UNIT', variableId: 'INCOMPLETE_VAR' }
+    ]);
+  });
+
+  it('uses the shared response candidate filters for coding-list variables', async () => {
+    let queryBuilder: QueryBuilderMock | undefined;
+    const service = createService([], createFileRepository({}), {
+      rawVariableRows: [],
+      unitVariableMap: new Map(),
+      onQueryBuilderCreated: createdQueryBuilder => {
+        queryBuilder = createdQueryBuilder;
+      }
+    });
+
+    await service.getCodingListVariables(1);
+
+    const conditions = queryBuilder?.andWhere.mock.calls
+      .map(([condition]) => String(condition)) ?? [];
+    expect(conditions).toContain(
+      "response.value IS NOT NULL AND response.value ~ '[^[:space:]]'"
+    );
+    expect(conditions).toEqual(expect.arrayContaining([
+      expect.stringContaining("response.variableid NOT ILIKE '%image%'"),
+      expect.stringContaining("response.variableid NOT ILIKE '%\\_0%'")
+    ]));
   });
 });

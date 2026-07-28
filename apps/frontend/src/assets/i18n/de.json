@@ -72,7 +72,80 @@
     "errors": {
       "too-many-worksheets-title": "Export zu groß",
       "too-many-worksheets-message": "Dieser Export würde {{actual}} Tabellenblätter erzeugen. Erlaubt sind aktuell {{max}}. Wählen Sie „Nach Variable, kompakt“ oder schränken Sie die Auswahl ein.",
+      "item-matrix-incomplete-title": "Itemdatensatz nicht vollständig exportierbar",
+      "item-matrix-incomplete-message": "{{total}} Zellen konnten nicht sicher aufgelöst werden. Der reguläre Export wurde abgelehnt. Sie können die Ursachen prüfen oder ein deutlich gekennzeichnetes unvollständiges Paket herunterladen.",
+      "item-matrix-incomplete-expired": "{{total}} Zellen konnten nicht sicher aufgelöst werden. Diagnose und unvollständiges Paket sind abgelaufen; starten Sie den Export erneut.",
+      "item-matrix-diagnostics-load-failed": "Die Matrixdiagnose konnte nicht geladen werden. Starten Sie den Export gegebenenfalls erneut.",
+      "item-matrix-incomplete-download-failed": "Das unvollständige Paket konnte nicht heruntergeladen werden. Falls es abgelaufen ist, starten Sie den Export erneut.",
+      "remove-failed": "Der Export konnte nicht vollständig gelöscht werden und bleibt deshalb in der Liste. Versuchen Sie es erneut.",
       "generic-title": "Export fehlgeschlagen"
+    },
+    "item-matrix-actions": {
+      "show-diagnostics": "Diagnose anzeigen",
+      "download-incomplete": "Unvollständigen Export herunterladen"
+    },
+    "incomplete-confirm": {
+      "title": "Unvollständigen Itemdatensatz herunterladen?",
+      "content": "Die Matrix enthält {{total}} leere Fehlerzellen und darf nicht als vollständiger Datensatz behandelt werden. Das ZIP enthält zusätzlich eine Diagnose und einen Warnhinweis.",
+      "confirm": "Unvollständiges ZIP herunterladen",
+      "cancel": "Abbrechen"
+    },
+    "item-matrix-diagnostics": {
+      "title": "Matrixdiagnose ({{count}} Zellen)",
+      "description": "Die Diagnose ist vollständig nach Ursache, Booklet und Spalte gruppiert. Sie enthält keine Personenkennungen; höchstens 20 Zeilennummern dienen als Beispiele.",
+      "search": "Diagnosen durchsuchen",
+      "reason": "Ursache",
+      "all-reasons": "Alle Ursachen",
+      "results": "{{filtered}} von {{total}} Diagnosegruppen",
+      "download": "Gefilterte Diagnose als CSV",
+      "booklet": "Booklet",
+      "column": "Spalte",
+      "count": "Betroffene Zellen",
+      "sample-rows": "Beispielzeilen",
+      "action": "Empfohlene Maßnahme",
+      "empty": "Keine Diagnosegruppe entspricht den Filtern.",
+      "reasons": {
+        "unresolved-cell": {
+          "label": "Zelle konnte nicht aufgelöst werden",
+          "action": "Prüfen Sie Status, Kodierung und Itemdefinition der betroffenen Spalte."
+        },
+        "unresolved-status": {
+          "label": "Status ohne exportierbaren Wert",
+          "action": "Schließen Sie die Verarbeitung oder Kodierung der betroffenen Antworten ab."
+        },
+        "derived-result-missing": {
+          "label": "Ergebnis einer abgeleiteten Variable fehlt",
+          "action": "Führen Sie die Ableitung erneut aus oder ergänzen Sie das erwartete Ergebnis."
+        },
+        "derived-cycle": {
+          "label": "Zyklische Variablenableitung",
+          "action": "Korrigieren Sie die gegenseitigen Abhängigkeiten der abgeleiteten Variablen."
+        },
+        "derived-source-unresolved": {
+          "label": "Quelle einer abgeleiteten Variable ist nicht auflösbar",
+          "action": "Prüfen Sie Quellvariablen, Variablenzuordnung und vorhandene Antwortdaten."
+        },
+        "derived-design-conflict": {
+          "label": "Widerspruch zwischen Booklet-Design und Ableitung",
+          "action": "Prüfen Sie die Ableitung auf eine Mischung aus nicht vorgelegten und vorgelegten Quellen."
+        },
+        "internal-resolution-missing": {
+          "label": "Interne Zellzuordnung fehlt",
+          "action": "Prüfen Sie die Item-Metadaten und starten Sie den Export erneut."
+        },
+        "invalid-code": {
+          "label": "Code ist nicht exportierbar",
+          "action": "Ersetzen Sie reservierte technische Codes durch ein fachliches Ergebnis oder Missing."
+        },
+        "missing-code": {
+          "label": "Code fehlt",
+          "action": "Ergänzen Sie den Code oder verwenden Sie eine Score-Matrix."
+        },
+        "missing-score": {
+          "label": "Score fehlt",
+          "action": "Ergänzen Sie den Score oder verwenden Sie eine Code-Matrix."
+        }
+      }
     },
     "types": {
       "aggregated": "Aggregierte Ansicht",
@@ -85,7 +158,8 @@
       "manual-review-new-column-per-coder": "pro Kodierer neue Spalte",
       "manual-review-new-row-per-variable": "pro Variable neue Zeile",
       "results-by-version": "Finale Ergebnisdaten",
-      "item-matrix": "Itemmatrix"
+      "item-matrix": "Itemdatensatz",
+      "psychometrics": "Trennschärfen / Psychometrie"
     }
   },
   "manual-coding-export": {
@@ -102,6 +176,9 @@
     "job-definition-filter": "Jobdefinitionen filtern",
     "training-filter": "Schulungen filtern",
     "coder-filter": "Kodierer filtern",
+    "select-all": "Alle auswählen",
+    "deselect-all": "Alle abwählen",
+    "include-response-value": "Antwortwert hinzufügen",
     "start": "Exportjob starten",
     "too-many-worksheets-title": "Export zu groß",
     "too-many-worksheets-message": "Dieser Export würde {{actual}} Tabellenblätter erzeugen. Erlaubt sind aktuell {{max}}. Das ist in Excel sehr schwer nutzbar und kann lange dauern. Wählen Sie den kompakten Export oder schränken Sie die Auswahl ein.",
@@ -345,6 +422,7 @@
     "users-deleted": "Nutzer:in(en) gelöscht",
     "users-not-deleted": "Nutzer:in(en) konnten nicht gelöscht werden",
     "workspaces": "Arbeitsbereiche",
+    "notifications": "Systemhinweise",
     "settings": "Einstellungen",
     "upload-resource-package": "Resource-Package hochladen/aktualisieren",
     "delete-selected": "Markierte löschen",
@@ -388,6 +466,59 @@
     "deleting-workspace-persons": "Personendaten werden gelöscht...",
     "deleting-workspace-finish": "Löschen wird abgeschlossen...",
     "deleting-workspace-success": "Arbeitsbereich erfolgreich gelöscht!"
+  },
+  "system-notifications": {
+    "banner-label": "Systemhinweis",
+    "dismiss": "Hinweis ausblenden",
+    "manage-title": "Systemhinweise verwalten",
+    "type": "Typ",
+    "severity": "Priorität",
+    "title": "Titel",
+    "message": "Nachricht",
+    "starts-at": "Betroffen ab",
+    "ends-at": "Betroffen bis",
+    "visible-from": "Sichtbar ab",
+    "visible-until": "Sichtbar bis",
+    "enabled": "Aktiviert",
+    "dismissible": "Durch Nutzer:innen ausblendbar",
+    "preview": "Vorschau",
+    "preview-title": "Titel des Hinweises",
+    "preview-message": "Der Hinweistext wird hier angezeigt.",
+    "create": "Hinweis anlegen",
+    "update": "Änderungen speichern",
+    "status-label": "Status",
+    "window": "Zeitraum",
+    "actions": "Aktionen",
+    "edit": "Hinweis bearbeiten",
+    "delete": "Hinweis löschen",
+    "delete-title": "Systemhinweis löschen",
+    "delete-content": "Soll der Systemhinweis „{{title}}“ wirklich gelöscht werden?",
+    "empty": "Noch keine Systemhinweise vorhanden.",
+    "invalid-event-window": "Das Ende des betroffenen Zeitraums muss nach dem Beginn liegen.",
+    "invalid-visibility-window": "Das Sichtbarkeitsende muss nach dem Sichtbarkeitsbeginn liegen.",
+    "saved": "Systemhinweis gespeichert.",
+    "deleted": "Systemhinweis gelöscht.",
+    "load-error": "Systemhinweise konnten nicht geladen werden.",
+    "save-error": "Systemhinweis konnte nicht gespeichert werden.",
+    "delete-error": "Systemhinweis konnte nicht gelöscht werden.",
+    "types": {
+      "update": "Update",
+      "maintenance": "Wartung",
+      "outage": "Ausfall",
+      "info": "Information"
+    },
+    "severities": {
+      "low": "Niedrig",
+      "medium": "Mittel",
+      "high": "Hoch",
+      "critical": "Kritisch"
+    },
+    "status": {
+      "scheduled": "Geplant",
+      "active": "Aktiv",
+      "expired": "Abgelaufen",
+      "disabled": "Deaktiviert"
+    }
   },
   "ws-admin": {
     "name": "Name",
@@ -458,6 +589,10 @@
     "export.errors.no-workspace": "Kein Arbeitsbereich ausgewählt",
     "export.errors.export-failed": "Datenexport fehlgeschlagen",
     "export.errors.start-failed": "Datenexport konnte nicht gestartet werden",
+    "export.errors.psychometric-options-failed": "Die Missing-Profile für den Psychometrie-Export konnten nicht geladen werden.",
+    "export.errors.psychometric-domain-options-failed": "Die VOMD-Domänen für den Psychometrie-Export konnten nicht geladen werden.",
+    "export.errors.item-dataset-options-failed": "Die Item-Metadaten für den Itemdatensatz konnten nicht geladen werden.",
+    "export.errors.results-options-failed": "Die Missing-Profile für den v1-Ergebnisexport konnten nicht geladen werden.",
     "export.errors.too-many-worksheets-short": "Der Export ist zu groß für einzelne Tabellenblätter.",
     "export.errors.token-failed": "Replay-Token konnte nicht erzeugt werden",
     "export.job-started": "Datenexport gestartet",
@@ -491,17 +626,109 @@
       "only-manual-coding-tooltip": "Exportiert nur Variablen, die manuell kodiert werden sollen (CODING_INCOMPLETE Variablen). Diese Option ist standardmäßig aktiviert.",
       "export-type": "Exporttyp",
       "export-type-results": "Finale Ergebnisdaten",
-      "export-type-item-matrix": "Itemmatrix",
+      "export-type-item-matrix": "Itemdatensatz",
+      "export-type-psychometrics": "Trennschärfen / Psychometrie",
       "results-version": "Ergebnisversion",
       "results-version-v1": "v1 Autocoding",
       "results-version-v2": "v2 manuelle Kodierung",
       "results-version-v3": "v3 zweites Autocoding",
+      "results-missings-profile": "Missing-Profil",
+      "results-missings-profile-loading": "Missing-Profile werden geladen …",
+      "results-no-missings-profile": "Kein Missing-Profil verfügbar",
       "results-format": "Dateiformat",
       "results-format-csv": "CSV",
       "results-format-excel": "Excel",
       "matrix-value": "Zellwert",
       "matrix-value-score": "Score",
       "matrix-value-code": "Code",
+      "item-dataset-missings-profile": "Missing-Profil",
+      "item-dataset-no-missings-profile": "Kein Missing-Profil verfügbar",
+      "item-dataset-search": "Items durchsuchen",
+      "item-dataset-items": "Items",
+      "item-dataset-items-selected": "{{count}} Items ausgewählt",
+      "item-dataset-items-selected-total": "{{selected}} von {{total}} Items ausgewählt",
+      "item-dataset-select-all": "Alle auswählen",
+      "item-dataset-clear-all": "Auswahl aufheben",
+      "item-dataset-select-filtered": "Treffer auswählen",
+      "item-dataset-clear-filtered": "Treffer abwählen",
+      "item-dataset-mnr-scope": "Reichweite für nicht erreichte Items",
+      "item-dataset-mnr-scope-unit": "Pro Aufgabe",
+      "item-dataset-mnr-scope-testlet": "Pro Testlet",
+      "item-dataset-mnr-scope-booklet": "Pro Booklet",
+      "item-dataset-recode-trailing": "Abschließende Auslassungen als nicht erreicht behandeln",
+      "item-dataset-mapping-title": "Fehlerhafte Item-Metadaten: {{count}} – der Itemdatensatz kann nicht exportiert werden",
+      "item-dataset-mapping-warning-title": "Item-Metadatenwarnungen: {{count}} – der Export ist weiterhin möglich",
+      "item-dataset-diagnostic-file": "VOMD-Datei",
+      "item-dataset-diagnostic-expected-file": "Erwartete VOMD-Datei",
+      "item-dataset-diagnostic-unit": "Unit",
+      "item-dataset-diagnostic-item": "Item",
+      "item-dataset-diagnostic-variable": "variableId",
+      "item-dataset-diagnostic-target-variable": "Ziel-variableId",
+      "item-dataset-diagnostic-column": "Spalte",
+      "item-dataset-diagnostics-show-details": "Details anzeigen",
+      "item-dataset-diagnostics-title-warning": "Item-Metadatenwarnungen ({{count}})",
+      "item-dataset-diagnostics-title-error": "Fehlerhafte Item-Metadaten ({{count}})",
+      "item-dataset-diagnostics-description-warning": "Diese Hinweise verhindern den Export nicht. Prüfen und korrigieren Sie die betroffenen Metadaten bei Gelegenheit.",
+      "item-dataset-diagnostics-description-error": "Diese Probleme verhindern den Itemdatensatz-Export. Korrigieren Sie die betroffenen Metadaten und laden Sie die Optionen anschließend neu.",
+      "item-dataset-diagnostics-search": "Diagnosen durchsuchen",
+      "item-dataset-diagnostics-cause": "Ursache",
+      "item-dataset-diagnostics-all-causes": "Alle Ursachen",
+      "item-dataset-diagnostics-results": "{{filtered}} von {{total}} Diagnosen",
+      "item-dataset-diagnostics-download": "Gefilterte Diagnosen als CSV",
+      "item-dataset-diagnostics-group-count": "{{count}} Diagnosen",
+      "item-dataset-diagnostics-empty": "Keine Diagnosen entsprechen den Filtern.",
+      "item-dataset-diagnostics-severity-warning": "Warnung",
+      "item-dataset-diagnostics-severity-error": "Fehler",
+      "item-dataset-diagnostic-code": {
+        "vomd-mapping": "Ungültige VOMD-Zuordnung",
+        "ambiguous-vomd-fallback": "Mehrdeutiger VOMD-Fallback",
+        "missing-vomd": "Fehlende VOMD-Datei",
+        "missing-item-id": "Fehlende Item-ID",
+        "missing-variable-id": "Fehlende variableId",
+        "variable-not-found": "Variable nicht gefunden",
+        "ambiguous-variable": "Mehrdeutige Variable",
+        "ambiguous-item-fallback": "Mehrdeutiger Item-Fallback",
+        "duplicate-vomd-item": "Doppeltes VOMD-Item",
+        "ambiguous-variable-mapping": "Mehrdeutige Variablenzuordnung",
+        "column-name-collision": "Spaltenkollision",
+        "unknown-selection": "Unbekannte Itemauswahl",
+        "vomd-fallback-used": "Eindeutiger Fallback verwendet",
+        "vomd-fallback-ignored": "Redundanter Fallback ignoriert"
+      },
+      "item-dataset-diagnostics-csv": {
+        "severity": "Schweregrad",
+        "cause": "Ursache",
+        "message": "Meldung",
+        "file": "VOMD-Datei",
+        "unit": "Unit",
+        "item": "Item",
+        "variable": "variableId",
+        "column": "Spalte",
+        "action": "Handlungsempfehlung"
+      },
+      "psychometric-missings-profile": "Missing-Profil",
+      "psychometric-no-missings-profile": "Kein Missing-Profil verfügbar",
+      "psychometric-domain": "Domänenbildung",
+      "psychometric-domain-workspace": "Gesamter Workspace",
+      "psychometric-domain-hint": "Nur vollständig und einwertig belegte VOMD-Felder können ausgewählt werden.",
+      "psychometric-no-items": "Keine auswertbaren VOMD-Items gefunden",
+      "psychometric-mapping-issues": "Fatale Zuordnungsprobleme: {{count}}",
+      "psychometric-info-summary": "Der Export enthält aggregierte Trennschärfen, keine personenbezogenen Daten. Ein Item ist eine in der VOMD ausgewiesene Testaufgabe bzw. Ergebnisvariable.",
+      "psychometric-items-detected": "Erkannte VOMD-Items: {{count}}",
+      "psychometric-info-show-details": "Kennwerte und Status erläutern",
+      "psychometric-info-hide-details": "Erläuterungen ausblenden",
+      "psychometric-info-score-title": "Score-Trennschärfe",
+      "psychometric-info-score-description": "Zusammenhang zwischen dem Score des aktuellen Items und dem Domänenscore, also dem mittleren Score der zugeordneten Testaufgaben.",
+      "psychometric-info-code-category-title": "Code-/Kategorientrennschärfe",
+      "psychometric-info-code-category-description": "Zusammenhang einer 0/1-Markierung für den jeweiligen Code oder die jeweilige Antwortkategorie mit dem Domänenscore.",
+      "psychometric-info-status-title": "Paarweise vollständige Fälle und Status",
+      "psychometric-info-status-description": "n bezeichnet die Anzahl der paarweise vollständigen Fälle für Item und Domänenscore. Statt einer Korrelation erscheint ein Status bei weniger als zwei solchen Fällen, einem konstanten Item oder einem konstanten Domänenscore. Weniger als 30 Fälle sind nur eine Orientierung und verhindern den Export nicht.",
+      "psychometric-info-part-whole-title": "Part-Whole-Korrektur",
+      "psychometric-info-part-whole-description": "Zieht den Score des aktuellen Items aus dem Domänenscore ab, bevor der Zusammenhang berechnet wird.",
+      "psychometric-max-categories": "Maximale Antwortkategorien je Testaufgabe",
+      "psychometric-max-categories-hint": "Bei Überschreitung wird ein Status ausgegeben, statt Kategorien stillschweigend wegzulassen.",
+      "psychometric-part-whole": "Part-Whole-Korrektur anwenden",
+      "psychometric-part-whole-tooltip": "Zieht den Score des aktuellen Items vom zugehörigen Domänenscore ab.",
       "include-response-values": "Antwortwerte einschließen",
       "include-response-values-tooltip": "Fügt die ursprünglichen Antwortwerte in den finalen Ergebnisdaten hinzu.",
       "include-geogebra-response-values": "GeoGebra-Werte als String einschließen",
@@ -561,7 +788,12 @@
     "filter-test-persons": "Suche nach Testpersonen",
     "filter-test-groups": "Suche nach Testgruppen",
     "filter-test-files": "Suche nach Testdateien",
-    "invalid-regex": "Ungültiger regulärer Ausdruck"
+    "invalid-regex": "Ungültiger regulärer Ausdruck",
+    "invalid-postgres-regex": "Der reguläre Ausdruck ist für die Datenbanksuche ungültig.",
+    "regex-timeout": "Die Regex-Suche hat zu lange gedauert. Bitte verwenden Sie ein spezifischeres Muster.",
+    "response-value-timeout": "Die Suche im Antwortwert hat zu lange gedauert. Bitte verwenden Sie einen spezifischeren Suchbegriff.",
+    "response-value-prefix-hint": "Die Suche berücksichtigt die ersten 2.000 Zeichen jedes Antwortwerts.",
+    "test-results-load-error": "Testergebnisse konnten nicht geladen werden."
   },
   "access-rights": {
     "hint": "Zugriffsrechte: Bitte links Nutzer:in wählen",
@@ -789,8 +1021,18 @@
         "metric-agreements": "{{count}} Übereinstimmungen",
         "metric-deviations": "Abweichungen",
         "metric-not-comparable": "{{count}} nicht vergleichbar",
-        "metric-code-kappa": "Code-Kappa",
-        "metric-score-kappa": "Score-Kappa",
+        "metric-code-kappa": "Cohen-Code-Kappa",
+        "metric-score-kappa": "Cohen-Score-Kappa",
+        "metric-mean-cohen-kappa": "Mittleres Cohen's Kappa",
+        "metric-mean-brennan-prediger-kappa": "Mittleres Brennan-Prediger-Kappa",
+        "metric-brennan-prediger-kappa": "Brennan-Prediger-Kappa",
+        "metric-fleiss-kappa": "Fleiss' Kappa",
+        "cohen-interpretation": "Cohen-Interpretation",
+        "complete-cases": "{{count}} vollständige Fälle",
+        "complete-of-possible-cases": "{{complete}} vollständige / {{possible}} mögliche Fälle",
+        "reliability-export-csv": "Reliabilität als CSV exportieren",
+        "reliability-export-error": "Der Reliabilitäts-Export konnte nicht erstellt werden.",
+        "fleiss-minimum-raters": "Fleiss' Kappa wird erst ab drei ausgewählten Kodierern berechnet.",
         "metric-mean-agreement": "Mittlere Übereinstimmung",
         "metric-weighted": "gewichtet",
         "metric-unweighted": "ungewichtet",
@@ -899,7 +1141,7 @@
     "job-definition-none": "Keine Jobdefinitionen verfügbar",
     "job-definition-picker-title": "Jobdefinition auswählen",
     "job-definition-picker-search": "Jobdefinitionen suchen",
-    "job-definition-picker-search-placeholder": "ID, Status, Gruppe oder Umfang",
+    "job-definition-picker-search-placeholder": "Name, ID, Status, Gruppe oder Umfang",
     "job-definition-picker-clear-search": "Suche leeren",
     "job-definition-picker-clear": "Jobdefinition-Filter entfernen",
     "job-definition-picker-apply": "Auswahl übernehmen",
@@ -923,6 +1165,7 @@
         "status": "Status",
         "units": "Aufgaben"
       },
+      "refreshing": "Kodierjobs werden aktualisiert...",
       "issue-tooltip": {
         "no-review-issues": "Keine prüfpflichtigen Kodierungsprobleme",
         "open-no-review-issues-singular": "{{count}} offene Aufgabe, keine prüfpflichtigen Kodierungsprobleme",
@@ -1183,7 +1426,7 @@
     "auto-refresh-manual-coding-jobs": "Kodierübersichten und Kodierjob-Tabellen automatisch aktualisieren",
     "auto-refresh-manual-coding-jobs-description": "Wenn aktiviert, werden Kodierübersicht, Manuelle Kodierung und Kodierjob-Tabellen automatisch bei relevanten Änderungen aktualisiert. Wenn deaktiviert, laden Sie teure Übersichten und Listen gezielt per Aktualisieren-Button.",
     "include-derive-error-in-manual-coding": "DERIVE_ERROR in manueller Kodierung zulassen",
-    "include-derive-error-in-manual-coding-description": "Wenn aktiviert, können DERIVE_ERROR-Fälle bei Kodierjobdefinitionen gezielt in die manuelle Kodierung aufgenommen werden. Standardmäßig ist diese Funktion deaktiviert.",
+    "include-derive-error-in-manual-coding-description": "Wenn aktiviert, werden DERIVE_ERROR-Fälle in Kodierlisten aufgenommen und können bei Kodierjobdefinitionen gezielt in die manuelle Kodierung einbezogen werden. Standardmäßig ist diese Funktion deaktiviert.",
     "include-derive-error-in-manual-coding-enabled": "DERIVE_ERROR-Fälle können in die manuelle Kodierung aufgenommen werden",
     "include-derive-error-in-manual-coding-disabled": "DERIVE_ERROR-Fälle werden nicht in die manuelle Kodierung aufgenommen",
     "enable-regex-search": "Reguläre Ausdrücke in Suchfeldern",
@@ -1556,6 +1799,11 @@
       "v2-description": "Manuelle Kodierung (enthält auch v1-Ergebnisse)",
       "v3-description": "Zweiter Autocoder-Lauf (enthält auch v1 und v2-Ergebnisse)",
       "select-format": "Exportformat auswählen",
+      "select-missings-profile": "Missing-Profil auswählen",
+      "missings-profile": "Missing-Profil",
+      "loading-missings-profiles": "Missing-Profile werden geladen …",
+      "missings-profiles-error": "Die Missing-Profile konnten nicht geladen werden.",
+      "no-missings-profiles": "Kein Missing-Profil verfügbar.",
       "options-title": "Exportoptionen",
       "include-replay-urls": "Replay-URLs einschließen",
       "replay-urls-description": "Fügt eine Spalte mit direkten Links zu den Replay-Ansichten der einzelnen Antworten hinzu",
@@ -2125,6 +2373,10 @@
       "manual-title": "Kodierstatus wird manuell aktualisiert",
       "manual-text": "Automatische Statusprüfungen sind für diesen Arbeitsbereich deaktiviert. Aktualisieren Sie den Kodierstatus in der Kodierungsverwaltung bei Bedarf manuell.",
       "refresh": "Kodierstatus aktualisieren"
+    },
+    "flat-table": {
+      "response-frequency-column": "Antwortwerthäufigkeit",
+      "response-frequency-tooltip": "Aggregierte Häufigkeit dieses Antwortwerts über alle berücksichtigten Fälle. Der Wert wird in jeder passenden Fallzeile wiederholt."
     }
   },
   "coding-variables-dialog": {
@@ -2169,6 +2421,12 @@
       }
     },
     "form-fields": {
+      "name-label": "Name",
+      "name-placeholder": "z.B. Lesen Klasse 4",
+      "name-required": "Ein Name für die Jobdefinition ist erforderlich",
+      "name-maxlength": "Der Name darf höchstens 255 Zeichen lang sein",
+      "description-label": "Beschreibung",
+      "description-placeholder": "Optionale Beschreibung der Jobdefinition",
       "status-label": "Status",
       "duration-label": "Dauer für eine Kodieraufgabe (Sekunden)",
       "duration-placeholder": "z.B. 300 (5 Minuten)",
@@ -2343,6 +2601,7 @@
     "bulk-creation-in-progress": "Kodier-Jobs werden erstellt...",
     "table-headers": {
       "id": "ID",
+      "name": "Jobdefinition",
       "status": "Status",
       "variables": "Variablen",
       "coders": "Kodierer",
@@ -2375,10 +2634,10 @@
     },
     "workflow": {
       "definition": "Definition",
-      "jobs-count-unavailable": "Definition #{{id}} · Jobstatus nicht geladen",
-      "no-jobs": "Definition #{{id}} · Noch keine Kodierjobs erstellt",
-      "one-job": "Definition #{{id}} · 1 Kodierjob erstellt",
-      "many-jobs": "Definition #{{id}} · {{count}} Kodierjobs erstellt"
+      "jobs-count-unavailable": "{{label}} · Jobstatus nicht geladen",
+      "no-jobs": "{{label}} · Noch keine Kodierjobs erstellt",
+      "one-job": "{{label}} · 1 Kodierjob erstellt",
+      "many-jobs": "{{label}} · {{count}} Kodierjobs erstellt"
     },
     "refresh-dialog": {
       "title": {
@@ -2627,7 +2886,17 @@
       "given-answer": "Gegebene Antwort",
       "coder-results": "Kodierergebnisse",
       "selection": "Auswahl",
+      "manager-unknown": "Manager unbekannt",
       "alternative-coder-names": "Weitere Namen: {{names}}"
+    },
+    "code-groups": {
+      "schema": "Schema-Codes",
+      "general": "Allgemeine Codes"
+    },
+    "manager-state": {
+      "draft": "Entwurf",
+      "applied": "Angewendet",
+      "superseded": "Überholt"
     },
     "code-label": "Code",
     "score-label": "Bewertung",
@@ -2721,6 +2990,7 @@
       "no-workspace-selected": "Kein Arbeitsbereich ausgewählt",
       "failed-to-load": "Fehler beim Laden der doppelkodierten Variablen",
       "failed-to-apply": "Fehler beim Anwenden der Auflösungen",
+      "resolutions-partially-applied": "{{applied}} Auflösung(en) angewendet, {{skipped}} übersprungen und {{failed}} fehlgeschlagen.",
       "no-decisions": "Keine Entscheidungen zum Anwenden ausgewählt",
       "no-decision-for-item": "Keine Entscheidung für diese Variable ausgewählt",
       "replay-failed": "Replay konnte für diese Antwort nicht geöffnet werden",

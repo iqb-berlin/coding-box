@@ -56,6 +56,7 @@ import { SaveCodingProgressDto } from '../../admin/coding-job/dto/save-coding-pr
 import { SaveCodingNotesDto } from '../../admin/coding-job/dto/save-coding-notes.dto';
 import { TransferCodingCasesDto } from '../../admin/coding-job/dto/transfer-coding-cases.dto';
 import { TransferCodingCasesResultDto } from '../../admin/coding-job/dto/transfer-coding-cases-result.dto';
+import type { ReplayCodingSessionDto } from '../../../../../../api-dto/coding/replay-coding-session.dto';
 
 @ApiTags('WSG Admin Coding Jobs')
 @Controller('wsg-admin/workspace/:workspace_id/coding-job')
@@ -1131,6 +1132,192 @@ export class WsgCodingJobController {
     );
 
     return this.codingJobService.getBulkCodingProgress(jobIds, workspaceId);
+  }
+
+  @Get(':id/replay-session')
+  @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Start a coding-job replay session',
+    description:
+      'Returns navigation units, progress, notes, and replay metadata from one shared coding-job context'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiQuery({
+    name: 'onlyOpen',
+    required: false,
+    type: Boolean,
+    description: 'When true, only open units are returned for navigation'
+  })
+  @ApiOkResponse({
+    description: 'Replay session initialized successfully',
+    schema: {
+      type: 'object',
+      required: ['units', 'progress', 'notes', 'job', 'serverTimings'],
+      properties: {
+        units: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: [
+              'responseId',
+              'unitName',
+              'unitAlias',
+              'variableId',
+              'variableAnchor',
+              'variablePage',
+              'bookletName',
+              'personLogin',
+              'personCode',
+              'personGroup',
+              'variableBundleId',
+              'bundleContext'
+            ],
+            properties: {
+              responseId: { type: 'number' },
+              unitName: { type: 'string' },
+              unitAlias: { type: 'string', nullable: true },
+              variableId: { type: 'string' },
+              variableAnchor: { type: 'string' },
+              variablePage: { type: 'string' },
+              bookletName: { type: 'string' },
+              personLogin: { type: 'string' },
+              personCode: { type: 'string' },
+              personGroup: { type: 'string' },
+              variableBundleId: { type: 'number', nullable: true },
+              bundleContext: {
+                type: 'object',
+                nullable: true,
+                required: [
+                  'bundleId',
+                  'bundleName',
+                  'caseKey',
+                  'caseOrderingMode',
+                  'variables'
+                ],
+                properties: {
+                  bundleId: { type: 'number' },
+                  bundleName: { type: 'string' },
+                  caseKey: { type: 'string' },
+                  caseOrderingMode: {
+                    type: 'string',
+                    enum: ['continuous', 'alternating']
+                  },
+                  variables: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: [
+                        'responseId',
+                        'unitName',
+                        'variableId',
+                        'variableAnchor',
+                        'variablePage',
+                        'status',
+                        'code',
+                        'score',
+                        'source'
+                      ],
+                      properties: {
+                        responseId: { type: 'number', nullable: true },
+                        unitName: { type: 'string' },
+                        variableId: { type: 'string' },
+                        variableAnchor: { type: 'string' },
+                        variablePage: { type: 'string' },
+                        status: {
+                          type: 'string',
+                          enum: [
+                            'manual-open',
+                            'manual-coded',
+                            'auto-coded',
+                            'not-coded',
+                            'not-available'
+                          ]
+                        },
+                        code: { type: 'number', nullable: true },
+                        score: { type: 'number', nullable: true },
+                        source: {
+                          type: 'string',
+                          enum: ['manual', 'auto', 'none']
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        progress: {
+          type: 'object',
+          additionalProperties: {
+            type: 'object',
+            nullable: true,
+            required: ['id'],
+            properties: {
+              id: { type: 'number' },
+              code: { type: 'string' },
+              label: { type: 'string' },
+              score: { type: 'number' },
+              codingIssueOption: { type: 'number' }
+            }
+          }
+        },
+        notes: {
+          type: 'object',
+          additionalProperties: { type: 'string' }
+        },
+        job: {
+          type: 'object',
+          required: [
+            'status',
+            'comment',
+            'showScore',
+            'allowComments',
+            'suppressGeneralInstructions'
+          ],
+          properties: {
+            status: { type: 'string' },
+            comment: { type: 'string', nullable: true },
+            showScore: { type: 'boolean' },
+            allowComments: { type: 'boolean' },
+            suppressGeneralInstructions: { type: 'boolean' }
+          }
+        },
+        serverTimings: {
+          type: 'object',
+          additionalProperties: { type: 'number', nullable: true }
+        }
+      }
+    }
+  })
+  @ApiNotFoundResponse({
+    description: 'Coding job not found.'
+  })
+  async getCodingJobReplaySession(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number,
+      @Req() req: Request,
+      @Query('onlyOpen') onlyOpen?: string
+  ): Promise<ReplayCodingSessionDto> {
+    await this.assertCodingJobAccess(workspaceId, id, req);
+    return this.codingJobService.getCodingJobReplaySession(
+      id,
+      workspaceId,
+      onlyOpen === 'true'
+    );
   }
 
   @Get(':id/units')

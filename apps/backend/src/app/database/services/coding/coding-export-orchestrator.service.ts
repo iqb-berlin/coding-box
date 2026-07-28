@@ -5,9 +5,14 @@ import { CodingExportService } from './coding-export.service';
 import { CodingListService } from './coding-list.service';
 import {
   CodingItemMatrixExportService,
+  ItemMatrixExportConfiguration,
   ItemMatrixValue,
   ItemMatrixVersion
 } from './coding-item-matrix-export.service';
+import {
+  ItemDatasetOptionsDto,
+  ItemMatrixExportDiagnosticsDto
+} from '../../../../../../../api-dto/coding/export-request.dto';
 
 type CodingVersion = 'v1' | 'v2' | 'v3';
 
@@ -31,6 +36,7 @@ export interface VersionedCodingResultsExportOptions {
   includeResponseValues?: boolean;
   includeGeoGebraResponseValues?: boolean;
   includeGeoGebraFiles?: boolean;
+  missingsProfileId: number;
   onProgress?: ExportProgressCallback;
   checkCancellation?: () => Promise<void>;
 }
@@ -39,6 +45,7 @@ export interface DetailedCodingResultsExportOptions {
   workspaceId: number;
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
+  includeResponseValues?: boolean;
   anonymizeCoders?: boolean;
   usePseudoCoders?: boolean;
   authToken?: string;
@@ -53,8 +60,12 @@ export interface DetailedCodingResultsExportOptions {
 
 export interface ItemMatrixExportOptions {
   workspaceId: number;
+  missingsProfileId: number;
   matrixValue?: ItemMatrixValue;
   version?: ItemMatrixVersion;
+  notReachedScope?: ItemMatrixExportConfiguration['notReachedScope'];
+  recodeTrailingOmissions?: boolean;
+  items?: ItemMatrixExportConfiguration['items'];
   onProgress?: ExportProgressCallback;
   checkCancellation?: () => Promise<void>;
 }
@@ -73,6 +84,7 @@ export class CodingExportOrchestratorService {
     return this.codingListService.getCodingResultsByVersionCsvStream(
       options.workspaceId,
       options.version || 'v2',
+      options.missingsProfileId,
       options.authToken || '',
       options.serverUrl || '',
       options.includeReplayUrl || false,
@@ -90,6 +102,7 @@ export class CodingExportOrchestratorService {
       return this.codingListService.getCodingResultsByVersionAsGeoGebraZip(
         options.workspaceId,
         options.version || 'v2',
+        options.missingsProfileId,
         options.authToken || '',
         options.serverUrl || '',
         options.includeReplayUrl || false,
@@ -101,6 +114,7 @@ export class CodingExportOrchestratorService {
     return this.codingListService.getCodingResultsByVersionAsExcel(
       options.workspaceId,
       options.version || 'v2',
+      options.missingsProfileId,
       options.authToken || '',
       options.serverUrl || '',
       options.includeReplayUrl || false,
@@ -120,6 +134,7 @@ export class CodingExportOrchestratorService {
         filePath,
         options.workspaceId,
         options.version || 'v2',
+        options.missingsProfileId,
         options.authToken || '',
         options.serverUrl || '',
         options.includeReplayUrl || false,
@@ -133,6 +148,7 @@ export class CodingExportOrchestratorService {
       filePath,
       options.workspaceId,
       options.version || 'v2',
+      options.missingsProfileId,
       options.authToken || '',
       options.serverUrl || '',
       options.includeReplayUrl || false,
@@ -157,7 +173,8 @@ export class CodingExportOrchestratorService {
       options.jobDefinitionIds,
       options.coderTrainingIds,
       options.coderIds,
-      options.serverUrl || ''
+      options.serverUrl || '',
+      options.includeResponseValues || false
     );
   }
 
@@ -179,7 +196,8 @@ export class CodingExportOrchestratorService {
       options.jobDefinitionIds,
       options.coderTrainingIds,
       options.coderIds,
-      options.serverUrl || ''
+      options.serverUrl || '',
+      options.includeResponseValues || false
     );
   }
 
@@ -188,6 +206,7 @@ export class CodingExportOrchestratorService {
       options.workspaceId,
       options.matrixValue || 'score',
       options.version || 'v2',
+      this.getItemMatrixConfiguration(options),
       options.onProgress,
       options.checkCancellation
     ) as Readable);
@@ -198,6 +217,7 @@ export class CodingExportOrchestratorService {
       options.workspaceId,
       options.matrixValue || 'score',
       options.version || 'v2',
+      this.getItemMatrixConfiguration(options),
       options.onProgress,
       options.checkCancellation
     );
@@ -206,14 +226,45 @@ export class CodingExportOrchestratorService {
   exportItemMatrixAsExcelToFile(
     filePath: string,
     options: ItemMatrixExportOptions
-  ): Promise<void> {
+  ): Promise<ItemMatrixExportDiagnosticsDto> {
     return this.codingItemMatrixExportService.writeItemMatrixExcelToFile(
       filePath,
       options.workspaceId,
       options.matrixValue || 'score',
       options.version || 'v2',
+      this.getItemMatrixConfiguration(options),
       options.onProgress,
       options.checkCancellation
     );
+  }
+
+  exportItemMatrixAsCsvToFile(
+    filePath: string,
+    options: ItemMatrixExportOptions
+  ): Promise<ItemMatrixExportDiagnosticsDto> {
+    return this.codingItemMatrixExportService.writeItemMatrixCsvToFile(
+      filePath,
+      options.workspaceId,
+      options.matrixValue || 'score',
+      options.version || 'v2',
+      this.getItemMatrixConfiguration(options),
+      options.onProgress,
+      options.checkCancellation
+    );
+  }
+
+  getItemDatasetOptions(workspaceId: number): Promise<ItemDatasetOptionsDto> {
+    return this.codingItemMatrixExportService.getItemDatasetOptions(workspaceId);
+  }
+
+  private getItemMatrixConfiguration(
+    options: ItemMatrixExportOptions
+  ): ItemMatrixExportConfiguration {
+    return {
+      missingsProfileId: options.missingsProfileId,
+      notReachedScope: options.notReachedScope || 'unit',
+      recodeTrailingOmissions: options.recodeTrailingOmissions || false,
+      items: options.items
+    };
   }
 }

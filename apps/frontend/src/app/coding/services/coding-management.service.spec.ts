@@ -380,7 +380,7 @@ describe('CodingManagementService', () => {
       global.URL.createObjectURL = jest.fn();
       global.URL.revokeObjectURL = jest.fn();
 
-      await service.downloadCodingResults('v1', 'csv', true, false);
+      await service.downloadCodingResults('v1', 'csv', 7, true, false);
 
       expect(exportServiceMock.startExportJob).toHaveBeenCalledWith(
         1,
@@ -391,8 +391,39 @@ describe('CodingManagementService', () => {
         undefined,
         false,
         false,
+        false,
+        7
+      );
+    });
+
+    it('should show the profile validation reason when a v1 export job fails', async () => {
+      const validationError = "Missing profile 7 must define 'mnr'";
+      exportServiceMock.startExportJob.mockReturnValue(of({
+        jobId: 'job-1',
+        message: 'started'
+      }));
+      exportServiceMock.getExportJobStatus.mockReturnValue(of({
+        status: 'failed',
+        progress: 0,
+        error: validationError
+      }) as never);
+
+      await service.downloadCodingResults(
+        'v1',
+        'csv',
+        7,
+        false,
+        true,
+        false,
         false
       );
+
+      expect(snackBarMock.open).toHaveBeenCalledWith(
+        `coding-management.download-dialog.download-failed: ${validationError}`,
+        'close',
+        { duration: 5000, panelClass: ['error-snackbar'] }
+      );
+      expect(exportServiceMock.downloadExportFile).not.toHaveBeenCalled();
     });
 
     it('should pass GeoGebra package option to background export job', async () => {
@@ -404,7 +435,7 @@ describe('CodingManagementService', () => {
       global.URL.createObjectURL = jest.fn();
       global.URL.revokeObjectURL = jest.fn();
 
-      await service.downloadCodingResults('v2', 'excel', false, true, true);
+      await service.downloadCodingResults('v2', 'excel', 7, false, true, true);
 
       expect(exportServiceMock.startExportJob).toHaveBeenCalledWith(
         1,
@@ -415,7 +446,8 @@ describe('CodingManagementService', () => {
         undefined,
         true,
         true,
-        false
+        false,
+        7
       );
     });
 
@@ -428,7 +460,7 @@ describe('CodingManagementService', () => {
       global.URL.createObjectURL = jest.fn();
       global.URL.revokeObjectURL = jest.fn();
 
-      await service.downloadCodingResults('v2', 'csv', false, true, false, true);
+      await service.downloadCodingResults('v2', 'csv', 7, false, true, false, true);
 
       expect(exportServiceMock.startExportJob).toHaveBeenCalledWith(
         1,
@@ -439,7 +471,8 @@ describe('CodingManagementService', () => {
         undefined,
         true,
         false,
-        true
+        true,
+        7
       );
     });
 
@@ -448,7 +481,7 @@ describe('CodingManagementService', () => {
       exportServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'processing', progress: 50 }) as never);
       exportServiceMock.cancelExportJob.mockReturnValue(of({ success: true, message: 'cancelled' }));
 
-      const downloadPromise = service.downloadCodingResults('v2', 'csv', false, true);
+      const downloadPromise = service.downloadCodingResults('v2', 'csv', 7, false, true);
       await new Promise(resolve => { setTimeout(resolve, 20); });
 
       service.cancelCodingResultsDownload();
@@ -463,7 +496,7 @@ describe('CodingManagementService', () => {
       exportServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'processing', progress: 50 }) as never);
       exportServiceMock.cancelExportJob.mockReturnValue(throwError(() => new Error('cancel failed')));
 
-      const downloadPromise = service.downloadCodingResults('v2', 'csv', false, true);
+      const downloadPromise = service.downloadCodingResults('v2', 'csv', 7, false, true);
       await new Promise(resolve => { setTimeout(resolve, 20); });
 
       service.cancelCodingResultsDownload();
@@ -493,7 +526,7 @@ describe('CodingManagementService', () => {
       exportServiceMock.startExportJob.mockReturnValue(of({ jobId: 'job-1', message: 'started' }));
       exportServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'cancelled', progress: 50 }) as never);
 
-      await service.downloadCodingResults('v2', 'csv', false, true);
+      await service.downloadCodingResults('v2', 'csv', 7, false, true);
 
       expect(snackBarMock.open).toHaveBeenCalledWith(
         'coding-management.download-dialog.download-cancelled',
@@ -519,7 +552,7 @@ describe('CodingManagementService', () => {
       global.URL.createObjectURL = jest.fn();
       global.URL.revokeObjectURL = jest.fn();
 
-      const downloadPromise = service.downloadCodingResults('v2', 'csv', false, true);
+      const downloadPromise = service.downloadCodingResults('v2', 'csv', 7, false, true);
       await new Promise(resolve => { setTimeout(resolve, 20); });
 
       expect(exportServiceMock.cancelExportJob).toHaveBeenCalledWith(1, 'job-1');
