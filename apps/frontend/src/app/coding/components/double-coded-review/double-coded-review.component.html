@@ -70,7 +70,7 @@
                   class="decision-code-value"
                   [matTooltip]="getCodeLabel(selectedResult.code)"
                 >
-                  {{ getCodeDisplay(selectedResult.code) || 'N/A' }}
+                  {{ getDecisionDisplayCode(selectedResult) }}
                 </span>
                 @if (selectedResult.score !== null) {
                   <span class="decision-score-value"
@@ -88,34 +88,32 @@
             }
           </mat-select-trigger>
 
-          @for (
-            result of element.coderResults;
-            track result.coderId + '-' + result.jobId
-          ) {
-            <mat-option
-              [value]="result.jobId.toString()"
-              [disabled]="result.code === null"
-            >
-              <span class="decision-option" [matTooltip]="result.jobName || ''">
-                <span class="decision-option-source">
-                  {{ getDecisionResultSourceLabel(element, result) }}
+          <mat-optgroup
+            [label]="'double-coded-review.code-groups.schema' | translate"
+          >
+            @for (option of getAvailableSchemaCodes(element); track option.code) {
+              <mat-option [value]="getCatalogDecisionControlValue(option.code)">
+                <span class="decision-option">
+                  <span class="decision-option-code">{{ option.code }}</span>
+                  <span class="decision-option-source">{{ option.label }}</span>
+                  @if (option.score !== null) {
+                    <span class="decision-option-score">({{ option.score }})</span>
+                  }
                 </span>
-                <span class="decision-option-code">{{
-                  getCodeDisplay(result.code) || 'N/A'
-                }}</span>
-                @if (result.score !== null) {
-                  <span class="decision-option-score"
-                    >({{ result.score }})</span
-                  >
-                }
-                @if (result.code === null) {
-                  <span class="pending-coder"
-                    >({{ 'double-coded-review.pending' | translate }})</span
-                  >
-                }
-              </span>
-            </mat-option>
-          }
+              </mat-option>
+            }
+          </mat-optgroup>
+          <mat-optgroup
+            [label]="'double-coded-review.code-groups.general' | translate"
+          >
+            @for (option of getAvailableGeneralCodes(element); track option.code) {
+              <mat-option [value]="getCatalogDecisionControlValue(option.code)">
+                <span class="decision-option">
+                  <span class="decision-option-source">{{ option.label }}</span>
+                </span>
+              </mat-option>
+            }
+          </mat-optgroup>
         </mat-select>
       </mat-form-field>
 
@@ -139,7 +137,11 @@
         <button
           mat-mini-fab
           color="primary"
-          [disabled]="!getItemControl(element).value || isLoading"
+          [disabled]="
+            !canApplyReviewResults ||
+            !getItemControl(element).value ||
+            isLoading
+          "
           (click)="applySingleDecision(element)"
           matTooltip="{{
             'double-coded-review.apply-single-tooltip' | translate
@@ -376,6 +378,7 @@
                     color="primary"
                     (click)="applyReviewDecisions()"
                     [disabled]="
+                      !canApplyReviewResults ||
                       dataSource.data.length === 0 ||
                       !areAllVisibleConflictsResolved() ||
                       isLoading
@@ -513,6 +516,9 @@
                                       'applied-code-match':
                                         isAppliedCodeMatch(element, result)
                                     }"
+                                    [class.selected-code-match]="
+                                      result.currentSelectionMatch
+                                    "
                                   >
                                     @if (results.length > 1) {
                                       <div
@@ -575,6 +581,32 @@
                             } @else {
                               <span class="missing-value">-</span>
                             }
+                          }
+                        </td>
+                      </ng-container>
+                    }
+
+                    @for (columnId of dynamicManagerColumns; track columnId) {
+                      <ng-container [matColumnDef]="columnId">
+                        <th mat-header-cell *matHeaderCellDef>{{ getManagerColumnHeader(columnId) }}</th>
+                        <td mat-cell *matCellDef="let element">
+                          @if (getManagerDecisionForColumn(element, columnId); as decision) {
+                            <div class="manager-decision-cell">
+                              <div class="manager-decision-state">{{ getManagerDecisionStateLabel(decision) }}</div>
+                              <div class="coder-code-row">
+                                <span [matTooltip]="getManagerDecisionDisplayCode(decision)">
+                                  {{ getManagerDecisionDisplayCode(decision) }}
+                                </span>
+                                @if (decision.score !== null) {
+                                  <span class="coder-score-value">({{ decision.score }})</span>
+                                }
+                              </div>
+                              @if (decision.comment) {
+                                <mat-icon class="supervisor-comment-icon" [matTooltip]="decision.comment">rate_review</mat-icon>
+                              }
+                            </div>
+                          } @else {
+                            <span class="missing-value">-</span>
                           }
                         </td>
                       </ng-container>
@@ -857,6 +889,7 @@
                   color="primary"
                   (click)="applyReviewDecisions()"
                   [disabled]="
+                    !canApplyReviewResults ||
                     dataSource.data.length === 0 ||
                     !areAllVisibleConflictsResolved() ||
                     isLoading
@@ -985,6 +1018,9 @@
                                     'applied-code-match':
                                       isAppliedCodeMatch(element, result)
                                   }"
+                                  [class.selected-code-match]="
+                                    result.currentSelectionMatch
+                                  "
                                 >
                                   @if (results.length > 1) {
                                     <div
@@ -1043,6 +1079,32 @@
                           } @else {
                             <span class="missing-value">-</span>
                           }
+                        }
+                      </td>
+                    </ng-container>
+                  }
+
+                  @for (columnId of dynamicManagerColumns; track columnId) {
+                    <ng-container [matColumnDef]="columnId">
+                      <th mat-header-cell *matHeaderCellDef>{{ getManagerColumnHeader(columnId) }}</th>
+                      <td mat-cell *matCellDef="let element">
+                        @if (getManagerDecisionForColumn(element, columnId); as decision) {
+                          <div class="manager-decision-cell">
+                            <div class="manager-decision-state">{{ getManagerDecisionStateLabel(decision) }}</div>
+                            <div class="coder-code-row">
+                              <span [matTooltip]="getManagerDecisionDisplayCode(decision)">
+                                {{ getManagerDecisionDisplayCode(decision) }}
+                              </span>
+                              @if (decision.score !== null) {
+                                <span class="coder-score-value">({{ decision.score }})</span>
+                              }
+                            </div>
+                            @if (decision.comment) {
+                              <mat-icon class="supervisor-comment-icon" [matTooltip]="decision.comment">rate_review</mat-icon>
+                            }
+                          </div>
+                        } @else {
+                          <span class="missing-value">-</span>
                         }
                       </td>
                     </ng-container>

@@ -145,6 +145,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   unitId: string = '';
   isCodingMode: boolean = false;
   isCodingDecisionMode: boolean = false;
+  isCodingDecisionReadOnly: boolean = false;
   isBookletReplayMode: boolean = false; // for replays without coding features
   isReviewMode: boolean = false;
   isCodingIssueReviewMode: boolean = false;
@@ -616,6 +617,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.isReviewMode = queryParams.mode === 'coding-review';
         this.isCodingIssueReviewMode = queryParams.mode === 'coding-issue-review';
         this.isCodingDecisionMode = queryParams.mode === 'coding-decision';
+        this.isCodingDecisionReadOnly = queryParams.decisionReadOnly === 'true';
         this.codingService.isReviewMode = this.isReviewMode;
         this.codingService.isCodingIssueReviewMode = this.isCodingIssueReviewMode;
         this.isCodingMode = queryParams.mode === 'coding' ||
@@ -1830,7 +1832,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   isCodingReadOnly(): boolean {
-    return (!this.isCodingDecisionMode && this.appService.needsReAuthentication) ||
+    return this.isCodingDecisionReadOnly ||
+      (!this.isCodingDecisionMode && this.appService.needsReAuthentication) ||
       this.isReviewMode ||
       (this.codingService.isCompletedJobReview && !this.isCodingIssueReviewMode) ||
       this.codingService.isCodingJobFinalized;

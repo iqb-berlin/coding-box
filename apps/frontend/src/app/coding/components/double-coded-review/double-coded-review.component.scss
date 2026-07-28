@@ -366,6 +366,12 @@
             box-shadow: inset 3px 0 0 #2e7d32;
           }
 
+          &.selected-code-match {
+            border-color: #1565c0;
+            background-color: #eaf3ff;
+            box-shadow: inset 3px 0 0 #1565c0;
+          }
+
           .coder-result-source {
             min-width: 0;
             overflow: hidden;
@@ -427,7 +433,7 @@
         color: #9e9e9e;
       }
 
-      .selection-cell {
+.selection-cell {
         display: flex;
         flex-direction: column;
         gap: 8px;
@@ -590,6 +596,18 @@
       }
     }
   }
+}
+
+.manager-decision-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 110px;
+}
+
+.manager-decision-state {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 12px;
 }
 
 .decision-status {
