@@ -47,6 +47,7 @@ import {
   WorkspaceSettingsService
 } from '../../ws-admin/services/workspace-settings.service';
 import { CodingBackgroundJobsService } from './coding-background-jobs.service';
+import { CodingStatusSnapshotService } from './coding-status-snapshot.service';
 
 interface ExternalCodingImportWithPreviewDto {
   file: string;
@@ -254,6 +255,7 @@ export class TestPersonCodingService {
   private keycloak = inject(Keycloak, { optional: true });
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private codingBackgroundJobsService = inject(CodingBackgroundJobsService);
+  private codingStatusSnapshotService = inject(CodingStatusSnapshotService);
   private autoCodingCompletedSubject = new Subject<AutoCodingCompletedEvent>();
   private testResultsChangedSubject = new Subject<TestResultsChangedEvent>();
   private pendingStatisticsVersions = new Map<
@@ -374,6 +376,7 @@ export class TestPersonCodingService {
   invalidateCodingStatusCache(workspaceId?: number): void {
     this.codingStatusCacheGeneration += 1;
     if (!workspaceId) {
+      this.codingStatusSnapshotService.clearAll();
       this.codingFreshnessCache.clear();
       this.codingFreshnessRequests.clear();
       this.autocodingReadinessCache.clear();
@@ -386,6 +389,7 @@ export class TestPersonCodingService {
       return;
     }
 
+    this.codingStatusSnapshotService.clearWorkspace(workspaceId);
     this.codingFreshnessCache.delete(workspaceId);
     this.codingFreshnessRequests.delete(workspaceId);
     this.appliedResultsOverviewCache.delete(workspaceId);

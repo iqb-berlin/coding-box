@@ -22,6 +22,7 @@ describe('WorkspaceCodingStatisticsController', () => {
     getReadiness: jest.Mock;
     getReadinessFromCache: jest.Mock;
   };
+  let codingFreshnessService: { getWorkspaceRevision: jest.Mock };
   let controller: WorkspaceCodingStatisticsController;
   const request = {
     protocol: 'http',
@@ -85,6 +86,9 @@ describe('WorkspaceCodingStatisticsController', () => {
       }),
       getReadinessFromCache: jest.fn().mockResolvedValue(null)
     };
+    codingFreshnessService = {
+      getWorkspaceRevision: jest.fn().mockResolvedValue(17)
+    };
 
     controller = new WorkspaceCodingStatisticsController(
       codingStatisticsService as never,
@@ -92,7 +96,7 @@ describe('WorkspaceCodingStatisticsController', () => {
       {} as never,
       {} as never,
       codingReviewService as never,
-      {} as never,
+      codingFreshnessService as never,
       {} as never,
       codingReadinessService as never,
       codingReplayService as never,
@@ -166,6 +170,24 @@ describe('WorkspaceCodingStatisticsController', () => {
       autoCoderRun: 2,
       forceRefresh: true
     });
+  });
+
+  it('returns the current coding status revision', async () => {
+    await expect(controller.getCodingStatusRevision(5)).resolves.toEqual({
+      workspaceId: 5,
+      revision: 17
+    });
+    expect(codingFreshnessService.getWorkspaceRevision).toHaveBeenCalledWith(5);
+  });
+
+  it('protects the coding status revision with workspace authentication', () => {
+    const handler = WorkspaceCodingStatisticsController.prototype
+      .getCodingStatusRevision;
+
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      JwtAuthGuard,
+      WorkspaceGuard
+    ]);
   });
 
   it('delegates cache-only autocoding readiness requests without recalculating', async () => {

@@ -12,7 +12,12 @@ import {
   reduce,
   takeUntil
 } from 'rxjs/operators';
-import { combineLatest, range, Subject } from 'rxjs';
+import {
+  combineLatest,
+  forkJoin,
+  range,
+  Subject
+} from 'rxjs';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatIcon } from '@angular/material/icon';
 import {
@@ -99,6 +104,7 @@ import {
 } from '../../../shared/utils/coding-freshness-text.util';
 import { getResponseStatusLabel } from '../../../shared/utils/response-status-metadata.util';
 import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
+import { CodingStatusSnapshotService } from '../../services/coding-status-snapshot.service';
 
 @Component({
   selector: 'app-coding-management',
@@ -129,6 +135,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
   private codingManagementService = inject(CodingManagementService);
   private testPersonCodingService = inject(TestPersonCodingService);
+  private codingStatusSnapshotService = inject(CodingStatusSnapshotService);
   private codingBackgroundJobsService = inject(CodingBackgroundJobsService);
   private uiService = inject(CodingManagementUiService);
   private translateService = inject(TranslateService);
@@ -223,6 +230,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private hasShownFreshnessJobStatusPollingError = false;
   private readonly responseTableRequestCancel$ = new Subject<void>();
   private responseTableRequestId = 0;
+  private codingStatusOverviewRequestGeneration = 0;
   private readonly automaticCodingStatusRefreshDebounceMs = 250;
 
   ngOnInit(): void {
@@ -230,6 +238,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     let pendingStatisticsVersion: StatisticsVersion | null = null;
 
     if (workspaceId) {
+      this.restoreCodingStatusOverview(workspaceId);
       pendingStatisticsVersion = this.testPersonCodingService.consumePendingStatisticsVersion(workspaceId);
       if (pendingStatisticsVersion) {
         this.selectStatisticsVersion(pendingStatisticsVersion);
@@ -531,7 +540,6 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       .subscribe({
         next: readiness => {
           this.autocodingReadiness = readiness;
-          this.hasLoadedFullCodingStatusOverview = true;
         },
         error: () => {
           this.autocodingReadiness = null;
@@ -559,7 +567,6 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
         this.autocodingReadiness = readiness;
         this.autocodingReadinessLoadFailed = false;
-        this.hasLoadedFullCodingStatusOverview = true;
       });
   }
 
@@ -598,6 +605,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private invalidateCodingStatusOverviewCache(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
+      this.codingStatusOverviewRequestGeneration += 1;
       this.hasLoadedFullCodingStatusOverview = false;
       this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
     }
@@ -609,13 +617,112 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     }
 
     if (includeAutocodingReadiness) {
-      this.hasLoadedFullCodingStatusOverview = false;
+      this.loadFullCodingStatusOverview();
+      return;
     }
     this.loadCodingFreshness();
     this.loadManualAppliedResultsOverview();
-    if (includeAutocodingReadiness) {
-      this.loadAutocodingReadiness(false);
+  }
+
+  private restoreCodingStatusOverview(workspaceId: number): void {
+    const userId = this.appService.userId;
+    if (!userId) {
+      return;
     }
+    const generation = this.codingStatusOverviewRequestGeneration;
+    this.codingStatusSnapshotService.restoreOverview(userId, workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(snapshot => {
+        if (!snapshot ||
+            generation !== this.codingStatusOverviewRequestGeneration ||
+            workspaceId !== this.appService.selectedWorkspaceId ||
+            userId !== this.appService.userId) {
+          return;
+        }
+        this.codingFreshnessSummary = snapshot.freshness;
+        this.autocodingReadiness = snapshot.readiness;
+        this.manualAppliedResultsOverview = snapshot.appliedResultsOverview;
+        this.autocodingReadinessLoadFailed = false;
+        this.manualAppliedResultsOverviewLoadFailed = false;
+        this.hasLoadedFullCodingStatusOverview = snapshot.fullyChecked;
+      });
+  }
+
+  private loadFullCodingStatusOverview(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    const userId = this.appService.userId;
+    if (!workspaceId || !userId) {
+      return;
+    }
+
+    this.codingStatusOverviewRequestGeneration += 1;
+    const generation = this.codingStatusOverviewRequestGeneration;
+    this.hasLoadedFullCodingStatusOverview = false;
+    this.isLoadingCodingFreshness = true;
+    this.isLoadingAutocodingReadiness = true;
+    this.isLoadingManualAppliedResultsOverview = true;
+    this.autocodingReadinessLoadFailed = false;
+    this.manualAppliedResultsOverviewLoadFailed = false;
+
+    forkJoin({
+      freshness: this.testPersonCodingService.getCodingFreshness(workspaceId),
+      readiness: this.testPersonCodingService
+        .getAutocodingReadiness(workspaceId, 1, false),
+      appliedResultsOverview: this.testPersonCodingService
+        .getAppliedResultsOverview(workspaceId)
+    }).pipe(
+      finalize(() => {
+        if (generation === this.codingStatusOverviewRequestGeneration) {
+          this.isLoadingCodingFreshness = false;
+          this.isLoadingAutocodingReadiness = false;
+          this.isLoadingManualAppliedResultsOverview = false;
+        }
+      }),
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: ({ freshness, readiness, appliedResultsOverview }) => {
+        if (generation !== this.codingStatusOverviewRequestGeneration ||
+            workspaceId !== this.appService.selectedWorkspaceId) {
+          return;
+        }
+        this.codingFreshnessSummary = freshness;
+        this.autocodingReadiness = readiness;
+        this.manualAppliedResultsOverview = appliedResultsOverview;
+        this.manualAppliedResultsOverviewLoadFailed = appliedResultsOverview === null;
+        this.hasLoadedFullCodingStatusOverview = true;
+        if (this.hasCodingFreshnessWarnings) {
+          this.loadCodingFreshnessScope();
+        } else {
+          this.codingFreshnessScope = null;
+        }
+
+        this.codingStatusSnapshotService.getRevision(workspaceId)
+          .pipe(takeUntil(this.destroy$))
+          .subscribe(revision => {
+            if (generation !== this.codingStatusOverviewRequestGeneration ||
+                revision.revision !== freshness.currentRevision) {
+              return;
+            }
+            this.codingStatusSnapshotService.saveOverview({
+              userId,
+              workspaceId,
+              revision: revision.revision,
+              freshness,
+              readiness,
+              appliedResultsOverview,
+              fullyChecked: true
+            });
+          });
+      },
+      error: () => {
+        if (generation !== this.codingStatusOverviewRequestGeneration) {
+          return;
+        }
+        this.autocodingReadiness = null;
+        this.autocodingReadinessLoadFailed = true;
+        this.hasLoadedFullCodingStatusOverview = false;
+      }
+    });
   }
 
   private loadInitialCodingStatusOverview(): void {
@@ -623,7 +730,6 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.hasLoadedFullCodingStatusOverview = false;
     this.loadCodingFreshness(false);
     this.loadCachedAutocodingReadiness();
   }

@@ -65,6 +65,20 @@ describe('CodingFreshnessService', () => {
     });
   };
 
+  it('returns the current workspace revision and defaults missing rows to zero', async () => {
+    (connection.query as jest.Mock)
+      .mockResolvedValueOnce([{ revision: '9' }])
+      .mockResolvedValueOnce([]);
+
+    await expect(service.getWorkspaceRevision(1)).resolves.toBe(9);
+    await expect(service.getWorkspaceRevision(2)).resolves.toBe(0);
+    expect(connection.query).toHaveBeenNthCalledWith(
+      1,
+      'SELECT revision FROM workspace_test_results_revision WHERE workspace_id = $1',
+      [1]
+    );
+  });
+
   it('summarizes freshness rows by version and state', async () => {
     (connection.query as jest.Mock).mockResolvedValue([{ revision: 7 }]);
     (freshnessRepository.createQueryBuilder as jest.Mock).mockReturnValue(

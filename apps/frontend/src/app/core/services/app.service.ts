@@ -24,6 +24,7 @@ import { SERVER_URL } from '../../injection-tokens';
 import { suppressGlobalHttpErrorContext } from '../interceptors/http-error-context';
 import { WorkspaceTokenScope } from './auth-session.config';
 import { SessionRecoveryService } from './session-recovery.service';
+import { clearAllCodingStatusSnapshots } from './coding-status-session-storage';
 
 export interface WorkspaceTokenPolicy {
   scopes: Record<WorkspaceTokenScope, {
@@ -266,6 +267,10 @@ export class AppService {
   }
 
   updateAuthData(newAuthData: AuthDataDto): void {
+    const previousUserId = this.authDataSubject.value.userId;
+    if (previousUserId > 0 && previousUserId !== newAuthData.userId) {
+      clearAllCodingStatusSnapshots();
+    }
     this.authDataSubject.next(newAuthData);
   }
 
@@ -378,6 +383,7 @@ export class AppService {
     clearRecoveryDrafts?: boolean;
   } = {}): void {
     localStorage.removeItem('id_token');
+    clearAllCodingStatusSnapshots();
     this.keycloakIdentity = undefined;
     this.userProfile = {};
     this.isLoggedInKeycloak = false;

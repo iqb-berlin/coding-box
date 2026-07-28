@@ -1727,6 +1727,10 @@ export class CodingFreshnessService {
     return Number(raw[0]?.revision || 0);
   }
 
+  async getWorkspaceRevision(workspaceId: number): Promise<number> {
+    return this.getCurrentRevision(workspaceId);
+  }
+
   private async filterIncludedUnitIds(
     workspaceId: number,
     unitIds: number[]

@@ -252,6 +252,10 @@ describe('AppService', () => {
 
   describe('auth state cleanup', () => {
     it('should clear stored auth state', () => {
+      sessionStorage.setItem(
+        'coding-status-snapshot:v1:1:3:overview',
+        '{}'
+      );
       service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
       service.isLoggedInKeycloak = true;
       service.keycloakIdentity = 'user1';
@@ -271,6 +275,19 @@ describe('AppService', () => {
       expect(service.sessionExpiryWarning).toBe(false);
       expect(service.reAuthenticationReturnUrl).toBeUndefined();
       expect(service.authBootstrapStatus).toBe('ready');
+      expect(sessionStorage.length).toBe(0);
+    });
+
+    it('should clear coding snapshots when the authenticated user changes', () => {
+      service.updateAuthData({ userId: 1, userName: 'first' } as AuthDataDto);
+      sessionStorage.setItem(
+        'coding-status-snapshot:v1:1:3:overview',
+        '{}'
+      );
+
+      service.updateAuthData({ userId: 2, userName: 'second' } as AuthDataDto);
+
+      expect(sessionStorage.length).toBe(0);
     });
 
     it('should clear recovery drafts when auth state is cleared explicitly', () => {

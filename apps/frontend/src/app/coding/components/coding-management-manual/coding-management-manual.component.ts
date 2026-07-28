@@ -126,6 +126,12 @@ import {
 import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
 import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
 import { CodingBackgroundJobsService } from '../../services/coding-background-jobs.service';
+import { CodingStatusSnapshotService } from '../../services/coding-status-snapshot.service';
+import {
+  ManualCodingStatusSnapshot,
+  ManualCodingSnapshotDisplayParameters,
+  PlanningStatusState
+} from '../../services/coding-status-snapshot.model';
 
 interface SavedCodeProgress {
   id?: number;
@@ -133,22 +139,8 @@ interface SavedCodeProgress {
   [key: string]: unknown;
 }
 
-type PlanningStatusState =
-  'loading' |
-  'planning-data-required' |
-  'preparation-required' |
-  'warning' |
-  'planning-incomplete' |
-  'planning-ready' |
-  'training-ready' |
-  'execution-ready' |
-  'double-coding-review-ready' |
-  'stale-source-review' |
-  'completion-ready' |
-  'progress-unavailable' |
-  'complete';
-
 type ManualCodingTab = 'preparation' | 'planning' | 'training' | 'execution' | 'completion';
+type PlanningDataLoadState = 'notLoaded' | 'loading' | 'loaded' | 'stale';
 type ConcreteCodingJobsReloadScope = 'productive' | 'training';
 type CodingJobsReloadScope = 'active' | 'productive' | 'training' | 'rendered';
 
@@ -226,6 +218,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private translateService = inject(TranslateService);
   private dialog = inject(MatDialog);
   private codingBackgroundJobsService = inject(CodingBackgroundJobsService);
+  private codingStatusSnapshotService = inject(CodingStatusSnapshotService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private document = inject(DOCUMENT);
@@ -263,6 +256,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   };
 
   private hasLoadedPlanningDataBundle = false;
+  private planningDataLoadState: PlanningDataLoadState = 'notLoaded';
+  private restoredManualStatusSnapshot: ManualCodingStatusSnapshot | null = null;
+  private planningDataRequestGeneration = 0;
+  private planningDataCompletionTimer?: ReturnType<typeof setTimeout>;
+  private planningDataReloadTimer?: ReturnType<typeof setTimeout>;
 
   private pendingAutomaticManualTabLoad: ManualCodingTab | null = null;
 
@@ -521,6 +519,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .pipe(debounceTime(500), takeUntil(this.destroy$))
       .subscribe(reloadScope => {
         this.hasLoadedPlanningDataBundle = false;
+        this.planningDataLoadState = 'stale';
         this.loadJobDefinitionsForExport();
         this.loadManualTabData(this.activeManualTab);
         this.refreshCodingJobsAfterDataChange(reloadScope);
@@ -578,6 +577,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
         if (this.activeManualTab === 'planning') {
           this.hasLoadedPlanningDataBundle = false;
+          this.planningDataLoadState = 'stale';
           this.refreshCodingJobsAfterDataChange('rendered');
           return;
         }
@@ -605,6 +605,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .subscribe(() => this.restoreCoderTrainingRecoveryOverlay());
     this.restoreCoderTrainingRecoveryOverlay();
 
+    this.restoreManualCodingStatus();
     this.loadInitialManualCodingState();
     this.loadManualCodingJobRefreshSetting();
     this.loadManualCodingApplyPermission();
@@ -619,6 +620,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     if (this.pendingCodingJobsReloadTimer) {
       clearTimeout(this.pendingCodingJobsReloadTimer);
       this.pendingCodingJobsReloadTimer = undefined;
+    }
+    if (this.planningDataCompletionTimer) {
+      clearTimeout(this.planningDataCompletionTimer);
+      this.planningDataCompletionTimer = undefined;
+    }
+    if (this.planningDataReloadTimer) {
+      clearTimeout(this.planningDataReloadTimer);
+      this.planningDataReloadTimer = undefined;
     }
     this.destroy$.next();
     this.destroy$.complete();
@@ -1691,7 +1700,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     this.invalidateCodingStatusCache();
-    this.hasLoadedPlanningDataBundle = true;
     this.loadCodingProgressOverview();
     this.loadVariableCoverageOverview();
     this.loadCaseCoverageOverview();
@@ -2279,7 +2287,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   hasVariableCoverageConflicts(): boolean {
-    return (this.variableCoverageOverview?.conflictedVariables || 0) > 0;
+    return this.getStatusDisplayParameters().variableConflicts > 0;
   }
 
   isPlanningReady(): boolean {
@@ -2298,7 +2306,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private hasActiveTrainingCodingJobs(): boolean {
-    return (this.manualFreshnessJobSummary?.activeTrainingJobs ?? 0) > 0;
+    return this.getStatusDisplayParameters().activeTrainingJobs > 0;
   }
 
   private hasOpenProductiveManualJobs(): boolean {
@@ -2310,11 +2318,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private hasStaleSourceManualJobs(): boolean {
-    return (this.manualFreshnessJobSummary?.staleSourceJobs ?? 0) > 0;
+    return this.getStatusDisplayParameters().staleSourceJobs > 0;
   }
 
   private hasOpenDoubleCodingReviewConflicts(): boolean {
-    return this.openDoubleCodingConflictCount > 0;
+    return this.getStatusDisplayParameters().openDoubleCodingConflicts > 0;
   }
 
   private hasManualFreshnessJobSummary(): boolean {
@@ -2577,6 +2585,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       case 'stale-source-review':
       case 'completion-ready':
       case 'progress-unavailable':
+      case 'not-checked':
         return 'status-attention';
       case 'complete':
         return 'status-complete';
@@ -2595,8 +2604,16 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return 'loading';
     }
 
+    if (!this.hasPlanningDataBundleSnapshot() && this.restoredManualStatusSnapshot) {
+      return this.restoredManualStatusSnapshot.planningStatus;
+    }
+
     if (this.shouldRequirePlanningDataRefresh()) {
       return 'planning-data-required';
+    }
+
+    if (!this.hasPlanningDataBundleSnapshot()) {
+      return 'not-checked';
     }
 
     if (this.hasPreparationRefreshTarget()) {
@@ -2658,6 +2675,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         return 'sync';
       case 'planning-data-required':
         return 'refresh';
+      case 'not-checked':
+        return 'help_outline';
       case 'warning':
         return 'warning';
       case 'preparation-required':
@@ -2689,6 +2708,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         return 'Status wird aktualisiert';
       case 'planning-data-required':
         return 'Planungsdaten aktualisieren';
+      case 'not-checked':
+        return 'Kodierstand nicht geprüft';
       case 'warning':
         return this.hasVariableCoverageConflicts() ?
           'Konflikte prüfen' :
@@ -2720,6 +2741,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   getPlanningStatusDescription(): string {
     const planningStatusState = this.getPlanningStatusState();
+    const display = this.getStatusDisplayParameters();
 
     if (planningStatusState === 'loading') {
       return 'Die Planungs- und Kodierfortschritte werden geladen.';
@@ -2727,6 +2749,37 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
     if (planningStatusState === 'planning-data-required') {
       return 'Abdeckung, Kodierfortschritt und Freshness-Hinweise werden erst auf Anforderung geladen.';
+    }
+
+    if (planningStatusState === 'not-checked') {
+      return 'Der Kodierstand wurde in dieser Anmeldung noch nicht vollständig geprüft.';
+    }
+
+    if (!this.hasPlanningDataBundleSnapshot() && this.restoredManualStatusSnapshot) {
+      switch (planningStatusState) {
+        case 'warning':
+          return display.variableConflicts > 0 ?
+            `${display.variableConflicts} Variablenkonflikte müssen vor der verlässlichen Jobplanung geklärt werden.` :
+            `${display.manualCodeAvailabilityWarnings} Variablen benötigen reguläre Codes mit manueller Instruktion.`;
+        case 'planning-incomplete':
+          return display.unassignedCases > 0 ?
+            `${display.unassignedCases} Fälle sind noch nicht in Kodierjobs verteilt.` :
+            `${display.missingVariables} Variablen sind noch keiner Jobdefinition zugeordnet.`;
+        case 'training-ready':
+          return `${display.activeTrainingJobs} aktive Schulungskodierjob(s) sollten vor der produktiven Durchführung geprüft werden.`;
+        case 'double-coding-review-ready':
+          return `${display.openDoubleCodingConflicts} offene Doppelkodierungs-Konflikt(e) müssen im Review aufgelöst werden.`;
+        case 'stale-source-review':
+          return `${display.staleSourceJobs} Kodierjob(s) enthalten veraltete Quellfälle.`;
+        case 'execution-ready':
+          return 'Die Planung ist vollständig. Bearbeiten Sie nun die offenen Kodierfälle im Abschnitt Durchführung.';
+        case 'completion-ready':
+          return 'Alle Kodierfälle sind abgeschlossen. Prüfen Sie nun die Übernahme der Ergebnisse.';
+        case 'complete':
+          return 'Alle manuellen Kodierungen sind abgeschlossen und final übernommen.';
+        default:
+          break;
+      }
     }
 
     if (planningStatusState === 'progress-unavailable') {
@@ -2741,19 +2794,19 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     if (this.hasVariableCoverageConflicts()) {
-      return `${this.variableCoverageOverview?.conflictedVariables || 0} Variablenkonflikte müssen vor der verlässlichen Jobplanung geklärt werden.`;
+      return `${display.variableConflicts} Variablenkonflikte müssen vor der verlässlichen Jobplanung geklärt werden.`;
     }
 
     if (this.hasManualCodeAvailabilityWarnings) {
       return `${this.manualCodeAvailabilityWarningCount} Variablen haben keine regulären Codes mit manueller Instruktion. Kodierer können dort nur Sonderoptionen wie "Code-Vergabe unsicher" oder "Neuer Code nötig" auswählen.`;
     }
 
-    if ((this.variableCoverageOverview?.missingVariables || 0) > 0) {
-      return `${this.variableCoverageOverview?.missingVariables || 0} Variablen sind noch keiner Jobdefinition zugeordnet.`;
+    if (display.missingVariables > 0) {
+      return `${display.missingVariables} Variablen sind noch keiner Jobdefinition zugeordnet.`;
     }
 
-    if ((this.caseCoverageOverview?.effectiveUnassignedCases || 0) > 0) {
-      return `${this.caseCoverageOverview?.effectiveUnassignedCases || 0} Fälle sind noch nicht in Kodierjobs verteilt.`;
+    if (display.unassignedCases > 0) {
+      return `${display.unassignedCases} Fälle sind noch nicht in Kodierjobs verteilt.`;
     }
 
     if (this.isCompletionComplete()) {
@@ -2762,7 +2815,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
     if (this.isPlanningReady() &&
         this.hasActiveTrainingCodingJobs()) {
-      return `${this.manualFreshnessJobSummary?.activeTrainingJobs || 0} aktive Schulungskodierjob(s) sollten vor der produktiven Durchführung geprüft werden.`;
+      return `${display.activeTrainingJobs} aktive Schulungskodierjob(s) sollten vor der produktiven Durchführung geprüft werden.`;
     }
 
     if (this.isPlanningReady() &&
@@ -2772,11 +2825,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     if (this.isPlanningReady() && this.hasOpenDoubleCodingReviewConflicts()) {
-      return `${this.openDoubleCodingConflictCount} offene Doppelkodierungs-Konflikt(e) müssen im Review aufgelöst werden.`;
+      return `${display.openDoubleCodingConflicts} offene Doppelkodierungs-Konflikt(e) müssen im Review aufgelöst werden.`;
     }
 
     if (this.isPlanningReady() && this.hasStaleSourceManualJobs()) {
-      return `${this.manualFreshnessJobSummary?.staleSourceJobs || 0} Kodierjob(s) enthalten veraltete Quellfälle. Prüfen Sie diese Jobs in der Durchführung, bevor Ergebnisse angewendet oder weitergeführt werden.`;
+      return `${display.staleSourceJobs} Kodierjob(s) enthalten veraltete Quellfälle. Prüfen Sie diese Jobs in der Durchführung, bevor Ergebnisse angewendet oder weitergeführt werden.`;
     }
 
     if (this.isPlanningReady() &&
@@ -2797,6 +2850,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         return 'Planungsstand wird geladen';
       case 'planning-data-required':
         return 'Planungsstand laden';
+      case 'not-checked':
+        return 'Kodierstand prüfen';
       case 'warning':
         return this.hasVariableCoverageConflicts() ?
           'Konflikte zuerst klären' :
@@ -2829,12 +2884,15 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   getPlanningNextStepDescription(): string {
     const availableCases = this.getAvailableCasesForNewJobs();
     const unavailableCases = this.getUnavailableCasesForNewJobs();
+    const display = this.getStatusDisplayParameters();
 
     switch (this.getPlanningStatusState()) {
       case 'loading':
         return 'Warten Sie kurz, bis die Planungsdaten aktualisiert sind.';
       case 'planning-data-required':
         return 'Laden Sie die Planungsdaten, um Variablen- und Fallabdeckung, Kodierfortschritt, offene Variablen und Freshness-Hinweise zu prüfen.';
+      case 'not-checked':
+        return 'Öffnen Sie die Planung und aktualisieren Sie die Planungsdaten, bevor Sie den nächsten Arbeitsschritt festlegen.';
       case 'warning':
         if (this.hasVariableCoverageConflicts()) {
           return 'Prüfen Sie Variablen, die von mehreren Definitionen mit überlappenden Fällen verwendet werden.';
@@ -2845,6 +2903,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           'Aktualisieren Sie Antwortanalyse und Aggregationsgrundlage, bevor die manuelle Zielnavigation fortgesetzt wird.' :
           'Klären Sie offene Vorbereitungsbefunde wie leere Antworten oder Duplikate ohne aktive Aggregation.';
       case 'planning-incomplete':
+        if (!this.hasPlanningDataBundleSnapshot() &&
+            this.restoredManualStatusSnapshot) {
+          return display.unassignedCases > 0 ?
+            `${display.unassignedCases} Fälle sind noch nicht in Kodierjobs verteilt. Aktualisieren Sie die Planung für die aktuellen Verteilungsdetails.` :
+            `${display.missingVariables} Variablen sind noch keiner Jobdefinition zugeordnet. Aktualisieren Sie die Planung für die aktuellen Details.`;
+        }
         if ((this.caseCoverageOverview?.effectiveUnassignedCases || 0) > 0) {
           const unavailableHint = unavailableCases > 0 ?
             ` ${unavailableCases} Fälle sind bereits in Jobs verteilt oder durch andere Definitionen reserviert.` :
@@ -2895,6 +2959,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         return this.canShowManualCompletionTab() ? 'Abschluss ansehen' : 'Zu den Kodierjobs';
       case 'loading':
       case 'planning-data-required':
+      case 'not-checked':
       case 'progress-unavailable':
         return 'Aktualisieren';
       default:
@@ -2911,6 +2976,17 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private getPlanningNextStepTarget(): ManualFreshnessTarget {
+    if (!this.hasPlanningDataBundleSnapshot() && this.restoredManualStatusSnapshot) {
+      return this.restoredManualStatusSnapshot.nextTarget;
+    }
+    if (this.hasManualCodeAvailabilityWarnings &&
+        !this.hasVariableCoverageConflicts()) {
+      return {
+        tab: 'planning',
+        sectionId: 'manual-variable-coverage',
+        action: 'navigate'
+      };
+    }
     switch (this.getPlanningStatusState()) {
       case 'preparation-required':
         return {
@@ -2972,6 +3048,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const planningStatusState = this.getPlanningStatusState();
     if (planningStatusState === 'loading' ||
         planningStatusState === 'planning-data-required' ||
+        planningStatusState === 'not-checked' ||
         planningStatusState === 'progress-unavailable') {
       this.refreshManualCodingPlanning();
       return;
@@ -2983,6 +3060,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   getPlanningNextStepIcon(): string {
     switch (this.getPlanningStatusState()) {
       case 'planning-data-required':
+      case 'not-checked':
         return 'refresh';
       case 'warning':
         return 'warning';
@@ -3030,7 +3108,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   get manualCodeAvailabilityWarningCount(): number {
-    return this.manualCodeAvailabilityWarnings.length;
+    return this.getStatusDisplayParameters().manualCodeAvailabilityWarnings;
   }
 
   get hasManualCodeAvailabilityWarnings(): boolean {
@@ -3144,7 +3222,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private refreshAggregationDependentViews(includeResponseAnalysis = true): void {
     this.invalidateCodingStatusCache();
-    this.hasLoadedPlanningDataBundle = true;
     if (includeResponseAnalysis) {
       this.loadResponseAnalysis();
     }
@@ -3196,6 +3273,27 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       });
   }
 
+  private restoreManualCodingStatus(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    const userId = this.appService.authData.userId;
+    if (!workspaceId || !userId) {
+      return;
+    }
+    const generation = this.planningDataRequestGeneration;
+    this.codingStatusSnapshotService.restoreManual(userId, workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(snapshot => {
+        if (!snapshot ||
+            generation !== this.planningDataRequestGeneration ||
+            workspaceId !== this.appService.selectedWorkspaceId ||
+            userId !== this.appService.authData.userId) {
+          return;
+        }
+        this.restoredManualStatusSnapshot = snapshot;
+        this.codingFreshnessSummary = snapshot.freshness;
+      });
+  }
+
   private loadManualTabData(
     tab: ManualCodingTab,
     options: {
@@ -3225,7 +3323,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.loadResponseAnalysis();
         return;
       case 'planning':
-        if (forceRefresh && !deferStatusChecks) {
+        if (!deferStatusChecks &&
+            (forceRefresh ||
+             (this.autoRefreshManualCodingJobs &&
+              (this.planningDataLoadState === 'notLoaded' ||
+               this.planningDataLoadState === 'stale')))) {
           this.loadPlanningDataBundle(forceRefresh);
         }
         return;
@@ -3260,7 +3362,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private loadPlanningDataBundle(forceRefresh: boolean): void {
-    this.hasLoadedPlanningDataBundle = true;
+    if (this.planningDataLoadState === 'loading') {
+      return;
+    }
+    this.planningDataRequestGeneration += 1;
+    const generation = this.planningDataRequestGeneration;
+    this.planningDataLoadState = 'loading';
+    this.hasLoadedPlanningDataBundle = false;
     this.loadVariableCoverageOverview();
     this.loadCaseCoverageOverview();
     this.loadCodingProgressOverview();
@@ -3268,6 +3376,82 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadManualFreshnessDecisionData();
     this.loadCodingFreshness({ force: forceRefresh });
     this.loadResponseAnalysisForPlanningIfNeeded();
+    this.monitorPlanningDataBundleCompletion(generation);
+  }
+
+  private monitorPlanningDataBundleCompletion(generation: number): void {
+    if (this.planningDataCompletionTimer) {
+      clearTimeout(this.planningDataCompletionTimer);
+    }
+    this.planningDataCompletionTimer = setTimeout(() => {
+      this.planningDataCompletionTimer = undefined;
+      if (generation !== this.planningDataRequestGeneration ||
+          this.planningDataLoadState !== 'loading') {
+        return;
+      }
+      if (this.isAnyPlanningDataLoading()) {
+        this.monitorPlanningDataBundleCompletion(generation);
+        return;
+      }
+      this.planningDataLoadState = 'loaded';
+      this.hasLoadedPlanningDataBundle = true;
+      this.restoredManualStatusSnapshot = null;
+      this.persistManualCodingStatus(generation);
+      this.focusManualFreshnessTargetIfReady();
+    }, 50);
+  }
+
+  private persistManualCodingStatus(generation: number): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    const userId = this.appService.authData.userId;
+    if (!workspaceId || !userId) {
+      return;
+    }
+    this.codingStatusSnapshotService.getRevision(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(({ revision }) => {
+        if (generation !== this.planningDataRequestGeneration ||
+            this.planningDataLoadState !== 'loaded' ||
+            workspaceId !== this.appService.selectedWorkspaceId) {
+          return;
+        }
+        if (!this.codingFreshnessSummary ||
+            revision !== this.codingFreshnessSummary.currentRevision) {
+          this.planningDataLoadState = 'stale';
+          this.hasLoadedPlanningDataBundle = false;
+          this.scheduleVisiblePlanningReload();
+          return;
+        }
+        this.codingStatusSnapshotService.saveManual({
+          userId,
+          workspaceId,
+          revision,
+          planningStatus: this.getPlanningStatusState(),
+          displayParameters: this.getManualStatusDisplayParameters(),
+          freshness: this.codingFreshnessSummary,
+          nextTarget: this.getPlanningNextStepTarget(),
+          fullyChecked: true
+        });
+      });
+  }
+
+  private getManualStatusDisplayParameters(): ManualCodingSnapshotDisplayParameters {
+    return {
+      variableConflicts: this.variableCoverageOverview?.conflictedVariables || 0,
+      missingVariables: this.variableCoverageOverview?.missingVariables || 0,
+      unassignedCases: this.caseCoverageOverview?.effectiveUnassignedCases || 0,
+      activeTrainingJobs: this.manualFreshnessJobSummary?.activeTrainingJobs || 0,
+      staleSourceJobs: this.manualFreshnessJobSummary?.staleSourceJobs || 0,
+      openDoubleCodingConflicts: this.openDoubleCodingConflictCount,
+      manualCodeAvailabilityWarnings: this.manualCodeAvailabilityWarnings.length
+    };
+  }
+
+  private getStatusDisplayParameters(): ManualCodingSnapshotDisplayParameters {
+    if (!this.hasPlanningDataBundleSnapshot() && this.restoredManualStatusSnapshot) {
+      return this.restoredManualStatusSnapshot.displayParameters;
+    }
+    return this.getManualStatusDisplayParameters();
   }
 
   private loadManualCodingJobRefreshSetting(): void {
@@ -4308,8 +4492,29 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private invalidateCodingStatusCache(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
+      this.planningDataRequestGeneration += 1;
+      this.planningDataLoadState = 'stale';
+      this.hasLoadedPlanningDataBundle = false;
+      this.restoredManualStatusSnapshot = null;
       this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
+      this.scheduleVisiblePlanningReload();
     }
+  }
+
+  private scheduleVisiblePlanningReload(): void {
+    if (!this.autoRefreshManualCodingJobs ||
+        this.activeManualTab !== 'planning' ||
+        this.shouldSuppressCodingStatusChecks() ||
+        this.planningDataReloadTimer) {
+      return;
+    }
+    this.planningDataReloadTimer = setTimeout(() => {
+      this.planningDataReloadTimer = undefined;
+      if (this.activeManualTab === 'planning' &&
+          !this.shouldSuppressCodingStatusChecks()) {
+        this.loadManualTabData('planning');
+      }
+    }, 250);
   }
 
   private formatApplyCodingResultsMessage(

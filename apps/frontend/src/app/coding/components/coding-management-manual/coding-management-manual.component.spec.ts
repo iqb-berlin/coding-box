@@ -1194,6 +1194,18 @@ describe('CodingManagementManualComponent', () => {
     expect(refreshManualCodingPlanningSpy).toHaveBeenCalled();
   });
 
+  it('should show an unchecked status outside planning without a snapshot', () => {
+    component.selectedManualTabIndex = 2;
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+
+    expect(component.getPlanningStatusClass()).toBe('status-attention');
+    expect(component.getPlanningStatusIcon()).toBe('help_outline');
+    expect(component.getPlanningStatusTitle()).toBe('Kodierstand nicht geprüft');
+  });
+
   it('should not describe remaining applied results as open execution work without coding progress', () => {
     setCompletePlanningState();
     setAppliedResults(10, 0, 10);
@@ -1586,7 +1598,7 @@ describe('CodingManagementManualComponent', () => {
     expect(refreshCodingJobsAfterDataChangeSpy).toHaveBeenCalledWith('productive');
   });
 
-  it('should not load bundled planning data when the planning tab is opened', () => {
+  it('should load bundled planning data once when the planning tab is opened', () => {
     component.selectedManualTabIndex = 1;
     component.autoRefreshManualCodingJobs = true;
     const componentInternals = component as unknown as {
@@ -1627,13 +1639,17 @@ describe('CodingManagementManualComponent', () => {
 
     componentInternals.loadManualTabData('planning');
 
-    expect(variableCoverageSpy).not.toHaveBeenCalled();
-    expect(caseCoverageSpy).not.toHaveBeenCalled();
-    expect(codingProgressSpy).not.toHaveBeenCalled();
-    expect(incompleteVariablesSpy).not.toHaveBeenCalled();
-    expect(manualFreshnessDecisionSpy).not.toHaveBeenCalled();
-    expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
-    expect(loadResponseAnalysisSpy).not.toHaveBeenCalled();
+    expect(variableCoverageSpy).toHaveBeenCalledTimes(1);
+    expect(caseCoverageSpy).toHaveBeenCalledTimes(1);
+    expect(codingProgressSpy).toHaveBeenCalledTimes(1);
+    expect(incompleteVariablesSpy).toHaveBeenCalledTimes(1);
+    expect(manualFreshnessDecisionSpy).toHaveBeenCalledTimes(1);
+    expect(loadCodingFreshnessSpy).toHaveBeenCalledTimes(1);
+    expect(loadResponseAnalysisSpy).toHaveBeenCalledTimes(1);
+
+    componentInternals.loadManualTabData('planning');
+
+    expect(variableCoverageSpy).toHaveBeenCalledTimes(1);
     expect(component.shouldRenderManualTabData('planning')).toBe(true);
     expect(component.shouldShowManualRefreshButton()).toBe(true);
   });
@@ -3671,6 +3687,8 @@ describe('CodingManagementManualComponent', () => {
   }
 
   function setEmptyPlanningSnapshots(): void {
+    (component as unknown as { hasLoadedPlanningDataBundle: boolean })
+      .hasLoadedPlanningDataBundle = true;
     component.variableCoverageOverview = {
       totalVariables: 0,
       coveredVariables: 0,

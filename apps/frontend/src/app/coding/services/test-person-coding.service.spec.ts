@@ -43,6 +43,7 @@ describe('TestPersonCodingService', () => {
   const mockAuthToken = 'test-token';
 
   beforeEach(() => {
+    sessionStorage.clear();
     originalFetch = globalThis.fetch;
     keycloak = {
       authenticated: true,
@@ -111,6 +112,22 @@ describe('TestPersonCodingService', () => {
 
   it('should be created', () => {
     expect(service).toBeTruthy();
+  });
+
+  it('should clear workspace status snapshots with the status cache', () => {
+    sessionStorage.setItem(
+      `coding-status-snapshot:v1:7:${mockWorkspaceId}:overview`,
+      '{}'
+    );
+    sessionStorage.setItem('coding-status-snapshot:v1:7:999:overview', '{}');
+
+    service.invalidateCodingStatusCache(mockWorkspaceId);
+
+    expect(sessionStorage.getItem(
+      `coding-status-snapshot:v1:7:${mockWorkspaceId}:overview`
+    )).toBeNull();
+    expect(sessionStorage.getItem('coding-status-snapshot:v1:7:999:overview'))
+      .toBe('{}');
   });
 
   describe('codeTestPersons', () => {
