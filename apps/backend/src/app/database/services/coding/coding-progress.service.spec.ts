@@ -334,6 +334,8 @@ describe('CodingProgressService variable coverage conflicts', () => {
       totalIncompleteResponses: 2,
       appliedResponses: 1,
       remainingResponses: 1,
+      statusTotalIncompleteResponses: 2,
+      responseAnalysisRawCases: 1,
       deriveErrorRawTotalResponses: 1,
       deriveErrorRawAppliedResponses: 1,
       deriveErrorTotalResponses: 1,
@@ -341,12 +343,13 @@ describe('CodingProgressService variable coverage conflicts', () => {
       deriveErrorRemainingResponses: 0
     });
     expect(cacheService.set).toHaveBeenCalledWith(
-      'coding-progress:applied-results-overview:v1:5',
+      'coding-progress:applied-results-overview:v2:5',
       expect.objectContaining({
         cacheVersion: 0,
         data: expect.objectContaining({
           rawTotalIncompleteResponses: 2,
           rawAppliedResponses: 1,
+          responseAnalysisRawCases: 1,
           deriveErrorRawTotalResponses: 1,
           deriveErrorRawAppliedResponses: 1
         })
@@ -389,7 +392,7 @@ describe('CodingProgressService variable coverage conflicts', () => {
       0
     );
     expect(cacheService.get).toHaveBeenCalledWith(
-      'coding-progress:applied-results-overview:v1:5'
+      'coding-progress:applied-results-overview:v2:5'
     );
     expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
     expect(cacheService.set).not.toHaveBeenCalled();
@@ -399,7 +402,7 @@ describe('CodingProgressService variable coverage conflicts', () => {
     await service.invalidateAppliedResultsOverviewCache(5);
 
     expect(cacheService.delete).toHaveBeenCalledWith(
-      'coding-progress:applied-results-overview:v1:5'
+      'coding-progress:applied-results-overview:v2:5'
     );
   });
 

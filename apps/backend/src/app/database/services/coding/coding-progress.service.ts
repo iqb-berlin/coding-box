@@ -37,6 +37,7 @@ import {
 } from './coding-job-type.util';
 import { getCodingIncompleteVariablesCacheVersionKey } from './coding-incomplete-variables-cache-key.util';
 import { CodingAggregationPeerService } from './coding-aggregation-peer.service';
+import { MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES } from '../../utils/manual-coding-candidate.util';
 
 type ResponseMatchingFlag =
   | 'NO_AGGREGATION'
@@ -60,6 +61,7 @@ interface CoverageResponse {
 interface CoverageResponseScope {
   allResponses: CoverageResponse[];
   manualResponses: CoverageResponse[];
+  responseAnalysisRawCases: number;
   excludedSourceSummary: ManualCodingExcludedSourceSummary;
 }
 
@@ -105,6 +107,7 @@ interface AppliedResultsOverview {
   aggregationThreshold: number | null;
   aggregatedDuplicateCases: number;
   statusTotalIncompleteResponses: number;
+  responseAnalysisRawCases: number;
   coveredSourceVariableCount: number;
   coveredSourceResponseCount: number;
   deriveErrorTotalResponses: number;
@@ -232,6 +235,7 @@ export class CodingProgressService {
     aggregationThreshold: number | null;
     aggregatedDuplicateCases: number;
     statusTotalCasesToCode: number;
+    responseAnalysisRawCases: number;
     coveredSourceVariableCount: number;
     coveredSourceResponseCount: number;
   }> {
@@ -268,6 +272,7 @@ export class CodingProgressService {
       aggregationThreshold: effectiveProgress.aggregationThreshold,
       aggregatedDuplicateCases: effectiveProgress.aggregatedDuplicateCases,
       statusTotalCasesToCode: responseScope.allResponses.length,
+      responseAnalysisRawCases: responseScope.responseAnalysisRawCases,
       coveredSourceVariableCount:
         responseScope.excludedSourceSummary.coveredSourceVariableCount,
       coveredSourceResponseCount:
@@ -310,7 +315,7 @@ export class CodingProgressService {
   }
 
   private getAppliedResultsOverviewCacheKey(workspaceId: number): string {
-    return `coding-progress:applied-results-overview:v1:${workspaceId}`;
+    return `coding-progress:applied-results-overview:v2:${workspaceId}`;
   }
 
   private async getAppliedResultsOverviewCacheVersion(workspaceId: number): Promise<number> {
@@ -371,6 +376,7 @@ export class CodingProgressService {
       aggregationThreshold: effectiveProgress.aggregationThreshold,
       aggregatedDuplicateCases: effectiveProgress.aggregatedDuplicateCases,
       statusTotalIncompleteResponses: responseScope.allResponses.length,
+      responseAnalysisRawCases: responseScope.responseAnalysisRawCases,
       coveredSourceVariableCount:
         responseScope.excludedSourceSummary.coveredSourceVariableCount,
       coveredSourceResponseCount:
@@ -394,6 +400,7 @@ export class CodingProgressService {
     aggregationThreshold: number | null;
     aggregatedDuplicateCases: number;
     statusTotalCasesToCode: number;
+    responseAnalysisRawCases: number;
     coveredSourceVariableCount: number;
     coveredSourceResponseCount: number;
   }> {
@@ -439,6 +446,7 @@ export class CodingProgressService {
       aggregationThreshold: effectiveCoverage.aggregationThreshold,
       aggregatedDuplicateCases: effectiveCoverage.aggregatedDuplicateCases,
       statusTotalCasesToCode: responseScope.allResponses.length,
+      responseAnalysisRawCases: responseScope.responseAnalysisRawCases,
       coveredSourceVariableCount:
         responseScope.excludedSourceSummary.coveredSourceVariableCount,
       coveredSourceResponseCount:
@@ -523,6 +531,10 @@ export class CodingProgressService {
     return {
       allResponses,
       manualResponses,
+      responseAnalysisRawCases: allResponses.filter(response => (
+        response.statusV1 !== null &&
+        MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES.includes(response.statusV1)
+      )).length,
       excludedSourceSummary
     };
   }
@@ -564,10 +576,7 @@ export class CodingProgressService {
     const deriveErrorStatus = statusStringToNumber('DERIVE_ERROR');
     query[method](new Brackets(qb => {
       qb.where('response.status_v1 IN (:...statuses)', {
-        statuses: [
-          statusStringToNumber('CODING_INCOMPLETE'),
-          statusStringToNumber('INTENDED_INCOMPLETE')
-        ]
+        statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
       }).orWhere(
         `response.status_v1 = :deriveErrorStatus
           AND EXISTS (

@@ -11,7 +11,7 @@ import {
   DuplicateValueGroupDto
 } from '../../../../../../api-dto/coding/response-analysis.dto';
 import { CacheService } from '../../cache/cache.service';
-import { statusStringToNumber } from '../../database/utils/response-status-converter';
+import { MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES } from '../../database/utils/manual-coding-candidate.util';
 import { CodingAnalysisJobData } from '../job-queue.service';
 import {
   applyResolvedExclusionsToQuery,
@@ -94,8 +94,6 @@ export class CodingAnalysisProcessor {
     threshold: number,
     job?: Job<CodingAnalysisJobData>
   ): Promise<ResponseAnalysisDto> {
-    const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
-    const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const defaultMirCode = await this.getDefaultMirCode(workspaceId);
     const derivedVariableMap = await this.getDerivedVariableMap(workspaceId);
@@ -113,7 +111,9 @@ export class CodingAnalysisProcessor {
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.status_v1 IN (:...statuses)', { statuses: [codingIncompleteStatus, intendedIncompleteStatus] });
+      .andWhere('response.status_v1 IN (:...statuses)', {
+        statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+      });
     applyResolvedExclusionsToQuery(relevantVariablesQuery, exclusions);
     const relevantVariables = await relevantVariablesQuery
       .getRawMany();
@@ -155,7 +155,9 @@ export class CodingAnalysisProcessor {
         .leftJoinAndSelect('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
-        .andWhere('response.status_v1 IN (:...statuses)', { statuses: [codingIncompleteStatus, intendedIncompleteStatus] })
+        .andWhere('response.status_v1 IN (:...statuses)', {
+          statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+        })
         // Exclude already-aggregated responses (non-master duplicates) so they don't reappear after aggregation
         .andWhere(
           '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :emptyCode))',
