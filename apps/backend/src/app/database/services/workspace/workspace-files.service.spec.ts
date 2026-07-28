@@ -233,7 +233,20 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     createQueryBuilder: jest.fn(),
     find: jest.fn(),
     findOne: jest.fn(),
-    upsert: jest.fn().mockResolvedValue(undefined)
+    upsert: jest.fn().mockResolvedValue(undefined),
+    manager: {
+      connection: {
+        createQueryRunner: jest.fn(() => ({
+          connect: jest.fn().mockResolvedValue(undefined),
+          query: jest.fn().mockImplementation((sql: string) => Promise.resolve(
+            sql.includes('INSERT INTO workspace_coding_status_revision_operation') ? [{
+              revision: 1
+            }] : []
+          )),
+          release: jest.fn().mockResolvedValue(undefined)
+        }))
+      }
+    }
   };
   const mockCodingStatisticsService = {
     invalidateCache: jest.fn().mockResolvedValue(undefined),

@@ -265,7 +265,11 @@ describe('test results export/import roundtrip', () => {
     const dataSource = {
       createQueryRunner: jest.fn().mockReturnValue({
         connect: jest.fn().mockResolvedValue(undefined),
-        query: jest.fn().mockResolvedValue([]),
+        query: jest.fn().mockImplementation((sql: string) => Promise.resolve(
+          sql.includes('INSERT INTO workspace_coding_status_revision_operation') ? [{
+            revision: 1
+          }] : []
+        )),
         release: jest.fn().mockResolvedValue(undefined)
       }),
       getRepository: jest.fn(() => ({
@@ -338,7 +342,11 @@ describe('test results export/import roundtrip', () => {
       {
         createQueryRunner: jest.fn().mockReturnValue({
           connect: jest.fn().mockResolvedValue(undefined),
-          query: jest.fn().mockResolvedValue([]),
+          query: jest.fn().mockImplementation((sql: string) => Promise.resolve(
+            sql.includes('INSERT INTO workspace_coding_status_revision_operation') ? [{
+              revision: 1
+            }] : []
+          )),
           release: jest.fn().mockResolvedValue(undefined)
         })
       } as unknown as DataSource,

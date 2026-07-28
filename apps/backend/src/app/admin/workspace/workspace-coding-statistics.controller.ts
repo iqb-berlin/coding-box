@@ -1044,14 +1044,16 @@ export class WorkspaceCodingStatisticsController {
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
-    description: 'Current workspace test-results revision retrieved successfully.'
+    description: 'Current workspace coding-status revision retrieved successfully.'
   })
   async getCodingStatusRevision(
     @WorkspaceId() workspace_id: number
   ): Promise<CodingStatusRevisionDto> {
+    const statusRevision = await this.codingFreshnessService
+      .getWorkspaceStatusRevision(workspace_id);
     return {
       workspaceId: workspace_id,
-      revision: await this.codingFreshnessService.getWorkspaceRevision(workspace_id)
+      ...statusRevision
     };
   }
 

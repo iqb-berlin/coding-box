@@ -761,6 +761,8 @@ export class ResponseManagementService {
         }
         return result;
       });
+    }, {
+      recoverAfterFailure: () => this.reconcileCodingStatusAfterMutationFailure(workspaceId)
     });
   }
 
@@ -857,7 +859,16 @@ export class ResponseManagementService {
         }
         return result;
       });
+    }, {
+      recoverAfterFailure: () => this.reconcileCodingStatusAfterMutationFailure(workspaceId)
     });
+  }
+
+  private async reconcileCodingStatusAfterMutationFailure(
+    workspaceId: number
+  ): Promise<void> {
+    await this.codingFreshnessService
+      ?.reconcileWorkspaceAfterRevisionFailure(workspaceId);
   }
 
   private async tryRecordAuditEvent(

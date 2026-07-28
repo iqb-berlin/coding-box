@@ -4729,7 +4729,8 @@ export class WorkspaceTestResultsService {
           )));
         }
         return result;
-      }
+      },
+      this.codingStatusRecoveryOptions(workspaceId)
     );
   }
 
@@ -4762,7 +4763,8 @@ export class WorkspaceTestResultsService {
         request,
         userId,
         onProgress
-      )
+      ),
+      this.codingStatusRecoveryOptions(workspaceId)
     );
   }
 
@@ -4925,7 +4927,8 @@ export class WorkspaceTestResultsService {
         request,
         userId,
         onProgress
-      )
+      ),
+      this.codingStatusRecoveryOptions(workspaceId)
     );
   }
 
@@ -4951,7 +4954,8 @@ export class WorkspaceTestResultsService {
         request,
         userId,
         onProgress
-      )
+      ),
+      this.codingStatusRecoveryOptions(workspaceId)
     );
   }
 
@@ -6549,7 +6553,8 @@ export class WorkspaceTestResultsService {
           }
         }
         return result;
-      }
+      },
+      this.codingStatusRecoveryOptions(workspaceId)
     );
   }
 
@@ -6652,8 +6657,20 @@ export class WorkspaceTestResultsService {
           }
         }
         return result;
-      }
+      },
+      this.codingStatusRecoveryOptions(workspaceId)
     );
+  }
+
+  private codingStatusRecoveryOptions(workspaceId: number): {
+    recoverAfterFailure: () => Promise<void>;
+  } {
+    return {
+      recoverAfterFailure: async () => {
+        await this.codingFreshnessService
+          ?.reconcileWorkspaceAfterRevisionFailure(workspaceId);
+      }
+    };
   }
 
   private async tryRecordAuditEvent(

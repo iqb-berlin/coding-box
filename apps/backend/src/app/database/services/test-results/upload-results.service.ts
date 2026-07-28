@@ -764,6 +764,11 @@ export class UploadResultsService {
                   mutationSummary.changedUnitIds,
                   'RESULT_UPDATED'
                 );
+              }, {
+                recoverAfterFailure: async () => {
+                  await this.codingFreshnessService
+                    ?.reconcileWorkspaceAfterRevisionFailure(workspaceId);
+                }
               });
             });
           } finally {

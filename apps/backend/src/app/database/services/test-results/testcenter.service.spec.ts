@@ -66,7 +66,11 @@ describe('TestCenterService', () => {
           useValue: {
             createQueryRunner: jest.fn().mockReturnValue({
               connect: jest.fn().mockResolvedValue(undefined),
-              query: jest.fn().mockResolvedValue([]),
+              query: jest.fn().mockImplementation((sql: string) => Promise.resolve(
+                sql.includes('INSERT INTO workspace_coding_status_revision_operation') ? [{
+                  revision: 1
+                }] : []
+              )),
               release: jest.fn().mockResolvedValue(undefined)
             })
           }

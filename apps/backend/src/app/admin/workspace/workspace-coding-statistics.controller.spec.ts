@@ -22,7 +22,7 @@ describe('WorkspaceCodingStatisticsController', () => {
     getReadiness: jest.Mock;
     getReadinessFromCache: jest.Mock;
   };
-  let codingFreshnessService: { getWorkspaceRevision: jest.Mock };
+  let codingFreshnessService: { getWorkspaceStatusRevision: jest.Mock };
   let controller: WorkspaceCodingStatisticsController;
   const request = {
     protocol: 'http',
@@ -87,7 +87,11 @@ describe('WorkspaceCodingStatisticsController', () => {
       getReadinessFromCache: jest.fn().mockResolvedValue(null)
     };
     codingFreshnessService = {
-      getWorkspaceRevision: jest.fn().mockResolvedValue(17)
+      getWorkspaceStatusRevision: jest.fn().mockResolvedValue({
+        revision: 17,
+        statusRevision: '42',
+        stable: true
+      })
     };
 
     controller = new WorkspaceCodingStatisticsController(
@@ -175,9 +179,12 @@ describe('WorkspaceCodingStatisticsController', () => {
   it('returns the current coding status revision', async () => {
     await expect(controller.getCodingStatusRevision(5)).resolves.toEqual({
       workspaceId: 5,
-      revision: 17
+      revision: 17,
+      statusRevision: '42',
+      stable: true
     });
-    expect(codingFreshnessService.getWorkspaceRevision).toHaveBeenCalledWith(5);
+    expect(codingFreshnessService.getWorkspaceStatusRevision)
+      .toHaveBeenCalledWith(5);
   });
 
   it('protects the coding status revision with workspace authentication', () => {

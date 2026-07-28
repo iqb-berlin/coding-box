@@ -204,7 +204,11 @@ describe('WorkspaceTestResultsService', () => {
       createQueryRunner: jest.fn().mockReturnValue({
         connect: jest.fn().mockResolvedValue(undefined),
         startTransaction: jest.fn().mockResolvedValue(undefined),
-        query: jest.fn().mockResolvedValue([]),
+        query: jest.fn().mockImplementation((sql: string) => Promise.resolve(
+          sql.includes('INSERT INTO workspace_coding_status_revision_operation') ? [{
+            revision: 1
+          }] : []
+        )),
         commitTransaction: jest.fn().mockResolvedValue(undefined),
         rollbackTransaction: jest.fn().mockResolvedValue(undefined),
         release: jest.fn().mockResolvedValue(undefined)

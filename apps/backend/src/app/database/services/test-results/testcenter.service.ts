@@ -457,6 +457,11 @@ export class TestcenterService {
                 mutationSummary,
                 issues
               );
+            }, {
+              recoverAfterFailure: async () => {
+                await this.codingFreshnessService
+                  ?.reconcileWorkspaceAfterRevisionFailure(Number(workspace_id));
+              }
             });
 
             if (responseImportMutatedData) {

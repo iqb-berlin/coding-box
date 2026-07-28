@@ -22,6 +22,13 @@ const queryBuilder = (overrides: Record<string, jest.Mock> = {}) => ({
   ...overrides
 });
 
+const freshnessUpsertOptions = {
+  conflictPaths: ['workspace_id', 'unit_id', 'version'],
+  overwriteCondition: {
+    where: '"coding_unit_freshness"."source_revision" <= EXCLUDED."source_revision"'
+  }
+};
+
 describe('CodingFreshnessService', () => {
   let freshnessRepository: Repository<CodingUnitFreshness>;
   let responseRepository: Repository<ResponseEntity>;
@@ -76,6 +83,190 @@ describe('CodingFreshnessService', () => {
       1,
       'SELECT revision FROM workspace_test_results_revision WHERE workspace_id = $1',
       [1]
+    );
+  });
+
+  it('returns the combined status revision only as stable after processing finished', async () => {
+    (connection.query as jest.Mock).mockResolvedValueOnce([{
+      revision: '9',
+      status_revision: '1234567890123',
+      stable: true
+    }]);
+
+    await expect(service.getWorkspaceStatusRevision(1)).resolves.toEqual({
+      revision: 9,
+      statusRevision: '1234567890123',
+      stable: true
+    });
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining('failed_test_results_revision IS NULL'),
+      [1]
+    );
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining("now() - interval '24 hours'"),
+      [1]
+    );
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining('workspace_coding_status_revision_operation'),
+      [1]
+    );
+  });
+
+  it('recovers a recorded revision failure only after a full conservative reconciliation', async () => {
+    (connection.query as jest.Mock).mockImplementation((sql: string) => {
+      if (sql.includes('SELECT failed_test_results_revision')) {
+        return Promise.resolve([{ failed_test_results_revision: 5 }]);
+      }
+      if (sql.includes('SELECT unit_record.id')) {
+        return Promise.resolve([{ id: 11 }, { id: '12' }]);
+      }
+      if (sql.includes('SELECT revision FROM workspace_test_results_revision')) {
+        return Promise.resolve([{ revision: 8 }]);
+      }
+      if (sql.includes('RETURNING status_revision.workspace_id')) {
+        return Promise.resolve([{ workspace_id: 1 }]);
+      }
+      return Promise.resolve([]);
+    });
+    const markUnitsStaleSpy = jest.spyOn(
+      service,
+      'markUnitsStaleAfterResultChange'
+    ).mockResolvedValue(undefined);
+
+    await expect(
+      service.reconcileWorkspaceAfterRevisionFailure(1)
+    ).resolves.toBe(true);
+
+    expect(markUnitsStaleSpy).toHaveBeenCalledWith(
+      1,
+      [11, 12],
+      'RESULT_UPDATED'
+    );
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining("freshness_status = 'stale_source'"),
+      [1]
+    );
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining('failed_test_results_revision = NULL'),
+      [1, 8]
+    );
+  });
+
+  it('reconciles expired or previously recorded failures under a workspace lock', async () => {
+    const queryRunner = {
+      connect: jest.fn().mockResolvedValue(undefined),
+      query: jest.fn()
+        .mockResolvedValueOnce([{ locked: true }])
+        .mockResolvedValueOnce([]),
+      release: jest.fn().mockResolvedValue(undefined)
+    };
+    connection.createQueryRunner = jest.fn()
+      .mockReturnValue(queryRunner) as never;
+    (connection.query as jest.Mock)
+      .mockResolvedValueOnce([{ workspace_id: '4' }])
+      .mockResolvedValueOnce([{ workspace_id: 4 }]);
+    const reconcileSpy = jest.spyOn(
+      service,
+      'reconcileWorkspaceAfterRevisionFailure'
+    ).mockResolvedValue(true);
+
+    await expect(
+      service.reconcileRecoverableWorkspaceRevisionFailures()
+    ).resolves.toBe(1);
+
+    expect(connection.query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('failed_test_results_revision IS NOT NULL')
+    );
+    expect(connection.query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('expired_operations'),
+      [4]
+    );
+    expect(reconcileSpy).toHaveBeenCalledWith(4);
+    expect(queryRunner.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('increments every coding status revision update atomically', async () => {
+    const serviceInternals = service as unknown as {
+      incrementRevision(workspaceId: number): Promise<{
+        revision: number;
+      }>;
+      markRevisionProcessed(
+        workspaceId: number,
+        operation: { revision: number }
+      ): Promise<void>;
+      markRevisionFailed(workspaceId: number, revision: number): Promise<void>;
+    };
+    (connection.query as jest.Mock)
+      .mockResolvedValueOnce([{
+        revision: 4
+      }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const operation = await serviceInternals.incrementRevision(1);
+    await serviceInternals.markRevisionProcessed(1, operation);
+    await serviceInternals.markRevisionFailed(1, operation.revision);
+
+    const revisionStatements = (connection.query as jest.Mock).mock.calls
+      .map(([sql]) => sql as string);
+    expect(revisionStatements).toHaveLength(3);
+    revisionStatements.forEach(sql => {
+      expect(sql).not.toContain('txid_current()');
+    });
+    expect(revisionStatements[0]).toContain(
+      'workspace_coding_status_revision.revision + 1'
+    );
+    expect(revisionStatements[0]).toContain(
+      'INSERT INTO workspace_coding_status_revision_operation'
+    );
+    expect(revisionStatements[0]).toContain(
+      'DELETE FROM workspace_coding_status_revision_operation'
+    );
+    expect(revisionStatements[1]).toContain(
+      'workspace_coding_status_revision.revision + 1'
+    );
+    expect(revisionStatements[1]).not.toContain(
+      'failed_test_results_revision = CASE'
+    );
+    expect((connection.query as jest.Mock).mock.calls[1][1]).toEqual([1, 4]);
+    expect(revisionStatements[1]).toContain(
+      'DELETE FROM workspace_coding_status_revision_operation'
+    );
+    expect(revisionStatements[2]).toContain(
+      'workspace_coding_status_revision.revision + 1'
+    );
+    expect(revisionStatements[2]).toContain(
+      'DELETE FROM workspace_coding_status_revision_operation'
+    );
+    revisionStatements.forEach(sql => {
+      expect(sql).not.toContain('active_test_result_updates');
+      expect(sql).not.toContain('active_test_result_update_started_at');
+    });
+  });
+
+  it('records the exact failed revision without masking the original error', async () => {
+    const originalError = new Error('freshness update failed');
+    (connection.query as jest.Mock)
+      .mockResolvedValueOnce([{
+        revision: 5
+      }])
+      .mockRejectedValueOnce(new Error('failure marker failed'));
+    (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(
+      queryBuilder({
+        getRawMany: jest.fn().mockRejectedValue(originalError)
+      })
+    );
+
+    await expect(
+      service.markUnitsPendingAfterImport(1, [10])
+    ).rejects.toBe(originalError);
+
+    expect(connection.query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('failed_test_results_revision = GREATEST'),
+      [1, 5]
     );
   });
 
@@ -295,7 +486,7 @@ describe('CodingFreshnessService', () => {
           reason: 'RESULT_UPDATED'
         })
       ]),
-      ['workspace_id', 'unit_id', 'version']
+      freshnessUpsertOptions
     );
   });
 
@@ -333,7 +524,7 @@ describe('CodingFreshnessService', () => {
         source_revision: 14,
         coded_revision: 14
       })],
-      ['workspace_id', 'unit_id', 'version']
+      freshnessUpsertOptions
     );
     expect(responseRepository.createQueryBuilder).toHaveBeenCalledTimes(3);
   });
@@ -393,11 +584,11 @@ describe('CodingFreshnessService', () => {
           reason: 'CODING_SCHEME_CHANGED'
         })
       ]),
-      ['workspace_id', 'unit_id', 'version']
+      freshnessUpsertOptions
     );
     expect((freshnessRepository.upsert as jest.Mock).mock.calls[0][0])
       .toHaveLength(3);
-    expect(connection.query).toHaveBeenLastCalledWith(
+    expect(connection.query).toHaveBeenCalledWith(
       expect.stringContaining('UPDATE coding_job cj'),
       [1, [10], 'stale_source', 'CODING_SCHEME_CHANGED']
     );
@@ -519,9 +710,9 @@ describe('CodingFreshnessService', () => {
           source_revision: 12
         })
       ],
-      ['workspace_id', 'unit_id', 'version']
+      freshnessUpsertOptions
     );
-    expect(connection.query).toHaveBeenLastCalledWith(
+    expect(connection.query).toHaveBeenCalledWith(
       expect.stringContaining('UPDATE coding_job cj'),
       [1, [10], 'review_required', 'CODING_SCHEME_CHANGED']
     );
@@ -569,7 +760,7 @@ describe('CodingFreshnessService', () => {
         affected_response_count: 2,
         source_revision: 5
       })],
-      ['workspace_id', 'unit_id', 'version']
+      freshnessUpsertOptions
     );
     expect(JSON.stringify((freshnessRepository.upsert as jest.Mock).mock.calls[0][0]))
       .not.toContain('"unit_id":20');
@@ -624,7 +815,7 @@ describe('CodingFreshnessService', () => {
           reason: 'RESET'
         })
       ]),
-      ['workspace_id', 'unit_id', 'version']
+      freshnessUpsertOptions
     );
     expect((freshnessRepository.upsert as jest.Mock).mock.calls[0][0]).toHaveLength(4);
   });
@@ -712,7 +903,7 @@ describe('CodingFreshnessService', () => {
           affected_response_count: 4
         })
       ]),
-      ['workspace_id', 'unit_id', 'version']
+      freshnessUpsertOptions
     );
     expect((freshnessRepository.upsert as jest.Mock).mock.calls[0][0]).toHaveLength(2);
   });
@@ -891,7 +1082,7 @@ describe('CodingFreshnessService', () => {
         source_revision: 13,
         coded_revision: 13
       })],
-      ['workspace_id', 'unit_id', 'version']
+      freshnessUpsertOptions
     );
     expect(connection.query).toHaveBeenNthCalledWith(
       1,
@@ -966,7 +1157,7 @@ describe('CodingFreshnessService', () => {
           affected_response_count: 0
         })
       ]),
-      ['workspace_id', 'unit_id', 'version']
+      freshnessUpsertOptions
     );
   });
 
@@ -994,7 +1185,7 @@ describe('CodingFreshnessService', () => {
         affected_response_count: 3,
         source_revision: 7
       })],
-      ['workspace_id', 'unit_id', 'version']
+      freshnessUpsertOptions
     );
   });
 
@@ -1033,7 +1224,9 @@ describe('CodingFreshnessService', () => {
 
   it('marks newly imported responses in existing units as RESULT_ADDED', async () => {
     (connection.query as jest.Mock)
-      .mockResolvedValueOnce([{ revision: 9 }])
+      .mockResolvedValueOnce([{
+        revision: 9
+      }])
       .mockResolvedValueOnce({});
 
     const importedResponsesQb = queryBuilder({
@@ -1079,7 +1272,7 @@ describe('CodingFreshnessService', () => {
           source_revision: 9
         })
       ]),
-      ['workspace_id', 'unit_id', 'version']
+      freshnessUpsertOptions
     );
     expect((freshnessRepository.upsert as jest.Mock).mock.calls[0][0]).toHaveLength(4);
     expect(connection.query).toHaveBeenCalledWith(
@@ -1279,7 +1472,7 @@ describe('CodingFreshnessService', () => {
         affected_response_count: 5,
         source_revision: 8
       })],
-      ['workspace_id', 'unit_id', 'version']
+      freshnessUpsertOptions
     );
   });
 });

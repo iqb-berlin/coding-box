@@ -80,6 +80,7 @@ import {
 } from '../../../utils/regex-search.util';
 import { hasVisibleManualInstruction } from '../../../utils/manual-instruction.util';
 import { isExportWorkerProcess } from '../../../export-worker/export-worker-role';
+import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
 type WorkspaceUnitVisibility = {
   globalIgnoredUnits: Set<string>;
@@ -1940,16 +1941,34 @@ ${bookletRefs}
 
       this.logger.log(`[OctetStream] Proceeding to upsert ${fileIdNormalized}`);
 
-      await this.fileUploadRepository.upsert(fileUpload, [
-        'file_id',
-        'workspace_id'
-      ]);
-      const freshnessIssue = await this.markCodingSchemeFreshnessAfterFileChange(
-        workspaceId,
-        fileUpload.file_id,
-        existing?.data,
-        fileContent
-      );
+      let freshnessIssue: TestResultsUploadIssueDto | undefined;
+      const persistFileAndFreshness = async (): Promise<void> => {
+        await this.fileUploadRepository.upsert(fileUpload, [
+          'file_id',
+          'workspace_id'
+        ]);
+        freshnessIssue = await this.markCodingSchemeFreshnessAfterFileChange(
+          workspaceId,
+          fileUpload.file_id,
+          existing?.data,
+          fileContent
+        );
+      };
+      if (this.isCodingSchemeFileId(fileUpload.file_id)) {
+        await withWorkspaceTestResultsMutationLock(
+          this.fileUploadRepository.manager.connection,
+          workspaceId,
+          persistFileAndFreshness,
+          {
+            recoverAfterFailure: async () => {
+              await this.codingFreshnessService
+                ?.reconcileWorkspaceAfterRevisionFailure(workspaceId);
+            }
+          }
+        );
+      } else {
+        await persistFileAndFreshness();
+      }
       this.logger.log(
         `Successfully processed octet-stream file: ${file.originalname} as ${fileType}`
       );
@@ -2175,36 +2194,53 @@ ${bookletRefs}
         );
 
       const registry = this.fileUploadRepository.create(insertableEntries);
-      if (registry.length > 0) {
-        await this.fileUploadRepository
-          .createQueryBuilder()
-          .insert()
-          .into(FileUpload)
-          .values(registry)
-          .orIgnore()
-          .execute();
-      }
-
       const overwriteRegistry = this.fileUploadRepository.create(
         overwriteEntries.map(e => ({
           ...(e as Record<string, unknown>),
           created_at: new Date() as unknown as number
         }))
       );
-      if (overwriteRegistry.length > 0) {
-        await this.fileUploadRepository.upsert(overwriteRegistry, [
-          'file_id',
-          'workspace_id'
-        ]);
-      }
-      const freshnessIssues = (await Promise.all(changedCodingSchemes.map(change => (
-        this.markCodingSchemeFreshnessAfterFileChange(
+      let freshnessIssues: TestResultsUploadIssueDto[] = [];
+      const persistFilesAndFreshness = async (): Promise<void> => {
+        if (registry.length > 0) {
+          await this.fileUploadRepository
+            .createQueryBuilder()
+            .insert()
+            .into(FileUpload)
+            .values(registry)
+            .orIgnore()
+            .execute();
+        }
+        if (overwriteRegistry.length > 0) {
+          await this.fileUploadRepository.upsert(overwriteRegistry, [
+            'file_id',
+            'workspace_id'
+          ]);
+        }
+        freshnessIssues = (await Promise.all(changedCodingSchemes.map(change => (
+          this.markCodingSchemeFreshnessAfterFileChange(
+            workspaceId,
+            change.fileId,
+            change.previousData,
+            change.nextData
+          )
+        )))).filter((issue): issue is TestResultsUploadIssueDto => !!issue);
+      };
+      if (changedCodingSchemes.length > 0) {
+        await withWorkspaceTestResultsMutationLock(
+          this.fileUploadRepository.manager.connection,
           workspaceId,
-          change.fileId,
-          change.previousData,
-          change.nextData
-        )
-      )))).filter((issue): issue is TestResultsUploadIssueDto => !!issue);
+          persistFilesAndFreshness,
+          {
+            recoverAfterFailure: async () => {
+              await this.codingFreshnessService
+                ?.reconcileWorkspaceAfterRevisionFailure(workspaceId);
+            }
+          }
+        );
+      } else {
+        await persistFilesAndFreshness();
+      }
       if (registry.length > 0 || overwriteRegistry.length > 0) {
         await this.invalidateWorkspaceFileCaches(workspaceId);
       }
