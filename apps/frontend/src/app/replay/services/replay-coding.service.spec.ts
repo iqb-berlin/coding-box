@@ -450,6 +450,31 @@ describe('ReplayCodingService', () => {
       expect(didFlush).toBe(true);
     });
 
+    it('reports a pending save for the affected coding unit', async () => {
+      const pendingSave = new Subject<CodingJob>();
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValueOnce(pendingSave.asObservable());
+      const unit = {
+        id: 1,
+        name: 'u1',
+        alias: null,
+        bookletId: 0,
+        testPerson: 'p1',
+        variableId: 'v1'
+      };
+
+      const savePromise = service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'one' });
+      await Promise.resolve();
+
+      expect(service.isUnitSavePending(unit)).toBe(true);
+
+      pendingSave.next({} as CodingJob);
+      pendingSave.complete();
+      await savePromise;
+      await Promise.resolve();
+
+      expect(service.isUnitSavePending(unit)).toBe(false);
+    });
+
     it('rejects a flush when a pending row mutation fails', async () => {
       const pendingSave = new Subject<CodingJob>();
       codingJobBackendServiceMock.saveCodingProgress.mockReturnValueOnce(pendingSave.asObservable());

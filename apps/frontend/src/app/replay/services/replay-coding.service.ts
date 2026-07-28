@@ -929,6 +929,18 @@ export class ReplayCodingService {
     return this.isUnitCodedByCompositeKey(compositeKey);
   }
 
+  isUnitSavePending(unit: UnitsReplayUnit): boolean {
+    if (!unit.variableId) return false;
+
+    const compositeKey = this.generateCompositeKey(
+      unit.testPerson || '',
+      unit.name,
+      unit.variableId
+    );
+
+    return this.rowMutationChains.has(compositeKey);
+  }
+
   private isUnitCodedByCompositeKey(compositeKey: string): boolean {
     return this.isCompletedSelection(compositeKey, this.selectedCodes.get(compositeKey));
   }

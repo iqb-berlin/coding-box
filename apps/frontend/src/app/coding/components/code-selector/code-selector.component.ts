@@ -70,6 +70,7 @@ interface IndexedReplayUnit {
 export class CodeSelectorComponent implements OnChanges {
   @Input() codingScheme!: string | CodingScheme;
   @Input() variableId!: string;
+  @Input() codingCaseKey: string = '';
   @Input() preSelectedCodeId: number | null = null;
   @Input() preSelectedCodingIssueOptionId: number | null = null;
   @Input() coderNotes: string = '';
@@ -156,7 +157,12 @@ export class CodeSelectorComponent implements OnChanges {
     if (changes.codingScheme || changes.variableId || changes.missings) {
       this.loadCodes();
     }
-    if (changes.preSelectedCodeId || changes.preSelectedCodingIssueOptionId || changes.allowComments) {
+    if (
+      changes.codingCaseKey ||
+      changes.preSelectedCodeId ||
+      changes.preSelectedCodingIssueOptionId ||
+      changes.allowComments
+    ) {
       this.selectPreSelectedCode();
     }
   }
@@ -432,6 +438,17 @@ export class CodeSelectorComponent implements OnChanges {
       this.legacySelectedCode !== null;
   }
 
+  private hasSavedCurrentSelection(): boolean {
+    const data = this.unitsData;
+    const currentUnit = data?.units[data.currentUnitIndex];
+    if (!currentUnit || !this.codingService) {
+      return this.hasCurrentSelection();
+    }
+
+    return this.codingService.isUnitCoded(currentUnit) &&
+      !this.codingService.isUnitSavePending?.(currentUnit);
+  }
+
   deselectAll(): void {
     if (this.isReadOnly) return;
     this.selectedCode = null;
@@ -509,7 +526,7 @@ export class CodeSelectorComponent implements OnChanges {
 
     if (this.isNavigationDisabled) return;
     if (this.hasSaveError) return;
-    if (!this.isReadOnly && !this.hasCurrentSelection()) return;
+    if (!this.isReadOnly && !this.hasSavedCurrentSelection()) return;
     if (!this.isReadOnly && !this.canLeaveCurrentUnit()) return;
 
     const currentIndex = data.currentUnitIndex;
@@ -540,7 +557,7 @@ export class CodeSelectorComponent implements OnChanges {
     const nextIndex = currentIndex + 1;
     const hasNext = nextIndex < data.units.length;
     if (this.isReadOnly) return hasNext;
-    return hasNext && this.hasCurrentSelection() && !this.hasSaveError;
+    return hasNext && this.hasSavedCurrentSelection() && !this.hasSaveError;
   }
 
   hasPreviousUnit(): boolean {
