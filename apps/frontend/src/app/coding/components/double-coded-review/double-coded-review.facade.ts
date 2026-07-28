@@ -18,7 +18,7 @@ import {
 } from '../../../../../../../api-dto/coding/double-coded-review.dto';
 import { AppService } from '../../../core/services/app.service';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
-import { TestPersonCodingService } from '../../services/test-person-coding.service';
+import { DoubleCodedReviewApiService } from '../../services/double-coded-review-api.service';
 import {
   AppliedReviewResult,
   CatalogDecisionResult,
@@ -63,7 +63,7 @@ interface ManagerDraftCommandResult {
 export class DoubleCodedReviewFacade {
   private readonly fb = inject(FormBuilder);
   private readonly appService = inject(AppService);
-  private readonly testPersonCodingService = inject(TestPersonCodingService);
+  private readonly doubleCodedReviewApi = inject(DoubleCodedReviewApiService);
   private readonly sessionRecoveryService = inject(SessionRecoveryService);
 
   readonly selectionForm: FormGroup = this.fb.group({});
@@ -640,7 +640,7 @@ export class DoubleCodedReviewFacade {
         concatMap(command => {
           let request: Observable<ManagerDraftCommandResult>;
           if (command.kind === 'save') {
-            request = this.testPersonCodingService
+            request = this.doubleCodedReviewApi
               .saveDoubleCodedReviewDraft(
                 command.workspaceId,
                 command.item.responseId,
@@ -648,7 +648,7 @@ export class DoubleCodedReviewFacade {
               )
               .pipe(map(savedDraft => ({ command, savedDraft })));
           } else {
-            request = this.testPersonCodingService
+            request = this.doubleCodedReviewApi
               .deleteDoubleCodedReviewDraft(
                 command.workspaceId,
                 command.item.responseId

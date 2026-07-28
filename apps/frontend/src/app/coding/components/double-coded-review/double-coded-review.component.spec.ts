@@ -10,6 +10,7 @@ import { AppService } from '../../../core/services/app.service';
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
 import { CodingFacadeService } from '../../../services/facades/coding-facade.service';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
+import { DoubleCodedReviewApiService } from '../../services/double-coded-review-api.service';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { DoubleCodedReviewComponent } from './double-coded-review.component';
 import { DoubleCodedDecisionCellComponent } from './double-coded-decision-cell.component';
@@ -301,6 +302,10 @@ describe('DoubleCodedReviewComponent', () => {
             deleteDoubleCodedReviewDraft: jest.fn(() => of({ success: true })),
             notifyTestResultsChanged: jest.fn()
           }
+        },
+        {
+          provide: DoubleCodedReviewApiService,
+          useExisting: TestPersonCodingService
         },
         {
           provide: CodingStatisticsService,
