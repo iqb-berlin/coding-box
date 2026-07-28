@@ -34,17 +34,19 @@ describe('DoubleCodedReviewApiService', () => {
   it('requests review data with agreement and scope filters', () => {
     service.getDoubleCodedVariablesForReview(
       workspaceId,
-      2,
-      25,
-      true,
-      false,
-      ' VAR_1 ',
-      9,
-      'done',
-      'unresolved',
-      'differ',
-      [11, 12],
-      [21]
+      {
+        page: 2,
+        limit: 25,
+        onlyConflicts: true,
+        excludeTrainings: false,
+        search: ' VAR_1 ',
+        coderId: 9,
+        statusFilter: 'done',
+        resolvedFilter: 'unresolved',
+        agreementFilter: 'differ',
+        jobDefinitionIds: [11, 12],
+        coderTrainingIds: [21]
+      }
     ).subscribe();
 
     const req = httpMock.expectOne(request => request.url ===

@@ -2,61 +2,14 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
+  ApplyDoubleCodedResolutionsRequestDto,
   DoubleCodedManagerDecisionDto,
-  DoubleCodedResolutionDecisionDto,
-  DoubleCodedResolutionResultDto,
-  DoubleCodedReviewCodeDto,
+  DoubleCodedResolutionResponseDto,
+  DoubleCodedReviewQuery,
+  DoubleCodedReviewResponseDto,
   SaveDoubleCodedReviewDraftDto
 } from '../../../../../../api-dto/coding/double-coded-review.dto';
 import { SERVER_URL } from '../../injection-tokens';
-
-export interface DoubleCodedReviewCoderResult {
-  coderId: number;
-  coderName: string;
-  jobId: number;
-  jobName: string;
-  code: number | null;
-  codingIssueOption: number | null;
-  score: number | null;
-  notes: string | null;
-  supervisorComment: string | null;
-  codedAt: string;
-}
-
-export interface DoubleCodedReviewItemDto {
-  responseId: number;
-  sourceUnitId: number;
-  unitName: string;
-  variableId: string;
-  personLogin: string;
-  personCode: string;
-  bookletName: string;
-  givenAnswer: string;
-  isResolved: boolean;
-  appliedCode: number | null;
-  appliedScore: number | null;
-  appliedComment: string | null;
-  availableCodes: DoubleCodedReviewCodeDto[];
-  managerDrafts: DoubleCodedManagerDecisionDto[];
-  managerHistory: DoubleCodedManagerDecisionDto[];
-  coderResults: DoubleCodedReviewCoderResult[];
-}
-
-export interface DoubleCodedReviewResponseDto {
-  data: DoubleCodedReviewItemDto[];
-  total: number;
-  page: number;
-  limit: number;
-}
-
-export interface DoubleCodedResolutionResponseDto {
-  success: boolean;
-  appliedCount: number;
-  failedCount: number;
-  skippedCount: number;
-  message: string;
-  results: DoubleCodedResolutionResultDto[];
-}
 
 @Injectable({ providedIn: 'root' })
 export class DoubleCodedReviewApiService {
@@ -65,18 +18,21 @@ export class DoubleCodedReviewApiService {
 
   getDoubleCodedVariablesForReview(
     workspaceId: number,
-    page: number = 1,
-    limit: number = 50,
-    onlyConflicts: boolean = false,
-    excludeTrainings: boolean = false,
-    search?: string,
-    coderId?: number,
-    statusFilter?: string,
-    resolvedFilter?: string,
-    agreementFilter?: 'all' | 'match' | 'differ',
-    jobDefinitionIds?: number[],
-    coderTrainingIds?: number[]
+    query: DoubleCodedReviewQuery = {}
   ): Observable<DoubleCodedReviewResponseDto> {
+    const {
+      page = 1,
+      limit = 50,
+      onlyConflicts = false,
+      excludeTrainings = false,
+      search,
+      coderId,
+      statusFilter,
+      resolvedFilter,
+      agreementFilter,
+      jobDefinitionIds,
+      coderTrainingIds
+    } = query;
     let params = new HttpParams()
       .set('page', page.toString())
       .set('limit', limit.toString())
@@ -113,7 +69,7 @@ export class DoubleCodedReviewApiService {
 
   applyDoubleCodedResolutions(
     workspaceId: number,
-    dto: { decisions: DoubleCodedResolutionDecisionDto[] }
+    dto: ApplyDoubleCodedResolutionsRequestDto
   ): Observable<DoubleCodedResolutionResponseDto> {
     return this.http.post<DoubleCodedResolutionResponseDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/double-coded-review/apply-resolutions`,

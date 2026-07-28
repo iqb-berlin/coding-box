@@ -35,7 +35,7 @@ export class DoubleCodingReviewDecision {
     state: DoubleCodedReviewDecisionState;
 
   @Column({ type: 'bigint', nullable: true })
-    code: number | null;
+    effective_code: number | null;
 
   @Column({ type: 'bigint', nullable: true })
     selected_code: number | null;

@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { CodingProcessService } from '../coding/coding-process.service';
 import { CodingValidationService } from '../coding/coding-validation.service';
 import { DoubleCodingReviewQueryService } from '../coding/double-coding-review-query.service';
-import { DoubleCodingReviewDecisionService } from '../coding/double-coding-review-decision.service';
 import { CodingAnalysisService } from '../coding/coding-analysis.service';
 import { CodingProgressService } from '../coding/coding-progress.service';
 import { CodingReplayService } from '../coding/coding-replay.service';
@@ -23,7 +22,7 @@ import { VariableAnalysisItemDto } from '../../../../../../../api-dto/coding/var
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { ResponseAnalysisDto } from '../../../../../../../api-dto/coding/response-analysis.dto';
-import { DoubleCodedResolutionDecisionDto } from '../../../../../../../api-dto/coding/double-coded-review.dto';
+import { DoubleCodedReviewResponseDto } from '../../../../../../../api-dto/coding/double-coded-review.dto';
 
 @Injectable()
 export class WorkspaceCodingService {
@@ -37,7 +36,6 @@ export class WorkspaceCodingService {
     private codingProcessService: CodingProcessService,
     private codingValidationService: CodingValidationService,
     private doubleCodingReviewQueryService: DoubleCodingReviewQueryService,
-    private doubleCodingReviewDecisionService: DoubleCodingReviewDecisionService,
     private codingAnalysisService: CodingAnalysisService,
     private codingProgressService: CodingProgressService,
     private codingReplayService: CodingReplayService,
@@ -595,57 +593,15 @@ export class WorkspaceCodingService {
     limit: number = 50,
     onlyConflicts: boolean = false,
     excludeTrainings: boolean = false
-  ): Promise<{
-      data: Array<{
-        responseId: number;
-        unitName: string;
-        variableId: string;
-        personLogin: string;
-        personCode: string;
-        bookletName: string;
-        givenAnswer: string;
-        coderResults: Array<{
-          coderId: number;
-          coderName: string;
-          jobId: number;
-          jobName: string;
-          jobDefinitionId: number | null;
-          trainingId: number | null;
-          trainingLabel: string | null;
-          code: number | null;
-          codingIssueOption: number | null;
-          score: number | null;
-          notes: string | null;
-          codedAt: Date;
-        }>;
-      }>;
-      total: number;
-      page: number;
-      limit: number;
-    }> {
+  ): Promise<DoubleCodedReviewResponseDto> {
     return this.doubleCodingReviewQueryService.getDoubleCodedVariablesForReview(
       workspaceId,
-      page,
-      limit,
-      onlyConflicts,
-      excludeTrainings
-    );
-  }
-
-  async applyDoubleCodedResolutions(
-    workspaceId: number,
-    decisions: DoubleCodedResolutionDecisionDto[]
-  ): Promise<{
-      success: boolean;
-      appliedCount: number;
-      failedCount: number;
-      skippedCount: number;
-      message: string;
-    }> {
-    await this.codingProgressService.invalidateAppliedResultsOverviewCache(workspaceId);
-    return this.doubleCodingReviewDecisionService.applyDoubleCodedResolutions(
-      workspaceId,
-      decisions
+      {
+        page,
+        limit,
+        onlyConflicts,
+        excludeTrainings
+      }
     );
   }
 

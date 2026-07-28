@@ -3766,15 +3766,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.doubleCodedReviewApi
       .getDoubleCodedVariablesForReview(
         workspaceId,
-        1,
-        1,
-        true,
-        true,
-        undefined,
-        undefined,
-        undefined,
-        'unresolved',
-        'differ'
+        {
+          page: 1,
+          limit: 1,
+          onlyConflicts: true,
+          excludeTrainings: true,
+          resolvedFilter: 'unresolved',
+          agreementFilter: 'differ'
+        }
       )
       .pipe(
         takeUntil(this.destroy$),

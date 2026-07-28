@@ -17,7 +17,6 @@ import {
   CodingReplayService,
   CodingResponseQueryService,
   CodingResultsService,
-  DoubleCodingReviewDecisionService,
   DoubleCodingReviewQueryService,
   CodingStatisticsService,
   CodingValidationService,
@@ -165,10 +164,6 @@ describe('WorkspaceCodingService', () => {
     getDoubleCodedVariablesForReview: jest.fn()
   };
 
-  const mockDoubleCodingReviewDecisionService = {
-    applyDoubleCodedResolutions: jest.fn()
-  };
-
   const mockCodingAnalysisService = {
     getVariableAnalysis: jest.fn(),
     getResponseAnalysis: jest.fn(),
@@ -277,10 +272,6 @@ describe('WorkspaceCodingService', () => {
         {
           provide: DoubleCodingReviewQueryService,
           useValue: mockDoubleCodingReviewQueryService
-        },
-        {
-          provide: DoubleCodingReviewDecisionService,
-          useValue: mockDoubleCodingReviewDecisionService
         },
         { provide: CodingAnalysisService, useValue: mockCodingAnalysisService },
         { provide: CodingProgressService, useValue: mockCodingProgressService },
@@ -1468,40 +1459,12 @@ describe('WorkspaceCodingService', () => {
 
         expect(
           mockDoubleCodingReviewQueryService.getDoubleCodedVariablesForReview
-        ).toHaveBeenCalledWith(workspaceId, 1, 50, false, false);
-        expect(result).toEqual(expectedResult);
-      });
-    });
-
-    describe('applyDoubleCodedResolutions', () => {
-      it('should delegate to DoubleCodingReviewDecisionService', async () => {
-        const decisions = [
-          {
-            responseId: 1,
-            sourceUnitId: 101,
-            selectedJobId: 1,
-            resolutionComment: 'Resolution note'
-          }
-        ];
-        const expectedResult = {
-          success: true,
-          appliedCount: 1,
-          failedCount: 0,
-          skippedCount: 0,
-          message: 'Successfully applied 1 resolution(s)'
-        };
-        mockDoubleCodingReviewDecisionService.applyDoubleCodedResolutions.mockResolvedValue(
-          expectedResult
-        );
-
-        const result = await service.applyDoubleCodedResolutions(
-          workspaceId,
-          decisions
-        );
-
-        expect(
-          mockDoubleCodingReviewDecisionService.applyDoubleCodedResolutions
-        ).toHaveBeenCalledWith(workspaceId, decisions);
+        ).toHaveBeenCalledWith(workspaceId, {
+          page: 1,
+          limit: 50,
+          onlyConflicts: false,
+          excludeTrainings: false
+        });
         expect(result).toEqual(expectedResult);
       });
     });

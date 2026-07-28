@@ -154,7 +154,7 @@ describe('DoubleCodedReviewComponent', () => {
                       managerKey: '88',
                       managerName: 'Manager B',
                       state: 'draft',
-                      code: 1,
+                      effectiveCode: 1,
                       selectedCode: 1,
                       score: 0,
                       comment: 'Second opinion',
@@ -289,7 +289,7 @@ describe('DoubleCodedReviewComponent', () => {
                 managerKey: '99',
                 managerName: 'Reviewer',
                 state: 'draft',
-                code: draft.code,
+                effectiveCode: draft.code,
                 selectedCode: draft.code,
                 score: draft.score ?? null,
                 comment: draft.comment ?? null,
@@ -553,7 +553,7 @@ describe('DoubleCodedReviewComponent', () => {
           managerKey: '99',
           managerName: 'Reviewer',
           state: 'draft',
-          code: -3,
+          effectiveCode: -3,
           selectedCode: -3,
           score: 0,
           comment: null,
@@ -629,7 +629,7 @@ describe('DoubleCodedReviewComponent', () => {
       component.getManagerDecisionForColumn(reviewItem, 'manager_88')
     ).toMatchObject({
       state: 'draft',
-      code: 1,
+      effectiveCode: 1,
       comment: 'Second opinion'
     });
   });
@@ -642,7 +642,7 @@ describe('DoubleCodedReviewComponent', () => {
     )!;
     const decision = reviewItem.managerDrafts[0];
     decision.selectedCode = -3;
-    decision.code = -98;
+    decision.effectiveCode = -98;
 
     expect(component.getManagerDecisionDisplayCode(decision)).toBe(
       'code-selector.coding-issue-options.invalid-joke-answer'
@@ -667,7 +667,7 @@ describe('DoubleCodedReviewComponent', () => {
         managerKey: '42',
         managerName: 'Ehemalige Managerin A',
         state: 'applied',
-        code: 1,
+        effectiveCode: 1,
         selectedCode: 1,
         score: 0,
         comment: null,
@@ -685,7 +685,7 @@ describe('DoubleCodedReviewComponent', () => {
         managerKey: '43',
         managerName: 'Ehemaliger Manager B',
         state: 'superseded',
-        code: 2,
+        effectiveCode: 2,
         selectedCode: 2,
         score: 1,
         comment: null,

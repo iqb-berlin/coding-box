@@ -3,8 +3,7 @@ import {
   ConflictException,
   Injectable,
   Logger,
-  NotFoundException,
-  Optional
+  NotFoundException
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -25,6 +24,7 @@ import { CODING_JOB_TYPE_CODING_ISSUE_REVIEW } from './coding-job-type.util';
 import { CodingJobService } from './coding-job.service';
 import { CodingAnalysisService } from './coding-analysis.service';
 import { CodingValidationService } from './coding-validation.service';
+import { CodingProgressService } from './coding-progress.service';
 import {
   DoubleCodedManagerDecisionDto,
   DoubleCodedResolutionDecisionDto,
@@ -60,13 +60,12 @@ export class DoubleCodingReviewDecisionService {
     private codingStatisticsService: CodingStatisticsService,
     private codingAnalysisService: CodingAnalysisService,
     private codingValidationService: CodingValidationService,
+    private codingProgressService: CodingProgressService,
     private workspaceExclusionService: WorkspaceExclusionService,
     private codingJobService: CodingJobService,
-    @Optional()
-    private missingsProfilesService?: MissingsProfilesService,
-    @Optional()
+    private missingsProfilesService: MissingsProfilesService,
     @InjectRepository(DoubleCodingReviewDecision)
-    private reviewDecisionRepository?: Repository<DoubleCodingReviewDecision>
+    private reviewDecisionRepository: Repository<DoubleCodingReviewDecision>
   ) { }
 
   private toManagerDecisionDto(
@@ -79,15 +78,22 @@ export class DoubleCodingReviewDecisionService {
       managerKey: decision.manager_key,
       managerName: decision.manager_name,
       state: decision.state,
-      code: this.toNullableNumber(decision.code),
+      effectiveCode: this.toNullableNumber(decision.effective_code),
       selectedCode: this.toNullableNumber(decision.selected_code),
       score: this.toNullableNumber(decision.score),
       comment: decision.comment,
-      createdAt: decision.created_at,
-      updatedAt: decision.updated_at,
-      finalizedAt: decision.finalized_at,
+      createdAt: this.toIsoString(decision.created_at),
+      updatedAt: this.toIsoString(decision.updated_at),
+      finalizedAt: this.toIsoString(decision.finalized_at),
       legacy: false
     };
+  }
+
+  private toIsoString(value: Date | string | null): string | null {
+    if (value === null) {
+      return null;
+    }
+    return value instanceof Date ? value.toISOString() : value;
   }
 
   private toNullableNumber(
@@ -119,7 +125,6 @@ export class DoubleCodingReviewDecisionService {
     managerName: string,
     draft: SaveDoubleCodedReviewDraftDto
   ): Promise<DoubleCodedManagerDecisionDto> {
-    this.getReviewDecisionRepository();
     return this.responseRepository.manager.transaction(async entityManager => {
       const sourceUnitId = this.normalizeExplicitReplayInteger(draft.sourceUnitId);
       if (sourceUnitId === undefined || sourceUnitId <= 0) {
@@ -165,7 +170,7 @@ export class DoubleCodingReviewDecisionService {
         manager_key: String(managerUserId),
         manager_name: normalizedName,
         state: 'draft',
-        code,
+        effective_code: resolvedSelection.code,
         selected_code: code,
         score: resolvedSelection.score,
         comment: normalizedComment,
@@ -227,8 +232,7 @@ export class DoubleCodingReviewDecisionService {
     responseId: number,
     managerUserId: number
   ): Promise<{ success: boolean }> {
-    const repository = this.getReviewDecisionRepository();
-    const result = await repository.delete({
+    const result = await this.reviewDecisionRepository.delete({
       workspace_id: workspaceId,
       response_id: responseId,
       manager_user_id: managerUserId,
@@ -237,17 +241,10 @@ export class DoubleCodingReviewDecisionService {
     return { success: (result.affected || 0) > 0 };
   }
 
-  private getReviewDecisionRepository(): Repository<DoubleCodingReviewDecision> {
-    if (!this.reviewDecisionRepository) {
-      throw new Error('Double-coding review decision repository is unavailable');
-    }
-    return this.reviewDecisionRepository;
-  }
-
   async applyDoubleCodedResolutions(
     workspaceId: number,
     decisions: DoubleCodedResolutionDecisionDto[],
-    manager?: { userId: number; name: string }
+    manager: { userId: number; name: string }
   ): Promise<{
       success: boolean;
       appliedCount: number;
@@ -256,6 +253,15 @@ export class DoubleCodingReviewDecisionService {
       message: string;
       results: DoubleCodedResolutionResultDto[];
     }> {
+    if (
+      !manager ||
+      !Number.isInteger(manager.userId) ||
+      manager.userId <= 0 ||
+      typeof manager.name !== 'string'
+    ) {
+      throw new BadRequestException('A valid manager is required to apply review decisions');
+    }
+
     try {
       this.logger.log(
         `Applying ${decisions.length} double-coded resolutions in workspace ${workspaceId}`
@@ -305,6 +311,9 @@ export class DoubleCodingReviewDecisionService {
       ) {
         await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
       }
+      if (appliedCount > 0) {
+        await this.codingProgressService.invalidateAppliedResultsOverviewCache(workspaceId);
+      }
 
       const message = `Applied ${appliedCount} resolutions successfully. ${failedCount > 0 ? `${failedCount} failed.` : ''
       } ${skippedCount > 0 ? `${skippedCount} skipped.` : ''}`;
@@ -333,7 +342,7 @@ export class DoubleCodingReviewDecisionService {
     transactionalEntityManager: EntityManager,
     workspaceId: number,
     decision: DoubleCodedResolutionDecisionDto,
-    manager?: { userId: number; name: string }
+    manager: { userId: number; name: string }
   ): Promise<DoubleCodedResolutionResultDto> {
     const resolvedDecision = await this.resolveDoubleCodedResolution(
       transactionalEntityManager,
@@ -405,16 +414,12 @@ export class DoubleCodingReviewDecisionService {
     entityManager: EntityManager,
     workspaceId: number,
     responseId: number,
-    manager: { userId: number; name: string } | undefined,
+    manager: { userId: number; name: string },
     selectionCode: number,
-    code: number | null,
+    effectiveCode: number | null,
     score: number | null,
     comment: string | null
   ): Promise<void> {
-    if (!this.reviewDecisionRepository || !manager || !Number.isInteger(manager.userId) || manager.userId <= 0) {
-      return;
-    }
-
     const repository = entityManager.getRepository(DoubleCodingReviewDecision);
     const drafts = await repository.find({
       where: {
@@ -443,7 +448,7 @@ export class DoubleCodingReviewDecisionService {
         manager_key: String(manager.userId),
         manager_name: manager.name.trim() || `Manager ${manager.userId}`,
         state: 'applied',
-        code,
+        effective_code: effectiveCode,
         selected_code: selectionCode,
         score,
         comment,
@@ -452,7 +457,7 @@ export class DoubleCodingReviewDecisionService {
     } else {
       appliedDecision.manager_key = String(manager.userId);
       appliedDecision.manager_name = manager.name.trim() || appliedDecision.manager_name;
-      appliedDecision.code = code;
+      appliedDecision.effective_code = effectiveCode;
       appliedDecision.selected_code = selectionCode;
       appliedDecision.score = score;
       appliedDecision.comment = comment;
@@ -624,7 +629,7 @@ export class DoubleCodingReviewDecisionService {
     code: number
   ): Promise<ResolvedReviewSelection | undefined> {
     if (code < 0) {
-      if (!this.allowedCodingIssueCodes.has(code) || !this.missingsProfilesService) {
+      if (!this.allowedCodingIssueCodes.has(code)) {
         return undefined;
       }
       const missingId = this.manualMissingIdsByIssueOptionId.get(code);
