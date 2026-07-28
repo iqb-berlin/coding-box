@@ -38,6 +38,7 @@
     <div class="code-selector-container" [style.width.px]="codePanelWidth" [style.min-width.px]="codePanelWidth">
       @if (codingService.codingScheme && codingService.currentVariableId) {
       <app-code-selector [codingScheme]="codingService.codingScheme" [variableId]="codingService.currentVariableId"
+        [codingCaseKey]="getCurrentCodingCaseKey()"
         [preSelectedCodeId]="getPreSelectedCodeId(codingService.currentVariableId)"
         [preSelectedCodingIssueOptionId]="getPreSelectedCodingIssueOptionId(codingService.currentVariableId)"
         [coderNotes]="getCoderNotes()" [showProgress]="!!codingService.codingJobId"
