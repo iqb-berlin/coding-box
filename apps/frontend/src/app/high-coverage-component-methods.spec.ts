@@ -518,7 +518,7 @@ describe('high coverage component method smoke tests', () => {
     })).toBe('match');
   });
 
-  it('defaults double-coded review decisions to the first completed coder result', async () => {
+  it('defaults double-coded review decisions to the unique mode', async () => {
     const { DoubleCodedReviewComponent } = await import('./coding/components/double-coded-review/double-coded-review.component');
     const item = {
       ...sampleReviewItem,
@@ -538,10 +538,11 @@ describe('high coverage component method smoke tests', () => {
 
     instance.selectionForm = new FormGroup({});
     instance.dataSource = new MatTableDataSource<unknown>([item]);
+    (instance as typeof instance & { catalogDecisionPrefix: string }).catalogDecisionPrefix = 'code:';
 
     instance.updateForm();
 
-    expect(instance.selectionForm.get(instance.getItemControlName(item))?.value).toBe('11');
+    expect(instance.selectionForm.get(instance.getItemControlName(item))?.value).toBe('code:2');
   });
 
   it('defaults double-coded review scope to the newest active job definition', async () => {

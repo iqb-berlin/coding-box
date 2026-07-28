@@ -3398,7 +3398,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       maxWidth: '100vw',
       height: '95vh',
       maxHeight: '100vh',
-      data: {}
+      data: { canApplyResults: this.canApplyManualCodingResults }
     });
 
     dialogRef.afterClosed().subscribe(result => {
