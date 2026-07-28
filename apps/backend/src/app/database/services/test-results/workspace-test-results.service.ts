@@ -1132,7 +1132,7 @@ export class WorkspaceTestResultsService {
     return `${minutes}:${String(seconds).padStart(2, '0')} min`;
   }
 
-  private async findLogAnomaliesForBooklets(
+  private async findLogAnomaliesForBookletBatch(
     bookletIds: number[],
     thresholds: LogAnomalyThresholds,
     exclusions?: ResolvedWorkspaceExclusions
@@ -1582,6 +1582,60 @@ export class WorkspaceTestResultsService {
     return result;
   }
 
+  private async forEachLogAnomalyBatch(
+    bookletIds: number[],
+    thresholds: LogAnomalyThresholds,
+    exclusions: ResolvedWorkspaceExclusions | undefined,
+    consumeBatch: (
+      anomaliesByBooklet: Map<number, LogAnomalySummary[]>
+    ) => void | Promise<void>
+  ): Promise<void> {
+    const uniqueBookletIds = Array.from(
+      new Set(bookletIds.map(id => Number(id)).filter(id => id > 0))
+    );
+    const batches = this.getLogAnomalyIdBatches(uniqueBookletIds);
+
+    for (const [batchIndex, batchIds] of batches.entries()) {
+      let phase = 'load-and-analysis';
+      try {
+        const anomaliesByBooklet =
+          await this.findLogAnomaliesForBookletBatch(
+            batchIds,
+            thresholds,
+            exclusions
+          );
+        phase = 'aggregation';
+        await consumeBatch(anomaliesByBooklet);
+      } catch (error) {
+        this.logger.error(
+          `Log anomaly batch ${batchIndex + 1}/${batches.length} failed ` +
+          `for ${batchIds.length} booklet(s) during ${phase}`,
+          error instanceof Error ? error.stack : String(error)
+        );
+        throw error;
+      }
+    }
+  }
+
+  private async findLogAnomaliesForBooklets(
+    bookletIds: number[],
+    thresholds: LogAnomalyThresholds,
+    exclusions?: ResolvedWorkspaceExclusions
+  ): Promise<Map<number, LogAnomalySummary[]>> {
+    const result = new Map<number, LogAnomalySummary[]>();
+    await this.forEachLogAnomalyBatch(
+      bookletIds,
+      thresholds,
+      exclusions,
+      anomaliesByBooklet => {
+        anomaliesByBooklet.forEach((anomalies, bookletId) => {
+          result.set(bookletId, anomalies);
+        });
+      }
+    );
+    return result;
+  }
+
   async getLogAnomalySummary(
     workspaceId: number,
     options: {
@@ -1629,41 +1683,41 @@ export class WorkspaceTestResultsService {
       return emptySummary;
     }
 
-    const anomaliesByBooklet = await this.findLogAnomaliesForBooklets(
-      bookletIds,
-      this.buildLogAnomalyThresholds(options),
-      exclusions
-    );
-
     const summary: LogAnomalyDashboardSummary = {
       ...emptySummary,
       totalBooklets: bookletIds.length,
       byCode: {}
     };
 
-    anomaliesByBooklet.forEach(anomalies => {
-      if (anomalies.length === 0) {
-        return;
-      }
-      summary.affectedBooklets += 1;
-      summary.totalAnomalyRules += anomalies.length;
+    await this.forEachLogAnomalyBatch(
+      bookletIds,
+      this.buildLogAnomalyThresholds(options),
+      exclusions,
+      anomaliesByBooklet => {
+        anomaliesByBooklet.forEach(anomalies => {
+          if (anomalies.length === 0) {
+            return;
+          }
+          summary.affectedBooklets += 1;
+          summary.totalAnomalyRules += anomalies.length;
 
-      if (anomalies.some(anomaly => anomaly.severity === 'critical')) {
-        summary.criticalBooklets += 1;
-      }
-      if (anomalies.some(anomaly => anomaly.severity === 'warning')) {
-        summary.warningBooklets += 1;
-      }
-      if (anomalies.some(anomaly => anomaly.severity === 'info')) {
-        summary.infoBooklets += 1;
-      }
+          if (anomalies.some(anomaly => anomaly.severity === 'critical')) {
+            summary.criticalBooklets += 1;
+          }
+          if (anomalies.some(anomaly => anomaly.severity === 'warning')) {
+            summary.warningBooklets += 1;
+          }
+          if (anomalies.some(anomaly => anomaly.severity === 'info')) {
+            summary.infoBooklets += 1;
+          }
 
-      anomalies.forEach(anomaly => {
-        summary.totalAnomalyEvents += anomaly.count;
-        summary.byCode[anomaly.code] =
-          (summary.byCode[anomaly.code] || 0) + 1;
+          anomalies.forEach(anomaly => {
+            summary.totalAnomalyEvents += anomaly.count;
+            summary.byCode[anomaly.code] =
+              (summary.byCode[anomaly.code] || 0) + 1;
+          });
+        });
       });
-    });
 
     return summary;
   }
