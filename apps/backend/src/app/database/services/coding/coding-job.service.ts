@@ -128,6 +128,12 @@ interface CodingSchemeCode {
   manualInstruction?: string | null;
 }
 
+export interface SelectableReviewCode {
+  code: number;
+  label: string;
+  score: number | null;
+}
+
 interface CodingSchemeVariableCoding {
   id: string;
   alias?: string;
@@ -3838,6 +3844,70 @@ export class CodingJobService {
       codeId
     );
     return schemeCode.score ?? null;
+  }
+
+  async getSelectableReviewCodeForUnit(
+    codingJobUnit: CodingJobUnit,
+    workspaceId: number,
+    codeId: number
+  ): Promise<SelectableReviewCode> {
+    if (!Number.isInteger(codeId) || codeId < 0) {
+      throw new BadRequestException(
+        `Unsupported coding scheme code: ${codeId}`
+      );
+    }
+
+    const schemeCode = await this.getCodingSchemeCodeForUnit(
+      codingJobUnit,
+      workspaceId,
+      codeId
+    );
+    const selectableCode = this.toSelectableReviewCode(schemeCode);
+    if (!selectableCode) {
+      throw new BadRequestException(
+        `Code is not available for manual review: ${codeId}`
+      );
+    }
+    return selectableCode;
+  }
+
+  async getSelectableReviewCodesForUnits(
+    codingJobUnits: CodingJobUnit[],
+    workspaceId: number
+  ): Promise<Map<CodingJobUnit, SelectableReviewCode[]>> {
+    const codingSchemesByUnit = await this.getCodingSchemesForUnits(
+      codingJobUnits,
+      workspaceId
+    );
+    const result = new Map<CodingJobUnit, SelectableReviewCode[]>();
+
+    codingJobUnits.forEach(unit => {
+      const codingScheme = codingSchemesByUnit.get(unit);
+      const variableCoding = codingScheme ?
+        this.findVariableCoding(codingScheme, unit.variable_id) :
+        undefined;
+      const codes = (variableCoding?.codes || [])
+        .map(code => this.toSelectableReviewCode(code))
+        .filter((code): code is SelectableReviewCode => code !== undefined);
+
+      result.set(unit, codes);
+    });
+
+    return result;
+  }
+
+  private toSelectableReviewCode(
+    code: CodingSchemeCode
+  ): SelectableReviewCode | undefined {
+    const codeId = Number(code.id);
+    if (!Number.isInteger(codeId) || codeId < 0 || !this.hasManualInstruction(code)) {
+      return undefined;
+    }
+    return {
+      code: codeId,
+      label: String(code.label || code.code || code.id),
+      score: code.score ?? null
+    };
   }
 
   private async getCodingSchemeCodeForUnit(

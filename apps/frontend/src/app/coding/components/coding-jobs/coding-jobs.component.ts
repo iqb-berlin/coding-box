@@ -1314,7 +1314,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       maxWidth: '100vw',
       height: '95vh',
       maxHeight: '100vh',
-      data: {}
+      data: { canApplyResults: this.canApplyResults }
     });
 
     dialogRef.afterClosed().subscribe(result => {

@@ -2886,7 +2886,17 @@
       "given-answer": "Gegebene Antwort",
       "coder-results": "Kodierergebnisse",
       "selection": "Auswahl",
+      "manager-unknown": "Manager unbekannt",
       "alternative-coder-names": "Weitere Namen: {{names}}"
+    },
+    "code-groups": {
+      "schema": "Schema-Codes",
+      "general": "Allgemeine Codes"
+    },
+    "manager-state": {
+      "draft": "Entwurf",
+      "applied": "Angewendet",
+      "superseded": "Überholt"
     },
     "code-label": "Code",
     "score-label": "Bewertung",
@@ -2980,6 +2990,7 @@
       "no-workspace-selected": "Kein Arbeitsbereich ausgewählt",
       "failed-to-load": "Fehler beim Laden der doppelkodierten Variablen",
       "failed-to-apply": "Fehler beim Anwenden der Auflösungen",
+      "resolutions-partially-applied": "{{applied}} Auflösung(en) angewendet, {{skipped}} übersprungen und {{failed}} fehlgeschlagen.",
       "no-decisions": "Keine Entscheidungen zum Anwenden ausgewählt",
       "no-decision-for-item": "Keine Entscheidung für diese Variable ausgewählt",
       "replay-failed": "Replay konnte für diese Antwort nicht geöffnet werden",

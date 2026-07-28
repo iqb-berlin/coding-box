@@ -66,6 +66,7 @@ import {
   CodingProgressOverview,
   TestPersonCodingService
 } from '../../services/test-person-coding.service';
+import { DoubleCodedReviewApiService } from '../../services/double-coded-review-api.service';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 import { ExternalCodingImportResultDto } from '../../../../../../../api-dto/coding/external-coding-import-result.dto';
 import { AppService } from '../../../core/services/app.service';
@@ -210,6 +211,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     coderTrainingsListComponent?: CoderTrainingsListComponent;
 
   private testPersonCodingService = inject(TestPersonCodingService);
+  private doubleCodedReviewApi = inject(DoubleCodedReviewApiService);
   private codingJobBackendService = inject(CodingJobBackendService);
   private missingsProfileService = inject(MissingsProfileService);
   private statisticsService = inject(CodingStatisticsService);
@@ -3398,7 +3400,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       maxWidth: '100vw',
       height: '95vh',
       maxHeight: '100vh',
-      data: {}
+      data: { canApplyResults: this.canApplyManualCodingResults }
     });
 
     dialogRef.afterClosed().subscribe(result => {
@@ -3761,18 +3763,17 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingDoubleCodingConflictSummary = true;
-    this.testPersonCodingService
+    this.doubleCodedReviewApi
       .getDoubleCodedVariablesForReview(
         workspaceId,
-        1,
-        1,
-        true,
-        true,
-        undefined,
-        undefined,
-        undefined,
-        'unresolved',
-        'differ'
+        {
+          page: 1,
+          limit: 1,
+          onlyConflicts: true,
+          excludeTrainings: true,
+          resolvedFilter: 'unresolved',
+          agreementFilter: 'differ'
+        }
       )
       .pipe(
         takeUntil(this.destroy$),
