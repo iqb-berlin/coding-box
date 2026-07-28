@@ -9,12 +9,12 @@ export interface CodingStatusSnapshotMetadata {
   userId: number;
   workspaceId: number;
   revision: number;
+  statusRevision: string;
   checkedAt: string;
   surface: CodingStatusSnapshotSurface;
 }
 
-export interface CodingOverviewStatusSnapshot
-  extends CodingStatusSnapshotMetadata {
+export interface CodingOverviewStatusSnapshot extends CodingStatusSnapshotMetadata {
   surface: 'overview';
   freshness: CodingFreshnessSummaryDto;
   readiness: AutocodingReadinessDto;
@@ -23,20 +23,20 @@ export interface CodingOverviewStatusSnapshot
 }
 
 export type PlanningStatusState =
-  'not-checked' |
-  'loading' |
-  'planning-data-required' |
-  'preparation-required' |
-  'warning' |
-  'planning-incomplete' |
-  'planning-ready' |
-  'training-ready' |
-  'execution-ready' |
-  'double-coding-review-ready' |
-  'stale-source-review' |
-  'completion-ready' |
-  'progress-unavailable' |
-  'complete';
+  | 'not-checked'
+  | 'loading'
+  | 'planning-data-required'
+  | 'preparation-required'
+  | 'warning'
+  | 'planning-incomplete'
+  | 'planning-ready'
+  | 'training-ready'
+  | 'execution-ready'
+  | 'double-coding-review-ready'
+  | 'stale-source-review'
+  | 'completion-ready'
+  | 'progress-unavailable'
+  | 'complete';
 
 export type ManualCodingSnapshotTab =
   'preparation' | 'planning' | 'training' | 'execution' | 'completion';
@@ -57,8 +57,7 @@ export interface ManualCodingSnapshotDisplayParameters {
   manualCodeAvailabilityWarnings: number;
 }
 
-export interface ManualCodingStatusSnapshot
-  extends CodingStatusSnapshotMetadata {
+export interface ManualCodingStatusSnapshot extends CodingStatusSnapshotMetadata {
   surface: 'manual';
   planningStatus: PlanningStatusState;
   displayParameters: ManualCodingSnapshotDisplayParameters;

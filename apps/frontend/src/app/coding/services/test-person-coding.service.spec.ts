@@ -435,6 +435,20 @@ describe('TestPersonCodingService', () => {
       req.error(new ProgressEvent('error'));
     });
 
+    it('should propagate applied-results errors for a complete status check', () => {
+      let receivedError: unknown;
+      service
+        .getAppliedResultsOverview(mockWorkspaceId, { failOnError: true })
+        .subscribe({ error: error => { receivedError = error; } });
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/applied-results-overview`
+      );
+      req.error(new ProgressEvent('error'));
+
+      expect(receivedError).toBeTruthy();
+    });
+
     it('should reuse cached applied results overview until coding status is invalidated', () => {
       const mockResponse: AppliedResultsOverview = {
         totalIncompleteResponses: 2,
@@ -677,6 +691,20 @@ describe('TestPersonCodingService', () => {
         `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/progress-overview`
       );
       req.error(new ProgressEvent('error'));
+    });
+
+    it('should propagate coding-progress errors for a complete status check', () => {
+      let receivedError: unknown;
+      service
+        .getCodingProgressOverview(mockWorkspaceId, { failOnError: true })
+        .subscribe({ error: error => { receivedError = error; } });
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/progress-overview`
+      );
+      req.error(new ProgressEvent('error'));
+
+      expect(receivedError).toBeTruthy();
     });
   });
 
@@ -1265,6 +1293,20 @@ describe('TestPersonCodingService', () => {
       });
       httpMock.expectOne(url).flush(mockResponse);
       expect(secondResponse).toEqual(mockResponse);
+    });
+
+    it('should propagate coding-freshness errors for a complete status check', () => {
+      let receivedError: unknown;
+      service
+        .getCodingFreshness(mockWorkspaceId, { failOnError: true })
+        .subscribe({ error: error => { receivedError = error; } });
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness`
+      );
+      req.error(new ProgressEvent('error'));
+
+      expect(receivedError).toBeTruthy();
     });
 
     it('should return a fallback without requesting coding freshness while the status guard is active', () => {

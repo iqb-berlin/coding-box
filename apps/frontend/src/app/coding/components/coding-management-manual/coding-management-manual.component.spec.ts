@@ -1,4 +1,9 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import {
+  ComponentFixture,
+  fakeAsync,
+  TestBed,
+  tick
+} from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
@@ -1612,9 +1617,27 @@ describe('CodingManagementManualComponent', () => {
       loadManualFreshnessDecisionData(): void;
       loadCodingFreshness(): void;
       loadResponseAnalysis(): void;
+      codingStatusSnapshotService: {
+        getRevision(workspaceId: number): Observable<{
+          workspaceId: number;
+          revision: number;
+          statusRevision: string;
+          stable: boolean;
+        }>;
+      };
     };
     componentInternals.appService.selectedWorkspaceId = 5;
     componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
+    jest
+      .spyOn(componentInternals.codingStatusSnapshotService, 'getRevision')
+      .mockReturnValue(
+        of({
+          workspaceId: 5,
+          revision: 0,
+          statusRevision: '1',
+          stable: true
+        })
+      );
     const variableCoverageSpy = jest
       .spyOn(componentInternals, 'loadVariableCoverageOverview')
       .mockImplementation();
@@ -1718,9 +1741,27 @@ describe('CodingManagementManualComponent', () => {
       loadCodingFreshness(options?: { force?: boolean }): void;
       loadJobDefinitionsForExport(): void;
       loadResponseAnalysis(): void;
+      codingStatusSnapshotService: {
+        getRevision(workspaceId: number): Observable<{
+          workspaceId: number;
+          revision: number;
+          statusRevision: string;
+          stable: boolean;
+        }>;
+      };
     };
     componentInternals.appService.selectedWorkspaceId = 5;
     componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
+    jest
+      .spyOn(componentInternals.codingStatusSnapshotService, 'getRevision')
+      .mockReturnValue(
+        of({
+          workspaceId: 5,
+          revision: 0,
+          statusRevision: '1',
+          stable: true
+        })
+      );
     const variableCoverageSpy = jest
       .spyOn(componentInternals, 'loadVariableCoverageOverview')
       .mockImplementation();
@@ -1742,9 +1783,7 @@ describe('CodingManagementManualComponent', () => {
     jest
       .spyOn(componentInternals, 'loadJobDefinitionsForExport')
       .mockImplementation();
-    jest
-      .spyOn(componentInternals, 'loadResponseAnalysis')
-      .mockImplementation();
+    jest.spyOn(componentInternals, 'loadResponseAnalysis').mockImplementation();
 
     component.refreshManualCodingPlanning();
 
@@ -1753,8 +1792,581 @@ describe('CodingManagementManualComponent', () => {
     expect(codingProgressSpy).toHaveBeenCalled();
     expect(incompleteVariablesSpy).toHaveBeenCalled();
     expect(manualFreshnessDecisionSpy).toHaveBeenCalled();
-    expect(loadCodingFreshnessSpy).toHaveBeenCalledWith({ force: true });
+    expect(loadCodingFreshnessSpy).toHaveBeenCalledWith(
+      { force: true },
+      expect.any(Number)
+    );
     expect(component.shouldRenderManualTabData('planning')).toBe(true);
+  });
+
+  it('should route job definition changes through central status invalidation', fakeAsync(() => {
+    const componentInternals = component as unknown as {
+      invalidateCodingStatusCache(options?: { scheduleReload?: boolean }): boolean;
+      loadJobDefinitionsForExport(): void;
+      loadManualTabData(tab: 'preparation'): void;
+      refreshCodingJobsAfterDataChange(scope: string): void;
+    };
+    const invalidateSpy = jest.spyOn(
+      componentInternals,
+      'invalidateCodingStatusCache'
+    );
+    jest
+      .spyOn(componentInternals, 'loadJobDefinitionsForExport')
+      .mockImplementation();
+    jest.spyOn(componentInternals, 'loadManualTabData').mockImplementation();
+    jest
+      .spyOn(componentInternals, 'refreshCodingJobsAfterDataChange')
+      .mockImplementation();
+
+    component.onJobDefinitionChanged();
+
+    expect(invalidateSpy).toHaveBeenCalledTimes(1);
+    expect(invalidateSpy).toHaveBeenCalledWith({ scheduleReload: false });
+    tick(500);
+
+    expect(invalidateSpy).toHaveBeenCalledTimes(1);
+  }));
+
+  it('should debounce job definition changes into one planning bundle reload', fakeAsync(() => {
+    component.selectedManualTabIndex = 1;
+    component.autoRefreshManualCodingJobs = true;
+    const componentInternals = component as unknown as {
+      hasLoadedManualCodingJobRefreshSetting: boolean;
+      appService: { selectedWorkspaceId: number };
+      loadPlanningDataBundle(forceRefresh: boolean): void;
+      loadJobDefinitionsForExport(): void;
+      refreshCodingJobsAfterDataChange(scope: string): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
+    const loadPlanningDataBundleSpy = jest
+      .spyOn(componentInternals, 'loadPlanningDataBundle')
+      .mockImplementation();
+    jest
+      .spyOn(componentInternals, 'loadJobDefinitionsForExport')
+      .mockImplementation();
+    jest
+      .spyOn(componentInternals, 'refreshCodingJobsAfterDataChange')
+      .mockImplementation();
+
+    component.onJobDefinitionChanged();
+    tick(200);
+    component.onJobDefinitionChanged();
+    tick(200);
+    component.onJobDefinitionChanged();
+    tick(499);
+
+    expect(loadPlanningDataBundleSpy).not.toHaveBeenCalled();
+    tick(1);
+    tick(249);
+    expect(loadPlanningDataBundleSpy).not.toHaveBeenCalled();
+    tick(1);
+    tick(1000);
+
+    expect(loadPlanningDataBundleSpy).toHaveBeenCalledTimes(1);
+  }));
+
+  it('should debounce repeated visible planning invalidations into one reload', fakeAsync(() => {
+    component.selectedManualTabIndex = 1;
+    component.autoRefreshManualCodingJobs = true;
+    const componentInternals = component as unknown as {
+      hasLoadedManualCodingJobRefreshSetting: boolean;
+      appService: { selectedWorkspaceId: number };
+      loadPlanningDataBundle(forceRefresh: boolean): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
+    const loadPlanningDataBundleSpy = jest
+      .spyOn(componentInternals, 'loadPlanningDataBundle')
+      .mockImplementation();
+
+    component.refreshAllStatistics();
+    tick(100);
+    component.refreshAllStatistics();
+    tick(249);
+
+    expect(loadPlanningDataBundleSpy).not.toHaveBeenCalled();
+    tick(1);
+    tick(1000);
+
+    expect(loadPlanningDataBundleSpy).toHaveBeenCalledTimes(1);
+  }));
+
+  it('should ignore planning responses after their generation was cancelled', () => {
+    const oldResponse$ = new Subject<VariableCoverageOverview>();
+    const currentResponse$ = new Subject<VariableCoverageOverview>();
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      planningDataRequestGeneration: number;
+      planningDataLoadState: 'stale';
+      testPersonCodingService: {
+        getVariableCoverageOverview: jest.Mock;
+      };
+      cancelPlanningDataBundleRequests(): void;
+      loadVariableCoverageOverview(generation: number): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    jest
+      .spyOn(
+        componentInternals.testPersonCodingService,
+        'getVariableCoverageOverview'
+      )
+      .mockReturnValueOnce(oldResponse$.asObservable())
+      .mockReturnValueOnce(currentResponse$.asObservable());
+    const oldOverview = createVariableCoverageOverview(1);
+    const currentOverview = createVariableCoverageOverview(2);
+
+    componentInternals.planningDataRequestGeneration = 1;
+    componentInternals.loadVariableCoverageOverview(1);
+    componentInternals.planningDataLoadState = 'stale';
+    componentInternals.cancelPlanningDataBundleRequests();
+    componentInternals.planningDataRequestGeneration = 2;
+    componentInternals.loadVariableCoverageOverview(2);
+
+    currentResponse$.next(currentOverview);
+    oldResponse$.next(oldOverview);
+
+    expect(component.variableCoverageOverview).toEqual(currentOverview);
+    oldResponse$.complete();
+    currentResponse$.complete();
+  });
+
+  it('should clear response analysis loading when its planning generation is cancelled', () => {
+    const responseAnalysis$ = new Subject<never>();
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      planningDataRequestGeneration: number;
+      planningDataLoadState: 'loading';
+      testPersonCodingService: { getResponseAnalysis: jest.Mock };
+      cancelPlanningDataBundleRequests(): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    component.selectedManualTabIndex = 1;
+    componentInternals.planningDataRequestGeneration = 1;
+    componentInternals.planningDataLoadState = 'loading';
+    jest
+      .spyOn(componentInternals.testPersonCodingService, 'getResponseAnalysis')
+      .mockReturnValueOnce(responseAnalysis$.asObservable());
+
+    component.loadResponseAnalysis(1);
+    expect(component.isLoadingResponseAnalysis).toBe(true);
+
+    componentInternals.cancelPlanningDataBundleRequests();
+
+    expect(component.isLoadingResponseAnalysis).toBe(false);
+  });
+
+  it('should keep a failed planning bundle stale and not persist it', fakeAsync(() => {
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      planningDataRequestGeneration: number;
+      planningDataLoadState: 'loading' | 'stale';
+      planningDataLoadFailed: boolean;
+      testPersonCodingService: {
+        getVariableCoverageOverview: jest.Mock;
+      };
+      loadVariableCoverageOverview(generation: number): void;
+      monitorPlanningDataBundleCompletion(generation: number): void;
+      persistManualCodingStatus(generation: number): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.planningDataRequestGeneration = 1;
+    componentInternals.planningDataLoadState = 'loading';
+    jest
+      .spyOn(
+        componentInternals.testPersonCodingService,
+        'getVariableCoverageOverview'
+      )
+      .mockReturnValueOnce(throwError(() => new Error('unavailable')));
+    const persistSpy = jest
+      .spyOn(componentInternals, 'persistManualCodingStatus')
+      .mockImplementation();
+
+    componentInternals.loadVariableCoverageOverview(1);
+    componentInternals.monitorPlanningDataBundleCompletion(1);
+    tick(50);
+
+    expect(componentInternals.planningDataLoadFailed).toBe(true);
+    expect(componentInternals.planningDataLoadState).toBe('stale');
+    expect(persistSpy).not.toHaveBeenCalled();
+  }));
+
+  it('should use strict status requests for a planning bundle', () => {
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      testPersonCodingService: {
+        getCodingFreshness: jest.Mock;
+        getCodingProgressOverview: jest.Mock;
+        getVariableCoverageOverview: jest.Mock;
+        getCaseCoverageOverview: jest.Mock;
+        getAppliedResultsOverview: jest.Mock;
+      };
+      loadCodingFreshness(
+        options: { force?: boolean },
+        generation: number
+      ): void;
+      loadCodingProgressOverview(generation: number): void;
+      loadVariableCoverageOverview(generation: number): void;
+      loadCaseCoverageOverview(generation: number): void;
+      loadAppliedResultsOverview(generation: number): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    component.isLoadingCodingFreshness = false;
+    component.codingFreshnessSummary = null;
+
+    const freshnessSpy = jest
+      .spyOn(componentInternals.testPersonCodingService, 'getCodingFreshness')
+      .mockReturnValue(of({ workspaceId: 5, currentRevision: 0, items: [] }));
+    const progressSpy = jest
+      .spyOn(
+        componentInternals.testPersonCodingService,
+        'getCodingProgressOverview'
+      )
+      .mockReturnValue(of(null));
+    const variableCoverageSpy = jest
+      .spyOn(
+        componentInternals.testPersonCodingService,
+        'getVariableCoverageOverview'
+      )
+      .mockReturnValue(of(createVariableCoverageOverview(0)));
+    const caseCoverageSpy = jest
+      .spyOn(
+        componentInternals.testPersonCodingService,
+        'getCaseCoverageOverview'
+      )
+      .mockReturnValue(of(null));
+    const appliedResultsSpy = jest
+      .spyOn(
+        componentInternals.testPersonCodingService,
+        'getAppliedResultsOverview'
+      )
+      .mockReturnValue(of(null));
+
+    componentInternals.loadCodingFreshness({ force: true }, 1);
+    componentInternals.loadCodingProgressOverview(1);
+    componentInternals.loadVariableCoverageOverview(1);
+    componentInternals.loadCaseCoverageOverview(1);
+    componentInternals.loadAppliedResultsOverview(1);
+
+    expect(freshnessSpy).toHaveBeenCalledWith(5, { failOnError: true });
+    expect(progressSpy).toHaveBeenCalledWith(5, { failOnError: true });
+    expect(variableCoverageSpy).toHaveBeenCalledWith(5, { failOnError: true });
+    expect(caseCoverageSpy).toHaveBeenCalledWith(5, { failOnError: true });
+    expect(appliedResultsSpy).toHaveBeenCalledWith(5, { failOnError: true });
+  });
+
+  it('should fail the planning bundle when response analysis fails', () => {
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      planningDataRequestGeneration: number;
+      planningDataLoadState: 'loading' | 'stale';
+      planningDataLoadFailed: boolean;
+      testPersonCodingService: { getResponseAnalysis: jest.Mock };
+      loadResponseAnalysisForPlanningIfNeeded(generation: number): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    component.selectedManualTabIndex = 1;
+    component.responseAnalysis = null;
+    component.isLoadingResponseAnalysis = false;
+    componentInternals.planningDataRequestGeneration = 1;
+    componentInternals.planningDataLoadState = 'loading';
+    jest
+      .spyOn(componentInternals.testPersonCodingService, 'getResponseAnalysis')
+      .mockReturnValueOnce(throwError(() => new Error('unavailable')));
+
+    componentInternals.loadResponseAnalysisForPlanningIfNeeded(1);
+
+    expect(componentInternals.planningDataLoadFailed).toBe(true);
+    expect(componentInternals.planningDataLoadState).toBe('stale');
+  });
+
+  it('should fail the planning bundle when its response analysis is cancelled', () => {
+    const responseAnalysis$ = new Subject<never>();
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      planningDataRequestGeneration: number;
+      planningDataLoadState: 'loading' | 'stale';
+      planningDataLoadFailed: boolean;
+      testPersonCodingService: { getResponseAnalysis: jest.Mock };
+      loadResponseAnalysisForPlanningIfNeeded(generation: number): void;
+      stopResponseAnalysisView(): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    component.selectedManualTabIndex = 1;
+    component.responseAnalysis = null;
+    component.isLoadingResponseAnalysis = false;
+    componentInternals.planningDataRequestGeneration = 1;
+    componentInternals.planningDataLoadState = 'loading';
+    jest
+      .spyOn(componentInternals.testPersonCodingService, 'getResponseAnalysis')
+      .mockReturnValueOnce(responseAnalysis$.asObservable());
+
+    componentInternals.loadResponseAnalysisForPlanningIfNeeded(1);
+    expect(component.isLoadingResponseAnalysis).toBe(true);
+
+    componentInternals.stopResponseAnalysisView();
+
+    expect(component.isLoadingResponseAnalysis).toBe(false);
+    expect(componentInternals.planningDataLoadFailed).toBe(true);
+    expect(componentInternals.planningDataLoadState).toBe('stale');
+  });
+
+  it('should retry a planning load once when the revision changed during loading', () => {
+    component.autoRefreshManualCodingJobs = false;
+    const componentInternals = component as unknown as {
+      appService: {
+        selectedWorkspaceId: number;
+        updateAuthData(authData: unknown): void;
+      };
+      planningDataRequestGeneration: number;
+      planningDataLoadState: 'loading' | 'stale';
+      planningDataStartRevision: {
+        workspaceId: number;
+        revision: number;
+        statusRevision: string;
+        stable: boolean;
+      } | null;
+      restoredManualStatusSnapshot: unknown;
+      testPersonCodingService: {
+        invalidateCodingStatusCache(workspaceId?: number): void;
+      };
+      codingStatusSnapshotService: {
+        getRevision(workspaceId: number): Observable<{
+          workspaceId: number;
+          revision: number;
+          statusRevision: string;
+          stable: boolean;
+        }>;
+        saveManual(snapshot: unknown): void;
+      };
+      loadPlanningDataBundle(
+        forceRefresh: boolean,
+        revisionRetryCount?: number
+      ): void;
+      persistManualCodingStatus(
+        generation: number,
+        forceRefresh?: boolean,
+        revisionRetryCount?: number
+      ): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.appService.updateAuthData({ userId: 9 });
+    componentInternals.planningDataRequestGeneration = 1;
+    componentInternals.planningDataLoadState = 'loading';
+    componentInternals.planningDataStartRevision = {
+      workspaceId: 5,
+      revision: 3,
+      statusRevision: '7',
+      stable: true
+    };
+    componentInternals.restoredManualStatusSnapshot = {};
+    component.codingFreshnessSummary = {
+      workspaceId: 5,
+      currentRevision: 3,
+      items: []
+    };
+    jest
+      .spyOn(componentInternals.codingStatusSnapshotService, 'getRevision')
+      .mockReturnValue(
+        of({
+          workspaceId: 5,
+          revision: 4,
+          statusRevision: '8',
+          stable: true
+        })
+      );
+    const saveSpy = jest.spyOn(
+      componentInternals.codingStatusSnapshotService,
+      'saveManual'
+    );
+    const invalidateSpy = jest.spyOn(
+      componentInternals.testPersonCodingService,
+      'invalidateCodingStatusCache'
+    );
+    const retrySpy = jest
+      .spyOn(componentInternals, 'loadPlanningDataBundle')
+      .mockImplementation();
+
+    componentInternals.persistManualCodingStatus(1);
+
+    expect(componentInternals.planningDataLoadState).toBe('stale');
+    expect(componentInternals.restoredManualStatusSnapshot).toBeNull();
+    expect(invalidateSpy).toHaveBeenCalledWith(5);
+    expect(retrySpy).toHaveBeenCalledWith(false, 1);
+    expect(saveSpy).not.toHaveBeenCalled();
+
+    componentInternals.planningDataLoadState = 'loading';
+    componentInternals.restoredManualStatusSnapshot = {};
+    retrySpy.mockClear();
+    componentInternals.persistManualCodingStatus(1, false, 1);
+
+    expect(componentInternals.planningDataLoadState).toBe('stale');
+    expect(componentInternals.restoredManualStatusSnapshot).toBeNull();
+    expect(retrySpy).not.toHaveBeenCalled();
+  });
+
+  it('should not save a completed planning status after the authenticated user changes', () => {
+    const endRevision$ = new Subject<{
+      workspaceId: number;
+      revision: number;
+      statusRevision: string;
+      stable: boolean;
+    }>();
+    const componentInternals = component as unknown as {
+      appService: {
+        selectedWorkspaceId: number;
+        updateAuthData(authData: unknown): void;
+      };
+      planningDataRequestGeneration: number;
+      planningDataLoadState: 'loading' | 'loaded';
+      planningDataStartRevision: {
+        workspaceId: number;
+        revision: number;
+        statusRevision: string;
+        stable: boolean;
+      } | null;
+      codingStatusSnapshotService: {
+        getRevision(workspaceId: number): Observable<{
+          workspaceId: number;
+          revision: number;
+          statusRevision: string;
+          stable: boolean;
+        }>;
+        saveManual(snapshot: unknown): void;
+      };
+      persistManualCodingStatus(generation: number): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.appService.updateAuthData({ userId: 9 });
+    componentInternals.planningDataRequestGeneration = 1;
+    componentInternals.planningDataLoadState = 'loading';
+    componentInternals.planningDataStartRevision = {
+      workspaceId: 5,
+      revision: 3,
+      statusRevision: '7',
+      stable: true
+    };
+    component.codingFreshnessSummary = {
+      workspaceId: 5,
+      currentRevision: 3,
+      items: []
+    };
+    jest
+      .spyOn(componentInternals.codingStatusSnapshotService, 'getRevision')
+      .mockReturnValueOnce(endRevision$.asObservable());
+    const saveSpy = jest.spyOn(
+      componentInternals.codingStatusSnapshotService,
+      'saveManual'
+    );
+
+    componentInternals.persistManualCodingStatus(1);
+    componentInternals.appService.updateAuthData({ userId: 10 });
+    endRevision$.next({
+      workspaceId: 5,
+      revision: 3,
+      statusRevision: '7',
+      stable: true
+    });
+    endRevision$.complete();
+
+    expect(saveSpy).not.toHaveBeenCalled();
+    expect(componentInternals.planningDataLoadState).toBe('loading');
+  });
+
+  it('should keep the planning bundle stale when the final revision request fails', () => {
+    const componentInternals = component as unknown as {
+      appService: {
+        selectedWorkspaceId: number;
+        updateAuthData(authData: unknown): void;
+      };
+      planningDataRequestGeneration: number;
+      planningDataLoadState: 'loading' | 'stale';
+      codingStatusSnapshotService: {
+        getRevision(workspaceId: number): Observable<never>;
+        saveManual(snapshot: unknown): void;
+      };
+      persistManualCodingStatus(generation: number): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.appService.updateAuthData({ userId: 9 });
+    componentInternals.planningDataRequestGeneration = 1;
+    componentInternals.planningDataLoadState = 'loading';
+    jest
+      .spyOn(componentInternals.codingStatusSnapshotService, 'getRevision')
+      .mockReturnValueOnce(throwError(() => new Error('unavailable')));
+    const saveSpy = jest.spyOn(
+      componentInternals.codingStatusSnapshotService,
+      'saveManual'
+    );
+
+    componentInternals.persistManualCodingStatus(1);
+
+    expect(componentInternals.planningDataLoadState).toBe('stale');
+    expect(saveSpy).not.toHaveBeenCalled();
+  });
+
+  it('should ignore an older generationless planning metric response', () => {
+    const oldRequest = new Subject<CodingProgressOverview | null>();
+    const bundleRequest = new Subject<CodingProgressOverview | null>();
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      planningDataLoadState: 'notLoaded' | 'loading';
+      testPersonCodingService: {
+        getCodingProgressOverview: (
+          workspaceId: number
+        ) => Observable<CodingProgressOverview | null>;
+      };
+      loadCodingProgressOverview(planningGeneration?: number): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.planningDataLoadState = 'notLoaded';
+    jest
+      .spyOn(
+        componentInternals.testPersonCodingService,
+        'getCodingProgressOverview'
+      )
+      .mockReturnValueOnce(oldRequest)
+      .mockReturnValueOnce(bundleRequest);
+
+    componentInternals.loadCodingProgressOverview();
+    componentInternals.planningDataLoadState = 'loading';
+    componentInternals.loadCodingProgressOverview(1);
+    componentInternals.loadCodingProgressOverview();
+
+    expect(
+      componentInternals.testPersonCodingService.getCodingProgressOverview
+    ).toHaveBeenCalledTimes(2);
+
+    oldRequest.next({
+      totalCasesToCode: 99,
+      completedCases: 0,
+      completionPercentage: 0,
+      rawTotalCasesToCode: 99,
+      rawCompletedCases: 0,
+      rawCompletionPercentage: 0,
+      aggregationActive: false,
+      aggregationThreshold: null,
+      aggregatedDuplicateCases: 0
+    });
+    oldRequest.complete();
+    expect(component.codingProgressOverview).toBeNull();
+    expect(component.isLoadingCodingProgress).toBe(true);
+
+    bundleRequest.next({
+      totalCasesToCode: 5,
+      completedCases: 1,
+      completionPercentage: 20,
+      rawTotalCasesToCode: 5,
+      rawCompletedCases: 1,
+      rawCompletionPercentage: 20,
+      aggregationActive: false,
+      aggregationThreshold: null,
+      aggregatedDuplicateCases: 0
+    });
+    bundleRequest.complete();
+
+    expect(component.codingProgressOverview?.totalCasesToCode).toBe(5);
+    expect(component.isLoadingCodingProgress).toBe(false);
   });
 
   it('should not refresh after auto coding completes before auto-refresh setting is loaded', () => {
@@ -1796,6 +2408,40 @@ describe('CodingManagementManualComponent', () => {
     expect(loadJobDefinitionsForExportSpy).not.toHaveBeenCalled();
   });
 
+  it('should invalidate the visible planning status without auto-refreshing', () => {
+    component.selectedManualTabIndex = 1;
+    component.autoRefreshManualCodingJobs = false;
+    setCompletePlanningState();
+    const componentInternals = component as unknown as {
+      hasLoadedManualCodingJobRefreshSetting: boolean;
+      appService: { selectedWorkspaceId: number };
+      testPersonCodingService: {
+        notifyAutoCodingCompleted(jobId?: string): void;
+      };
+      refreshCodingJobsAfterDataChange(scope: string): void;
+      invalidateCodingStatusCache(): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
+    const reloadSpy = jest
+      .spyOn(componentInternals, 'refreshCodingJobsAfterDataChange')
+      .mockImplementation();
+    const invalidateSpy = jest.spyOn(
+      componentInternals,
+      'invalidateCodingStatusCache'
+    );
+    expect(component.shouldShowPlanningOverview()).toBe(true);
+
+    componentInternals.testPersonCodingService.notifyAutoCodingCompleted();
+
+    expect(invalidateSpy).toHaveBeenCalledTimes(1);
+    expect(reloadSpy).not.toHaveBeenCalled();
+    expect(component.shouldShowPlanningOverview()).toBe(false);
+    expect(component.getPlanningStatusTitle()).toBe(
+      'Planungsdaten aktualisieren'
+    );
+  });
+
   it('should not reload planning job definitions after auto coding completes in planning', () => {
     component.selectedManualTabIndex = 1;
     component.autoRefreshManualCodingJobs = true;
@@ -1811,6 +2457,7 @@ describe('CodingManagementManualComponent', () => {
       loadResponseAnalysis(): void;
       refreshCodingJobsAfterDataChange(scope: string): void;
       loadJobDefinitionsForExport(): void;
+      invalidateCodingStatusCache(): void;
     };
     const refreshJobDefinitionsSpy = jest.fn();
     component.codingJobDefinitionsComponent = {
@@ -1834,17 +2481,26 @@ describe('CodingManagementManualComponent', () => {
     const loadJobDefinitionsForExportSpy = jest
       .spyOn(componentInternals, 'loadJobDefinitionsForExport')
       .mockImplementation();
+    const invalidateSpy = jest.spyOn(
+      componentInternals,
+      'invalidateCodingStatusCache'
+    );
 
     componentInternals.testPersonCodingService.notifyAutoCodingCompleted();
 
     expect(refreshAllStatisticsSpy).not.toHaveBeenCalled();
     expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
     expect(loadResponseAnalysisSpy).not.toHaveBeenCalled();
-    expect(refreshCodingJobsAfterDataChangeSpy).toHaveBeenCalledWith('rendered');
+    expect(refreshCodingJobsAfterDataChangeSpy).toHaveBeenCalledWith(
+      'rendered'
+    );
+    expect(invalidateSpy).toHaveBeenCalledTimes(1);
     expect(loadJobDefinitionsForExportSpy).not.toHaveBeenCalled();
     expect(refreshJobDefinitionsSpy).not.toHaveBeenCalled();
     expect(component.shouldShowPlanningOverview()).toBe(false);
-    expect(component.getPlanningStatusTitle()).toBe('Planungsdaten aktualisieren');
+    expect(component.getPlanningStatusTitle()).toBe(
+      'Planungsdaten aktualisieren'
+    );
   });
 
   it('should wait for the auto-refresh setting before loading initial coding freshness', () => {
@@ -1856,6 +2512,9 @@ describe('CodingManagementManualComponent', () => {
       workspaceSettingsService: {
         getAutoRefreshManualCodingJobs: (workspaceId: number) => Observable<boolean>;
       };
+      codingStatusSnapshotService: {
+        restoreManual(userId: number, workspaceId: number): Observable<null>;
+      };
       loadCodersForExport(): void;
       loadJobDefinitionsForExport(): void;
       loadInitialManualCodingState(): void;
@@ -1866,6 +2525,9 @@ describe('CodingManagementManualComponent', () => {
     const getSettingSpy = jest
       .spyOn(componentInternals.workspaceSettingsService, 'getAutoRefreshManualCodingJobs')
       .mockReturnValue(manualRefreshSetting$.asObservable());
+    jest
+      .spyOn(componentInternals.codingStatusSnapshotService, 'restoreManual')
+      .mockReturnValue(of(null));
     jest.spyOn(componentInternals, 'loadCodersForExport').mockImplementation();
     jest.spyOn(componentInternals, 'loadJobDefinitionsForExport').mockImplementation();
     jest.spyOn(componentInternals, 'loadInitialManualCodingState').mockImplementation();
@@ -1890,6 +2552,89 @@ describe('CodingManagementManualComponent', () => {
       componentInternals.appService.selectedWorkspaceId = previousWorkspaceId;
       getSettingSpy.mockRestore();
     }
+  });
+
+  it('should not replace restored freshness with the initial live request', () => {
+    const isolatedFixture = TestBed.createComponent(CodingManagementManualComponent);
+    const isolatedComponent = isolatedFixture.componentInstance;
+    const restoredSnapshot$ = new Subject<{
+      schemaVersion: 1;
+      userId: number;
+      workspaceId: number;
+      revision: number;
+      statusRevision: string;
+      checkedAt: string;
+      surface: 'manual';
+      planningStatus: 'ready';
+      displayParameters: {
+        variableConflicts: number;
+        missingVariables: number;
+        unassignedCases: number;
+        activeTrainingJobs: number;
+        staleSourceJobs: number;
+        openDoubleCodingConflicts: number;
+        manualCodeAvailabilityWarnings: number;
+      };
+      freshness: { workspaceId: number; currentRevision: number; items: never[] };
+      nextTarget: { tab: 'planning'; sectionId: string; action: 'refresh' };
+      fullyChecked: true;
+    }>();
+    const componentInternals = isolatedComponent as unknown as {
+      appService: {
+        selectedWorkspaceId: number;
+        updateAuthData(authData: unknown): void;
+      };
+      codingStatusSnapshotService: {
+        restoreManual(userId: number, workspaceId: number): Observable<unknown>;
+      };
+      restoreManualCodingStatus(): void;
+      requestInitialCodingFreshness(): void;
+      loadCodingFreshness(): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.appService.updateAuthData({ userId: 9 });
+    jest
+      .spyOn(componentInternals.codingStatusSnapshotService, 'restoreManual')
+      .mockReturnValue(restoredSnapshot$.asObservable());
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+
+    componentInternals.restoreManualCodingStatus();
+    componentInternals.requestInitialCodingFreshness();
+    expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
+
+    restoredSnapshot$.next({
+      schemaVersion: 1,
+      userId: 9,
+      workspaceId: 5,
+      revision: 4,
+      statusRevision: '11',
+      checkedAt: new Date().toISOString(),
+      surface: 'manual',
+      planningStatus: 'ready',
+      displayParameters: {
+        variableConflicts: 0,
+        missingVariables: 0,
+        unassignedCases: 0,
+        activeTrainingJobs: 0,
+        staleSourceJobs: 0,
+        openDoubleCodingConflicts: 0,
+        manualCodeAvailabilityWarnings: 0
+      },
+      freshness: { workspaceId: 5, currentRevision: 4, items: [] },
+      nextTarget: {
+        tab: 'planning',
+        sectionId: 'manual-planning',
+        action: 'refresh'
+      },
+      fullyChecked: true
+    });
+    restoredSnapshot$.complete();
+
+    expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
+    expect(isolatedComponent.codingFreshnessSummary?.currentRevision).toBe(4);
+    isolatedFixture.destroy();
   });
 
   it('should skip initial coding freshness when auto-refresh is disabled', () => {
@@ -3438,6 +4183,37 @@ describe('CodingManagementManualComponent', () => {
     }
   });
 
+  it('should derive a restored completion target from the current permission', () => {
+    const componentInternals = component as unknown as {
+      hasLoadedPlanningDataBundle: boolean;
+      restoredManualStatusSnapshot: {
+        planningStatus: 'completion-ready';
+        nextTarget: {
+          tab: 'execution';
+          sectionId: 'manual-execution';
+          action: 'navigate';
+        };
+      };
+    };
+    componentInternals.hasLoadedPlanningDataBundle = false;
+    componentInternals.restoredManualStatusSnapshot = {
+      planningStatus: 'completion-ready',
+      nextTarget: {
+        tab: 'execution',
+        sectionId: 'manual-execution',
+        action: 'navigate'
+      }
+    };
+
+    component.canApplyManualCodingResults = true;
+    expect(component.getPlanningNextStepTargetTab()).toBe('completion');
+    expect(component.getPlanningNextStepTargetSection()).toBe('manual-completion');
+
+    component.canApplyManualCodingResults = false;
+    expect(component.getPlanningNextStepTargetTab()).toBe('execution');
+    expect(component.getPlanningNextStepTargetSection()).toBe('manual-execution');
+  });
+
   it('should switch from completion to execution when navigating to coding jobs', () => {
     jest.useFakeTimers();
     try {
@@ -3617,9 +4393,34 @@ describe('CodingManagementManualComponent', () => {
     );
   });
 
+  function createVariableCoverageOverview(
+    missingVariables: number
+  ): VariableCoverageOverview {
+    return {
+      totalVariables: 2,
+      coveredVariables: 2 - missingVariables,
+      coveredByDraft: 0,
+      coveredByPendingReview: 0,
+      coveredByApproved: 2 - missingVariables,
+      conflictedVariables: 0,
+      missingVariables,
+      partiallyAbgedeckteVariablen: 0,
+      fullyAbgedeckteVariablen: 2 - missingVariables,
+      coveragePercentage: missingVariables === 0 ? 100 : 50,
+      variableCaseCounts: [],
+      coverageByStatus: {
+        draft: [],
+        pending_review: [],
+        approved: [],
+        conflicted: []
+      }
+    };
+  }
+
   function setCompletePlanningState(): void {
-    (component as unknown as { hasLoadedPlanningDataBundle: boolean })
-      .hasLoadedPlanningDataBundle = true;
+    (
+      component as unknown as { hasLoadedPlanningDataBundle: boolean }
+    ).hasLoadedPlanningDataBundle = true;
     component.variableCoverageOverview = {
       totalVariables: 2,
       coveredVariables: 2,
@@ -3687,8 +4488,9 @@ describe('CodingManagementManualComponent', () => {
   }
 
   function setEmptyPlanningSnapshots(): void {
-    (component as unknown as { hasLoadedPlanningDataBundle: boolean })
-      .hasLoadedPlanningDataBundle = true;
+    (
+      component as unknown as { hasLoadedPlanningDataBundle: boolean }
+    ).hasLoadedPlanningDataBundle = true;
     component.variableCoverageOverview = {
       totalVariables: 0,
       coveredVariables: 0,

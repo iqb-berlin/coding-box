@@ -1,12 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import {
-  Observable,
-  catchError,
-  finalize,
-  map,
-  of,
-  shareReplay
+  Observable, catchError, finalize, map, of, shareReplay
 } from 'rxjs';
 import { CodingStatusRevisionDto } from '../../../../../../api-dto/coding/coding-status-revision.dto';
 import { SERVER_URL } from '../../injection-tokens';
@@ -24,6 +19,27 @@ import {
 type CodingStatusSnapshot =
   CodingOverviewStatusSnapshot | ManualCodingStatusSnapshot;
 type SnapshotMetadataKeys = 'schemaVersion' | 'checkedAt' | 'surface';
+
+interface RevisionRequestOptions {
+  fresh?: boolean;
+}
+
+const freshnessVersions = ['v1', 'v2', 'v3'] as const;
+const freshnessStates = [
+  'CURRENT',
+  'PENDING',
+  'STALE',
+  'MANUAL_REVIEW_REQUIRED'
+] as const;
+const readinessStates = ['READY', 'BLOCKED', 'NO_RESULTS'] as const;
+const readinessBlockers = [
+  'NO_RELEVANT_RESPONSES',
+  'MISSING_UNIT_FILES',
+  'MISSING_CODING_SCHEMES',
+  'INVALID_CODING_SCHEMES',
+  'NO_VALID_VARIABLE_MATCHES',
+  'NO_CODEABLE_RESPONSES'
+] as const;
 
 const planningStatusStates: readonly PlanningStatusState[] = [
   'not-checked',
@@ -106,15 +122,19 @@ export class CodingStatusSnapshotService {
     });
   }
 
-  getRevision(workspaceId: number): Observable<CodingStatusRevisionDto> {
+  getRevision(
+    workspaceId: number,
+    options: RevisionRequestOptions = {}
+  ): Observable<CodingStatusRevisionDto> {
+    if (options.fresh) {
+      return this.requestRevision(workspaceId);
+    }
     const pending = this.revisionRequests.get(workspaceId);
     if (pending) {
       return pending;
     }
 
-    const request$ = this.http.get<CodingStatusRevisionDto>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/revision`
-    ).pipe(
+    const request$ = this.requestRevision(workspaceId).pipe(
       finalize(() => {
         if (this.revisionRequests.get(workspaceId) === request$) {
           this.revisionRequests.delete(workspaceId);
@@ -124,6 +144,14 @@ export class CodingStatusSnapshotService {
     );
     this.revisionRequests.set(workspaceId, request$);
     return request$;
+  }
+
+  private requestRevision(
+    workspaceId: number
+  ): Observable<CodingStatusRevisionDto> {
+    return this.http.get<CodingStatusRevisionDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/revision`
+    );
   }
 
   clearWorkspace(workspaceId: number): void {
@@ -164,8 +192,13 @@ export class CodingStatusSnapshotService {
     }
 
     return this.getRevision(workspaceId).pipe(
-      map(({ workspaceId: responseWorkspaceId, revision }) => {
-        if (responseWorkspaceId !== workspaceId || revision !== snapshot.revision) {
+      map(revision => {
+        if (
+          !this.isRevisionValid(revision, workspaceId) ||
+          !revision.stable ||
+          revision.revision !== snapshot.revision ||
+          revision.statusRevision !== snapshot.statusRevision
+        ) {
           this.remove(key);
           return null;
         }
@@ -206,7 +239,8 @@ export class CodingStatusSnapshotService {
         return null;
       }
       const parsed = JSON.parse(raw) as Partial<CodingStatusSnapshot>;
-      if (parsed.schemaVersion !== 1 ||
+      if (
+        parsed.schemaVersion !== 1 ||
           parsed.userId !== userId ||
           parsed.workspaceId !== workspaceId ||
           parsed.surface !== surface ||
@@ -217,9 +251,12 @@ export class CodingStatusSnapshotService {
           typeof parsed.revision !== 'number' ||
           !Number.isInteger(parsed.revision) ||
           parsed.revision < 0 ||
+        typeof parsed.statusRevision !== 'string' ||
+        !/^(0|[1-9]\d*)$/.test(parsed.statusRevision) ||
           typeof parsed.checkedAt !== 'string' ||
           !Number.isFinite(Date.parse(parsed.checkedAt)) ||
-          !this.isSnapshotPayloadValid(parsed, surface)) {
+        !this.isSnapshotPayloadValid(parsed, surface)
+      ) {
         storage.removeItem(key);
         return null;
       }
@@ -247,29 +284,186 @@ export class CodingStatusSnapshotService {
     }
     if (surface === 'overview') {
       const overview = snapshot as Partial<CodingOverviewStatusSnapshot>;
-      return this.isObject(overview.freshness) &&
-        overview.freshness.workspaceId === snapshot.workspaceId &&
-        overview.freshness.currentRevision === snapshot.revision &&
-        Array.isArray(overview.freshness.items) &&
-        this.isObject(overview.readiness) &&
-        overview.readiness.workspaceId === snapshot.workspaceId &&
-        typeof overview.readiness.readiness === 'string' &&
+      return (
+        this.isFreshnessSummaryValid(
+          overview.freshness,
+          snapshot.workspaceId,
+          snapshot.revision
+        ) &&
+        this.isReadinessValid(overview.readiness, snapshot.workspaceId) &&
         (overview.appliedResultsOverview === null ||
-          this.isObject(overview.appliedResultsOverview));
+          this.isAppliedResultsOverviewValid(overview.appliedResultsOverview))
+      );
     }
     const manual = snapshot as Partial<ManualCodingStatusSnapshot>;
-    return planningStatusStates.includes(manual.planningStatus as PlanningStatusState) &&
+    return (
+      planningStatusStates.includes(
+        manual.planningStatus as PlanningStatusState
+      ) &&
       this.isDisplayParametersValid(manual.displayParameters) &&
       (manual.freshness === null ||
-        (this.isObject(manual.freshness) &&
-          manual.freshness.workspaceId === snapshot.workspaceId &&
-          manual.freshness.currentRevision === snapshot.revision &&
-          Array.isArray(manual.freshness.items))) &&
+        this.isFreshnessSummaryValid(
+          manual.freshness,
+          snapshot.workspaceId,
+          snapshot.revision
+        )) &&
       this.isObject(manual.nextTarget) &&
       manualSnapshotTabs.includes(manual.nextTarget.tab as string) &&
       typeof manual.nextTarget.sectionId === 'string' &&
       manual.nextTarget.sectionId.length > 0 &&
-      manualSnapshotActions.includes(manual.nextTarget.action as string);
+      manualSnapshotActions.includes(manual.nextTarget.action as string)
+    );
+  }
+
+  private isRevisionValid(
+    value: unknown,
+    workspaceId: number
+  ): value is CodingStatusRevisionDto {
+    return (
+      this.isObject(value) &&
+      value.workspaceId === workspaceId &&
+      this.isNonNegativeInteger(value.revision) &&
+      typeof value.statusRevision === 'string' &&
+      /^(0|[1-9]\d*)$/.test(value.statusRevision) &&
+      typeof value.stable === 'boolean'
+    );
+  }
+
+  private isFreshnessSummaryValid(
+    value: unknown,
+    workspaceId: unknown,
+    revision: unknown
+  ): boolean {
+    if (
+      !this.isObject(value) ||
+      value.workspaceId !== workspaceId ||
+      value.currentRevision !== revision ||
+      !Array.isArray(value.items)
+    ) {
+      return false;
+    }
+    return value.items.every(
+      item => this.isObject(item) &&
+        freshnessVersions.includes(
+          item.version as (typeof freshnessVersions)[number]
+        ) &&
+        freshnessStates.includes(
+          item.state as (typeof freshnessStates)[number]
+        ) &&
+        this.isNonNegativeInteger(item.unitCount) &&
+        this.isNonNegativeInteger(item.affectedResponseCount)
+    );
+  }
+
+  private isReadinessValid(value: unknown, workspaceId: unknown): boolean {
+    if (
+      !this.isObject(value) ||
+      value.workspaceId !== workspaceId ||
+      (value.autoCoderRun !== 1 && value.autoCoderRun !== 2) ||
+      !readinessStates.includes(
+        value.readiness as (typeof readinessStates)[number]
+      ) ||
+      !this.isStringArray(value.blockers, readinessBlockers) ||
+      !this.isStringArray(value.missingUnitFiles) ||
+      !this.isStringArray(value.missingCodingSchemes) ||
+      !this.isStringArray(value.invalidCodingSchemes) ||
+      !Array.isArray(value.invalidVariableSamples)
+    ) {
+      return false;
+    }
+    const counts = [
+      'rawResponsesTotal',
+      'rawResponsesWithRelevantStatus',
+      'resultUnitsTotal',
+      'resultUnitKeysTotal',
+      'matchedUnitFiles',
+      'matchedCodingSchemes',
+      'validVariablePairs',
+      'validResponses',
+      'codeableResponses'
+    ];
+    if (!counts.every(key => this.isNonNegativeInteger(value[key]))) {
+      return false;
+    }
+    if (
+      !value.invalidVariableSamples.every(
+        sample => this.isObject(sample) &&
+          typeof sample.unitName === 'string' &&
+          this.isNonNegativeInteger(sample.responseCount) &&
+          this.isStringArray(sample.sampleVariableIds) &&
+          this.isStringArray(sample.knownVariableIds)
+      )
+    ) {
+      return false;
+    }
+    return (
+      (value.computedAt === undefined ||
+        (typeof value.computedAt === 'string' &&
+          Number.isFinite(Date.parse(value.computedAt)))) &&
+      (value.computationMs === undefined ||
+        this.isNonNegativeNumber(value.computationMs)) &&
+      (value.fromCache === undefined || typeof value.fromCache === 'boolean') &&
+      (value.sourceRevision === undefined ||
+        this.isNonNegativeInteger(value.sourceRevision)) &&
+      (value.fileRevision === undefined ||
+        typeof value.fileRevision === 'string')
+    );
+  }
+
+  private isAppliedResultsOverviewValid(value: unknown): boolean {
+    if (!this.isObject(value)) {
+      return false;
+    }
+    const requiredCounts = [
+      'totalIncompleteResponses',
+      'appliedResponses',
+      'remainingResponses',
+      'completionPercentage',
+      'rawTotalIncompleteResponses',
+      'rawAppliedResponses',
+      'rawCompletionPercentage',
+      'aggregatedDuplicateCases'
+    ];
+    const optionalCounts = [
+      'statusTotalIncompleteResponses',
+      'responseAnalysisRawCases',
+      'coveredSourceVariableCount',
+      'coveredSourceResponseCount',
+      'deriveErrorTotalResponses',
+      'deriveErrorAppliedResponses',
+      'deriveErrorRemainingResponses',
+      'deriveErrorRawTotalResponses',
+      'deriveErrorRawAppliedResponses'
+    ];
+    return (
+      requiredCounts.every(key => this.isNonNegativeNumber(value[key])) &&
+      optionalCounts.every(
+        key => value[key] === undefined || this.isNonNegativeNumber(value[key])
+      ) &&
+      typeof value.aggregationActive === 'boolean' &&
+      (value.aggregationThreshold === null ||
+        this.isNonNegativeNumber(value.aggregationThreshold))
+    );
+  }
+
+  private isStringArray(
+    value: unknown,
+    allowed?: readonly string[]
+  ): value is string[] {
+    return (
+      Array.isArray(value) &&
+      value.every(
+        item => typeof item === 'string' && (!allowed || allowed.includes(item))
+      )
+    );
+  }
+
+  private isNonNegativeInteger(value: unknown): value is number {
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+  }
+
+  private isNonNegativeNumber(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0;
   }
 
   private isDisplayParametersValid(value: unknown): boolean {
@@ -284,11 +478,11 @@ export class CodingStatusSnapshotService {
       'staleSourceJobs',
       'openDoubleCodingConflicts',
       'manualCodeAvailabilityWarnings'
-    ].every(key => (
-      typeof value[key] === 'number' &&
+    ].every(
+      key => typeof value[key] === 'number' &&
       Number.isFinite(value[key]) &&
       value[key] >= 0
-    ));
+    );
   }
 
   private isObject(value: unknown): value is Record<string, unknown> {
@@ -296,14 +490,16 @@ export class CodingStatusSnapshotService {
   }
 
   private storageKeys(storage: Storage): string[] {
-    return Array.from({ length: storage.length }, (_, index) => storage.key(index))
-      .filter((key): key is string => (
-        !!key && key.startsWith(CODING_STATUS_SNAPSHOT_KEY_PREFIX)
-      ));
+    return Array.from({ length: storage.length }, (_, index) => storage.key(index)
+    ).filter(
+      (key): key is string => !!key && key.startsWith(CODING_STATUS_SNAPSHOT_KEY_PREFIX)
+    );
   }
 
   private keyBelongsToWorkspace(key: string, workspaceId: number): boolean {
-    const segments = key.slice(CODING_STATUS_SNAPSHOT_KEY_PREFIX.length).split(':');
+    const segments = key
+      .slice(CODING_STATUS_SNAPSHOT_KEY_PREFIX.length)
+      .split(':');
     return Number(segments[1]) === workspaceId;
   }
 

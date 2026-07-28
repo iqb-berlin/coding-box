@@ -7,16 +7,21 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
+  catchError,
   concatMap,
   finalize,
+  map,
   reduce,
+  switchMap,
   takeUntil
 } from 'rxjs/operators';
 import {
   combineLatest,
   forkJoin,
+  Observable,
   range,
-  Subject
+  Subject,
+  throwError
 } from 'rxjs';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatIcon } from '@angular/material/icon';
@@ -105,6 +110,14 @@ import {
 import { getResponseStatusLabel } from '../../../shared/utils/response-status-metadata.util';
 import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
 import { CodingStatusSnapshotService } from '../../services/coding-status-snapshot.service';
+
+type CodingStatusOverviewLoadSource =
+  'revision' | 'freshness' | 'readiness' | 'applied-results';
+
+type CodingStatusOverviewLoadError = {
+  source: CodingStatusOverviewLoadSource;
+  originalError: unknown;
+};
 
 @Component({
   selector: 'app-coding-management',
@@ -218,6 +231,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   };
 
   private destroy$ = new Subject<void>();
+  private isDestroyed = false;
   private freshnessJobPollingInterval: number | null = null;
   private activeFreshnessJobWorkspaceId: number | null = null;
   private lastResetProgress: number | null | undefined;
@@ -231,6 +245,14 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private readonly responseTableRequestCancel$ = new Subject<void>();
   private responseTableRequestId = 0;
   private codingStatusOverviewRequestGeneration = 0;
+  private codingFreshnessLoadRequestId = 0;
+  private codingFreshnessScopeLoadRequestId = 0;
+  private autocodingReadinessLoadRequestId = 0;
+  private appliedResultsOverviewLoadRequestId = 0;
+  private codingStatusOverviewRestoreState: 'pending' | 'restored' | 'empty' =
+    'pending';
+
+  private pendingInitialCodingStatusOverviewLoad = false;
   private readonly automaticCodingStatusRefreshDebounceMs = 250;
 
   ngOnInit(): void {
@@ -263,7 +285,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
             this.fetchCodingStatistics();
           }
           if (effectiveAutoRefresh) {
-            this.loadInitialCodingStatusOverview();
+            this.requestInitialCodingStatusOverview();
           }
         });
       this.workspaceSettingsService
@@ -387,6 +409,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.isDestroyed = true;
     if (this.activeFreshnessJobId) {
       this.testPersonCodingService.trackFreshnessCodingGuardUntilComplete(
         this.activeFreshnessJobWorkspaceId || this.appService.selectedWorkspaceId,
@@ -457,15 +480,33 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const statusGeneration = this.codingStatusOverviewRequestGeneration;
+    this.codingFreshnessLoadRequestId += 1;
+    const requestId = this.codingFreshnessLoadRequestId;
     this.isLoadingCodingFreshness = true;
     this.testPersonCodingService.getCodingFreshness(workspaceId)
       .pipe(
         finalize(() => {
-          this.isLoadingCodingFreshness = false;
+          if (this.shouldAcceptCodingStatusResponse(
+            workspaceId,
+            statusGeneration,
+            requestId,
+            this.codingFreshnessLoadRequestId
+          )) {
+            this.isLoadingCodingFreshness = false;
+          }
         }),
         takeUntil(this.destroy$)
       )
       .subscribe(summary => {
+        if (!this.shouldAcceptCodingStatusResponse(
+          workspaceId,
+          statusGeneration,
+          requestId,
+          this.codingFreshnessLoadRequestId
+        )) {
+          return;
+        }
         this.codingFreshnessSummary = summary;
         if (loadScopeOnWarnings && this.hasCodingFreshnessWarnings) {
           this.loadCodingFreshnessScope();
@@ -484,9 +525,20 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const statusGeneration = this.codingStatusOverviewRequestGeneration;
+    this.codingFreshnessScopeLoadRequestId += 1;
+    const requestId = this.codingFreshnessScopeLoadRequestId;
     this.testPersonCodingService.getCodingFreshnessScope(workspaceId)
       .pipe(takeUntil(this.destroy$))
       .subscribe(scope => {
+        if (!this.shouldAcceptCodingStatusResponse(
+          workspaceId,
+          statusGeneration,
+          requestId,
+          this.codingFreshnessScopeLoadRequestId
+        )) {
+          return;
+        }
         this.codingFreshnessScope = scope;
       });
   }
@@ -503,16 +555,34 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const statusGeneration = this.codingStatusOverviewRequestGeneration;
+    this.appliedResultsOverviewLoadRequestId += 1;
+    const requestId = this.appliedResultsOverviewLoadRequestId;
     this.isLoadingManualAppliedResultsOverview = true;
     this.manualAppliedResultsOverviewLoadFailed = false;
     this.testPersonCodingService.getAppliedResultsOverview(workspaceId)
       .pipe(
         finalize(() => {
-          this.isLoadingManualAppliedResultsOverview = false;
+          if (this.shouldAcceptCodingStatusResponse(
+            workspaceId,
+            statusGeneration,
+            requestId,
+            this.appliedResultsOverviewLoadRequestId
+          )) {
+            this.isLoadingManualAppliedResultsOverview = false;
+          }
         }),
         takeUntil(this.destroy$)
       )
       .subscribe(overview => {
+        if (!this.shouldAcceptCodingStatusResponse(
+          workspaceId,
+          statusGeneration,
+          requestId,
+          this.appliedResultsOverviewLoadRequestId
+        )) {
+          return;
+        }
         this.manualAppliedResultsOverview = overview;
         this.manualAppliedResultsOverviewLoadFailed = overview === null;
       });
@@ -528,20 +598,46 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const statusGeneration = this.codingStatusOverviewRequestGeneration;
+    this.autocodingReadinessLoadRequestId += 1;
+    const requestId = this.autocodingReadinessLoadRequestId;
     this.isLoadingAutocodingReadiness = true;
     this.autocodingReadinessLoadFailed = false;
     this.testPersonCodingService.getAutocodingReadiness(workspaceId, 1, forceRefresh)
       .pipe(
         finalize(() => {
-          this.isLoadingAutocodingReadiness = false;
+          if (this.shouldAcceptCodingStatusResponse(
+            workspaceId,
+            statusGeneration,
+            requestId,
+            this.autocodingReadinessLoadRequestId
+          )) {
+            this.isLoadingAutocodingReadiness = false;
+          }
         }),
         takeUntil(this.destroy$)
       )
       .subscribe({
         next: readiness => {
+          if (!this.shouldAcceptCodingStatusResponse(
+            workspaceId,
+            statusGeneration,
+            requestId,
+            this.autocodingReadinessLoadRequestId
+          )) {
+            return;
+          }
           this.autocodingReadiness = readiness;
         },
         error: () => {
+          if (!this.shouldAcceptCodingStatusResponse(
+            workspaceId,
+            statusGeneration,
+            requestId,
+            this.autocodingReadinessLoadRequestId
+          )) {
+            return;
+          }
           this.autocodingReadiness = null;
           this.autocodingReadinessLoadFailed = true;
         }
@@ -558,16 +654,35 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const statusGeneration = this.codingStatusOverviewRequestGeneration;
+    this.autocodingReadinessLoadRequestId += 1;
+    const requestId = this.autocodingReadinessLoadRequestId;
     this.testPersonCodingService.getCachedAutocodingReadiness(workspaceId, 1)
       .pipe(takeUntil(this.destroy$))
       .subscribe(readiness => {
-        if (!readiness) {
+        if (!readiness || !this.shouldAcceptCodingStatusResponse(
+          workspaceId,
+          statusGeneration,
+          requestId,
+          this.autocodingReadinessLoadRequestId
+        )) {
           return;
         }
 
         this.autocodingReadiness = readiness;
         this.autocodingReadinessLoadFailed = false;
       });
+  }
+
+  private shouldAcceptCodingStatusResponse(
+    workspaceId: number,
+    statusGeneration: number,
+    requestId: number,
+    currentRequestId: number
+  ): boolean {
+    return workspaceId === this.appService.selectedWorkspaceId &&
+      statusGeneration === this.codingStatusOverviewRequestGeneration &&
+      requestId === currentRequestId;
   }
 
   refreshAutocodingReadiness(): void {
@@ -627,11 +742,15 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private restoreCodingStatusOverview(workspaceId: number): void {
     const userId = this.appService.userId;
     if (!userId) {
+      this.completeCodingStatusOverviewRestore();
       return;
     }
     const generation = this.codingStatusOverviewRequestGeneration;
     this.codingStatusSnapshotService.restoreOverview(userId, workspaceId)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        finalize(() => this.completeCodingStatusOverviewRestore()),
+        takeUntil(this.destroy$)
+      )
       .subscribe(snapshot => {
         if (!snapshot ||
             generation !== this.codingStatusOverviewRequestGeneration ||
@@ -645,7 +764,34 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         this.autocodingReadinessLoadFailed = false;
         this.manualAppliedResultsOverviewLoadFailed = false;
         this.hasLoadedFullCodingStatusOverview = snapshot.fullyChecked;
+        this.codingStatusOverviewRestoreState = 'restored';
       });
+  }
+
+  private requestInitialCodingStatusOverview(): void {
+    if (this.codingStatusOverviewRestoreState === 'pending') {
+      this.pendingInitialCodingStatusOverviewLoad = true;
+      return;
+    }
+    if (this.codingStatusOverviewRestoreState === 'restored' ||
+        this.codingStatusOverviewRequestGeneration !== 0) {
+      return;
+    }
+    this.loadInitialCodingStatusOverview();
+  }
+
+  private completeCodingStatusOverviewRestore(): void {
+    if (this.isDestroyed) {
+      return;
+    }
+    if (this.codingStatusOverviewRestoreState === 'pending') {
+      this.codingStatusOverviewRestoreState = 'empty';
+    }
+    if (!this.pendingInitialCodingStatusOverviewLoad) {
+      return;
+    }
+    this.pendingInitialCodingStatusOverviewLoad = false;
+    this.requestInitialCodingStatusOverview();
   }
 
   private loadFullCodingStatusOverview(): void {
@@ -664,13 +810,54 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.autocodingReadinessLoadFailed = false;
     this.manualAppliedResultsOverviewLoadFailed = false;
 
-    forkJoin({
-      freshness: this.testPersonCodingService.getCodingFreshness(workspaceId),
-      readiness: this.testPersonCodingService
-        .getAutocodingReadiness(workspaceId, 1, false),
-      appliedResultsOverview: this.testPersonCodingService
-        .getAppliedResultsOverview(workspaceId)
-    }).pipe(
+    this.withCodingStatusOverviewErrorSource(
+      'revision',
+      this.codingStatusSnapshotService.getRevision(workspaceId)
+    ).pipe(
+      switchMap(startRevision => {
+        if (startRevision.workspaceId !== workspaceId || !startRevision.stable) {
+          return throwError(() => ({
+            source: 'revision' as const,
+            originalError: new Error('Coding status revision is not stable.')
+          }));
+        }
+        return forkJoin({
+          freshness: this.withCodingStatusOverviewErrorSource(
+            'freshness',
+            this.testPersonCodingService.getCodingFreshness(workspaceId, {
+              failOnError: true
+            })
+          ),
+          readiness: this.withCodingStatusOverviewErrorSource(
+            'readiness',
+            this.testPersonCodingService.getAutocodingReadiness(
+              workspaceId,
+              1,
+              true
+            )
+          ),
+          appliedResultsOverview: this.withCodingStatusOverviewErrorSource(
+            'applied-results',
+            this.testPersonCodingService.getAppliedResultsOverview(
+              workspaceId,
+              { failOnError: true }
+            )
+          )
+        }).pipe(
+          switchMap(results => this.withCodingStatusOverviewErrorSource(
+            'revision',
+            this.codingStatusSnapshotService.getRevision(workspaceId, {
+              fresh: true
+            })
+          ).pipe(
+            map(endRevision => ({
+              ...results,
+              startRevision,
+              endRevision
+            }))
+          ))
+        );
+      }),
       finalize(() => {
         if (generation === this.codingStatusOverviewRequestGeneration) {
           this.isLoadingCodingFreshness = false;
@@ -680,15 +867,33 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       }),
       takeUntil(this.destroy$)
     ).subscribe({
-      next: ({ freshness, readiness, appliedResultsOverview }) => {
+      next: ({
+        freshness,
+        readiness,
+        appliedResultsOverview,
+        startRevision,
+        endRevision
+      }) => {
         if (generation !== this.codingStatusOverviewRequestGeneration ||
-            workspaceId !== this.appService.selectedWorkspaceId) {
+            workspaceId !== this.appService.selectedWorkspaceId ||
+            userId !== this.appService.userId) {
+          return;
+        }
+        if (!appliedResultsOverview ||
+            startRevision.workspaceId !== workspaceId ||
+            endRevision.workspaceId !== workspaceId ||
+            !startRevision.stable ||
+            !endRevision.stable ||
+            startRevision.statusRevision !== endRevision.statusRevision ||
+            startRevision.revision !== freshness.currentRevision ||
+            endRevision.revision !== freshness.currentRevision) {
+          this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
           return;
         }
         this.codingFreshnessSummary = freshness;
         this.autocodingReadiness = readiness;
         this.manualAppliedResultsOverview = appliedResultsOverview;
-        this.manualAppliedResultsOverviewLoadFailed = appliedResultsOverview === null;
+        this.manualAppliedResultsOverviewLoadFailed = false;
         this.hasLoadedFullCodingStatusOverview = true;
         if (this.hasCodingFreshnessWarnings) {
           this.loadCodingFreshnessScope();
@@ -696,33 +901,54 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
           this.codingFreshnessScope = null;
         }
 
-        this.codingStatusSnapshotService.getRevision(workspaceId)
-          .pipe(takeUntil(this.destroy$))
-          .subscribe(revision => {
-            if (generation !== this.codingStatusOverviewRequestGeneration ||
-                revision.revision !== freshness.currentRevision) {
-              return;
-            }
-            this.codingStatusSnapshotService.saveOverview({
-              userId,
-              workspaceId,
-              revision: revision.revision,
-              freshness,
-              readiness,
-              appliedResultsOverview,
-              fullyChecked: true
-            });
-          });
+        this.codingStatusSnapshotService.saveOverview({
+          userId,
+          workspaceId,
+          revision: endRevision.revision,
+          statusRevision: endRevision.statusRevision,
+          freshness,
+          readiness,
+          appliedResultsOverview,
+          fullyChecked: true
+        });
       },
-      error: () => {
+      error: error => {
         if (generation !== this.codingStatusOverviewRequestGeneration) {
           return;
         }
-        this.autocodingReadiness = null;
-        this.autocodingReadinessLoadFailed = true;
+        if (this.isCodingStatusOverviewLoadError(error)) {
+          if (error.source === 'readiness') {
+            this.autocodingReadiness = null;
+            this.autocodingReadinessLoadFailed = true;
+          }
+          if (error.source === 'applied-results') {
+            this.manualAppliedResultsOverview = null;
+            this.manualAppliedResultsOverviewLoadFailed = true;
+          }
+        }
         this.hasLoadedFullCodingStatusOverview = false;
       }
     });
+  }
+
+  private withCodingStatusOverviewErrorSource<T>(
+    source: CodingStatusOverviewLoadSource,
+    request: Observable<T>
+  ): Observable<T> {
+    return request.pipe(
+      catchError(error => throwError(() => ({ source, originalError: error })))
+    );
+  }
+
+  private isCodingStatusOverviewLoadError(
+    error: unknown
+  ): error is CodingStatusOverviewLoadError {
+    if (typeof error !== 'object' || error === null || !('source' in error)) {
+      return false;
+    }
+    return ['revision', 'freshness', 'readiness', 'applied-results'].includes(
+      (error as { source: CodingStatusOverviewLoadSource }).source
+    );
   }
 
   private loadInitialCodingStatusOverview(): void {

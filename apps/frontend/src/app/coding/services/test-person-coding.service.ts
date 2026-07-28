@@ -113,6 +113,10 @@ export interface CohensKappaStatisticsResponse {
 
 export type CohensKappaCalculationLevel = 'code' | 'score';
 
+interface CodingStatusRequestOptions {
+  failOnError?: boolean;
+}
+
 export interface CohensKappaScope {
   jobDefinitionIds?: number[];
   coderTrainingIds?: number[];
@@ -701,8 +705,34 @@ export class TestPersonCodingService {
   }
 
   getCodingFreshness(
-    workspaceId: number
+    workspaceId: number,
+    options: CodingStatusRequestOptions = {}
   ): Observable<CodingFreshnessSummaryDto> {
+    if (options.failOnError) {
+      if (
+        this.codingBackgroundJobsService.isStatusCheckGuardActive(workspaceId)
+      ) {
+        return throwError(() => new Error('Coding status check is guarded'));
+      }
+
+      const requestGeneration = this.codingStatusCacheGeneration;
+      return this.http
+        .get<CodingFreshnessSummaryDto>(
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/freshness`,
+        {
+          headers: this.authHeader,
+          context: suppressGlobalHttpErrorContext()
+        }
+      )
+        .pipe(
+          tap(summary => {
+            if (this.codingStatusCacheGeneration === requestGeneration) {
+              this.codingFreshnessCache.set(workspaceId, summary);
+            }
+          })
+        );
+    }
+
     const cached = this.codingFreshnessCache.get(workspaceId);
     if (
       this.codingBackgroundJobsService.isStatusCheckGuardActive(workspaceId)
@@ -1181,19 +1211,45 @@ export class TestPersonCodingService {
   }
 
   getCodingProgressOverview(
-    workspaceId: number
+    workspaceId: number,
+    options: CodingStatusRequestOptions = {}
   ): Observable<CodingProgressOverview | null> {
     return this.http
       .get<CodingProgressOverview>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/progress-overview`,
       { headers: this.authHeader }
     )
-      .pipe(catchError(() => of(null)));
+      .pipe(catchError(error => (
+        options.failOnError ? throwError(() => error) : of(null)
+      )));
   }
 
   getAppliedResultsOverview(
-    workspaceId: number
+    workspaceId: number,
+    options: CodingStatusRequestOptions = {}
   ): Observable<AppliedResultsOverview | null> {
+    if (options.failOnError) {
+      if (
+        this.codingBackgroundJobsService.isStatusCheckGuardActive(workspaceId)
+      ) {
+        return throwError(() => new Error('Coding status check is guarded'));
+      }
+
+      const requestGeneration = this.codingStatusCacheGeneration;
+      return this.http
+        .get<AppliedResultsOverview>(
+        `${this.serverUrl}admin/workspace/${workspaceId}/coding/applied-results-overview`,
+        { headers: this.authHeader }
+      )
+        .pipe(
+          tap(overview => {
+            if (this.codingStatusCacheGeneration === requestGeneration) {
+              this.appliedResultsOverviewCache.set(workspaceId, overview);
+            }
+          })
+        );
+    }
+
     if (
       this.codingBackgroundJobsService.isStatusCheckGuardActive(workspaceId)
     ) {
@@ -1295,7 +1351,7 @@ export class TestPersonCodingService {
       .pipe(catchError(() => of([])));
   }
 
-  getVariableCoverageOverview(workspaceId: number): Observable<{
+  getVariableCoverageOverview(workspaceId: number, options: CodingStatusRequestOptions = {}): Observable<{
     totalVariables: number;
     coveredVariables: number;
     coveredByDraft: number;
@@ -1366,34 +1422,39 @@ export class TestPersonCodingService {
       { headers: this.authHeader }
     )
       .pipe(
-        catchError(() => of({
-          totalVariables: 0,
-          coveredVariables: 0,
-          coveredByDraft: 0,
-          coveredByPendingReview: 0,
-          coveredByApproved: 0,
-          conflictedVariables: 0,
-          missingVariables: 0,
-          partiallyAbgedeckteVariablen: 0,
-          fullyAbgedeckteVariablen: 0,
-          coveragePercentage: 0,
-          variableCaseCounts: [],
-          coverageByStatus: {
-            draft: [],
-            pending_review: [],
-            approved: [],
-            conflicted: []
-          },
-          statusTotalVariables: 0,
-          coveredSourceVariableCount: 0,
-          coveredSourceResponseCount: 0
+        catchError(error => {
+          if (options.failOnError) {
+            return throwError(() => error);
+          }
+          return of({
+            totalVariables: 0,
+            coveredVariables: 0,
+            coveredByDraft: 0,
+            coveredByPendingReview: 0,
+            coveredByApproved: 0,
+            conflictedVariables: 0,
+            missingVariables: 0,
+            partiallyAbgedeckteVariablen: 0,
+            fullyAbgedeckteVariablen: 0,
+            coveragePercentage: 0,
+            variableCaseCounts: [],
+            coverageByStatus: {
+              draft: [],
+              pending_review: [],
+              approved: [],
+              conflicted: []
+            },
+            statusTotalVariables: 0,
+            coveredSourceVariableCount: 0,
+            coveredSourceResponseCount: 0
+          });
         })
-        )
       );
   }
 
   getCaseCoverageOverview(
-    workspaceId: number
+    workspaceId: number,
+    options: CodingStatusRequestOptions = {}
   ): Observable<CaseCoverageOverview> {
     return this.http
       .get<CaseCoverageOverview>(
@@ -1401,25 +1462,29 @@ export class TestPersonCodingService {
       { headers: this.authHeader }
     )
       .pipe(
-        catchError(() => of({
-          totalCasesToCode: 0,
-          effectiveTotalCasesToCode: 0,
-          casesInJobs: 0,
-          effectiveCasesInJobs: 0,
-          doubleCodedCases: 0,
-          singleCodedCases: 0,
-          unassignedCases: 0,
-          effectiveUnassignedCases: 0,
-          coveragePercentage: 0,
-          rawCoveragePercentage: 0,
-          aggregationActive: false,
-          aggregationThreshold: null,
-          aggregatedDuplicateCases: 0,
-          statusTotalCasesToCode: 0,
-          coveredSourceVariableCount: 0,
-          coveredSourceResponseCount: 0
+        catchError(error => {
+          if (options.failOnError) {
+            return throwError(() => error);
+          }
+          return of({
+            totalCasesToCode: 0,
+            effectiveTotalCasesToCode: 0,
+            casesInJobs: 0,
+            effectiveCasesInJobs: 0,
+            doubleCodedCases: 0,
+            singleCodedCases: 0,
+            unassignedCases: 0,
+            effectiveUnassignedCases: 0,
+            coveragePercentage: 0,
+            rawCoveragePercentage: 0,
+            aggregationActive: false,
+            aggregationThreshold: null,
+            aggregatedDuplicateCases: 0,
+            statusTotalCasesToCode: 0,
+            coveredSourceVariableCount: 0,
+            coveredSourceResponseCount: 0
+          });
         })
-        )
       );
   }
 

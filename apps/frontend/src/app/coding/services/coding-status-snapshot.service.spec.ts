@@ -31,6 +31,7 @@ describe('CodingStatusSnapshotService', () => {
     userId: 7,
     workspaceId: 3,
     revision: 11,
+    statusRevision: '21',
     freshness: { workspaceId: 3, currentRevision: 11, items: [] },
     readiness: {
       workspaceId: 3,
@@ -62,8 +63,12 @@ describe('CodingStatusSnapshotService', () => {
     service.restoreOverview(7, 3).subscribe(snapshot => {
       restoredRevision = snapshot?.revision;
     });
-    http.expectOne(`${serverUrl}admin/workspace/3/coding/revision`)
-      .flush({ workspaceId: 3, revision: 11 });
+    http.expectOne(`${serverUrl}admin/workspace/3/coding/revision`).flush({
+      workspaceId: 3,
+      revision: 11,
+      statusRevision: '21',
+      stable: true
+    });
 
     expect(restoredRevision).toBe(11);
   });
@@ -73,8 +78,27 @@ describe('CodingStatusSnapshotService', () => {
     service.restoreOverview(7, 3).subscribe(snapshot => {
       expect(snapshot).toBeNull();
     });
-    http.expectOne(`${serverUrl}admin/workspace/3/coding/revision`)
-      .flush({ workspaceId: 3, revision: 12 });
+    http.expectOne(`${serverUrl}admin/workspace/3/coding/revision`).flush({
+      workspaceId: 3,
+      revision: 12,
+      statusRevision: '22',
+      stable: true
+    });
+
+    expect(sessionStorage.length).toBe(0);
+  });
+
+  it('removes a snapshot while the server status is being updated', () => {
+    saveOverview();
+    service.restoreOverview(7, 3).subscribe(snapshot => {
+      expect(snapshot).toBeNull();
+    });
+    http.expectOne(`${serverUrl}admin/workspace/3/coding/revision`).flush({
+      workspaceId: 3,
+      revision: 11,
+      statusRevision: '21',
+      stable: false
+    });
 
     expect(sessionStorage.length).toBe(0);
   });
@@ -110,9 +134,16 @@ describe('CodingStatusSnapshotService', () => {
     service.restoreOverview(7, 3).subscribe();
     service.restoreOverview(7, 3).subscribe();
 
-    const requests = http.match(`${serverUrl}admin/workspace/3/coding/revision`);
+    const requests = http.match(
+      `${serverUrl}admin/workspace/3/coding/revision`
+    );
     expect(requests).toHaveLength(1);
-    requests[0].flush({ workspaceId: 3, revision: 11 });
+    requests[0].flush({
+      workspaceId: 3,
+      revision: 11,
+      statusRevision: '21',
+      stable: true
+    });
   });
 
   it('removes malformed storage without requesting a revision', () => {
@@ -137,6 +168,7 @@ describe('CodingStatusSnapshotService', () => {
         userId: 7,
         workspaceId: 3,
         revision: 11,
+        statusRevision: '21',
         checkedAt: new Date().toISOString(),
         surface: 'manual',
         planningStatus: 'unknown-state',
@@ -168,5 +200,44 @@ describe('CodingStatusSnapshotService', () => {
       .toBeNull();
     expect(sessionStorage.getItem('coding-status-snapshot:v1:7:4:manual'))
       .toBe('{}');
+  });
+
+  it('does not reuse a pending request for an explicit fresh revision check', () => {
+    service.getRevision(3).subscribe();
+    service.getRevision(3, { fresh: true }).subscribe();
+
+    const requests = http.match(
+      `${serverUrl}admin/workspace/3/coding/revision`
+    );
+    expect(requests).toHaveLength(2);
+    requests.forEach(request => request.flush({
+      workspaceId: 3,
+      revision: 11,
+      statusRevision: '21',
+      stable: true
+    })
+    );
+  });
+
+  it('removes an overview with malformed nested readiness data', () => {
+    saveOverview();
+    const key = 'coding-status-snapshot:v1:7:3:overview';
+    const snapshot = JSON.parse(sessionStorage.getItem(key) || '{}');
+    snapshot.readiness.invalidVariableSamples = [
+      {
+        unitName: 'UNIT',
+        responseCount: 'many',
+        sampleVariableIds: [],
+        knownVariableIds: []
+      }
+    ];
+    sessionStorage.setItem(key, JSON.stringify(snapshot));
+
+    service
+      .restoreOverview(7, 3)
+      .subscribe(value => expect(value).toBeNull());
+
+    http.expectNone(`${serverUrl}admin/workspace/3/coding/revision`);
+    expect(sessionStorage.getItem(key)).toBeNull();
   });
 });
