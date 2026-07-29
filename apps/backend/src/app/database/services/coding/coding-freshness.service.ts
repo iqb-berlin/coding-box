@@ -34,6 +34,7 @@ import { statusStringToNumber } from '../../utils/response-status-converter';
 import { IQB_STANDARD_MISSING_CODES, MissingsProfilesService } from './missings-profiles.service';
 import { getNonCodingIssueReviewJobSqlCondition } from './coding-job-type.util';
 import { getCodingVariableIdCandidateSql } from './coding-response-candidate.util';
+import { getWorkspaceCodingStatusRevision } from '../shared/workspace-coding-status-revision.util';
 
 type UnitCodingPresence = Record<CodingFreshnessVersion, boolean>;
 
@@ -159,6 +160,14 @@ export class CodingFreshnessService {
         affectedResponseCount: Number(row.affectedResponseCount || 0)
       }))
     };
+  }
+
+  async getWorkspaceStatusRevision(workspaceId: number): Promise<{
+    revision: number;
+    statusRevision: string;
+    stable: boolean;
+  }> {
+    return getWorkspaceCodingStatusRevision(this.connection, workspaceId);
   }
 
   async getScope(

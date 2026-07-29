@@ -1,16 +1,11 @@
 import { DataSource, EntityManager, QueryRunner } from 'typeorm';
-
-const WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE = 774020251;
+import {
+  normalizeWorkspaceId,
+  touchWorkspaceCodingStatusRevision,
+  WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE
+} from './workspace-coding-status-revision.util';
 
 type QueryRunnerFactory = Pick<DataSource, 'createQueryRunner'>;
-
-function normalizeWorkspaceId(workspaceId: number): number {
-  const normalized = Number(workspaceId);
-  if (!Number.isInteger(normalized) || normalized < 1) {
-    throw new Error('A valid workspace id is required for the test-results mutation lock.');
-  }
-  return normalized;
-}
 
 export async function lockWorkspaceTestResultsMutationInTransaction(
   manager: EntityManager,
@@ -20,6 +15,7 @@ export async function lockWorkspaceTestResultsMutationInTransaction(
     'SELECT pg_advisory_xact_lock($1::int, $2::int)',
     [WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE, normalizeWorkspaceId(workspaceId)]
   );
+  await touchWorkspaceCodingStatusRevision(manager, workspaceId);
 }
 
 export async function withWorkspaceTestResultsMutationLock<T>(
@@ -39,7 +35,12 @@ export async function withWorkspaceTestResultsMutationLock<T>(
       [WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE, normalizedWorkspaceId]
     );
     locked = true;
-    return await callback();
+    await touchWorkspaceCodingStatusRevision(queryRunner, normalizedWorkspaceId);
+    try {
+      return await callback();
+    } finally {
+      await touchWorkspaceCodingStatusRevision(queryRunner, normalizedWorkspaceId);
+    }
   } finally {
     try {
       if (locked) {

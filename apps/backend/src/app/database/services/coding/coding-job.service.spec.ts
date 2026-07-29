@@ -1476,8 +1476,10 @@ describe('CodingJobService', () => {
     const callOrder: string[] = [];
     const transactionManager = {
       getRepository: jest.fn(),
-      query: jest.fn().mockImplementation(async () => {
-        callOrder.push('advisory-lock');
+      query: jest.fn().mockImplementation(async (sql: string) => {
+        callOrder.push(sql.includes('status_revision') ?
+          'status-revision' :
+          'advisory-lock');
       })
     };
     const plan = {
@@ -1623,6 +1625,7 @@ describe('CodingJobService', () => {
     );
     expect(callOrder).toEqual([
       'advisory-lock',
+      'status-revision',
       'assert',
       'lock',
       'existing',
