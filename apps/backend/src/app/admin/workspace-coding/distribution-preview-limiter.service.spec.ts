@@ -1,11 +1,17 @@
-import { RequestTimeoutException } from '@nestjs/common';
+import { HttpStatus, Logger, RequestTimeoutException } from '@nestjs/common';
 import { DistributionPreviewLimiterService } from './distribution-preview-limiter.service';
 
 describe('DistributionPreviewLimiterService', () => {
   let service: DistributionPreviewLimiterService;
 
   beforeEach(() => {
+    jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     service = new DistributionPreviewLimiterService();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('runs at most two distribution previews concurrently', async () => {
@@ -62,5 +68,56 @@ describe('DistributionPreviewLimiterService', () => {
     releases.forEach(release => release());
     await expect(Promise.all([first, second])).resolves.toEqual([1, 2]);
     expect(execute).toHaveBeenCalledTimes(2);
+    expect(service.getSnapshot()).toEqual(expect.objectContaining({
+      active: 0,
+      pending: 0,
+      cancelled: 1
+    }));
+  });
+
+  it('rejects excess previews instead of growing the queue without a limit', async () => {
+    const releases: Array<() => void> = [];
+    const execute = jest.fn((result: number) => new Promise<number>(resolve => {
+      releases.push(() => resolve(result));
+    }));
+    const accepted = Array.from(
+      { length: 10 },
+      (_, index) => service.run(() => execute(index + 1))
+    );
+
+    await Promise.resolve();
+    const rejected = service.run(() => execute(11));
+
+    await expect(rejected).rejects.toMatchObject({
+      status: HttpStatus.TOO_MANY_REQUESTS
+    });
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(service.getSnapshot()).toEqual({
+      active: 2,
+      pending: 8,
+      maxConcurrent: 2,
+      maxPending: 8,
+      rejected: 1,
+      cancelled: 0
+    });
+    expect(Logger.prototype.warn).toHaveBeenCalledWith(
+      expect.stringContaining('rejected=1')
+    );
+
+    for (let index = 0; index < accepted.length; index += 1) {
+      releases.shift()?.();
+      await new Promise(resolve => {
+        setImmediate(resolve);
+      });
+    }
+    await expect(Promise.all(accepted)).resolves.toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+    ]);
+    expect(execute).toHaveBeenCalledTimes(10);
+    expect(service.getSnapshot()).toEqual(expect.objectContaining({
+      active: 0,
+      pending: 0,
+      rejected: 1
+    }));
   });
 });

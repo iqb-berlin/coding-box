@@ -196,6 +196,38 @@ describe('WorkspaceCodingStatisticsController', () => {
     expect(response.listenerCount('close')).toBe(0);
   });
 
+  it('cancels a queued distribution preview when the response connection closes', async () => {
+    const body = {
+      selectedVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
+      selectedCoders: [{ id: 1, name: 'Coder', username: 'coder' }]
+    };
+    const response = Object.assign(new EventEmitter(), { writableEnded: false });
+    let receivedSignal: AbortSignal | undefined;
+    distributionPreviewLimiterService.run.mockImplementation((
+      _execute: () => Promise<unknown>,
+      signal: AbortSignal
+    ) => {
+      receivedSignal = signal;
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener(
+          'abort',
+          () => reject(new Error('preview cancelled')),
+          { once: true }
+        );
+      });
+    });
+
+    const calculation = controller.calculateDistribution(5, body, response as never);
+    expect(response.listenerCount('close')).toBe(1);
+
+    response.emit('close');
+
+    await expect(calculation).rejects.toThrow('preview cancelled');
+    expect(receivedSignal?.aborted).toBe(true);
+    expect(codingJobService.calculateDistribution).not.toHaveBeenCalled();
+    expect(response.listenerCount('close')).toBe(0);
+  });
+
   it('delegates autocoding readiness requests with parsed options', async () => {
     await controller.getAutocodingReadiness(5, '2', 'true');
 
