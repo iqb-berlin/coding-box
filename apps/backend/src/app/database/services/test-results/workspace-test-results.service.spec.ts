@@ -42,6 +42,7 @@ const mockQueryBuilder = () => ({
   getRawMany: jest.fn().mockResolvedValue([]),
   getCount: jest.fn().mockResolvedValue(0),
   getMany: jest.fn().mockResolvedValue([]),
+  getRawAndEntities: jest.fn().mockResolvedValue({ entities: [], raw: [] }),
   orderBy: jest.fn().mockReturnThis(),
   skip: jest.fn().mockReturnThis(),
   take: jest.fn().mockReturnThis(),
@@ -1134,6 +1135,61 @@ describe('WorkspaceTestResultsService', () => {
         expect.stringContaining('COALESCE(response.status_v3'),
         { codedStatus: 5 }
       );
+    });
+
+    it('should return the effective v2 status while preserving raw version statuses', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(1);
+      qb.getRawAndEntities.mockResolvedValue({
+        entities: [{
+          id: 1,
+          variableid: '01',
+          value: 'answer',
+          status: 5,
+          status_v1: 8,
+          status_v2: null,
+          status_v3: null,
+          code_v1: null,
+          code_v2: null,
+          code_v3: null,
+          score_v1: null,
+          score_v2: null,
+          score_v3: null,
+          unit: {
+            id: 2,
+            name: 'Unit1',
+            alias: null,
+            booklet: {
+              id: 3,
+              bookletinfo: { name: 'Booklet1' },
+              person: {
+                id: 4,
+                login: 'login',
+                code: 'code',
+                group: 'group'
+              }
+            }
+          }
+        }],
+        raw: [{ effective_coding_status_output: '8' }]
+      });
+
+      const result = await service.searchResponses(
+        1,
+        { version: 'v2', responseSource: 'all' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.addSelect).toHaveBeenCalledWith(
+        getEffectiveCodingStatusExpression('v2'),
+        'effective_coding_status_output'
+      );
+      expect(result.data[0]).toMatchObject({
+        codedStatus: 'CODING_INCOMPLETE',
+        status_v1: 'CODING_INCOMPLETE',
+        status_v2: 'UNSET'
+      });
     });
 
     it('should apply DERIVE_ERROR codedStatus filters numerically', async () => {
