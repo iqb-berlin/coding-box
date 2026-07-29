@@ -12,7 +12,13 @@ import {
   reduce,
   takeUntil
 } from 'rxjs/operators';
-import { combineLatest, range, Subject } from 'rxjs';
+import {
+  catchError,
+  combineLatest,
+  of,
+  range,
+  Subject
+} from 'rxjs';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatIcon } from '@angular/material/icon';
 import {
@@ -100,6 +106,7 @@ import {
 import { getResponseStatusLabel } from '../../../shared/utils/response-status-metadata.util';
 import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
 import { CodingStatusSnapshotService } from '../../services/coding-status-snapshot.service';
+import { CodingStatusRevisionDto } from '../../../../../../../api-dto/coding/coding-status-revision.dto';
 
 @Component({
   selector: 'app-coding-management',
@@ -227,6 +234,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private responseTableRequestId = 0;
   private readonly automaticCodingStatusRefreshDebounceMs = 250;
   private overviewSnapshotSavePending = false;
+  private overviewSnapshotLoadRevision: CodingStatusRevisionDto | null = null;
+  private overviewStatusLoadRequestId = 0;
 
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -256,9 +265,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
           if (shouldFetchInitialStatistics) {
             this.fetchCodingStatistics();
           }
-          if (effectiveAutoRefresh) {
-            this.loadInitialCodingStatusOverview();
-          }
+          this.loadInitialCodingStatusOverview(effectiveAutoRefresh);
         });
       this.workspaceSettingsService
         .getEnableRegexSearch(workspaceId)
@@ -607,7 +614,9 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private invalidateCodingStatusOverviewCache(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
+      this.overviewStatusLoadRequestId += 1;
       this.hasLoadedFullCodingStatusOverview = false;
+      this.overviewSnapshotLoadRevision = null;
       this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
     }
   }
@@ -617,6 +626,34 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const workspaceId = this.appService.selectedWorkspaceId;
+    this.overviewStatusLoadRequestId += 1;
+    const requestId = this.overviewStatusLoadRequestId;
+    this.overviewSnapshotLoadRevision = null;
+    if (!workspaceId) {
+      this.startCodingStatusOverviewLoad(includeAutocodingReadiness);
+      return;
+    }
+
+    this.codingStatusSnapshotService.getRevision(workspaceId, true)
+      .pipe(
+        catchError(() => of(null)),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(revision => {
+        if (requestId !== this.overviewStatusLoadRequestId ||
+          this.appService.selectedWorkspaceId !== workspaceId) {
+          return;
+        }
+
+        this.overviewSnapshotLoadRevision = revision?.stable ? revision : null;
+        this.startCodingStatusOverviewLoad(includeAutocodingReadiness);
+      });
+  }
+
+  private startCodingStatusOverviewLoad(
+    includeAutocodingReadiness: boolean
+  ): void {
     if (includeAutocodingReadiness) {
       this.hasLoadedFullCodingStatusOverview = false;
     }
@@ -627,7 +664,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     }
   }
 
-  private loadInitialCodingStatusOverview(): void {
+  private loadInitialCodingStatusOverview(allowNetworkReload: boolean): void {
     if (this.deferCodingStatusRefreshIfBackgroundJobIsRunning(false)) {
       return;
     }
@@ -635,7 +672,9 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
     const userId = this.appService.authData?.userId || 0;
     if (!workspaceId || userId <= 0) {
-      this.loadInitialCodingStatusOverviewWithoutSnapshot();
+      if (allowNetworkReload) {
+        this.loadInitialCodingStatusOverviewWithoutSnapshot();
+      }
       return;
     }
 
@@ -643,10 +682,18 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(snapshot => {
         if (!snapshot || this.appService.selectedWorkspaceId !== workspaceId) {
-          this.loadInitialCodingStatusOverviewWithoutSnapshot();
+          if (allowNetworkReload) {
+            this.loadInitialCodingStatusOverviewWithoutSnapshot();
+          }
           return;
         }
 
+        this.overviewSnapshotLoadRevision = {
+          workspaceId,
+          revision: snapshot.revision,
+          statusRevision: snapshot.statusRevision,
+          stable: true
+        };
         this.codingFreshnessSummary = snapshot.freshness;
         this.autocodingReadiness = snapshot.readiness;
         this.manualAppliedResultsOverview = snapshot.appliedResultsOverview;
@@ -665,7 +712,9 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private trySaveCodingStatusOverviewSnapshot(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     const userId = this.appService.authData?.userId || 0;
-    if (!workspaceId || userId <= 0 || this.overviewSnapshotSavePending ||
+    const initialRevision = this.overviewSnapshotLoadRevision;
+    if (!workspaceId || userId <= 0 || !initialRevision ||
+      this.overviewSnapshotSavePending ||
       !this.hasLoadedFullCodingStatusOverview ||
       !this.codingFreshnessSummary || !this.autocodingReadiness ||
       this.isLoadingCodingFreshness || this.isLoadingAutocodingReadiness ||
@@ -685,6 +734,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       )
       .subscribe(revision => {
         if (!revision.stable ||
+          revision.revision !== initialRevision.revision ||
+          revision.statusRevision !== initialRevision.statusRevision ||
           revision.revision !== this.codingFreshnessSummary?.currentRevision ||
           this.appService.selectedWorkspaceId !== workspaceId) {
           return;

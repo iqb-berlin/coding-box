@@ -31,6 +31,7 @@ import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
 import { Success } from '../../models/success.model';
 import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/test-person-coding-dialog.component';
+import { CodingStatusSnapshotService } from '../../services/coding-status-snapshot.service';
 
 describe('CodingManagementComponent', () => {
   let component: CodingManagementComponent;
@@ -42,6 +43,7 @@ describe('CodingManagementComponent', () => {
   let mockWorkspaceSettingsService: jest.Mocked<Partial<WorkspaceSettingsService>>;
   let mockTestPersonCodingService: jest.Mocked<Partial<TestPersonCodingService>>;
   let mockCodingBackgroundJobsService: jest.Mocked<Partial<CodingBackgroundJobsService>>;
+  let mockCodingStatusSnapshotService: jest.Mocked<Partial<CodingStatusSnapshotService>>;
   let mockRouter: jest.Mocked<Partial<Router>>;
   let mockSnackBar: jest.Mocked<Partial<MatSnackBar>>;
   let autoCodingCompletedSubject: Subject<{ jobId?: string }>;
@@ -96,7 +98,20 @@ describe('CodingManagementComponent', () => {
 
     mockAppService = {
       selectedWorkspaceId: 1,
-      loggedUser: { sub: 'test-user' }
+      loggedUser: { sub: 'test-user' },
+      authData: { userId: 7 } as never
+    };
+
+    mockCodingStatusSnapshotService = {
+      restoreOverview: jest.fn().mockReturnValue(of(null)),
+      getRevision: jest.fn().mockReturnValue(of({
+        workspaceId: 1,
+        revision: 0,
+        statusRevision: '0',
+        stable: true
+      })),
+      saveOverview: jest.fn(),
+      clearWorkspace: jest.fn()
     };
 
     mockWorkspaceSettingsService = {
@@ -243,6 +258,10 @@ describe('CodingManagementComponent', () => {
           useValue: mockCodingBackgroundJobsService
         },
         {
+          provide: CodingStatusSnapshotService,
+          useValue: mockCodingStatusSnapshotService
+        },
+        {
           provide: Router,
           useValue: mockRouter
         }
@@ -342,6 +361,47 @@ describe('CodingManagementComponent', () => {
       expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
     });
 
+    it('should restore a session snapshot when auto-refresh is disabled', () => {
+      fixture.destroy();
+      const freshness = {
+        workspaceId: 1,
+        currentRevision: 12,
+        items: []
+      };
+      const readiness = {
+        workspaceId: 1,
+        readiness: 'READY'
+      } as never;
+      (mockWorkspaceSettingsService.getAutoRefreshManualCodingJobs as jest.Mock)
+        .mockReturnValueOnce(of(false));
+      (mockCodingStatusSnapshotService.restoreOverview as jest.Mock)
+        .mockReturnValueOnce(of({
+          userId: 7,
+          workspaceId: 1,
+          revision: 12,
+          statusRevision: '34',
+          freshness,
+          readiness,
+          appliedResultsOverview: null
+        }));
+      (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getCachedAutocodingReadiness as jest.Mock).mockClear();
+
+      const isolatedFixture = TestBed.createComponent(CodingManagementComponent);
+      const isolatedComponent = isolatedFixture.componentInstance;
+      isolatedFixture.detectChanges();
+
+      expect(mockCodingStatusSnapshotService.restoreOverview)
+        .toHaveBeenLastCalledWith(7, 1);
+      expect(isolatedComponent.codingFreshnessSummary).toBe(freshness);
+      expect(isolatedComponent.autocodingReadiness).toBe(readiness);
+      expect(isolatedComponent.hasLoadedFullCodingStatusOverview).toBe(true);
+      expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getCachedAutocodingReadiness).not.toHaveBeenCalled();
+
+      isolatedFixture.destroy();
+    });
+
     it('should not show full-check loading copy during the lightweight initial refresh', () => {
       fixture.destroy();
       const codingFreshnessSubject = new Subject<{
@@ -418,6 +478,47 @@ describe('CodingManagementComponent', () => {
       expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, false);
       expect(component.shouldShowManualCodingStatusRefresh()).toBe(false);
       expect(component.isCodingStatusOverviewPendingManualRefresh).toBe(false);
+    });
+
+    it('should bracket a full refresh and reject a snapshot when the revision changed', () => {
+      const initialRevision$ = new Subject<{
+        workspaceId: number;
+        revision: number;
+        statusRevision: string;
+        stable: boolean;
+      }>();
+      (mockCodingStatusSnapshotService.getRevision as jest.Mock)
+        .mockReset()
+        .mockReturnValueOnce(initialRevision$.asObservable())
+        .mockReturnValueOnce(of({
+          workspaceId: 1,
+          revision: 0,
+          statusRevision: '2',
+          stable: true
+        }));
+      (mockCodingStatusSnapshotService.saveOverview as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+
+      component.refreshCodingStatusOverview();
+
+      expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+
+      initialRevision$.next({
+        workspaceId: 1,
+        revision: 0,
+        statusRevision: '1',
+        stable: true
+      });
+      initialRevision$.complete();
+
+      expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalled();
+      expect(mockCodingStatusSnapshotService.saveOverview).not.toHaveBeenCalled();
     });
 
     it('should load manual applied results on init when second auto-coding freshness is open', () => {

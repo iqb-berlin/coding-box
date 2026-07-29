@@ -23,6 +23,7 @@ import type {
   ManualCodeAvailabilityWarningDto
 } from '../../../../../../../api-dto/coding/manual-code-availability.dto';
 import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
+import { CodingStatusSnapshotService } from '../../services/coding-status-snapshot.service';
 
 type VariableCoverageOverview = NonNullable<
 CodingManagementManualComponent['variableCoverageOverview']
@@ -160,6 +161,15 @@ describe('CodingManagementManualComponent', () => {
 
     fixture = TestBed.createComponent(CodingManagementManualComponent);
     component = fixture.componentInstance;
+    jest.spyOn(
+      TestBed.inject(CodingStatusSnapshotService),
+      'getRevision'
+    ).mockReturnValue(of({
+      workspaceId: 5,
+      revision: 0,
+      statusRevision: '0',
+      stable: true
+    }));
     fixture.detectChanges();
   });
 
@@ -1173,6 +1183,39 @@ describe('CodingManagementManualComponent', () => {
     expect(component.getPlanningStatusTitle()).toBe('Status wird aktualisiert');
   });
 
+  it('should keep a neutral planning status when execution loaded only partial data', () => {
+    component.selectedManualTabIndex = component.manualCodingTabs.indexOf('execution');
+    component.caseCoverageOverview = {
+      totalCasesToCode: 10,
+      effectiveTotalCasesToCode: 10,
+      casesInJobs: 5,
+      effectiveCasesInJobs: 5,
+      doubleCodedCases: 0,
+      singleCodedCases: 5,
+      unassignedCases: 5,
+      effectiveUnassignedCases: 5,
+      coveragePercentage: 50,
+      rawCoveragePercentage: 50,
+      aggregationActive: false,
+      aggregationThreshold: null,
+      aggregatedDuplicateCases: 0
+    } satisfies CaseCoverageOverview;
+    component.codingProgressOverview = {
+      totalCasesToCode: 10,
+      completedCases: 2,
+      completionPercentage: 20,
+      rawTotalCasesToCode: 10,
+      rawCompletedCases: 2,
+      rawCompletionPercentage: 20,
+      aggregationActive: false,
+      aggregationThreshold: null,
+      aggregatedDuplicateCases: 0
+    } satisfies CodingProgressOverview;
+
+    expect(component.getPlanningStatusIcon()).toBe('help_outline');
+    expect(component.getPlanningStatusTitle()).toBe('Kodierstand nicht geprüft');
+  });
+
   it('should ask for an explicit planning data refresh before loading planning snapshots', () => {
     component.selectedManualTabIndex = 1;
     const componentInternals = component as unknown as {
@@ -1636,6 +1679,68 @@ describe('CodingManagementManualComponent', () => {
     expect(loadResponseAnalysisSpy).toHaveBeenCalledTimes(1);
     expect(component.shouldRenderManualTabData('planning')).toBe(true);
     expect(component.shouldShowManualRefreshButton()).toBe(true);
+  });
+
+  it('should wait for the initial revision and reject a mixed planning snapshot', () => {
+    const initialRevision$ = new Subject<{
+      workspaceId: number;
+      revision: number;
+      statusRevision: string;
+      stable: boolean;
+    }>();
+    const snapshotService = TestBed.inject(CodingStatusSnapshotService);
+    (snapshotService.getRevision as jest.Mock)
+      .mockReset()
+      .mockReturnValueOnce(initialRevision$.asObservable())
+      .mockReturnValueOnce(of({
+        workspaceId: 5,
+        revision: 0,
+        statusRevision: '2',
+        stable: true
+      }));
+    const saveSnapshotSpy = jest
+      .spyOn(snapshotService, 'saveManual')
+      .mockImplementation();
+    const componentInternals = component as unknown as {
+      appService: {
+        selectedWorkspaceId: number;
+        updateAuthData(authData: unknown): void;
+      };
+      loadPlanningDataBundle(forceRefresh: boolean): void;
+      loadVariableCoverageOverview(): void;
+      loadCaseCoverageOverview(): void;
+      loadCodingProgressOverview(): void;
+      loadCodingIncompleteVariables(): void;
+      loadManualFreshnessDecisionData(): void;
+      loadCodingFreshness(): void;
+      loadResponseAnalysisForPlanningIfNeeded(): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.appService.updateAuthData({ userId: 7 });
+    const dataLoadSpies = [
+      jest.spyOn(componentInternals, 'loadVariableCoverageOverview').mockImplementation(),
+      jest.spyOn(componentInternals, 'loadCaseCoverageOverview').mockImplementation(),
+      jest.spyOn(componentInternals, 'loadCodingProgressOverview').mockImplementation(),
+      jest.spyOn(componentInternals, 'loadCodingIncompleteVariables').mockImplementation(),
+      jest.spyOn(componentInternals, 'loadManualFreshnessDecisionData').mockImplementation(),
+      jest.spyOn(componentInternals, 'loadCodingFreshness').mockImplementation(),
+      jest.spyOn(componentInternals, 'loadResponseAnalysisForPlanningIfNeeded').mockImplementation()
+    ];
+
+    componentInternals.loadPlanningDataBundle(false);
+
+    dataLoadSpies.forEach(spy => expect(spy).not.toHaveBeenCalled());
+
+    initialRevision$.next({
+      workspaceId: 5,
+      revision: 0,
+      statusRevision: '1',
+      stable: true
+    });
+    initialRevision$.complete();
+
+    dataLoadSpies.forEach(spy => expect(spy).toHaveBeenCalledTimes(1));
+    expect(saveSnapshotSpy).not.toHaveBeenCalled();
   });
 
   it('should skip automatic planning metrics when auto-refresh is disabled', () => {
@@ -3671,6 +3776,8 @@ describe('CodingManagementManualComponent', () => {
   }
 
   function setEmptyPlanningSnapshots(): void {
+    (component as unknown as { hasLoadedPlanningDataBundle: boolean })
+      .hasLoadedPlanningDataBundle = true;
     component.variableCoverageOverview = {
       totalVariables: 0,
       coveredVariables: 0,

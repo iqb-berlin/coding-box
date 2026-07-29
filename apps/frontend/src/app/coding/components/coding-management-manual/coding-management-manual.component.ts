@@ -18,6 +18,7 @@ import { MatInputModule } from '@angular/material/input';
 import {
   Subject, takeUntil, debounceTime, finalize, Observable, of, tap,
   distinctUntilChanged,
+  catchError,
   firstValueFrom,
   map,
   switchMap
@@ -259,6 +260,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private manualSnapshotLoadRevision: CodingStatusRevisionDto | null = null;
   private manualSnapshotSavePending = false;
   private isRestoringManualStatusSnapshot = false;
+  private planningDataLoadRequestId = 0;
+  private isLoadingPlanningDataRevision = false;
 
   private pendingAutomaticManualTabLoad: ManualCodingTab | null = null;
 
@@ -2079,7 +2082,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private isPlanningStatusLoading(): boolean {
-    return this.isLoadingInitialResponseAnalysisForStatus() ||
+    return this.isLoadingPlanningDataRevision ||
+      this.isLoadingInitialResponseAnalysisForStatus() ||
       this.isLoadingCodingProgress ||
       this.isLoadingVariableCoverage ||
       this.isLoadingCaseCoverage ||
@@ -2631,8 +2635,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     if (this.activeManualTab !== 'planning' &&
-        !this.hasLoadedPlanningDataBundle &&
-        !this.hasLivePlanningStatusData()) {
+      !this.hasLoadedPlanningDataBundle) {
       return 'not-checked';
     }
 
@@ -2693,16 +2696,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     return 'planning-ready';
-  }
-
-  private hasLivePlanningStatusData(): boolean {
-    return this.variableCoverageOverview !== null ||
-      this.caseCoverageOverview !== null ||
-      this.codingProgressOverview !== null ||
-      this.appliedResultsOverview !== null ||
-      this.manualFreshnessJobSummary !== null ||
-      this.manualCodeAvailabilityWarnings.length > 0 ||
-      this.openDoubleCodingConflictCount > 0;
   }
 
   getPlanningStatusIcon(): string {
@@ -3370,19 +3363,39 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private loadPlanningDataBundle(forceRefresh: boolean): void {
     const workspaceId = this.appService.selectedWorkspaceId;
+    this.planningDataLoadRequestId += 1;
+    const requestId = this.planningDataLoadRequestId;
     this.restoredManualStatusSnapshot = null;
     this.manualSnapshotLoadRevision = null;
-    if (workspaceId) {
-      this.codingStatusSnapshotService.getRevision(workspaceId, true)
-        .pipe(takeUntil(this.destroy$))
-        .subscribe(revision => {
-          if (revision.stable &&
-            this.appService.selectedWorkspaceId === workspaceId) {
-            this.manualSnapshotLoadRevision = revision;
+    if (!workspaceId) {
+      this.startPlanningDataBundleLoad(forceRefresh);
+      return;
+    }
+
+    this.isLoadingPlanningDataRevision = true;
+    this.codingStatusSnapshotService.getRevision(workspaceId, true)
+      .pipe(
+        catchError(() => of(null)),
+        finalize(() => {
+          if (requestId === this.planningDataLoadRequestId) {
+            this.isLoadingPlanningDataRevision = false;
             this.trySaveManualCodingStatusSnapshot();
           }
-        });
-    }
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(revision => {
+        if (requestId !== this.planningDataLoadRequestId ||
+          this.appService.selectedWorkspaceId !== workspaceId) {
+          return;
+        }
+
+        this.manualSnapshotLoadRevision = revision?.stable ? revision : null;
+        this.startPlanningDataBundleLoad(forceRefresh);
+      });
+  }
+
+  private startPlanningDataBundleLoad(forceRefresh: boolean): void {
     this.hasLoadedPlanningDataBundle = true;
     this.loadVariableCoverageOverview();
     this.loadCaseCoverageOverview();
@@ -4481,6 +4494,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
     this.restoredManualStatusSnapshot = null;
     this.manualSnapshotLoadRevision = null;
+    this.planningDataLoadRequestId += 1;
+    this.isLoadingPlanningDataRevision = false;
     if (workspaceId) {
       this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
     }
