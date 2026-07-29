@@ -2165,6 +2165,113 @@ describe('CodingManagementManualComponent', () => {
     isolatedFixture.destroy();
   });
 
+  it('should invalidate cached status before loading after restore misses', () => {
+    const isolatedFixture = TestBed.createComponent(CodingManagementManualComponent);
+    const isolatedComponent = isolatedFixture.componentInstance;
+    const restoredSnapshot$ = new Subject<null>();
+    const componentInternals = isolatedComponent as unknown as {
+      appService: {
+        selectedWorkspaceId: number;
+        updateAuthData(authData: unknown): void;
+      };
+      manualPlanningStatusFacade: {
+        snapshotService: {
+          restoreManual(userId: number, workspaceId: number): Observable<unknown>;
+        };
+      };
+      testPersonCodingService: {
+        invalidateVolatileCodingStatusCache(workspaceId: number): void;
+      };
+      restoreManualCodingStatus(): void;
+      requestInitialCodingFreshness(): void;
+      loadCodingFreshness(): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.appService.updateAuthData({ userId: 9 });
+    jest
+      .spyOn(
+        componentInternals.manualPlanningStatusFacade.snapshotService,
+        'restoreManual'
+      )
+      .mockReturnValue(restoredSnapshot$.asObservable());
+    const invalidateCacheSpy = jest.spyOn(
+      componentInternals.testPersonCodingService,
+      'invalidateVolatileCodingStatusCache'
+    );
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+
+    componentInternals.restoreManualCodingStatus();
+    componentInternals.requestInitialCodingFreshness();
+    expect(invalidateCacheSpy).not.toHaveBeenCalled();
+    expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
+
+    restoredSnapshot$.next(null);
+    restoredSnapshot$.complete();
+
+    expect(invalidateCacheSpy).toHaveBeenCalledWith(5);
+    expect(loadCodingFreshnessSpy).toHaveBeenCalledTimes(1);
+    expect(invalidateCacheSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      loadCodingFreshnessSpy.mock.invocationCallOrder[0]
+    );
+    isolatedFixture.destroy();
+  });
+
+  it('should not invalidate a concurrent manual status load after restore misses', () => {
+    const isolatedFixture = TestBed.createComponent(CodingManagementManualComponent);
+    const isolatedComponent = isolatedFixture.componentInstance;
+    const restoredSnapshot$ = new Subject<null>();
+    const componentInternals = isolatedComponent as unknown as {
+      appService: {
+        selectedWorkspaceId: number;
+        updateAuthData(authData: unknown): void;
+      };
+      manualPlanningStatusFacade: {
+        snapshotService: {
+          restoreManual(userId: number, workspaceId: number): Observable<unknown>;
+        };
+        viewStateSubject: {
+          next(state: {
+            loadState: 'loading';
+            data: null;
+            restoredSnapshot: null;
+            presentation: null;
+          }): void;
+        };
+      };
+      testPersonCodingService: {
+        invalidateVolatileCodingStatusCache(workspaceId: number): void;
+      };
+      restoreManualCodingStatus(): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.appService.updateAuthData({ userId: 9 });
+    jest
+      .spyOn(
+        componentInternals.manualPlanningStatusFacade.snapshotService,
+        'restoreManual'
+      )
+      .mockReturnValue(restoredSnapshot$.asObservable());
+    const invalidateCacheSpy = jest.spyOn(
+      componentInternals.testPersonCodingService,
+      'invalidateVolatileCodingStatusCache'
+    );
+
+    componentInternals.restoreManualCodingStatus();
+    componentInternals.manualPlanningStatusFacade.viewStateSubject.next({
+      loadState: 'loading',
+      data: null,
+      restoredSnapshot: null,
+      presentation: null
+    });
+    restoredSnapshot$.next(null);
+    restoredSnapshot$.complete();
+
+    expect(invalidateCacheSpy).not.toHaveBeenCalled();
+    isolatedFixture.destroy();
+  });
+
   it('should skip initial coding freshness when auto-refresh is disabled', () => {
     const manualRefreshSetting$ = new Subject<boolean>();
     const isolatedFixture = TestBed.createComponent(CodingManagementManualComponent);

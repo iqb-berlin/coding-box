@@ -186,6 +186,7 @@ describe('CodingManagementComponent', () => {
         aggregatedDuplicateCases: 0
       })),
       invalidateCodingStatusCache: jest.fn(),
+      invalidateVolatileCodingStatusCache: jest.fn(),
       startFreshnessCoding: jest.fn().mockReturnValue(of({
         totalResponses: 0,
         statusCounts: {},
@@ -396,6 +397,8 @@ describe('CodingManagementComponent', () => {
       (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
       (mockTestPersonCodingService.getCachedAutocodingReadiness as jest.Mock)
         .mockClear();
+      (mockTestPersonCodingService.invalidateVolatileCodingStatusCache as jest.Mock)
+        .mockClear();
       (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
       (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
 
@@ -422,6 +425,8 @@ describe('CodingManagementComponent', () => {
       (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
       (mockTestPersonCodingService.getCachedAutocodingReadiness as jest.Mock)
         .mockClear();
+      (mockTestPersonCodingService.invalidateVolatileCodingStatusCache as jest.Mock)
+        .mockClear();
 
       const isolatedFixture = TestBed.createComponent(CodingManagementComponent);
       isolatedFixture.detectChanges();
@@ -429,14 +434,86 @@ describe('CodingManagementComponent', () => {
       expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getCachedAutocodingReadiness)
         .not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.invalidateVolatileCodingStatusCache)
+        .not.toHaveBeenCalled();
 
       restoredSnapshot$.next(null);
       restoredSnapshot$.complete();
 
+      expect(mockTestPersonCodingService.invalidateVolatileCodingStatusCache)
+        .toHaveBeenCalledWith(1);
       expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledWith(1);
       expect(mockTestPersonCodingService.getCachedAutocodingReadiness)
         .toHaveBeenCalledWith(1, 1);
+      expect(
+        (mockTestPersonCodingService
+          .invalidateVolatileCodingStatusCache as jest.Mock)
+          .mock.invocationCallOrder[0]
+      ).toBeLessThan(
+        (mockTestPersonCodingService.getCodingFreshness as jest.Mock)
+          .mock.invocationCallOrder[0]
+      );
       isolatedFixture.destroy();
+    });
+
+    it('should retry a full status load once after its revision changes', () => {
+      (mockCodingStatusSnapshotService.getRevision as jest.Mock)
+        .mockReset()
+        .mockReturnValueOnce(of({
+          workspaceId: 1,
+          revision: 5,
+          statusRevision: '5',
+          stable: true
+        }))
+        .mockReturnValueOnce(of({
+          workspaceId: 1,
+          revision: 6,
+          statusRevision: '6',
+          stable: true
+        }))
+        .mockReturnValueOnce(of({
+          workspaceId: 1,
+          revision: 6,
+          statusRevision: '6',
+          stable: true
+        }))
+        .mockReturnValueOnce(of({
+          workspaceId: 1,
+          revision: 6,
+          statusRevision: '6',
+          stable: true
+        }));
+      (mockTestPersonCodingService.getCodingFreshness as jest.Mock)
+        .mockReset()
+        .mockReturnValueOnce(of({
+          workspaceId: 1,
+          currentRevision: 5,
+          items: []
+        }))
+        .mockReturnValueOnce(of({
+          workspaceId: 1,
+          currentRevision: 6,
+          items: []
+        }));
+      (mockTestPersonCodingService.invalidateCodingStatusCache as jest.Mock)
+        .mockClear();
+      (mockCodingStatusSnapshotService.saveOverview as jest.Mock).mockClear();
+
+      component.refreshCodingStatusOverview();
+
+      expect(mockTestPersonCodingService.invalidateCodingStatusCache)
+        .toHaveBeenCalledTimes(2);
+      expect(mockCodingStatusSnapshotService.getRevision).toHaveBeenCalledTimes(4);
+      expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledTimes(2);
+      expect(component.codingFreshnessSummary?.currentRevision).toBe(6);
+      expect(component.hasLoadedFullCodingStatusOverview).toBe(true);
+      expect(mockCodingStatusSnapshotService.saveOverview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceId: 1,
+          revision: 6,
+          statusRevision: '6'
+        })
+      );
     });
 
     it('should not show full-check loading copy during the lightweight initial refresh', () => {

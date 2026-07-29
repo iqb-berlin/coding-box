@@ -752,10 +752,15 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         takeUntil(this.destroy$)
       )
       .subscribe(snapshot => {
-        if (!snapshot ||
-            generation !== this.codingStatusOverviewRequestGeneration ||
+        if (generation !== this.codingStatusOverviewRequestGeneration ||
             workspaceId !== this.appService.selectedWorkspaceId ||
             userId !== this.appService.userId) {
+          return;
+        }
+        if (!snapshot) {
+          this.testPersonCodingService.invalidateVolatileCodingStatusCache(
+            workspaceId
+          );
           return;
         }
         this.codingFreshnessSummary = snapshot.freshness;
@@ -794,7 +799,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.requestInitialCodingStatusOverview();
   }
 
-  private loadFullCodingStatusOverview(): void {
+  private loadFullCodingStatusOverview(retryAfterRevisionMismatch = true): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     const userId = this.appService.userId;
     if (!workspaceId || !userId) {
@@ -888,6 +893,9 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
             startRevision.revision !== freshness.currentRevision ||
             endRevision.revision !== freshness.currentRevision) {
           this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
+          if (retryAfterRevisionMismatch) {
+            this.loadFullCodingStatusOverview(false);
+          }
           return;
         }
         this.codingFreshnessSummary = freshness;

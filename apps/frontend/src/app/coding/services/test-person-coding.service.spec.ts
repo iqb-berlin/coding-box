@@ -130,6 +130,16 @@ describe('TestPersonCodingService', () => {
       .toBe('{}');
   });
 
+  it('should preserve status snapshots when only volatile caches are invalidated', () => {
+    const snapshotKey =
+      `coding-status-snapshot:v1:7:${mockWorkspaceId}:overview`;
+    sessionStorage.setItem(snapshotKey, '{}');
+
+    service.invalidateVolatileCodingStatusCache(mockWorkspaceId);
+
+    expect(sessionStorage.getItem(snapshotKey)).toBe('{}');
+  });
+
   describe('codeTestPersons', () => {
     it('should send a GET request to code test persons', () => {
       const mockTestPersonIds = '1,2,3';

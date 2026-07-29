@@ -378,9 +378,17 @@ export class TestPersonCodingService {
   }
 
   invalidateCodingStatusCache(workspaceId?: number): void {
-    this.codingStatusCacheGeneration += 1;
     if (!workspaceId) {
       this.codingStatusSnapshotService.clearAll();
+    } else {
+      this.codingStatusSnapshotService.clearWorkspace(workspaceId);
+    }
+    this.invalidateVolatileCodingStatusCache(workspaceId);
+  }
+
+  invalidateVolatileCodingStatusCache(workspaceId?: number): void {
+    this.codingStatusCacheGeneration += 1;
+    if (!workspaceId) {
       this.codingFreshnessCache.clear();
       this.codingFreshnessRequests.clear();
       this.autocodingReadinessCache.clear();
@@ -393,7 +401,6 @@ export class TestPersonCodingService {
       return;
     }
 
-    this.codingStatusSnapshotService.clearWorkspace(workspaceId);
     this.codingFreshnessCache.delete(workspaceId);
     this.codingFreshnessRequests.delete(workspaceId);
     this.appliedResultsOverviewCache.delete(workspaceId);

@@ -3219,13 +3219,23 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .subscribe(() => {
         const snapshot =
           this.manualPlanningStatusFacade.viewState.restoredSnapshot;
-        if (snapshot &&
-            workspaceId === this.appService.selectedWorkspaceId &&
-            userId === this.appService.authData.userId) {
-          this.restoredManualStatusSnapshot = snapshot;
-          this.codingFreshnessSummary = snapshot.freshness;
-          this.manualStatusSnapshotRestoreState = 'restored';
+        if (workspaceId !== this.appService.selectedWorkspaceId ||
+            userId !== this.appService.authData.userId) {
+          return;
         }
+        if (!snapshot) {
+          const loadState =
+            this.manualPlanningStatusFacade.viewState.loadState;
+          if (loadState !== 'loading' && loadState !== 'loaded') {
+            this.testPersonCodingService.invalidateVolatileCodingStatusCache(
+              workspaceId
+            );
+          }
+          return;
+        }
+        this.restoredManualStatusSnapshot = snapshot;
+        this.codingFreshnessSummary = snapshot.freshness;
+        this.manualStatusSnapshotRestoreState = 'restored';
       });
   }
 
