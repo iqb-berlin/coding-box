@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
-  Observable, catchError, of, switchMap
+  Observable, catchError, of, switchMap, throwError
 } from 'rxjs';
 import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
 import { SERVER_URL } from '../../injection-tokens';
@@ -26,6 +26,10 @@ interface PaginatedResponse<T> {
   limit: number;
 }
 
+interface CodingStatisticsRequestOptions {
+  failOnError?: boolean;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -34,7 +38,11 @@ export class CodingStatisticsService {
   private http = inject(HttpClient);
   private appService = inject(AppService);
 
-  getCodingStatistics(workspace_id: number, version: 'v1' | 'v2' | 'v3' = 'v1'): Observable<CodingStatistics> {
+  getCodingStatistics(
+    workspace_id: number,
+    version: 'v1' | 'v2' | 'v3' = 'v1',
+    options: CodingStatisticsRequestOptions = {}
+  ): Observable<CodingStatistics> {
     const params = new HttpParams().set('version', version);
     return this.http
       .get<CodingStatistics>(
@@ -44,7 +52,12 @@ export class CodingStatisticsService {
         context: suppressGlobalHttpErrorContext()
       })
       .pipe(
-        catchError(() => of({ totalResponses: 0, statusCounts: {} }))
+        catchError(error => {
+          if (options.failOnError) {
+            return throwError(() => error);
+          }
+          return of({ totalResponses: 0, statusCounts: {} });
+        })
       );
   }
 

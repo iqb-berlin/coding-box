@@ -52,6 +52,20 @@ describe('CodingStatisticsService', () => {
     req.flush(mockRes);
   });
 
+  it('should propagate coding statistics errors for strict requests', () => {
+    const errorSpy = jest.fn();
+    service.getCodingStatistics(1, 'v2', { failOnError: true }).subscribe({
+      error: errorSpy
+    });
+
+    const req = httpMock.expectOne(
+      `${mockServerUrl}admin/workspace/1/coding/statistics?version=v2`
+    );
+    req.flush('failed', { status: 500, statusText: 'Server Error' });
+
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('should get coding freshness', () => {
     const mockRes = {
       workspaceId: 1,
