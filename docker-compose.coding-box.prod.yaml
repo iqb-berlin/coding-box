@@ -50,10 +50,13 @@ services:
   backend-export-worker:
     image: ${REGISTRY_PATH}iqbberlin/coding-box-backend:${TAG}
     depends_on:
+      db:
+        condition: service_healthy
       redis:
         condition: service_healthy
     environment:
       APP_ROLE: export-worker
+      EXPORT_WORKER_READY_FILE: /tmp/coding-box-export-worker-ready
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PREFIX: ${REDIS_PREFIX:-coding-box}
@@ -74,6 +77,12 @@ services:
         limits:
           cpus: ${EXPORT_WORKER_CPU_LIMIT:-2}
           memory: ${EXPORT_WORKER_MEMORY_LIMIT:-3G}
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/coding-box-export-worker-ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
     restart: always
 
   frontend:

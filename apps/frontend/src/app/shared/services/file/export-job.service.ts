@@ -31,7 +31,9 @@ import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-s
 import type { PsychometricDomainCandidatesDto } from '../../../../../../../api-dto/coding/psychometric-discrimination.dto';
 import {
   BackgroundExportRequest,
+  ExportJobDisplayVariantDto,
   ExportJobErrorMetadataDto,
+  ExportJobListItemDto,
   ExportJobProgressPhaseDto,
   ExportJobStateDto,
   ExportJobStatusDto,
@@ -111,6 +113,8 @@ export class ExportJobService implements OnDestroy {
   ReturnType<typeof setTimeout>
   >();
 
+  private restoreVersions = new Map<number, number>();
+
   private stopPolling$ = new Subject<void>();
 
   readonly jobs$ = this.jobsSubject.asObservable();
@@ -139,6 +143,72 @@ export class ExportJobService implements OnDestroy {
 
   get cancelledJobs(): ExportJob[] {
     return this.jobsSubject.value.filter(job => job.status === 'cancelled');
+  }
+
+  restoreWorkspaceJobs(workspaceId: number): Observable<ExportJob[]> {
+    const restoreVersion = (this.restoreVersions.get(workspaceId) || 0) + 1;
+    this.restoreVersions.set(workspaceId, restoreVersion);
+    const jobIdsAtStart = new Set(
+      this.jobsSubject.value
+        .filter(job => job.workspaceId === workspaceId)
+        .map(job => job.jobId)
+    );
+
+    return this.codingJobBackendService.getExportJobs(workspaceId).pipe(
+      map(statuses => statuses
+        .filter(status => this.isRestorableJob(status))
+        .map(status => this.toExportJob(workspaceId, status))
+      ),
+      tap(restoredJobs => {
+        if (this.restoreVersions.get(workspaceId) !== restoreVersion) {
+          return;
+        }
+
+        const currentJobs = this.jobsSubject.value;
+        const currentWorkspaceJobs = currentJobs.filter(
+          job => job.workspaceId === workspaceId
+        );
+        const currentJobsById = new Map(
+          currentWorkspaceJobs.map(job => [job.jobId, job])
+        );
+        const restoredWithLocalMetadata = restoredJobs.map(job => {
+          const localJob = currentJobsById.get(job.jobId);
+          return localJob ? {
+            ...job,
+            displayLabelKey: localJob.displayLabelKey || job.displayLabelKey,
+            downloadFilePrefix:
+              localJob.downloadFilePrefix || job.downloadFilePrefix
+          } : job;
+        });
+        const restoredJobIds = new Set(
+          restoredWithLocalMetadata.map(job => job.jobId)
+        );
+        const jobsAddedDuringRestore = currentWorkspaceJobs.filter(
+          job => !jobIdsAtStart.has(job.jobId) && !restoredJobIds.has(job.jobId)
+        );
+        const nextWorkspaceJobs = [
+          ...restoredWithLocalMetadata,
+          ...jobsAddedDuringRestore
+        ];
+
+        currentWorkspaceJobs.forEach(job => {
+          this.stopPollingForJob(job.jobId);
+          this.clearItemMatrixExpirationTimer(job.jobId);
+        });
+        const jobsFromOtherWorkspaces = currentJobs.filter(
+          job => job.workspaceId !== workspaceId
+        );
+        this.jobsSubject.next([...jobsFromOtherWorkspaces, ...nextWorkspaceJobs]);
+
+        nextWorkspaceJobs.forEach(job => {
+          if (job.status === 'waiting' || job.status === 'active') {
+            this.startPollingForJob(workspaceId, job.jobId);
+          }
+          this.scheduleItemMatrixArtifactExpiration(job.jobId, job);
+        });
+      }),
+      catchError(() => of([]))
+    );
   }
 
   startJob(
@@ -259,6 +329,66 @@ export class ExportJobService implements OnDestroy {
   private addJob(job: ExportJob): void {
     const currentJobs = this.jobsSubject.value;
     this.jobsSubject.next([...currentJobs, job]);
+  }
+
+  private isRestorableJob(status: ExportJobListItemDto): boolean {
+    if (status.status === 'completed') {
+      return !!status.result;
+    }
+    if (status.errorCode === ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE) {
+      return status.errorDetails.diagnosticsAvailable ||
+        status.errorDetails.incompleteDownloadAvailable;
+    }
+    return true;
+  }
+
+  private toExportJob(
+    workspaceId: number,
+    status: ExportJobListItemDto
+  ): ExportJob {
+    const displayMetadata = this.getDisplayMetadata(status.displayVariant);
+    return {
+      jobId: status.jobId,
+      workspaceId,
+      status: this.mapStatus(status.status),
+      progress: status.progress,
+      progressPhase: status.progressPhase,
+      processedRows: status.processedRows,
+      totalRows: status.totalRows,
+      progressMessage: status.progressMessage,
+      exportType: status.exportType,
+      displayLabelKey: displayMetadata.displayLabelKey,
+      downloadFilePrefix: displayMetadata.downloadFilePrefix ||
+        (status.exportType === 'item-matrix' ? 'Itemdatensatz' : undefined),
+      result: status.result ? {
+        fileName: status.result.fileName,
+        fileSize: status.result.fileSize
+      } : undefined,
+      error: status.error,
+      createdAt: status.createdAt,
+      ...this.getExportJobErrorMetadata(status)
+    };
+  }
+
+  private getDisplayMetadata(
+    variant?: ExportJobDisplayVariantDto
+  ): Pick<ExportJob, 'displayLabelKey' | 'downloadFilePrefix'> {
+    switch (variant) {
+      case 'manual-review-most-frequent':
+      case 'manual-review-new-column-per-coder':
+      case 'manual-review-new-row-per-variable':
+        return {
+          displayLabelKey: `export-toast.types.${variant}`,
+          downloadFilePrefix: variant
+        };
+      case 'manual-review-by-variable-compact':
+        return {
+          displayLabelKey: 'export-toast.types.by-variable-compact',
+          downloadFilePrefix: variant
+        };
+      default:
+        return {};
+    }
   }
 
   private updateJob(
@@ -522,7 +652,7 @@ export class ExportJobService implements OnDestroy {
 
   private scheduleItemMatrixArtifactExpiration(
     jobId: string,
-    status: ExportJobStatusDto
+    status: ExportJobErrorMetadataDto
   ): void {
     this.clearItemMatrixExpirationTimer(jobId);
     if (status.errorCode !== ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE) {

@@ -40,4 +40,15 @@ describe('DatabaseModule configuration', () => {
       '-c jit=off -c idle_in_transaction_session_timeout=0'
     );
   });
+
+  it('rejects PostgreSQL options with literal wrapping quotes', () => {
+    expect(() => buildPostgresConnectionOptions('"-c jit=off"', '0'))
+      .toThrow(
+        'PGOPTIONS must not contain wrapping quote characters'
+      );
+    expect(() => buildPostgresConnectionOptions("'-c jit=off'", '0'))
+      .toThrow(
+        'PGOPTIONS must not contain wrapping quote characters'
+      );
+  });
 });

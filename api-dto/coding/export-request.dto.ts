@@ -16,6 +16,24 @@ export const BACKGROUND_EXPORT_TYPES = [
 ] as const;
 
 export type BackgroundExportType = (typeof BACKGROUND_EXPORT_TYPES)[number];
+export const CODING_EXPORT_TYPES = [
+  'aggregated',
+  'by-coder',
+  'by-variable',
+  'by-variable-compact',
+  'detailed',
+  'coding-times',
+  'results-by-version',
+  'coding-list',
+  'item-matrix',
+  'psychometrics'
+] as const satisfies readonly BackgroundExportType[];
+export type CodingExportType = (typeof CODING_EXPORT_TYPES)[number];
+export const isCodingExportType = (
+  value: unknown
+): value is CodingExportType =>
+  typeof value === 'string' &&
+  (CODING_EXPORT_TYPES as readonly string[]).includes(value);
 export type ExportVersion = 'v1' | 'v2' | 'v3';
 export type ExportFormat = 'csv' | 'json' | 'excel';
 export type ItemDatasetNotReachedScope = 'unit' | 'testlet' | 'booklet';
@@ -106,6 +124,7 @@ export interface ExportJobResultDto {
   userId: number;
   exportType: string;
   createdAt: number;
+  expiresAt: number;
 }
 
 export interface ExportJobStatusBaseDto {
@@ -121,6 +140,19 @@ export interface ExportJobStatusBaseDto {
 
 export type ExportJobStatusDto =
   ExportJobStatusBaseDto & ExportJobErrorMetadataDto;
+
+export type ExportJobDisplayVariantDto =
+  | 'manual-review-most-frequent'
+  | 'manual-review-new-column-per-coder'
+  | 'manual-review-new-row-per-variable'
+  | 'manual-review-by-variable-compact';
+
+export type ExportJobListItemDto = ExportJobStatusDto & {
+  jobId: string;
+  exportType: CodingExportType;
+  createdAt: number;
+  displayVariant?: ExportJobDisplayVariantDto;
+};
 
 export interface ExportJobStatusErrorDto {
   error: string;

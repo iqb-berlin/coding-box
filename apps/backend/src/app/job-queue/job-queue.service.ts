@@ -1,7 +1,8 @@
 import {
   Injectable,
   Logger,
-  ConflictException
+  ConflictException,
+  ServiceUnavailableException
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -842,6 +843,24 @@ export class JobQueueService {
     data: ExportJobData,
     options?: JobOptions
   ): Promise<Job<ExportJobData>> {
+    let workers: { [index: string]: string }[];
+    try {
+      workers = await this.dataExportQueue.getWorkers();
+    } catch (error) {
+      this.logger.error(
+        `Unable to determine export worker availability: ${error.message}`,
+        error.stack
+      );
+      throw new ServiceUnavailableException(
+        'The export worker is currently unavailable'
+      );
+    }
+    if (workers.length === 0) {
+      throw new ServiceUnavailableException(
+        'The export worker is currently unavailable'
+      );
+    }
+
     await this.assertNoDependencyConflicts('data-export', data.workspaceId);
     const existing = await this.findActiveJob<ExportJobData>(
       this.dataExportQueue,

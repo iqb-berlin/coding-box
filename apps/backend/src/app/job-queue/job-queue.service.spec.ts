@@ -1,4 +1,7 @@
-import { ConflictException } from '@nestjs/common';
+import {
+  ConflictException,
+  ServiceUnavailableException
+} from '@nestjs/common';
 import { JobQueueService } from './job-queue.service';
 
 const createJob = (
@@ -22,6 +25,7 @@ const createQueue = (job = createJob()) => ({
   add: jest.fn().mockImplementation(async data => ({ ...job, data })),
   getJob: jest.fn().mockResolvedValue(job),
   getJobs: jest.fn().mockResolvedValue([job]),
+  getWorkers: jest.fn().mockResolvedValue([{ name: 'export-worker' }]),
   getJobCounts: jest.fn().mockResolvedValue({
     waiting: 1, active: 0, completed: 0, failed: 0, delayed: 0
   }),
@@ -106,6 +110,28 @@ describe('JobQueueService', () => {
     await expect(service.addResetCodingVersionJob({ workspaceId: 1, version: 'v1' })).rejects.toBeInstanceOf(ConflictException);
     await expect(service.addValidationTaskJob({ taskId: 7 })).rejects.toBeInstanceOf(ConflictException);
     await expect(service.addExternalCodingImportJob({ workspaceId: 1, tempFilePath: '/tmp/a', fileName: 'a.csv' })).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('rejects new export jobs when no export worker is registered', async () => {
+    queues[2].getWorkers.mockResolvedValue([]);
+
+    await expect(service.addExportJob({
+      workspaceId: 1,
+      userId: 2,
+      exportType: 'coding-list'
+    })).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(queues[2].add).not.toHaveBeenCalled();
+  });
+
+  it('reports export worker discovery failures as unavailable', async () => {
+    queues[2].getWorkers.mockRejectedValue(new Error('Redis unavailable'));
+
+    await expect(service.addExportJob({
+      workspaceId: 1,
+      userId: 2,
+      exportType: 'coding-list'
+    })).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(queues[2].add).not.toHaveBeenCalled();
   });
 
   it('reuses active coding statistics jobs for the same workspace and version', async () => {

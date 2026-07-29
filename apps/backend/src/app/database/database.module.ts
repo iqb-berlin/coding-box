@@ -70,6 +70,15 @@ export function buildPostgresConnectionOptions(
   idleInTransactionTimeout: string | number | undefined
 ): string {
   const existingOptions = options?.trim();
+  if (
+    existingOptions &&
+    ((existingOptions.startsWith('"') && existingOptions.endsWith('"')) ||
+      (existingOptions.startsWith("'") && existingOptions.endsWith("'")))
+  ) {
+    throw new Error(
+      'PGOPTIONS must not contain wrapping quote characters; configure the value without literal quotes'
+    );
+  }
   const timeout = parsePostgresIdleInTransactionTimeout(idleInTransactionTimeout);
   return [
     existingOptions,

@@ -25,6 +25,7 @@ import {
   ItemMatrixExportJobErrorDto
 } from '../../../../../../api-dto/coding/export-request.dto';
 import { ItemMatrixDiagnosticsDialogComponent } from './item-matrix-diagnostics-dialog.component';
+import { AppService } from '../../core/services/app.service';
 
 @Component({
   selector: 'coding-box-export-toast',
@@ -45,6 +46,7 @@ import { ItemMatrixDiagnosticsDialogComponent } from './item-matrix-diagnostics-
 })
 export class ExportToastComponent implements OnInit, OnDestroy {
   private exportJobService = inject(ExportJobService);
+  private appService = inject(AppService);
   private translateService = inject(TranslateService);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
@@ -70,6 +72,17 @@ export class ExportToastComponent implements OnInit, OnDestroy {
       .subscribe(jobs => {
         this.jobs = jobs;
       });
+    this.restoreWorkspaceJobs(this.appService.selectedWorkspaceId);
+    this.appService.selectedWorkspaceId$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(workspaceId => this.restoreWorkspaceJobs(workspaceId));
+  }
+
+  private restoreWorkspaceJobs(workspaceId: number): void {
+    if (!workspaceId) return;
+    this.exportJobService.restoreWorkspaceJobs(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe();
   }
 
   ngOnDestroy(): void {

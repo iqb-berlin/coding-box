@@ -13,6 +13,7 @@ import {
   DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
   EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
 } from '../../../core/services/auth-session.config';
+import { ExportJobListItemDto } from '../../../../../../../api-dto/coding/export-request.dto';
 
 describe('ExportJobService', () => {
   let service: ExportJobService;
@@ -23,6 +24,7 @@ describe('ExportJobService', () => {
   beforeEach(() => {
     codingJobBackendServiceMock = {
       startExportJob: jest.fn(),
+      getExportJobs: jest.fn(),
       getExportJobStatus: jest.fn(),
       cancelExportJob: jest.fn(),
       downloadExportFile: jest.fn(),
@@ -62,6 +64,205 @@ describe('ExportJobService', () => {
 
   it('should be created', () => {
     expect(service).toBeTruthy();
+  });
+
+  describe('restoreWorkspaceJobs', () => {
+    it('restores completed and structured failed jobs', () => {
+      codingJobBackendServiceMock.getExportJobs.mockReturnValue(of([
+        {
+          jobId: 'completed',
+          status: 'completed',
+          progress: 100,
+          exportType: 'item-matrix',
+          createdAt: 10,
+          result: {
+            fileId: 'completed',
+            fileName: 'Itemdatensatz.csv',
+            fileSize: 42,
+            workspaceId: 5,
+            userId: 2,
+            exportType: 'item-matrix',
+            createdAt: 10,
+            expiresAt: 3_600_010
+          }
+        },
+        {
+          jobId: 'failed',
+          status: 'failed',
+          progress: 90,
+          exportType: 'item-matrix',
+          createdAt: 11,
+          error: 'incomplete',
+          errorCode: 'ITEM_MATRIX_UNRESOLVED_CELLS',
+          errorDetails: {
+            total: 2,
+            groupCount: 1,
+            sampleLimit: 20,
+            diagnosticsAvailable: true,
+            incompleteDownloadAvailable: true
+          }
+        }
+      ]));
+
+      service.restoreWorkspaceJobs(5).subscribe();
+
+      expect(service.completedJobs[0]).toEqual(expect.objectContaining({
+        jobId: 'completed',
+        workspaceId: 5,
+        downloadFilePrefix: 'Itemdatensatz',
+        result: { fileName: 'Itemdatensatz.csv', fileSize: 42 }
+      }));
+      expect(service.failedJobs[0]).toEqual(expect.objectContaining({
+        jobId: 'failed',
+        errorCode: 'ITEM_MATRIX_UNRESOLVED_CELLS',
+        errorDetails: expect.objectContaining({
+          diagnosticsAvailable: true,
+          incompleteDownloadAvailable: true
+        })
+      }));
+    });
+
+    it('resumes polling for restored active jobs', fakeAsync(() => {
+      codingJobBackendServiceMock.getExportJobs.mockReturnValue(of([{
+        jobId: 'active',
+        status: 'processing',
+        progress: 50,
+        exportType: 'aggregated',
+        createdAt: 10
+      }]));
+      codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({
+        status: 'completed',
+        progress: 100
+      }));
+
+      service.restoreWorkspaceJobs(5).subscribe();
+      expect(service.activeJobs[0].status).toBe('active');
+
+      tick(2000);
+
+      expect(codingJobBackendServiceMock.getExportJobStatus)
+        .toHaveBeenCalledWith(5, 'active');
+      expect(service.completedJobs[0].jobId).toBe('active');
+    }));
+
+    it('omits jobs whose artifacts have expired', () => {
+      codingJobBackendServiceMock.getExportJobs.mockReturnValue(of([
+        {
+          jobId: 'completed',
+          status: 'completed',
+          progress: 100,
+          exportType: 'aggregated',
+          createdAt: 10
+        },
+        {
+          jobId: 'failed',
+          status: 'failed',
+          progress: 90,
+          exportType: 'item-matrix',
+          createdAt: 11,
+          errorCode: 'ITEM_MATRIX_UNRESOLVED_CELLS',
+          errorDetails: {
+            total: 2,
+            groupCount: 0,
+            sampleLimit: 20,
+            diagnosticsAvailable: false,
+            incompleteDownloadAvailable: false
+          }
+        }
+      ]));
+
+      service.restoreWorkspaceJobs(5).subscribe();
+
+      expect(service.completedJobs).toEqual([]);
+      expect(service.failedJobs).toEqual([]);
+    });
+
+    it('keeps the current jobs when restoration fails', () => {
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(of({
+        jobId: 'local',
+        message: 'Job started'
+      }));
+      codingJobBackendServiceMock.getExportJobs.mockReturnValue(
+        throwError(() => new Error('offline'))
+      );
+      service.startJob(5, { exportType: 'aggregated' }).subscribe();
+
+      service.restoreWorkspaceJobs(5).subscribe();
+
+      expect(service.activeJobs.map(job => job.jobId)).toEqual(['local']);
+    });
+
+    it('keeps jobs started while restoration is in flight', fakeAsync(() => {
+      const restoration = new Subject<ExportJobListItemDto[]>();
+      codingJobBackendServiceMock.getExportJobs.mockReturnValue(restoration);
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(of({
+        jobId: 'started-during-restore',
+        message: 'Job started'
+      }));
+      codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({
+        status: 'processing',
+        progress: 25
+      }));
+
+      service.restoreWorkspaceJobs(5).subscribe();
+      service.startJob(5, { exportType: 'aggregated' }).subscribe();
+      restoration.next([]);
+      restoration.complete();
+
+      expect(service.activeJobs.map(job => job.jobId))
+        .toEqual(['started-during-restore']);
+
+      tick(2000);
+
+      expect(codingJobBackendServiceMock.getExportJobStatus)
+        .toHaveBeenCalledWith(5, 'started-during-restore');
+    }));
+
+    it('ignores an older overlapping restoration response', () => {
+      const firstRestore = new Subject<ExportJobListItemDto[]>();
+      const secondRestore = new Subject<ExportJobListItemDto[]>();
+      codingJobBackendServiceMock.getExportJobs
+        .mockReturnValueOnce(firstRestore)
+        .mockReturnValueOnce(secondRestore);
+
+      service.restoreWorkspaceJobs(5).subscribe();
+      service.restoreWorkspaceJobs(5).subscribe();
+      secondRestore.next([{
+        jobId: 'latest',
+        status: 'failed',
+        progress: 10,
+        exportType: 'aggregated',
+        createdAt: 20
+      }]);
+      firstRestore.next([{
+        jobId: 'stale',
+        status: 'failed',
+        progress: 10,
+        exportType: 'aggregated',
+        createdAt: 10
+      }]);
+
+      expect(service.failedJobs.map(job => job.jobId)).toEqual(['latest']);
+    });
+
+    it('restores manual export display metadata', () => {
+      codingJobBackendServiceMock.getExportJobs.mockReturnValue(of([{
+        jobId: 'manual-review',
+        status: 'failed',
+        progress: 80,
+        exportType: 'aggregated',
+        createdAt: 10,
+        displayVariant: 'manual-review-new-column-per-coder'
+      }]));
+
+      service.restoreWorkspaceJobs(5).subscribe();
+
+      expect(service.failedJobs[0]).toEqual(expect.objectContaining({
+        displayLabelKey:
+          'export-toast.types.manual-review-new-column-per-coder',
+        downloadFilePrefix: 'manual-review-new-column-per-coder'
+      }));
+    });
   });
 
   it.each([

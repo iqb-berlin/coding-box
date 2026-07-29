@@ -1,5 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { BehaviorSubject, of, throwError } from 'rxjs';
+import {
+  BehaviorSubject, Subject, of, throwError
+} from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -8,6 +10,7 @@ import {
   ExportJob,
   ExportJobService
 } from '../../shared/services/file/export-job.service';
+import { AppService } from '../../core/services/app.service';
 
 describe('ExportToastComponent', () => {
   let fixture: ComponentFixture<ExportToastComponent>;
@@ -20,7 +23,9 @@ describe('ExportToastComponent', () => {
     cancelJob: jest.Mock;
     getItemMatrixDiagnostics: jest.Mock;
     downloadIncompleteItemMatrix: jest.Mock;
+    restoreWorkspaceJobs: jest.Mock;
   };
+  let selectedWorkspaceId$: Subject<number>;
   let dialog: { open: jest.Mock };
   let snackBar: { open: jest.Mock };
 
@@ -62,13 +67,15 @@ describe('ExportToastComponent', () => {
 
   beforeEach(async () => {
     jobs$ = new BehaviorSubject<ExportJob[]>(jobs);
+    selectedWorkspaceId$ = new Subject<number>();
     exportJobService = {
       jobs$,
       downloadFile: jest.fn(),
       removeJob: jest.fn().mockReturnValue(of(true)),
       cancelJob: jest.fn(),
       getItemMatrixDiagnostics: jest.fn(),
-      downloadIncompleteItemMatrix: jest.fn().mockReturnValue(of(undefined))
+      downloadIncompleteItemMatrix: jest.fn().mockReturnValue(of(undefined)),
+      restoreWorkspaceJobs: jest.fn().mockReturnValue(of([]))
     };
     dialog = {
       open: jest.fn().mockReturnValue({ afterClosed: () => of(true) })
@@ -79,6 +86,13 @@ describe('ExportToastComponent', () => {
       imports: [ExportToastComponent, TranslateModule.forRoot()],
       providers: [
         { provide: ExportJobService, useValue: exportJobService },
+        {
+          provide: AppService,
+          useValue: {
+            selectedWorkspaceId: 5,
+            selectedWorkspaceId$: selectedWorkspaceId$
+          }
+        },
         { provide: MatDialog, useValue: dialog },
         { provide: MatSnackBar, useValue: snackBar }
       ]
@@ -206,6 +220,21 @@ describe('ExportToastComponent', () => {
     component.ngOnDestroy();
     jobs$.next(jobs);
     expect(component.jobs).toEqual([]);
+  });
+
+  it('restores export jobs globally for the selected workspace', () => {
+    component.ngOnInit();
+
+    expect(exportJobService.restoreWorkspaceJobs).toHaveBeenCalledWith(5);
+
+    selectedWorkspaceId$.next(7);
+
+    expect(exportJobService.restoreWorkspaceJobs).toHaveBeenCalledWith(7);
+
+    component.ngOnDestroy();
+    selectedWorkspaceId$.next(8);
+
+    expect(exportJobService.restoreWorkspaceJobs).not.toHaveBeenCalledWith(8);
   });
 
   it('keeps a job visible and reports a failed removal', () => {

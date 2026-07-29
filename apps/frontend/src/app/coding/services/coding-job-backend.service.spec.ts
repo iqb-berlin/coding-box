@@ -814,6 +814,27 @@ describe('CodingJobBackendService', () => {
   });
 
   describe('item dataset exports', () => {
+    it('loads export jobs for workspace rehydration', () => {
+      service.getExportJobs(5).subscribe(result => {
+        expect(result[0]).toEqual(expect.objectContaining({
+          jobId: 'job-1',
+          status: 'processing'
+        }));
+      });
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/5/coding/export/jobs`
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush([{
+        jobId: 'job-1',
+        status: 'processing',
+        progress: 50,
+        exportType: 'item-matrix',
+        createdAt: 10
+      }]);
+    });
+
     it('loads selectable VOMD items and mapping issues', () => {
       service.getItemDatasetOptions(5).subscribe(result => {
         expect(result.items[0].columnName).toBe('Aufgabe1_ITEM1');

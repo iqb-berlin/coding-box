@@ -19,6 +19,7 @@ import type { PsychometricDomainCandidatesDto } from '../../../../../../api-dto/
 import type { ReplayCodingSessionDto } from '../../../../../../api-dto/coding/replay-coding-session.dto';
 import type {
   BackgroundExportRequest,
+  ExportJobListItemDto,
   ExportJobStatusResponseDto,
   ItemDatasetOptionsDto,
   ItemMatrixExportDiagnosticsDto
@@ -1224,6 +1225,13 @@ export class CodingJobBackendService {
   ): Observable<ExportJobStatusResponseDto> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`;
     return this.http.get<ExportJobStatusResponseDto>(url, {
+      headers: this.authHeader
+    });
+  }
+
+  getExportJobs(workspaceId: number): Observable<ExportJobListItemDto[]> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/jobs`;
+    return this.http.get<ExportJobListItemDto[]>(url, {
       headers: this.authHeader
     });
   }

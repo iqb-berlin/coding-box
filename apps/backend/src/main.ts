@@ -20,10 +20,16 @@ import { createPostgresPoolSnapshotProvider } from './app/database/postgres-pool
 import { releaseCacheStartupWarmups } from './app/cache/cache-startup-warmup.queue';
 import { RuntimeConfigService } from './app/config/runtime-config.service';
 
+const exportWorkerReadyFile =
+  process.env.EXPORT_WORKER_READY_FILE ||
+  '/tmp/coding-box-export-worker-ready';
+
 async function bootstrap() {
   if (isExportWorkerProcess()) {
+    fs.rmSync(exportWorkerReadyFile, { force: true });
     const workerApp = await NestFactory.createApplicationContext(ExportWorkerModule);
     workerApp.enableShutdownHooks();
+    fs.writeFileSync(exportWorkerReadyFile, new Date().toISOString());
     Logger.log('Export worker started');
     return;
   }

@@ -23,10 +23,12 @@ import {
   ApiBody
 } from '@nestjs/swagger';
 import { Response, Request } from 'express';
+import { Job } from 'bull';
 import * as fs from 'fs';
 import { Readable } from 'stream';
 import {
   JobQueueService,
+  ExportJobData,
   ExportJobProgress,
   ExportJobResult
 } from '../../job-queue/job-queue.service';
@@ -44,15 +46,19 @@ import {
 import { PsychometricDomainCandidatesDto } from '../../../../../../api-dto/coding/psychometric-discrimination.dto';
 import {
   BackgroundExportRequest,
+  ExportJobDisplayVariantDto,
   ExportJobErrorMetadataDto,
+  ExportJobListItemDto,
   ExportJobProgressPhaseDto,
   ExportJobResultDto,
   ExportJobStateDto,
+  ExportJobStatusDto,
   ExportJobStatusResponseDto,
   ExportRequestValidationError,
   ItemDatasetOptionsDto,
   ItemMatrixExportDiagnosticsDto,
   ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE,
+  isCodingExportType,
   parseExportRequest
 } from '../../../../../../api-dto/coding/export-request.dto';
 import {
@@ -183,6 +189,57 @@ export class WorkspaceCodingExportController {
         max: Number(worksheetLimitMatch[2])
       }
     };
+  }
+
+  private async toPublicExportJobStatus(
+    job: Job<ExportJobData>,
+    jobId: string
+  ): Promise<ExportJobStatusDto> {
+    const state = await job.getState();
+    const progress = this.toPublicExportProgress(await job.progress());
+    const failedReason = job.failedReason;
+    const status = this.mapExportJobState(state, job);
+
+    const artifact = status === 'completed' ?
+      await this.exportArtifactService.getArtifact(jobId) :
+      null;
+
+    return {
+      status,
+      ...progress,
+      ...(artifact ?
+        {
+          result: this.toPublicExportJobResult(artifact)
+        } :
+        {}),
+      ...(status === 'failed' && failedReason ?
+        {
+          error: failedReason,
+          ...await this.getPublicExportErrorDetails(jobId, failedReason)
+        } :
+        {})
+    };
+  }
+
+  private getExportJobDisplayVariant(
+    data: ExportJobData
+  ): ExportJobDisplayVariantDto | undefined {
+    if (data.exportType === 'by-variable-compact' && data.excludeAutoCoded) {
+      return 'manual-review-by-variable-compact';
+    }
+    if (data.exportType !== 'aggregated' || !data.excludeAutoCoded) {
+      return undefined;
+    }
+
+    switch (data.doubleCodingMethod || 'most-frequent') {
+      case 'new-column-per-coder':
+        return 'manual-review-new-column-per-coder';
+      case 'new-row-per-variable':
+        return 'manual-review-new-row-per-variable';
+      case 'most-frequent':
+      default:
+        return 'manual-review-most-frequent';
+    }
   }
 
   private toPublicExportProgress(progress: unknown): {
@@ -1360,6 +1417,11 @@ export class WorkspaceCodingExportController {
       }
       throw error;
     }
+    if (!isCodingExportType(request.exportType)) {
+      throw new BadRequestException(
+        `Export type '${request.exportType}' is not available through the coding export API`
+      );
+    }
 
     try {
       const userId = this.getRequestUserId(req);
@@ -1489,32 +1551,14 @@ export class WorkspaceCodingExportController {
       if (job.data.workspaceId !== workspace_id) {
         return { error: 'Access denied to this export' };
       }
+      if (!isCodingExportType(job.data.exportType)) {
+        return { error: 'Access denied to this export' };
+      }
 
-      const state = await job.getState();
-      const progress = this.toPublicExportProgress(await job.progress());
-      const failedReason = job.failedReason;
-      const status = this.mapExportJobState(state, job);
-
-      return {
-        status,
-        ...progress,
-        ...(status === 'completed' && job.returnvalue ?
-          {
-            result: this.toPublicExportJobResult(
-              job.returnvalue as ExportJobResult
-            )
-          } :
-          {}),
-        ...(status === 'failed' && failedReason ?
-          {
-            error: failedReason,
-            ...await this.getPublicExportErrorDetails(
-              job.id?.toString() || jobId,
-              failedReason
-            )
-          } :
-          {})
-      };
+      return await this.toPublicExportJobStatus(
+        job,
+        job.id?.toString() || jobId
+      );
     } catch (error) {
       this.logger.error(
         `Error getting export job status: ${error.message}`,
@@ -1534,7 +1578,9 @@ export class WorkspaceCodingExportController {
       workspaceId: result.workspaceId,
       userId: result.userId,
       exportType: result.exportType,
-      createdAt: result.createdAt
+      createdAt: result.createdAt,
+      expiresAt:
+        result.createdAt + ExportArtifactService.ttlSeconds * 1000
     };
   }
 
@@ -1572,6 +1618,10 @@ export class WorkspaceCodingExportController {
       }
 
       if (metadata.workspaceId !== workspace_id) {
+        res.status(403).json({ error: 'Access denied to this export' });
+        return;
+      }
+      if (!isCodingExportType(metadata.exportType)) {
         res.status(403).json({ error: 'Access denied to this export' });
         return;
       }
@@ -1736,41 +1786,95 @@ export class WorkspaceCodingExportController {
           processedRows: { type: 'number' },
           totalRows: { type: 'number' },
           progressMessage: { type: 'string' },
+          result: {
+            type: 'object',
+            properties: {
+              fileId: { type: 'string' },
+              fileName: { type: 'string' },
+              fileSize: { type: 'number' },
+              workspaceId: { type: 'number' },
+              userId: { type: 'number' },
+              exportType: { type: 'string' },
+              createdAt: { type: 'number' }
+            }
+          },
+          error: { type: 'string' },
+          errorCode: {
+            type: 'string',
+            enum: [
+              ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE,
+              'EXPORT_TOO_MANY_WORKSHEETS'
+            ]
+          },
+          errorDetails: {
+            oneOf: [
+              {
+                type: 'object',
+                properties: {
+                  total: { type: 'number' },
+                  groupCount: { type: 'number' },
+                  sampleLimit: { type: 'number' },
+                  diagnosticsAvailable: { type: 'boolean' },
+                  incompleteDownloadAvailable: { type: 'boolean' },
+                  expiresAt: { type: 'number' }
+                }
+              },
+              {
+                type: 'object',
+                properties: {
+                  actual: { type: 'number' },
+                  max: { type: 'number' }
+                }
+              }
+            ]
+          },
           exportType: { type: 'string' },
-          createdAt: { type: 'number' }
+          createdAt: { type: 'number' },
+          displayVariant: {
+            type: 'string',
+            enum: [
+              'manual-review-most-frequent',
+              'manual-review-new-column-per-coder',
+              'manual-review-new-row-per-variable',
+              'manual-review-by-variable-compact'
+            ]
+          }
         }
       }
     }
   })
-  async getExportJobs(@WorkspaceId() workspace_id: number): Promise<
-  Array<{
-    jobId: string;
-    status: ExportJobStateDto;
-    progress: number;
-    progressPhase?: ExportJobProgressPhaseDto;
-    processedRows?: number;
-    totalRows?: number;
-    progressMessage?: string;
-    exportType: string;
-    createdAt: number;
-  }>
-  > {
+  async getExportJobs(
+    @WorkspaceId() workspace_id: number
+  ): Promise<ExportJobListItemDto[]> {
     try {
       const jobs = await this.jobQueueService.getExportJobs(workspace_id);
 
-      return await Promise.all(
-        jobs.map(async job => {
-          const state = await job.getState();
-          const progress = this.toPublicExportProgress(await job.progress());
+      const codingJobs = jobs.filter(job => isCodingExportType(
+        job.data.exportType
+      ));
+
+      const jobItems = await Promise.all(
+        codingJobs.map(async job => {
+          const jobId = job.id.toString();
+          const status = await this.toPublicExportJobStatus(job, jobId);
+          const displayVariant = this.getExportJobDisplayVariant(job.data);
+          if (status.status === 'completed' && !status.result) {
+            return null;
+          }
 
           return {
-            jobId: job.id.toString(),
-            status: this.mapExportJobState(state, job),
-            ...progress,
+            jobId,
+            ...status,
             exportType: job.data.exportType,
-            createdAt: job.timestamp
+            createdAt: job.timestamp,
+            ...(displayVariant ?
+              { displayVariant } :
+              {})
           };
         })
+      );
+      return jobItems.filter(
+        (job): job is ExportJobListItemDto => job !== null
       );
     } catch (error) {
       this.logger.error(
@@ -1808,11 +1912,17 @@ export class WorkspaceCodingExportController {
       const job = await this.jobQueueService.getExportJob(jobId);
       if (!job) {
         return {
-          success: false,
-          message: 'Export job not found'
+          success: true,
+          message: 'Export job already deleted'
         };
       }
       if (job.data.workspaceId !== workspace_id) {
+        return {
+          success: false,
+          message: 'Access denied to this export'
+        };
+      }
+      if (!isCodingExportType(job.data.exportType)) {
         return {
           success: false,
           message: 'Access denied to this export'
@@ -1877,6 +1987,12 @@ export class WorkspaceCodingExportController {
         };
       }
       if (job.data.workspaceId !== workspace_id) {
+        return {
+          success: false,
+          message: 'Access denied to this export'
+        };
+      }
+      if (!isCodingExportType(job.data.exportType)) {
         return {
           success: false,
           message: 'Access denied to this export'
