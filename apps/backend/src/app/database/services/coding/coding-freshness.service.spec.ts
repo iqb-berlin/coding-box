@@ -4,6 +4,7 @@ import { CodingFreshnessService } from './coding-freshness.service';
 import { CodingUnitFreshness } from '../../entities/coding-unit-freshness.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import { WorkspaceCodingStatusMutationService } from '../shared';
 
 const queryBuilder = (overrides: Record<string, jest.Mock> = {}) => ({
   select: jest.fn().mockReturnThis(),
@@ -34,6 +35,12 @@ describe('CodingFreshnessService', () => {
   let responseRepository: Repository<ResponseEntity>;
   let connection: DataSource;
   let service: CodingFreshnessService;
+  let workspaceCodingStatusMutationService: {
+    run: jest.Mock;
+    getRevision: jest.Mock;
+    reconcile: jest.Mock;
+    recoverAllExpired: jest.Mock;
+  };
 
   beforeEach(() => {
     freshnessRepository = {
@@ -50,10 +57,33 @@ describe('CodingFreshnessService', () => {
       createQueryBuilder: jest.fn()
     } as unknown as DataSource;
 
+    workspaceCodingStatusMutationService = {
+      run: jest.fn(async (workspaceId, mutation) => {
+        const rows = await connection.query(
+          'SELECT revision FROM workspace_test_results_revision WHERE workspace_id = $1',
+          [workspaceId]
+        ) as Array<{ revision: number | string }>;
+        return mutation({ revision: Number(rows[0]?.revision || 0) });
+      }),
+      getRevision: jest.fn(async workspaceId => {
+        const rows = await connection.query(
+          'SELECT revision FROM workspace_test_results_revision WHERE workspace_id = $1',
+          [workspaceId]
+        ) as Array<{ revision: number | string }>;
+        return Number(rows[0]?.revision || 0);
+      }),
+      reconcile: jest.fn(),
+      recoverAllExpired: jest.fn()
+    };
+
     service = new CodingFreshnessService(
       freshnessRepository,
       responseRepository,
-      connection
+      connection,
+      workspaceCodingStatusMutationService as unknown as
+      WorkspaceCodingStatusMutationService,
+      undefined,
+      undefined
     );
   });
 
@@ -112,162 +142,24 @@ describe('CodingFreshnessService', () => {
     );
   });
 
-  it('recovers a recorded revision failure only after a full conservative reconciliation', async () => {
-    (connection.query as jest.Mock).mockImplementation((sql: string) => {
-      if (sql.includes('SELECT failed_test_results_revision')) {
-        return Promise.resolve([{ failed_test_results_revision: 5 }]);
-      }
-      if (sql.includes('SELECT unit_record.id')) {
-        return Promise.resolve([{ id: 11 }, { id: '12' }]);
-      }
-      if (sql.includes('SELECT revision FROM workspace_test_results_revision')) {
-        return Promise.resolve([{ revision: 8 }]);
-      }
-      if (sql.includes('RETURNING status_revision.workspace_id')) {
-        return Promise.resolve([{ workspace_id: 1 }]);
-      }
-      return Promise.resolve([]);
-    });
-    const markUnitsStaleSpy = jest.spyOn(
-      service,
-      'markUnitsStaleAfterResultChange'
-    ).mockResolvedValue(undefined);
+  it('delegates revision failure reconciliation to the mutation coordinator', async () => {
+    workspaceCodingStatusMutationService.reconcile.mockResolvedValue(true);
 
-    await expect(
-      service.reconcileWorkspaceAfterRevisionFailure(1)
-    ).resolves.toBe(true);
+    await expect(service.reconcileWorkspaceAfterRevisionFailure(1))
+      .resolves.toBe(true);
 
-    expect(markUnitsStaleSpy).toHaveBeenCalledWith(
-      1,
-      [11, 12],
-      'RESULT_UPDATED'
-    );
-    expect(connection.query).toHaveBeenCalledWith(
-      expect.stringContaining("freshness_status = 'stale_source'"),
-      [1]
-    );
-    expect(connection.query).toHaveBeenCalledWith(
-      expect.stringContaining('failed_test_results_revision = NULL'),
-      [1, 8]
-    );
+    expect(workspaceCodingStatusMutationService.reconcile)
+      .toHaveBeenCalledWith(1);
   });
 
-  it('reconciles expired or previously recorded failures under a workspace lock', async () => {
-    const queryRunner = {
-      connect: jest.fn().mockResolvedValue(undefined),
-      query: jest.fn()
-        .mockResolvedValueOnce([{ locked: true }])
-        .mockResolvedValueOnce([]),
-      release: jest.fn().mockResolvedValue(undefined)
-    };
-    connection.createQueryRunner = jest.fn()
-      .mockReturnValue(queryRunner) as never;
-    (connection.query as jest.Mock)
-      .mockResolvedValueOnce([{ workspace_id: '4' }])
-      .mockResolvedValueOnce([{ workspace_id: 4 }]);
-    const reconcileSpy = jest.spyOn(
-      service,
-      'reconcileWorkspaceAfterRevisionFailure'
-    ).mockResolvedValue(true);
+  it('delegates scheduled recovery to the mutation coordinator', async () => {
+    workspaceCodingStatusMutationService.recoverAllExpired.mockResolvedValue(2);
 
-    await expect(
-      service.reconcileRecoverableWorkspaceRevisionFailures()
-    ).resolves.toBe(1);
+    await expect(service.reconcileRecoverableWorkspaceRevisionFailures())
+      .resolves.toBe(2);
 
-    expect(connection.query).toHaveBeenNthCalledWith(
-      1,
-      expect.stringContaining('failed_test_results_revision IS NOT NULL')
-    );
-    expect(connection.query).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining('expired_operations'),
-      [4]
-    );
-    expect(reconcileSpy).toHaveBeenCalledWith(4);
-    expect(queryRunner.release).toHaveBeenCalledTimes(1);
-  });
-
-  it('increments every coding status revision update atomically', async () => {
-    const serviceInternals = service as unknown as {
-      incrementRevision(workspaceId: number): Promise<{
-        revision: number;
-      }>;
-      markRevisionProcessed(
-        workspaceId: number,
-        operation: { revision: number }
-      ): Promise<void>;
-      markRevisionFailed(workspaceId: number, revision: number): Promise<void>;
-    };
-    (connection.query as jest.Mock)
-      .mockResolvedValueOnce([{
-        revision: 4
-      }])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
-
-    const operation = await serviceInternals.incrementRevision(1);
-    await serviceInternals.markRevisionProcessed(1, operation);
-    await serviceInternals.markRevisionFailed(1, operation.revision);
-
-    const revisionStatements = (connection.query as jest.Mock).mock.calls
-      .map(([sql]) => sql as string);
-    expect(revisionStatements).toHaveLength(3);
-    revisionStatements.forEach(sql => {
-      expect(sql).not.toContain('txid_current()');
-    });
-    expect(revisionStatements[0]).toContain(
-      'workspace_coding_status_revision.revision + 1'
-    );
-    expect(revisionStatements[0]).toContain(
-      'INSERT INTO workspace_coding_status_revision_operation'
-    );
-    expect(revisionStatements[0]).toContain(
-      'DELETE FROM workspace_coding_status_revision_operation'
-    );
-    expect(revisionStatements[1]).toContain(
-      'workspace_coding_status_revision.revision + 1'
-    );
-    expect(revisionStatements[1]).not.toContain(
-      'failed_test_results_revision = CASE'
-    );
-    expect((connection.query as jest.Mock).mock.calls[1][1]).toEqual([1, 4]);
-    expect(revisionStatements[1]).toContain(
-      'DELETE FROM workspace_coding_status_revision_operation'
-    );
-    expect(revisionStatements[2]).toContain(
-      'workspace_coding_status_revision.revision + 1'
-    );
-    expect(revisionStatements[2]).toContain(
-      'DELETE FROM workspace_coding_status_revision_operation'
-    );
-    revisionStatements.forEach(sql => {
-      expect(sql).not.toContain('active_test_result_updates');
-      expect(sql).not.toContain('active_test_result_update_started_at');
-    });
-  });
-
-  it('records the exact failed revision without masking the original error', async () => {
-    const originalError = new Error('freshness update failed');
-    (connection.query as jest.Mock)
-      .mockResolvedValueOnce([{
-        revision: 5
-      }])
-      .mockRejectedValueOnce(new Error('failure marker failed'));
-    (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(
-      queryBuilder({
-        getRawMany: jest.fn().mockRejectedValue(originalError)
-      })
-    );
-
-    await expect(
-      service.markUnitsPendingAfterImport(1, [10])
-    ).rejects.toBe(originalError);
-
-    expect(connection.query).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining('failed_test_results_revision = GREATEST'),
-      [1, 5]
-    );
+    expect(workspaceCodingStatusMutationService.recoverAllExpired)
+      .toHaveBeenCalledTimes(1);
   });
 
   it('summarizes freshness rows by version and state', async () => {
@@ -323,7 +215,10 @@ describe('CodingFreshnessService', () => {
       freshnessRepository,
       responseRepository,
       connection,
-      workspaceExclusionService
+      workspaceCodingStatusMutationService as unknown as
+      WorkspaceCodingStatusMutationService,
+      workspaceExclusionService,
+      undefined
     );
 
     (connection.query as jest.Mock).mockResolvedValue([{ revision: 7 }]);
@@ -730,7 +625,10 @@ describe('CodingFreshnessService', () => {
       freshnessRepository,
       responseRepository,
       connection,
-      workspaceExclusionService
+      workspaceCodingStatusMutationService as unknown as
+      WorkspaceCodingStatusMutationService,
+      workspaceExclusionService,
+      undefined
     );
 
     const includedUnitsQb = queryBuilder({

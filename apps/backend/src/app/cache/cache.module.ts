@@ -13,12 +13,14 @@ import { Unit } from '../database/entities/unit.entity';
 import { WorkspaceModule } from '../workspace/workspace.module';
 // eslint-disable-next-line import/no-cycle
 import { CodingModule } from '../coding/coding.module';
+import { WorkspaceCodingStatusMutationModule } from '../database/services/shared';
 
 @Module({
   imports: [
     CacheClientModule,
     ScheduleModule.forRoot(),
     TypeOrmModule.forFeature([Persons, Unit]),
+    WorkspaceCodingStatusMutationModule,
     forwardRef(() => WorkspaceModule),
     forwardRef(() => CodingModule)
   ],

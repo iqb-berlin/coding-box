@@ -6,12 +6,12 @@ describe('CodingStatusRevisionRecoverySchedulerService', () => {
     const recovery = new Promise<number>(resolve => {
       resolveRecovery = resolve;
     });
-    const codingFreshnessService = {
-      reconcileRecoverableWorkspaceRevisionFailures: jest.fn()
+    const workspaceCodingStatusMutationService = {
+      recoverAllExpired: jest.fn()
         .mockReturnValue(recovery)
     };
     const service = new CodingStatusRevisionRecoverySchedulerService(
-      codingFreshnessService as never
+      workspaceCodingStatusMutationService as never
     );
 
     const firstRun = service.recoverWorkspaceRevisionFailures();
@@ -20,17 +20,17 @@ describe('CodingStatusRevisionRecoverySchedulerService', () => {
     await Promise.all([firstRun, overlappingRun]);
 
     expect(
-      codingFreshnessService.reconcileRecoverableWorkspaceRevisionFailures
+      workspaceCodingStatusMutationService.recoverAllExpired
     ).toHaveBeenCalledTimes(1);
   });
 
   it('does not reject the scheduler run when recovery fails', async () => {
-    const codingFreshnessService = {
-      reconcileRecoverableWorkspaceRevisionFailures: jest.fn()
+    const workspaceCodingStatusMutationService = {
+      recoverAllExpired: jest.fn()
         .mockRejectedValue(new Error('database unavailable'))
     };
     const service = new CodingStatusRevisionRecoverySchedulerService(
-      codingFreshnessService as never
+      workspaceCodingStatusMutationService as never
     );
 
     await expect(service.recoverWorkspaceRevisionFailures())

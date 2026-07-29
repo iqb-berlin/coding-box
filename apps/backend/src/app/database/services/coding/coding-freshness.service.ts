@@ -34,15 +34,7 @@ import { statusStringToNumber } from '../../utils/response-status-converter';
 import { IQB_STANDARD_MISSING_CODES, MissingsProfilesService } from './missings-profiles.service';
 import { getNonCodingIssueReviewJobSqlCondition } from './coding-job-type.util';
 import { getCodingVariableIdCandidateSql } from './coding-response-candidate.util';
-import {
-  beginWorkspaceCodingStatusRevisionOperation,
-  clearWorkspaceCodingStatusRevisionFailureAfterReconciliation,
-  completeWorkspaceCodingStatusRevisionOperation,
-  failExpiredWorkspaceCodingStatusRevisionOperations,
-  failWorkspaceCodingStatusRevisionOperation,
-  withWorkspaceTestResultsAdvisoryLockIfAvailable,
-  WorkspaceCodingStatusRevisionOperation
-} from '../shared/workspace-test-results-lock.util';
+import { WorkspaceCodingStatusMutationService } from '../shared/workspace-coding-status-mutation.service';
 
 type UnitCodingPresence = Record<CodingFreshnessVersion, boolean>;
 
@@ -105,21 +97,19 @@ type ReconcileAppliedManualCodingJobsOptions = {
   manager?: EntityManager;
 };
 
-type RevisionOperation = WorkspaceCodingStatusRevisionOperation;
-
 @Injectable()
 export class CodingFreshnessService {
   private readonly logger = new Logger(CodingFreshnessService.name);
   private readonly ID_QUERY_BATCH_SIZE = 1000;
   private readonly FRESHNESS_UPSERT_BATCH_SIZE = 250;
-  private readonly revisionFailureRecoveries = new Set<number>();
-
   constructor(
     @InjectRepository(CodingUnitFreshness)
     private readonly freshnessRepository: Repository<CodingUnitFreshness>,
     @InjectRepository(ResponseEntity)
     private readonly responseRepository: Repository<ResponseEntity>,
     private readonly connection: DataSource,
+    private readonly workspaceCodingStatusMutationService:
+    WorkspaceCodingStatusMutationService,
     @Optional()
     private readonly workspaceExclusionService?: WorkspaceExclusionService,
     @Optional()
@@ -339,98 +329,90 @@ export class CodingFreshnessService {
     unitIds: number[],
     affectedResponseCount = 0
   ): Promise<void> {
-    const operation = await this.incrementRevision(workspaceId);
-    const { revision } = operation;
-    try {
-      const ids = await this.filterIncludedUnitIds(
-        workspaceId,
-        this.uniquePositiveIds(unitIds)
-      );
-      if (ids.length === 0) {
-        await this.markRevisionProcessed(workspaceId, operation);
-        return;
-      }
-      const responseCounts = await this.getResponseCountsByUnit(workspaceId, ids);
-      const workspacePresence = await this.getWorkspaceCodingPresence(workspaceId);
-      const rows: FreshnessUpsert[] = [];
-
-      this.getAutoCodingVersionsToRefresh(workspacePresence).forEach(version => {
-        ids.forEach(unitId => rows.push(this.buildRow(
+    await this.workspaceCodingStatusMutationService.run(
+      workspaceId,
+      async ({ revision }) => {
+        const ids = await this.filterIncludedUnitIds(
           workspaceId,
-          unitId,
-          version,
-          'PENDING',
-          'RESULT_ADDED',
-          responseCounts.get(unitId) ?? affectedResponseCount,
-          revision,
-          null
-        )));
-      });
+          this.uniquePositiveIds(unitIds)
+        );
+        if (ids.length === 0) {
+          return;
+        }
+        const responseCounts = await this.getResponseCountsByUnit(workspaceId, ids);
+        const workspacePresence = await this.getWorkspaceCodingPresence(workspaceId);
+        const rows: FreshnessUpsert[] = [];
 
-      await this.upsertRows(rows);
-      await this.markCodingJobsStaleForUnitIds(
-        workspaceId,
-        ids,
-        'RESULT_ADDED',
-        'stale_source'
-      );
-      await this.markCodingJobsStaleForAddedUnitIds(
-        workspaceId,
-        ids,
-        'RESULT_ADDED',
-        'stale_source'
-      );
-      await this.markRevisionProcessed(workspaceId, operation);
-    } catch (error) {
-      await this.markRevisionFailedAndRecoverSafely(workspaceId, revision);
-      throw error;
-    }
+        this.getAutoCodingVersionsToRefresh(workspacePresence).forEach(version => {
+          ids.forEach(unitId => rows.push(this.buildRow(
+            workspaceId,
+            unitId,
+            version,
+            'PENDING',
+            'RESULT_ADDED',
+            responseCounts.get(unitId) ?? affectedResponseCount,
+            revision,
+            null
+          )));
+        });
+
+        await this.upsertRows(rows);
+        await this.markCodingJobsStaleForUnitIds(
+          workspaceId,
+          ids,
+          'RESULT_ADDED',
+          'stale_source'
+        );
+        await this.markCodingJobsStaleForAddedUnitIds(
+          workspaceId,
+          ids,
+          'RESULT_ADDED',
+          'stale_source'
+        );
+      }
+    );
   }
 
   async markResponsesPendingAfterImport(
     workspaceId: number,
     responseIds: number[]
   ): Promise<void> {
-    const operation = await this.incrementRevision(workspaceId);
-    const { revision } = operation;
-    try {
-      const responseIdsByUnit = await this.getImportedResponseIdsByUnit(
-        workspaceId,
-        responseIds
-      );
-      const unitIds = Array.from(responseIdsByUnit.keys());
-      if (unitIds.length === 0) {
-        await this.markRevisionProcessed(workspaceId, operation);
-        return;
-      }
-      const workspacePresence = await this.getWorkspaceCodingPresence(workspaceId);
-      const rows: FreshnessUpsert[] = [];
-
-      this.getAutoCodingVersionsToRefresh(workspacePresence).forEach(version => {
-        unitIds.forEach(unitId => rows.push(this.buildRow(
+    await this.workspaceCodingStatusMutationService.run(
+      workspaceId,
+      async ({ revision }) => {
+        const responseIdsByUnit = await this.getImportedResponseIdsByUnit(
           workspaceId,
-          unitId,
-          version,
-          'PENDING',
-          'RESULT_ADDED',
-          responseIdsByUnit.get(unitId)?.length || 0,
-          revision,
-          null
-        )));
-      });
+          responseIds
+        );
+        const unitIds = Array.from(responseIdsByUnit.keys());
+        if (unitIds.length === 0) {
+          return;
+        }
+        const workspacePresence = await this.getWorkspaceCodingPresence(workspaceId);
+        const rows: FreshnessUpsert[] = [];
 
-      await this.upsertRows(rows);
-      await this.markCodingJobsStaleForAddedResponseIds(
-        workspaceId,
-        Array.from(responseIdsByUnit.values()).flat(),
-        'RESULT_ADDED',
-        'stale_source'
-      );
-      await this.markRevisionProcessed(workspaceId, operation);
-    } catch (error) {
-      await this.markRevisionFailedAndRecoverSafely(workspaceId, revision);
-      throw error;
-    }
+        this.getAutoCodingVersionsToRefresh(workspacePresence).forEach(version => {
+          unitIds.forEach(unitId => rows.push(this.buildRow(
+            workspaceId,
+            unitId,
+            version,
+            'PENDING',
+            'RESULT_ADDED',
+            responseIdsByUnit.get(unitId)?.length || 0,
+            revision,
+            null
+          )));
+        });
+
+        await this.upsertRows(rows);
+        await this.markCodingJobsStaleForAddedResponseIds(
+          workspaceId,
+          Array.from(responseIdsByUnit.values()).flat(),
+          'RESULT_ADDED',
+          'stale_source'
+        );
+      }
+    );
   }
 
   async markUnitsStaleAfterResultChange(
@@ -438,82 +420,78 @@ export class CodingFreshnessService {
     unitIds: number[],
     reason: Extract<CodingFreshnessReason, 'RESULT_UPDATED' | 'RESULT_DELETED'> = 'RESULT_UPDATED'
   ): Promise<void> {
-    const operation = await this.incrementRevision(workspaceId);
-    const { revision } = operation;
-    try {
-      const ids = await this.filterIncludedUnitIds(
-        workspaceId,
-        this.uniquePositiveIds(unitIds)
-      );
-      if (ids.length === 0) {
-        await this.markRevisionProcessed(workspaceId, operation);
-        return;
-      }
-      const workspacePresence = await this.getWorkspaceCodingPresence(workspaceId);
-      const unitPresence = await this.getUnitCodingPresence(workspaceId, ids);
-      const manualReviewUnitIds = ids.filter(unitId => unitPresence.get(unitId)?.v2);
-      const manualResponseCounts = manualReviewUnitIds.length > 0 ?
-        await this.getResponseCountsByUnit(workspaceId, manualReviewUnitIds) :
-        new Map<number, number>();
-      const autoCodingVersionsToRefresh = this.getAutoCodingVersionsToRefresh(workspacePresence);
-      const autoCodingResponseCountsByVersion = new Map<CodingFreshnessVersion, Map<number, number>>();
-      const rows: FreshnessUpsert[] = [];
+    await this.workspaceCodingStatusMutationService.run(
+      workspaceId,
+      async ({ revision }) => {
+        const ids = await this.filterIncludedUnitIds(
+          workspaceId,
+          this.uniquePositiveIds(unitIds)
+        );
+        if (ids.length === 0) {
+          return;
+        }
+        const workspacePresence = await this.getWorkspaceCodingPresence(workspaceId);
+        const unitPresence = await this.getUnitCodingPresence(workspaceId, ids);
+        const manualReviewUnitIds = ids.filter(unitId => unitPresence.get(unitId)?.v2);
+        const manualResponseCounts = manualReviewUnitIds.length > 0 ?
+          await this.getResponseCountsByUnit(workspaceId, manualReviewUnitIds) :
+          new Map<number, number>();
+        const autoCodingVersionsToRefresh = this.getAutoCodingVersionsToRefresh(workspacePresence);
+        const autoCodingResponseCountsByVersion = new Map<CodingFreshnessVersion, Map<number, number>>();
+        const rows: FreshnessUpsert[] = [];
 
-      for (const version of autoCodingVersionsToRefresh) {
-        autoCodingResponseCountsByVersion.set(
-          version,
-          await this.getAutoCodingCandidateResponseCountsByUnit(workspaceId, ids, version)
+        for (const version of autoCodingVersionsToRefresh) {
+          autoCodingResponseCountsByVersion.set(
+            version,
+            await this.getAutoCodingCandidateResponseCountsByUnit(workspaceId, ids, version)
+          );
+        }
+
+        autoCodingVersionsToRefresh.forEach(version => {
+          ids.forEach(unitId => {
+            const autoCodingResponseCount =
+            autoCodingResponseCountsByVersion.get(version)?.get(unitId) || 0;
+            let state: CodingFreshnessState = 'CURRENT';
+            if (autoCodingResponseCount > 0) {
+              state = unitPresence.get(unitId)?.[version] ? 'STALE' : 'PENDING';
+            }
+            rows.push(this.buildRow(
+              workspaceId,
+              unitId,
+              version,
+              state,
+              reason,
+              autoCodingResponseCount,
+              revision,
+              state === 'CURRENT' ? revision : null
+            ));
+          });
+        });
+
+        ids.forEach(unitId => {
+          if (unitPresence.get(unitId)?.v2) {
+            rows.push(this.buildRow(
+              workspaceId,
+              unitId,
+              'v2',
+              'MANUAL_REVIEW_REQUIRED',
+              reason,
+              manualResponseCounts.get(unitId) || 0,
+              revision,
+              null
+            ));
+          }
+        });
+
+        await this.upsertRows(rows);
+        await this.markCodingJobsStaleForUnitIds(
+          workspaceId,
+          ids,
+          reason,
+          'stale_source'
         );
       }
-
-      autoCodingVersionsToRefresh.forEach(version => {
-        ids.forEach(unitId => {
-          const autoCodingResponseCount =
-            autoCodingResponseCountsByVersion.get(version)?.get(unitId) || 0;
-          let state: CodingFreshnessState = 'CURRENT';
-          if (autoCodingResponseCount > 0) {
-            state = unitPresence.get(unitId)?.[version] ? 'STALE' : 'PENDING';
-          }
-          rows.push(this.buildRow(
-            workspaceId,
-            unitId,
-            version,
-            state,
-            reason,
-            autoCodingResponseCount,
-            revision,
-            state === 'CURRENT' ? revision : null
-          ));
-        });
-      });
-
-      ids.forEach(unitId => {
-        if (unitPresence.get(unitId)?.v2) {
-          rows.push(this.buildRow(
-            workspaceId,
-            unitId,
-            'v2',
-            'MANUAL_REVIEW_REQUIRED',
-            reason,
-            manualResponseCounts.get(unitId) || 0,
-            revision,
-            null
-          ));
-        }
-      });
-
-      await this.upsertRows(rows);
-      await this.markCodingJobsStaleForUnitIds(
-        workspaceId,
-        ids,
-        reason,
-        'stale_source'
-      );
-      await this.markRevisionProcessed(workspaceId, operation);
-    } catch (error) {
-      await this.markRevisionFailedAndRecoverSafely(workspaceId, revision);
-      throw error;
-    }
+    );
   }
 
   async markUnitsStaleAfterCodingSchemeChange(
@@ -523,109 +501,105 @@ export class CodingFreshnessService {
       manualCodingSchemeRefs?: string[];
     }
   ): Promise<void> {
-    const operation = await this.incrementRevision(workspaceId);
-    const { revision } = operation;
-    try {
-      const autoCodingUnitIds = await this.getUnitIdsByCodingSchemeRefs(
-        workspaceId,
-        scope.autoCodingSchemeRefs || []
-      );
-      const manualCodingUnitIds = await this.getUnitIdsByCodingSchemeRefs(
-        workspaceId,
-        [
-          ...(scope.manualCodingSchemeRefs || []),
-          ...(scope.autoCodingSchemeRefs || [])
-        ]
-      );
-      const allUnitIds = await this.filterIncludedUnitIds(
-        workspaceId,
-        this.uniquePositiveIds([
-          ...autoCodingUnitIds,
-          ...manualCodingUnitIds
-        ])
-      );
-      if (allUnitIds.length === 0) {
-        await this.markRevisionProcessed(workspaceId, operation);
-        return;
-      }
-
-      const includedUnitIdSet = new Set(allUnitIds);
-      const includedAutoCodingUnitIds = autoCodingUnitIds
-        .filter(unitId => includedUnitIdSet.has(unitId));
-      const includedManualCodingUnitIds = manualCodingUnitIds
-        .filter(unitId => includedUnitIdSet.has(unitId));
-
-      const responseCounts = await this.getResponseCountsByUnit(
-        workspaceId,
-        allUnitIds
-      );
-      const workspacePresence = await this.getWorkspaceCodingPresence(workspaceId);
-      const unitPresence = await this.getUnitCodingPresence(workspaceId, allUnitIds);
-      const rows: FreshnessUpsert[] = [];
-
-      if (includedAutoCodingUnitIds.length > 0) {
-        this.getAutoCodingVersionsToRefresh(workspacePresence).forEach(version => {
-          includedAutoCodingUnitIds.forEach(unitId => {
-            const state: CodingFreshnessState =
-              unitPresence.get(unitId)?.[version] ? 'STALE' : 'PENDING';
-            rows.push(this.buildRow(
-              workspaceId,
-              unitId,
-              version,
-              state,
-              'CODING_SCHEME_CHANGED',
-              responseCounts.get(unitId) || 0,
-              revision,
-              null
-            ));
-          });
-        });
-      }
-
-      includedManualCodingUnitIds.forEach(unitId => {
-        const presence = unitPresence.get(unitId);
-        if (!presence?.v1 && !presence?.v2 && !presence?.v3) {
+    await this.workspaceCodingStatusMutationService.run(
+      workspaceId,
+      async ({ revision }) => {
+        const autoCodingUnitIds = await this.getUnitIdsByCodingSchemeRefs(
+          workspaceId,
+          scope.autoCodingSchemeRefs || []
+        );
+        const manualCodingUnitIds = await this.getUnitIdsByCodingSchemeRefs(
+          workspaceId,
+          [
+            ...(scope.manualCodingSchemeRefs || []),
+            ...(scope.autoCodingSchemeRefs || [])
+          ]
+        );
+        const allUnitIds = await this.filterIncludedUnitIds(
+          workspaceId,
+          this.uniquePositiveIds([
+            ...autoCodingUnitIds,
+            ...manualCodingUnitIds
+          ])
+        );
+        if (allUnitIds.length === 0) {
           return;
         }
-        rows.push(this.buildRow(
-          workspaceId,
-          unitId,
-          'v2',
-          'MANUAL_REVIEW_REQUIRED',
-          'CODING_SCHEME_CHANGED',
-          responseCounts.get(unitId) || 0,
-          revision,
-          null
-        ));
-      });
 
-      await this.upsertRows(rows);
+        const includedUnitIdSet = new Set(allUnitIds);
+        const includedAutoCodingUnitIds = autoCodingUnitIds
+          .filter(unitId => includedUnitIdSet.has(unitId));
+        const includedManualCodingUnitIds = manualCodingUnitIds
+          .filter(unitId => includedUnitIdSet.has(unitId));
 
-      if (includedAutoCodingUnitIds.length > 0) {
-        await this.markCodingJobsStaleForUnitIds(
+        const responseCounts = await this.getResponseCountsByUnit(
           workspaceId,
-          includedAutoCodingUnitIds,
-          'CODING_SCHEME_CHANGED',
-          'stale_source'
+          allUnitIds
         );
-      }
+        const workspacePresence = await this.getWorkspaceCodingPresence(workspaceId);
+        const unitPresence = await this.getUnitCodingPresence(workspaceId, allUnitIds);
+        const rows: FreshnessUpsert[] = [];
 
-      const includedAutoCodingUnitIdSet = new Set(includedAutoCodingUnitIds);
-      const includedManualOnlyUnitIds = includedManualCodingUnitIds
-        .filter(unitId => !includedAutoCodingUnitIdSet.has(unitId));
-      if (includedManualOnlyUnitIds.length > 0) {
-        await this.markCodingJobsStaleForUnitIds(
-          workspaceId,
-          includedManualOnlyUnitIds,
-          'CODING_SCHEME_CHANGED',
-          'review_required'
-        );
+        if (includedAutoCodingUnitIds.length > 0) {
+          this.getAutoCodingVersionsToRefresh(workspacePresence).forEach(version => {
+            includedAutoCodingUnitIds.forEach(unitId => {
+              const state: CodingFreshnessState =
+              unitPresence.get(unitId)?.[version] ? 'STALE' : 'PENDING';
+              rows.push(this.buildRow(
+                workspaceId,
+                unitId,
+                version,
+                state,
+                'CODING_SCHEME_CHANGED',
+                responseCounts.get(unitId) || 0,
+                revision,
+                null
+              ));
+            });
+          });
+        }
+
+        includedManualCodingUnitIds.forEach(unitId => {
+          const presence = unitPresence.get(unitId);
+          if (!presence?.v1 && !presence?.v2 && !presence?.v3) {
+            return;
+          }
+          rows.push(this.buildRow(
+            workspaceId,
+            unitId,
+            'v2',
+            'MANUAL_REVIEW_REQUIRED',
+            'CODING_SCHEME_CHANGED',
+            responseCounts.get(unitId) || 0,
+            revision,
+            null
+          ));
+        });
+
+        await this.upsertRows(rows);
+
+        if (includedAutoCodingUnitIds.length > 0) {
+          await this.markCodingJobsStaleForUnitIds(
+            workspaceId,
+            includedAutoCodingUnitIds,
+            'CODING_SCHEME_CHANGED',
+            'stale_source'
+          );
+        }
+
+        const includedAutoCodingUnitIdSet = new Set(includedAutoCodingUnitIds);
+        const includedManualOnlyUnitIds = includedManualCodingUnitIds
+          .filter(unitId => !includedAutoCodingUnitIdSet.has(unitId));
+        if (includedManualOnlyUnitIds.length > 0) {
+          await this.markCodingJobsStaleForUnitIds(
+            workspaceId,
+            includedManualOnlyUnitIds,
+            'CODING_SCHEME_CHANGED',
+            'review_required'
+          );
+        }
       }
-      await this.markRevisionProcessed(workspaceId, operation);
-    } catch (error) {
-      await this.markRevisionFailedAndRecoverSafely(workspaceId, revision);
-      throw error;
-    }
+    );
   }
 
   async markVersionCurrent(
@@ -1769,7 +1743,7 @@ export class CodingFreshnessService {
   }
 
   async getWorkspaceRevision(workspaceId: number): Promise<number> {
-    return this.getCurrentRevision(workspaceId);
+    return this.workspaceCodingStatusMutationService.getRevision(workspaceId);
   }
 
   async getWorkspaceStatusRevision(workspaceId: number): Promise<{
@@ -1818,130 +1792,11 @@ export class CodingFreshnessService {
   async reconcileWorkspaceAfterRevisionFailure(
     workspaceId: number
   ): Promise<boolean> {
-    if (this.revisionFailureRecoveries.has(workspaceId)) {
-      return false;
-    }
-    this.revisionFailureRecoveries.add(workspaceId);
-
-    try {
-      const failedRows = await this.connection.query(
-        `
-          SELECT failed_test_results_revision
-          FROM workspace_coding_status_revision
-          WHERE workspace_id = $1
-            AND failed_test_results_revision IS NOT NULL
-        `,
-        [workspaceId]
-      ) as Array<{ failed_test_results_revision: number | string }>;
-      if (failedRows.length === 0) {
-        return false;
-      }
-
-      const unitRows = await this.connection.query(
-        `
-          SELECT unit_record.id
-          FROM "unit" unit_record
-          INNER JOIN booklet ON booklet.id = unit_record.bookletid
-          INNER JOIN persons person ON person.id = booklet.personid
-          WHERE person.workspace_id = $1
-        `,
-        [workspaceId]
-      ) as Array<{ id: number | string }>;
-      await this.markUnitsStaleAfterResultChange(
-        workspaceId,
-        unitRows.map(row => Number(row.id)),
-        'RESULT_UPDATED'
-      );
-      await this.markAllProductiveCodingJobsStaleAfterRevisionFailure(workspaceId);
-
-      const reconciledRevision = await this.getCurrentRevision(workspaceId);
-      const recovered =
-        await clearWorkspaceCodingStatusRevisionFailureAfterReconciliation(
-          this.connection,
-          workspaceId,
-          reconciledRevision
-        );
-      if (recovered) {
-        this.logger.warn(
-          `Recovered coding status revision for workspace ${workspaceId} ` +
-          `after a full conservative reconciliation at revision ${reconciledRevision}.`
-        );
-      }
-      return recovered;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(
-        'Could not reconcile failed coding status revision for workspace ' +
-        `${workspaceId}: ${message}`
-      );
-      return false;
-    } finally {
-      this.revisionFailureRecoveries.delete(workspaceId);
-    }
+    return this.workspaceCodingStatusMutationService.reconcile(workspaceId);
   }
 
   async reconcileRecoverableWorkspaceRevisionFailures(): Promise<number> {
-    const rows = await this.connection.query(
-      `
-        SELECT recovery_candidate.workspace_id
-        FROM (
-          SELECT status_revision.workspace_id
-          FROM workspace_coding_status_revision status_revision
-          WHERE status_revision.failed_test_results_revision IS NOT NULL
-          UNION
-          SELECT expired_operation.workspace_id
-          FROM workspace_coding_status_revision_operation expired_operation
-          WHERE expired_operation.started_at < now() - interval '24 hours'
-        ) recovery_candidate
-        WHERE NOT EXISTS (
-          SELECT 1
-          FROM workspace_coding_status_revision_operation active_operation
-          WHERE active_operation.workspace_id = recovery_candidate.workspace_id
-            AND active_operation.started_at >= now() - interval '24 hours'
-        )
-        ORDER BY recovery_candidate.workspace_id
-      `
-    ) as Array<{ workspace_id: number | string }>;
-    let recoveredWorkspaceCount = 0;
-
-    for (const row of rows) {
-      const workspaceId = Number(row.workspace_id);
-      const recovered =
-        await withWorkspaceTestResultsAdvisoryLockIfAvailable(
-          this.connection,
-          workspaceId,
-          async () => {
-            await failExpiredWorkspaceCodingStatusRevisionOperations(
-              this.connection,
-              workspaceId
-            );
-            return this.reconcileWorkspaceAfterRevisionFailure(workspaceId);
-          }
-        );
-      if (recovered === true) {
-        recoveredWorkspaceCount += 1;
-      }
-    }
-
-    return recoveredWorkspaceCount;
-  }
-
-  private async markAllProductiveCodingJobsStaleAfterRevisionFailure(
-    workspaceId: number
-  ): Promise<void> {
-    await this.connection.query(
-      `
-        UPDATE coding_job
-        SET freshness_status = 'stale_source',
-            freshness_reason = 'RESULT_UPDATED',
-            freshness_updated_at = now(),
-            updated_at = now()
-        WHERE workspace_id = $1
-          AND training_id IS NULL
-          AND ${getNonCodingIssueReviewJobSqlCondition('coding_job')}
-      `,
-      [workspaceId]
-    );
+    return this.workspaceCodingStatusMutationService.recoverAllExpired();
   }
 
   private async filterIncludedUnitIds(
@@ -2101,62 +1956,6 @@ export class CodingFreshnessService {
       'MANUAL_REVIEW_REQUIRED'
     ]);
     return Array.from(new Set(states.filter(state => allowed.has(state))));
-  }
-
-  private async incrementRevision(workspaceId: number): Promise<RevisionOperation> {
-    return beginWorkspaceCodingStatusRevisionOperation(this.connection, workspaceId);
-  }
-
-  private async markRevisionProcessed(
-    workspaceId: number,
-    operation: RevisionOperation
-  ): Promise<void> {
-    await completeWorkspaceCodingStatusRevisionOperation(
-      this.connection,
-      workspaceId,
-      operation
-    );
-  }
-
-  private async markRevisionFailed(
-    workspaceId: number,
-    revision: number
-  ): Promise<void> {
-    await failWorkspaceCodingStatusRevisionOperation(
-      this.connection,
-      workspaceId,
-      revision
-    );
-  }
-
-  private async markRevisionFailedSafely(
-    workspaceId: number,
-    revision: number
-  ): Promise<boolean> {
-    try {
-      await this.markRevisionFailed(workspaceId, revision);
-      return true;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(
-        `Could not persist failed coding freshness revision ${revision} ` +
-          `for workspace ${workspaceId}: ${message}`
-      );
-      return false;
-    }
-  }
-
-  private async markRevisionFailedAndRecoverSafely(
-    workspaceId: number,
-    revision: number
-  ): Promise<void> {
-    const failureRecorded = await this.markRevisionFailedSafely(
-      workspaceId,
-      revision
-    );
-    if (failureRecorded) {
-      await this.reconcileWorkspaceAfterRevisionFailure(workspaceId);
-    }
   }
 
   private async getWorkspaceCodingPresence(

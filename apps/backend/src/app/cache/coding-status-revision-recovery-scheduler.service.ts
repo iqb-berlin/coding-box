@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { CodingFreshnessService } from '../database/services/coding';
+import { WorkspaceCodingStatusMutationService } from '../database/services/shared';
 
 @Injectable()
 export class CodingStatusRevisionRecoverySchedulerService implements OnModuleInit {
@@ -10,7 +10,8 @@ export class CodingStatusRevisionRecoverySchedulerService implements OnModuleIni
   private recoveryInFlight: Promise<void> | null = null;
 
   constructor(
-    private readonly codingFreshnessService: CodingFreshnessService
+    private readonly workspaceCodingStatusMutationService:
+    WorkspaceCodingStatusMutationService
   ) {}
 
   onModuleInit(): void {
@@ -43,8 +44,8 @@ export class CodingStatusRevisionRecoverySchedulerService implements OnModuleIni
 
   private async runRecovery(): Promise<void> {
     try {
-      const recoveredWorkspaceCount = await this.codingFreshnessService
-        .reconcileRecoverableWorkspaceRevisionFailures();
+      const recoveredWorkspaceCount =
+        await this.workspaceCodingStatusMutationService.recoverAllExpired();
       if (recoveredWorkspaceCount > 0) {
         this.logger.warn(
           `Recovered coding status revisions for ${recoveredWorkspaceCount} workspace(s).`

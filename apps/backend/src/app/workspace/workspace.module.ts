@@ -91,7 +91,11 @@ import {
   JobService,
   BullJobManagementService
 } from '../database/services/jobs';
-import { JournalService } from '../database/services/shared';
+import {
+  JournalService,
+  WorkspaceCodingStatusMutationModule,
+  WORKSPACE_CODING_STATUS_RECONCILER
+} from '../database/services/shared';
 // eslint-disable-next-line import/no-cycle
 import { JobQueueClientModule } from '../job-queue/job-queue-client.module';
 // eslint-disable-next-line import/no-cycle
@@ -138,6 +142,7 @@ import { CodingModule } from '../coding/coding.module';
     HttpModule,
     JobQueueClientModule,
     CacheClientModule,
+    WorkspaceCodingStatusMutationModule,
     forwardRef(() => CodingModule)
   ],
   providers: [
@@ -189,7 +194,11 @@ import { CodingModule } from '../coding/coding.module';
     ExportArtifactService,
     UnitInfoService,
     BookletInfoService,
-    WorkspaceExclusionService
+    WorkspaceExclusionService,
+    {
+      provide: WORKSPACE_CODING_STATUS_RECONCILER,
+      useExisting: CodingFreshnessService
+    }
   ],
   exports: [
     WorkspaceCoreService,

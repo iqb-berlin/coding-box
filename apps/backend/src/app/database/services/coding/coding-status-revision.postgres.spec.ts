@@ -1,5 +1,9 @@
 import { DataSource, QueryRunner } from 'typeorm';
 import { CodingFreshnessService } from './coding-freshness.service';
+import {
+  WorkspaceCodingStatusMutation,
+  WorkspaceCodingStatusMutationService
+} from '../shared';
 
 const describePostgres = process.env.POSTGRES_INTEGRATION_TESTS === 'true' ?
   describe :
@@ -13,9 +17,50 @@ const postgresConfig = {
   database: process.env.POSTGRES_DB || 'coding-box'
 };
 
+type MutationInternals = {
+  beginOperation(
+    executor: DataSource,
+    id: number
+  ): Promise<WorkspaceCodingStatusMutation>;
+  completeOperation(
+    executor: DataSource,
+    id: number,
+    operation: WorkspaceCodingStatusMutation
+  ): Promise<void>;
+  failOperation(
+    executor: DataSource,
+    id: number,
+    revision: number
+  ): Promise<void>;
+};
+
 describePostgres('Coding status revision Postgres integration', () => {
   let dataSource: DataSource;
   let workspaceId: number | undefined;
+
+  const createServices = (): {
+    freshness: CodingFreshnessService;
+    mutation: WorkspaceCodingStatusMutationService;
+  } => {
+    let freshness: CodingFreshnessService;
+    const mutation = new WorkspaceCodingStatusMutationService(
+      dataSource,
+      { get: () => freshness } as never
+    );
+    freshness = new CodingFreshnessService(
+      {} as never,
+      {} as never,
+      dataSource,
+      mutation,
+      undefined,
+      undefined
+    );
+    return { freshness, mutation };
+  };
+
+  const mutationInternals = (
+    service: WorkspaceCodingStatusMutationService
+  ): MutationInternals => service as unknown as MutationInternals;
 
   beforeAll(async () => {
     dataSource = new DataSource({
@@ -150,24 +195,24 @@ describePostgres('Coding status revision Postgres integration', () => {
       [`status-revision-operations-${suffix}`]
     ) as Array<{ id: number }>;
     workspaceId = workspace.id;
-    const service = new CodingFreshnessService(
-      {} as never,
-      {} as never,
-      dataSource
+    const { freshness, mutation } = createServices();
+    const serviceInternals = mutationInternals(mutation);
+
+    const orphanedOperation = await serviceInternals.beginOperation(
+      dataSource,
+      workspaceId
     );
-    const serviceInternals = service as unknown as {
-      incrementRevision(id: number): Promise<{ revision: number }>;
-      markRevisionProcessed(
-        id: number,
-        operation: { revision: number }
-      ): Promise<void>;
-    };
+    const completedOperation = await serviceInternals.beginOperation(
+      dataSource,
+      workspaceId
+    );
+    await serviceInternals.completeOperation(
+      dataSource,
+      workspaceId,
+      completedOperation
+    );
 
-    const orphanedOperation = await serviceInternals.incrementRevision(workspaceId);
-    const completedOperation = await serviceInternals.incrementRevision(workspaceId);
-    await serviceInternals.markRevisionProcessed(workspaceId, completedOperation);
-
-    await expect(service.getWorkspaceStatusRevision(workspaceId))
+    await expect(freshness.getWorkspaceStatusRevision(workspaceId))
       .resolves.toMatchObject({ stable: false });
 
     await dataSource.query(
@@ -177,10 +222,14 @@ describePostgres('Coding status revision Postgres integration', () => {
          AND test_results_revision = $2`,
       [workspaceId, orphanedOperation.revision]
     );
-    await expect(service.getWorkspaceStatusRevision(workspaceId))
+    await expect(freshness.getWorkspaceStatusRevision(workspaceId))
       .resolves.toMatchObject({ stable: true });
 
-    const nextOperation = await serviceInternals.incrementRevision(workspaceId);
+    await expect(mutation.recoverExpired(workspaceId)).resolves.toBe(true);
+    const nextOperation = await serviceInternals.beginOperation(
+      dataSource,
+      workspaceId
+    );
     const operations = await dataSource.query(
       `SELECT test_results_revision
        FROM workspace_coding_status_revision_operation
@@ -191,8 +240,12 @@ describePostgres('Coding status revision Postgres integration', () => {
     expect(operations.map(operation => Number(operation.test_results_revision)))
       .toEqual([nextOperation.revision]);
 
-    await serviceInternals.markRevisionProcessed(workspaceId, nextOperation);
-    await expect(service.getWorkspaceStatusRevision(workspaceId))
+    await serviceInternals.completeOperation(
+      dataSource,
+      workspaceId,
+      nextOperation
+    );
+    await expect(freshness.getWorkspaceStatusRevision(workspaceId))
       .resolves.toMatchObject({ stable: true });
   }, 30000);
 
@@ -205,16 +258,13 @@ describePostgres('Coding status revision Postgres integration', () => {
       [`status-revision-lone-orphan-${suffix}`]
     ) as Array<{ id: number }>;
     workspaceId = workspace.id;
-    const service = new CodingFreshnessService(
-      {} as never,
-      {} as never,
-      dataSource
-    );
-    const serviceInternals = service as unknown as {
-      incrementRevision(id: number): Promise<{ revision: number }>;
-    };
+    const { freshness, mutation } = createServices();
+    const serviceInternals = mutationInternals(mutation);
 
-    const orphanedOperation = await serviceInternals.incrementRevision(workspaceId);
+    const orphanedOperation = await serviceInternals.beginOperation(
+      dataSource,
+      workspaceId
+    );
     await dataSource.query(
       `UPDATE workspace_coding_status_revision_operation
        SET started_at = now() - interval '25 hours'
@@ -223,11 +273,11 @@ describePostgres('Coding status revision Postgres integration', () => {
       [workspaceId, orphanedOperation.revision]
     );
 
-    await expect(service.getWorkspaceStatusRevision(workspaceId))
+    await expect(freshness.getWorkspaceStatusRevision(workspaceId))
       .resolves.toMatchObject({ stable: false });
-    await expect(service.reconcileRecoverableWorkspaceRevisionFailures())
+    await expect(mutation.recoverAllExpired())
       .resolves.toBe(1);
-    await expect(service.getWorkspaceStatusRevision(workspaceId))
+    await expect(freshness.getWorkspaceStatusRevision(workspaceId))
       .resolves.toMatchObject({ stable: true });
   }, 30000);
 
@@ -240,29 +290,29 @@ describePostgres('Coding status revision Postgres integration', () => {
       [`status-revision-failure-${suffix}`]
     ) as Array<{ id: number }>;
     workspaceId = workspace.id;
-    const service = new CodingFreshnessService(
-      {} as never,
-      {} as never,
-      dataSource
-    );
-    const serviceInternals = service as unknown as {
-      incrementRevision(id: number): Promise<{ revision: number }>;
-      markRevisionProcessed(
-        id: number,
-        operation: { revision: number }
-      ): Promise<void>;
-      markRevisionFailed(id: number, revision: number): Promise<void>;
-    };
+    const { freshness, mutation } = createServices();
+    const serviceInternals = mutationInternals(mutation);
 
-    const failedOperation = await serviceInternals.incrementRevision(workspaceId);
-    await serviceInternals.markRevisionFailed(
+    const failedOperation = await serviceInternals.beginOperation(
+      dataSource,
+      workspaceId
+    );
+    await serviceInternals.failOperation(
+      dataSource,
       workspaceId,
       failedOperation.revision
     );
-    const successfulOperation = await serviceInternals.incrementRevision(workspaceId);
-    await serviceInternals.markRevisionProcessed(workspaceId, successfulOperation);
+    const successfulOperation = await serviceInternals.beginOperation(
+      dataSource,
+      workspaceId
+    );
+    await serviceInternals.completeOperation(
+      dataSource,
+      workspaceId,
+      successfulOperation
+    );
 
-    await expect(service.getWorkspaceStatusRevision(workspaceId))
+    await expect(freshness.getWorkspaceStatusRevision(workspaceId))
       .resolves.toMatchObject({ stable: false });
     const [status] = await dataSource.query(
       `SELECT failed_test_results_revision
@@ -274,9 +324,9 @@ describePostgres('Coding status revision Postgres integration', () => {
       .toBe(failedOperation.revision);
 
     await expect(
-      service.reconcileWorkspaceAfterRevisionFailure(workspaceId)
+      mutation.reconcile(workspaceId)
     ).resolves.toBe(true);
-    await expect(service.getWorkspaceStatusRevision(workspaceId))
+    await expect(freshness.getWorkspaceStatusRevision(workspaceId))
       .resolves.toMatchObject({ stable: true });
   }, 30000);
 });

@@ -2,14 +2,8 @@ export { JournalService } from './journal.service';
 export * from './types';
 export { LRUCache } from './lru-cache';
 export {
-  beginWorkspaceCodingStatusRevisionOperation,
-  clearWorkspaceCodingStatusRevisionFailureAfterReconciliation,
-  completeWorkspaceCodingStatusRevisionOperation,
-  failExpiredWorkspaceCodingStatusRevisionOperations,
-  failWorkspaceCodingStatusRevisionOperation,
-  lockWorkspaceTestResultsMutationInTransaction,
-  withWorkspaceTestResultsAdvisoryLockIfAvailable,
-  withWorkspaceTestResultsMutationLock,
-  WorkspaceCodingStatusRevisionOperation,
-  WorkspaceTestResultsMutationLockOptions
-} from './workspace-test-results-lock.util';
+  WorkspaceCodingStatusMutation,
+  WorkspaceCodingStatusMutationService,
+  WORKSPACE_CODING_STATUS_RECONCILER
+} from './workspace-coding-status-mutation.service';
+export { WorkspaceCodingStatusMutationModule } from './workspace-coding-status-mutation.module';

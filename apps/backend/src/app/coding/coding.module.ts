@@ -63,6 +63,9 @@ import { CacheClientModule } from '../cache/cache-client.module';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceModule } from '../workspace/workspace.module';
 import { UserModule } from '../user/user.module';
+import {
+  WorkspaceCodingStatusMutationModule
+} from '../database/services/shared';
 
 @Module({
   imports: [
@@ -92,6 +95,7 @@ import { UserModule } from '../user/user.module';
     ]),
     JobQueueClientModule,
     CacheClientModule,
+    WorkspaceCodingStatusMutationModule,
     forwardRef(() => WorkspaceModule),
     UserModule
   ],
