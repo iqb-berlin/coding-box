@@ -48,6 +48,7 @@ import {
 import { AutocodingReadinessDto } from '../../../../../../api-dto/coding/autocoding-readiness.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { sanitizeCsvText } from '../../utils/csv.util';
+import { DistributionPreviewLimiterService } from '../workspace-coding/distribution-preview-limiter.service';
 
 type CodingStatisticsJobStatusResponse = {
   status: string;
@@ -257,7 +258,8 @@ export class WorkspaceCodingStatisticsController {
     private codingProcessService: CodingProcessService,
     private codingReadinessService: CodingReadinessService,
     private codingReplayService: CodingReplayService,
-    private jobQueueService: JobQueueService
+    private jobQueueService: JobQueueService,
+    private distributionPreviewLimiterService: DistributionPreviewLimiterService
   ) { }
 
   private calculateMeanKappa(
@@ -2782,9 +2784,25 @@ export class WorkspaceCodingStatisticsController {
                      caseOrderingMode?: 'continuous' | 'alternating';
                      maxCodingCases?: number;
                      distributionSeed?: string | number;
-                   }
+                   },
+                   @Res({ passthrough: true }) response: Response
   ): Promise<DistributionCalculationResponse> {
-    return this.codingJobService.calculateDistribution(workspace_id, body);
+    const cancellation = new AbortController();
+    const cancelOnDisconnect = () => {
+      if (!response.writableEnded) {
+        cancellation.abort();
+      }
+    };
+    response.once('close', cancelOnDisconnect);
+
+    try {
+      return await this.distributionPreviewLimiterService.run(
+        () => this.codingJobService.calculateDistribution(workspace_id, body),
+        cancellation.signal
+      );
+    } finally {
+      response.removeListener('close', cancelOnDisconnect);
+    }
   }
 
   @Post(':workspace_id/coding/create-distributed-jobs')

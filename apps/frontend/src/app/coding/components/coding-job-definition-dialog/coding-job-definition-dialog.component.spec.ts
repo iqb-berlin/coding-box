@@ -9,7 +9,7 @@ import {
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { of, Subject } from 'rxjs';
+import { Observable, of, Subject } from 'rxjs';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from './coding-job-definition-dialog.component';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
@@ -1559,6 +1559,50 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.getTotalDoubleCodedCases()).toBe(4);
     expect(component.getTotalCodingTasks()).toBe(10);
     expect(component.getTimePerCoderInSeconds()).toBe(420);
+  }));
+
+  it('should cancel an outdated distribution preview before starting the next one', fakeAsync(() => {
+    const firstPreviewCancelled = jest.fn();
+    const firstPreview = new Observable(() => firstPreviewCancelled);
+    (mockDistributedCodingService.calculateDistribution as jest.Mock)
+      .mockReturnValueOnce(firstPreview)
+      .mockReturnValue(of(emptyDistributionPreview));
+    createComponent();
+    (mockDistributedCodingService.calculateDistribution as jest.Mock).mockClear();
+
+    component.selectedCoders.select(component.availableCoders[0]);
+    component.selectedVariables.select(component.variables[0]);
+    tick(300);
+
+    expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledTimes(1);
+    expect(firstPreviewCancelled).not.toHaveBeenCalled();
+
+    component.codingJobForm.patchValue({ maxCodingCases: 5 });
+
+    expect(firstPreviewCancelled).toHaveBeenCalledTimes(1);
+    expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledTimes(1);
+
+    tick(300);
+
+    expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledTimes(2);
+  }));
+
+  it('should not recalculate distribution for unrelated definition fields', fakeAsync(() => {
+    createComponent();
+    component.selectedCoders.select(component.availableCoders[0]);
+    component.selectedVariables.select(component.variables[0]);
+    tick(300);
+    (mockDistributedCodingService.calculateDistribution as jest.Mock).mockClear();
+
+    component.codingJobForm.patchValue({
+      name: 'Neuer Name',
+      description: 'Neue Beschreibung',
+      durationSeconds: 60,
+      showScore: true
+    });
+    tick(300);
+
+    expect(mockDistributedCodingService.calculateDistribution).not.toHaveBeenCalled();
   }));
 
   it('should send a stable distribution seed when submitting a new definition for review', () => {
