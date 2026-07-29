@@ -1,7 +1,12 @@
 import {
   Injectable, Logger, BadRequestException, ForbiddenException
 } from '@nestjs/common';
-import { In, MoreThan, Repository } from 'typeorm';
+import {
+  EntityManager,
+  In,
+  MoreThan,
+  Repository
+} from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import User from '../../entities/user.entity';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
@@ -148,7 +153,11 @@ export class UsersService {
     return true;
   }
 
-  async assertUsersCanCodeInWorkspace(userIds: number[], workspaceId: number): Promise<void> {
+  async assertUsersCanCodeInWorkspace(
+    userIds: number[],
+    workspaceId: number,
+    manager?: EntityManager
+  ): Promise<void> {
     const uniqueUserIds = Array.from(new Set(userIds));
     if (uniqueUserIds.length === 0) {
       return;
@@ -159,7 +168,10 @@ export class UsersService {
       throw new BadRequestException('Selected coders must have positive integer IDs.');
     }
 
-    const coderRows = await this.workspaceUserRepository.find({
+    const repository = manager ?
+      manager.getRepository(WorkspaceUser) :
+      this.workspaceUserRepository;
+    const coderRows = await repository.find({
       where: {
         workspaceId,
         userId: In(uniqueUserIds),

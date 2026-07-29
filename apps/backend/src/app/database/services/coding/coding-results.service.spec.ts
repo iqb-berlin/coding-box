@@ -162,6 +162,10 @@ describe('CodingResultsService', () => {
       missingsProfilesService as unknown as MissingsProfilesService,
       workspaceExclusionService as unknown as WorkspaceExclusionService,
       {
+        withWorkspaceLock: jest.fn((
+          _workspaceId: number,
+          operation: () => Promise<unknown>
+        ) => operation()),
         lockInTransaction: jest.fn(async (
           manager: { query: jest.Mock },
           workspaceId: number

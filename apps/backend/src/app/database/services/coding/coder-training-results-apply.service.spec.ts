@@ -130,7 +130,13 @@ describe('CoderTrainingResultsApplyService', () => {
       codingAnalysisService as unknown as CodingAnalysisService,
       codingFreshnessService as unknown as CodingFreshnessService,
       workspaceExclusionService as unknown as WorkspaceExclusionService,
-      { lockInTransaction: jest.fn().mockResolvedValue(undefined) } as never
+      {
+        withWorkspaceLock: jest.fn((
+          _workspaceId: number,
+          operation: () => Promise<unknown>
+        ) => operation()),
+        lockInTransaction: jest.fn().mockResolvedValue(undefined)
+      } as never
     );
   });
 
@@ -333,6 +339,10 @@ describe('CoderTrainingResultsApplyService', () => {
     expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(1);
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(1);
     expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(1);
+    expect(
+      coderTrainingService.getWithinTrainingCodingComparison
+        .mock.invocationCallOrder[0]
+    ).toBeLessThan(queryRunner.startTransaction.mock.invocationCallOrder[0]);
     expect(result.updatedResponsesCount).toBe(1);
     expect(result.removedJobUnitCount).toBe(1);
   });

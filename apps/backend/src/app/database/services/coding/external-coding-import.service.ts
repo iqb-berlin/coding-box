@@ -41,6 +41,33 @@ type ExternalCodingScoreMode = 'import' | 'derive';
 type ExternalCodingExistingCodingMode = 'skip-conflicts' | 'fill-empty' | 'overwrite';
 type ExternalCodingImportAction = 'update' | 'skip' | 'unchanged';
 
+type ExternalCodingAffectedRow = {
+  unitAlias: string;
+  variableId: string;
+  personCode?: string;
+  personLogin?: string;
+  personGroup?: string;
+  bookletName?: string;
+  originalCodedStatus: string;
+  originalCode: number | null;
+  originalScore: number | null;
+  updatedCodedStatus: string | null;
+  updatedCode: number | null;
+  updatedScore: number | null;
+  importAction?: ExternalCodingImportAction;
+  actionReason?: string;
+  hasExistingCoding?: boolean;
+  hasConflict?: boolean;
+};
+
+type ExternalCodingImportResult = {
+  message: string;
+  processedRows: number;
+  updatedRows: number;
+  errors: string[];
+  affectedRows: ExternalCodingAffectedRow[];
+};
+
 interface ImportContext {
   detectedFormat: ExternalCodingDetectedFormat;
   sourceFormat?: ExternalCodingSourceFormat;
@@ -124,30 +151,7 @@ export class ExternalCodingImportService {
     workspaceId: number,
     body: ExternalCodingImportBody,
     progressCallback: (progress: number, message: string) => void
-  ): Promise<{
-      message: string;
-      processedRows: number;
-      updatedRows: number;
-      errors: string[];
-      affectedRows: Array<{
-        unitAlias: string;
-        variableId: string;
-        personCode?: string;
-        personLogin?: string;
-        personGroup?: string;
-        bookletName?: string;
-        originalCodedStatus: string;
-        originalCode: number | null;
-        originalScore: number | null;
-        updatedCodedStatus: string | null;
-        updatedCode: number | null;
-        updatedScore: number | null;
-        importAction?: ExternalCodingImportAction;
-        actionReason?: string;
-        hasExistingCoding?: boolean;
-        hasConflict?: boolean;
-      }>;
-    }> {
+  ): Promise<ExternalCodingImportResult> {
     return this.importExternalCoding(workspaceId, body, progressCallback);
   }
 
@@ -155,30 +159,29 @@ export class ExternalCodingImportService {
     workspaceId: number,
     body: ExternalCodingImportBody,
     progressCallback?: (progress: number, message: string) => void
-  ): Promise<{
-      message: string;
-      processedRows: number;
-      updatedRows: number;
-      errors: string[];
-      affectedRows: Array<{
-        unitAlias: string;
-        variableId: string;
-        personCode?: string;
-        personLogin?: string;
-        personGroup?: string;
-        bookletName?: string;
-        originalCodedStatus: string;
-        originalCode: number | null;
-        originalScore: number | null;
-        updatedCodedStatus: string | null;
-        updatedCode: number | null;
-        updatedScore: number | null;
-        importAction?: ExternalCodingImportAction;
-        actionReason?: string;
-        hasExistingCoding?: boolean;
-        hasConflict?: boolean;
-      }>;
-    }> {
+  ): Promise<ExternalCodingImportResult> {
+    if (body.previewOnly) {
+      return this.importExternalCodingWithinWorkspaceLock(
+        workspaceId,
+        body,
+        progressCallback
+      );
+    }
+    return this.workspaceCodingStatusMutationService.withWorkspaceLock(
+      workspaceId,
+      () => this.importExternalCodingWithinWorkspaceLock(
+        workspaceId,
+        body,
+        progressCallback
+      )
+    );
+  }
+
+  private async importExternalCodingWithinWorkspaceLock(
+    workspaceId: number,
+    body: ExternalCodingImportBody,
+    progressCallback?: (progress: number, message: string) => void
+  ): Promise<ExternalCodingImportResult> {
     let queryRunner: QueryRunner | undefined;
     let transactionCommitted = false;
 
@@ -228,24 +231,7 @@ export class ExternalCodingImportService {
       let skippedRowsWithoutCoding = 0;
       const processedRows = parsedData.length;
       const existingCodingMode = body.existingCodingMode || 'skip-conflicts';
-      const affectedRows: Array<{
-        unitAlias: string;
-        variableId: string;
-        personCode?: string;
-        personLogin?: string;
-        personGroup?: string;
-        bookletName?: string;
-        originalCodedStatus: string;
-        originalCode: number | null;
-        originalScore: number | null;
-        updatedCodedStatus: string | null;
-        updatedCode: number | null;
-        updatedScore: number | null;
-        importAction?: ExternalCodingImportAction;
-        actionReason?: string;
-        hasExistingCoding?: boolean;
-        hasConflict?: boolean;
-      }> = [];
+      const affectedRows: ExternalCodingAffectedRow[] = [];
       const updatedResponseIds: number[] = [];
 
       // Process data in batches for better performance
@@ -268,6 +254,9 @@ export class ExternalCodingImportService {
       const responseRepository = queryRunner ?
         queryRunner.manager.getRepository(ResponseEntity) :
         this.responseRepository;
+      const fileUploadRepository = queryRunner ?
+        queryRunner.manager.getRepository(FileUpload) :
+        this.fileUploadRepository;
 
       for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
         const batchStart = batchIndex * batchSize;
@@ -384,7 +373,8 @@ export class ExternalCodingImportService {
                 const validation = await this.validateCodeAgainstScheme(
                   response.unit!,
                   variableId,
-                  parsedCode.value
+                  parsedCode.value,
+                  fileUploadRepository
                 );
                 const resolvedCoding = this.resolveImportedCoding(
                   parsedCode.value,
@@ -565,30 +555,7 @@ export class ExternalCodingImportService {
     workspaceId: number,
     body: ExternalCodingImportBody,
     progressCallback?: (progress: number, message: string) => void
-  ): Promise<{
-      message: string;
-      processedRows: number;
-      updatedRows: number;
-      errors: string[];
-      affectedRows: Array<{
-        unitAlias: string;
-        variableId: string;
-        personCode?: string;
-        personLogin?: string;
-        personGroup?: string;
-        bookletName?: string;
-        originalCodedStatus: string;
-        originalCode: number | null;
-        originalScore: number | null;
-        updatedCodedStatus: string | null;
-        updatedCode: number | null;
-        updatedScore: number | null;
-        importAction?: ExternalCodingImportAction;
-        actionReason?: string;
-        hasExistingCoding?: boolean;
-        hasConflict?: boolean;
-      }>;
-    }> {
+  ): Promise<ExternalCodingImportResult> {
     // Set previewOnly to false for actual application
     return this.importExternalCoding(workspaceId, { ...body, previewOnly: false }, progressCallback);
   }
@@ -994,10 +961,13 @@ export class ExternalCodingImportService {
     );
   }
 
-  private async getCodingSchemeForUnit(unit: Unit): Promise<CodingScheme | null> {
+  private async getCodingSchemeForUnit(
+    unit: Unit,
+    repository: Repository<FileUpload> = this.fileUploadRepository
+  ): Promise<CodingScheme | null> {
     try {
       // Get the unit's test file to access the coding scheme reference
-      const testFile = await this.fileUploadRepository.findOne({
+      const testFile = await repository.findOne({
         where: { file_id: unit.alias.toUpperCase() }
       });
 
@@ -1017,7 +987,7 @@ export class ExternalCodingImportService {
       const codingSchemeRef = codingSchemeRefText.toUpperCase();
 
       // Get the coding scheme file from the database
-      const codingSchemeFile = await this.fileUploadRepository.findOne({
+      const codingSchemeFile = await repository.findOne({
         where: { file_id: codingSchemeRef }
       });
 
@@ -1037,10 +1007,11 @@ export class ExternalCodingImportService {
   private async validateCodeAgainstScheme(
     unit: Unit,
     variableId: string,
-    code: number | null
+    code: number | null,
+    repository: Repository<FileUpload> = this.fileUploadRepository
   ): Promise<CodeValidationResult> {
     try {
-      const codingScheme = await this.getCodingSchemeForUnit(unit);
+      const codingScheme = await this.getCodingSchemeForUnit(unit, repository);
 
       if (!codingScheme) {
         // No coding scheme found, leave as CODING_INCOMPLETE

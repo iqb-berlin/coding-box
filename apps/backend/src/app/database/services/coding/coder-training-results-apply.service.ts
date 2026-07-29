@@ -55,9 +55,14 @@ interface ApplyContext {
   conflicts: ProductiveJobConflict[];
 }
 
+type TrainingCodingComparisonRows = Awaited<ReturnType<
+CoderTrainingService['getWithinTrainingCodingComparison']
+>>;
+
 interface BuildApplyContextOptions {
   manager?: EntityManager;
   lockProductiveJobConflicts?: boolean;
+  comparisonRows?: TrainingCodingComparisonRows;
 }
 
 @Injectable()
@@ -94,6 +99,21 @@ export class CoderTrainingResultsApplyService {
     trainingId: number,
     request: ApplyTrainingDiscussionResultsRequestDto
   ): Promise<ApplyTrainingDiscussionResultsResultDto> {
+    return this.workspaceCodingStatusMutationService.withWorkspaceLock(
+      workspaceId,
+      () => this.applyTrainingDiscussionResultsWithinWorkspaceLock(
+        workspaceId,
+        trainingId,
+        request
+      )
+    );
+  }
+
+  private async applyTrainingDiscussionResultsWithinWorkspaceLock(
+    workspaceId: number,
+    trainingId: number,
+    request: ApplyTrainingDiscussionResultsRequestDto
+  ): Promise<ApplyTrainingDiscussionResultsResultDto> {
     const source = this.validateSource(request.source);
     const existingResultStrategy = this.validateExistingResultStrategy(
       request.existingResultStrategy
@@ -101,6 +121,11 @@ export class CoderTrainingResultsApplyService {
     const jobConflictStrategy = this.validateJobConflictStrategy(
       request.jobConflictStrategy
     );
+    const comparisonRows =
+      await this.coderTrainingService.getWithinTrainingCodingComparison(
+        workspaceId,
+        trainingId
+      );
     const queryRunner =
       this.responseRepository.manager.connection.createQueryRunner();
     let applyResult: ApplyTrainingDiscussionResultsResultDto | null = null;
@@ -122,7 +147,8 @@ export class CoderTrainingResultsApplyService {
         source,
         {
           manager: queryRunner.manager,
-          lockProductiveJobConflicts: true
+          lockProductiveJobConflicts: true,
+          comparisonRows
         }
       );
 
@@ -297,10 +323,11 @@ export class CoderTrainingResultsApplyService {
     source: TrainingDiscussionApplySource,
     options: BuildApplyContextOptions = {}
   ): Promise<ApplyContext> {
-    const rows = await this.coderTrainingService.getWithinTrainingCodingComparison(
-      workspaceId,
-      trainingId
-    );
+    const rows = options.comparisonRows ??
+      await this.coderTrainingService.getWithinTrainingCodingComparison(
+        workspaceId,
+        trainingId
+      );
     const candidates = rows
       .filter(row => row.discussionSource === source)
       .map(row => ({

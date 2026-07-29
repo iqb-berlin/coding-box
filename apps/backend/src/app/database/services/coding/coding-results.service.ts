@@ -450,39 +450,57 @@ export class CodingResultsService {
 
       if (responsesToUpdate.length === 0) {
         if (skippedReviewCount === 0) {
-          const queryRunner = this.responseRepository.manager.connection.createQueryRunner();
-          await queryRunner.connect();
-          await queryRunner.startTransaction('READ COMMITTED');
+          const freshnessBlocker =
+            await this.workspaceCodingStatusMutationService.withWorkspaceLock(
+              workspaceId,
+              async () => {
+                const queryRunner =
+                  this.responseRepository.manager.connection.createQueryRunner();
+                await queryRunner.connect();
+                await queryRunner.startTransaction('READ COMMITTED');
 
-          try {
-            const freshnessBlocker = await this.getFreshnessApplyBlockerInTransaction(
-              workspaceId,
-              codingJobId,
-              queryRunner.manager
-            );
-            if (freshnessBlocker) {
-              await queryRunner.rollbackTransaction();
-              return freshnessBlocker;
-            }
+                try {
+                  const blocker =
+                    await this.getFreshnessApplyBlockerInTransaction(
+                      workspaceId,
+                      codingJobId,
+                      queryRunner.manager
+                    );
+                  if (blocker) {
+                    await queryRunner.rollbackTransaction();
+                    return blocker;
+                  }
 
-            await this.markManualFreshnessCurrent(
-              workspaceId,
-              directResponseIds,
-              codingJobId,
-              queryRunner.manager
+                  await this.markManualFreshnessCurrent(
+                    workspaceId,
+                    directResponseIds,
+                    codingJobId,
+                    queryRunner.manager
+                  );
+                  await this.codingJobService.markCodingJobResultsApplied(
+                    codingJobId,
+                    workspaceId,
+                    queryRunner.manager
+                  );
+                  await queryRunner.commitTransaction();
+                  return null;
+                } catch (error) {
+                  await queryRunner.rollbackTransaction();
+                  this.logger.error(
+                    `Error finalizing coding results: ${error.message}`,
+                    error.stack
+                  );
+                  throw new Error(
+                    `Fehler beim Anwenden der Kodierungsergebnisse: ${
+                      error.message}`
+                  );
+                } finally {
+                  await queryRunner.release();
+                }
+              }
             );
-            await this.codingJobService.markCodingJobResultsApplied(
-              codingJobId,
-              workspaceId,
-              queryRunner.manager
-            );
-            await queryRunner.commitTransaction();
-          } catch (error) {
-            await queryRunner.rollbackTransaction();
-            this.logger.error(`Error finalizing coding results: ${error.message}`, error.stack);
-            throw new Error(`Fehler beim Anwenden der Kodierungsergebnisse: ${error.message}`);
-          } finally {
-            await queryRunner.release();
+          if (freshnessBlocker) {
+            return freshnessBlocker;
           }
 
           await this.invalidateIncompleteVariablesCache(workspaceId);
@@ -500,113 +518,129 @@ export class CodingResultsService {
         };
       }
 
-      const queryRunner = this.responseRepository.manager.connection.createQueryRunner();
-      await queryRunner.connect();
-      await queryRunner.startTransaction('READ COMMITTED');
-
-      try {
-        const freshnessBlocker = await this.getFreshnessApplyBlockerInTransaction(
+      const applyResult =
+        await this.workspaceCodingStatusMutationService.withWorkspaceLock(
           workspaceId,
-          codingJobId,
-          queryRunner.manager
-        );
-        if (freshnessBlocker) {
-          await queryRunner.rollbackTransaction();
-          return freshnessBlocker;
-        }
+          async () => {
+            const queryRunner =
+              this.responseRepository.manager.connection.createQueryRunner();
+            await queryRunner.connect();
+            await queryRunner.startTransaction('READ COMMITTED');
 
-        const batchSize = 500;
-        let totalUpdated = 0;
-        const updatedResponseIds: number[] = [];
-
-        for (let i = 0; i < responsesToUpdate.length; i += batchSize) {
-          const batch = responsesToUpdate.slice(i, i + batchSize);
-
-          const updateResults = await Promise.all(batch.map(async responseUpdate => ({
-            responseUpdate,
-            result: await queryRunner.manager.update(
-              ResponseEntity,
-              responseUpdate.protectExistingV2 ?
-                {
-                  id: responseUpdate.responseId,
-                  status_v2: IsNull(),
-                  code_v2: IsNull(),
-                  score_v2: IsNull()
-                } :
-                responseUpdate.responseId,
-              {
-                code_v2: responseUpdate.code_v2,
-                score_v2: responseUpdate.score_v2,
-                status_v2: responseUpdate.status_v2
+            try {
+              const freshnessBlocker =
+                await this.getFreshnessApplyBlockerInTransaction(
+                  workspaceId,
+                  codingJobId,
+                  queryRunner.manager
+                );
+              if (freshnessBlocker) {
+                await queryRunner.rollbackTransaction();
+                return freshnessBlocker;
               }
-            )
-          })));
 
-          const protectedUpdatesSkipped = updateResults.filter(({ responseUpdate, result }) => (
-            responseUpdate.protectExistingV2 && result.affected === 0
-          )).length;
-          skippedAlreadyCodedCount += protectedUpdatesSkipped;
+              const batchSize = 500;
+              let totalUpdated = 0;
+              const updatedResponseIds: number[] = [];
 
-          const updatedBatch = updateResults.filter(({ responseUpdate, result }) => (
-            !responseUpdate.protectExistingV2 || result.affected !== 0
-          ));
-          updatedResponseIds.push(...updatedBatch.map(({ responseUpdate }) => (
-            responseUpdate.responseId
-          )));
-          totalUpdated += updatedBatch.length;
+              for (let i = 0; i < responsesToUpdate.length; i += batchSize) {
+                const batch = responsesToUpdate.slice(i, i + batchSize);
 
-          this.logger.log(`Updated batch of ${updatedBatch.length} responses (${totalUpdated}/${responsesToUpdate.length})`);
-        }
+                const updateResults = await Promise.all(
+                  batch.map(async responseUpdate => ({
+                    responseUpdate,
+                    result: await queryRunner.manager.update(
+                      ResponseEntity,
+                      responseUpdate.protectExistingV2 ?
+                        {
+                          id: responseUpdate.responseId,
+                          status_v2: IsNull(),
+                          code_v2: IsNull(),
+                          score_v2: IsNull()
+                        } :
+                        responseUpdate.responseId,
+                      {
+                        code_v2: responseUpdate.code_v2,
+                        score_v2: responseUpdate.score_v2,
+                        status_v2: responseUpdate.status_v2
+                      }
+                    )
+                  }))
+                );
 
-        const freshnessResponseIds = skippedReviewCount === 0 ?
-          Array.from(new Set([
-            ...directResponseIds,
-            ...updatedResponseIds
-          ])) :
-          Array.from(new Set(updatedResponseIds));
+                const protectedUpdatesSkipped = updateResults.filter(({ responseUpdate, result }) => (
+                  responseUpdate.protectExistingV2 && result.affected === 0
+                )).length;
+                skippedAlreadyCodedCount += protectedUpdatesSkipped;
 
-        await this.markManualFreshnessCurrent(
-          workspaceId,
-          freshnessResponseIds,
-          codingJobId,
-          queryRunner.manager
-        );
+                const updatedBatch = updateResults.filter(({ responseUpdate, result }) => (
+                  !responseUpdate.protectExistingV2 || result.affected !== 0
+                ));
+                updatedResponseIds.push(...updatedBatch.map(({ responseUpdate }) => (
+                  responseUpdate.responseId
+                )));
+                totalUpdated += updatedBatch.length;
 
-        if (skippedReviewCount === 0) {
-          await this.codingJobService.markCodingJobResultsApplied(
-            codingJobId,
-            workspaceId,
-            queryRunner.manager
-          );
-        }
+                this.logger.log(`Updated batch of ${updatedBatch.length} responses (${totalUpdated}/${responsesToUpdate.length})`);
+              }
 
-        await queryRunner.commitTransaction();
+              const freshnessResponseIds = skippedReviewCount === 0 ?
+                Array.from(new Set([
+                  ...directResponseIds,
+                  ...updatedResponseIds
+                ])) :
+                Array.from(new Set(updatedResponseIds));
 
-        await this.invalidateIncompleteVariablesCache(workspaceId);
-        await this.codingStatisticsService.invalidateCache(workspaceId);
-        await this.codingAnalysisService.invalidateCache(workspaceId);
+              await this.markManualFreshnessCurrent(
+                workspaceId,
+                freshnessResponseIds,
+                codingJobId,
+                queryRunner.manager
+              );
 
-        return {
-          success: true,
-          updatedResponsesCount: totalUpdated,
-          skippedReviewCount,
-          skippedAlreadyCodedCount,
-          overwrittenExistingCount,
-          messageKey: 'coding-results.apply.success.bulk',
-          messageParams: {
-            count: totalUpdated,
-            skipped: skippedReviewCount,
-            skippedAlreadyCoded: skippedAlreadyCodedCount,
-            overwrittenExisting: overwrittenExistingCount
+              if (skippedReviewCount === 0) {
+                await this.codingJobService.markCodingJobResultsApplied(
+                  codingJobId,
+                  workspaceId,
+                  queryRunner.manager
+                );
+              }
+
+              await queryRunner.commitTransaction();
+
+              await this.invalidateIncompleteVariablesCache(workspaceId);
+              await this.codingStatisticsService.invalidateCache(workspaceId);
+              await this.codingAnalysisService.invalidateCache(workspaceId);
+
+              return {
+                success: true,
+                updatedResponsesCount: totalUpdated,
+                skippedReviewCount,
+                skippedAlreadyCodedCount,
+                overwrittenExistingCount,
+                messageKey: 'coding-results.apply.success.bulk',
+                messageParams: {
+                  count: totalUpdated,
+                  skipped: skippedReviewCount,
+                  skippedAlreadyCoded: skippedAlreadyCodedCount,
+                  overwrittenExisting: overwrittenExistingCount
+                }
+              };
+            } catch (error) {
+              await queryRunner.rollbackTransaction();
+              this.logger.error(
+                `Error updating responses: ${error.message}`,
+                error.stack
+              );
+              throw new Error(
+                `Fehler beim Anwenden der Kodierungsergebnisse: ${error.message}`
+              );
+            } finally {
+              await queryRunner.release();
+            }
           }
-        };
-      } catch (error) {
-        await queryRunner.rollbackTransaction();
-        this.logger.error(`Error updating responses: ${error.message}`, error.stack);
-        throw new Error(`Fehler beim Anwenden der Kodierungsergebnisse: ${error.message}`);
-      } finally {
-        await queryRunner.release();
-      }
+        );
+      return applyResult;
     } catch (error) {
       this.logger.error(`Error applying coding results: ${error.message}`, error.stack);
       throw new Error(`Fehler beim Anwenden der Kodierungsergebnisse: ${error.message}`);

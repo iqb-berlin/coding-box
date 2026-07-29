@@ -13,6 +13,7 @@ import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { ResponseEntity } from '../../entities/response.entity';
+import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CodingAggregationPeerService } from './coding-aggregation-peer.service';
 
@@ -112,6 +113,9 @@ describe('CodingJobService', () => {
   let workspaceFilesService: {
     getDerivedVariableMap: jest.Mock;
   };
+  let workspaceExclusionService: {
+    resolveExclusionsForQueries: jest.Mock;
+  };
   let usersService: {
     getUserIsAdmin: jest.Mock;
     getUserAccessLevel: jest.Mock;
@@ -195,6 +199,9 @@ describe('CodingJobService', () => {
           if (entity === JobDefinition) return jobDefinitionRepository;
           if (entity === VariableBundle) return variableBundleRepository;
           if (entity === ResponseEntity) return responseRepository;
+          if (entity === CoderTrainingDiscussionResult) {
+            return coderTrainingDiscussionResultRepository;
+          }
           return createRepo();
         }
       })
@@ -214,7 +221,7 @@ describe('CodingJobService', () => {
         status: 'approved'
       })
     });
-    const workspaceExclusionService = {
+    workspaceExclusionService = {
       resolveExclusionsForQueries: jest.fn().mockResolvedValue({
         globalIgnoredUnits: [],
         ignoredBooklets: [],
@@ -263,6 +270,10 @@ describe('CodingJobService', () => {
       usersService as never,
       new CodingAggregationPeerService(responseRepository as never),
       {
+        withWorkspaceLock: jest.fn((
+          _workspaceId: number,
+          operation: () => Promise<unknown>
+        ) => operation()),
         lockInTransaction: jest.fn(async (
           manager: { query: jest.Mock },
           workspaceId: number
@@ -451,7 +462,7 @@ describe('CodingJobService', () => {
 
     expect(
       missingsProfilesService.resolveMissingsProfileId
-    ).toHaveBeenCalledWith(7, 55);
+    ).toHaveBeenCalledWith(7, undefined);
     expect(
       missingsProfilesService.resolveMissingsProfileId
     ).toHaveBeenCalledWith(7, 77);
@@ -486,6 +497,27 @@ describe('CodingJobService', () => {
       }
     });
     expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('preloads non-transactional coding-job query context before opening the transaction', async () => {
+    await expect(
+      service.createCodingJob(3, { name: 'Job' })
+    ).resolves.toMatchObject({ name: 'Job' });
+
+    const transactionCallOrder =
+      connection.transaction.mock.invocationCallOrder[0];
+    expect(
+      missingsProfilesService.getMissingByIdForProfileOrDefault.mock
+        .invocationCallOrder[0]
+    ).toBeLessThan(transactionCallOrder);
+    expect(
+      workspaceExclusionService.resolveExclusionsForQueries.mock
+        .invocationCallOrder[0]
+    ).toBeLessThan(transactionCallOrder);
+    expect(
+      workspaceFilesService.getDerivedVariableMap.mock.invocationCallOrder[0]
+    ).toBeLessThan(transactionCallOrder);
+    expect(settingRepository.findOne).not.toHaveBeenCalled();
   });
 
   it('sets variable bundle ids on distributed bundle job units', async () => {
@@ -529,7 +561,8 @@ describe('CodingJobService', () => {
           }>,
           manager: {
             getRepository: (entity: unknown) => unknown;
-          }
+          },
+          missingsProfileId: number | undefined
         ) => Promise<CodingJob>;
       }
     ).createCodingJobWithUnitSubsetInManager(
@@ -561,7 +594,8 @@ describe('CodingJobService', () => {
           if (entity === VariableBundle) return variableBundleRepository;
           return createRepo();
         }
-      }
+      },
+      55
     );
 
     expect(codingJobRepository.create).toHaveBeenCalledWith(
@@ -631,7 +665,8 @@ describe('CodingJobService', () => {
           },
           manager: {
             getRepository: (entity: unknown) => unknown;
-          }
+          },
+          missingsProfileId: number | undefined
         ) => Promise<unknown[]>;
       }
     ).createDistributedCodingJobsFromPlanInManager(
@@ -677,7 +712,8 @@ describe('CodingJobService', () => {
           if (entity === CodingJobUnit) return codingJobUnitRepository;
           return createRepo();
         }
-      }
+      },
+      77
     );
 
     expect(codingJobRepository.create).toHaveBeenCalledWith(
@@ -1632,8 +1668,18 @@ describe('CodingJobService', () => {
     expect(buildPlanSpy).toHaveBeenCalledWith(
       3,
       expect.objectContaining({ jobDefinitionId: 9 }),
-      transactionManager
+      transactionManager,
+      expect.objectContaining({
+        derivedVariableMap: expect.any(Map),
+        queryContext: expect.objectContaining({
+          defaultMirCode: 99,
+          derivedVariableMap: expect.any(Map)
+        })
+      })
     );
+    expect(
+      workspaceFilesService.getDerivedVariableMap.mock.invocationCallOrder[0]
+    ).toBeLessThan(connection.transaction.mock.invocationCallOrder[0]);
     expect(callOrder).toEqual([
       'advisory-lock',
       'assert',
@@ -2102,10 +2148,68 @@ describe('CodingJobService', () => {
 
     expect(usersService.assertUsersCanCodeInWorkspace).toHaveBeenCalledWith(
       [99],
-      3
+      3,
+      expect.any(Object)
     );
     expect(codingJobRepository.save).not.toHaveBeenCalled();
     expect(codingJobCoderRepository.delete).not.toHaveBeenCalled();
+  });
+
+  it('updates job fields and assignments in one transaction', async () => {
+    const transactionalCodingJobRepository = createRepo();
+    const transactionalCoderRepository = createRepo();
+    const transactionalVariableRepository = createRepo();
+    const transactionalBundleRepository = createRepo();
+    transactionalCodingJobRepository.findOne.mockResolvedValue({
+      id: 1,
+      workspace_id: 3,
+      status: 'active'
+    });
+    const transactionManager = {
+      query: jest.fn().mockResolvedValue([]),
+      getRepository: jest.fn((entity: unknown) => {
+        if (entity === CodingJob) return transactionalCodingJobRepository;
+        if (entity === CodingJobCoder) return transactionalCoderRepository;
+        if (entity === CodingJobVariable) return transactionalVariableRepository;
+        if (entity === CodingJobVariableBundle) {
+          return transactionalBundleRepository;
+        }
+        return createRepo();
+      })
+    };
+    connection.transaction.mockImplementationOnce(callback => callback(transactionManager)
+    );
+
+    await expect(
+      service.updateCodingJob(1, 3, {
+        name: 'Changed',
+        assignedCoders: [9],
+        variables: [{ unitName: 'UNIT', variableId: 'VAR' }],
+        variableBundleIds: [4]
+      })
+    ).resolves.toMatchObject({ name: 'Changed' });
+
+    expect(connection.transaction).toHaveBeenCalledTimes(1);
+    expect(transactionalCodingJobRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1, name: 'Changed' })
+    );
+    expect(transactionalCoderRepository.delete).toHaveBeenCalledWith({
+      coding_job_id: 1
+    });
+    expect(transactionalCoderRepository.save).toHaveBeenCalled();
+    expect(transactionalVariableRepository.delete).toHaveBeenCalledWith({
+      coding_job_id: 1
+    });
+    expect(transactionalVariableRepository.save).toHaveBeenCalled();
+    expect(transactionalBundleRepository.delete).toHaveBeenCalledWith({
+      coding_job_id: 1
+    });
+    expect(transactionalBundleRepository.save).toHaveBeenCalled();
+    expect(codingJobRepository.findOne).not.toHaveBeenCalled();
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+    expect(codingJobCoderRepository.delete).not.toHaveBeenCalled();
+    expect(codingJobVariableRepository.delete).not.toHaveBeenCalled();
+    expect(codingJobVariableBundleRepository.delete).not.toHaveBeenCalled();
   });
 
   it('rejects unsupported coding job statuses', async () => {
@@ -4748,6 +4852,34 @@ describe('CodingJobService', () => {
       key: 'workspace-3-response-matching-mode',
       content: JSON.stringify({ flags: [ResponseMatchingFlag.IGNORE_CASE] })
     });
+  });
+
+  it('loads aggregation snapshots through the transaction manager', async () => {
+    const transactionalSettingRepository = createRepo();
+    transactionalSettingRepository.findOne.mockImplementation(({ where }) => Promise.resolve(
+      where.key.endsWith('response-matching-mode') ?
+        {
+          content: JSON.stringify({
+            flags: [ResponseMatchingFlag.IGNORE_CASE]
+          })
+        } :
+        { content: '3' }
+    )
+    );
+    const manager = {
+      getRepository: jest.fn().mockReturnValue(transactionalSettingRepository)
+    };
+
+    await expect(
+      service.getCurrentAggregationSettingsSnapshot(3, manager as never)
+    ).resolves.toMatchObject({
+      aggregationEnabled: true,
+      aggregationThreshold: 3,
+      responseMatchingFlags: [ResponseMatchingFlag.IGNORE_CASE]
+    });
+
+    expect(settingRepository.findOne).not.toHaveBeenCalled();
+    expect(transactionalSettingRepository.findOne).toHaveBeenCalledTimes(3);
   });
 
   it('treats legacy disabled thresholds as no aggregation matching mode', async () => {

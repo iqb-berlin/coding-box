@@ -19,7 +19,8 @@ import { ResponseEntity } from '../../entities/response.entity';
 import {
   CodedResponse,
   CodingStatistics,
-  CodingStatisticsWithJob
+  CodingStatisticsWithJob,
+  WorkspaceCodingStatusMutationService
 } from '../shared';
 import { ResponseManagementService } from '../test-results/response-management.service';
 import { AutocoderSourceRevisionStaleError } from '../test-results/autocoder-source-revision-stale.error';
@@ -60,7 +61,9 @@ export class CodingProcessService {
     private responseManagementService: ResponseManagementService,
     private workspaceCoreService: WorkspaceCoreService,
     private workspaceExclusionService: WorkspaceExclusionService,
-    private codingReadinessService: CodingReadinessService
+    private codingReadinessService: CodingReadinessService,
+    private workspaceCodingStatusMutationService:
+    WorkspaceCodingStatusMutationService
   ) { }
 
   private codingSchemeCache: Map<
@@ -573,25 +576,30 @@ export class CodingProcessService {
       }
 
       // Step 12: Update responses in database - 100% progress
-      queryRunner =
-        this.responseRepository.manager.connection.createQueryRunner();
-      await queryRunner.connect();
-      await queryRunner.startTransaction('READ COMMITTED');
-
       const updateSuccess =
-        await this.responseManagementService.updateResponsesInDatabase(
+        await this.workspaceCodingStatusMutationService.withWorkspaceLock(
           workspace_id,
-          allCodedResponses,
-          queryRunner,
-          jobId,
-          this.isJobCancelled.bind(this),
-          progressCallback,
-          metrics,
-          {
-            unitIds: unitIdsArray,
-            autoCoderRun: resolvedAutoCoderRun,
-            markCurrentVersion: resolvedAutoCoderRun === 2 ? 'v3' : 'v1',
-            expectedSourceRevision: freshnessSourceRevision
+          async () => {
+            queryRunner =
+              this.responseRepository.manager.connection.createQueryRunner();
+            await queryRunner.connect();
+            await queryRunner.startTransaction('READ COMMITTED');
+
+            return this.responseManagementService.updateResponsesInDatabase(
+              workspace_id,
+              allCodedResponses,
+              queryRunner,
+              jobId,
+              this.isJobCancelled.bind(this),
+              progressCallback,
+              metrics,
+              {
+                unitIds: unitIdsArray,
+                autoCoderRun: resolvedAutoCoderRun,
+                markCurrentVersion: resolvedAutoCoderRun === 2 ? 'v3' : 'v1',
+                expectedSourceRevision: freshnessSourceRevision
+              }
+            );
           }
         );
 

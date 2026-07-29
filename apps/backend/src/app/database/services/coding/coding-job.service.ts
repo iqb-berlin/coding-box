@@ -47,6 +47,7 @@ import { UsersService } from '../users';
 import {
   applyResolvedExclusionsToQuery,
   isExcludedByResolvedExclusions,
+  type ResolvedWorkspaceExclusions,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import {
@@ -213,6 +214,23 @@ type DistributionPlanRequest = {
   allowComments?: boolean;
   suppressGeneralInstructions?: boolean;
   missingsProfileId?: number;
+};
+
+type DistributionPlanContext = {
+  derivedVariableMap?: Map<string, Set<string>>;
+  queryContext?: CodingJobQueryContext;
+};
+
+type CodingJobQueryContext = {
+  defaultMirCode: number;
+  exclusions: ResolvedWorkspaceExclusions;
+  derivedVariableMap: Map<string, Set<string>>;
+};
+
+type UpdateCodingJobContext = {
+  nextMissingsProfileId?: number;
+  defaultMissingsProfileId?: number;
+  exclusions?: ResolvedWorkspaceExclusions;
 };
 
 type DistributionVariableUsageRequest = {
@@ -539,8 +557,25 @@ export class CodingJobService {
     return missing.code;
   }
 
-  private async codingJobHasCodingWork(codingJobId: number): Promise<boolean> {
-    const count = await this.codingJobUnitRepository
+  private async loadCodingJobQueryContext(
+    workspaceId: number
+  ): Promise<CodingJobQueryContext> {
+    const [defaultMirCode, exclusions, derivedVariableMap] = await Promise.all([
+      this.getDefaultMirCode(workspaceId),
+      this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId),
+      this.workspaceFilesService.getDerivedVariableMap(workspaceId)
+    ]);
+    return { defaultMirCode, exclusions, derivedVariableMap };
+  }
+
+  private async codingJobHasCodingWork(
+    codingJobId: number,
+    manager?: EntityManager
+  ): Promise<boolean> {
+    const repository = manager ?
+      manager.getRepository(CodingJobUnit) :
+      this.codingJobUnitRepository;
+    const count = await repository
       .createQueryBuilder('cju')
       .where('cju.coding_job_id = :codingJobId', { codingJobId })
       .andWhere(
@@ -557,7 +592,8 @@ export class CodingJobService {
   }
 
   private async codingJobHasTrainingDiscussions(
-    codingJob: CodingJob
+    codingJob: CodingJob,
+    manager?: EntityManager
   ): Promise<boolean> {
     if (
       !codingJob.training_id ||
@@ -566,7 +602,10 @@ export class CodingJobService {
       return false;
     }
 
-    const count = await this.coderTrainingDiscussionResultRepository.count({
+    const repository = manager ?
+      manager.getRepository(CoderTrainingDiscussionResult) :
+      this.coderTrainingDiscussionResultRepository;
+    const count = await repository.count({
       where: {
         workspace_id: codingJob.workspace_id,
         training_id: codingJob.training_id
@@ -578,13 +617,10 @@ export class CodingJobService {
 
   private async assertMissingsProfileCanChange(
     codingJob: CodingJob,
-    nextMissingsProfileId: number | undefined
+    currentMissingsProfileId: number | undefined,
+    nextMissingsProfileId: number | undefined,
+    manager?: EntityManager
   ): Promise<void> {
-    const currentMissingsProfileId = await this.resolveMissingsProfileId(
-      codingJob.workspace_id,
-      codingJob.missings_profile_id
-    );
-
     if (currentMissingsProfileId === nextMissingsProfileId) {
       return;
     }
@@ -595,13 +631,13 @@ export class CodingJobService {
       );
     }
 
-    if (await this.codingJobHasCodingWork(codingJob.id)) {
+    if (await this.codingJobHasCodingWork(codingJob.id, manager)) {
       throw new BadRequestException(
         `Cannot change missings profile for coding job ${codingJob.id} because coding work already exists`
       );
     }
 
-    if (await this.codingJobHasTrainingDiscussions(codingJob)) {
+    if (await this.codingJobHasTrainingDiscussions(codingJob, manager)) {
       throw new BadRequestException(
         `Cannot change missings profile for coding job ${codingJob.id} because training discussions already exist`
       );
@@ -793,8 +829,17 @@ export class CodingJobService {
 
   async assertCodersCanCodeInWorkspace(
     userIds: number[],
-    workspaceId: number
+    workspaceId: number,
+    manager?: EntityManager
   ): Promise<void> {
+    if (manager) {
+      await this.usersService.assertUsersCanCodeInWorkspace(
+        userIds,
+        workspaceId,
+        manager
+      );
+      return;
+    }
     await this.usersService.assertUsersCanCodeInWorkspace(userIds, workspaceId);
   }
 
@@ -805,7 +850,7 @@ export class CodingJobService {
     workspaceId?: number
   ): Promise<void> {
     if (workspaceId !== undefined) {
-      await this.assertCodersCanCodeInWorkspace(userIds, workspaceId);
+      await this.assertCodersCanCodeInWorkspace(userIds, workspaceId, manager);
       return;
     }
 
@@ -823,18 +868,24 @@ export class CodingJobService {
       );
     }
 
-    await this.assertCodersCanCodeInWorkspace(userIds, codingJob.workspace_id);
+    await this.assertCodersCanCodeInWorkspace(
+      userIds,
+      codingJob.workspace_id,
+      manager
+    );
   }
 
   private async applyCodingJobUnitExclusions<T>(
     queryBuilder: SelectQueryBuilder<T>,
     workspaceId: number,
-    parameterPrefix: string
+    parameterPrefix: string,
+    resolvedExclusions?: ResolvedWorkspaceExclusions
   ): Promise<void> {
     const exclusions =
-      await this.workspaceExclusionService.resolveExclusionsForQueries(
+      resolvedExclusions ??
+      (await this.workspaceExclusionService.resolveExclusionsForQueries(
         workspaceId
-      );
+      ));
     applyResolvedExclusionsToQuery(queryBuilder, exclusions, {
       unitNameExpression: 'cju.unit_name',
       bookletNameExpression: 'cju.booklet_name',
@@ -1124,7 +1175,8 @@ export class CodingJobService {
 
   async getCodingJobProgress(
     jobId: number,
-    manager?: EntityManager
+    manager?: EntityManager,
+    resolvedExclusions?: ResolvedWorkspaceExclusions
   ): Promise<{ progress: number; coded: number; total: number; open: number }> {
     const codingJobRepository = manager ?
       manager.getRepository(CodingJob) :
@@ -1152,7 +1204,8 @@ export class CodingJobService {
     await this.applyCodingJobUnitExclusions(
       totalUnitsQuery,
       codingJob.workspace_id,
-      'codingJobProgressTotal'
+      'codingJobProgressTotal',
+      resolvedExclusions
     );
     const totalUnits = await totalUnitsQuery.getCount();
 
@@ -1172,7 +1225,8 @@ export class CodingJobService {
     await this.applyCodingJobUnitExclusions(
       codedUnitsQuery,
       codingJob.workspace_id,
-      'codingJobProgressCoded'
+      'codingJobProgressCoded',
+      resolvedExclusions
     );
 
     const openUnitsQuery = codingJobUnitRepository
@@ -1182,7 +1236,8 @@ export class CodingJobService {
     await this.applyCodingJobUnitExclusions(
       openUnitsQuery,
       codingJob.workspace_id,
-      'codingJobProgressOpen'
+      'codingJobProgressOpen',
+      resolvedExclusions
     );
 
     const [codedUnits, openUnits] = await Promise.all([
@@ -2534,101 +2589,118 @@ export class CodingJobService {
       missings_profile_id: missingsProfileId
     };
 
-    const createdCodingJob = await this.connection.transaction(
-      async manager => {
-        await this.workspaceCodingStatusMutationService.lockInTransaction(
-          manager,
-          workspaceId
-        );
-        const codingJobRepo = manager.getRepository(CodingJob);
-        const aggregationSettings =
-          await this.getCurrentAggregationSettingsSnapshot(workspaceId);
-        const codingJob = codingJobRepo.create({
-          workspace_id: workspaceId,
-          name: normalizedCreateCodingJobDto.name,
-          description: normalizedCreateCodingJobDto.description,
-          status: normalizedCreateCodingJobDto.status || 'pending',
-          showScore: normalizedCreateCodingJobDto.showScore ?? false,
-          allowComments: normalizedCreateCodingJobDto.allowComments ?? true,
-          suppressGeneralInstructions:
-            normalizedCreateCodingJobDto.suppressGeneralInstructions ?? false,
-          missings_profile_id: normalizedCreateCodingJobDto.missings_profile_id,
-          aggregation_enabled: aggregationSettings.aggregationEnabled,
-          aggregation_threshold: aggregationSettings.aggregationThreshold,
-          response_matching_flags: aggregationSettings.responseMatchingFlags,
-          aggregation_settings_version:
-            aggregationSettings.aggregationSettingsVersion
-        });
+    const createdCodingJob =
+      await this.workspaceCodingStatusMutationService.withWorkspaceLock(
+        workspaceId,
+        async () => {
+          const queryContext =
+            await this.loadCodingJobQueryContext(workspaceId);
+          return this.connection.transaction(async manager => {
+            await this.workspaceCodingStatusMutationService.lockInTransaction(
+              manager,
+              workspaceId
+            );
+            const codingJobRepo = manager.getRepository(CodingJob);
+            const aggregationSettings =
+              await this.getCurrentAggregationSettingsSnapshot(
+                workspaceId,
+                manager
+              );
+            const codingJob = codingJobRepo.create({
+              workspace_id: workspaceId,
+              name: normalizedCreateCodingJobDto.name,
+              description: normalizedCreateCodingJobDto.description,
+              status: normalizedCreateCodingJobDto.status || 'pending',
+              showScore: normalizedCreateCodingJobDto.showScore ?? false,
+              allowComments: normalizedCreateCodingJobDto.allowComments ?? true,
+              suppressGeneralInstructions:
+                normalizedCreateCodingJobDto.suppressGeneralInstructions ??
+                false,
+              missings_profile_id:
+                normalizedCreateCodingJobDto.missings_profile_id,
+              aggregation_enabled: aggregationSettings.aggregationEnabled,
+              aggregation_threshold: aggregationSettings.aggregationThreshold,
+              response_matching_flags:
+                aggregationSettings.responseMatchingFlags,
+              aggregation_settings_version:
+                aggregationSettings.aggregationSettingsVersion
+            });
 
-        const savedCodingJob = await codingJobRepo.save(codingJob);
+            const savedCodingJob = await codingJobRepo.save(codingJob);
 
-        if (
-          normalizedCreateCodingJobDto.assignedCoders &&
-          normalizedCreateCodingJobDto.assignedCoders.length > 0
-        ) {
-          await this.assignCoders(
-            savedCodingJob.id,
-            normalizedCreateCodingJobDto.assignedCoders,
-            manager,
-            workspaceId
-          );
-        }
-
-        if (
-          normalizedCreateCodingJobDto.variables &&
-          normalizedCreateCodingJobDto.variables.length > 0
-        ) {
-          await this.assignVariables(
-            savedCodingJob.id,
-            normalizedCreateCodingJobDto.variables,
-            manager
-          );
-        }
-
-        if (
-          normalizedCreateCodingJobDto.variableBundleIds &&
-          normalizedCreateCodingJobDto.variableBundleIds.length > 0
-        ) {
-          await this.assignVariableBundles(
-            savedCodingJob.id,
-            normalizedCreateCodingJobDto.variableBundleIds,
-            manager
-          );
-        } else if (
-          normalizedCreateCodingJobDto.variableBundles &&
-          normalizedCreateCodingJobDto.variableBundles.length > 0
-        ) {
-          if (normalizedCreateCodingJobDto.variableBundles[0].id) {
-            const bundleIds = normalizedCreateCodingJobDto.variableBundles
-              .filter(bundle => bundle.id)
-              .map(bundle => bundle.id);
-
-            if (bundleIds.length > 0) {
-              await this.assignVariableBundles(
+            if (
+              normalizedCreateCodingJobDto.assignedCoders &&
+              normalizedCreateCodingJobDto.assignedCoders.length > 0
+            ) {
+              await this.assignCoders(
                 savedCodingJob.id,
-                bundleIds,
+                normalizedCreateCodingJobDto.assignedCoders,
+                manager,
+                workspaceId
+              );
+            }
+
+            if (
+              normalizedCreateCodingJobDto.variables &&
+              normalizedCreateCodingJobDto.variables.length > 0
+            ) {
+              await this.assignVariables(
+                savedCodingJob.id,
+                normalizedCreateCodingJobDto.variables,
                 manager
               );
             }
-          } else {
-            const variables =
-              normalizedCreateCodingJobDto.variableBundles.flatMap(
-                bundle => bundle.variables || []
-              );
-            if (variables.length > 0) {
-              await this.assignVariables(savedCodingJob.id, variables, manager);
-            }
-          }
-        }
-        await this.saveCodingJobUnits(
-          savedCodingJob.id,
-          normalizedCreateCodingJobDto.maxCodingCases,
-          manager
-        );
 
-        return savedCodingJob;
-      }
-    );
+            if (
+              normalizedCreateCodingJobDto.variableBundleIds &&
+              normalizedCreateCodingJobDto.variableBundleIds.length > 0
+            ) {
+              await this.assignVariableBundles(
+                savedCodingJob.id,
+                normalizedCreateCodingJobDto.variableBundleIds,
+                manager
+              );
+            } else if (
+              normalizedCreateCodingJobDto.variableBundles &&
+              normalizedCreateCodingJobDto.variableBundles.length > 0
+            ) {
+              if (normalizedCreateCodingJobDto.variableBundles[0].id) {
+                const bundleIds = normalizedCreateCodingJobDto.variableBundles
+                  .filter(bundle => bundle.id)
+                  .map(bundle => bundle.id);
+
+                if (bundleIds.length > 0) {
+                  await this.assignVariableBundles(
+                    savedCodingJob.id,
+                    bundleIds,
+                    manager
+                  );
+                }
+              } else {
+                const variables =
+                  normalizedCreateCodingJobDto.variableBundles.flatMap(
+                    bundle => bundle.variables || []
+                  );
+                if (variables.length > 0) {
+                  await this.assignVariables(
+                    savedCodingJob.id,
+                    variables,
+                    manager
+                  );
+                }
+              }
+            }
+            await this.saveCodingJobUnits(
+              savedCodingJob.id,
+              normalizedCreateCodingJobDto.maxCodingCases,
+              manager,
+              queryContext
+            );
+
+            return savedCodingJob;
+          });
+        }
+      );
 
     await this.invalidateIncompleteVariablesCache(workspaceId);
     return createdCodingJob;
@@ -2639,7 +2711,71 @@ export class CodingJobService {
     workspaceId: number,
     updateCodingJobDto: UpdateCodingJobDto
   ): Promise<CodingJob> {
-    const codingJob = await this.getCodingJob(id, workspaceId);
+    return this.workspaceCodingStatusMutationService.withWorkspaceLock(
+      workspaceId,
+      async () => {
+        const hasMissingsProfileUpdate =
+          updateCodingJobDto.missingsProfileId !== undefined;
+        const [missingsProfileIds, exclusions] = await Promise.all([
+          hasMissingsProfileUpdate ?
+            Promise.all([
+              this.resolveMissingsProfileId(
+                workspaceId,
+                updateCodingJobDto.missingsProfileId
+              ),
+              this.resolveMissingsProfileId(workspaceId)
+            ]) :
+            Promise.resolve(undefined),
+          updateCodingJobDto.status === 'completed' ?
+            this.workspaceExclusionService.resolveExclusionsForQueries(
+              workspaceId
+            ) :
+            Promise.resolve(undefined)
+        ]);
+        const updateContext: UpdateCodingJobContext = {
+          nextMissingsProfileId: missingsProfileIds?.[0],
+          defaultMissingsProfileId: missingsProfileIds?.[1],
+          exclusions
+        };
+
+        return this.connection.transaction(async manager => {
+          await this.workspaceCodingStatusMutationService.lockInTransaction(
+            manager,
+            workspaceId
+          );
+          return this.updateCodingJobInManager(
+            id,
+            workspaceId,
+            updateCodingJobDto,
+            updateContext,
+            manager
+          );
+        });
+      }
+    );
+  }
+
+  private async updateCodingJobInManager(
+    id: number,
+    workspaceId: number,
+    updateCodingJobDto: UpdateCodingJobDto,
+    updateContext: UpdateCodingJobContext,
+    manager: EntityManager
+  ): Promise<CodingJob> {
+    const codingJob = {
+      codingJob: await this.getCodingJobByIdForWorkspace(
+        id,
+        workspaceId,
+        manager
+      )
+    };
+    const codingJobRepository = manager.getRepository(CodingJob);
+    const codingJobCoderRepository = manager.getRepository(CodingJobCoder);
+    const codingJobVariableRepository =
+      manager.getRepository(CodingJobVariable);
+    const codingJobVariableBundleRepository = manager.getRepository(
+      CodingJobVariableBundle
+    );
 
     if (updateCodingJobDto.name !== undefined) {
       codingJob.codingJob.name = updateCodingJobDto.name;
@@ -2687,7 +2823,11 @@ export class CodingJobService {
         codingJob.codingJob.status !== 'completed' &&
         targetStatus === 'completed'
       ) {
-        await this.assertCodingJobCanBeCompleted(id);
+        await this.assertCodingJobCanBeCompleted(
+          id,
+          manager,
+          updateContext.exclusions
+        );
       }
       codingJob.codingJob.status = targetStatus;
     }
@@ -2695,15 +2835,17 @@ export class CodingJobService {
       codingJob.codingJob.comment = updateCodingJobDto.comment;
     }
     if (updateCodingJobDto.missingsProfileId !== undefined) {
-      const nextMissingsProfileId = await this.resolveMissingsProfileId(
-        workspaceId,
-        updateCodingJobDto.missingsProfileId
-      );
+      const currentMissingsProfileId =
+        codingJob.codingJob.missings_profile_id ||
+        updateContext.defaultMissingsProfileId;
       await this.assertMissingsProfileCanChange(
         codingJob.codingJob,
-        nextMissingsProfileId
+        currentMissingsProfileId,
+        updateContext.nextMissingsProfileId,
+        manager
       );
-      codingJob.codingJob.missings_profile_id = nextMissingsProfileId;
+      codingJob.codingJob.missings_profile_id =
+        updateContext.nextMissingsProfileId;
     }
     if (updateCodingJobDto.showScore !== undefined) {
       codingJob.codingJob.showScore = updateCodingJobDto.showScore;
@@ -2720,47 +2862,47 @@ export class CodingJobService {
       if (updateCodingJobDto.assignedCoders.length > 0) {
         await this.assertCodersCanCodeInWorkspace(
           updateCodingJobDto.assignedCoders,
-          workspaceId
+          workspaceId,
+          manager
         );
       }
     }
 
-    const savedCodingJob = await this.codingJobRepository.save(
-      codingJob.codingJob
-    );
+    const savedCodingJob = await codingJobRepository.save(codingJob.codingJob);
 
     if (updateCodingJobDto.assignedCoders !== undefined) {
       if (updateCodingJobDto.assignedCoders.length > 0) {
         await this.assignCoders(
           id,
           updateCodingJobDto.assignedCoders,
-          undefined,
+          manager,
           workspaceId
         );
       } else {
-        await this.codingJobCoderRepository.delete({ coding_job_id: id });
+        await codingJobCoderRepository.delete({ coding_job_id: id });
       }
     }
 
     if (updateCodingJobDto.variables !== undefined) {
-      await this.codingJobVariableRepository.delete({ coding_job_id: id });
+      await codingJobVariableRepository.delete({ coding_job_id: id });
       if (updateCodingJobDto.variables.length > 0) {
-        await this.assignVariables(id, updateCodingJobDto.variables);
+        await this.assignVariables(id, updateCodingJobDto.variables, manager);
       }
     }
 
     if (updateCodingJobDto.variableBundleIds !== undefined) {
-      await this.codingJobVariableBundleRepository.delete({
+      await codingJobVariableBundleRepository.delete({
         coding_job_id: id
       });
       if (updateCodingJobDto.variableBundleIds.length > 0) {
         await this.assignVariableBundles(
           id,
-          updateCodingJobDto.variableBundleIds
+          updateCodingJobDto.variableBundleIds,
+          manager
         );
       }
     } else if (updateCodingJobDto.variableBundles !== undefined) {
-      await this.codingJobVariableBundleRepository.delete({
+      await codingJobVariableBundleRepository.delete({
         coding_job_id: id
       });
 
@@ -2771,14 +2913,14 @@ export class CodingJobService {
             .map(bundle => bundle.id);
 
           if (bundleIds.length > 0) {
-            await this.assignVariableBundles(id, bundleIds);
+            await this.assignVariableBundles(id, bundleIds, manager);
           }
         } else {
           const variables = updateCodingJobDto.variableBundles.flatMap(
             bundle => bundle.variables || []
           );
           if (variables.length > 0) {
-            await this.assignVariables(id, variables);
+            await this.assignVariables(id, variables, manager);
           }
         }
       }
@@ -5104,7 +5246,8 @@ export class CodingJobService {
 
   private async getSlimResponsesForCodingJob(
     codingJobId: number,
-    manager?: EntityManager
+    manager?: EntityManager,
+    queryContext?: CodingJobQueryContext
   ): Promise<SlimResponse[]> {
     const jobRepo = manager ?
       manager.getRepository(CodingJob) :
@@ -5197,7 +5340,9 @@ export class CodingJobService {
       '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
       {
         aggregatedCode: -111,
-        defaultMirCode: await this.getDefaultMirCode(workspaceId)
+        defaultMirCode:
+          queryContext?.defaultMirCode ??
+          (await this.getDefaultMirCode(workspaceId))
       }
     );
     queryBuilder.andWhere(
@@ -5205,9 +5350,10 @@ export class CodingJobService {
       { completedV2Status: statusStringToNumber('CODING_COMPLETE') }
     );
     const exclusions =
-      await this.workspaceExclusionService.resolveExclusionsForQueries(
+      queryContext?.exclusions ??
+      (await this.workspaceExclusionService.resolveExclusionsForQueries(
         workspaceId
-      );
+      ));
     applyResolvedExclusionsToQuery(queryBuilder, exclusions);
 
     const raw = await queryBuilder.orderBy('response.id', 'ASC').getRawMany();
@@ -5239,11 +5385,13 @@ export class CodingJobService {
   private async saveCodingJobUnits(
     codingJobId: number,
     maxCodingCases?: number,
-    manager?: EntityManager
+    manager?: EntityManager,
+    queryContext?: CodingJobQueryContext
   ): Promise<void> {
     let responses = await this.getSlimResponsesForCodingJob(
       codingJobId,
-      manager
+      manager,
+      queryContext
     );
 
     if (responses.length === 0) {
@@ -5277,7 +5425,8 @@ export class CodingJobService {
         workspaceId,
         responses,
         aggregationThreshold,
-        aggregationSettings.responseMatchingFlags
+        aggregationSettings.responseMatchingFlags,
+        queryContext?.derivedVariableMap
       );
       this.logger.log(
         `Aggregation enabled (threshold: ${aggregationThreshold}). ` +
@@ -5386,9 +5535,15 @@ export class CodingJobService {
   }
 
   private async assertCodingJobCanBeCompleted(
-    codingJobId: number
+    codingJobId: number,
+    manager?: EntityManager,
+    resolvedExclusions?: ResolvedWorkspaceExclusions
   ): Promise<void> {
-    const progress = await this.getCodingJobProgress(codingJobId);
+    const progress = await this.getCodingJobProgress(
+      codingJobId,
+      manager,
+      resolvedExclusions
+    );
     const missingUnits = Math.max(
       0,
       progress.total - progress.coded - progress.open
@@ -5416,11 +5571,16 @@ export class CodingJobService {
     createCodingJobDto: CreateCodingJobDto,
     unitSubset: SlimResponse[]
   ): Promise<CodingJob> {
+    const missingsProfileId = await this.resolveMissingsProfileId(
+      workspaceId,
+      createCodingJobDto.missings_profile_id
+    );
     const savedCodingJob = await this.connection.transaction(manager => this.createCodingJobWithUnitSubsetInManager(
       workspaceId,
       createCodingJobDto,
       unitSubset,
-      manager
+      manager,
+      missingsProfileId
     )
     );
 
@@ -5432,15 +5592,12 @@ export class CodingJobService {
     workspaceId: number,
     createCodingJobDto: InternalCreateCodingJobDto,
     unitSubset: SlimResponse[],
-    manager: EntityManager
+    manager: EntityManager,
+    missingsProfileId: number | undefined
   ): Promise<CodingJob> {
     const codingJobRepo = manager.getRepository(CodingJob);
     const aggregationSettings =
-      await this.getCurrentAggregationSettingsSnapshot(workspaceId);
-    const missingsProfileId = await this.resolveMissingsProfileId(
-      workspaceId,
-      createCodingJobDto.missings_profile_id
-    );
+      await this.getCurrentAggregationSettingsSnapshot(workspaceId, manager);
     const codingJob = codingJobRepo.create({
       workspace_id: workspaceId,
       name: createCodingJobDto.name,
@@ -5655,11 +5812,12 @@ export class CodingJobService {
   }
 
   async getCurrentAggregationSettingsSnapshot(
-    workspaceId: number
+    workspaceId: number,
+    manager?: EntityManager
   ): Promise<CodingJobAggregationSettings> {
     const [aggregationThreshold, responseMatchingFlags] = await Promise.all([
-      this.getAggregationThreshold(workspaceId),
-      this.getResponseMatchingMode(workspaceId)
+      this.getAggregationThreshold(workspaceId, manager),
+      this.getResponseMatchingMode(workspaceId, manager)
     ]);
     const aggregationEnabled =
       aggregationThreshold !== null &&
@@ -5913,9 +6071,11 @@ export class CodingJobService {
     workspaceId: number,
     responses: SlimResponse[],
     aggregationThreshold: number,
-    matchingFlags: ResponseMatchingFlag[]
+    matchingFlags: ResponseMatchingFlag[],
+    derivedVariableMap?: Map<string, Set<string>>
   ): Promise<SlimResponse[]> {
-    const derivedVariableMap =
+    const derivedVariableSets = derivedVariableMap ?
+      this.buildDerivedVariableSets(derivedVariableMap) :
       await this.getDerivedVariableMapForAggregation(workspaceId);
     const dedupedResponses = this.deduplicateSlimResponsesForManualCoding(
       responses,
@@ -5925,7 +6085,7 @@ export class CodingJobService {
       this.withManualCodingDeduplicationFields(dedupedResponses),
       matchingFlags,
       aggregationThreshold,
-      derivedVariableMap
+      derivedVariableSets
     );
     const filteredResponses: SlimResponse[] = [];
 
@@ -5991,7 +6151,8 @@ export class CodingJobService {
   async getSlimResponsesForVariables(
     workspaceId: number,
     variables: VariableReference[],
-    manager?: EntityManager
+    manager?: EntityManager,
+    queryContext?: CodingJobQueryContext
   ): Promise<SlimResponse[]> {
     if (variables.length === 0) {
       return [];
@@ -6023,7 +6184,9 @@ export class CodingJobService {
         '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
         {
           aggregatedCode: -111,
-          defaultMirCode: await this.getDefaultMirCode(workspaceId)
+          defaultMirCode:
+            queryContext?.defaultMirCode ??
+            (await this.getDefaultMirCode(workspaceId))
         }
       )
       .andWhere('(response.status_v2 IS NULL OR response.status_v2 != :completedV2Status)', {
@@ -6031,9 +6194,10 @@ export class CodingJobService {
       });
     this.applyManualCodingCandidateStatusFilter(queryBuilder, variables);
     const exclusions =
-      await this.workspaceExclusionService.resolveExclusionsForQueries(
+      queryContext?.exclusions ??
+      (await this.workspaceExclusionService.resolveExclusionsForQueries(
         workspaceId
-      );
+      ));
     applyResolvedExclusionsToQuery(queryBuilder, exclusions);
 
     const conditions: string[] = [];
@@ -6082,12 +6246,14 @@ export class CodingJobService {
     matchingFlags: ResponseMatchingFlag[],
     aggregationThreshold: number | null,
     derivedVariableMap: Map<string, Set<string>>,
-    manager?: EntityManager
+    manager?: EntityManager,
+    queryContext?: CodingJobQueryContext
   ): Promise<SlimResponse[]> {
     const activeResponses = await this.getSlimResponsesForVariables(
       workspaceId,
       variables,
-      manager
+      manager,
+      queryContext
     );
     const aggregationActive = aggregationThreshold !== null &&
       !matchingFlags.includes(ResponseMatchingFlag.NO_AGGREGATION);
@@ -6110,6 +6276,12 @@ export class CodingJobService {
         variables,
         manager,
         loadQueryContext: async () => {
+          if (queryContext) {
+            return {
+              defaultMirCode: queryContext.defaultMirCode,
+              exclusions: queryContext.exclusions
+            };
+          }
           const [defaultMirCode, exclusions] = await Promise.all([
             this.getDefaultMirCode(workspaceId),
             this.workspaceExclusionService.resolveExclusionsForQueries(
@@ -6909,7 +7081,8 @@ export class CodingJobService {
   private async buildDistributionPlan(
     workspaceId: number,
     request: DistributionPlanRequest,
-    manager?: EntityManager
+    manager?: EntityManager,
+    context: DistributionPlanContext = {}
   ): Promise<DistributionPlan> {
     const caseOrderingMode = request.caseOrderingMode || 'continuous';
     const distributionSeed = this.getDistributionSeed(workspaceId, request);
@@ -6919,7 +7092,8 @@ export class CodingJobService {
     );
     await this.assertCodersCanCodeInWorkspace(
       coders.map(coder => coder.id),
-      workspaceId
+      workspaceId,
+      manager
     );
     const codersPerDoubleCodedCase = 2;
 
@@ -6951,7 +7125,8 @@ export class CodingJobService {
       manager
     );
     const derivedVariableMap =
-      await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
+      context.derivedVariableMap ??
+      (await this.workspaceFilesService.getDerivedVariableMap(workspaceId));
     const derivedVariableSets =
       this.buildDerivedVariableSets(derivedVariableMap);
     const isDerivedVariable = (unitName: string, variableId: string): boolean => this.isDerivedVariable(derivedVariableSets, unitName, variableId);
@@ -6968,7 +7143,8 @@ export class CodingJobService {
       matchingFlags,
       aggregationThreshold,
       derivedVariableMap,
-      manager
+      manager,
+      context.queryContext
     );
     const assignedResponseIds = await this.getAssignedResponseIdsForVariables(
       workspaceId,
@@ -7740,89 +7916,108 @@ export class CodingJobService {
     let preview: JobDefinitionRefreshPreviewDto | null = null;
     const createdJobs: DistributionCreatedJob[] = [];
 
-    await this.connection.transaction(async manager => {
-      await this.workspaceCodingStatusMutationService.lockInTransaction(
-        manager,
-        workspaceId
-      );
-      await this.assertDeriveErrorManualCodingEnabled(
-        workspaceId,
-        request,
-        manager
-      );
-      await this.assertApprovedJobDefinitionCanBeUsed(
-        manager,
-        workspaceId,
-        jobDefinitionId
-      );
-      await this.lockCodingJobUnitsForDefinition(
-        manager,
-        workspaceId,
-        jobDefinitionId
-      );
+    await this.workspaceCodingStatusMutationService.withWorkspaceLock(
+      workspaceId,
+      async () => {
+        const [queryContext, missingsProfileId] = await Promise.all([
+          this.loadCodingJobQueryContext(workspaceId),
+          this.resolveMissingsProfileId(workspaceId, request.missingsProfileId)
+        ]);
+        return this.connection.transaction(async manager => {
+          await this.workspaceCodingStatusMutationService.lockInTransaction(
+            manager,
+            workspaceId
+          );
+          await this.assertDeriveErrorManualCodingEnabled(
+            workspaceId,
+            request,
+            manager
+          );
+          await this.assertApprovedJobDefinitionCanBeUsed(
+            manager,
+            workspaceId,
+            jobDefinitionId
+          );
+          await this.lockCodingJobUnitsForDefinition(
+            manager,
+            workspaceId,
+            jobDefinitionId
+          );
 
-      const [existingRows, jobsRow, hasCodingWork] = await Promise.all([
-        this.getJobDefinitionExistingTaskRows(
-          workspaceId,
-          jobDefinitionId,
-          manager
-        ),
-        this.getJobDefinitionJobCounts(workspaceId, jobDefinitionId, manager),
-        this.jobDefinitionHasAnyCodingWork(
-          workspaceId,
-          jobDefinitionId,
-          manager
-        )
-      ]);
+          const [existingRows, jobsRow, hasCodingWork] = await Promise.all([
+            this.getJobDefinitionExistingTaskRows(
+              workspaceId,
+              jobDefinitionId,
+              manager
+            ),
+            this.getJobDefinitionJobCounts(
+              workspaceId,
+              jobDefinitionId,
+              manager
+            ),
+            this.jobDefinitionHasAnyCodingWork(
+              workspaceId,
+              jobDefinitionId,
+              manager
+            )
+          ]);
 
-      const transactionPlan = await this.buildDistributionPlan(
-        workspaceId,
-        request,
-        manager
-      );
-      plan = transactionPlan;
+          const transactionPlan = await this.buildDistributionPlan(
+            workspaceId,
+            request,
+            manager,
+            {
+              derivedVariableMap: queryContext.derivedVariableMap,
+              queryContext
+            }
+          );
+          plan = transactionPlan;
 
-      preview = this.buildJobDefinitionRefreshPreview(
-        jobDefinitionId,
-        transactionPlan,
-        existingRows,
-        jobsRow,
-        hasCodingWork
-      );
-
-      if (!preview.canApply) {
-        throw new BadRequestException(
-          preview.blockingReason || 'Job definition refresh cannot be applied.'
-        );
-      }
-
-      if (preview.existingJobsCount > 0) {
-        await this.deleteCodingJobsByDefinitionInManager(
-          manager,
-          workspaceId,
-          jobDefinitionId
-        );
-      }
-
-      createdJobs.push(
-        ...(await this.createDistributedCodingJobsFromPlanInManager(
-          workspaceId,
-          request,
-          transactionPlan,
-          manager
-        ))
-      );
-
-      if (afterRefreshInTransaction) {
-        await afterRefreshInTransaction(manager, {
-          ...this.buildDistributedCodingJobsResult(
+          preview = this.buildJobDefinitionRefreshPreview(
+            jobDefinitionId,
             transactionPlan,
-            createdJobs
-          ),
-          preview
+            existingRows,
+            jobsRow,
+            hasCodingWork
+          );
+
+          if (!preview.canApply) {
+            throw new BadRequestException(
+              preview.blockingReason ||
+                'Job definition refresh cannot be applied.'
+            );
+          }
+
+          if (preview.existingJobsCount > 0) {
+            await this.deleteCodingJobsByDefinitionInManager(
+              manager,
+              workspaceId,
+              jobDefinitionId
+            );
+          }
+
+          createdJobs.push(
+            ...(await this.createDistributedCodingJobsFromPlanInManager(
+              workspaceId,
+              request,
+              transactionPlan,
+              manager,
+              missingsProfileId
+            ))
+          );
+
+          if (afterRefreshInTransaction) {
+            await afterRefreshInTransaction(manager, {
+              ...this.buildDistributedCodingJobsResult(
+                transactionPlan,
+                createdJobs
+              ),
+              preview
+            });
+          }
         });
       }
-    });
+    );
 
     await this.invalidateIncompleteVariablesCache(workspaceId);
     if (!plan || !preview) {
@@ -7841,7 +8036,8 @@ export class CodingJobService {
     workspaceId: number,
     request: DistributionPlanRequest,
     plan: DistributionPlan,
-    manager: EntityManager
+    manager: EntityManager,
+    missingsProfileId: number | undefined
   ): Promise<DistributionCreatedJob[]> {
     const createdJobs: DistributionCreatedJob[] = [];
 
@@ -7867,7 +8063,8 @@ export class CodingJobService {
         workspaceId,
         createCodingJobDto,
         job.unitSubset,
-        manager
+        manager,
+        missingsProfileId
       );
 
       createdJobs.push({
@@ -7933,6 +8130,10 @@ export class CodingJobService {
         plan.jobsToCreate.length > 0 ||
         request.jobDefinitionId !== undefined
       ) {
+        const missingsProfileId = await this.resolveMissingsProfileId(
+          workspaceId,
+          request.missingsProfileId
+        );
         await this.connection.transaction(async manager => {
           await this.assertApprovedJobDefinitionHasNoCreatedJobs(
             manager,
@@ -7945,7 +8146,8 @@ export class CodingJobService {
               workspaceId,
               request,
               plan,
-              manager
+              manager,
+              missingsProfileId
             ))
           );
 

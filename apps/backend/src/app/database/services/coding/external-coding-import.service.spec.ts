@@ -2,6 +2,10 @@ import { ExternalCodingImportService } from './external-coding-import.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 
 const createWorkspaceMutationService = () => ({
+  withWorkspaceLock: jest.fn((
+    _workspaceId: number,
+    operation: () => Promise<unknown>
+  ) => operation()),
   lockInTransaction: jest.fn((
     manager: { query: (sql: string, parameters: unknown[]) => Promise<unknown> },
     workspaceId: number
@@ -78,7 +82,7 @@ describe('ExternalCodingImportService', () => {
       createWorkspaceMutationService() as never,
       codingFreshnessService as never
     );
-    jest.spyOn(service as unknown as {
+    const validateCodeAgainstScheme = jest.spyOn(service as unknown as {
       validateCodeAgainstScheme: () => Promise<unknown>;
     }, 'validateCodeAgainstScheme')
       .mockResolvedValue({
@@ -104,6 +108,12 @@ describe('ExternalCodingImportService', () => {
       code_v2: 1,
       score_v2: 1
     });
+    expect(validateCodeAgainstScheme).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 7 }),
+      'VAR',
+      1,
+      transactionalResponseRepository
+    );
     expect(codingFreshnessService.markManualCodingCurrent).toHaveBeenCalledWith(
       17,
       [99],

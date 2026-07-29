@@ -16,6 +16,7 @@ import Persons from '../../entities/persons.entity';
 import { Unit } from '../../entities/unit.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import { ResponseEntity } from '../../entities/response.entity';
+import { WorkspaceCodingStatusMutationService } from '../shared';
 
 jest.mock('@iqb/responses', () => ({
   CodingSchemeFactory: {
@@ -257,7 +258,16 @@ describe('CodingProcessService', () => {
         { provide: WorkspaceFilesService, useValue: mockWorkspaceFilesService },
         { provide: CodingReadinessService, useValue: mockCodingReadinessService },
         { provide: CodingStatisticsService, useValue: mockCodingStatisticsService },
-        { provide: WorkspaceCoreService, useValue: mockWorkspaceCoreService }
+        { provide: WorkspaceCoreService, useValue: mockWorkspaceCoreService },
+        {
+          provide: WorkspaceCodingStatusMutationService,
+          useValue: {
+            withWorkspaceLock: jest.fn((
+              _workspaceId: number,
+              operation: () => Promise<unknown>
+            ) => operation())
+          }
+        }
       ]
     }).compile();
 

@@ -274,6 +274,22 @@ describe('UsersService', () => {
     await expect(service.assertUsersCanCodeInWorkspace([1, 2], 7)).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('asserts workspace coders through a provided transaction manager', async () => {
+    const transactionalRepository = {
+      find: jest.fn().mockResolvedValue([{ userId: 1 }])
+    };
+    const manager = {
+      getRepository: jest.fn().mockReturnValue(transactionalRepository)
+    };
+
+    await expect(
+      service.assertUsersCanCodeInWorkspace([1], 7, manager as never)
+    ).resolves.toBeUndefined();
+
+    expect(transactionalRepository.find).toHaveBeenCalled();
+    expect(workspaceUserRepository.find).not.toHaveBeenCalled();
+  });
+
   it('checks whether a single user is enabled as coder in a workspace', async () => {
     workspaceUserRepository.findOne.mockResolvedValueOnce({ userId: 1 });
 
