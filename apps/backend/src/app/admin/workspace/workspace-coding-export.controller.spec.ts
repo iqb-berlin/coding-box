@@ -5,6 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { BadRequestException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { Request } from 'express';
 import { WorkspaceCodingExportController } from './workspace-coding-export.controller';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -14,7 +15,8 @@ import {
   CodingExportOrchestratorService,
   CodingListExportService,
   CodingPsychometricExportService,
-  ExportArtifactService
+  ExportArtifactService,
+  ExportJobClientLeaseService
 } from '../../database/services/coding';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
@@ -29,15 +31,26 @@ const createController = (
   codingExportOrchestratorService: CodingExportOrchestratorService,
   jobQueueService: JobQueueService,
   cacheService: CacheService,
-  codingPsychometricExportService: CodingPsychometricExportService
+  codingPsychometricExportService: CodingPsychometricExportService,
+  exportJobClientLeaseService: ExportJobClientLeaseService = {
+    createLease: jest.fn().mockResolvedValue('client-lease'),
+    refreshLease: jest.fn().mockResolvedValue(undefined),
+    releaseLease: jest.fn().mockResolvedValue(undefined),
+    isLeaseActive: jest.fn().mockResolvedValue(true)
+  } as unknown as ExportJobClientLeaseService
 ): WorkspaceCodingExportController => new WorkspaceCodingExportController(
   codingListExportService,
   codingExportService,
   codingExportOrchestratorService,
   jobQueueService,
   codingPsychometricExportService,
-  new ExportArtifactService(cacheService)
+  new ExportArtifactService(cacheService),
+  exportJobClientLeaseService
 );
+
+const requestForUser = (userId = 2): Request => ({
+  user: { id: userId }
+} as unknown as Request);
 
 const createWritableResponse = () => {
   const res = new PassThrough() as PassThrough & {
@@ -212,7 +225,7 @@ describe('WorkspaceCodingExportController', () => {
     res.json = jest.fn();
 
     try {
-      await controller.downloadExport('1', 5, res as never);
+      await controller.downloadExport('1', 5, res as never, requestForUser());
 
       expect(res.setHeader).toHaveBeenCalledWith(
         'Content-Type',
@@ -390,7 +403,8 @@ describe('WorkspaceCodingExportController', () => {
     expect(jobQueueService.addExportJob).toHaveBeenCalledWith({
       exportType: 'detailed',
       workspaceId: 5,
-      userId: 2
+      userId: 2,
+      clientLeaseId: 'client-lease'
     });
   });
 
@@ -596,7 +610,7 @@ describe('WorkspaceCodingExportController', () => {
     };
     const jobQueueService = {
       getExportJob: jest.fn().mockResolvedValue({
-        data: { workspaceId: 5, exportType: 'detailed' },
+        data: { workspaceId: 5, userId: 2, exportType: 'detailed' },
         getState: jest.fn().mockResolvedValue('completed'),
         progress: jest.fn().mockResolvedValue(100),
         returnvalue: artifact
@@ -615,7 +629,11 @@ describe('WorkspaceCodingExportController', () => {
     );
 
     try {
-      const status = await controller.getExportJobStatus(5, 'job-1');
+      const status = await controller.getExportJobStatus(
+        5,
+        'job-1',
+        requestForUser()
+      );
 
       expect(status).toEqual({
         status: 'completed',
@@ -642,7 +660,7 @@ describe('WorkspaceCodingExportController', () => {
       'Der Export enthaelt 2578 Unit-Variable-Kombinationen und ueberschreitet das konfigurierte Limit von 1000 Tabellenblaettern.';
     const jobQueueService = {
       getExportJob: jest.fn().mockResolvedValue({
-        data: { workspaceId: 5, exportType: 'by-variable' },
+        data: { workspaceId: 5, userId: 2, exportType: 'by-variable' },
         getState: jest.fn().mockResolvedValue('failed'),
         progress: jest.fn().mockResolvedValue(20),
         failedReason
@@ -657,7 +675,11 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
+    await expect(controller.getExportJobStatus(
+      5,
+      'job-1',
+      requestForUser()
+    )).resolves.toEqual({
       status: 'failed',
       progress: 20,
       error: failedReason,
@@ -688,7 +710,7 @@ describe('WorkspaceCodingExportController', () => {
     };
     const job = {
       id: 'job-1',
-      data: { workspaceId: 5, exportType: 'item-matrix' },
+      data: { workspaceId: 5, userId: 2, exportType: 'item-matrix' },
       getState: jest.fn().mockResolvedValue('failed'),
       progress: jest.fn().mockResolvedValue(90),
       failedReason:
@@ -731,7 +753,11 @@ describe('WorkspaceCodingExportController', () => {
     );
 
     try {
-      const status = await controller.getExportJobStatus(5, 'job-1');
+      const status = await controller.getExportJobStatus(
+        5,
+        'job-1',
+        requestForUser()
+      );
       expect(status).toEqual(expect.objectContaining({
         status: 'failed',
         errorCode: 'ITEM_MATRIX_UNRESOLVED_CELLS',
@@ -744,12 +770,21 @@ describe('WorkspaceCodingExportController', () => {
         })
       }));
       await expect(
-        controller.getItemMatrixExportDiagnostics(5, 'job-1')
+        controller.getItemMatrixExportDiagnostics(
+          5,
+          'job-1',
+          requestForUser()
+        )
       ).resolves.toEqual(diagnostics);
 
       const res = createWritableResponse();
       res.resume();
-      await controller.downloadIncompleteItemMatrix(5, 'job-1', res as never);
+      await controller.downloadIncompleteItemMatrix(
+        5,
+        'job-1',
+        res as never,
+        requestForUser()
+      );
       expect(res.setHeader).toHaveBeenCalledWith(
         'Content-Type',
         'application/zip'
@@ -766,7 +801,7 @@ describe('WorkspaceCodingExportController', () => {
   it('rejects diagnostics for wrong workspaces, job types and expired data', async () => {
     const job = {
       id: 'job-1',
-      data: { workspaceId: 5, exportType: 'item-matrix' },
+      data: { workspaceId: 5, userId: 2, exportType: 'item-matrix' },
       getState: jest.fn().mockResolvedValue('failed')
     };
     const jobQueueService = {
@@ -785,17 +820,17 @@ describe('WorkspaceCodingExportController', () => {
     );
 
     await expect(
-      controller.getItemMatrixExportDiagnostics(6, 'job-1')
+      controller.getItemMatrixExportDiagnostics(6, 'job-1', requestForUser())
     ).rejects.toThrow('Access denied');
 
     job.data.exportType = 'detailed';
     await expect(
-      controller.getItemMatrixExportDiagnostics(5, 'job-1')
+      controller.getItemMatrixExportDiagnostics(5, 'job-1', requestForUser())
     ).rejects.toThrow('only for failed item matrix exports');
 
     job.data.exportType = 'item-matrix';
     await expect(
-      controller.getItemMatrixExportDiagnostics(5, 'job-1')
+      controller.getItemMatrixExportDiagnostics(5, 'job-1', requestForUser())
     ).rejects.toThrow('not found or expired');
   });
 
@@ -809,7 +844,7 @@ describe('WorkspaceCodingExportController', () => {
     fs.writeFileSync(incompletePath, 'incomplete');
     const jobQueueService = {
       getExportJob: jest.fn().mockResolvedValue({
-        data: { workspaceId: 5, exportType: 'item-matrix' }
+        data: { workspaceId: 5, userId: 2, exportType: 'item-matrix' }
       }),
       deleteExportJob: jest.fn().mockResolvedValue(true)
     };
@@ -831,7 +866,11 @@ describe('WorkspaceCodingExportController', () => {
     );
 
     try {
-      await expect(controller.deleteExportJob(5, 'job-1')).resolves.toEqual({
+      await expect(controller.deleteExportJob(
+        5,
+        'job-1',
+        requestForUser()
+      )).resolves.toEqual({
         success: true,
         message: 'Export job deleted successfully'
       });
@@ -867,7 +906,11 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.deleteExportJob(5, 'missing')).resolves.toEqual({
+    await expect(controller.deleteExportJob(
+      5,
+      'missing',
+      requestForUser()
+    )).resolves.toEqual({
       success: true,
       message: 'Export job already deleted'
     });
@@ -879,7 +922,7 @@ describe('WorkspaceCodingExportController', () => {
   it('keeps the export job when an artifact file cannot be deleted', async () => {
     const jobQueueService = {
       getExportJob: jest.fn().mockResolvedValue({
-        data: { workspaceId: 5, exportType: 'item-matrix' }
+        data: { workspaceId: 5, userId: 2, exportType: 'item-matrix' }
       }),
       deleteExportJob: jest.fn().mockResolvedValue(true)
     };
@@ -902,7 +945,11 @@ describe('WorkspaceCodingExportController', () => {
     );
 
     try {
-      await expect(controller.deleteExportJob(5, 'job-1')).resolves.toEqual({
+      await expect(controller.deleteExportJob(
+        5,
+        'job-1',
+        requestForUser()
+      )).resolves.toEqual({
         success: false,
         message: 'file is busy'
       });
@@ -916,7 +963,7 @@ describe('WorkspaceCodingExportController', () => {
   it('keeps the export job when artifact cache cleanup is incomplete', async () => {
     const jobQueueService = {
       getExportJob: jest.fn().mockResolvedValue({
-        data: { workspaceId: 5, exportType: 'item-matrix' }
+        data: { workspaceId: 5, userId: 2, exportType: 'item-matrix' }
       }),
       deleteExportJob: jest.fn().mockResolvedValue(true)
     };
@@ -936,7 +983,11 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.deleteExportJob(5, 'job-1')).resolves.toEqual({
+    await expect(controller.deleteExportJob(
+      5,
+      'job-1',
+      requestForUser()
+    )).resolves.toEqual({
       success: false,
       message: 'Export artifacts could not be deleted completely'
     });
@@ -947,7 +998,7 @@ describe('WorkspaceCodingExportController', () => {
   it('normalizes structured export progress details in job status', async () => {
     const jobQueueService = {
       getExportJob: jest.fn().mockResolvedValue({
-        data: { workspaceId: 5, exportType: 'detailed' },
+        data: { workspaceId: 5, userId: 2, exportType: 'detailed' },
         getState: jest.fn().mockResolvedValue('active'),
         progress: jest.fn().mockResolvedValue({
           percentage: 57.4,
@@ -967,7 +1018,11 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
+    await expect(controller.getExportJobStatus(
+      5,
+      'job-1',
+      requestForUser()
+    )).resolves.toEqual({
       status: 'processing',
       progress: 57,
       progressPhase: 'writing',
@@ -977,11 +1032,53 @@ describe('WorkspaceCodingExportController', () => {
     });
   });
 
+  it('refreshes the client lease while an owned export is active', async () => {
+    const jobQueueService = {
+      getExportJob: jest.fn().mockResolvedValue({
+        data: {
+          workspaceId: 5,
+          userId: 2,
+          exportType: 'detailed',
+          clientLeaseId: 'lease-1'
+        },
+        getState: jest.fn().mockResolvedValue('active'),
+        progress: jest.fn().mockResolvedValue(50)
+      })
+    };
+    const exportJobClientLeaseService = {
+      createLease: jest.fn(),
+      refreshLease: jest.fn().mockResolvedValue(undefined),
+      releaseLease: jest.fn(),
+      isLeaseActive: jest.fn()
+    } as unknown as ExportJobClientLeaseService;
+    const controller = createController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService,
+      codingPsychometricExportServiceMock,
+      exportJobClientLeaseService
+    );
+
+    await expect(controller.getExportJobStatus(
+      5,
+      'job-1',
+      requestForUser()
+    )).resolves.toEqual({
+      status: 'processing',
+      progress: 50
+    });
+    expect(exportJobClientLeaseService.refreshLease)
+      .toHaveBeenCalledWith('lease-1');
+  });
+
   it('reports cancellation-marked export jobs as cancelled', async () => {
     const jobQueueService = {
       getExportJob: jest.fn().mockResolvedValue({
         data: {
           workspaceId: 5,
+          userId: 2,
           exportType: 'detailed',
           isCancelled: true
         },
@@ -998,7 +1095,11 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
+    await expect(controller.getExportJobStatus(
+      5,
+      'job-1',
+      requestForUser()
+    )).resolves.toEqual({
       status: 'cancelled',
       progress: 55
     });
@@ -1007,7 +1108,7 @@ describe('WorkspaceCodingExportController', () => {
   it('maps stuck export jobs to the public pending state', async () => {
     const jobQueueService = {
       getExportJob: jest.fn().mockResolvedValue({
-        data: { workspaceId: 5, exportType: 'detailed' },
+        data: { workspaceId: 5, userId: 2, exportType: 'detailed' },
         getState: jest.fn().mockResolvedValue('stuck'),
         progress: jest.fn().mockResolvedValue(0)
       })
@@ -1021,7 +1122,11 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
+    await expect(controller.getExportJobStatus(
+      5,
+      'job-1',
+      requestForUser()
+    )).resolves.toEqual({
       status: 'pending',
       progress: 0
     });
@@ -1032,6 +1137,7 @@ describe('WorkspaceCodingExportController', () => {
       getExportJob: jest.fn().mockResolvedValue({
         data: {
           workspaceId: 5,
+          userId: 2,
           exportType: 'detailed',
           isCancelled: true
         },
@@ -1058,7 +1164,11 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
+    await expect(controller.getExportJobStatus(
+      5,
+      'job-1',
+      requestForUser()
+    )).resolves.toEqual({
       status: 'cancelled',
       progress: 21
     });
@@ -1067,7 +1177,7 @@ describe('WorkspaceCodingExportController', () => {
   it('reports failed export jobs caused by cancellation as cancelled', async () => {
     const jobQueueService = {
       getExportJob: jest.fn().mockResolvedValue({
-        data: { workspaceId: 5, exportType: 'detailed' },
+        data: { workspaceId: 5, userId: 2, exportType: 'detailed' },
         getState: jest.fn().mockResolvedValue('failed'),
         progress: jest.fn().mockResolvedValue(20),
         failedReason: 'Export job job-1 was cancelled'
@@ -1082,7 +1192,11 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
+    await expect(controller.getExportJobStatus(
+      5,
+      'job-1',
+      requestForUser()
+    )).resolves.toEqual({
       status: 'cancelled',
       progress: 20
     });
@@ -1095,6 +1209,7 @@ describe('WorkspaceCodingExportController', () => {
           id: 'active-cancelled',
           data: {
             workspaceId: 5,
+            userId: 2,
             exportType: 'coding-list',
             isCancelled: true
           },
@@ -1104,7 +1219,7 @@ describe('WorkspaceCodingExportController', () => {
         },
         {
           id: 'failed-cancelled',
-          data: { workspaceId: 5, exportType: 'detailed' },
+          data: { workspaceId: 5, userId: 2, exportType: 'detailed' },
           timestamp: 101,
           failedReason: 'Export job failed-cancelled was cancelled',
           getState: jest.fn().mockResolvedValue('failed'),
@@ -1112,7 +1227,7 @@ describe('WorkspaceCodingExportController', () => {
         },
         {
           id: 'waiting-job',
-          data: { workspaceId: 5, exportType: 'by-variable' },
+          data: { workspaceId: 5, userId: 2, exportType: 'by-variable' },
           timestamp: 102,
           getState: jest.fn().mockResolvedValue('waiting'),
           progress: jest.fn().mockResolvedValue(0)
@@ -1128,7 +1243,7 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.getExportJobs(5)).resolves.toEqual([
+    await expect(controller.getExportJobs(5, requestForUser())).resolves.toEqual([
       {
         jobId: 'active-cancelled',
         status: 'cancelled',
@@ -1142,15 +1257,88 @@ describe('WorkspaceCodingExportController', () => {
         progress: 20,
         exportType: 'detailed',
         createdAt: 101
-      },
-      {
-        jobId: 'waiting-job',
-        status: 'pending',
-        progress: 0,
-        exportType: 'by-variable',
-        createdAt: 102
       }
     ]);
+  });
+
+  it('lists only export jobs owned by the authenticated user', async () => {
+    const createFailedJob = (id: string, userId: number) => ({
+      id,
+      data: {
+        workspaceId: 5,
+        userId,
+        exportType: 'detailed'
+      },
+      timestamp: 100,
+      failedReason: 'failed',
+      getState: jest.fn().mockResolvedValue('failed'),
+      progress: jest.fn().mockResolvedValue(20)
+    });
+    const jobQueueService = {
+      getExportJobs: jest.fn().mockResolvedValue([
+        createFailedJob('own-job', 2),
+        createFailedJob('other-job', 3)
+      ])
+    };
+    const controller = createController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService,
+      codingPsychometricExportServiceMock
+    );
+
+    const jobs = await controller.getExportJobs(5, requestForUser(2));
+
+    expect(jobs.map(job => job.jobId)).toEqual(['own-job']);
+  });
+
+  it('rejects status, cancellation and deletion for another user job', async () => {
+    const job = {
+      data: { workspaceId: 5, userId: 3, exportType: 'detailed' },
+      getState: jest.fn()
+    };
+    const jobQueueService = {
+      getExportJob: jest.fn().mockResolvedValue(job),
+      markExportJobCancelled: jest.fn(),
+      cancelExportJob: jest.fn(),
+      deleteExportJob: jest.fn()
+    };
+    const controller = createController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService,
+      codingPsychometricExportServiceMock
+    );
+
+    await expect(controller.getExportJobStatus(
+      5,
+      'other-job',
+      requestForUser(2)
+    )).resolves.toEqual({ error: 'Access denied to this export' });
+    await expect(controller.cancelExportJob(
+      5,
+      'other-job',
+      requestForUser(2)
+    )).resolves.toEqual({
+      success: false,
+      message: 'Access denied to this export'
+    });
+    await expect(controller.deleteExportJob(
+      5,
+      'other-job',
+      requestForUser(2)
+    )).resolves.toEqual({
+      success: false,
+      message: 'Access denied to this export'
+    });
+    expect(job.getState).not.toHaveBeenCalled();
+    expect(jobQueueService.markExportJobCancelled).not.toHaveBeenCalled();
+    expect(jobQueueService.cancelExportJob).not.toHaveBeenCalled();
+    expect(jobQueueService.deleteExportJob).not.toHaveBeenCalled();
   });
 
   it('returns display variants for manual coding exports', async () => {
@@ -1160,24 +1348,26 @@ describe('WorkspaceCodingExportController', () => {
           id: 'manual-aggregated',
           data: {
             workspaceId: 5,
+            userId: 2,
             exportType: 'aggregated',
             excludeAutoCoded: true,
             doubleCodingMethod: 'new-column-per-coder'
           },
           timestamp: 100,
-          getState: jest.fn().mockResolvedValue('waiting'),
-          progress: jest.fn().mockResolvedValue(0)
+          getState: jest.fn().mockResolvedValue('failed'),
+          progress: jest.fn().mockResolvedValue(80)
         },
         {
           id: 'manual-compact',
           data: {
             workspaceId: 5,
+            userId: 2,
             exportType: 'by-variable-compact',
             excludeAutoCoded: true
           },
           timestamp: 101,
-          getState: jest.fn().mockResolvedValue('waiting'),
-          progress: jest.fn().mockResolvedValue(0)
+          getState: jest.fn().mockResolvedValue('failed'),
+          progress: jest.fn().mockResolvedValue(80)
         }
       ])
     };
@@ -1190,7 +1380,7 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.getExportJobs(5)).resolves.toEqual([
+    await expect(controller.getExportJobs(5, requestForUser())).resolves.toEqual([
       expect.objectContaining({
         jobId: 'manual-aggregated',
         displayVariant: 'manual-review-new-column-per-coder'
@@ -1206,7 +1396,7 @@ describe('WorkspaceCodingExportController', () => {
     const jobQueueService = {
       getExportJobs: jest.fn().mockResolvedValue([{
         id: 'failed-matrix',
-        data: { workspaceId: 5, exportType: 'item-matrix' },
+        data: { workspaceId: 5, userId: 2, exportType: 'item-matrix' },
         timestamp: 100,
         failedReason:
           'ITEM_MATRIX_UNRESOLVED_CELLS:2 Itemdatensatz enthält 2 nicht exportierbare Zellen.',
@@ -1241,7 +1431,7 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.getExportJobs(5)).resolves.toEqual([{
+    await expect(controller.getExportJobs(5, requestForUser())).resolves.toEqual([{
       jobId: 'failed-matrix',
       status: 'failed',
       progress: 90,
@@ -1265,7 +1455,7 @@ describe('WorkspaceCodingExportController', () => {
     const jobQueueService = {
       getExportJobs: jest.fn().mockResolvedValue([{
         id: 'completed-expired',
-        data: { workspaceId: 5, exportType: 'aggregated' },
+        data: { workspaceId: 5, userId: 2, exportType: 'aggregated' },
         timestamp: 100,
         getState: jest.fn().mockResolvedValue('completed'),
         progress: jest.fn().mockResolvedValue(100),
@@ -1293,12 +1483,12 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.getExportJobs(5)).resolves.toEqual([]);
+    await expect(controller.getExportJobs(5, requestForUser())).resolves.toEqual([]);
   });
 
   it('does not clean up cached export metadata when cancelling coding export jobs', async () => {
     const job = {
-      data: { workspaceId: 5, exportType: 'detailed' },
+      data: { workspaceId: 5, userId: 2, exportType: 'detailed' },
       getState: jest.fn().mockResolvedValue('active')
     };
     const jobQueueService = {
@@ -1319,7 +1509,11 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.cancelExportJob(5, 'job-1')).resolves.toEqual({
+    await expect(controller.cancelExportJob(
+      5,
+      'job-1',
+      requestForUser()
+    )).resolves.toEqual({
       success: true,
       message:
         'Export job cancellation requested (job will stop at next checkpoint)'
@@ -1336,6 +1530,7 @@ describe('WorkspaceCodingExportController', () => {
     const job = {
       data: {
         workspaceId: 5,
+        userId: 2,
         exportType: 'detailed',
         isCancelled: true
       },
@@ -1355,7 +1550,11 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.cancelExportJob(5, 'job-1')).resolves.toEqual({
+    await expect(controller.cancelExportJob(
+      5,
+      'job-1',
+      requestForUser()
+    )).resolves.toEqual({
       success: true,
       message: 'Export job cancelled successfully'
     });
@@ -1367,7 +1566,7 @@ describe('WorkspaceCodingExportController', () => {
 
   it('does not report coding export cancellation as successful when queue cancellation was not accepted', async () => {
     const job = {
-      data: { workspaceId: 5, exportType: 'detailed' },
+      data: { workspaceId: 5, userId: 2, exportType: 'detailed' },
       getState: jest.fn().mockResolvedValue('active')
     };
     const jobQueueService = {
@@ -1384,7 +1583,11 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.cancelExportJob(5, 'job-1')).resolves.toEqual({
+    await expect(controller.cancelExportJob(
+      5,
+      'job-1',
+      requestForUser()
+    )).resolves.toEqual({
       success: false,
       message: 'Export job cancellation could not be requested'
     });
@@ -1396,7 +1599,7 @@ describe('WorkspaceCodingExportController', () => {
 
   it('reports coding export cancellation as successful when cancellation completes during the request', async () => {
     const job = {
-      data: { workspaceId: 5, exportType: 'detailed' },
+      data: { workspaceId: 5, userId: 2, exportType: 'detailed' },
       getState: jest
         .fn()
         .mockResolvedValueOnce('active')
@@ -1416,7 +1619,11 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.cancelExportJob(5, 'job-1')).resolves.toEqual({
+    await expect(controller.cancelExportJob(
+      5,
+      'job-1',
+      requestForUser()
+    )).resolves.toEqual({
       success: true,
       message:
         'Export job cancellation requested (job will stop at next checkpoint)'
@@ -1442,7 +1649,11 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
+    await expect(controller.getExportJobStatus(
+      5,
+      'job-1',
+      requestForUser()
+    )).resolves.toEqual({
       error: 'Access denied to this export'
     });
   });

@@ -21,7 +21,8 @@ import {
 import {
   CodingExportOrchestratorService,
   CodingExportService,
-  CodingPsychometricExportService
+  CodingPsychometricExportService,
+  ExportJobClientLeaseService
 } from '../../database/services/coding';
 import {
   ExportArtifactService
@@ -59,7 +60,8 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
     private cacheService: CacheService,
     private jobQueueService: JobQueueService,
     private codingPsychometricExportService: CodingPsychometricExportService,
-    private exportArtifactService: ExportArtifactService
+    private exportArtifactService: ExportArtifactService,
+    private exportJobClientLeaseService: ExportJobClientLeaseService
   ) { }
 
   async onModuleInit(): Promise<void> {
@@ -191,6 +193,16 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
     job: Job<ExportJobData>,
     filePath?: string
   ): Promise<void> {
+    if (
+      job.data.clientLeaseId &&
+      !await this.exportJobClientLeaseService.isLeaseActive(
+        job.data.clientLeaseId
+      )
+    ) {
+      const cancelledData = { ...job.data, isCancelled: true };
+      await job.update(cancelledData);
+      job.data = cancelledData;
+    }
     if (
       job.data.isCancelled ||
       (await this.jobQueueService.isExportJobCancelled(job.id.toString()))
@@ -854,6 +866,9 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
       this.cleanupPartialExportFile(filePath);
       throw error;
     } finally {
+      await this.exportJobClientLeaseService.releaseLease(
+        job.data.clientLeaseId
+      );
       await this.stopExportWorkingDirectoryLease(workingDirectory);
       this.cleanupExportWorkingDirectory(workingDirectory);
       this.jobQueueService.clearExportJobCancellationSignal(jobId);

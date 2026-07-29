@@ -7,7 +7,8 @@ import { PassThrough, Readable } from 'stream';
 import {
   CodingExportOrchestratorService,
   CodingExportService,
-  CodingPsychometricExportService
+  CodingPsychometricExportService,
+  ExportJobClientLeaseService
 } from '../../database/services/coding';
 import {
   ExportArtifactService
@@ -20,7 +21,8 @@ import { ExportJobProcessor } from './export-job.processor';
 jest.mock('../../database/services/coding', () => ({
   CodingExportOrchestratorService: jest.fn(),
   CodingExportService: jest.fn(),
-  CodingPsychometricExportService: jest.fn()
+  CodingPsychometricExportService: jest.fn(),
+  ExportJobClientLeaseService: jest.fn()
 }));
 jest.mock('../../database/services/test-results', () => ({
   WorkspaceTestResultsService: jest.fn()
@@ -32,16 +34,22 @@ describe('ExportJobProcessor', () => {
     sampleLimit: 20,
     groups: []
   };
-  const createJob = (data: Partial<ExportJobData>): Job<ExportJobData> => ({
-    id: 'job-1',
-    data: {
-      workspaceId: 7,
-      userId: 3,
-      exportType: 'coding-list',
-      ...data
-    } as ExportJobData,
-    progress: jest.fn().mockResolvedValue(undefined)
-  }) as unknown as Job<ExportJobData>;
+  const createJob = (data: Partial<ExportJobData>): Job<ExportJobData> => {
+    const job = {
+      id: 'job-1',
+      data: {
+        workspaceId: 7,
+        userId: 3,
+        exportType: 'coding-list',
+        ...data
+      } as ExportJobData,
+      progress: jest.fn().mockResolvedValue(undefined),
+      update: jest.fn().mockImplementation(async updatedData => {
+        job.data = updatedData;
+      })
+    };
+    return job as unknown as Job<ExportJobData>;
+  };
 
   const createProcessor = () => {
     const codingExportService = {
@@ -58,6 +66,10 @@ describe('ExportJobProcessor', () => {
       exportCodingTimesReportToFile: jest.fn((filePath: string) => fs.promises.writeFile(filePath, 'coding-times')
       ),
       exportCodingResultsByVariableCompactAsCsvStream: jest.fn()
+    };
+    const exportJobClientLeaseService = {
+      isLeaseActive: jest.fn().mockResolvedValue(true),
+      releaseLease: jest.fn().mockResolvedValue(undefined)
     };
     const codingExportOrchestratorService = {
       exportResultsByVersionAsCsv: jest.fn(),
@@ -106,7 +118,8 @@ describe('ExportJobProcessor', () => {
       codingPsychometricExportService as unknown as CodingPsychometricExportService,
       new ExportArtifactService(
         cacheService as unknown as CacheService
-      )
+      ),
+      exportJobClientLeaseService as unknown as ExportJobClientLeaseService
     );
 
     return {
@@ -115,7 +128,8 @@ describe('ExportJobProcessor', () => {
       codingExportOrchestratorService,
       cacheService,
       jobQueueService,
-      codingPsychometricExportService
+      codingPsychometricExportService,
+      exportJobClientLeaseService
     };
   };
 
@@ -219,6 +233,32 @@ describe('ExportJobProcessor', () => {
     } finally {
       cleanup(filePath);
     }
+  });
+
+  it('cancels an export when its client lease has expired', async () => {
+    const {
+      processor,
+      codingExportService,
+      exportJobClientLeaseService
+    } = createProcessor();
+    exportJobClientLeaseService.isLeaseActive.mockResolvedValue(false);
+    const job = createJob({
+      format: 'excel',
+      clientLeaseId: 'expired-client-lease'
+    });
+
+    await expect(processor.process(job)).resolves.toMatchObject({
+      filePath: '',
+      fileSize: 0
+    });
+
+    expect(job.update).toHaveBeenCalledWith(expect.objectContaining({
+      isCancelled: true
+    }));
+    expect(codingExportService.exportCodingListForJobAsExcelToFile)
+      .not.toHaveBeenCalled();
+    expect(exportJobClientLeaseService.releaseLease)
+      .toHaveBeenCalledWith('expired-client-lease');
   });
 
   it('passes trainingRequired to coding-list Excel exports', async () => {

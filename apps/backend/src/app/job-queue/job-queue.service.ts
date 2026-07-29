@@ -154,6 +154,7 @@ export type ExportJobData = BackgroundExportRequest & {
   workspaceId: number;
   userId: number;
   isCancelled?: boolean;
+  clientLeaseId?: string;
 };
 
 export type ExportJobProgressPhase = 'preparing'
@@ -203,6 +204,9 @@ export interface RedisConnectionStatus {
 
 @Injectable()
 export class JobQueueService {
+  private static readonly completedExportJobRetentionSeconds = 3600;
+  private static readonly failedExportJobRetentionSeconds = 86400;
+  private static readonly recentTerminalExportJobLimit = 500;
   private readonly logger = new Logger(JobQueueService.name);
 
   private readonly exportCancellationControllers = new Map<string, AbortController>();
@@ -874,7 +878,15 @@ export class JobQueueService {
     this.logger.log(
       `Adding export job for workspace ${data.workspaceId}, type: ${data.exportType}`
     );
-    return this.dataExportQueue.add(data, options);
+    return this.dataExportQueue.add(data, {
+      removeOnComplete: {
+        age: JobQueueService.completedExportJobRetentionSeconds
+      },
+      removeOnFail: {
+        age: JobQueueService.failedExportJobRetentionSeconds
+      },
+      ...options
+    });
   }
 
   async getExportJob(jobId: string): Promise<Job<ExportJobData>> {
@@ -883,13 +895,24 @@ export class JobQueueService {
 
   async getExportJobs(workspaceId: number): Promise<Job<ExportJobData>[]> {
     this.logger.log(`Fetching all export jobs for workspace ${workspaceId}`);
-    const jobs = await this.dataExportQueue.getJobs([
-      'completed',
-      'failed',
-      'active',
-      'waiting',
-      'delayed'
+    const [inProgressJobs, terminalJobs] = await Promise.all([
+      this.dataExportQueue.getJobs([
+        'active',
+        'waiting',
+        'delayed'
+      ]),
+      this.dataExportQueue.getJobs(
+        ['completed', 'failed'],
+        0,
+        JobQueueService.recentTerminalExportJobLimit - 1,
+        false
+      )
     ]);
+    const jobs = [...new Map(
+      [...inProgressJobs, ...terminalJobs]
+        .filter((job): job is Job<ExportJobData> => !!job)
+        .map(job => [job.id.toString(), job])
+    ).values()];
     this.logger.log(`Found ${jobs.length} export jobs in total`);
     return jobs.filter(job => this.jobMatchesWorkspace(job, workspaceId));
   }

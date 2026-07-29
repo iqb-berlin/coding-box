@@ -41,7 +41,8 @@ import {
   CodingExportOrchestratorService,
   CodingListExportService,
   CodingPsychometricExportService,
-  ExportArtifactService
+  ExportArtifactService,
+  ExportJobClientLeaseService
 } from '../../database/services/coding';
 import { PsychometricDomainCandidatesDto } from '../../../../../../api-dto/coding/psychometric-discrimination.dto';
 import {
@@ -85,7 +86,8 @@ export class WorkspaceCodingExportController {
     private codingExportOrchestratorService: CodingExportOrchestratorService,
     private jobQueueService: JobQueueService,
     private codingPsychometricExportService: CodingPsychometricExportService,
-    private readonly exportArtifactService: ExportArtifactService
+    private readonly exportArtifactService: ExportArtifactService,
+    private readonly exportJobClientLeaseService: ExportJobClientLeaseService
   ) {}
 
   private parseVersionedExportMissingsProfileId(
@@ -159,6 +161,10 @@ export class WorkspaceCodingExportController {
     }
 
     return userId;
+  }
+
+  private isExportJobOwner(job: Job<ExportJobData>, req: Request): boolean {
+    return Number(job.data.userId) === this.getRequestUserId(req);
   }
 
   private async getPublicExportErrorDetails(
@@ -1423,12 +1429,15 @@ export class WorkspaceCodingExportController {
       );
     }
 
+    let clientLeaseId: string | undefined;
     try {
       const userId = this.getRequestUserId(req);
+      clientLeaseId = await this.exportJobClientLeaseService.createLease();
       const job = await this.jobQueueService.addExportJob({
         ...request,
         workspaceId: workspace_id,
-        userId
+        userId,
+        clientLeaseId
       });
 
       this.logger.log(
@@ -1440,6 +1449,7 @@ export class WorkspaceCodingExportController {
         message: `Export job created successfully. Job ID: ${job.id}`
       };
     } catch (error) {
+      await this.exportJobClientLeaseService.releaseLease(clientLeaseId);
       this.logger.error(
         `Error creating export job: ${error.message}`,
         error.stack
@@ -1541,7 +1551,8 @@ export class WorkspaceCodingExportController {
   })
   async getExportJobStatus(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string
+      @Param('jobId') jobId: string,
+      @Req() req: Request
   ): Promise<ExportJobStatusResponseDto> {
     try {
       const job = await this.jobQueueService.getExportJob(jobId);
@@ -1551,8 +1562,21 @@ export class WorkspaceCodingExportController {
       if (job.data.workspaceId !== workspace_id) {
         return { error: 'Access denied to this export' };
       }
+      if (!this.isExportJobOwner(job, req)) {
+        return { error: 'Access denied to this export' };
+      }
       if (!isCodingExportType(job.data.exportType)) {
         return { error: 'Access denied to this export' };
+      }
+
+      const state = await job.getState();
+      if (
+        job.data.clientLeaseId &&
+        ['active', 'waiting', 'delayed', 'stuck', 'paused'].includes(state)
+      ) {
+        await this.exportJobClientLeaseService.refreshLease(
+          job.data.clientLeaseId
+        );
       }
 
       return await this.toPublicExportJobStatus(
@@ -1607,7 +1631,8 @@ export class WorkspaceCodingExportController {
   async downloadExport(
     @Param('jobId') jobId: string,
       @WorkspaceId() workspace_id: number,
-      @Res() res: Response
+      @Res() res: Response,
+      @Req() req: Request
   ): Promise<void> {
     try {
       const metadata = await this.exportArtifactService.getArtifact(jobId);
@@ -1618,6 +1643,10 @@ export class WorkspaceCodingExportController {
       }
 
       if (metadata.workspaceId !== workspace_id) {
+        res.status(403).json({ error: 'Access denied to this export' });
+        return;
+      }
+      if (Number(metadata.userId) !== this.getRequestUserId(req)) {
         res.status(403).json({ error: 'Access denied to this export' });
         return;
       }
@@ -1673,13 +1702,17 @@ export class WorkspaceCodingExportController {
   @ApiOkResponse({ description: 'Non-personal item matrix diagnostics' })
   async getItemMatrixExportDiagnostics(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string
+      @Param('jobId') jobId: string,
+      @Req() req: Request
   ): Promise<ItemMatrixExportDiagnosticsDto> {
     const job = await this.jobQueueService.getExportJob(jobId);
     if (!job) {
       throw new NotFoundException('Export job not found');
     }
     if (job.data.workspaceId !== workspace_id) {
+      throw new ForbiddenException('Access denied to this export');
+    }
+    if (!this.isExportJobOwner(job, req)) {
       throw new ForbiddenException('Access denied to this export');
     }
     if (job.data.exportType !== 'item-matrix' || await job.getState() !== 'failed') {
@@ -1711,7 +1744,8 @@ export class WorkspaceCodingExportController {
   async downloadIncompleteItemMatrix(
     @WorkspaceId() workspace_id: number,
       @Param('jobId') jobId: string,
-      @Res() res: Response
+      @Res() res: Response,
+      @Req() req: Request
   ): Promise<void> {
     const job = await this.jobQueueService.getExportJob(jobId);
     if (!job) {
@@ -1719,6 +1753,10 @@ export class WorkspaceCodingExportController {
       return;
     }
     if (job.data.workspaceId !== workspace_id) {
+      res.status(403).json({ error: 'Access denied to this export' });
+      return;
+    }
+    if (!this.isExportJobOwner(job, req)) {
       res.status(403).json({ error: 'Access denied to this export' });
       return;
     }
@@ -1795,7 +1833,8 @@ export class WorkspaceCodingExportController {
               workspaceId: { type: 'number' },
               userId: { type: 'number' },
               exportType: { type: 'string' },
-              createdAt: { type: 'number' }
+              createdAt: { type: 'number' },
+              expiresAt: { type: 'number' }
             }
           },
           error: { type: 'string' },
@@ -1844,13 +1883,16 @@ export class WorkspaceCodingExportController {
     }
   })
   async getExportJobs(
-    @WorkspaceId() workspace_id: number
+    @WorkspaceId() workspace_id: number,
+      @Req() req: Request
   ): Promise<ExportJobListItemDto[]> {
     try {
       const jobs = await this.jobQueueService.getExportJobs(workspace_id);
+      const userId = this.getRequestUserId(req);
 
-      const codingJobs = jobs.filter(job => isCodingExportType(
-        job.data.exportType
+      const codingJobs = jobs.filter(job => (
+        Number(job.data.userId) === userId &&
+        isCodingExportType(job.data.exportType)
       ));
 
       const jobItems = await Promise.all(
@@ -1858,6 +1900,13 @@ export class WorkspaceCodingExportController {
           const jobId = job.id.toString();
           const status = await this.toPublicExportJobStatus(job, jobId);
           const displayVariant = this.getExportJobDisplayVariant(job.data);
+          if (
+            status.status === 'pending' ||
+            status.status === 'processing' ||
+            status.status === 'paused'
+          ) {
+            return null;
+          }
           if (status.status === 'completed' && !status.result) {
             return null;
           }
@@ -1906,7 +1955,8 @@ export class WorkspaceCodingExportController {
   })
   async deleteExportJob(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string
+      @Param('jobId') jobId: string,
+      @Req() req: Request
   ): Promise<{ success: boolean; message: string }> {
     try {
       const job = await this.jobQueueService.getExportJob(jobId);
@@ -1917,6 +1967,12 @@ export class WorkspaceCodingExportController {
         };
       }
       if (job.data.workspaceId !== workspace_id) {
+        return {
+          success: false,
+          message: 'Access denied to this export'
+        };
+      }
+      if (!this.isExportJobOwner(job, req)) {
         return {
           success: false,
           message: 'Access denied to this export'
@@ -1975,7 +2031,8 @@ export class WorkspaceCodingExportController {
   })
   async cancelExportJob(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: string
+      @Param('jobId') jobId: string,
+      @Req() req: Request
   ): Promise<{ success: boolean; message: string }> {
     try {
       // First, check the job state
@@ -1987,6 +2044,12 @@ export class WorkspaceCodingExportController {
         };
       }
       if (job.data.workspaceId !== workspace_id) {
+        return {
+          success: false,
+          message: 'Access denied to this export'
+        };
+      }
+      if (!this.isExportJobOwner(job, req)) {
         return {
           success: false,
           message: 'Access denied to this export'

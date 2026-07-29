@@ -134,6 +134,23 @@ describe('JobQueueService', () => {
     expect(queues[2].add).not.toHaveBeenCalled();
   });
 
+  it('applies bounded retention to export jobs', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    const data = {
+      workspaceId: 1,
+      userId: 2,
+      exportType: 'coding-list' as const
+    };
+
+    await service.addExportJob(data, { attempts: 2 });
+
+    expect(queues[2].add).toHaveBeenCalledWith(data, {
+      removeOnComplete: { age: 3600 },
+      removeOnFail: { age: 86400 },
+      attempts: 2
+    });
+  });
+
   it('reuses active coding statistics jobs for the same workspace and version', async () => {
     const activeStatisticsJob = createJob({ workspaceId: 1, version: 'v2' });
     queues[1].getJobs.mockResolvedValue([activeStatisticsJob]);
@@ -307,6 +324,22 @@ describe('JobQueueService', () => {
     await expect(service.getVariableAnalysisJobs(1)).resolves.toHaveLength(1);
     await expect(service.getActiveCodingAnalysisJob(1)).resolves.toHaveProperty('id', 'job-1');
     await expect(service.getActiveResetCodingVersionJob(1)).resolves.toHaveProperty('id', 'job-1');
+  });
+
+  it('bounds terminal export-job history while retaining all in-progress jobs', async () => {
+    await service.getExportJobs(1);
+
+    expect(queues[2].getJobs).toHaveBeenNthCalledWith(
+      1,
+      ['active', 'waiting', 'delayed']
+    );
+    expect(queues[2].getJobs).toHaveBeenNthCalledWith(
+      2,
+      ['completed', 'failed'],
+      0,
+      499,
+      false
+    );
   });
 
   it('ignores stale null jobs when listing export jobs', async () => {

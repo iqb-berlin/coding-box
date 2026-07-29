@@ -122,7 +122,7 @@ describe('ExportJobService', () => {
       }));
     });
 
-    it('resumes polling for restored active jobs', fakeAsync(() => {
+    it('does not restore active jobs after a client reload', fakeAsync(() => {
       codingJobBackendServiceMock.getExportJobs.mockReturnValue(of([{
         jobId: 'active',
         status: 'processing',
@@ -136,13 +136,13 @@ describe('ExportJobService', () => {
       }));
 
       service.restoreWorkspaceJobs(5).subscribe();
-      expect(service.activeJobs[0].status).toBe('active');
+      expect(service.activeJobs).toEqual([]);
 
       tick(2000);
 
       expect(codingJobBackendServiceMock.getExportJobStatus)
-        .toHaveBeenCalledWith(5, 'active');
-      expect(service.completedJobs[0].jobId).toBe('active');
+        .not.toHaveBeenCalled();
+      expect(service.completedJobs).toEqual([]);
     }));
 
     it('omits jobs whose artifacts have expired', () => {

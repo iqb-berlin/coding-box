@@ -332,6 +332,13 @@ export class ExportJobService implements OnDestroy {
   }
 
   private isRestorableJob(status: ExportJobListItemDto): boolean {
+    if (
+      status.status === 'pending' ||
+      status.status === 'processing' ||
+      status.status === 'paused'
+    ) {
+      return false;
+    }
     if (status.status === 'completed') {
       return !!status.result;
     }
