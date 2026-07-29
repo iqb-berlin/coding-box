@@ -68,6 +68,8 @@ const manualSnapshotActions: readonly string[] = [
   'navigate',
   'double-coding-review'
 ];
+const maxSnapshotSizeBytes = 1_000_000;
+const maxPostgresBigint = '9223372036854775807';
 
 @Injectable({ providedIn: 'root' })
 export class CodingStatusSnapshotService {
@@ -238,21 +240,20 @@ export class CodingStatusSnapshotService {
       if (!raw) {
         return null;
       }
+      if (raw.length > maxSnapshotSizeBytes) {
+        storage.removeItem(key);
+        return null;
+      }
       const parsed = JSON.parse(raw) as Partial<CodingStatusSnapshot>;
       if (
         parsed.schemaVersion !== 1 ||
           parsed.userId !== userId ||
           parsed.workspaceId !== workspaceId ||
           parsed.surface !== surface ||
-          !Number.isInteger(parsed.userId) ||
-          parsed.userId <= 0 ||
-          !Number.isInteger(parsed.workspaceId) ||
-          parsed.workspaceId <= 0 ||
-          typeof parsed.revision !== 'number' ||
-          !Number.isInteger(parsed.revision) ||
-          parsed.revision < 0 ||
-        typeof parsed.statusRevision !== 'string' ||
-        !/^(0|[1-9]\d*)$/.test(parsed.statusRevision) ||
+          !this.isPositiveSafeInteger(parsed.userId) ||
+          !this.isPositiveSafeInteger(parsed.workspaceId) ||
+          !this.isNonNegativeInteger(parsed.revision) ||
+        !this.isPostgresBigintRevision(parsed.statusRevision) ||
           typeof parsed.checkedAt !== 'string' ||
           !Number.isFinite(Date.parse(parsed.checkedAt)) ||
         !this.isSnapshotPayloadValid(parsed, surface)
@@ -323,8 +324,7 @@ export class CodingStatusSnapshotService {
       this.isObject(value) &&
       value.workspaceId === workspaceId &&
       this.isNonNegativeInteger(value.revision) &&
-      typeof value.statusRevision === 'string' &&
-      /^(0|[1-9]\d*)$/.test(value.statusRevision) &&
+      this.isPostgresBigintRevision(value.statusRevision) &&
       typeof value.stable === 'boolean'
     );
   }
@@ -459,7 +459,19 @@ export class CodingStatusSnapshotService {
   }
 
   private isNonNegativeInteger(value: unknown): value is number {
-    return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+    return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+  }
+
+  private isPositiveSafeInteger(value: unknown): value is number {
+    return this.isNonNegativeInteger(value) && value > 0;
+  }
+
+  private isPostgresBigintRevision(value: unknown): value is string {
+    return typeof value === 'string' &&
+      /^(0|[1-9]\d*)$/.test(value) &&
+      (value.length < maxPostgresBigint.length ||
+        (value.length === maxPostgresBigint.length &&
+          value <= maxPostgresBigint));
   }
 
   private isNonNegativeNumber(value: unknown): value is number {
@@ -478,11 +490,7 @@ export class CodingStatusSnapshotService {
       'staleSourceJobs',
       'openDoubleCodingConflicts',
       'manualCodeAvailabilityWarnings'
-    ].every(
-      key => typeof value[key] === 'number' &&
-      Number.isFinite(value[key]) &&
-      value[key] >= 0
-    );
+    ].every(key => this.isNonNegativeInteger(value[key]));
   }
 
   private isObject(value: unknown): value is Record<string, unknown> {

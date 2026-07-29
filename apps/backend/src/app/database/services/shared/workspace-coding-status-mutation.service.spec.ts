@@ -153,6 +153,50 @@ describe('WorkspaceCodingStatusMutationService', () => {
     expect(secondMutation).toHaveBeenCalledTimes(1);
   });
 
+  it.each([2, 3, 4, 10])(
+    'limits concurrent workspace locks for pool size %i without losing slots',
+    async poolMax => {
+      const { connection, service } = createHarness({ poolMax });
+      const expectedParallelLocks = Math.floor(poolMax / 2);
+      const operationCount = expectedParallelLocks + 2;
+      const releases: Array<(() => void) | undefined> = [];
+      const operations = Array.from({ length: operationCount }, (_, index) => (
+        service.withWorkspaceLock(100 + index, () => new Promise<void>(resolve => {
+          releases[index] = resolve;
+        }))
+      ));
+
+      while (releases.filter(Boolean).length < expectedParallelLocks) {
+        await new Promise<void>(resolve => {
+          setImmediate(resolve);
+        });
+      }
+      expect(connection.createQueryRunner)
+        .toHaveBeenCalledTimes(expectedParallelLocks);
+
+      let releasedCount = 0;
+      let startedCount = expectedParallelLocks;
+      while (startedCount < operationCount) {
+        releases.slice(releasedCount, startedCount)
+          .forEach(release => release?.());
+        releasedCount = startedCount;
+        startedCount = Math.min(
+          operationCount,
+          startedCount + expectedParallelLocks
+        );
+        while (releases.filter(Boolean).length < startedCount) {
+          await new Promise<void>(resolve => {
+            setImmediate(resolve);
+          });
+        }
+      }
+      releases.slice(releasedCount).forEach(release => release?.());
+      await Promise.all(operations);
+
+      expect(connection.createQueryRunner).toHaveBeenCalledTimes(operationCount);
+    }
+  );
+
   it('rejects a pool that cannot reserve a separate work connection', () => {
     expect(() => createHarness({ poolMax: 1 })).toThrow(
       'must provide at least 2 connections'

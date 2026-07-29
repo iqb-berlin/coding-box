@@ -160,6 +160,71 @@ describe('CodingStatusSnapshotService', () => {
     expect(sessionStorage.length).toBe(0);
   });
 
+  it.each([
+    ['unsafe numeric revision', Number.MAX_SAFE_INTEGER + 1, '21'],
+    ['out-of-range status revision', 11, '9223372036854775808']
+  ])('removes a snapshot with an %s', (_, revision, statusRevision) => {
+    saveOverview();
+    const key = 'coding-status-snapshot:v1:7:3:overview';
+    const snapshot = JSON.parse(sessionStorage.getItem(key) || '{}');
+    snapshot.revision = revision;
+    snapshot.freshness.currentRevision = revision;
+    snapshot.statusRevision = statusRevision;
+    sessionStorage.setItem(key, JSON.stringify(snapshot));
+
+    service.restoreOverview(7, 3).subscribe(value => {
+      expect(value).toBeNull();
+    });
+
+    http.expectNone(`${serverUrl}admin/workspace/3/coding/revision`);
+    expect(sessionStorage.getItem(key)).toBeNull();
+  });
+
+  it('removes an oversized snapshot before parsing it', () => {
+    const key = 'coding-status-snapshot:v1:7:3:overview';
+    sessionStorage.setItem(key, 'x'.repeat(1_000_001));
+
+    service.restoreOverview(7, 3).subscribe(value => {
+      expect(value).toBeNull();
+    });
+
+    http.expectNone(`${serverUrl}admin/workspace/3/coding/revision`);
+    expect(sessionStorage.getItem(key)).toBeNull();
+  });
+
+  it('removes manual snapshots with fractional display counts', () => {
+    service.saveManual({
+      userId: 7,
+      workspaceId: 3,
+      revision: 11,
+      statusRevision: '21',
+      planningStatus: 'planning-incomplete',
+      displayParameters: {
+        variableConflicts: 0.5,
+        missingVariables: 0,
+        unassignedCases: 0,
+        activeTrainingJobs: 0,
+        staleSourceJobs: 0,
+        openDoubleCodingConflicts: 0,
+        manualCodeAvailabilityWarnings: 0
+      },
+      freshness: null,
+      nextTarget: {
+        tab: 'planning',
+        sectionId: 'planning',
+        action: 'navigate'
+      },
+      fullyChecked: true
+    });
+
+    service.restoreManual(7, 3).subscribe(value => {
+      expect(value).toBeNull();
+    });
+
+    http.expectNone(`${serverUrl}admin/workspace/3/coding/revision`);
+    expect(sessionStorage.length).toBe(0);
+  });
+
   it('removes snapshots with unknown typed status values', () => {
     sessionStorage.setItem(
       'coding-status-snapshot:v1:7:3:manual',
