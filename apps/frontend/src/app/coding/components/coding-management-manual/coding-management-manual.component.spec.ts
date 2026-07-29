@@ -1586,7 +1586,7 @@ describe('CodingManagementManualComponent', () => {
     expect(refreshCodingJobsAfterDataChangeSpy).toHaveBeenCalledWith('productive');
   });
 
-  it('should not load bundled planning data when the planning tab is opened', () => {
+  it('should load bundled planning data when planning is opened without a snapshot', () => {
     component.selectedManualTabIndex = 1;
     component.autoRefreshManualCodingJobs = true;
     const componentInternals = component as unknown as {
@@ -1627,13 +1627,13 @@ describe('CodingManagementManualComponent', () => {
 
     componentInternals.loadManualTabData('planning');
 
-    expect(variableCoverageSpy).not.toHaveBeenCalled();
-    expect(caseCoverageSpy).not.toHaveBeenCalled();
-    expect(codingProgressSpy).not.toHaveBeenCalled();
-    expect(incompleteVariablesSpy).not.toHaveBeenCalled();
-    expect(manualFreshnessDecisionSpy).not.toHaveBeenCalled();
-    expect(loadCodingFreshnessSpy).not.toHaveBeenCalled();
-    expect(loadResponseAnalysisSpy).not.toHaveBeenCalled();
+    expect(variableCoverageSpy).toHaveBeenCalledTimes(1);
+    expect(caseCoverageSpy).toHaveBeenCalledTimes(1);
+    expect(codingProgressSpy).toHaveBeenCalledTimes(1);
+    expect(incompleteVariablesSpy).toHaveBeenCalledTimes(1);
+    expect(manualFreshnessDecisionSpy).toHaveBeenCalledTimes(1);
+    expect(loadCodingFreshnessSpy).toHaveBeenCalledTimes(1);
+    expect(loadResponseAnalysisSpy).toHaveBeenCalledTimes(1);
     expect(component.shouldRenderManualTabData('planning')).toBe(true);
     expect(component.shouldShowManualRefreshButton()).toBe(true);
   });

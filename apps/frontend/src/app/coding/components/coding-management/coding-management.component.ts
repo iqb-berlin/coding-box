@@ -99,6 +99,7 @@ import {
 } from '../../../shared/utils/coding-freshness-text.util';
 import { getResponseStatusLabel } from '../../../shared/utils/response-status-metadata.util';
 import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
+import { CodingStatusSnapshotService } from '../../services/coding-status-snapshot.service';
 
 @Component({
   selector: 'app-coding-management',
@@ -134,6 +135,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private translateService = inject(TranslateService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
+  private codingStatusSnapshotService = inject(CodingStatusSnapshotService);
   private readonly reviewBatchSize = 500;
   private readonly maxReviewResponses = 5000;
 
@@ -224,6 +226,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private readonly responseTableRequestCancel$ = new Subject<void>();
   private responseTableRequestId = 0;
   private readonly automaticCodingStatusRefreshDebounceMs = 250;
+  private overviewSnapshotSavePending = false;
 
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -453,6 +456,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       .pipe(
         finalize(() => {
           this.isLoadingCodingFreshness = false;
+          this.trySaveCodingStatusOverviewSnapshot();
         }),
         takeUntil(this.destroy$)
       )
@@ -466,6 +470,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         if (!loadScopeOnWarnings && this.hasSecondAutocodingFreshnessWarnings) {
           this.loadManualAppliedResultsOverview();
         }
+        this.trySaveCodingStatusOverviewSnapshot();
       });
   }
 
@@ -500,12 +505,14 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       .pipe(
         finalize(() => {
           this.isLoadingManualAppliedResultsOverview = false;
+          this.trySaveCodingStatusOverviewSnapshot();
         }),
         takeUntil(this.destroy$)
       )
       .subscribe(overview => {
         this.manualAppliedResultsOverview = overview;
         this.manualAppliedResultsOverviewLoadFailed = overview === null;
+        this.trySaveCodingStatusOverviewSnapshot();
       });
   }
 
@@ -525,6 +532,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       .pipe(
         finalize(() => {
           this.isLoadingAutocodingReadiness = false;
+          this.trySaveCodingStatusOverviewSnapshot();
         }),
         takeUntil(this.destroy$)
       )
@@ -532,6 +540,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         next: readiness => {
           this.autocodingReadiness = readiness;
           this.hasLoadedFullCodingStatusOverview = true;
+          this.trySaveCodingStatusOverviewSnapshot();
         },
         error: () => {
           this.autocodingReadiness = null;
@@ -623,9 +632,73 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const workspaceId = this.appService.selectedWorkspaceId;
+    const userId = this.appService.authData?.userId || 0;
+    if (!workspaceId || userId <= 0) {
+      this.loadInitialCodingStatusOverviewWithoutSnapshot();
+      return;
+    }
+
+    this.codingStatusSnapshotService.restoreOverview(userId, workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(snapshot => {
+        if (!snapshot || this.appService.selectedWorkspaceId !== workspaceId) {
+          this.loadInitialCodingStatusOverviewWithoutSnapshot();
+          return;
+        }
+
+        this.codingFreshnessSummary = snapshot.freshness;
+        this.autocodingReadiness = snapshot.readiness;
+        this.manualAppliedResultsOverview = snapshot.appliedResultsOverview;
+        this.autocodingReadinessLoadFailed = false;
+        this.manualAppliedResultsOverviewLoadFailed = false;
+        this.hasLoadedFullCodingStatusOverview = true;
+      });
+  }
+
+  private loadInitialCodingStatusOverviewWithoutSnapshot(): void {
     this.hasLoadedFullCodingStatusOverview = false;
     this.loadCodingFreshness(false);
     this.loadCachedAutocodingReadiness();
+  }
+
+  private trySaveCodingStatusOverviewSnapshot(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    const userId = this.appService.authData?.userId || 0;
+    if (!workspaceId || userId <= 0 || this.overviewSnapshotSavePending ||
+      !this.hasLoadedFullCodingStatusOverview ||
+      !this.codingFreshnessSummary || !this.autocodingReadiness ||
+      this.isLoadingCodingFreshness || this.isLoadingAutocodingReadiness ||
+      this.isLoadingManualAppliedResultsOverview ||
+      this.autocodingReadinessLoadFailed ||
+      this.manualAppliedResultsOverviewLoadFailed) {
+      return;
+    }
+
+    this.overviewSnapshotSavePending = true;
+    this.codingStatusSnapshotService.getRevision(workspaceId, true)
+      .pipe(
+        finalize(() => {
+          this.overviewSnapshotSavePending = false;
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(revision => {
+        if (!revision.stable ||
+          revision.revision !== this.codingFreshnessSummary?.currentRevision ||
+          this.appService.selectedWorkspaceId !== workspaceId) {
+          return;
+        }
+        this.codingStatusSnapshotService.saveOverview({
+          userId,
+          workspaceId,
+          revision: revision.revision,
+          statusRevision: revision.statusRevision,
+          freshness: this.codingFreshnessSummary,
+          readiness: this.autocodingReadiness!,
+          appliedResultsOverview: this.manualAppliedResultsOverview
+        });
+      });
   }
 
   private scheduleAutomaticCodingStatusOverviewRefresh(): void {
