@@ -60,6 +60,15 @@ describe('AppService', () => {
     expect(service).toBeTruthy();
   });
 
+  it('clears coding-status snapshots when the authenticated user changes', () => {
+    service.updateAuthData({ ...AppService.defaultAuthData, userId: 1 });
+    sessionStorage.setItem('coding-status-snapshot:v1:1:7:manual', '{}');
+
+    service.updateAuthData({ ...AppService.defaultAuthData, userId: 2 });
+
+    expect(sessionStorage.length).toBe(0);
+  });
+
   describe('selectedWorkspaceId', () => {
     it('should emit selected workspace changes', () => {
       const workspaceIds: number[] = [];

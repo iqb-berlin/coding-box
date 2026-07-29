@@ -47,6 +47,7 @@ import {
   WorkspaceSettingsService
 } from '../../ws-admin/services/workspace-settings.service';
 import { CodingBackgroundJobsService } from './coding-background-jobs.service';
+import { clearCodingStatusSnapshots } from '../../core/services/coding-status-session-storage';
 
 interface ExternalCodingImportWithPreviewDto {
   file: string;
@@ -372,6 +373,7 @@ export class TestPersonCodingService {
   }
 
   invalidateCodingStatusCache(workspaceId?: number): void {
+    clearCodingStatusSnapshots(workspaceId);
     this.codingStatusCacheGeneration += 1;
     if (!workspaceId) {
       this.codingFreshnessCache.clear();
