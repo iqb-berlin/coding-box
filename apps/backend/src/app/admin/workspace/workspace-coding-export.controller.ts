@@ -222,7 +222,7 @@ export class WorkspaceCodingExportController {
       ...(status === 'failed' && failedReason ?
         {
           error: failedReason,
-          ...await this.getPublicExportErrorDetails(jobId, failedReason)
+          ...(await this.getPublicExportErrorDetails(jobId, failedReason))
         } :
         {})
     };
@@ -568,10 +568,8 @@ export class WorkspaceCodingExportController {
                    @Query('missingsProfileId') missingsProfileId?: string
   ): Promise<void> {
     try {
-      const resolvedMissingsProfileId = this.parseVersionedExportMissingsProfileId(
-        version,
-        missingsProfileId
-      );
+      const resolvedMissingsProfileId =
+        this.parseVersionedExportMissingsProfileId(version, missingsProfileId);
       const csvStream =
         await this.codingExportOrchestratorService.exportResultsByVersionAsCsv({
           workspaceId: workspace_id,
@@ -713,10 +711,8 @@ export class WorkspaceCodingExportController {
       );
     }
 
-    const resolvedMissingsProfileId = this.parseVersionedExportMissingsProfileId(
-      version,
-      missingsProfileId
-    );
+    const resolvedMissingsProfileId =
+      this.parseVersionedExportMissingsProfileId(version, missingsProfileId);
     const buffer =
       await this.codingExportOrchestratorService.exportResultsByVersionAsExcel({
         workspaceId: workspace_id,
@@ -1589,13 +1585,11 @@ export class WorkspaceCodingExportController {
         `Error getting export job status: ${error.message}`,
         error.stack
       );
-      return { error: error.message };
+      throw error;
     }
   }
 
-  private toPublicExportJobResult(
-    result: ExportJobResult
-  ): ExportJobResultDto {
+  private toPublicExportJobResult(result: ExportJobResult): ExportJobResultDto {
     return {
       fileId: result.fileId,
       fileName: result.fileName,
@@ -1604,8 +1598,7 @@ export class WorkspaceCodingExportController {
       userId: result.userId,
       exportType: result.exportType,
       createdAt: result.createdAt,
-      expiresAt:
-        result.createdAt + ExportArtifactService.ttlSeconds * 1000
+      expiresAt: result.createdAt + ExportArtifactService.ttlSeconds * 1000
     };
   }
 
@@ -1716,15 +1709,19 @@ export class WorkspaceCodingExportController {
     if (!this.isExportJobOwner(job, req)) {
       throw new ForbiddenException('Access denied to this export');
     }
-    if (job.data.exportType !== 'item-matrix' || await job.getState() !== 'failed') {
+    if (
+      job.data.exportType !== 'item-matrix' ||
+      (await job.getState()) !== 'failed'
+    ) {
       throw new BadRequestException(
         'Diagnostics are available only for failed item matrix exports'
       );
     }
-    const diagnostics =
-      await this.exportArtifactService.getDiagnostics(jobId);
+    const diagnostics = await this.exportArtifactService.getDiagnostics(jobId);
     if (!diagnostics) {
-      throw new NotFoundException('Item matrix diagnostics not found or expired');
+      throw new NotFoundException(
+        'Item matrix diagnostics not found or expired'
+      );
     }
     return diagnostics;
   }
@@ -1761,9 +1758,13 @@ export class WorkspaceCodingExportController {
       res.status(403).json({ error: 'Access denied to this export' });
       return;
     }
-    if (job.data.exportType !== 'item-matrix' || await job.getState() !== 'failed') {
+    if (
+      job.data.exportType !== 'item-matrix' ||
+      (await job.getState()) !== 'failed'
+    ) {
       res.status(400).json({
-        error: 'Incomplete downloads are available only for failed item matrix exports'
+        error:
+          'Incomplete downloads are available only for failed item matrix exports'
       });
       return;
     }
@@ -1794,6 +1795,12 @@ export class WorkspaceCodingExportController {
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
     description: 'List of export jobs for the workspace',
+    headers: {
+      'X-Export-History-Pending': {
+        description: 'Whether legacy export history is still being indexed',
+        schema: { type: 'boolean' }
+      }
+    },
     schema: {
       type: 'array',
       items: {
@@ -1885,33 +1892,28 @@ export class WorkspaceCodingExportController {
   })
   async getExportJobs(
     @WorkspaceId() workspace_id: number,
-      @Req() req: Request
+      @Req() req: Request,
+      @Res({ passthrough: true }) res?: Response
   ): Promise<ExportJobListItemDto[]> {
     try {
       const userId = this.getRequestUserId(req);
-      const jobs = await this.jobQueueService.getExportJobs(
-        workspace_id,
-        userId,
-        CODING_EXPORT_TYPES
-      );
+      const { jobs, historyPending } =
+        await this.jobQueueService.getExportJobsWithHistoryState(
+          workspace_id,
+          userId,
+          CODING_EXPORT_TYPES
+        );
 
-      const codingJobs = jobs.filter(job => (
-        Number(job.data.userId) === userId &&
-        isCodingExportType(job.data.exportType)
-      ));
+      const codingJobs = jobs.filter(
+        job => Number(job.data.userId) === userId &&
+          isCodingExportType(job.data.exportType)
+      );
 
       const jobItems = await Promise.all(
         codingJobs.map(async job => {
           const jobId = job.id.toString();
           const status = await this.toPublicExportJobStatus(job, jobId);
           const displayVariant = this.getExportJobDisplayVariant(job.data);
-          if (
-            status.status === 'pending' ||
-            status.status === 'processing' ||
-            status.status === 'paused'
-          ) {
-            return null;
-          }
           if (status.status === 'completed' && !status.result) {
             return null;
           }
@@ -1921,11 +1923,13 @@ export class WorkspaceCodingExportController {
             ...status,
             exportType: job.data.exportType,
             createdAt: job.timestamp,
-            ...(displayVariant ?
-              { displayVariant } :
-              {})
+            ...(displayVariant ? { displayVariant } : {})
           };
         })
+      );
+      res?.setHeader(
+        'X-Export-History-Pending',
+        historyPending ? 'true' : 'false'
       );
       return jobItems.filter(
         (job): job is ExportJobListItemDto => job !== null

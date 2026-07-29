@@ -50,6 +50,8 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
   ReturnType<typeof setInterval>
   >();
 
+  private readonly jobsWithUnavailableClientLease = new Set<string>();
+
   constructor(
     @Inject(forwardRef(() => CodingExportService))
     private codingExportService: CodingExportService,
@@ -75,9 +77,7 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
             `Failed to clean up expired export files: ${error.message}`
           );
         });
-      },
-      ExportJobProcessor.expiredFileCleanupIntervalMs
-    );
+      }, ExportJobProcessor.expiredFileCleanupIntervalMs);
     this.expiredFileCleanupTimer.unref?.();
   }
 
@@ -86,9 +86,8 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
       clearInterval(this.expiredFileCleanupTimer);
       this.expiredFileCleanupTimer = undefined;
     }
-    this.workingDirectoryHeartbeatTimers.forEach(timer => (
-      clearInterval(timer)
-    ));
+    this.workingDirectoryHeartbeatTimers.forEach(timer => clearInterval(timer)
+    );
     this.workingDirectoryHeartbeatTimers.clear();
   }
 
@@ -143,19 +142,15 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
     jobId: string
   ): Promise<void> {
     await this.refreshExportWorkingDirectoryLease(workingDirectory, jobId);
-    const timer = setInterval(
-      () => {
-        this.refreshExportWorkingDirectoryLease(
-          workingDirectory,
-          jobId
-        ).catch(error => {
+    const timer = setInterval(() => {
+      this.refreshExportWorkingDirectoryLease(workingDirectory, jobId).catch(
+        error => {
           this.logger.warn(
             `Failed to refresh export working directory lease for ${workingDirectory}: ${error.message}`
           );
-        });
-      },
-      ExportJobProcessor.workingDirectoryHeartbeatIntervalMs
-    );
+        }
+      );
+    }, ExportJobProcessor.workingDirectoryHeartbeatIntervalMs);
     timer.unref?.();
     this.workingDirectoryHeartbeatTimers.set(workingDirectory, timer);
   }
@@ -193,15 +188,50 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
     job: Job<ExportJobData>,
     filePath?: string
   ): Promise<void> {
-    if (
-      job.data.clientLeaseId &&
-      !await this.exportJobClientLeaseService.isLeaseActive(
-        job.data.clientLeaseId
-      )
-    ) {
-      const cancelledData = { ...job.data, isCancelled: true };
-      await job.update(cancelledData);
-      job.data = cancelledData;
+    const jobId = job.id.toString();
+    if (job.data.clientLeaseId) {
+      const clientLeaseId = job.data.clientLeaseId;
+      let cleanupClaim: string | null = null;
+      try {
+        cleanupClaim =
+          await this.exportJobClientLeaseService.tryClaimExpiredLease(
+            clientLeaseId
+          );
+        if (
+          cleanupClaim &&
+          (await this.exportJobClientLeaseService.confirmCleanupClaim(
+            clientLeaseId,
+            cleanupClaim
+          ))
+        ) {
+          const cancelledData = { ...job.data, isCancelled: true };
+          await job.update(cancelledData);
+          job.data = cancelledData;
+        }
+        this.jobsWithUnavailableClientLease.delete(jobId);
+      } catch (error) {
+        if (!this.jobsWithUnavailableClientLease.has(jobId)) {
+          this.jobsWithUnavailableClientLease.add(jobId);
+          this.logger.warn(
+            `Could not determine the client lease for export job ${job.id}; ` +
+              `continuing until expiry can be confirmed: ${error.message}`
+          );
+        }
+      } finally {
+        if (cleanupClaim) {
+          try {
+            await this.exportJobClientLeaseService.releaseCleanupClaim(
+              clientLeaseId,
+              cleanupClaim
+            );
+          } catch (error) {
+            this.logger.warn(
+              'Could not release the client lease cleanup claim for export ' +
+                `job ${job.id}: ${error.message}`
+            );
+          }
+        }
+      }
     }
     if (
       job.data.isCancelled ||
@@ -237,17 +267,15 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
   private async cleanupExpiredExportFiles(tempDir: string): Promise<void> {
     try {
       this.exportArtifactService.cleanupExpiredArtifacts(tempDir);
-      const expiresBefore = Date.now() -
-        ExportArtifactService.ttlSeconds * 1000;
+      const expiresBefore =
+        Date.now() - ExportArtifactService.ttlSeconds * 1000;
       const entries = fs.readdirSync(tempDir, { withFileTypes: true });
       for (const entry of entries) {
         const expiredPath = path.join(tempDir, entry.name);
         try {
           if (
             !entry.isDirectory() ||
-            !entry.name.startsWith(
-              ExportJobProcessor.workingDirectoryPrefix
-            ) ||
+            !entry.name.startsWith(ExportJobProcessor.workingDirectoryPrefix) ||
             fs.statSync(expiredPath).mtimeMs >= expiresBefore
           ) {
             continue;
@@ -842,9 +870,9 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
 
       this.logger.log(
         `Export file generated successfully: ${finalFileName} (${metadata.fileSize} bytes) ` +
-        `in ${fileWriteFinishedAt - startedAt}ms ` +
-        `(generation: ${generationFinishedAt - generationStartedAt}ms, ` +
-        `file write: ${fileWriteFinishedAt - generationFinishedAt}ms)`
+          `in ${fileWriteFinishedAt - startedAt}ms ` +
+          `(generation: ${generationFinishedAt - generationStartedAt}ms, ` +
+          `file write: ${fileWriteFinishedAt - generationFinishedAt}ms)`
       );
 
       await this.updateJobProgress(job, 100, { phase: 'completed' });
@@ -868,6 +896,7 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
       this.cleanupPartialExportFile(filePath);
       throw error;
     } finally {
+      this.jobsWithUnavailableClientLease.delete(jobId);
       await this.exportJobClientLeaseService.releaseLease(
         job.data.clientLeaseId
       );

@@ -52,6 +52,11 @@ export interface CodingJobUnitDto {
   otherCoders: string[];
 }
 
+export interface ExportJobListResponse {
+  jobs: ExportJobListItemDto[];
+  historyPending: boolean;
+}
+
 export type CodingExportConfig = BackgroundExportRequest & {
   userId?: number;
 };
@@ -1229,11 +1234,16 @@ export class CodingJobBackendService {
     });
   }
 
-  getExportJobs(workspaceId: number): Observable<ExportJobListItemDto[]> {
+  getExportJobs(workspaceId: number): Observable<ExportJobListResponse> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/jobs`;
     return this.http.get<ExportJobListItemDto[]>(url, {
-      headers: this.authHeader
-    });
+      headers: this.authHeader,
+      observe: 'response'
+    }).pipe(map(response => ({
+      jobs: response.body || [],
+      historyPending:
+        response.headers.get('X-Export-History-Pending') === 'true'
+    })));
   }
 
   downloadExportFile(workspaceId: number, jobId: string): Observable<Blob> {
@@ -1259,18 +1269,20 @@ export class CodingJobBackendService {
     jobId: string
   ): Observable<IncompleteItemMatrixDownload> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}/download-incomplete`;
-    return this.http.get(url, {
-      responseType: 'blob',
-      observe: 'response',
-      headers: this.authHeader
-    }).pipe(
-      map(response => ({
-        blob: response.body || new Blob(),
-        fileName: getDownloadFileName(
-          response.headers.get('content-disposition')
-        )
-      }))
-    );
+    return this.http
+      .get(url, {
+        responseType: 'blob',
+        observe: 'response',
+        headers: this.authHeader
+      })
+      .pipe(
+        map(response => ({
+          blob: response.body || new Blob(),
+          fileName: getDownloadFileName(
+            response.headers.get('content-disposition')
+          )
+        }))
+      );
   }
 
   deleteExportJob(

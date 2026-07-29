@@ -102,14 +102,14 @@ export type ExportJobErrorMetadataDto =
   | ExportJobWithoutStructuredErrorDto;
 
 export type ExportJobProgressPhaseDto =
-  | 'preparing'
+  'preparing'
   | 'counting'
   | 'writing'
   | 'finalizing'
   | 'completed';
 
 export type ExportJobStateDto =
-  | 'pending'
+  'pending'
   | 'processing'
   | 'completed'
   | 'failed'
@@ -159,7 +159,7 @@ export interface ExportJobStatusErrorDto {
 }
 
 export type ExportJobStatusResponseDto =
-  | ExportJobStatusDto
+  ExportJobStatusDto
   | ExportJobStatusErrorDto;
 
 export interface ItemDatasetSelection {
@@ -188,7 +188,7 @@ export type ItemDatasetMappingIssueCode =
   | 'unknown-selection';
 
 export type ItemDatasetMappingWarningCode =
-  | 'vomd-fallback-used'
+  'vomd-fallback-used'
   | 'vomd-fallback-ignored';
 
 interface ItemDatasetMappingDiagnosticDto {
@@ -374,8 +374,8 @@ export const parseExportRequest = (value: unknown): BackgroundExportRequest => {
       assertOptionalTabularFormat(value, value.exportType);
       assertOptionalVersion(value, value.exportType);
       if (
-        (!Number.isSafeInteger(value.missingsProfileId) ||
-          Number(value.missingsProfileId) <= 0)
+        !Number.isSafeInteger(value.missingsProfileId) ||
+        Number(value.missingsProfileId) <= 0
       ) {
         throw new ExportRequestValidationError(
           'results-by-version exports require missingsProfileId to be a positive integer'
@@ -429,7 +429,8 @@ export const parseExportRequest = (value: unknown): BackgroundExportRequest => {
       }
       if (
         value.recodeTrailingOmissions === true &&
-        (value.notReachedScope === undefined || value.notReachedScope === 'unit')
+        (value.notReachedScope === undefined ||
+          value.notReachedScope === 'unit')
       ) {
         throw new ExportRequestValidationError(
           'item-matrix recodeTrailingOmissions is supported only for testlet or booklet scope'
@@ -438,13 +439,14 @@ export const parseExportRequest = (value: unknown): BackgroundExportRequest => {
       if (
         value.items !== undefined &&
         (!Array.isArray(value.items) ||
-          value.items.some(item => (
-            !isRecord(item) ||
-            typeof item.unitId !== 'string' ||
-            item.unitId.trim() === '' ||
-            typeof item.itemId !== 'string' ||
-            item.itemId.trim() === ''
-          )))
+          value.items.some(
+            (item) =>
+              !isRecord(item) ||
+              typeof item.unitId !== 'string' ||
+              item.unitId.trim() === '' ||
+              typeof item.itemId !== 'string' ||
+              item.itemId.trim() === ''
+          ))
       ) {
         throw new ExportRequestValidationError(
           'item-matrix items must contain valid unitId/itemId pairs'

@@ -110,6 +110,10 @@ export class ExportToastComponent implements OnInit, OnDestroy {
     return this.jobs.filter(j => j.status === 'failed').length;
   }
 
+  get unavailableJobCount(): number {
+    return this.jobs.filter(j => j.status === 'unavailable').length;
+  }
+
   toggleCollapse(): void {
     this.isCollapsed = !this.isCollapsed;
   }
@@ -128,6 +132,8 @@ export class ExportToastComponent implements OnInit, OnDestroy {
         return 'error';
       case 'cancelled':
         return 'cancel';
+      case 'unavailable':
+        return 'cloud_off';
       default:
         return 'help';
     }
@@ -202,6 +208,11 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   }
 
   getErrorTitle(job: ExportJob): string {
+    if (job.status === 'unavailable') {
+      return this.translateService.instant(
+        'export-toast.errors.status-unavailable-title'
+      );
+    }
     if (this.isItemMatrixResolutionError(job)) {
       return this.translateService.instant(
         'export-toast.errors.item-matrix-incomplete-title'
@@ -216,6 +227,11 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   }
 
   getErrorMessage(job: ExportJob): string {
+    if (job.status === 'unavailable') {
+      return this.translateService.instant(
+        'export-toast.errors.status-unavailable-message'
+      );
+    }
     if (this.isItemMatrixResolutionError(job)) {
       const key = this.hasItemMatrixArtifacts(job) ?
         'export-toast.errors.item-matrix-incomplete-message' :
@@ -355,7 +371,8 @@ export class ExportToastComponent implements OnInit, OnDestroy {
     const completedJobs = this.jobs.filter(
       j => j.status === 'completed' ||
         j.status === 'failed' ||
-        j.status === 'cancelled'
+        j.status === 'cancelled' ||
+        j.status === 'unavailable'
     );
     completedJobs.forEach(job => this.removeJob(job));
   }

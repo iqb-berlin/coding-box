@@ -8,12 +8,16 @@ import {
   Subject,
   Subscription,
   catchError,
-  interval,
   of,
+  timer as rxTimer,
   throwError
 } from 'rxjs';
 import {
-  finalize, map, switchMap, takeUntil, tap
+  expand,
+  finalize, map,
+  repeat,
+  retry,
+  switchMap, takeUntil, tap
 } from 'rxjs/operators';
 import {
   CodingExportEstimate,
@@ -46,7 +50,8 @@ interface ExportJobBase {
   jobId: string;
   workspaceId: number;
   status:
-  'waiting' | 'active' | 'downloading' | 'completed' | 'failed' | 'cancelled';
+  | 'waiting' | 'active' | 'downloading' | 'completed' | 'failed' | 'cancelled'
+  | 'unavailable';
   progress: number;
   progressPhase?: ExportJobProgressPhaseDto;
   processedRows?: number;
@@ -104,6 +109,8 @@ export function isReplayAuthTokenError(
   providedIn: 'root'
 })
 export class ExportJobService implements OnDestroy {
+  private static readonly statusPollingIntervalMs = 2000;
+  private static readonly maxStatusRetryDelayMs = 30000;
   private jobsSubject = new BehaviorSubject<ExportJob[]>([]);
   private pollingSubscriptions = new Map<string, Subscription>();
   private downloadSubscriptions = new Map<string, Subscription>();
@@ -141,6 +148,10 @@ export class ExportJobService implements OnDestroy {
     return this.jobsSubject.value.filter(job => job.status === 'failed');
   }
 
+  get unavailableJobs(): ExportJob[] {
+    return this.jobsSubject.value.filter(job => job.status === 'unavailable');
+  }
+
   get cancelledJobs(): ExportJob[] {
     return this.jobsSubject.value.filter(job => job.status === 'cancelled');
   }
@@ -163,8 +174,45 @@ export class ExportJobService implements OnDestroy {
         .map(job => job.jobId)
     );
 
-    return this.codingJobBackendService.getExportJobs(workspaceId).pipe(
-      map(statuses => statuses
+    let consecutiveRestoreFailures = 0;
+    let consecutiveHistoryPendingResponses = 0;
+    const loadJobs = () => defer(() => this.codingJobBackendService.getExportJobs(workspaceId)).pipe(
+      tap(() => {
+        consecutiveRestoreFailures = 0;
+      }),
+      retry({
+        delay: error => {
+          if (!this.isRetryableRequestError(error)) {
+            return throwError(() => error);
+          }
+          consecutiveRestoreFailures += 1;
+          return rxTimer(
+            this.getRequestRetryDelay(consecutiveRestoreFailures)
+          );
+        }
+      })
+    );
+    return loadJobs().pipe(
+      expand(response => {
+        if (
+          !response.historyPending ||
+          this.restoreVersions.get(workspaceId) !== restoreVersion
+        ) {
+          consecutiveHistoryPendingResponses = 0;
+          return EMPTY;
+        }
+        consecutiveHistoryPendingResponses += 1;
+        return rxTimer(
+          this.getRequestRetryDelay(consecutiveHistoryPendingResponses)
+        ).pipe(
+          switchMap(() => (
+            this.restoreVersions.get(workspaceId) === restoreVersion ?
+              loadJobs() :
+              EMPTY
+          ))
+        );
+      }),
+      map(response => response.jobs
         .filter(status => this.isRestorableJob(status))
         .map(status => this.toExportJob(workspaceId, status))
       ),
@@ -347,18 +395,14 @@ export class ExportJobService implements OnDestroy {
 
   private isRestorableJob(status: ExportJobListItemDto): boolean {
     if (
-      status.status === 'pending' ||
-      status.status === 'processing' ||
-      status.status === 'paused'
-    ) {
-      return false;
-    }
-    if (status.status === 'completed') {
+      status.status === 'completed') {
       return !!status.result;
     }
     if (status.errorCode === ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE) {
-      return status.errorDetails.diagnosticsAvailable ||
-        status.errorDetails.incompleteDownloadAvailable;
+      return (
+        status.errorDetails.diagnosticsAvailable ||
+        status.errorDetails.incompleteDownloadAvailable
+      );
     }
     return true;
   }
@@ -431,17 +475,44 @@ export class ExportJobService implements OnDestroy {
       return;
     }
 
-    const subscription = interval(2000)
+    let consecutiveStatusRequestFailures = 0;
+    let nextStatusRequestDelayMs = ExportJobService.statusPollingIntervalMs;
+    const statusRequest$ = defer(() => this.codingJobBackendService.getExportJobStatus(workspaceId, jobId).pipe(
+      catchError(error => {
+        if (this.isRetryableStatusRequestError(error)) {
+          consecutiveStatusRequestFailures += 1;
+          nextStatusRequestDelayMs = this.getRequestRetryDelay(
+            consecutiveStatusRequestFailures
+          );
+          return EMPTY;
+        }
+
+        this.updateJob(jobId, {
+          status: 'unavailable',
+          error: 'Failed to get job status'
+        });
+        this.stopPollingForJob(jobId);
+        return EMPTY;
+      })
+    )
+    );
+    const subscription = rxTimer(ExportJobService.statusPollingIntervalMs)
       .pipe(
-        takeUntil(this.stopPolling$),
-        switchMap(() => this.codingJobBackendService.getExportJobStatus(workspaceId, jobId)
+        switchMap(() => statusRequest$.pipe(
+          repeat({
+            delay: () => rxTimer(nextStatusRequestDelayMs)
+          })
         )
+        ),
+        takeUntil(this.stopPolling$)
       )
       .subscribe({
         next: status => {
+          consecutiveStatusRequestFailures = 0;
+          nextStatusRequestDelayMs = ExportJobService.statusPollingIntervalMs;
           if (!('status' in status)) {
             this.updateJob(jobId, {
-              status: 'failed',
+              status: 'unavailable',
               error: status.error
             });
             this.stopPollingForJob(jobId);
@@ -477,17 +548,34 @@ export class ExportJobService implements OnDestroy {
           ) {
             this.stopPollingForJob(jobId);
           }
-        },
-        error: () => {
-          this.updateJob(jobId, {
-            status: 'failed',
-            error: 'Failed to get job status'
-          });
-          this.stopPollingForJob(jobId);
         }
       });
 
     this.pollingSubscriptions.set(jobId, subscription);
+  }
+
+  private isRetryableStatusRequestError(error: unknown): boolean {
+    return (
+      this.isRetryableRequestError(error) ||
+      (error instanceof HttpErrorResponse && error.status === 409)
+    );
+  }
+
+  private isRetryableRequestError(error: unknown): boolean {
+    return (
+      error instanceof HttpErrorResponse &&
+      (error.status === 0 ||
+        error.status === 408 ||
+        error.status === 429 ||
+        error.status >= 500)
+    );
+  }
+
+  private getRequestRetryDelay(consecutiveFailures: number): number {
+    const exponentialDelay =
+      ExportJobService.statusPollingIntervalMs *
+      2 ** Math.max(0, consecutiveFailures - 1);
+    return Math.min(exponentialDelay, ExportJobService.maxStatusRetryDelayMs);
   }
 
   private mapStatus(status: ExportJobStateDto): ExportJob['status'] {
@@ -535,7 +623,9 @@ export class ExportJobService implements OnDestroy {
           this.stopDownloadForJob(jobId);
           this.clearItemMatrixExpirationTimer(jobId);
           this.jobsSubject.next(
-            this.jobsSubject.value.filter(candidate => candidate.jobId !== jobId)
+            this.jobsSubject.value.filter(
+              candidate => candidate.jobId !== jobId
+            )
           );
           return true;
         }),

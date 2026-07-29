@@ -62,6 +62,13 @@ describe('ExportToastComponent', () => {
       workspaceId: 1,
       exportType: 'coding-times',
       status: 'cancelled'
+    },
+    {
+      jobId: 'unavailable',
+      workspaceId: 1,
+      exportType: 'psychometrics',
+      status: 'unavailable',
+      error: 'Failed to get job status'
     }
   ] as ExportJob[];
 
@@ -123,6 +130,9 @@ describe('ExportToastComponent', () => {
           'item-matrix-incomplete-expired':
             '{{total}} Zellen konnten nicht sicher aufgelöst werden; abgelaufen.',
           'item-matrix-incomplete-download-failed': 'Download fehlgeschlagen',
+          'status-unavailable-title': 'Exportstatus nicht verfügbar',
+          'status-unavailable-message':
+            'Der aktuelle Zustand des Exports konnte nicht ermittelt werden.',
           'remove-failed': 'Löschen fehlgeschlagen',
           'generic-title': 'Export fehlgeschlagen'
         },
@@ -162,12 +172,14 @@ describe('ExportToastComponent', () => {
     expect(component.activeJobCount).toBe(2);
     expect(component.completedJobCount).toBe(1);
     expect(component.failedJobCount).toBe(1);
+    expect(component.unavailableJobCount).toBe(1);
     expect(component.getStatusIcon('waiting')).toBe('hourglass_empty');
     expect(component.getStatusIcon('active')).toBe('sync');
     expect(component.getStatusIcon('downloading')).toBe('file_download');
     expect(component.getStatusIcon('completed')).toBe('check_circle');
     expect(component.getStatusIcon('failed')).toBe('error');
     expect(component.getStatusIcon('cancelled')).toBe('cancel');
+    expect(component.getStatusIcon('unavailable')).toBe('cloud_off');
     expect(component.getStatusIcon('unknown' as never)).toBe('help');
     expect(component.getStatusClass('failed')).toBe('status-failed');
     expect(component.getExportTypeLabel('aggregated')).toBe(
@@ -188,6 +200,13 @@ describe('ExportToastComponent', () => {
     );
     expect(component.getExportTypeLabel('custom')).toBe('custom');
     expect(component.getErrorTitle(jobs[3])).toBe('Export fehlgeschlagen');
+    expect(component.getErrorTitle(jobs[5])).toBe(
+      'Exportstatus nicht verfügbar'
+    );
+    expect(component.getErrorMessage(jobs[5])).toBe(
+      'Der aktuelle Zustand des Exports konnte nicht ermittelt werden.'
+    );
+    expect(component.hasTechnicalDetails(jobs[5])).toBe(true);
 
     component.toggleCollapse();
     expect(component.isCollapsed).toBe(true);
@@ -208,6 +227,7 @@ describe('ExportToastComponent', () => {
     expect(exportJobService.removeJob).toHaveBeenCalledWith('done');
     expect(exportJobService.removeJob).toHaveBeenCalledWith('bad');
     expect(exportJobService.removeJob).toHaveBeenCalledWith('cancelled');
+    expect(exportJobService.removeJob).toHaveBeenCalledWith('unavailable');
   });
 
   it('updates from the jobs stream and tears down subscriptions', () => {

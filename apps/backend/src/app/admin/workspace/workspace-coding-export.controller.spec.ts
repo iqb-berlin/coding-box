@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { BadRequestException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { WorkspaceCodingExportController } from './workspace-coding-export.controller';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -50,7 +50,7 @@ const createController = (
 
 const requestForUser = (userId = 2): Request => ({
   user: { id: userId }
-} as unknown as Request);
+}) as unknown as Request;
 
 const createWritableResponse = () => {
   const res = new PassThrough() as PassThrough & {
@@ -1073,6 +1073,40 @@ describe('WorkspaceCodingExportController', () => {
       .toHaveBeenCalledWith('lease-1');
   });
 
+  it('propagates transient lease refresh failures for HTTP retry handling', async () => {
+    const jobQueueService = {
+      getExportJob: jest.fn().mockResolvedValue({
+        data: {
+          workspaceId: 5,
+          userId: 2,
+          exportType: 'detailed',
+          clientLeaseId: 'lease-1'
+        },
+        getState: jest.fn().mockResolvedValue('active'),
+        progress: jest.fn().mockResolvedValue(50)
+      })
+    };
+    const exportJobClientLeaseService = {
+      createLease: jest.fn(),
+      refreshLease: jest.fn().mockRejectedValue(new Error('redis unavailable')),
+      releaseLease: jest.fn(),
+      isLeaseActive: jest.fn()
+    } as unknown as ExportJobClientLeaseService;
+    const controller = createController(
+      {} as CodingListExportService,
+      {} as CodingExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService,
+      codingPsychometricExportServiceMock,
+      exportJobClientLeaseService
+    );
+
+    await expect(
+      controller.getExportJobStatus(5, 'job-1', requestForUser())
+    ).rejects.toThrow('redis unavailable');
+  });
+
   it('reports cancellation-marked export jobs as cancelled', async () => {
     const jobQueueService = {
       getExportJob: jest.fn().mockResolvedValue({
@@ -1204,35 +1238,38 @@ describe('WorkspaceCodingExportController', () => {
 
   it('maps cancelled export jobs consistently in the job list', async () => {
     const jobQueueService = {
-      getExportJobs: jest.fn().mockResolvedValue([
-        {
-          id: 'active-cancelled',
-          data: {
-            workspaceId: 5,
-            userId: 2,
-            exportType: 'coding-list',
-            isCancelled: true
+      getExportJobsWithHistoryState: jest.fn().mockResolvedValue({
+        jobs: [
+          {
+            id: 'active-cancelled',
+            data: {
+              workspaceId: 5,
+              userId: 2,
+              exportType: 'coding-list',
+              isCancelled: true
+            },
+            timestamp: 100,
+            getState: jest.fn().mockResolvedValue('active'),
+            progress: jest.fn().mockResolvedValue(55)
           },
-          timestamp: 100,
-          getState: jest.fn().mockResolvedValue('active'),
-          progress: jest.fn().mockResolvedValue(55)
-        },
-        {
-          id: 'failed-cancelled',
-          data: { workspaceId: 5, userId: 2, exportType: 'detailed' },
-          timestamp: 101,
-          failedReason: 'Export job failed-cancelled was cancelled',
-          getState: jest.fn().mockResolvedValue('failed'),
-          progress: jest.fn().mockResolvedValue(20)
-        },
-        {
-          id: 'waiting-job',
-          data: { workspaceId: 5, userId: 2, exportType: 'by-variable' },
-          timestamp: 102,
-          getState: jest.fn().mockResolvedValue('waiting'),
-          progress: jest.fn().mockResolvedValue(0)
-        }
-      ])
+          {
+            id: 'failed-cancelled',
+            data: { workspaceId: 5, userId: 2, exportType: 'detailed' },
+            timestamp: 101,
+            failedReason: 'Export job failed-cancelled was cancelled',
+            getState: jest.fn().mockResolvedValue('failed'),
+            progress: jest.fn().mockResolvedValue(20)
+          },
+          {
+            id: 'waiting-job',
+            data: { workspaceId: 5, userId: 2, exportType: 'by-variable' },
+            timestamp: 102,
+            getState: jest.fn().mockResolvedValue('waiting'),
+            progress: jest.fn().mockResolvedValue(0)
+          }
+        ],
+        historyPending: false
+      })
     };
     const controller = createController(
       {} as CodingListExportService,
@@ -1243,7 +1280,9 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.getExportJobs(5, requestForUser())).resolves.toEqual([
+    const response = createWritableResponse();
+    await expect(controller.getExportJobs(5, requestForUser(), response as unknown as Response
+    )).resolves.toEqual([
       {
         jobId: 'active-cancelled',
         status: 'cancelled',
@@ -1257,8 +1296,19 @@ describe('WorkspaceCodingExportController', () => {
         progress: 20,
         exportType: 'detailed',
         createdAt: 101
+      },
+      {
+        jobId: 'waiting-job',
+        status: 'pending',
+        progress: 0,
+        exportType: 'by-variable',
+        createdAt: 102
       }
     ]);
+    expect(response.setHeader).toHaveBeenCalledWith(
+      'X-Export-History-Pending',
+      'false'
+    );
   });
 
   it('lists only export jobs owned by the authenticated user', async () => {
@@ -1275,10 +1325,13 @@ describe('WorkspaceCodingExportController', () => {
       progress: jest.fn().mockResolvedValue(20)
     });
     const jobQueueService = {
-      getExportJobs: jest.fn().mockResolvedValue([
-        createFailedJob('own-job', 2),
-        createFailedJob('other-job', 3)
-      ])
+      getExportJobsWithHistoryState: jest.fn().mockResolvedValue({
+        jobs: [
+          createFailedJob('own-job', 2),
+          createFailedJob('other-job', 3)
+        ],
+        historyPending: false
+      })
     };
     const controller = createController(
       {} as CodingListExportService,
@@ -1291,7 +1344,7 @@ describe('WorkspaceCodingExportController', () => {
 
     const jobs = await controller.getExportJobs(5, requestForUser(2));
 
-    expect(jobQueueService.getExportJobs).toHaveBeenCalledWith(
+    expect(jobQueueService.getExportJobsWithHistoryState).toHaveBeenCalledWith(
       5,
       2,
       expect.arrayContaining(['coding-list', 'item-matrix'])
@@ -1348,33 +1401,36 @@ describe('WorkspaceCodingExportController', () => {
 
   it('returns display variants for manual coding exports', async () => {
     const jobQueueService = {
-      getExportJobs: jest.fn().mockResolvedValue([
-        {
-          id: 'manual-aggregated',
-          data: {
-            workspaceId: 5,
-            userId: 2,
-            exportType: 'aggregated',
-            excludeAutoCoded: true,
-            doubleCodingMethod: 'new-column-per-coder'
+      getExportJobsWithHistoryState: jest.fn().mockResolvedValue({
+        jobs: [
+          {
+            id: 'manual-aggregated',
+            data: {
+              workspaceId: 5,
+              userId: 2,
+              exportType: 'aggregated',
+              excludeAutoCoded: true,
+              doubleCodingMethod: 'new-column-per-coder'
+            },
+            timestamp: 100,
+            getState: jest.fn().mockResolvedValue('failed'),
+            progress: jest.fn().mockResolvedValue(80)
           },
-          timestamp: 100,
-          getState: jest.fn().mockResolvedValue('failed'),
-          progress: jest.fn().mockResolvedValue(80)
-        },
-        {
-          id: 'manual-compact',
-          data: {
-            workspaceId: 5,
-            userId: 2,
-            exportType: 'by-variable-compact',
-            excludeAutoCoded: true
-          },
-          timestamp: 101,
-          getState: jest.fn().mockResolvedValue('failed'),
-          progress: jest.fn().mockResolvedValue(80)
-        }
-      ])
+          {
+            id: 'manual-compact',
+            data: {
+              workspaceId: 5,
+              userId: 2,
+              exportType: 'by-variable-compact',
+              excludeAutoCoded: true
+            },
+            timestamp: 101,
+            getState: jest.fn().mockResolvedValue('failed'),
+            progress: jest.fn().mockResolvedValue(80)
+          }
+        ],
+        historyPending: false
+      })
     };
     const controller = createController(
       {} as CodingListExportService,
@@ -1399,15 +1455,18 @@ describe('WorkspaceCodingExportController', () => {
 
   it('returns structured item matrix error details in the job list', async () => {
     const jobQueueService = {
-      getExportJobs: jest.fn().mockResolvedValue([{
-        id: 'failed-matrix',
-        data: { workspaceId: 5, userId: 2, exportType: 'item-matrix' },
-        timestamp: 100,
-        failedReason:
+      getExportJobsWithHistoryState: jest.fn().mockResolvedValue({
+        jobs: [{
+          id: 'failed-matrix',
+          data: { workspaceId: 5, userId: 2, exportType: 'item-matrix' },
+          timestamp: 100,
+          failedReason:
           'ITEM_MATRIX_UNRESOLVED_CELLS:2 Itemdatensatz enthält 2 nicht exportierbare Zellen.',
-        getState: jest.fn().mockResolvedValue('failed'),
-        progress: jest.fn().mockResolvedValue(90)
-      }])
+          getState: jest.fn().mockResolvedValue('failed'),
+          progress: jest.fn().mockResolvedValue(90)
+        }],
+        historyPending: false
+      })
     };
     const cacheService = {
       get: jest.fn()
@@ -1458,23 +1517,26 @@ describe('WorkspaceCodingExportController', () => {
 
   it('omits completed jobs whose artifacts have expired', async () => {
     const jobQueueService = {
-      getExportJobs: jest.fn().mockResolvedValue([{
-        id: 'completed-expired',
-        data: { workspaceId: 5, userId: 2, exportType: 'aggregated' },
-        timestamp: 100,
-        getState: jest.fn().mockResolvedValue('completed'),
-        progress: jest.fn().mockResolvedValue(100),
-        returnvalue: {
-          fileId: 'completed-expired',
-          fileName: 'export.xlsx',
-          filePath: '/expired/export.xlsx',
-          fileSize: 10,
-          workspaceId: 5,
-          userId: 2,
-          exportType: 'aggregated',
-          createdAt: 100
-        }
-      }])
+      getExportJobsWithHistoryState: jest.fn().mockResolvedValue({
+        jobs: [{
+          id: 'completed-expired',
+          data: { workspaceId: 5, userId: 2, exportType: 'aggregated' },
+          timestamp: 100,
+          getState: jest.fn().mockResolvedValue('completed'),
+          progress: jest.fn().mockResolvedValue(100),
+          returnvalue: {
+            fileId: 'completed-expired',
+            fileName: 'export.xlsx',
+            filePath: '/expired/export.xlsx',
+            fileSize: 10,
+            workspaceId: 5,
+            userId: 2,
+            exportType: 'aggregated',
+            createdAt: 100
+          }
+        }],
+        historyPending: false
+      })
     };
     const cacheService = {
       get: jest.fn().mockResolvedValue(undefined)

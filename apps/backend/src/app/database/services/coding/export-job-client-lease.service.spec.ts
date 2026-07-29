@@ -27,6 +27,7 @@ describe('ExportJobClientLeaseService', () => {
     const leaseId = await service.createLease();
 
     expect(leaseId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(ExportJobClientLeaseService.ttlSeconds).toBeGreaterThan(60);
     expect(cacheService.executeScript).toHaveBeenCalledWith(
       expect.stringContaining("redis.call('SET'"),
       [

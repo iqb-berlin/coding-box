@@ -25,12 +25,16 @@ const createQueue = (job = createJob()) => ({
   add: jest.fn().mockImplementation(async data => ({ ...job, data })),
   getJob: jest.fn().mockResolvedValue(job),
   getJobs: jest.fn().mockResolvedValue([job]),
+  toKey: jest.fn().mockImplementation(state => `data-export:${state}`),
   getWorkers: jest.fn().mockResolvedValue([{ name: 'export-worker' }]),
   getJobCounts: jest.fn().mockResolvedValue({
     waiting: 1, active: 0, completed: 0, failed: 0, delayed: 0
   }),
   isReady: jest.fn().mockResolvedValue(undefined),
-  client: { ping: jest.fn().mockResolvedValue('PONG') }
+  client: {
+    ping: jest.fn().mockResolvedValue('PONG'),
+    zrevrange: jest.fn().mockResolvedValue([])
+  }
 });
 
 describe('JobQueueService', () => {
@@ -45,6 +49,10 @@ describe('JobQueueService', () => {
     addJob: jest.Mock;
     getRecentJobIds: jest.Mock;
     removeJobIds: jest.Mock;
+    claimLegacyBackfill: jest.Mock;
+    refreshLegacyBackfillClaim: jest.Mock;
+    completeLegacyBackfill: jest.Mock;
+    releaseLegacyBackfillClaim: jest.Mock;
   };
   let service: JobQueueService;
 
@@ -61,7 +69,11 @@ describe('JobQueueService', () => {
     exportJobHistoryIndexService = {
       addJob: jest.fn().mockResolvedValue(undefined),
       getRecentJobIds: jest.fn().mockResolvedValue([]),
-      removeJobIds: jest.fn().mockResolvedValue(undefined)
+      removeJobIds: jest.fn().mockResolvedValue(undefined),
+      claimLegacyBackfill: jest.fn().mockResolvedValue({ status: 'complete' }),
+      refreshLegacyBackfillClaim: jest.fn().mockResolvedValue(undefined),
+      completeLegacyBackfill: jest.fn().mockResolvedValue(undefined),
+      releaseLegacyBackfillClaim: jest.fn().mockResolvedValue(undefined)
     };
     service = new JobQueueService(
       queues[0] as never,
@@ -484,7 +496,9 @@ describe('JobQueueService', () => {
 
     expect(queues[2].getJobs).toHaveBeenNthCalledWith(
       1,
-      ['active', 'waiting', 'delayed']
+      ['active', 'waiting', 'delayed',
+        'paused'
+      ]
     );
     expect(exportJobHistoryIndexService.getRecentJobIds).toHaveBeenCalledWith({
       workspaceId: 1,
@@ -492,6 +506,306 @@ describe('JobQueueService', () => {
       exportTypes: ['coding-list']
     });
     expect(queues[2].getJobs).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains in-progress jobs when the history index cannot be read', async () => {
+    const activeJob = {
+      ...createJob(
+        {
+          workspaceId: 1,
+          userId: 2,
+          exportType: 'coding-list'
+        },
+        'active'
+      ),
+      id: 'active-job'
+    };
+    queues[2].getJobs.mockResolvedValue([activeJob]);
+    exportJobHistoryIndexService.getRecentJobIds.mockRejectedValue(
+      new Error('history unavailable')
+    );
+
+    await expect(service.getExportJobs(1, 2, ['coding-list'])).resolves.toEqual(
+      [activeJob]
+    );
+  });
+
+  it('backfills legacy terminal jobs once', async () => {
+    const legacyJob = {
+      ...createJob(
+        {
+          workspaceId: 1,
+          userId: 2,
+          exportType: 'coding-list'
+        },
+        'completed'
+      ),
+      id: 'legacy-job'
+    };
+    exportJobHistoryIndexService.claimLegacyBackfill.mockResolvedValue({
+      status: 'claimed',
+      claim: 'backfill-claim'
+    });
+    queues[2].getJobs.mockResolvedValue([]);
+    queues[2].client.zrevrange.mockImplementation(async key => (
+      key === 'data-export:completed' ? ['legacy-job'] : []
+    ));
+    queues[2].getJob.mockResolvedValue(legacyJob);
+
+    await expect(
+      service.getExportJobsWithHistoryState(1, 2, ['coding-list'])
+    ).resolves.toEqual({
+      jobs: [],
+      historyPending: true
+    });
+    await new Promise(resolve => {
+      setImmediate(resolve);
+    });
+
+    expect(queues[2].client.zrevrange).toHaveBeenCalledWith(
+      'data-export:completed',
+      0,
+      -1
+    );
+    expect(queues[2].client.zrevrange).toHaveBeenCalledWith(
+      'data-export:failed',
+      0,
+      -1
+    );
+    expect(exportJobHistoryIndexService.addJob).toHaveBeenCalledWith(
+      'legacy-job',
+      legacyJob.data,
+      legacyJob.timestamp
+    );
+    expect(
+      exportJobHistoryIndexService.refreshLegacyBackfillClaim
+    ).toHaveBeenCalledWith('backfill-claim');
+    expect(
+      exportJobHistoryIndexService.completeLegacyBackfill
+    ).toHaveBeenCalledWith('backfill-claim');
+    expect(
+      exportJobHistoryIndexService.claimLegacyBackfill
+    ).toHaveBeenCalledTimes(1);
+
+    exportJobHistoryIndexService.getRecentJobIds.mockResolvedValue([
+      'legacy-job'
+    ]);
+    queues[2].getJob.mockResolvedValue(legacyJob);
+    await expect(
+      service.getExportJobsWithHistoryState(1, 2, ['coding-list'])
+    ).resolves.toEqual({
+      jobs: [legacyJob],
+      historyPending: false
+    });
+    expect(
+      exportJobHistoryIndexService.claimLegacyBackfill
+    ).toHaveBeenCalledTimes(1);
+  });
+
+  it('backfills retained terminal jobs beyond the former global limit', async () => {
+    const legacyJobs = Array.from({ length: 2001 }, (_, index) => ({
+      ...createJob(
+        {
+          workspaceId: index + 1,
+          userId: 2,
+          exportType: 'coding-list'
+        },
+        'completed'
+      ),
+      id: `legacy-job-${index}`,
+      timestamp: index
+    }));
+    exportJobHistoryIndexService.claimLegacyBackfill.mockResolvedValue({
+      status: 'claimed',
+      claim: 'complete-backfill-claim'
+    });
+    const legacyJobsById = new Map(
+      legacyJobs.map(job => [job.id.toString(), job])
+    );
+    queues[2].getJobs.mockResolvedValue([]);
+    queues[2].client.zrevrange.mockImplementation(async key => (
+      key === 'data-export:completed' ? [...legacyJobsById.keys()] : []
+    ));
+    queues[2].getJob.mockImplementation(async jobId => (
+      legacyJobsById.get(jobId.toString())
+    ));
+
+    await service.getExportJobsWithHistoryState(1, 2, ['coding-list']);
+    await new Promise(resolve => {
+      setImmediate(resolve);
+    });
+
+    expect(exportJobHistoryIndexService.addJob).toHaveBeenCalledTimes(2001);
+    expect(exportJobHistoryIndexService.addJob).toHaveBeenCalledWith(
+      'legacy-job-2000',
+      legacyJobs[2000].data,
+      2000
+    );
+    expect(queues[2].getJob).toHaveBeenCalledWith(
+      'legacy-job-2000'
+    );
+    expect(
+      exportJobHistoryIndexService.completeLegacyBackfill
+    ).toHaveBeenCalledWith('complete-backfill-claim');
+  });
+
+  it('does not skip retained jobs when an earlier job is deleted between batches', async () => {
+    const legacyJobs = Array.from({ length: 101 }, (_, index) => ({
+      ...createJob(
+        {
+          workspaceId: 1,
+          userId: 2,
+          exportType: 'coding-list'
+        },
+        'completed'
+      ),
+      id: `legacy-job-${index}`,
+      timestamp: index
+    }));
+    const legacyJobsById = new Map(
+      legacyJobs.map(job => [job.id.toString(), job])
+    );
+    exportJobHistoryIndexService.claimLegacyBackfill.mockResolvedValue({
+      status: 'claimed',
+      claim: 'stable-snapshot-claim'
+    });
+    queues[2].getJobs.mockResolvedValue([]);
+    queues[2].client.zrevrange.mockImplementation(async key => (
+      key === 'data-export:completed' ? [...legacyJobsById.keys()] : []
+    ));
+    queues[2].getJob.mockImplementation(async jobId => (
+      legacyJobsById.get(jobId.toString())
+    ));
+    exportJobHistoryIndexService.refreshLegacyBackfillClaim
+      .mockImplementationOnce(async () => {
+        legacyJobsById.delete('legacy-job-0');
+      });
+
+    await service.getExportJobsWithHistoryState(1, 2, ['coding-list']);
+    await new Promise(resolve => {
+      setImmediate(resolve);
+    });
+
+    expect(exportJobHistoryIndexService.addJob).toHaveBeenCalledTimes(101);
+    expect(exportJobHistoryIndexService.addJob).toHaveBeenCalledWith(
+      'legacy-job-100',
+      legacyJobs[100].data,
+      100
+    );
+    expect(
+      exportJobHistoryIndexService.completeLegacyBackfill
+    ).toHaveBeenCalledWith('stable-snapshot-claim');
+  });
+
+  it('does not block active jobs while legacy history is being indexed', async () => {
+    const activeJob = {
+      ...createJob(
+        {
+          workspaceId: 1,
+          userId: 2,
+          exportType: 'coding-list'
+        },
+        'active'
+      ),
+      id: 'active-job'
+    };
+    const legacyJob = {
+      ...createJob(
+        {
+          workspaceId: 1,
+          userId: 2,
+          exportType: 'coding-list'
+        },
+        'completed'
+      ),
+      id: 'legacy-job'
+    };
+    let finishIndexing: () => void;
+    const indexing = new Promise<void>(resolve => {
+      finishIndexing = resolve;
+    });
+    exportJobHistoryIndexService.claimLegacyBackfill.mockResolvedValue({
+      status: 'claimed',
+      claim: 'backfill-claim'
+    });
+    exportJobHistoryIndexService.addJob.mockReturnValue(indexing);
+    queues[2].client.zrevrange.mockImplementation(async key => (
+      key === 'data-export:completed' ? ['legacy-job'] : []
+    ));
+    queues[2].getJob.mockResolvedValue(legacyJob);
+    queues[2].getJobs.mockImplementation(async states => (
+      states.includes('active') ? [activeJob] : []
+    ));
+
+    await expect(
+      service.getExportJobsWithHistoryState(1, 2, ['coding-list'])
+    ).resolves.toEqual({
+      jobs: [activeJob],
+      historyPending: true
+    });
+    expect(
+      exportJobHistoryIndexService.completeLegacyBackfill
+    ).not.toHaveBeenCalled();
+
+    finishIndexing!();
+    await indexing;
+    await new Promise(resolve => {
+      setImmediate(resolve);
+    });
+    expect(
+      exportJobHistoryIndexService.completeLegacyBackfill
+    ).toHaveBeenCalledWith('backfill-claim');
+  });
+
+  it('retries legacy backfill after another owner was busy', async () => {
+    exportJobHistoryIndexService.claimLegacyBackfill
+      .mockResolvedValueOnce({ status: 'busy' })
+      .mockResolvedValueOnce({
+        status: 'claimed',
+        claim: 'retry-claim'
+      });
+    queues[2].getJobs.mockResolvedValue([]);
+
+    await service.getExportJobs(1, 2, ['coding-list']);
+    await new Promise(resolve => {
+      setImmediate(resolve);
+    });
+    await service.getExportJobs(1, 2, ['coding-list']);
+    await new Promise(resolve => {
+      setImmediate(resolve);
+    });
+
+    expect(
+      exportJobHistoryIndexService.claimLegacyBackfill
+    ).toHaveBeenCalledTimes(2);
+    expect(
+      exportJobHistoryIndexService.completeLegacyBackfill
+    ).toHaveBeenCalledWith('retry-claim');
+  });
+
+  it('retains paused export jobs while restoring scoped history', async () => {
+    const pausedJob = {
+      ...createJob(
+        {
+          workspaceId: 1,
+          userId: 2,
+          exportType: 'coding-list'
+        },
+        'paused'
+      ),
+      id: 'paused-job'
+    };
+    queues[2].getJobs.mockResolvedValue([pausedJob]);
+
+    await expect(service.getExportJobs(1, 2, ['coding-list'])).resolves.toEqual(
+      [pausedJob]
+    );
+    expect(queues[2].getJobs).toHaveBeenCalledWith([
+      'active',
+      'waiting',
+      'delayed',
+      'paused'
+    ]);
   });
 
   it('hydrates terminal jobs from the scoped history index', async () => {
@@ -516,44 +830,48 @@ describe('JobQueueService', () => {
     );
     queues[2].getJobs.mockResolvedValue([]);
     queues[2].getJob.mockImplementation(async jobId => ({
-      ...createJob({
-        workspaceId: 1,
-        userId: 2,
-        exportType: 'coding-list'
-      }, 'completed'),
+      ...createJob(
+        {
+          workspaceId: 1,
+          userId: 2,
+          exportType: 'coding-list'
+        },
+        'completed'
+      ),
       id: jobId
     }));
-    exportJobHistoryIndexService.getRecentJobIds
-      .mockResolvedValue(indexedJobIds);
+    exportJobHistoryIndexService.getRecentJobIds.mockResolvedValue(
+      indexedJobIds
+    );
 
-    await expect(service.getExportJobs(
-      1,
-      2,
-      ['coding-list']
-    )).resolves.toHaveLength(500);
+    await expect(
+      service.getExportJobs(1, 2, ['coding-list'])
+    ).resolves.toHaveLength(500);
 
     expect(queues[2].getJob).toHaveBeenCalledTimes(500);
   });
 
   it('filters export types before applying the terminal-job result limit', async () => {
     const codingJob = {
-      ...createJob({
-        workspaceId: 1,
-        userId: 2,
-        exportType: 'coding-list'
-      }, 'completed'),
+      ...createJob(
+        {
+          workspaceId: 1,
+          userId: 2,
+          exportType: 'coding-list'
+        },
+        'completed'
+      ),
       id: 'coding-job'
     };
     queues[2].getJobs.mockResolvedValue([]);
     queues[2].getJob.mockResolvedValue(codingJob);
-    exportJobHistoryIndexService.getRecentJobIds
-      .mockResolvedValue(['coding-job']);
+    exportJobHistoryIndexService.getRecentJobIds.mockResolvedValue([
+      'coding-job'
+    ]);
 
-    await expect(service.getExportJobs(
-      1,
-      2,
-      ['coding-list']
-    )).resolves.toEqual([codingJob]);
+    await expect(service.getExportJobs(1, 2, ['coding-list'])).resolves.toEqual(
+      [codingJob]
+    );
     expect(exportJobHistoryIndexService.getRecentJobIds).toHaveBeenCalledWith({
       workspaceId: 1,
       userId: 2,
@@ -562,30 +880,34 @@ describe('JobQueueService', () => {
   });
 
   it('prunes stale IDs while listing indexed export jobs', async () => {
-    const matchingJob = createJob({
-      workspaceId: 1,
-      userId: 2,
-      exportType: 'test-results'
-    }, 'failed');
+    const matchingJob = createJob(
+      {
+        workspaceId: 1,
+        userId: 2,
+        exportType: 'test-results'
+      },
+      'failed'
+    );
     queues[2].getJobs.mockResolvedValue([]);
     queues[2].getJob
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(matchingJob);
-    exportJobHistoryIndexService.getRecentJobIds
-      .mockResolvedValue(['stale-job', 'job-1']);
+    exportJobHistoryIndexService.getRecentJobIds.mockResolvedValue([
+      'stale-job',
+      'job-1'
+    ]);
 
-    const exportJobs = await service.getExportJobs(
-      1,
-      2,
-      ['test-results']
-    );
+    const exportJobs = await service.getExportJobs(1, 2, ['test-results']);
 
     expect(exportJobs).toHaveLength(1);
-    expect(exportJobHistoryIndexService.removeJobIds).toHaveBeenCalledWith({
-      workspaceId: 1,
-      userId: 2,
-      exportTypes: ['test-results']
-    }, ['stale-job']);
+    expect(exportJobHistoryIndexService.removeJobIds).toHaveBeenCalledWith(
+      {
+        workspaceId: 1,
+        userId: 2,
+        exportTypes: ['test-results']
+      },
+      ['stale-job']
+    );
   });
 
   it('covers all registered process overview queues', async () => {
@@ -609,18 +931,18 @@ describe('JobQueueService', () => {
 
   it('uses validation task progress and metadata from the task entity in the process overview', async () => {
     queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
-    queues[7].getJobs.mockResolvedValue([
-      createJob({ taskId: 7 }, 'active')
+    queues[7].getJobs.mockResolvedValue([createJob({ taskId: 7 }, 'active')]);
+    validationTaskRepository.find.mockResolvedValueOnce([
+      {
+        id: 7,
+        workspace_id: 1,
+        validation_type: 'testFiles',
+        status: 'processing',
+        progress: 65,
+        progress_message: 'Testdateien werden geprüft...',
+        error: 'Schema validation failed'
+      }
     ]);
-    validationTaskRepository.find.mockResolvedValueOnce([{
-      id: 7,
-      workspace_id: 1,
-      validation_type: 'testFiles',
-      status: 'processing',
-      progress: 65,
-      progress_message: 'Testdateien werden geprüft...',
-      error: 'Schema validation failed'
-    }]);
 
     const workspaceJobs = await service.getAllWorkspaceJobs(1);
 
@@ -644,15 +966,17 @@ describe('JobQueueService', () => {
     queues[7].getJobs.mockResolvedValue([
       createJob({ taskId: 7 }, 'completed')
     ]);
-    validationTaskRepository.find.mockResolvedValueOnce([{
-      id: 7,
-      workspace_id: 1,
-      validation_type: 'testFiles',
-      status: 'cancelled',
-      progress: 30,
-      progress_message: 'Validierung abgebrochen.',
-      error: 'Cancelled by user'
-    }]);
+    validationTaskRepository.find.mockResolvedValueOnce([
+      {
+        id: 7,
+        workspace_id: 1,
+        validation_type: 'testFiles',
+        status: 'cancelled',
+        progress: 30,
+        progress_message: 'Validierung abgebrochen.',
+        error: 'Cancelled by user'
+      }
+    ]);
 
     const workspaceJobs = await service.getAllWorkspaceJobs(1);
 
@@ -673,18 +997,18 @@ describe('JobQueueService', () => {
 
   it('keeps active Bull validation tasks active even when the task entity is cancelled', async () => {
     queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
-    queues[7].getJobs.mockResolvedValue([
-      createJob({ taskId: 7 }, 'active')
+    queues[7].getJobs.mockResolvedValue([createJob({ taskId: 7 }, 'active')]);
+    validationTaskRepository.find.mockResolvedValueOnce([
+      {
+        id: 7,
+        workspace_id: 1,
+        validation_type: 'testFiles',
+        status: 'cancelled',
+        progress: 30,
+        progress_message: 'Validierung abgebrochen.',
+        error: 'Cancelled by user'
+      }
     ]);
-    validationTaskRepository.find.mockResolvedValueOnce([{
-      id: 7,
-      workspace_id: 1,
-      validation_type: 'testFiles',
-      status: 'cancelled',
-      progress: 30,
-      progress_message: 'Validierung abgebrochen.',
-      error: 'Cancelled by user'
-    }]);
 
     const workspaceJobs = await service.getAllWorkspaceJobs(1);
 
@@ -708,15 +1032,17 @@ describe('JobQueueService', () => {
     queues[7].getJobs.mockResolvedValue([
       createJob({ taskId: 7 }, 'completed')
     ]);
-    validationTaskRepository.find.mockResolvedValueOnce([{
-      id: 7,
-      workspace_id: 1,
-      validation_type: 'testFiles',
-      status: 'failed',
-      progress: 100,
-      progress_message: 'Validierung fehlgeschlagen.',
-      error: 'Schema validation failed'
-    }]);
+    validationTaskRepository.find.mockResolvedValueOnce([
+      {
+        id: 7,
+        workspace_id: 1,
+        validation_type: 'testFiles',
+        status: 'failed',
+        progress: 100,
+        progress_message: 'Validierung fehlgeschlagen.',
+        error: 'Schema validation failed'
+      }
+    ]);
 
     const workspaceJobs = await service.getAllWorkspaceJobs(1);
 
@@ -805,7 +1131,9 @@ describe('JobQueueService', () => {
         isCancelled: false
       }
     });
-    expect(JSON.stringify(workspaceJobs[0].data)).not.toContain('requestedByUserId');
+    expect(JSON.stringify(workspaceJobs[0].data)).not.toContain(
+      'requestedByUserId'
+    );
   });
 
   it('ignores stale null jobs returned by Bull when listing workspace jobs', async () => {
@@ -828,20 +1156,34 @@ describe('JobQueueService', () => {
     queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
     queues[1].getJobs.mockResolvedValue([null] as never);
 
-    await expect(service.assertNoDependencyConflicts('data-export', 1)).resolves.toBeUndefined();
+    await expect(
+      service.assertNoDependencyConflicts('data-export', 1)
+    ).resolves.toBeUndefined();
   });
 
   it('checks dependency conflicts and redis status', async () => {
-    await expect(service.assertNoActiveUploadForWorkspace(1)).rejects.toBeInstanceOf(ConflictException);
-    await expect(service.assertNoDependencyConflicts('data-export', 1)).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      service.assertNoActiveUploadForWorkspace(1)
+    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      service.assertNoDependencyConflicts('data-export', 1)
+    ).rejects.toBeInstanceOf(ConflictException);
 
     queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
-    await expect(service.assertNoActiveUploadForWorkspace(1)).resolves.toBeUndefined();
-    await expect(service.assertNoDependencyConflicts('data-export', 1)).resolves.toBeUndefined();
+    await expect(
+      service.assertNoActiveUploadForWorkspace(1)
+    ).resolves.toBeUndefined();
+    await expect(
+      service.assertNoDependencyConflicts('data-export', 1)
+    ).resolves.toBeUndefined();
 
-    await expect(service.checkRedisConnection()).resolves.toMatchObject({ connected: true });
+    await expect(service.checkRedisConnection()).resolves.toMatchObject({
+      connected: true
+    });
     queues[0].client = null;
-    await expect(service.checkRedisConnection()).resolves.toMatchObject({ connected: false });
+    await expect(service.checkRedisConnection()).resolves.toMatchObject({
+      connected: false
+    });
   });
 
   it('deletes all variable analysis jobs including active ones', async () => {

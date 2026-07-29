@@ -816,23 +816,35 @@ describe('CodingJobBackendService', () => {
   describe('item dataset exports', () => {
     it('loads export jobs for workspace rehydration', () => {
       service.getExportJobs(5).subscribe(result => {
-        expect(result[0]).toEqual(expect.objectContaining({
-          jobId: 'job-1',
-          status: 'processing'
-        }));
+        expect(result).toEqual(
+          expect.objectContaining({
+            historyPending: false
+          })
+        );
+        expect(result.jobs[0]).toEqual(
+          expect.objectContaining({
+            jobId: 'job-1',
+            status: 'processing'
+          })
+        );
       });
 
       const req = httpMock.expectOne(
         `${mockServerUrl}admin/workspace/5/coding/export/jobs`
       );
       expect(req.request.method).toBe('GET');
-      req.flush([{
-        jobId: 'job-1',
-        status: 'processing',
-        progress: 50,
-        exportType: 'item-matrix',
-        createdAt: 10
-      }]);
+      req.flush(
+        [
+          {
+            jobId: 'job-1',
+            status: 'processing',
+            progress: 50,
+            exportType: 'item-matrix',
+            createdAt: 10
+          }
+        ],
+        { headers: { 'X-Export-History-Pending': 'false' } }
+      );
     });
 
     it('loads selectable VOMD items and mapping issues', () => {
@@ -847,20 +859,23 @@ describe('CodingJobBackendService', () => {
       );
       expect(req.request.method).toBe('GET');
       req.flush({
-        items: [{
-          unitId: 'UNIT1',
-          unitLabel: 'Aufgabe 1',
-          itemId: 'ITEM1',
-          itemLabel: 'Item 1',
-          columnName: 'Aufgabe1_ITEM1'
-        }],
+        items: [
+          {
+            unitId: 'UNIT1',
+            unitLabel: 'Aufgabe 1',
+            itemId: 'ITEM1',
+            itemLabel: 'Item 1',
+            columnName: 'Aufgabe1_ITEM1'
+          }
+        ],
         mappingIssues: [],
         mappingWarnings: []
       });
     });
 
     it('loads diagnostics for a failed item matrix export', () => {
-      service.getItemMatrixExportDiagnostics(5, 'job-1')
+      service
+        .getItemMatrixExportDiagnostics(5, 'job-1')
         .subscribe(result => expect(result.total).toBe(2));
 
       const req = httpMock.expectOne(

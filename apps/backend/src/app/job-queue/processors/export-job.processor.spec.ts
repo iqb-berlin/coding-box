@@ -69,6 +69,9 @@ describe('ExportJobProcessor', () => {
     };
     const exportJobClientLeaseService = {
       isLeaseActive: jest.fn().mockResolvedValue(true),
+      tryClaimExpiredLease: jest.fn().mockResolvedValue(null),
+      confirmCleanupClaim: jest.fn().mockResolvedValue(true),
+      releaseCleanupClaim: jest.fn().mockResolvedValue(undefined),
       releaseLease: jest.fn().mockResolvedValue(undefined)
     };
     const codingExportOrchestratorService = {
@@ -242,7 +245,9 @@ describe('ExportJobProcessor', () => {
       codingExportService,
       exportJobClientLeaseService
     } = createProcessor();
-    exportJobClientLeaseService.isLeaseActive.mockResolvedValue(false);
+    exportJobClientLeaseService.tryClaimExpiredLease.mockResolvedValue(
+      'cleanup-claim'
+    );
     const job = createJob({
       format: 'excel',
       clientLeaseId: 'expired-client-lease'
@@ -260,6 +265,85 @@ describe('ExportJobProcessor', () => {
       .not.toHaveBeenCalled();
     expect(exportJobClientLeaseService.releaseLease)
       .toHaveBeenCalledWith('expired-client-lease');
+    expect(
+      exportJobClientLeaseService.confirmCleanupClaim
+    ).toHaveBeenCalledWith('expired-client-lease', 'cleanup-claim');
+    expect(
+      exportJobClientLeaseService.releaseCleanupClaim
+    ).toHaveBeenCalledWith('expired-client-lease', 'cleanup-claim');
+  });
+
+  it('continues when the client renews its lease before cleanup is confirmed', async () => {
+    const { processor, codingExportService, exportJobClientLeaseService } =
+      createProcessor();
+    exportJobClientLeaseService.tryClaimExpiredLease.mockResolvedValue(
+      'cleanup-claim'
+    );
+    exportJobClientLeaseService.confirmCleanupClaim.mockResolvedValue(false);
+    const job = createJob({
+      format: 'excel',
+      clientLeaseId: 'renewed-client-lease'
+    });
+    let filePath: string | undefined;
+
+    try {
+      const result = await processor.process(job);
+      filePath = result.filePath;
+
+      expect(job.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          isCancelled: true
+        })
+      );
+      expect(
+        codingExportService.exportCodingListForJobAsExcelToFile
+      ).toHaveBeenCalled();
+      expect(
+        exportJobClientLeaseService.releaseCleanupClaim
+      ).toHaveBeenCalledWith('renewed-client-lease', 'cleanup-claim');
+    } finally {
+      cleanup(filePath);
+    }
+  });
+
+  it('continues an export when the client lease status is unavailable', async () => {
+    const { processor, codingExportService, exportJobClientLeaseService } =
+      createProcessor();
+    exportJobClientLeaseService.tryClaimExpiredLease.mockRejectedValue(
+      new Error('redis unavailable')
+    );
+    const logger = (
+      processor as unknown as {
+        logger: { warn: jest.Mock };
+      }
+    ).logger;
+    const warningSpy = jest.spyOn(logger, 'warn').mockImplementation(jest.fn());
+    const job = createJob({
+      format: 'excel',
+      clientLeaseId: 'unknown-client-lease'
+    });
+    let filePath: string | undefined;
+
+    try {
+      const result = await processor.process(job);
+      filePath = result.filePath;
+
+      expect(result.fileSize).toBeGreaterThan(0);
+      expect(job.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          isCancelled: true
+        })
+      );
+      expect(
+        exportJobClientLeaseService.tryClaimExpiredLease.mock.calls.length
+      ).toBeGreaterThan(1);
+      expect(warningSpy).toHaveBeenCalledTimes(1);
+      expect(
+        codingExportService.exportCodingListForJobAsExcelToFile
+      ).toHaveBeenCalled();
+    } finally {
+      cleanup(filePath);
+    }
   });
 
   it('passes trainingRequired to coding-list Excel exports', async () => {
@@ -815,9 +899,9 @@ describe('ExportJobProcessor', () => {
         3600
       );
       expect(rawMatrixPath && fs.existsSync(rawMatrixPath)).toBe(false);
-      expect(
-        rawMatrixPath && fs.existsSync(path.dirname(rawMatrixPath))
-      ).toBe(false);
+      expect(rawMatrixPath && fs.existsSync(path.dirname(rawMatrixPath))).toBe(
+        false
+      );
     } finally {
       cleanup(metadata.filePath);
     }
@@ -878,36 +962,38 @@ describe('ExportJobProcessor', () => {
         return {
           total: 1,
           sampleLimit: 20,
-          groups: [{
-            reasonCode: 'unresolved-status',
-            bookletName: 'BOOKLET-1',
-            columnName: 'UNIT1_1',
-            count: 1,
-            sampleRowNumbers: [2]
-          }]
+          groups: [
+            {
+              reasonCode: 'unresolved-status',
+              bookletName: 'BOOKLET-1',
+              columnName: 'UNIT1_1',
+              count: 1,
+              sampleRowNumbers: [2]
+            }
+          ]
         };
       }
     );
-    cacheService.set.mockImplementation(
-      async (key: string, value: unknown) => {
-        if (key === 'item-matrix-incomplete-result:job-1') {
-          packagePath = (value as { filePath: string }).filePath;
-          return true;
-        }
-        if (key === 'item-matrix-diagnostics:job-1') {
-          return false;
-        }
+    cacheService.set.mockImplementation(async (key: string, value: unknown) => {
+      if (key === 'item-matrix-incomplete-result:job-1') {
+        packagePath = (value as { filePath: string }).filePath;
         return true;
       }
-    );
+      if (key === 'item-matrix-diagnostics:job-1') {
+        return false;
+      }
+      return true;
+    });
 
     await expect(
-      processor.process(createJob({
-        exportType: 'item-matrix',
-        format: 'csv',
-        matrixValue: 'score',
-        missingsProfileId: 4
-      }))
+      processor.process(
+        createJob({
+          exportType: 'item-matrix',
+          format: 'csv',
+          matrixValue: 'score',
+          missingsProfileId: 4
+        })
+      )
     ).rejects.toThrow('nicht vollständig veröffentlicht');
 
     expect(rawMatrixPath && fs.existsSync(rawMatrixPath)).toBe(false);

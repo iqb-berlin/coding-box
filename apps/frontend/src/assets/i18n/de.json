@@ -77,6 +77,8 @@
       "item-matrix-incomplete-expired": "{{total}} Zellen konnten nicht sicher aufgelöst werden. Diagnose und unvollständiges Paket sind abgelaufen; starten Sie den Export erneut.",
       "item-matrix-diagnostics-load-failed": "Die Matrixdiagnose konnte nicht geladen werden. Starten Sie den Export gegebenenfalls erneut.",
       "item-matrix-incomplete-download-failed": "Das unvollständige Paket konnte nicht heruntergeladen werden. Falls es abgelaufen ist, starten Sie den Export erneut.",
+      "status-unavailable-title": "Exportstatus nicht verfügbar",
+      "status-unavailable-message": "Der aktuelle Zustand des Exports konnte nicht ermittelt werden. Das bedeutet nicht, dass der Export fehlgeschlagen ist.",
       "remove-failed": "Der Export konnte nicht vollständig gelöscht werden und bleibt deshalb in der Liste. Versuchen Sie es erneut.",
       "generic-title": "Export fehlgeschlagen"
     },

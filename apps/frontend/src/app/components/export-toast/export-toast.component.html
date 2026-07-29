@@ -35,7 +35,7 @@
             <span class="progress-message">{{ getProgressDescription(job) }}</span>
           </div>
 
-          <div class="job-error" *ngIf="job.status === 'failed' && job.error">
+          <div class="job-error" *ngIf="(job.status === 'failed' || job.status === 'unavailable') && job.error">
             <div class="error-title">{{ getErrorTitle(job) }}</div>
             <div class="error-text">{{ getErrorMessage(job) }}</div>
             <details *ngIf="hasTechnicalDetails(job)" class="error-details">
@@ -87,7 +87,7 @@
             </button>
             <button
               mat-icon-button
-              *ngIf="job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled'"
+              *ngIf="job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled' || job.status === 'unavailable'"
               (click)="removeJob(job)"
               matTooltip="{{ 'export-toast.remove' | translate }}"
               [attr.aria-label]="'export-toast.remove' | translate">
@@ -97,7 +97,7 @@
         </div>
       </div>
 
-      <div class="toast-footer" *ngIf="completedJobCount > 0 || failedJobCount > 0">
+      <div class="toast-footer" *ngIf="completedJobCount > 0 || failedJobCount > 0 || unavailableJobCount > 0">
         <button mat-button (click)="clearCompleted()">
           {{ 'export-toast.clear-all' | translate }}
         </button>

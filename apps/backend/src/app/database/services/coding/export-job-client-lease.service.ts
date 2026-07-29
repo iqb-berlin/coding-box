@@ -8,7 +8,9 @@ import { CacheService } from '../../../cache/cache.service';
 
 @Injectable()
 export class ExportJobClientLeaseService {
-  static readonly ttlSeconds = 30;
+  // Browser timers may be throttled to one minute in background tabs. Keep a
+  // second interval of grace before treating the client as disconnected.
+  static readonly ttlSeconds = 2 * 60;
   private static readonly cleanupClaimTtlSeconds = 30;
 
   private static readonly writeLeaseScript = `

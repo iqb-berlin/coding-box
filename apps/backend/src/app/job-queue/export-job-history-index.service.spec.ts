@@ -70,4 +70,65 @@ describe('ExportJobHistoryIndexService', () => {
       ['stale-1', 'stale-2']
     );
   });
+
+  it('claims the legacy backfill only when it is not complete or running', async () => {
+    await expect(service.claimLegacyBackfill()).resolves.toEqual({
+      status: 'claimed',
+      claim: expect.any(String)
+    });
+
+    expect(cacheService.executeScript).toHaveBeenCalledWith(
+      expect.stringMatching(/EXISTS[\s\S]*SET[\s\S]*NX/),
+      [
+        'export-job-history:v2:legacy-backfill-complete',
+        'export-job-history:v2:legacy-backfill-claim'
+      ],
+      [expect.any(String), '300']
+    );
+
+    cacheService.executeScript.mockResolvedValueOnce(0);
+    await expect(service.claimLegacyBackfill()).resolves.toEqual({
+      status: 'busy'
+    });
+
+    cacheService.executeScript.mockResolvedValueOnce(2);
+    await expect(service.claimLegacyBackfill()).resolves.toEqual({
+      status: 'complete'
+    });
+  });
+
+  it('completes and releases legacy backfill claims by ownership token', async () => {
+    await service.completeLegacyBackfill('claim-1');
+    await service.releaseLegacyBackfillClaim('claim-2');
+
+    expect(cacheService.executeScript).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(/SET[\s\S]*DEL/),
+      [
+        'export-job-history:v2:legacy-backfill-complete',
+        'export-job-history:v2:legacy-backfill-claim'
+      ],
+      ['claim-1']
+    );
+    expect(cacheService.executeScript).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/GET[\s\S]*DEL/),
+      ['export-job-history:v2:legacy-backfill-claim'],
+      ['claim-2']
+    );
+  });
+
+  it('refreshes a legacy backfill claim only while it is still owned', async () => {
+    await service.refreshLegacyBackfillClaim('claim-1');
+
+    expect(cacheService.executeScript).toHaveBeenCalledWith(
+      expect.stringMatching(/GET[\s\S]*EXPIRE/),
+      ['export-job-history:v2:legacy-backfill-claim'],
+      ['claim-1', '300']
+    );
+
+    cacheService.executeScript.mockResolvedValueOnce(0);
+    await expect(service.refreshLegacyBackfillClaim('expired-claim'))
+      .rejects.toThrow('claim expired');
+  });
 });
