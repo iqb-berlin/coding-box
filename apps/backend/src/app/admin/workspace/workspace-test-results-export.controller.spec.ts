@@ -403,5 +403,10 @@ describe('WorkspaceTestResultsExportController', () => {
         })
       ])
     );
+    expect(jobQueueService.getExportJobs).toHaveBeenCalledWith(
+      7,
+      undefined,
+      ['test-results', 'test-logs']
+    );
   });
 });

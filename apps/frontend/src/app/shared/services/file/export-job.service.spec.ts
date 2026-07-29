@@ -218,6 +218,61 @@ describe('ExportJobService', () => {
         .toHaveBeenCalledWith(5, 'started-during-restore');
     }));
 
+    it('keeps an already running local job when its workspace is restored', fakeAsync(() => {
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(of({
+        jobId: 'running-before-restore',
+        message: 'Job started'
+      }));
+      codingJobBackendServiceMock.getExportJobs.mockReturnValue(of([]));
+      codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({
+        status: 'processing',
+        progress: 25
+      }));
+
+      service.startJob(5, { exportType: 'aggregated' }).subscribe();
+      service.restoreWorkspaceJobs(5).subscribe();
+
+      expect(service.activeJobs.map(job => job.jobId))
+        .toEqual(['running-before-restore']);
+
+      tick(2000);
+
+      expect(codingJobBackendServiceMock.getExportJobStatus)
+        .toHaveBeenCalledWith(5, 'running-before-restore');
+    }));
+
+    it('keeps a local job that completes while restoration is in flight', fakeAsync(() => {
+      const restoration = new Subject<ExportJobListItemDto[]>();
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(of({
+        jobId: 'completed-during-restore',
+        message: 'Job started'
+      }));
+      codingJobBackendServiceMock.getExportJobs.mockReturnValue(restoration);
+      codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({
+        status: 'completed',
+        progress: 100,
+        result: {
+          fileId: 'completed-during-restore',
+          fileName: 'export.csv',
+          fileSize: 42,
+          workspaceId: 5,
+          userId: 2,
+          exportType: 'aggregated',
+          createdAt: 10,
+          expiresAt: 3_600_010
+        }
+      }));
+
+      service.startJob(5, { exportType: 'aggregated' }).subscribe();
+      service.restoreWorkspaceJobs(5).subscribe();
+      tick(2000);
+      restoration.next([]);
+      restoration.complete();
+
+      expect(service.completedJobs.map(job => job.jobId))
+        .toEqual(['completed-during-restore']);
+    }));
+
     it('ignores an older overlapping restoration response', () => {
       const firstRestore = new Subject<ExportJobListItemDto[]>();
       const secondRestore = new Subject<ExportJobListItemDto[]>();

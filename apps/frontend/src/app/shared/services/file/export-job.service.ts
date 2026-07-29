@@ -153,6 +153,15 @@ export class ExportJobService implements OnDestroy {
         .filter(job => job.workspaceId === workspaceId)
         .map(job => job.jobId)
     );
+    const locallyActiveJobIdsAtStart = new Set(
+      this.jobsSubject.value
+        .filter(job => job.workspaceId === workspaceId && (
+          job.status === 'waiting' ||
+          job.status === 'active' ||
+          job.status === 'downloading'
+        ))
+        .map(job => job.jobId)
+    );
 
     return this.codingJobBackendService.getExportJobs(workspaceId).pipe(
       map(statuses => statuses
@@ -186,8 +195,13 @@ export class ExportJobService implements OnDestroy {
         const jobsAddedDuringRestore = currentWorkspaceJobs.filter(
           job => !jobIdsAtStart.has(job.jobId) && !restoredJobIds.has(job.jobId)
         );
+        const locallyActiveJobs = currentWorkspaceJobs.filter(
+          job => locallyActiveJobIdsAtStart.has(job.jobId) &&
+            !restoredJobIds.has(job.jobId)
+        );
         const nextWorkspaceJobs = [
           ...restoredWithLocalMetadata,
+          ...locallyActiveJobs,
           ...jobsAddedDuringRestore
         ];
 

@@ -59,6 +59,7 @@ import {
   ItemDatasetOptionsDto,
   ItemMatrixExportDiagnosticsDto,
   ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE,
+  CODING_EXPORT_TYPES,
   isCodingExportType,
   parseExportRequest
 } from '../../../../../../api-dto/coding/export-request.dto';
@@ -1887,8 +1888,12 @@ export class WorkspaceCodingExportController {
       @Req() req: Request
   ): Promise<ExportJobListItemDto[]> {
     try {
-      const jobs = await this.jobQueueService.getExportJobs(workspace_id);
       const userId = this.getRequestUserId(req);
+      const jobs = await this.jobQueueService.getExportJobs(
+        workspace_id,
+        userId,
+        CODING_EXPORT_TYPES
+      );
 
       const codingJobs = jobs.filter(job => (
         Number(job.data.userId) === userId &&

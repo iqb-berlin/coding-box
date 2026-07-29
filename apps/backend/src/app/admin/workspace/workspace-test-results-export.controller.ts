@@ -494,7 +494,11 @@ export class WorkspaceTestResultsExportController {
   async getExportJobs(
     @Param('workspace_id', ParseIntPipe) workspace_id: number
   ): Promise<ExportJobStatus[]> {
-    const jobs = await this.jobQueueService.getExportJobs(Number(workspace_id));
+    const jobs = await this.jobQueueService.getExportJobs(
+      Number(workspace_id),
+      undefined,
+      ['test-results', 'test-logs']
+    );
 
     const result: ExportJobStatus[] = [];
     for (const job of jobs) {

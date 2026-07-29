@@ -1291,6 +1291,11 @@ describe('WorkspaceCodingExportController', () => {
 
     const jobs = await controller.getExportJobs(5, requestForUser(2));
 
+    expect(jobQueueService.getExportJobs).toHaveBeenCalledWith(
+      5,
+      2,
+      expect.arrayContaining(['coding-list', 'item-matrix'])
+    );
     expect(jobs.map(job => job.jobId)).toEqual(['own-job']);
   });
 
