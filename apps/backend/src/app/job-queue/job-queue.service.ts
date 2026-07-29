@@ -15,7 +15,17 @@ import {
   CodebookExportFormat,
   CodebookTrainingRequirementFilter
 } from '../../../../../api-dto/coding/codebook-content-setting';
-import { BackgroundExportRequest } from '../../../../../api-dto/coding/export-request.dto';
+import {
+  BACKGROUND_EXPORT_TYPES,
+  BackgroundExportRequest
+} from '../../../../../api-dto/coding/export-request.dto';
+import {
+  ExportJobClientLeaseService
+} from '../database/services/coding/export-job-client-lease.service';
+import {
+  ExportJobHistoryIndexService,
+  ExportJobHistoryScope
+} from './export-job-history-index.service';
 
 type ProcessOverviewValidationTask = Pick<
 ValidationTask,
@@ -207,6 +217,7 @@ export class JobQueueService {
   private static readonly completedExportJobRetentionSeconds = 3600;
   private static readonly failedExportJobRetentionSeconds = 86400;
   private static readonly recentTerminalExportJobLimit = 500;
+  private static readonly exportJobHistoryHydrationBatchSize = 100;
   private readonly logger = new Logger(JobQueueService.name);
 
   private readonly exportCancellationControllers = new Map<string, AbortController>();
@@ -251,7 +262,9 @@ export class JobQueueService {
     @InjectQueue('external-coding-import') private externalCodingImportQueue: Queue,
     @InjectQueue('database-export') private databaseExportQueue: Queue<DatabaseExportJobData>,
     @InjectRepository(ValidationTask)
-    private readonly validationTaskRepository: Repository<ValidationTask>
+    private readonly validationTaskRepository: Repository<ValidationTask>,
+    private readonly exportJobClientLeaseService: ExportJobClientLeaseService,
+    private readonly exportJobHistoryIndexService: ExportJobHistoryIndexService
   ) { }
 
   private getQueue(name: string): Queue {
@@ -638,6 +651,68 @@ export class JobQueueService {
     return jobs.find(job => job.data && matchFn(job.data));
   }
 
+  private async removeExpiredWaitingExportJob(
+    job: Job<ExportJobData>
+  ): Promise<boolean> {
+    const leaseId = job.data.clientLeaseId;
+    if (!leaseId) {
+      return false;
+    }
+
+    let cleanupClaim: string | null = null;
+    try {
+      cleanupClaim = await this.exportJobClientLeaseService
+        .tryClaimExpiredLease(leaseId);
+      if (!cleanupClaim) {
+        return false;
+      }
+
+      const state = await job.getState();
+      if (state !== 'waiting' && state !== 'delayed') {
+        await this.exportJobClientLeaseService.releaseCleanupClaim(
+          leaseId,
+          cleanupClaim
+        );
+        cleanupClaim = null;
+        return false;
+      }
+
+      const cleanupConfirmed = await this.exportJobClientLeaseService
+        .confirmCleanupClaim(leaseId, cleanupClaim);
+      if (!cleanupConfirmed) {
+        await this.exportJobClientLeaseService.releaseCleanupClaim(
+          leaseId,
+          cleanupClaim
+        );
+        cleanupClaim = null;
+        return false;
+      }
+
+      await job.remove();
+      this.logger.log(
+        `Removed export job ${job.id} because its client lease expired before processing`
+      );
+      return true;
+    } catch (error) {
+      if (cleanupClaim) {
+        try {
+          await this.exportJobClientLeaseService.releaseCleanupClaim(
+            leaseId,
+            cleanupClaim
+          );
+        } catch (releaseError) {
+          this.logger.warn(
+            `Could not release cleanup claim for export job ${job.id}: ${releaseError.message}`
+          );
+        }
+      }
+      this.logger.warn(
+        `Could not remove export job ${job.id} with an expired client lease: ${error.message}`
+      );
+      return false;
+    }
+  }
+
   async addTestPersonCodingJob(
     data: TestPersonCodingJobData,
     options?: JobOptions
@@ -866,10 +941,16 @@ export class JobQueueService {
     }
 
     await this.assertNoDependencyConflicts('data-export', data.workspaceId);
-    const existing = await this.findActiveJob<ExportJobData>(
+    let existing = await this.findActiveJob<ExportJobData>(
       this.dataExportQueue,
       d => d.workspaceId === data.workspaceId && d.exportType === data.exportType
     );
+    while (existing && await this.removeExpiredWaitingExportJob(existing)) {
+      existing = await this.findActiveJob<ExportJobData>(
+        this.dataExportQueue,
+        d => d.workspaceId === data.workspaceId && d.exportType === data.exportType
+      );
+    }
     if (existing) {
       throw new ConflictException(
         `An export job of type '${data.exportType}' is already running for workspace ${data.workspaceId} (job ${existing.id})`
@@ -878,7 +959,7 @@ export class JobQueueService {
     this.logger.log(
       `Adding export job for workspace ${data.workspaceId}, type: ${data.exportType}`
     );
-    return this.dataExportQueue.add(data, {
+    const job = await this.dataExportQueue.add(data, {
       removeOnComplete: {
         age: JobQueueService.completedExportJobRetentionSeconds
       },
@@ -887,13 +968,113 @@ export class JobQueueService {
       },
       ...options
     });
+    await this.ensureExportJobIndexed(job);
+    return job;
   }
 
   async getExportJob(jobId: string): Promise<Job<ExportJobData>> {
     return this.dataExportQueue.getJob(jobId);
   }
 
-  async getExportJobs(workspaceId: number): Promise<Job<ExportJobData>[]> {
+  private exportJobMatchesScope(
+    job: Job<ExportJobData> | null | undefined,
+    workspaceId: number,
+    userId?: number,
+    exportTypes?: readonly string[]
+  ): job is Job<ExportJobData> {
+    return !!job &&
+      this.jobMatchesWorkspace(job, workspaceId) &&
+      (userId === undefined || Number(job.data.userId) === userId) &&
+      (!exportTypes || exportTypes.includes(job.data.exportType));
+  }
+
+  private async getRecentTerminalExportJobs(
+    workspaceId: number,
+    userId?: number,
+    exportTypes?: readonly string[]
+  ): Promise<Job<ExportJobData>[]> {
+    const scope: ExportJobHistoryScope = {
+      workspaceId,
+      userId,
+      exportTypes: exportTypes || BACKGROUND_EXPORT_TYPES
+    };
+    const jobIds = await this.exportJobHistoryIndexService.getRecentJobIds(
+      scope
+    );
+    const terminalJobs: Job<ExportJobData>[] = [];
+    const staleJobIds: string[] = [];
+
+    for (
+      let start = 0;
+      start < jobIds.length &&
+      terminalJobs.length < JobQueueService.recentTerminalExportJobLimit;
+      start += JobQueueService.exportJobHistoryHydrationBatchSize
+    ) {
+      const batchIds = jobIds.slice(
+        start,
+        start + JobQueueService.exportJobHistoryHydrationBatchSize
+      );
+      const candidates = await Promise.allSettled(batchIds.map(async jobId => {
+        const job = await this.dataExportQueue.getJob(jobId);
+        if (!job) {
+          return { jobId };
+        }
+        return {
+          jobId,
+          job,
+          state: await job.getState()
+        };
+      }));
+
+      candidates.forEach(candidate => {
+        if (candidate.status === 'rejected') {
+          this.logger.warn(
+            `Could not hydrate an indexed export job: ${candidate.reason?.message || candidate.reason}`
+          );
+          return;
+        }
+        if (!candidate.value.job) {
+          staleJobIds.push(candidate.value.jobId);
+          return;
+        }
+        if (
+          (candidate.value.state === 'completed' ||
+            candidate.value.state === 'failed') &&
+          this.exportJobMatchesScope(
+            candidate.value.job,
+            workspaceId,
+            userId,
+            exportTypes
+          )
+        ) {
+          terminalJobs.push(candidate.value.job);
+        }
+      });
+    }
+
+    if (staleJobIds.length) {
+      try {
+        await this.exportJobHistoryIndexService.removeJobIds(
+          scope,
+          staleJobIds
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Could not prune stale export history entries: ${error.message}`
+        );
+      }
+    }
+
+    return terminalJobs
+      .sort((first, second) => second.timestamp - first.timestamp)
+      .slice(0, JobQueueService.recentTerminalExportJobLimit);
+  }
+
+  async getExportJobs(
+    workspaceId: number,
+    userId?: number,
+    exportTypes?: readonly string[]
+  ): Promise<Job<ExportJobData>[]> {
     this.logger.log(`Fetching all export jobs for workspace ${workspaceId}`);
     const [inProgressJobs, terminalJobs] = await Promise.all([
       this.dataExportQueue.getJobs([
@@ -901,20 +1082,38 @@ export class JobQueueService {
         'waiting',
         'delayed'
       ]),
-      this.dataExportQueue.getJobs(
-        ['completed', 'failed'],
-        0,
-        JobQueueService.recentTerminalExportJobLimit - 1,
-        false
+      this.getRecentTerminalExportJobs(
+        workspaceId,
+        userId,
+        exportTypes
       )
     ]);
     const jobs = [...new Map(
       [...inProgressJobs, ...terminalJobs]
-        .filter((job): job is Job<ExportJobData> => !!job)
+        .filter(job => this.exportJobMatchesScope(
+          job,
+          workspaceId,
+          userId,
+          exportTypes
+        ))
         .map(job => [job.id.toString(), job])
     ).values()];
     this.logger.log(`Found ${jobs.length} export jobs in total`);
-    return jobs.filter(job => this.jobMatchesWorkspace(job, workspaceId));
+    return jobs;
+  }
+
+  async ensureExportJobIndexed(job: Job<ExportJobData>): Promise<void> {
+    try {
+      await this.exportJobHistoryIndexService.addJob(
+        job.id.toString(),
+        job.data,
+        job.timestamp
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Could not index export job ${job.id}: ${error.message}`
+      );
+    }
   }
 
   createExportJobCancellationSignal(jobId: string): AbortSignal {

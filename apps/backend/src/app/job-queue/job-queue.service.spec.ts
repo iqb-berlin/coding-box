@@ -36,12 +36,32 @@ const createQueue = (job = createJob()) => ({
 describe('JobQueueService', () => {
   let queues: ReturnType<typeof createQueue>[];
   let validationTaskRepository: { find: jest.Mock };
+  let exportJobClientLeaseService: {
+    tryClaimExpiredLease: jest.Mock;
+    confirmCleanupClaim: jest.Mock;
+    releaseCleanupClaim: jest.Mock;
+  };
+  let exportJobHistoryIndexService: {
+    addJob: jest.Mock;
+    getRecentJobIds: jest.Mock;
+    removeJobIds: jest.Mock;
+  };
   let service: JobQueueService;
 
   beforeEach(() => {
     queues = Array.from({ length: 12 }, () => createQueue());
     validationTaskRepository = {
       find: jest.fn().mockResolvedValue([{ id: 7, workspace_id: 1 }])
+    };
+    exportJobClientLeaseService = {
+      tryClaimExpiredLease: jest.fn().mockResolvedValue(null),
+      confirmCleanupClaim: jest.fn().mockResolvedValue(true),
+      releaseCleanupClaim: jest.fn().mockResolvedValue(undefined)
+    };
+    exportJobHistoryIndexService = {
+      addJob: jest.fn().mockResolvedValue(undefined),
+      getRecentJobIds: jest.fn().mockResolvedValue([]),
+      removeJobIds: jest.fn().mockResolvedValue(undefined)
     };
     service = new JobQueueService(
       queues[0] as never,
@@ -56,7 +76,9 @@ describe('JobQueueService', () => {
       queues[9] as never,
       queues[10] as never,
       queues[11] as never,
-      validationTaskRepository as never
+      validationTaskRepository as never,
+      exportJobClientLeaseService as never,
+      exportJobHistoryIndexService as never
     );
   });
 
@@ -134,6 +156,132 @@ describe('JobQueueService', () => {
     expect(queues[2].add).not.toHaveBeenCalled();
   });
 
+  it('removes an expired waiting export before checking for duplicates', async () => {
+    const expiredJob = createJob({
+      workspaceId: 1,
+      userId: 2,
+      exportType: 'coding-list',
+      clientLeaseId: 'expired-lease'
+    });
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[2].getJobs
+      .mockResolvedValueOnce([expiredJob])
+      .mockResolvedValueOnce([]);
+    exportJobClientLeaseService.tryClaimExpiredLease
+      .mockResolvedValue('cleanup-claim');
+
+    await expect(service.addExportJob({
+      workspaceId: 1,
+      userId: 2,
+      exportType: 'coding-list',
+      clientLeaseId: 'new-lease'
+    })).resolves.toHaveProperty('data.clientLeaseId', 'new-lease');
+
+    expect(expiredJob.getState).toHaveBeenCalled();
+    expect(exportJobClientLeaseService.tryClaimExpiredLease)
+      .toHaveBeenCalledWith('expired-lease');
+    expect(exportJobClientLeaseService.confirmCleanupClaim)
+      .toHaveBeenCalledWith('expired-lease', 'cleanup-claim');
+    expect(expiredJob.remove).toHaveBeenCalled();
+    expect(exportJobClientLeaseService.releaseCleanupClaim)
+      .not.toHaveBeenCalled();
+    expect(queues[2].add).toHaveBeenCalled();
+  });
+
+  it('does not remove an export if cleanup ownership expires before removal', async () => {
+    const waitingJob = createJob({
+      workspaceId: 1,
+      userId: 2,
+      exportType: 'coding-list',
+      clientLeaseId: 'renewed-lease'
+    });
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[2].getJobs.mockResolvedValue([waitingJob]);
+    exportJobClientLeaseService.tryClaimExpiredLease
+      .mockResolvedValue('expired-cleanup-claim');
+    exportJobClientLeaseService.confirmCleanupClaim.mockResolvedValue(false);
+
+    await expect(service.addExportJob({
+      workspaceId: 1,
+      userId: 2,
+      exportType: 'coding-list',
+      clientLeaseId: 'new-lease'
+    })).rejects.toBeInstanceOf(ConflictException);
+
+    expect(waitingJob.remove).not.toHaveBeenCalled();
+    expect(exportJobClientLeaseService.releaseCleanupClaim)
+      .toHaveBeenCalledWith('renewed-lease', 'expired-cleanup-claim');
+  });
+
+  it('does not remove an export whose cleanup claim cannot be acquired', async () => {
+    const renewedJob = createJob({
+      workspaceId: 1,
+      userId: 2,
+      exportType: 'coding-list',
+      clientLeaseId: 'renewed-lease'
+    });
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[2].getJobs.mockResolvedValue([renewedJob]);
+    exportJobClientLeaseService.tryClaimExpiredLease.mockResolvedValue(null);
+
+    await expect(service.addExportJob({
+      workspaceId: 1,
+      userId: 2,
+      exportType: 'coding-list',
+      clientLeaseId: 'new-lease'
+    })).rejects.toBeInstanceOf(ConflictException);
+
+    expect(renewedJob.remove).not.toHaveBeenCalled();
+    expect(queues[2].add).not.toHaveBeenCalled();
+  });
+
+  it('does not remove an export when Redis cannot establish lease expiry', async () => {
+    const waitingJob = createJob({
+      workspaceId: 1,
+      userId: 2,
+      exportType: 'coding-list',
+      clientLeaseId: 'unknown-lease'
+    });
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[2].getJobs.mockResolvedValue([waitingJob]);
+    exportJobClientLeaseService.tryClaimExpiredLease
+      .mockRejectedValue(new ServiceUnavailableException());
+
+    await expect(service.addExportJob({
+      workspaceId: 1,
+      userId: 2,
+      exportType: 'coding-list',
+      clientLeaseId: 'new-lease'
+    })).rejects.toBeInstanceOf(ConflictException);
+
+    expect(waitingJob.remove).not.toHaveBeenCalled();
+    expect(queues[2].add).not.toHaveBeenCalled();
+  });
+
+  it('releases the cleanup claim if the export has already become active', async () => {
+    const activeJob = createJob({
+      workspaceId: 1,
+      userId: 2,
+      exportType: 'coding-list',
+      clientLeaseId: 'expired-lease'
+    }, 'active');
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[2].getJobs.mockResolvedValue([activeJob]);
+    exportJobClientLeaseService.tryClaimExpiredLease
+      .mockResolvedValue('cleanup-claim');
+
+    await expect(service.addExportJob({
+      workspaceId: 1,
+      userId: 2,
+      exportType: 'coding-list',
+      clientLeaseId: 'new-lease'
+    })).rejects.toBeInstanceOf(ConflictException);
+
+    expect(activeJob.remove).not.toHaveBeenCalled();
+    expect(exportJobClientLeaseService.releaseCleanupClaim)
+      .toHaveBeenCalledWith('expired-lease', 'cleanup-claim');
+  });
+
   it('applies bounded retention to export jobs', async () => {
     queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
     const data = {
@@ -149,6 +297,11 @@ describe('JobQueueService', () => {
       removeOnFail: { age: 86400 },
       attempts: 2
     });
+    expect(exportJobHistoryIndexService.addJob).toHaveBeenCalledWith(
+      'job-1',
+      data,
+      100
+    );
   });
 
   it('reuses active coding statistics jobs for the same workspace and version', async () => {
@@ -326,37 +479,113 @@ describe('JobQueueService', () => {
     await expect(service.getActiveResetCodingVersionJob(1)).resolves.toHaveProperty('id', 'job-1');
   });
 
-  it('bounds terminal export-job history while retaining all in-progress jobs', async () => {
-    await service.getExportJobs(1);
+  it('queries scoped history IDs while retaining in-progress jobs', async () => {
+    await service.getExportJobs(1, 2, ['coding-list']);
 
     expect(queues[2].getJobs).toHaveBeenNthCalledWith(
       1,
       ['active', 'waiting', 'delayed']
     );
-    expect(queues[2].getJobs).toHaveBeenNthCalledWith(
-      2,
-      ['completed', 'failed'],
-      0,
-      499,
-      false
-    );
+    expect(exportJobHistoryIndexService.getRecentJobIds).toHaveBeenCalledWith({
+      workspaceId: 1,
+      userId: 2,
+      exportTypes: ['coding-list']
+    });
+    expect(queues[2].getJobs).toHaveBeenCalledTimes(1);
   });
 
-  it('ignores stale null jobs when listing export jobs', async () => {
-    queues[2].getJobs.mockResolvedValue([
-      null,
-      createJob(null),
-      createJob({ workspaceId: 2, exportType: 'test-results' }),
-      createJob({ workspaceId: 1, exportType: 'test-results' })
-    ] as never);
+  it('hydrates terminal jobs from the scoped history index', async () => {
+    const matchingJob = {
+      ...createJob({ workspaceId: 1, userId: 2, exportType: 'coding-list' }, 'completed'),
+      id: 'matching-job'
+    };
+    queues[2].getJobs.mockResolvedValue([]);
+    queues[2].getJob.mockResolvedValue(matchingJob);
+    exportJobHistoryIndexService.getRecentJobIds
+      .mockResolvedValue(['matching-job']);
 
-    const exportJobs = await service.getExportJobs(1);
+    await expect(service.getExportJobs(1, 2)).resolves.toEqual([matchingJob]);
+    expect(queues[2].getJob).toHaveBeenCalledWith('matching-job');
+    expect(matchingJob.getState).toHaveBeenCalled();
+  });
+
+  it('stops hydrating indexed jobs after reaching the terminal result limit', async () => {
+    const indexedJobIds = Array.from(
+      { length: 600 },
+      (_, index) => `job-${index}`
+    );
+    queues[2].getJobs.mockResolvedValue([]);
+    queues[2].getJob.mockImplementation(async jobId => ({
+      ...createJob({
+        workspaceId: 1,
+        userId: 2,
+        exportType: 'coding-list'
+      }, 'completed'),
+      id: jobId
+    }));
+    exportJobHistoryIndexService.getRecentJobIds
+      .mockResolvedValue(indexedJobIds);
+
+    await expect(service.getExportJobs(
+      1,
+      2,
+      ['coding-list']
+    )).resolves.toHaveLength(500);
+
+    expect(queues[2].getJob).toHaveBeenCalledTimes(500);
+  });
+
+  it('filters export types before applying the terminal-job result limit', async () => {
+    const codingJob = {
+      ...createJob({
+        workspaceId: 1,
+        userId: 2,
+        exportType: 'coding-list'
+      }, 'completed'),
+      id: 'coding-job'
+    };
+    queues[2].getJobs.mockResolvedValue([]);
+    queues[2].getJob.mockResolvedValue(codingJob);
+    exportJobHistoryIndexService.getRecentJobIds
+      .mockResolvedValue(['coding-job']);
+
+    await expect(service.getExportJobs(
+      1,
+      2,
+      ['coding-list']
+    )).resolves.toEqual([codingJob]);
+    expect(exportJobHistoryIndexService.getRecentJobIds).toHaveBeenCalledWith({
+      workspaceId: 1,
+      userId: 2,
+      exportTypes: ['coding-list']
+    });
+  });
+
+  it('prunes stale IDs while listing indexed export jobs', async () => {
+    const matchingJob = createJob({
+      workspaceId: 1,
+      userId: 2,
+      exportType: 'test-results'
+    }, 'failed');
+    queues[2].getJobs.mockResolvedValue([]);
+    queues[2].getJob
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(matchingJob);
+    exportJobHistoryIndexService.getRecentJobIds
+      .mockResolvedValue(['stale-job', 'job-1']);
+
+    const exportJobs = await service.getExportJobs(
+      1,
+      2,
+      ['test-results']
+    );
 
     expect(exportJobs).toHaveLength(1);
-    expect(exportJobs[0].data).toMatchObject({
+    expect(exportJobHistoryIndexService.removeJobIds).toHaveBeenCalledWith({
       workspaceId: 1,
-      exportType: 'test-results'
-    });
+      userId: 2,
+      exportTypes: ['test-results']
+    }, ['stale-job']);
   });
 
   it('covers all registered process overview queues', async () => {

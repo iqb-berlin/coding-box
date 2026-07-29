@@ -375,6 +375,8 @@ export class ExportJobProcessor implements OnModuleInit, OnModuleDestroy {
     );
     const startedAt = Date.now();
 
+    await this.jobQueueService.ensureExportJobIndexed(job);
+
     parseExportRequest(job.data);
 
     const jobId = job.id.toString();

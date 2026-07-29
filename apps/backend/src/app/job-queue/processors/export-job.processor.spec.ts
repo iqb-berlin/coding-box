@@ -97,6 +97,7 @@ describe('ExportJobProcessor', () => {
     };
     const jobQueueService = {
       isExportJobCancelled: jest.fn().mockResolvedValue(false),
+      ensureExportJobIndexed: jest.fn().mockResolvedValue(undefined),
       createExportJobCancellationSignal: jest.fn(
         () => new AbortController().signal
       ),

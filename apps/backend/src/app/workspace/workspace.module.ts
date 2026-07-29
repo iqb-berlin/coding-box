@@ -85,8 +85,7 @@ import {
   CodingResponseQueryService,
   CodingFreshnessService,
   CodingItemMatrixExportService,
-  ExportArtifactService,
-  ExportJobClientLeaseService
+  ExportArtifactService
 } from '../database/services/coding';
 import {
   JobService,
@@ -188,7 +187,6 @@ import { CodingModule } from '../coding/coding.module';
     CodingFreshnessService,
     CodingItemMatrixExportService,
     ExportArtifactService,
-    ExportJobClientLeaseService,
     UnitInfoService,
     BookletInfoService,
     WorkspaceExclusionService
@@ -234,7 +232,6 @@ import { CodingModule } from '../coding/coding.module';
     CodingFreshnessService,
     CodingItemMatrixExportService,
     ExportArtifactService,
-    ExportJobClientLeaseService,
     UnitInfoService,
     BookletInfoService,
     WorkspaceExclusionService

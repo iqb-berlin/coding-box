@@ -16,6 +16,7 @@ describe('CacheService', () => {
       set: jest.fn(),
       del: jest.fn(),
       exists: jest.fn(),
+      eval: jest.fn(),
       incr: jest.fn(),
       scan: jest.fn()
     };
@@ -77,6 +78,31 @@ describe('CacheService', () => {
     await expect(service.exists('a')).resolves.toBe(true);
     await expect(service.exists('b')).resolves.toBe(false);
     await expect(service.exists('c')).resolves.toBe(false);
+  });
+
+  it('propagates errors for strict cache operations', async () => {
+    redis.exists
+      .mockResolvedValueOnce(1)
+      .mockRejectedValueOnce(new Error('redis down'));
+    redis.eval
+      .mockResolvedValueOnce(1)
+      .mockRejectedValueOnce(new Error('redis down'));
+
+    await expect(service.existsStrict('lease')).resolves.toBe(true);
+    await expect(service.existsStrict('lease')).rejects.toThrow('redis down');
+    await expect(service.executeScript<number>(
+      'return 1',
+      ['lease'],
+      ['value']
+    )).resolves.toBe(1);
+    expect(redis.eval).toHaveBeenCalledWith(
+      'return 1',
+      1,
+      'lease',
+      'value'
+    );
+    await expect(service.executeScript('return 1', []))
+      .rejects.toThrow('redis down');
   });
 
   it('stores and pages validation results', async () => {

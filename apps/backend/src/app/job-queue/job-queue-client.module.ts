@@ -4,9 +4,17 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JobQueueService } from './job-queue.service';
 import { ValidationTask } from '../database/entities/validation-task.entity';
+import { CacheClientModule } from '../cache/cache-client.module';
+import {
+  ExportJobClientLeaseService
+} from '../database/services/coding/export-job-client-lease.service';
+import {
+  ExportJobHistoryIndexService
+} from './export-job-history-index.service';
 
 @Module({
   imports: [
+    CacheClientModule,
     TypeOrmModule.forFeature([ValidationTask]),
     BullModule.forRootAsync({
       imports: [ConfigModule],
@@ -56,7 +64,16 @@ import { ValidationTask } from '../database/entities/validation-task.entity';
       name: 'database-export'
     })
   ],
-  providers: [JobQueueService],
-  exports: [BullModule, JobQueueService]
+  providers: [
+    JobQueueService,
+    ExportJobClientLeaseService,
+    ExportJobHistoryIndexService
+  ],
+  exports: [
+    BullModule,
+    JobQueueService,
+    ExportJobClientLeaseService,
+    ExportJobHistoryIndexService
+  ]
 })
 export class JobQueueClientModule { }

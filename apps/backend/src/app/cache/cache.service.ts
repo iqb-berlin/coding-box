@@ -136,6 +136,48 @@ export class CacheService {
   }
 
   /**
+   * Check if a key exists and propagate Redis errors to the caller.
+   * Use this for decisions where treating an unavailable cache as a miss would
+   * cause destructive behaviour.
+   */
+  async existsStrict(key: string): Promise<boolean> {
+    try {
+      const exists = await this.redis.exists(key);
+      return exists === 1;
+    } catch (error) {
+      this.logger.error(
+        `Error checking if key exists in cache: ${error.message}`,
+        error.stack
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Execute a Redis script while preserving its atomicity and error semantics.
+   */
+  async executeScript<T>(
+    script: string,
+    keys: string[],
+    args: string[] = []
+  ): Promise<T> {
+    try {
+      return await this.redis.eval(
+        script,
+        keys.length,
+        ...keys,
+        ...args
+      ) as T;
+    } catch (error) {
+      this.logger.error(
+        `Error executing cache script: ${error.message}`,
+        error.stack
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Generate a cache key for unit responses
    * @param workspaceId The workspace ID
    * @param testPerson The test person ID
