@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 export const DEFAULT_POSTGRES_POOL_MAX = 10;
+export const MINIMUM_POSTGRES_POOL_MAX = 2;
 export const DEFAULT_CODING_FILE_LOAD_CONCURRENCY = 4;
 export const DEFAULT_RESPONSE_CACHE_WORKSPACE_CONCURRENCY = 1;
 export const DEFAULT_RESPONSE_CACHE_ITEM_CONCURRENCY = 4;
@@ -30,6 +31,13 @@ export function parsePositiveInteger(
 
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export function parsePostgresPoolMax(value: unknown): number {
+  const parsed = parsePositiveInteger(value, DEFAULT_POSTGRES_POOL_MAX);
+  return parsed >= MINIMUM_POSTGRES_POOL_MAX ?
+    parsed :
+    DEFAULT_POSTGRES_POOL_MAX;
 }
 
 export function parsePositiveMilliseconds(
@@ -75,9 +83,8 @@ export class RuntimeConfigService {
   readonly requestStartLogging: boolean;
 
   constructor(configService: ConfigService) {
-    this.postgresPoolMax = parsePositiveInteger(
-      configService.get(POSTGRES_POOL_MAX_ENV),
-      DEFAULT_POSTGRES_POOL_MAX
+    this.postgresPoolMax = parsePostgresPoolMax(
+      configService.get(POSTGRES_POOL_MAX_ENV)
     );
     const databaseConcurrencyBudget = Math.max(
       1,

@@ -1765,7 +1765,6 @@ export class CodingFreshnessService {
                 SELECT 1
                 FROM workspace_coding_status_revision_operation active_operation
                 WHERE active_operation.workspace_id = requested_workspace.workspace_id
-                  AND active_operation.started_at >= now() - interval '24 hours'
               )
               THEN true
             ELSE false

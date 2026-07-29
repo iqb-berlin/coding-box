@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   DEFAULT_CODING_FILE_LOAD_CONCURRENCY,
   DEFAULT_IN_FLIGHT_REQUEST_THRESHOLD_MS,
+  DEFAULT_POSTGRES_POOL_MAX,
   DEFAULT_RESPONSE_CACHE_ITEM_CONCURRENCY,
   DEFAULT_RESPONSE_CACHE_WORKSPACE_CONCURRENCY,
   DEFAULT_SLOW_REQUEST_THRESHOLD_MS,
@@ -44,6 +45,14 @@ describe('RuntimeConfigService', () => {
       config.responseCacheWorkspaceConcurrency *
       config.responseCacheItemConcurrency
     ).toBeLessThanOrEqual(4);
+  });
+
+  it('rejects a pool size that cannot reserve a lock and a work connection', () => {
+    const config = new RuntimeConfigService(new ConfigService({
+      POSTGRES_POOL_MAX: '1'
+    }));
+
+    expect(config.postgresPoolMax).toBe(DEFAULT_POSTGRES_POOL_MAX);
   });
 
   it('parses monitoring configuration once', () => {

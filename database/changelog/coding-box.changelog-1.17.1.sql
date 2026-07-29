@@ -118,6 +118,27 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE FUNCTION "public"."touch_workspace_coding_status_revision_from_file_upload"()
+RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    PERFORM "public"."touch_workspace_coding_status_revision_by_id"(NEW.workspace_id);
+  ELSIF TG_OP = 'DELETE' THEN
+    PERFORM "public"."touch_workspace_coding_status_revision_by_id"(OLD.workspace_id);
+  ELSE
+    PERFORM "public"."touch_workspace_coding_status_revision_by_id"(OLD.workspace_id);
+    IF NEW.workspace_id IS DISTINCT FROM OLD.workspace_id THEN
+      PERFORM "public"."touch_workspace_coding_status_revision_by_id"(NEW.workspace_id);
+    END IF;
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE OR REPLACE FUNCTION "public"."touch_workspace_coding_status_revision_from_parent"()
 RETURNS trigger AS $$
 DECLARE
@@ -371,7 +392,7 @@ FOR EACH ROW EXECUTE FUNCTION "public"."touch_workspace_coding_status_revision_f
 
 CREATE TRIGGER "workspace_coding_status_revision_file_upload"
 AFTER INSERT OR UPDATE OR DELETE ON "public"."file_upload"
-FOR EACH ROW EXECUTE FUNCTION "public"."touch_workspace_coding_status_revision"('workspace_id');
+FOR EACH ROW EXECUTE FUNCTION "public"."touch_workspace_coding_status_revision_from_file_upload"();
 
 CREATE TRIGGER "workspace_coding_status_revision_missings_profile"
 AFTER INSERT OR UPDATE OR DELETE ON "public"."missings_profile"
@@ -521,6 +542,7 @@ FOR EACH ROW EXECUTE FUNCTION "public"."touch_workspace_coding_status_revision_f
 -- rollback DROP FUNCTION IF EXISTS "public"."touch_workspace_coding_status_revision_from_parent_rows"();
 -- rollback DROP FUNCTION IF EXISTS "public"."touch_workspace_coding_status_revision_from_workspace_rows"();
 -- rollback DROP FUNCTION IF EXISTS "public"."touch_workspace_coding_status_revision_from_parent"();
+-- rollback DROP FUNCTION IF EXISTS "public"."touch_workspace_coding_status_revision_from_file_upload"();
 -- rollback DROP FUNCTION IF EXISTS "public"."touch_workspace_coding_status_revision"();
 -- rollback DROP FUNCTION IF EXISTS "public"."touch_workspace_coding_status_revision_by_id"(INTEGER);
 -- rollback DROP TABLE IF EXISTS "public"."workspace_coding_status_revision_operation";

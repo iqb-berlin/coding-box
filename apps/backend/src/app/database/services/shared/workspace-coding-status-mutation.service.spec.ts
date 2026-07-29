@@ -2,7 +2,11 @@ import { DataSource } from 'typeorm';
 import { WorkspaceCodingStatusMutationService } from './workspace-coding-status-mutation.service';
 
 describe('WorkspaceCodingStatusMutationService', () => {
-  const createHarness = (options: { expired?: boolean; failed?: boolean } = {}) => {
+  const createHarness = (options: {
+    expired?: boolean;
+    failed?: boolean;
+    poolMax?: number;
+  } = {}) => {
     let nextRevision = 4;
     const queryRunner = {
       connect: jest.fn().mockResolvedValue(undefined),
@@ -23,6 +27,7 @@ describe('WorkspaceCodingStatusMutationService', () => {
       release: jest.fn().mockResolvedValue(undefined)
     };
     const connection = {
+      options: { extra: { max: options.poolMax ?? 10 } },
       createQueryRunner: jest.fn().mockReturnValue(queryRunner),
       query: jest.fn().mockImplementation((sql: string) => {
         if (sql.includes('SELECT failed_test_results_revision')) {
@@ -80,6 +85,150 @@ describe('WorkspaceCodingStatusMutationService', () => {
       expect.any(Array)
     );
     expect(queryRunner.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('queues same-workspace mutations before reserving another connection', async () => {
+    const { connection, service } = createHarness();
+    let signalFirstMutationStarted: (() => void) | undefined;
+    const firstMutationStarted = new Promise<void>(resolve => {
+      signalFirstMutationStarted = resolve;
+    });
+    let continueFirstMutation: (() => void) | undefined;
+    const firstMutationGate = new Promise<void>(resolve => {
+      continueFirstMutation = resolve;
+    });
+    const secondMutation = jest.fn().mockResolvedValue(undefined);
+
+    const first = service.run(3, async () => {
+      signalFirstMutationStarted?.();
+      await firstMutationGate;
+    });
+    await firstMutationStarted;
+
+    const second = service.run(3, secondMutation);
+    await new Promise<void>(resolve => {
+      setImmediate(resolve);
+    });
+
+    expect(connection.createQueryRunner).toHaveBeenCalledTimes(1);
+    expect(secondMutation).not.toHaveBeenCalled();
+
+    continueFirstMutation?.();
+    await Promise.all([first, second]);
+
+    expect(connection.createQueryRunner).toHaveBeenCalledTimes(2);
+    expect(secondMutation).toHaveBeenCalledTimes(1);
+  });
+
+  it('reserves half of the configured pool across both lock entry points', async () => {
+    const { connection, service } = createHarness({ poolMax: 2 });
+    let signalFirstMutationStarted: (() => void) | undefined;
+    const firstMutationStarted = new Promise<void>(resolve => {
+      signalFirstMutationStarted = resolve;
+    });
+    let continueFirstMutation: (() => void) | undefined;
+    const firstMutationGate = new Promise<void>(resolve => {
+      continueFirstMutation = resolve;
+    });
+    const secondMutation = jest.fn().mockResolvedValue(undefined);
+
+    const first = service.run(3, async () => {
+      signalFirstMutationStarted?.();
+      await firstMutationGate;
+    });
+    await firstMutationStarted;
+
+    const second = service.withWorkspaceLock(4, secondMutation);
+    await new Promise<void>(resolve => {
+      setImmediate(resolve);
+    });
+
+    expect(connection.createQueryRunner).toHaveBeenCalledTimes(1);
+    expect(secondMutation).not.toHaveBeenCalled();
+
+    continueFirstMutation?.();
+    await Promise.all([first, second]);
+
+    expect(connection.createQueryRunner).toHaveBeenCalledTimes(2);
+    expect(secondMutation).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a pool that cannot reserve a separate work connection', () => {
+    expect(() => createHarness({ poolMax: 1 })).toThrow(
+      'must provide at least 2 connections'
+    );
+  });
+
+  it('releases a blocking lock slot when query runner creation throws', async () => {
+    const { connection, service } = createHarness({ poolMax: 2 });
+    const createQueryRunner = connection.createQueryRunner as jest.Mock;
+    const queryRunner = createQueryRunner.getMockImplementation()?.();
+    createQueryRunner
+      .mockReset()
+      .mockImplementationOnce(() => {
+        throw new Error('query runner unavailable');
+      })
+      .mockReturnValueOnce(queryRunner);
+
+    await expect(service.run(3, async () => undefined))
+      .rejects.toThrow('query runner unavailable');
+    await expect(service.run(4, async () => 'recovered'))
+      .resolves.toBe('recovered');
+
+    expect(createQueryRunner).toHaveBeenCalledTimes(2);
+  });
+
+  it('releases a non-blocking lock slot when query runner creation throws', async () => {
+    const { connection, service } = createHarness({ poolMax: 2 });
+    const createQueryRunner = connection.createQueryRunner as jest.Mock;
+    const queryRunner = createQueryRunner.getMockImplementation()?.();
+    createQueryRunner
+      .mockReset()
+      .mockImplementationOnce(() => {
+        throw new Error('query runner unavailable');
+      })
+      .mockReturnValueOnce(queryRunner);
+
+    await expect(service.recoverExpired(3))
+      .rejects.toThrow('query runner unavailable');
+    await expect(service.recoverExpired(4)).resolves.toBe(false);
+
+    expect(createQueryRunner).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses a non-blocking transaction lock outside a workspace lock', async () => {
+    const { service } = createHarness();
+    const manager = {
+      query: jest.fn().mockResolvedValue([{ locked: false }])
+    };
+
+    await expect(service.lockInTransaction(manager as never, 3))
+      .rejects.toThrow('currently being modified');
+    expect(manager.query).toHaveBeenCalledWith(
+      'SELECT pg_try_advisory_xact_lock($1::int, $2::int) AS locked',
+      expect.any(Array)
+    );
+  });
+
+  it('reuses a workspace lock for a transaction without locking again', async () => {
+    const { service } = createHarness();
+    const manager = { query: jest.fn() };
+
+    await service.withWorkspaceLock(3, async () => {
+      await service.lockInTransaction(manager as never, 3);
+    });
+
+    expect(manager.query).not.toHaveBeenCalled();
+  });
+
+  it('runs a coding-status mutation inside an existing workspace lock', async () => {
+    const { connection, service } = createHarness();
+    const mutation = jest.fn().mockResolvedValue(undefined);
+
+    await service.withWorkspaceLock(3, () => service.run(3, mutation));
+
+    expect(connection.createQueryRunner).toHaveBeenCalledTimes(1);
+    expect(mutation).toHaveBeenCalledWith({ revision: 4 });
   });
 
   it('reuses the active workspace operation for nested mutations', async () => {
@@ -196,21 +345,9 @@ describe('WorkspaceCodingStatusMutationService', () => {
         defaultConnectionQuery(sql) : Promise.resolve([]);
     });
 
-    let signalSecondLockRequested: (() => void) | undefined;
-    const secondLockRequested = new Promise<void>(resolve => {
-      signalSecondLockRequested = resolve;
-    });
-    let acquireSecondLock: (() => void) | undefined;
-    const secondLockGate = new Promise<void>(resolve => {
-      acquireSecondLock = resolve;
-    });
     const secondQueryRunner = {
       connect: jest.fn().mockResolvedValue(undefined),
       query: jest.fn().mockImplementation((sql: string) => {
-        if (sql.includes('pg_advisory_lock')) {
-          signalSecondLockRequested?.();
-          return secondLockGate;
-        }
         if (sql.includes('latest_expired')) {
           return Promise.resolve([]);
         }
@@ -249,16 +386,18 @@ describe('WorkspaceCodingStatusMutationService', () => {
 
     await recoveryStarted;
     startDelayedMutation?.();
-    await secondLockRequested;
+    await new Promise<void>(resolve => {
+      setImmediate(resolve);
+    });
 
-    expect(connection.createQueryRunner).toHaveBeenCalledTimes(2);
+    expect(connection.createQueryRunner).toHaveBeenCalledTimes(1);
     expect(delayedMutation).not.toHaveBeenCalled();
 
     continueRecovery?.();
     await outerMutation;
-    acquireSecondLock?.();
     await detachedMutation;
 
+    expect(connection.createQueryRunner).toHaveBeenCalledTimes(2);
     expect(delayedMutation).toHaveBeenCalledWith({ revision: 10 });
     expect(secondQueryRunner.release).toHaveBeenCalledTimes(1);
   });

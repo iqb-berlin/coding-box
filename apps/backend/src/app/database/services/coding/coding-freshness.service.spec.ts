@@ -133,7 +133,7 @@ describe('CodingFreshnessService', () => {
       [1]
     );
     expect(connection.query).toHaveBeenCalledWith(
-      expect.stringContaining("now() - interval '24 hours'"),
+      expect.not.stringContaining("now() - interval '24 hours'"),
       [1]
     );
     expect(connection.query).toHaveBeenCalledWith(

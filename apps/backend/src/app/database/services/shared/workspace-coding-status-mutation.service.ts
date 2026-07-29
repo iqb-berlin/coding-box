@@ -8,6 +8,10 @@ import {
 } from 'typeorm';
 
 const WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE = 774020251;
+const DEFAULT_POSTGRES_POOL_SIZE = 10;
+const MINIMUM_POSTGRES_POOL_SIZE = 2;
+
+type LockSlotRelease = () => void;
 
 export type WorkspaceCodingStatusMutation = {
   revision: number;
@@ -44,10 +48,30 @@ export class WorkspaceCodingStatusMutationService {
 
   private readonly revisionFailureRecoveries = new Set<number>();
 
+  private readonly workspaceMutationTails = new Map<number, Promise<void>>();
+
+  private readonly maxConcurrentSessionLocks: number;
+
+  private activeSessionLocks = 0;
+
+  private readonly lockSlotWaiters: Array<() => void> = [];
+
   constructor(
     private readonly connection: DataSource,
     private readonly moduleRef: ModuleRef
-  ) {}
+  ) {
+    const poolSize = this.getPostgresPoolSize();
+    if (poolSize < MINIMUM_POSTGRES_POOL_SIZE) {
+      throw new Error(
+        `The PostgreSQL pool must provide at least ${MINIMUM_POSTGRES_POOL_SIZE} ` +
+        'connections for workspace coding status coordination.'
+      );
+    }
+    this.maxConcurrentSessionLocks = Math.max(
+      1,
+      Math.floor(poolSize / 2)
+    );
+  }
 
   async run<T>(
     workspaceId: number,
@@ -57,26 +81,76 @@ export class WorkspaceCodingStatusMutationService {
     const activeContext = WorkspaceCodingStatusMutationService.contexts
       .getStore()?.get(normalizedWorkspaceId);
 
-    if (
-      activeContext?.phase === 'running' &&
-      activeContext.operation
-    ) {
-      return this.executeNestedMutation(
-        activeContext,
-        activeContext.operation,
-        mutation
-      );
+    if (activeContext?.phase === 'running') {
+      if (activeContext.operation) {
+        return this.executeNestedMutation(
+          activeContext,
+          activeContext.operation,
+          mutation
+        );
+      }
+      try {
+        await this.prepareForMutation(activeContext);
+        return await this.executeOperation(activeContext, mutation);
+      } finally {
+        activeContext.phase = 'running';
+      }
     }
 
-    const queryRunner = this.connection.createQueryRunner();
+    return this.enqueueWorkspaceMutation(
+      normalizedWorkspaceId,
+      () => this.runUnderAdvisoryLock(
+        normalizedWorkspaceId,
+        async context => {
+          await this.prepareForMutation(context);
+          return this.executeOperation(context, mutation);
+        }
+      )
+    );
+  }
+
+  async withWorkspaceLock<T>(
+    workspaceId: number,
+    operation: () => Promise<T>
+  ): Promise<T> {
+    const normalizedWorkspaceId = this.normalizeWorkspaceId(workspaceId);
+    const activeContext = WorkspaceCodingStatusMutationService.contexts
+      .getStore()?.get(normalizedWorkspaceId);
+    if (activeContext?.phase === 'running') {
+      return operation();
+    }
+
+    return this.enqueueWorkspaceMutation(
+      normalizedWorkspaceId,
+      () => this.runUnderAdvisoryLock(
+        normalizedWorkspaceId,
+        async context => {
+          context.phase = 'running';
+          try {
+            return await operation();
+          } finally {
+            context.phase = 'closing';
+          }
+        }
+      )
+    );
+  }
+
+  private async runUnderAdvisoryLock<T>(
+    workspaceId: number,
+    operation: (context: WorkspaceMutationContext) => Promise<T>
+  ): Promise<T> {
+    const releaseLockSlot = await this.acquireLockSlot();
+    let queryRunner: QueryRunner | null = null;
     let locked = false;
     let context: WorkspaceMutationContext | null = null;
-    await queryRunner.connect();
 
     try {
+      queryRunner = this.connection.createQueryRunner();
+      await queryRunner.connect();
       await queryRunner.query(
         'SELECT pg_advisory_lock($1::int, $2::int)',
-        [WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE, normalizedWorkspaceId]
+        [WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE, workspaceId]
       );
       locked = true;
 
@@ -84,7 +158,7 @@ export class WorkspaceCodingStatusMutationService {
         WorkspaceCodingStatusMutationService.contexts.getStore();
       const contexts = new Map(parentContexts || []);
       context = {
-        workspaceId: normalizedWorkspaceId,
+        workspaceId,
         queryRunner,
         operation: null,
         operationFailed: false,
@@ -92,28 +166,55 @@ export class WorkspaceCodingStatusMutationService {
         phase: 'idle',
         pendingNestedMutations: new Set()
       };
-      contexts.set(normalizedWorkspaceId, context);
+      contexts.set(workspaceId, context);
 
       return await WorkspaceCodingStatusMutationService.contexts.run(
         contexts,
-        async () => {
-          await this.prepareForMutation(context);
-          return this.executeOperation(context, mutation);
-        }
+        () => operation(context)
       );
     } finally {
       if (context) {
         context.phase = 'inactive';
       }
       try {
-        if (locked) {
+        if (locked && queryRunner) {
           await queryRunner.query(
             'SELECT pg_advisory_unlock($1::int, $2::int)',
-            [WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE, normalizedWorkspaceId]
+            [WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE, workspaceId]
           );
         }
       } finally {
-        await queryRunner.release();
+        try {
+          if (queryRunner) {
+            await queryRunner.release();
+          }
+        } finally {
+          releaseLockSlot();
+        }
+      }
+    }
+  }
+
+  private async enqueueWorkspaceMutation<T>(
+    workspaceId: number,
+    mutation: () => Promise<T>
+  ): Promise<T> {
+    const predecessor = this.workspaceMutationTails.get(workspaceId) ||
+      Promise.resolve();
+    let releaseQueue: (() => void) | undefined;
+    const queueEntry = new Promise<void>(resolve => {
+      releaseQueue = resolve;
+    });
+    const tail = predecessor.then(() => queueEntry);
+    this.workspaceMutationTails.set(workspaceId, tail);
+
+    await predecessor;
+    try {
+      return await mutation();
+    } finally {
+      releaseQueue?.();
+      if (this.workspaceMutationTails.get(workspaceId) === tail) {
+        this.workspaceMutationTails.delete(workspaceId);
       }
     }
   }
@@ -122,13 +223,27 @@ export class WorkspaceCodingStatusMutationService {
     manager: EntityManager,
     workspaceId: number
   ): Promise<void> {
-    await manager.query(
-      'SELECT pg_advisory_xact_lock($1::int, $2::int)',
+    const normalizedWorkspaceId = this.normalizeWorkspaceId(workspaceId);
+    const activeContext = WorkspaceCodingStatusMutationService.contexts
+      .getStore()?.get(normalizedWorkspaceId);
+    if (activeContext?.phase === 'running') {
+      return;
+    }
+
+    const rows = await manager.query(
+      'SELECT pg_try_advisory_xact_lock($1::int, $2::int) AS locked',
       [
         WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE,
-        this.normalizeWorkspaceId(workspaceId)
+        normalizedWorkspaceId
       ]
-    );
+    ) as Array<{ locked: boolean | string }> | undefined;
+    const locked = rows?.[0]?.locked === true || rows?.[0]?.locked === 't';
+    if (!locked) {
+      throw new Error(
+        `Workspace ${normalizedWorkspaceId} is currently being modified. ` +
+        'Retry the transaction after releasing its database connection.'
+      );
+    }
   }
 
   async getRevision(workspaceId: number): Promise<number> {
@@ -621,12 +736,17 @@ export class WorkspaceCodingStatusMutationService {
     workspaceId: number,
     callback: (context: WorkspaceMutationContext) => Promise<T>
   ): Promise<T | undefined> {
-    const queryRunner = this.connection.createQueryRunner();
+    const releaseLockSlot = this.tryAcquireLockSlot();
+    if (!releaseLockSlot) {
+      return undefined;
+    }
+    let queryRunner: QueryRunner | null = null;
     let locked = false;
     let context: WorkspaceMutationContext | null = null;
-    await queryRunner.connect();
 
     try {
+      queryRunner = this.connection.createQueryRunner();
+      await queryRunner.connect();
       const rows = await queryRunner.query(
         'SELECT pg_try_advisory_lock($1::int, $2::int) AS locked',
         [WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE, workspaceId]
@@ -658,16 +778,72 @@ export class WorkspaceCodingStatusMutationService {
         context.phase = 'inactive';
       }
       try {
-        if (locked) {
+        if (locked && queryRunner) {
           await queryRunner.query(
             'SELECT pg_advisory_unlock($1::int, $2::int)',
             [WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE, workspaceId]
           );
         }
       } finally {
-        await queryRunner.release();
+        try {
+          if (queryRunner) {
+            await queryRunner.release();
+          }
+        } finally {
+          releaseLockSlot();
+        }
       }
     }
+  }
+
+  private getPostgresPoolSize(): number {
+    const options = this.connection.options as {
+      poolSize?: unknown;
+      extra?: { max?: unknown };
+    } | undefined;
+    const configuredValue = options?.poolSize || options?.extra?.max;
+    const configuredSize =
+      typeof configuredValue === 'number' ||
+      typeof configuredValue === 'string' ?
+        Number(configuredValue) :
+        Number.NaN;
+    return Number.isSafeInteger(configuredSize) && configuredSize > 0 ?
+      configuredSize : DEFAULT_POSTGRES_POOL_SIZE;
+  }
+
+  private async acquireLockSlot(): Promise<LockSlotRelease> {
+    if (this.activeSessionLocks >= this.maxConcurrentSessionLocks) {
+      await new Promise<void>(resolve => {
+        this.lockSlotWaiters.push(resolve);
+      });
+    } else {
+      this.activeSessionLocks += 1;
+    }
+    return this.createLockSlotRelease();
+  }
+
+  private tryAcquireLockSlot(): LockSlotRelease | null {
+    if (this.activeSessionLocks >= this.maxConcurrentSessionLocks) {
+      return null;
+    }
+    this.activeSessionLocks += 1;
+    return this.createLockSlotRelease();
+  }
+
+  private createLockSlotRelease(): LockSlotRelease {
+    let released = false;
+    return () => {
+      if (released) {
+        return;
+      }
+      released = true;
+      const next = this.lockSlotWaiters.shift();
+      if (next) {
+        next();
+      } else {
+        this.activeSessionLocks -= 1;
+      }
+    };
   }
 
   private normalizeWorkspaceId(workspaceId: number): number {

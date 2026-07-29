@@ -223,7 +223,7 @@ describePostgres('Coding status revision Postgres integration', () => {
       [workspaceId, orphanedOperation.revision]
     );
     await expect(freshness.getWorkspaceStatusRevision(workspaceId))
-      .resolves.toMatchObject({ stable: true });
+      .resolves.toMatchObject({ stable: false });
 
     await expect(mutation.recoverExpired(workspaceId)).resolves.toBe(true);
     const nextOperation = await serviceInternals.beginOperation(
