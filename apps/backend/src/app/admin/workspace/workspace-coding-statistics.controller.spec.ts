@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import * as ExcelJS from 'exceljs';
+import { EventEmitter } from 'events';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -12,7 +13,10 @@ describe('WorkspaceCodingStatisticsController', () => {
     calculateCohensKappa: jest.Mock;
     roundKappaCalculationResult: jest.Mock;
   };
-  let codingJobService: { createDistributedCodingJobs: jest.Mock };
+  let codingJobService: {
+    calculateDistribution: jest.Mock;
+    createDistributedCodingJobs: jest.Mock;
+  };
   let codingReviewService: {
     getDoubleCodedVariablesForReview: jest.Mock;
     getCodedVariablesForKappa: jest.Mock;
@@ -22,6 +26,7 @@ describe('WorkspaceCodingStatisticsController', () => {
     getReadiness: jest.Mock;
     getReadinessFromCache: jest.Mock;
   };
+  let distributionPreviewLimiterService: { run: jest.Mock };
   let controller: WorkspaceCodingStatisticsController;
   const request = {
     protocol: 'http',
@@ -38,6 +43,17 @@ describe('WorkspaceCodingStatisticsController', () => {
       }))
     };
     codingJobService = {
+      calculateDistribution: jest.fn().mockResolvedValue({
+        distribution: {},
+        distributionByCoderId: {},
+        doubleCodingInfo: {},
+        aggregationInfo: {},
+        matchingFlags: [],
+        warnings: [],
+        pairDistribution: {},
+        tasksPerCoder: {},
+        coderWeights: {}
+      }),
       createDistributedCodingJobs: jest.fn().mockResolvedValue({
         success: true,
         jobsCreated: 0,
@@ -85,6 +101,9 @@ describe('WorkspaceCodingStatisticsController', () => {
       }),
       getReadinessFromCache: jest.fn().mockResolvedValue(null)
     };
+    distributionPreviewLimiterService = {
+      run: jest.fn().mockImplementation(execute => execute())
+    };
 
     controller = new WorkspaceCodingStatisticsController(
       codingStatisticsService as never,
@@ -96,7 +115,8 @@ describe('WorkspaceCodingStatisticsController', () => {
       {} as never,
       codingReadinessService as never,
       codingReplayService as never,
-      {} as never
+      {} as never,
+      distributionPreviewLimiterService as never
     );
     request.get.mockImplementation((name: string) => {
       if (name === 'host') {
@@ -157,6 +177,23 @@ describe('WorkspaceCodingStatisticsController', () => {
     await controller.createDistributedCodingJobs(5, body);
 
     expect(codingJobService.createDistributedCodingJobs).toHaveBeenCalledWith(5, body);
+  });
+
+  it('runs distribution previews through the concurrency limiter', async () => {
+    const body = {
+      selectedVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
+      selectedCoders: [{ id: 1, name: 'Coder', username: 'coder' }]
+    };
+    const response = Object.assign(new EventEmitter(), { writableEnded: false });
+
+    await controller.calculateDistribution(5, body, response as never);
+
+    expect(distributionPreviewLimiterService.run).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.any(AbortSignal)
+    );
+    expect(codingJobService.calculateDistribution).toHaveBeenCalledWith(5, body);
+    expect(response.listenerCount('close')).toBe(0);
   });
 
   it('delegates autocoding readiness requests with parsed options', async () => {
