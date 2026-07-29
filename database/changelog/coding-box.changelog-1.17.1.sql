@@ -36,36 +36,28 @@ FROM "public"."workspace"
 LEFT JOIN "public"."workspace_test_results_revision" test_revision
   ON test_revision.workspace_id = workspace.id;
 
+ALTER TABLE "public"."unit"
+  ADD COLUMN "workspace_id" INTEGER;
+
+UPDATE "public"."unit" unit_record
+SET "workspace_id" = person.workspace_id
+FROM "public"."booklet" booklet
+INNER JOIN "public"."persons" person ON person.id = booklet.personid
+WHERE booklet.id = unit_record.bookletid;
+
+ALTER TABLE "public"."response"
+  ADD COLUMN "workspace_id" INTEGER;
+
+UPDATE "public"."response" response_record
+SET "workspace_id" = unit_record.workspace_id
+FROM "public"."unit" unit_record
+WHERE unit_record.id = response_record.unitid;
+
 CREATE OR REPLACE FUNCTION "public"."touch_workspace_coding_status_revision_by_id"(
   changed_workspace_id INTEGER
 )
 RETURNS void AS $$
-DECLARE
-  touched_workspace_ids TEXT;
-  workspace_marker TEXT;
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM "public"."workspace"
-    WHERE "id" = changed_workspace_id
-  ) THEN
-    RETURN;
-  END IF;
-
-  touched_workspace_ids := COALESCE(
-    NULLIF(current_setting('coding_box.touched_status_workspaces', true), ''),
-    ','
-  );
-  workspace_marker := ',' || changed_workspace_id::TEXT || ',';
-  IF strpos(touched_workspace_ids, workspace_marker) > 0 THEN
-    RETURN;
-  END IF;
-  PERFORM set_config(
-    'coding_box.touched_status_workspaces',
-    touched_workspace_ids || changed_workspace_id::TEXT || ',',
-    true
-  );
-
   INSERT INTO "public"."workspace_coding_status_revision" (
     "workspace_id",
     "revision",
@@ -73,19 +65,145 @@ BEGIN
     "processed_test_results_revision",
     "updated_at"
   )
-  VALUES (
-    changed_workspace_id,
+  SELECT
+    workspace.id,
     1,
     txid_current(),
     0,
     now()
-  )
+  FROM "public"."workspace" workspace
+  WHERE workspace.id = changed_workspace_id
   ON CONFLICT ("workspace_id") DO UPDATE
   SET "revision" = "workspace_coding_status_revision"."revision" + 1,
       "last_touch_transaction_id" = EXCLUDED."last_touch_transaction_id",
       "updated_at" = EXCLUDED."updated_at"
   WHERE "workspace_coding_status_revision"."last_touch_transaction_id"
     IS DISTINCT FROM EXCLUDED."last_touch_transaction_id";
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "public"."touch_workspace_coding_status_revision_from_response_insert"()
+RETURNS trigger AS $$
+BEGIN
+  UPDATE public.workspace_coding_status_revision status_revision
+  SET revision = status_revision.revision + 1,
+      last_touch_transaction_id = txid_current()
+  FROM (
+    SELECT DISTINCT workspace_id
+    FROM new_rows
+    WHERE workspace_id IS NOT NULL
+  ) changed
+  WHERE status_revision.workspace_id = changed.workspace_id
+    AND status_revision.last_touch_transaction_id IS DISTINCT FROM txid_current();
+
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "public"."touch_workspace_coding_status_revision_from_response_update"()
+RETURNS trigger AS $$
+BEGIN
+  UPDATE public.workspace_coding_status_revision status_revision
+  SET revision = status_revision.revision + 1,
+      last_touch_transaction_id = txid_current()
+  FROM (
+    SELECT workspace_id FROM old_rows
+    UNION
+    SELECT workspace_id FROM new_rows
+  ) changed
+  WHERE status_revision.workspace_id = changed.workspace_id
+    AND status_revision.last_touch_transaction_id IS DISTINCT FROM txid_current();
+
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "public"."touch_workspace_coding_status_revision_from_response_delete"()
+RETURNS trigger AS $$
+BEGIN
+  UPDATE public.workspace_coding_status_revision status_revision
+  SET revision = status_revision.revision + 1,
+      last_touch_transaction_id = txid_current()
+  FROM (
+    SELECT DISTINCT workspace_id
+    FROM old_rows
+    WHERE workspace_id IS NOT NULL
+  ) changed
+  WHERE status_revision.workspace_id = changed.workspace_id
+    AND status_revision.last_touch_transaction_id IS DISTINCT FROM txid_current();
+
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "public"."set_response_workspace_id"()
+RETURNS trigger AS $$
+BEGIN
+  SELECT unit_record.workspace_id
+  INTO NEW.workspace_id
+  FROM public.unit unit_record
+  WHERE unit_record.id = NEW.unitid;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "public"."sync_response_workspace_id_from_unit"()
+RETURNS trigger AS $$
+BEGIN
+  IF NEW.workspace_id IS DISTINCT FROM OLD.workspace_id THEN
+    UPDATE public.response response_record
+    SET workspace_id = NEW.workspace_id
+    WHERE response_record.unitid = NEW.id
+      AND response_record.workspace_id IS DISTINCT FROM NEW.workspace_id;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "public"."set_unit_workspace_id"()
+RETURNS trigger AS $$
+BEGIN
+  SELECT person.workspace_id
+  INTO NEW.workspace_id
+  FROM public.booklet booklet
+  INNER JOIN public.persons person ON person.id = booklet.personid
+  WHERE booklet.id = NEW.bookletid;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "public"."sync_unit_workspace_id_from_person"()
+RETURNS trigger AS $$
+BEGIN
+  IF NEW.workspace_id IS DISTINCT FROM OLD.workspace_id THEN
+    UPDATE public.unit unit_record
+    SET workspace_id = NEW.workspace_id
+    FROM public.booklet booklet
+    WHERE booklet.id = unit_record.bookletid
+      AND booklet.personid = NEW.id
+      AND unit_record.workspace_id IS DISTINCT FROM NEW.workspace_id;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION "public"."sync_unit_workspace_id_from_booklet"()
+RETURNS trigger AS $$
+BEGIN
+  IF NEW.personid IS DISTINCT FROM OLD.personid THEN
+    UPDATE public.unit unit_record
+    SET workspace_id = person.workspace_id
+    FROM public.persons person
+    WHERE unit_record.bookletid = NEW.id
+      AND person.id = NEW.personid
+      AND unit_record.workspace_id IS DISTINCT FROM person.workspace_id;
+  END IF;
+
+  RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -299,13 +417,6 @@ BEGIN
       'INNER JOIN public.persons person ON person.id = booklet.personid',
       changed_rows_sql
     )
-    WHEN 'response' THEN format(
-      'SELECT DISTINCT person.workspace_id FROM (%s) changed '
-      'INNER JOIN public.unit unit_record ON unit_record.id = changed.unitid '
-      'INNER JOIN public.booklet booklet ON booklet.id = unit_record.bookletid '
-      'INNER JOIN public.persons person ON person.id = booklet.personid',
-      changed_rows_sql
-    )
     ELSE NULL
   END;
 
@@ -321,6 +432,26 @@ BEGIN
   RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "unit_workspace_id"
+BEFORE INSERT OR UPDATE ON "public"."unit"
+FOR EACH ROW EXECUTE FUNCTION "public"."set_unit_workspace_id"();
+
+CREATE TRIGGER "response_workspace_id"
+BEFORE INSERT OR UPDATE OF unitid, workspace_id ON "public"."response"
+FOR EACH ROW EXECUTE FUNCTION "public"."set_response_workspace_id"();
+
+CREATE TRIGGER "response_workspace_id_from_unit"
+AFTER UPDATE OF workspace_id ON "public"."unit"
+FOR EACH ROW EXECUTE FUNCTION "public"."sync_response_workspace_id_from_unit"();
+
+CREATE TRIGGER "unit_workspace_id_from_person"
+AFTER UPDATE ON "public"."persons"
+FOR EACH ROW EXECUTE FUNCTION "public"."sync_unit_workspace_id_from_person"();
+
+CREATE TRIGGER "unit_workspace_id_from_booklet"
+AFTER UPDATE ON "public"."booklet"
+FOR EACH ROW EXECUTE FUNCTION "public"."sync_unit_workspace_id_from_booklet"();
 
 CREATE TRIGGER "workspace_coding_status_revision_workspace"
 AFTER INSERT OR UPDATE ON "public"."workspace"
@@ -374,17 +505,17 @@ FOR EACH STATEMENT EXECUTE FUNCTION "public"."touch_workspace_coding_status_revi
 CREATE TRIGGER "workspace_coding_status_revision_response_insert"
 AFTER INSERT ON "public"."response"
 REFERENCING NEW TABLE AS new_rows
-FOR EACH STATEMENT EXECUTE FUNCTION "public"."touch_workspace_coding_status_revision_from_results"('response');
+FOR EACH STATEMENT EXECUTE FUNCTION "public"."touch_workspace_coding_status_revision_from_response_insert"();
 
 CREATE TRIGGER "workspace_coding_status_revision_response_update"
 AFTER UPDATE ON "public"."response"
 REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows
-FOR EACH STATEMENT EXECUTE FUNCTION "public"."touch_workspace_coding_status_revision_from_results"('response');
+FOR EACH STATEMENT EXECUTE FUNCTION "public"."touch_workspace_coding_status_revision_from_response_update"();
 
 CREATE TRIGGER "workspace_coding_status_revision_response_delete"
 AFTER DELETE ON "public"."response"
 REFERENCING OLD TABLE AS old_rows
-FOR EACH STATEMENT EXECUTE FUNCTION "public"."touch_workspace_coding_status_revision_from_results"('response');
+FOR EACH STATEMENT EXECUTE FUNCTION "public"."touch_workspace_coding_status_revision_from_response_delete"();
 
 CREATE TRIGGER "workspace_coding_status_revision_setting"
 AFTER INSERT OR UPDATE OR DELETE ON "public"."setting"
@@ -537,7 +668,20 @@ FOR EACH ROW EXECUTE FUNCTION "public"."touch_workspace_coding_status_revision_f
 -- rollback DROP TRIGGER IF EXISTS "workspace_coding_status_revision_persons_update" ON "public"."persons";
 -- rollback DROP TRIGGER IF EXISTS "workspace_coding_status_revision_persons_insert" ON "public"."persons";
 -- rollback DROP TRIGGER IF EXISTS "workspace_coding_status_revision_workspace" ON "public"."workspace";
+-- rollback DROP TRIGGER IF EXISTS "unit_workspace_id_from_booklet" ON "public"."booklet";
+-- rollback DROP TRIGGER IF EXISTS "unit_workspace_id_from_person" ON "public"."persons";
+-- rollback DROP TRIGGER IF EXISTS "response_workspace_id_from_unit" ON "public"."unit";
+-- rollback DROP TRIGGER IF EXISTS "response_workspace_id" ON "public"."response";
+-- rollback DROP TRIGGER IF EXISTS "unit_workspace_id" ON "public"."unit";
 -- rollback DROP FUNCTION IF EXISTS "public"."touch_workspace_coding_status_revision_from_setting"();
+-- rollback DROP FUNCTION IF EXISTS "public"."touch_workspace_coding_status_revision_from_response_delete"();
+-- rollback DROP FUNCTION IF EXISTS "public"."touch_workspace_coding_status_revision_from_response_update"();
+-- rollback DROP FUNCTION IF EXISTS "public"."touch_workspace_coding_status_revision_from_response_insert"();
+-- rollback DROP FUNCTION IF EXISTS "public"."sync_unit_workspace_id_from_booklet"();
+-- rollback DROP FUNCTION IF EXISTS "public"."sync_unit_workspace_id_from_person"();
+-- rollback DROP FUNCTION IF EXISTS "public"."set_unit_workspace_id"();
+-- rollback DROP FUNCTION IF EXISTS "public"."sync_response_workspace_id_from_unit"();
+-- rollback DROP FUNCTION IF EXISTS "public"."set_response_workspace_id"();
 -- rollback DROP FUNCTION IF EXISTS "public"."touch_workspace_coding_status_revision_from_results"();
 -- rollback DROP FUNCTION IF EXISTS "public"."touch_workspace_coding_status_revision_from_parent_rows"();
 -- rollback DROP FUNCTION IF EXISTS "public"."touch_workspace_coding_status_revision_from_workspace_rows"();
@@ -545,5 +689,7 @@ FOR EACH ROW EXECUTE FUNCTION "public"."touch_workspace_coding_status_revision_f
 -- rollback DROP FUNCTION IF EXISTS "public"."touch_workspace_coding_status_revision_from_file_upload"();
 -- rollback DROP FUNCTION IF EXISTS "public"."touch_workspace_coding_status_revision"();
 -- rollback DROP FUNCTION IF EXISTS "public"."touch_workspace_coding_status_revision_by_id"(INTEGER);
+-- rollback ALTER TABLE "public"."response" DROP COLUMN IF EXISTS "workspace_id";
+-- rollback ALTER TABLE "public"."unit" DROP COLUMN IF EXISTS "workspace_id";
 -- rollback DROP TABLE IF EXISTS "public"."workspace_coding_status_revision_operation";
 -- rollback DROP TABLE IF EXISTS "public"."workspace_coding_status_revision";

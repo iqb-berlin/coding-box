@@ -552,7 +552,7 @@ export class WorkspaceCodingStatusMutationService {
     executor: Pick<EntityManager, 'query'>,
     workspaceId: number
   ): Promise<boolean> {
-    const rows = await executor.query(
+    const result: unknown = await executor.query(
       `
         WITH expired_operations AS (
           DELETE FROM workspace_coding_status_revision_operation
@@ -588,7 +588,8 @@ export class WorkspaceCodingStatusMutationService {
         RETURNING workspace_id
       `,
       [workspaceId]
-    ) as Array<{ workspace_id: number | string }> | undefined;
+    );
+    const rows = this.getQueryRows<{ workspace_id: number | string }>(result);
     return Array.isArray(rows) && rows.length === 1;
   }
 
@@ -703,7 +704,7 @@ export class WorkspaceCodingStatusMutationService {
     if (!Number.isSafeInteger(reconciledRevision) || reconciledRevision < 1) {
       throw new Error('A valid reconciled revision is required.');
     }
-    const rows = await this.connection.query(
+    const result: unknown = await this.connection.query(
       `
         UPDATE workspace_coding_status_revision status_revision
         SET failed_test_results_revision = NULL,
@@ -728,8 +729,16 @@ export class WorkspaceCodingStatusMutationService {
         RETURNING status_revision.workspace_id
       `,
       [workspaceId, reconciledRevision]
-    ) as Array<{ workspace_id: number | string }> | undefined;
-    return Array.isArray(rows) && rows.length === 1;
+    );
+    return this.getQueryRows<{ workspace_id: number | string }>(result)
+      .length === 1;
+  }
+
+  private getQueryRows<T>(result: unknown): T[] {
+    if (!Array.isArray(result)) {
+      return [];
+    }
+    return Array.isArray(result[0]) ? result[0] as T[] : result as T[];
   }
 
   private async withAdvisoryLockIfAvailable<T>(

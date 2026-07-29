@@ -87,7 +87,7 @@ describePostgres('Coding status revision Postgres integration', () => {
       `INSERT INTO workspace (name, settings)
        VALUES ($1, '{}'::jsonb)
        RETURNING id`,
-      [`status-revision-${suffix}`]
+      [`sr-order-${suffix}`]
     ) as Array<{ id: number }>;
     workspaceId = workspace.id;
     const [before] = await dataSource.query(
@@ -145,7 +145,7 @@ describePostgres('Coding status revision Postgres integration', () => {
       `INSERT INTO workspace (name, settings)
        VALUES ($1, '{}'::jsonb)
        RETURNING id`,
-      [`status-revision-dedupe-${suffix}`]
+      [`sr-dedupe-${suffix}`]
     ) as Array<{ id: number }>;
     workspaceId = workspace.id;
     const [before] = await dataSource.query(
@@ -186,13 +186,130 @@ describePostgres('Coding status revision Postgres integration', () => {
     expect(BigInt(after.revision)).toBe(BigInt(before.revision) + BigInt(1));
   }, 30000);
 
+  it('advances both workspaces when a response moves between them', async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const runner = dataSource.createQueryRunner();
+    let workspaceIds: number[] = [];
+    let bookletInfoId: number | undefined;
+    await runner.connect();
+    await runner.startTransaction();
+
+    try {
+      const workspaces = await runner.query(
+        `INSERT INTO workspace (name, settings)
+         VALUES ($1, '{}'::jsonb), ($2, '{}'::jsonb)
+         RETURNING id`,
+        [`sr-move-a-${suffix}`, `sr-move-b-${suffix}`]
+      ) as Array<{ id: number }>;
+      workspaceIds = workspaces.map(workspace => workspace.id);
+      const persons = await runner.query(
+        `INSERT INTO persons ("group", login, code, workspace_id)
+         VALUES ('g', 'a', 'a', $1), ('g', 'b', 'b', $2)
+         RETURNING id`,
+        workspaceIds
+      ) as Array<{ id: number }>;
+      const [bookletInfo] = await runner.query(
+        `INSERT INTO bookletinfo (name, size)
+         VALUES ($1, 0)
+         RETURNING id`,
+        [`sr-move-${suffix}`]
+      ) as Array<{ id: number }>;
+      bookletInfoId = bookletInfo.id;
+      const booklets = await runner.query(
+        `INSERT INTO booklet (infoid, personid)
+         VALUES ($1, $2), ($1, $3)
+         RETURNING id`,
+        [bookletInfo.id, persons[0].id, persons[1].id]
+      ) as Array<{ id: number }>;
+      const units = await runner.query(
+        `INSERT INTO unit (bookletid, name)
+         VALUES ($1, 'UNIT-A'), ($2, 'UNIT-B')
+         RETURNING id`,
+        booklets.map(booklet => booklet.id)
+      ) as Array<{ id: number }>;
+      const [response] = await runner.query(
+        `INSERT INTO response (unitid, variableid, status, value)
+         VALUES ($1, 'VAR', 0, 'a')
+         RETURNING id`,
+        [units[0].id]
+      ) as Array<{ id: number }>;
+      await runner.commitTransaction();
+      await runner.startTransaction();
+      const before = await runner.query(
+        `SELECT workspace_id, revision
+         FROM workspace_coding_status_revision
+         WHERE workspace_id = ANY($1::int[])
+         ORDER BY workspace_id`,
+        [workspaceIds]
+      ) as Array<{ workspace_id: number; revision: string }>;
+
+      await runner.query(
+        'UPDATE response SET unitid = $1 WHERE id = $2',
+        [units[1].id, response.id]
+      );
+      const [movedResponse] = await runner.query(
+        'SELECT workspace_id FROM response WHERE id = $1',
+        [response.id]
+      ) as Array<{ workspace_id: number }>;
+      expect(movedResponse.workspace_id).toBe(workspaceIds[1]);
+
+      const after = await runner.query(
+        `SELECT workspace_id, revision
+         FROM workspace_coding_status_revision
+         WHERE workspace_id = ANY($1::int[])
+         ORDER BY workspace_id`,
+        [workspaceIds]
+      ) as Array<{ workspace_id: number; revision: string }>;
+      expect(after).toHaveLength(2);
+      expect(after.map((row, index) => (
+        BigInt(row.revision) - BigInt(before[index].revision)
+      ))).toEqual([BigInt(1), BigInt(1)]);
+
+      await runner.query(
+        'UPDATE persons SET workspace_id = $1 WHERE id = $2',
+        [workspaceIds[0], persons[1].id]
+      );
+      const [synchronizedHierarchy] = await runner.query(
+        `SELECT unit_record.workspace_id AS unit_workspace_id,
+                response_record.workspace_id AS response_workspace_id
+         FROM unit unit_record
+         INNER JOIN response response_record
+           ON response_record.unitid = unit_record.id
+         WHERE response_record.id = $1`,
+        [response.id]
+      ) as Array<{
+        unit_workspace_id: number;
+        response_workspace_id: number;
+      }>;
+      expect(synchronizedHierarchy).toEqual({
+        unit_workspace_id: workspaceIds[0],
+        response_workspace_id: workspaceIds[0]
+      });
+    } finally {
+      await rollbackIfActive(runner);
+      await runner.release();
+      if (workspaceIds.length > 0) {
+        await dataSource.query(
+          'DELETE FROM workspace WHERE id = ANY($1::int[])',
+          [workspaceIds]
+        );
+      }
+      if (bookletInfoId !== undefined) {
+        await dataSource.query(
+          'DELETE FROM bookletinfo WHERE id = $1',
+          [bookletInfoId]
+        );
+      }
+    }
+  }, 30000);
+
   it('expires only the orphaned operation when revision updates overlap', async () => {
     const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const [workspace] = await dataSource.query(
       `INSERT INTO workspace (name, settings)
        VALUES ($1, '{}'::jsonb)
        RETURNING id`,
-      [`status-revision-operations-${suffix}`]
+      [`sr-operations-${suffix}`]
     ) as Array<{ id: number }>;
     workspaceId = workspace.id;
     const { freshness, mutation } = createServices();
@@ -255,7 +372,7 @@ describePostgres('Coding status revision Postgres integration', () => {
       `INSERT INTO workspace (name, settings)
        VALUES ($1, '{}'::jsonb)
        RETURNING id`,
-      [`status-revision-lone-orphan-${suffix}`]
+      [`sr-orphan-${suffix}`]
     ) as Array<{ id: number }>;
     workspaceId = workspace.id;
     const { freshness, mutation } = createServices();
@@ -287,7 +404,7 @@ describePostgres('Coding status revision Postgres integration', () => {
       `INSERT INTO workspace (name, settings)
        VALUES ($1, '{}'::jsonb)
        RETURNING id`,
-      [`status-revision-failure-${suffix}`]
+      [`sr-failure-${suffix}`]
     ) as Array<{ id: number }>;
     workspaceId = workspace.id;
     const { freshness, mutation } = createServices();

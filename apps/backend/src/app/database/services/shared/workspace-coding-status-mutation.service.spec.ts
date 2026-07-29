@@ -42,7 +42,7 @@ describe('WorkspaceCodingStatusMutationService', () => {
           return Promise.resolve([{ revision: 7 }]);
         }
         if (sql.includes('RETURNING status_revision.workspace_id')) {
-          return Promise.resolve([{ workspace_id: 3 }]);
+          return Promise.resolve([[{ workspace_id: 3 }], 1]);
         }
         return Promise.resolve([]);
       })
