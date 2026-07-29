@@ -110,6 +110,7 @@ export type ResponseSearchSortBy =
   'booklet_id';
 export type ResponseSearchSortDirection = 'asc' | 'desc';
 const EFFECTIVE_CODING_STATUS_SORT_ALIAS = 'effective_coding_status_sort';
+const EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS = 'effective_coding_status_output';
 
 export type WorkspaceOverviewStats = {
   testPersons: number;
@@ -6999,7 +7000,12 @@ export class WorkspaceTestResultsService {
 
         query.skip(skip).take(limit);
 
-        const responses = await query.getMany();
+        query.addSelect(
+          getEffectiveCodingStatusExpression(version),
+          EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS
+        );
+        const { entities: responses, raw: rawResponses } =
+          await query.getRawAndEntities();
 
         this.logger.log(
           `Found ${total} responses matching the criteria in workspace: ${workspaceId}, returning ${responses.length} for page ${page}`
@@ -7016,16 +7022,20 @@ export class WorkspaceTestResultsService {
           variablePageMaps.set(unitName, pageMap);
         }
 
-        const data = responses.map(response => {
+        const data = responses.map((response, responseIndex) => {
           const code = response[
             `code_${version}` as keyof ResponseEntity
           ] as number;
           const score = response[
             `score_${version}` as keyof ResponseEntity
           ] as number;
-          const codedStatus = response[
-            `status_${version}` as keyof ResponseEntity
-          ] as number;
+          const rawEffectiveCodingStatus = rawResponses[responseIndex]?.[
+            EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS
+          ];
+          const codedStatus = rawEffectiveCodingStatus === null ||
+            rawEffectiveCodingStatus === undefined ?
+            null :
+            Number(rawEffectiveCodingStatus);
           const variablePage =
           variablePageMaps.get(response.unit.name)?.get(response.variableid) ||
           '0';
