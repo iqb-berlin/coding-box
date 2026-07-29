@@ -27,6 +27,7 @@ import { BookletLog } from '../../entities/bookletLog.entity';
 import { Session } from '../../entities/session.entity';
 import { UnitLog } from '../../entities/unitLog.entity';
 import { Person } from '../shared';
+import { CacheService } from '../../../cache/cache.service';
 
 describe('UploadResultsService', () => {
   let service: UploadResultsService;
@@ -1057,7 +1058,8 @@ existing-group;existing-login;existing-code;booklet1;unit2;"[{""subForm"":"""","
           chunkRepository,
           bookletLogRepository,
           sessionRepository,
-          unitLogRepository
+          unitLogRepository,
+          createMock<CacheService>()
         )
       );
       const realUploadService = new UploadResultsService(

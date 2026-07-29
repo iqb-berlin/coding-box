@@ -1,4 +1,5 @@
 import { DataSource, Repository } from 'typeorm';
+import { createMock } from '@golevelup/ts-jest';
 import { PersonPersistenceService } from './person-persistence.service';
 import Persons from '../../entities/persons.entity';
 import { Booklet } from '../../entities/booklet.entity';
@@ -13,6 +14,7 @@ import { UnitLog } from '../../entities/unitLog.entity';
 import { UnitTag } from '../../entities/unitTag.entity';
 import { UnitNote } from '../../entities/unitNote.entity';
 import { Person } from '../shared';
+import { CacheService } from '../../../cache/cache.service';
 
 // Opt-in: set POSTGRES_INTEGRATION_TESTS=true and POSTGRES_* if the local
 // development defaults below do not match the target database.
@@ -78,7 +80,8 @@ describePostgres('PersonPersistenceService Postgres integration', () => {
       dataSource.getRepository(ChunkEntity),
       dataSource.getRepository(BookletLog),
       dataSource.getRepository(Session),
-      dataSource.getRepository(UnitLog)
+      dataSource.getRepository(UnitLog),
+      createMock<CacheService>()
     );
   }, 30000);
 

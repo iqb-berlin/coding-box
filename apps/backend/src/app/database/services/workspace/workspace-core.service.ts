@@ -24,6 +24,7 @@ import {
   getCodingIncompleteVariablesCacheKeys,
   getCodingIncompleteVariablesCacheVersionKey
 } from '../coding/coding-incomplete-variables-cache-key.util';
+import { touchWorkspaceCodingStatusRevision } from '../shared/workspace-coding-status-revision.util';
 
 @Injectable()
 export class WorkspaceCoreService {
@@ -122,6 +123,10 @@ export class WorkspaceCoreService {
       if (workspaceData.settings) {
         await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceData.id);
         await this.invalidateCachesAffectedByExclusions(workspaceData.id);
+        await touchWorkspaceCodingStatusRevision(
+          this.connection.manager,
+          workspaceData.id
+        );
       }
     }
   }
@@ -183,6 +188,10 @@ export class WorkspaceCoreService {
     await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`);
     await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
     await this.invalidateCachesAffectedByExclusions(workspaceId);
+    await touchWorkspaceCodingStatusRevision(
+      this.connection.manager,
+      workspaceId
+    );
   }
 
   async getWorkspaceSettings(workspaceId: number): Promise<WorkspaceSettingsDto> {
@@ -199,6 +208,10 @@ export class WorkspaceCoreService {
     await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`);
     await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
     await this.invalidateCachesAffectedByExclusions(workspaceId);
+    await touchWorkspaceCodingStatusRevision(
+      this.connection.manager,
+      workspaceId
+    );
   }
 
   private async invalidateCachesAffectedByExclusions(workspaceId: number): Promise<void> {

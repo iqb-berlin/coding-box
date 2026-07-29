@@ -25,6 +25,7 @@ jest.mock('./coding-statistics.service', () => ({
 
 describe('CodingAnalysisService aggregation settings', () => {
   function createService() {
+    const statusRevisionQuery = jest.fn().mockResolvedValue([]);
     const queryBuilder = {
       select: jest.fn().mockReturnThis(),
       innerJoin: jest.fn().mockReturnThis(),
@@ -34,7 +35,8 @@ describe('CodingAnalysisService aggregation settings', () => {
     };
     const responseRepository = {
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
-      update: jest.fn().mockResolvedValue(undefined)
+      update: jest.fn().mockResolvedValue(undefined),
+      manager: { query: statusRevisionQuery }
     } as unknown as Repository<ResponseEntity>;
     const codingJobService = {
       getAggregationThreshold: jest.fn().mockResolvedValue(2),
@@ -82,7 +84,8 @@ describe('CodingAnalysisService aggregation settings', () => {
       codingValidationService,
       codingStatisticsService,
       cacheService,
-      jobQueueService
+      jobQueueService,
+      statusRevisionQuery
     };
   }
 
@@ -138,7 +141,8 @@ describe('CodingAnalysisService aggregation settings', () => {
     const {
       service,
       cacheService,
-      jobQueueService
+      jobQueueService,
+      statusRevisionQuery
     } = createService();
 
     await service.startAnalysis(7, [ResponseMatchingFlag.IGNORE_CASE], 4, {
@@ -158,6 +162,7 @@ describe('CodingAnalysisService aggregation settings', () => {
       cacheKey: 'response-analysis:7_IGNORE_CASE_t4',
       runId: expect.any(String)
     });
+    expect(statusRevisionQuery).toHaveBeenCalledTimes(1);
   });
 
   it('queues a superseding forced restart even when an older workspace analysis is active', async () => {

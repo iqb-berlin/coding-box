@@ -7,8 +7,9 @@ import { CodingAnalysisProcessor } from './coding-analysis.processor';
 
 describe('CodingAnalysisProcessor', () => {
   function createProcessor(cacheService: Partial<CacheService>) {
+    const statusRevisionQuery = jest.fn().mockResolvedValue([]);
     const processor = new CodingAnalysisProcessor(
-      {} as never,
+      { manager: { query: statusRevisionQuery } } as never,
       cacheService as CacheService,
       {} as WorkspaceExclusionService,
       {} as WorkspaceFilesService
@@ -49,7 +50,8 @@ describe('CodingAnalysisProcessor', () => {
 
     return {
       processor,
-      analysis
+      analysis,
+      statusRevisionQuery
     };
   }
 
@@ -71,12 +73,17 @@ describe('CodingAnalysisProcessor', () => {
       get: jest.fn().mockResolvedValue('newer-run'),
       set: jest.fn().mockResolvedValue(true)
     };
-    const { processor, analysis } = createProcessor(cacheService);
+    const {
+      processor,
+      analysis,
+      statusRevisionQuery
+    } = createProcessor(cacheService);
 
     await expect(processor.handleResponseAnalysis(createJob('old-run'))).resolves.toBe(analysis);
 
     expect(cacheService.get).toHaveBeenCalledWith('response-analysis:7__t2:run');
     expect(cacheService.set).not.toHaveBeenCalled();
+    expect(statusRevisionQuery).not.toHaveBeenCalled();
   });
 
   it('caches analysis results for the latest marked run', async () => {
@@ -84,10 +91,15 @@ describe('CodingAnalysisProcessor', () => {
       get: jest.fn().mockResolvedValue('current-run'),
       set: jest.fn().mockResolvedValue(true)
     };
-    const { processor, analysis } = createProcessor(cacheService);
+    const {
+      processor,
+      analysis,
+      statusRevisionQuery
+    } = createProcessor(cacheService);
 
     await expect(processor.handleResponseAnalysis(createJob('current-run'))).resolves.toBe(analysis);
 
     expect(cacheService.set).toHaveBeenCalledWith('response-analysis:7__t2', analysis);
+    expect(statusRevisionQuery).toHaveBeenCalledTimes(1);
   });
 });

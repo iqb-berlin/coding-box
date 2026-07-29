@@ -25,6 +25,7 @@ describe('WorkspaceCoreService', () => {
     manager: { delete: jest.Mock };
   };
   let managerSave: jest.Mock;
+  let statusRevisionQuery: jest.Mock;
   let service: WorkspaceCoreService;
 
   beforeEach(() => {
@@ -49,9 +50,11 @@ describe('WorkspaceCoreService', () => {
       }
       return Promise.resolve(value);
     });
+    statusRevisionQuery = jest.fn().mockResolvedValue([]);
     service = new WorkspaceCoreService(
       repo as never,
       {
+        manager: { query: statusRevisionQuery },
         createQueryRunner: () => queryRunner,
         transaction: (callback: (manager: { save: jest.Mock }) => Promise<unknown>) => callback({ save: managerSave })
       } as never,
@@ -92,6 +95,7 @@ describe('WorkspaceCoreService', () => {
     await expect(service.patch({ id: 1, name: 'Patched', settings: { a: true } } as never)).resolves.toBeUndefined();
     expect(cacheService.delete).toHaveBeenCalled();
     expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
+    expect(statusRevisionQuery).toHaveBeenCalledTimes(1);
     await expect(service.remove([])).resolves.toBeUndefined();
     await expect(service.remove([1])).resolves.toBeUndefined();
     expect(queryRunner.commitTransaction).toHaveBeenCalled();
@@ -136,5 +140,6 @@ describe('WorkspaceCoreService', () => {
     expect(cacheService.deleteByPattern).toHaveBeenCalledWith('response-analysis:1_*');
     expect(cacheService.deleteByPattern).toHaveBeenCalledWith('responses:1:*');
     expect(cacheService.deleteByPattern).toHaveBeenCalledWith('flat_response_filter_options:1:*');
+    expect(statusRevisionQuery).toHaveBeenCalledTimes(2);
   });
 });

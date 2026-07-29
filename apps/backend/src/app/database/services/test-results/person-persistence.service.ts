@@ -22,6 +22,9 @@ import { Session } from '../../entities/session.entity';
 import { UnitLog } from '../../entities/unitLog.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
+import { CacheService } from '../../../cache/cache.service';
+import { CODING_ANALYSIS_CACHE_KEY_PREFIX } from '../coding/coding-analysis-cache-key.util';
+import { touchWorkspaceCodingStatusRevision } from '../shared/workspace-coding-status-revision.util';
 
 export interface TestResultsMutationSummary {
   addedUnitIds: number[];
@@ -84,7 +87,8 @@ export class PersonPersistenceService {
     @InjectRepository(Session)
     private bookletSessionRepository: Repository<Session>,
     @InjectRepository(UnitLog)
-    private unitLogRepository: Repository<UnitLog>
+    private unitLogRepository: Repository<UnitLog>,
+    private cacheService: CacheService
   ) { }
 
   /**
@@ -110,7 +114,19 @@ export class PersonPersistenceService {
       );
 
       this.logger.log(`Marked ${result.affected} persons as not to be considered in workspace ${workspaceId}`);
-      return result.affected > 0;
+      const changed = (result.affected || 0) > 0;
+      if (changed) {
+        await Promise.all([
+          touchWorkspaceCodingStatusRevision(
+            this.personsRepository.manager,
+            workspaceId
+          ),
+          this.cacheService.deleteByPattern(
+            `${CODING_ANALYSIS_CACHE_KEY_PREFIX}:${workspaceId}_*`
+          )
+        ]);
+      }
+      return changed;
     } catch (error) {
       this.logger.error(`Error marking persons as not considered: ${error.message}`, error.stack);
       return false;
@@ -140,7 +156,19 @@ export class PersonPersistenceService {
       );
 
       this.logger.log(`Marked ${result.affected} persons as considered in workspace ${workspaceId}`);
-      return result.affected > 0;
+      const changed = (result.affected || 0) > 0;
+      if (changed) {
+        await Promise.all([
+          touchWorkspaceCodingStatusRevision(
+            this.personsRepository.manager,
+            workspaceId
+          ),
+          this.cacheService.deleteByPattern(
+            `${CODING_ANALYSIS_CACHE_KEY_PREFIX}:${workspaceId}_*`
+          )
+        ]);
+      }
+      return changed;
     } catch (error) {
       this.logger.error(`Error marking persons as considered: ${error.message}`, error.stack);
       return false;

@@ -14,6 +14,7 @@ import { BookletLog } from '../../entities/bookletLog.entity';
 import { Session } from '../../entities/session.entity';
 import { UnitLog } from '../../entities/unitLog.entity';
 import { Person } from '../shared';
+import { CacheService } from '../../../cache/cache.service';
 
 describe('PersonPersistenceService', () => {
   let service: PersonPersistenceService;
@@ -25,6 +26,7 @@ describe('PersonPersistenceService', () => {
   let bookletLogRepository: Repository<BookletLog>;
   let bookletSessionRepository: Repository<Session>;
   let chunkRepository: Repository<ChunkEntity>;
+  let cacheService: jest.Mocked<Pick<CacheService, 'deleteByPattern'>>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -39,7 +41,11 @@ describe('PersonPersistenceService', () => {
         { provide: getRepositoryToken(ChunkEntity), useValue: createMock<Repository<ChunkEntity>>() },
         { provide: getRepositoryToken(BookletLog), useValue: createMock<Repository<BookletLog>>() },
         { provide: getRepositoryToken(Session), useValue: createMock<Repository<Session>>() },
-        { provide: getRepositoryToken(UnitLog), useValue: createMock<Repository<UnitLog>>() }
+        { provide: getRepositoryToken(UnitLog), useValue: createMock<Repository<UnitLog>>() },
+        {
+          provide: CacheService,
+          useValue: { deleteByPattern: jest.fn().mockResolvedValue(undefined) }
+        }
       ]
     }).compile();
 
@@ -52,9 +58,38 @@ describe('PersonPersistenceService', () => {
     bookletLogRepository = module.get(getRepositoryToken(BookletLog));
     bookletSessionRepository = module.get(getRepositoryToken(Session));
     chunkRepository = module.get(getRepositoryToken(ChunkEntity));
+    cacheService = module.get(CacheService);
 
     jest.spyOn(unitRepository, 'create').mockImplementation(entity => entity as Unit);
   });
+
+  it.each([
+    ['not considered', 'markPersonsAsNotConsidered', false],
+    ['considered', 'markPersonsAsConsidered', true]
+  ] as const)(
+    'increments the coding-status revision when persons are marked as %s',
+    async (_label, method, consider) => {
+      jest.spyOn(personsRepository, 'update').mockResolvedValue({
+        affected: 1,
+        raw: [],
+        generatedMaps: []
+      });
+      const statusRevisionQuery = jest
+        .spyOn(personsRepository.manager, 'query')
+        .mockResolvedValue([]);
+
+      await expect(service[method](7, ['person-1'])).resolves.toBe(true);
+
+      expect(personsRepository.update).toHaveBeenCalledWith(
+        { workspace_id: 7, login: expect.anything() },
+        { consider }
+      );
+      expect(statusRevisionQuery).toHaveBeenCalledTimes(1);
+      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(
+        'response-analysis:7_*'
+      );
+    }
+  );
 
   it('should process logs from input persons even if they are not in DB booklets array', async () => {
     const inputPersons: Person[] = [

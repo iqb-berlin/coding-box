@@ -29,6 +29,7 @@ import {
   IQB_STANDARD_MISSING_CODES,
   MissingsProfilesService
 } from '../../database/services/coding/missings-profiles.service';
+import { touchWorkspaceCodingStatusRevision } from '../../database/services/shared/workspace-coding-status-revision.util';
 
 @Processor('response-analysis')
 export class CodingAnalysisProcessor {
@@ -79,6 +80,10 @@ export class CodingAnalysisProcessor {
       }
 
       await this.cacheService.set(cacheKey, analysis);
+      await touchWorkspaceCodingStatusRevision(
+        this.responseRepository.manager,
+        workspaceId
+      );
 
       this.logger.log(`Response analysis for workspace ${workspaceId} completed and cached.`);
       return analysis;

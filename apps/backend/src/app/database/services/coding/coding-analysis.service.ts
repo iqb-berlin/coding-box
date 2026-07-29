@@ -27,6 +27,7 @@ import {
   getCodingAnalysisCacheKey,
   getCodingAnalysisRunMarkerKey
 } from './coding-analysis-cache-key.util';
+import { touchWorkspaceCodingStatusRevision } from '../shared/workspace-coding-status-revision.util';
 
 export interface AggregationSettingsResult {
   success: boolean;
@@ -208,6 +209,10 @@ export class CodingAnalysisService {
 
     const runId = randomUUID();
     await this.cacheService.set(getCodingAnalysisRunMarkerKey(cacheKey), runId, 0);
+    await touchWorkspaceCodingStatusRevision(
+      this.responseRepository.manager,
+      workspaceId
+    );
 
     await this.jobQueueService.addCodingAnalysisJob({
       workspaceId,
