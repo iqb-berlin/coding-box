@@ -161,6 +161,17 @@ describe('CodingResultsService', () => {
       codingAnalysisService as unknown as CodingAnalysisService,
       missingsProfilesService as unknown as MissingsProfilesService,
       workspaceExclusionService as unknown as WorkspaceExclusionService,
+      {
+        lockInTransaction: jest.fn(async (
+          manager: { query: jest.Mock },
+          workspaceId: number
+        ) => {
+          await manager.query(
+            'SELECT pg_advisory_xact_lock($1::int, $2::int)',
+            [774020251, workspaceId]
+          );
+        })
+      } as never,
       codingFreshnessService as unknown as CodingFreshnessService
     );
   });

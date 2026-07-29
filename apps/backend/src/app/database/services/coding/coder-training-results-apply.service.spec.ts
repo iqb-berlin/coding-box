@@ -129,7 +129,8 @@ describe('CoderTrainingResultsApplyService', () => {
       codingValidationService as unknown as CodingValidationService,
       codingAnalysisService as unknown as CodingAnalysisService,
       codingFreshnessService as unknown as CodingFreshnessService,
-      workspaceExclusionService as unknown as WorkspaceExclusionService
+      workspaceExclusionService as unknown as WorkspaceExclusionService,
+      { lockInTransaction: jest.fn().mockResolvedValue(undefined) } as never
     );
   });
 

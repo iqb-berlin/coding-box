@@ -26,6 +26,10 @@ describe('ResponseManagementService', () => {
     {} as never,
     {} as never,
     workspaceTestResultsService as never,
+    {
+      run: jest.fn(async (_workspaceId, mutation) => mutation({ revision: 1 })),
+      lockInTransaction: jest.fn().mockResolvedValue(undefined)
+    } as never,
     codingFreshnessService as never
   );
 
@@ -561,6 +565,9 @@ describe('ResponseManagementService', () => {
       connection as never,
       journalService as never,
       workspaceTestResultsService as never,
+      {
+        run: jest.fn(async (_workspaceId, mutation) => mutation({ revision: 1 }))
+      } as never,
       codingFreshnessService as never
     );
     journalService.recordEvent.mockRejectedValueOnce(new Error('audit down'));
@@ -633,6 +640,9 @@ describe('ResponseManagementService', () => {
       connection as never,
       journalService as never,
       workspaceTestResultsService as never,
+      {
+        run: jest.fn(async (_workspaceId, mutation) => mutation({ revision: 1 }))
+      } as never,
       codingFreshnessService as never
     );
     const key = [

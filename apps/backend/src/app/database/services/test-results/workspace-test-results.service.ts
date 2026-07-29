@@ -40,7 +40,9 @@ import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import { UnitLastState } from '../../entities/unitLastState.entity';
 import { UnitTagService } from '../workspace/unit-tag.service';
-import { JournalService, Chunk, TcMergeResponse } from '../shared';
+import {
+  JournalService, Chunk, TcMergeResponse, WorkspaceCodingStatusMutationService
+} from '../shared';
 import type { RecordAuditJournalEventInput } from '../shared/journal.service';
 import { CacheService } from '../../../cache/cache.service';
 // eslint-disable-next-line import/no-cycle
@@ -65,7 +67,6 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { FLAT_FREQUENCIES_CACHE_PREFIX, OVERVIEW_STATS_CACHE_PREFIX } from '../workspace/workspace-constants';
-import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 import {
   TestResultsDeletePreviewDto,
   TestResultsDeleteRequestDto,
@@ -551,6 +552,8 @@ export class WorkspaceTestResultsService {
     private readonly responseManagementService: ResponseManagementService,
     private readonly workspaceCoreService: WorkspaceCoreService,
     private readonly workspaceExclusionService: WorkspaceExclusionService,
+    private readonly workspaceCodingStatusMutationService:
+    WorkspaceCodingStatusMutationService,
     @Optional()
     private readonly codingFreshnessService?: CodingFreshnessService,
     @Optional()
@@ -4658,8 +4661,7 @@ export class WorkspaceTestResultsService {
         warnings: string[];
       };
     }> {
-    return withWorkspaceTestResultsMutationLock(
-      this.connection,
+    return this.workspaceCodingStatusMutationService.run(
       workspaceId,
       async () => {
         const auditEvents: RecordAuditJournalEventInput[] = [];
@@ -4729,8 +4731,7 @@ export class WorkspaceTestResultsService {
           )));
         }
         return result;
-      },
-      this.codingStatusRecoveryOptions(workspaceId)
+      }
     );
   }
 
@@ -4755,16 +4756,14 @@ export class WorkspaceTestResultsService {
     userId: string,
     onProgress?: (progress: number, message?: string) => Promise<void>
   ): Promise<TestResultsDeleteResultDto> {
-    return withWorkspaceTestResultsMutationLock(
-      this.connection,
+    return this.workspaceCodingStatusMutationService.run(
       workspaceId,
       async () => this.deleteTestResultsByRequestLocked(
         workspaceId,
         request,
         userId,
         onProgress
-      ),
-      this.codingStatusRecoveryOptions(workspaceId)
+      )
     );
   }
 
@@ -4919,16 +4918,14 @@ export class WorkspaceTestResultsService {
     userId: string,
     onProgress?: (progress: number, message?: string) => Promise<void>
   ): Promise<TestResultsDeleteResultDto> {
-    return withWorkspaceTestResultsMutationLock(
-      this.connection,
+    return this.workspaceCodingStatusMutationService.run(
       workspaceId,
       async () => this.deleteTestLogsByRequestLocked(
         workspaceId,
         request,
         userId,
         onProgress
-      ),
-      this.codingStatusRecoveryOptions(workspaceId)
+      )
     );
   }
 
@@ -4946,16 +4943,14 @@ export class WorkspaceTestResultsService {
     userId: string,
     onProgress?: (progress: number, message?: string) => Promise<void>
   ): Promise<TestResultsDeleteResultDto> {
-    return withWorkspaceTestResultsMutationLock(
-      this.connection,
+    return this.workspaceCodingStatusMutationService.run(
       workspaceId,
       async () => this.deleteTestResultResponsesByRequestLocked(
         workspaceId,
         request,
         userId,
         onProgress
-      ),
-      this.codingStatusRecoveryOptions(workspaceId)
+      )
     );
   }
 
@@ -6488,8 +6483,7 @@ export class WorkspaceTestResultsService {
         warnings: string[];
       };
     }> {
-    return withWorkspaceTestResultsMutationLock(
-      this.connection,
+    return this.workspaceCodingStatusMutationService.run(
       workspaceId,
       async () => {
         let auditEvent: RecordAuditJournalEventInput | null = null;
@@ -6553,8 +6547,7 @@ export class WorkspaceTestResultsService {
           }
         }
         return result;
-      },
-      this.codingStatusRecoveryOptions(workspaceId)
+      }
     );
   }
 
@@ -6594,8 +6587,7 @@ export class WorkspaceTestResultsService {
         warnings: string[];
       };
     }> {
-    return withWorkspaceTestResultsMutationLock(
-      this.connection,
+    return this.workspaceCodingStatusMutationService.run(
       workspaceId,
       async () => {
         let auditEvent: RecordAuditJournalEventInput | null = null;
@@ -6657,20 +6649,8 @@ export class WorkspaceTestResultsService {
           }
         }
         return result;
-      },
-      this.codingStatusRecoveryOptions(workspaceId)
-    );
-  }
-
-  private codingStatusRecoveryOptions(workspaceId: number): {
-    recoverAfterFailure: () => Promise<void>;
-  } {
-    return {
-      recoverAfterFailure: async () => {
-        await this.codingFreshnessService
-          ?.reconcileWorkspaceAfterRevisionFailure(workspaceId);
       }
-    };
+    );
   }
 
   private async tryRecordAuditEvent(

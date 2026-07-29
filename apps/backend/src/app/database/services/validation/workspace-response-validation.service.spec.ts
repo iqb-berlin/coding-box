@@ -1418,8 +1418,17 @@ describe('WorkspaceResponseValidationService.deleteInvalidResponses', () => {
       {} as Repository<Booklet>,
       {} as Repository<FileUpload>
     );
-    const result = await service.deleteInvalidResponses(1, [100]);
+    const beforeDelete = jest.fn().mockResolvedValue(undefined);
+    const result = await service.deleteInvalidResponses(1, [100], {
+      beforeDelete
+    });
     expect(result).toBe(1);
+    expect(beforeDelete).toHaveBeenCalledWith({
+      responseIds: [100],
+      unitIds: [10]
+    });
+    expect(beforeDelete.mock.invocationCallOrder[0])
+      .toBeLessThan((responseRepo.delete as jest.Mock).mock.invocationCallOrder[0]);
     expect(responseRepo.delete).toHaveBeenCalled();
   });
 

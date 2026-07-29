@@ -4,6 +4,11 @@ import { FileIo } from '../../../admin/workspace/file-io.interface';
 import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
 import { NO_CODING_SCHEME_REF_NORMALIZED } from '../../entities/file_upload.entity';
 
+const createWorkspaceCodingStatusMutationService = () => ({
+  run: jest.fn(async (_workspaceId, mutation) => mutation({ revision: 1 })),
+  lockInTransaction: jest.fn().mockResolvedValue(undefined)
+});
+
 describe('WorkspaceFilesService.handleFile', () => {
   beforeAll(() => {
     Logger.overrideLogger(false);
@@ -41,7 +46,8 @@ describe('WorkspaceFilesService.handleFile', () => {
       {} as unknown as CtorParams[8],
       {} as unknown as CtorParams[9],
       { delete: jest.fn() } as unknown as CtorParams[10],
-      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11]
+      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11],
+      createWorkspaceCodingStatusMutationService() as unknown as CtorParams[12]
     );
   }
 
@@ -280,8 +286,9 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
       {} as unknown as CtorParams[9],
       { delete: jest.fn() } as unknown as CtorParams[10],
       mockWorkspaceTestResultsService as unknown as CtorParams[11],
+      createWorkspaceCodingStatusMutationService() as unknown as CtorParams[12],
       undefined,
-      mockCodingFreshnessService as unknown as CtorParams[13],
+      mockCodingFreshnessService as unknown as CtorParams[14],
       undefined,
       undefined
     );
@@ -662,7 +669,8 @@ describe('WorkspaceFilesService.onModuleInit', () => {
       {} as unknown as CtorParams[8],
       {} as unknown as CtorParams[9],
       { delete: jest.fn() } as unknown as CtorParams[10],
-      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11]
+      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11],
+      createWorkspaceCodingStatusMutationService() as unknown as CtorParams[12]
     );
   }
 
@@ -765,7 +773,8 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
       {} as unknown as CtorParams[8],
       {} as unknown as CtorParams[9],
       { delete: jest.fn() } as unknown as CtorParams[10],
-      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11]
+      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11],
+      createWorkspaceCodingStatusMutationService() as unknown as CtorParams[12]
     );
   }
 
@@ -856,7 +865,14 @@ describe('WorkspaceFilesService response deletion cache invalidation', () => {
   };
 
   const mockWorkspaceTestResultsService = {
-    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
+    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined),
+    invalidateCodingStatisticsCache: jest.fn().mockResolvedValue(undefined),
+    invalidateCodingAvailabilityCache: jest.fn().mockResolvedValue(undefined)
+  };
+
+  const mockCodingFreshnessService = {
+    markCodingJobsStaleForResponseIds: jest.fn().mockResolvedValue(undefined),
+    markUnitsStaleAfterResultChange: jest.fn().mockResolvedValue(undefined)
   };
 
   function makeService(): WorkspaceFilesService {
@@ -872,7 +888,12 @@ describe('WorkspaceFilesService response deletion cache invalidation', () => {
       mockWorkspaceResponseValidationService as unknown as CtorParams[8],
       {} as unknown as CtorParams[9],
       { delete: jest.fn() } as unknown as CtorParams[10],
-      mockWorkspaceTestResultsService as unknown as CtorParams[11]
+      mockWorkspaceTestResultsService as unknown as CtorParams[11],
+      createWorkspaceCodingStatusMutationService() as unknown as CtorParams[12],
+      undefined,
+      mockCodingFreshnessService as unknown as CtorParams[14],
+      undefined,
+      undefined
     );
   }
 
@@ -880,14 +901,32 @@ describe('WorkspaceFilesService response deletion cache invalidation', () => {
     jest.clearAllMocks();
   });
 
-  it('should invalidate workspace stats after deleting invalid responses', async () => {
+  it('should invalidate coding state after deleting invalid responses', async () => {
     const service = makeService();
-    mockWorkspaceResponseValidationService.deleteInvalidResponses.mockResolvedValue(2);
+    mockWorkspaceResponseValidationService.deleteInvalidResponses
+      .mockImplementation(async (_workspaceId, ids, hooks) => {
+        await hooks.beforeDelete({ responseIds: ids, unitIds: [20] });
+        return 2;
+      });
 
     const deletedCount = await service.deleteInvalidResponses(1, [10, 11]);
 
     expect(deletedCount).toBe(2);
-    expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
+    expect(mockCodingFreshnessService.markCodingJobsStaleForResponseIds)
+      .toHaveBeenCalledWith(
+        1,
+        [10, 11],
+        'RESULT_DELETED',
+        'stale_source'
+      );
+    expect(mockCodingFreshnessService.markUnitsStaleAfterResultChange)
+      .toHaveBeenCalledWith(1, [20], 'RESULT_DELETED');
+    expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache)
+      .toHaveBeenCalledWith(1);
+    expect(mockWorkspaceTestResultsService.invalidateCodingStatisticsCache)
+      .toHaveBeenCalledWith(1);
+    expect(mockWorkspaceTestResultsService.invalidateCodingAvailabilityCache)
+      .toHaveBeenCalledWith(1);
   });
 
   it('should not invalidate workspace stats when no invalid responses were deleted', async () => {
@@ -900,14 +939,31 @@ describe('WorkspaceFilesService response deletion cache invalidation', () => {
     expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache).not.toHaveBeenCalled();
   });
 
-  it('should invalidate workspace stats after deleting all invalid responses', async () => {
+  it('should invalidate coding state after deleting all invalid responses', async () => {
     const service = makeService();
-    mockWorkspaceResponseValidationService.deleteAllInvalidResponses.mockResolvedValue(3);
+    mockWorkspaceResponseValidationService.deleteAllInvalidResponses
+      .mockImplementation(async (_workspaceId, _validationType, hooks) => {
+        await hooks.beforeDelete({
+          responseIds: [10, 11, 12],
+          unitIds: [20, 21]
+        });
+        return 3;
+      });
 
     const deletedCount = await service.deleteAllInvalidResponses(1, 'variables');
 
     expect(deletedCount).toBe(3);
-    expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
+    expect(mockCodingFreshnessService.markCodingJobsStaleForResponseIds)
+      .toHaveBeenCalledWith(
+        1,
+        [10, 11, 12],
+        'RESULT_DELETED',
+        'stale_source'
+      );
+    expect(mockCodingFreshnessService.markUnitsStaleAfterResultChange)
+      .toHaveBeenCalledWith(1, [20, 21], 'RESULT_DELETED');
+    expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache)
+      .toHaveBeenCalledWith(1);
   });
 });
 
@@ -957,7 +1013,8 @@ describe('WorkspaceFilesService.findAllFileTypes', () => {
       {} as unknown as CtorParams[8],
       {} as unknown as CtorParams[9],
       { delete: jest.fn() } as unknown as CtorParams[10],
-      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11]
+      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11],
+      createWorkspaceCodingStatusMutationService() as unknown as CtorParams[12]
     );
   }
 
@@ -1043,7 +1100,8 @@ describe('WorkspaceFilesService.findFiles', () => {
     {} as unknown as CtorParams[8],
     {} as unknown as CtorParams[9],
     { delete: jest.fn() } as unknown as CtorParams[10],
-    { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11]
+    { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11],
+    createWorkspaceCodingStatusMutationService() as unknown as CtorParams[12]
   );
 
   beforeEach(() => {
@@ -1106,7 +1164,8 @@ describe('WorkspaceFilesService.downloadWorkspaceFilesAsZip', () => {
       {} as unknown as CtorParams[8],
       {} as unknown as CtorParams[9],
       { delete: jest.fn() } as unknown as CtorParams[10],
-      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11]
+      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11],
+      createWorkspaceCodingStatusMutationService() as unknown as CtorParams[12]
     );
   }
 
@@ -1283,7 +1342,8 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
       {} as unknown as CtorParams[8],
       {} as unknown as CtorParams[9],
       mockCacheService as unknown as CtorParams[10],
-      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11]
+      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11],
+      createWorkspaceCodingStatusMutationService() as unknown as CtorParams[12]
     );
   }
 

@@ -9,7 +9,9 @@ import { ImportOptionsDto } from '../../../../../../../api-dto/files/import-opti
 import { TestcenterService } from './testcenter.service';
 import { PersonService } from './person.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
-import { Person, Response, Log } from '../shared';
+import {
+  Log, Person, Response, WorkspaceCodingStatusMutationService
+} from '../shared';
 import { CacheService } from '../../../cache/cache.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
@@ -93,6 +95,12 @@ describe('TestCenterService', () => {
           useValue: createMock<CodingAnalysisService>({
             invalidateCache: jest.fn().mockResolvedValue(undefined)
           })
+        },
+        {
+          provide: WorkspaceCodingStatusMutationService,
+          useValue: {
+            run: jest.fn((_workspaceId, mutation) => mutation(1))
+          }
         }
       ]
     }).compile();

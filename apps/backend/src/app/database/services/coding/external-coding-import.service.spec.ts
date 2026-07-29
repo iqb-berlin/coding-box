@@ -1,6 +1,16 @@
 import { ExternalCodingImportService } from './external-coding-import.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 
+const createWorkspaceMutationService = () => ({
+  lockInTransaction: jest.fn((
+    manager: { query: (sql: string, parameters: unknown[]) => Promise<unknown> },
+    workspaceId: number
+  ) => manager.query(
+    'SELECT pg_advisory_xact_lock($1::int, $2::int)',
+    [774020251, workspaceId]
+  ))
+});
+
 const createQueryBuilder = (result: unknown = []) => {
   const qb: Record<string, jest.Mock> = {};
   [
@@ -65,6 +75,7 @@ describe('ExternalCodingImportService', () => {
       {} as never,
       {} as never,
       cacheService as never,
+      createWorkspaceMutationService() as never,
       codingFreshnessService as never
     );
     jest.spyOn(service as unknown as {
@@ -159,6 +170,7 @@ describe('ExternalCodingImportService', () => {
       {} as never,
       {} as never,
       cacheService as never,
+      createWorkspaceMutationService() as never,
       codingFreshnessService as never
     );
     jest.spyOn(service as unknown as {
@@ -243,6 +255,7 @@ describe('ExternalCodingImportService', () => {
       {} as never,
       {} as never,
       cacheService as never,
+      createWorkspaceMutationService() as never,
       codingFreshnessService as never
     );
     jest.spyOn(service as unknown as {
@@ -283,6 +296,7 @@ describe('ExternalCodingImportService', () => {
       {} as never,
       {} as never,
       { delete: jest.fn().mockResolvedValue(undefined) } as never,
+      createWorkspaceMutationService() as never,
       { markManualCodingCurrent: jest.fn().mockResolvedValue(undefined) } as never
     );
     jest.spyOn(service as unknown as {
@@ -353,6 +367,7 @@ describe('ExternalCodingImportService', () => {
       {} as never,
       {} as never,
       { delete: jest.fn().mockResolvedValue(undefined) } as never,
+      createWorkspaceMutationService() as never,
       { markManualCodingCurrent: jest.fn().mockResolvedValue(undefined) } as never
     );
     jest.spyOn(service as unknown as {
@@ -395,6 +410,7 @@ describe('ExternalCodingImportService', () => {
       {} as never,
       {} as never,
       { delete: jest.fn().mockResolvedValue(undefined) } as never,
+      createWorkspaceMutationService() as never,
       { markManualCodingCurrent: jest.fn().mockResolvedValue(undefined) } as never
     );
 
@@ -460,6 +476,7 @@ describe('ExternalCodingImportService', () => {
       {} as never,
       {} as never,
       { delete: jest.fn().mockResolvedValue(undefined) } as never,
+      createWorkspaceMutationService() as never,
       codingFreshnessService as never
     );
     jest.spyOn(service as unknown as {

@@ -32,6 +32,13 @@ interface UnitVariableDefinitions {
   noValueIds: Set<string>;
 }
 
+export type InvalidResponseDeletionHooks = {
+  beforeDelete?: (targets: {
+    responseIds: number[];
+    unitIds: number[];
+  }) => Promise<void>;
+};
+
 @Injectable()
 export class WorkspaceResponseValidationService {
   private readonly logger = new Logger(WorkspaceResponseValidationService.name);
@@ -1418,7 +1425,8 @@ export class WorkspaceResponseValidationService {
 
   async deleteInvalidResponses(
     workspaceId: number,
-    responseIds: number[]
+    responseIds: number[],
+    hooks: InvalidResponseDeletionHooks = {}
   ): Promise<number> {
     try {
       if (!workspaceId) {
@@ -1496,6 +1504,15 @@ export class WorkspaceResponseValidationService {
         }
 
         if (validResponseIds.length > 0) {
+          const validResponseIdSet = new Set(validResponseIds);
+          await hooks.beforeDelete?.({
+            responseIds: validResponseIds,
+            unitIds: Array.from(new Set(
+              responsesToCheck
+                .filter(response => validResponseIdSet.has(response.id))
+                .map(response => response.unitid)
+            ))
+          });
           const deleteResult = await this.responseRepository.delete({
             id: In(validResponseIds)
           });
@@ -1521,7 +1538,8 @@ export class WorkspaceResponseValidationService {
     | 'variables'
     | 'variableTypes'
     | 'responseStatus'
-    | 'duplicateResponses'
+    | 'duplicateResponses',
+    hooks: InvalidResponseDeletionHooks = {}
   ): Promise<number> {
     try {
       if (!workspaceId) {
@@ -1570,7 +1588,11 @@ export class WorkspaceResponseValidationService {
           return 0;
         }
 
-        return await this.deleteInvalidResponses(workspaceId, responseIds);
+        return await this.deleteInvalidResponses(
+          workspaceId,
+          responseIds,
+          hooks
+        );
       }
 
       let invalidResponses: InvalidVariableDto[] = [];
@@ -1616,7 +1638,11 @@ export class WorkspaceResponseValidationService {
         return 0;
       }
 
-      return await this.deleteInvalidResponses(workspaceId, responseIds);
+      return await this.deleteInvalidResponses(
+        workspaceId,
+        responseIds,
+        hooks
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(

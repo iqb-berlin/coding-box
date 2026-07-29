@@ -262,10 +262,23 @@ describe('CodingJobService', () => {
       workspaceExclusionService as never,
       usersService as never,
       new CodingAggregationPeerService(responseRepository as never),
+      {
+        lockInTransaction: jest.fn(async (
+          manager: { query: jest.Mock },
+          workspaceId: number
+        ) => {
+          await manager.query(
+            'SELECT pg_advisory_xact_lock($1::int, $2::int)',
+            [774020251, workspaceId]
+          );
+        })
+      } as never,
       codingFreshnessService as never,
       codingFileCacheService as never,
       missingsProfilesService as never,
-      coderTrainingDiscussionResultRepository as never
+      coderTrainingDiscussionResultRepository as never,
+      undefined,
+      undefined
     );
     jest
       .spyOn(

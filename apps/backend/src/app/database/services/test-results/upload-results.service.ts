@@ -12,7 +12,9 @@ import {
   statusStringToNumber
 } from '../../utils/response-status-converter';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
-import { Log, Person, Response } from '../shared';
+import {
+  Log, Person, Response, WorkspaceCodingStatusMutationService
+} from '../shared';
 import { PersonService } from './person.service';
 import {
   TestResultsUploadIssueDto,
@@ -25,7 +27,6 @@ import { JobQueueService, TestResultsUploadJobData } from '../../../job-queue/jo
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { CodingAnalysisService } from '../coding/coding-analysis.service';
-import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
 type PersonWithoutBooklets = Omit<Person, 'booklets'>;
 
@@ -60,6 +61,8 @@ export class UploadResultsService {
     private readonly jobQueueService: JobQueueService,
     private readonly workspaceTestResultsService: WorkspaceTestResultsService,
     private readonly connection: DataSource,
+    private readonly workspaceCodingStatusMutationService:
+    WorkspaceCodingStatusMutationService,
     @Optional()
     private readonly codingFreshnessService?: CodingFreshnessService,
     @Optional()
@@ -724,7 +727,7 @@ export class UploadResultsService {
               );
 
               const filteredPersons = this.filterImportedPersons(personsWithUnits, scope, scopeFilters);
-              await withWorkspaceTestResultsMutationLock(this.connection, workspaceId, async () => {
+              await this.workspaceCodingStatusMutationService.run(workspaceId, async () => {
                 const mutationSummary = await this.personService.processPersonBooklets(
                   filteredPersons,
                   workspaceId,
@@ -764,11 +767,6 @@ export class UploadResultsService {
                   mutationSummary.changedUnitIds,
                   'RESULT_UPDATED'
                 );
-              }, {
-                recoverAfterFailure: async () => {
-                  await this.codingFreshnessService
-                    ?.reconcileWorkspaceAfterRevisionFailure(workspaceId);
-                }
               });
             });
           } finally {

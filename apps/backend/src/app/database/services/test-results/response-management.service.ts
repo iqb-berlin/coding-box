@@ -3,16 +3,16 @@ import {
   forwardRef, Inject, Injectable, Logger, Optional
 } from '@nestjs/common';
 import { ResponseEntity } from '../../entities/response.entity';
-import { JournalService, CodedResponse } from '../shared';
+import {
+  JournalService,
+  CodedResponse,
+  WorkspaceCodingStatusMutationService
+} from '../shared';
 import type { RecordAuditJournalEventInput } from '../shared/journal.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
-import {
-  lockWorkspaceTestResultsMutationInTransaction,
-  withWorkspaceTestResultsMutationLock
-} from '../shared/workspace-test-results-lock.util';
 import { CodingFreshnessVersion } from '../../../../../../../api-dto/coding/coding-freshness.dto';
 import { AutocoderSourceRevisionStaleError } from './autocoder-source-revision-stale.error';
 
@@ -32,6 +32,8 @@ export class ResponseManagementService {
     private readonly journalService: JournalService,
     @Inject(forwardRef(() => WorkspaceTestResultsService))
     private readonly workspaceTestResultsService: WorkspaceTestResultsService,
+    private readonly workspaceCodingStatusMutationService:
+    WorkspaceCodingStatusMutationService,
     @Optional()
     private readonly codingFreshnessService?: CodingFreshnessService
   ) { }
@@ -59,7 +61,7 @@ export class ResponseManagementService {
         return true;
       }
 
-      await lockWorkspaceTestResultsMutationInTransaction(
+      await this.workspaceCodingStatusMutationService.lockInTransaction(
         queryRunner.manager,
         workspaceId
       );
@@ -635,7 +637,7 @@ export class ResponseManagementService {
       return { resolvedCount: 0, success: true };
     }
 
-    return withWorkspaceTestResultsMutationLock(this.connection, workspaceId, async () => {
+    return this.workspaceCodingStatusMutationService.run(workspaceId, async () => {
       const affectedUnitIds: number[] = [];
       return this.connection.transaction(async manager => {
         let resolvedCount = 0;
@@ -761,8 +763,6 @@ export class ResponseManagementService {
         }
         return result;
       });
-    }, {
-      recoverAfterFailure: () => this.reconcileCodingStatusAfterMutationFailure(workspaceId)
     });
   }
 
@@ -777,7 +777,7 @@ export class ResponseManagementService {
         warnings: string[];
       };
     }> {
-    return withWorkspaceTestResultsMutationLock(this.connection, workspaceId, async () => {
+    return this.workspaceCodingStatusMutationService.run(workspaceId, async () => {
       let affectedUnitId: number | null = null;
       let auditEvent: RecordAuditJournalEventInput | null = null;
       return this.connection.transaction(async manager => {
@@ -859,16 +859,7 @@ export class ResponseManagementService {
         }
         return result;
       });
-    }, {
-      recoverAfterFailure: () => this.reconcileCodingStatusAfterMutationFailure(workspaceId)
     });
-  }
-
-  private async reconcileCodingStatusAfterMutationFailure(
-    workspaceId: number
-  ): Promise<void> {
-    await this.codingFreshnessService
-      ?.reconcileWorkspaceAfterRevisionFailure(workspaceId);
   }
 
   private async tryRecordAuditEvent(

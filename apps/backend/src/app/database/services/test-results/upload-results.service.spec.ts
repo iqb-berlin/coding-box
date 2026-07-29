@@ -26,7 +26,7 @@ import { ChunkEntity } from '../../entities/chunk.entity';
 import { BookletLog } from '../../entities/bookletLog.entity';
 import { Session } from '../../entities/session.entity';
 import { UnitLog } from '../../entities/unitLog.entity';
-import { Person } from '../shared';
+import { Person, WorkspaceCodingStatusMutationService } from '../shared';
 
 describe('UploadResultsService', () => {
   let service: UploadResultsService;
@@ -84,6 +84,12 @@ describe('UploadResultsService', () => {
           useValue: createMock<CodingAnalysisService>({
             invalidateCache: jest.fn().mockResolvedValue(undefined)
           })
+        },
+        {
+          provide: WorkspaceCodingStatusMutationService,
+          useValue: {
+            run: jest.fn((_workspaceId, mutation) => mutation(1))
+          }
         },
         {
           provide: DataSource,
@@ -1079,6 +1085,9 @@ existing-group;existing-login;existing-code;booklet1;unit2;"[{""subForm"":"""","
             release: jest.fn().mockResolvedValue(undefined)
           })
         } as unknown as DataSource,
+        {
+          run: jest.fn((_workspaceId, mutation) => mutation(1))
+        } as unknown as WorkspaceCodingStatusMutationService,
         realCodingFreshnessService,
         realCodingAnalysisService
       );

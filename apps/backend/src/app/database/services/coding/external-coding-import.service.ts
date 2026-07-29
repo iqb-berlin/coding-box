@@ -13,7 +13,7 @@ import { CacheService } from '../../../cache/cache.service';
 import { statusStringToNumber, statusNumberToString } from '../../utils/response-status-converter';
 import FileUpload from '../../entities/file_upload.entity';
 import { CodingFreshnessService } from './coding-freshness.service';
-import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { WorkspaceCodingStatusMutationService } from '../shared';
 import {
   getCodingIncompleteVariablesCacheKeys,
   getCodingIncompleteVariablesCacheVersionKey
@@ -114,6 +114,8 @@ export class ExternalCodingImportService {
     @InjectRepository(FileUpload)
     private fileUploadRepository: Repository<FileUpload>,
     private cacheService: CacheService,
+    private workspaceCodingStatusMutationService:
+    WorkspaceCodingStatusMutationService,
     @Optional()
     private codingFreshnessService?: CodingFreshnessService
   ) {}
@@ -257,7 +259,10 @@ export class ExternalCodingImportService {
         queryRunner = this.responseRepository.manager.connection.createQueryRunner();
         await queryRunner.connect();
         await queryRunner.startTransaction('READ COMMITTED');
-        await lockWorkspaceTestResultsMutationInTransaction(queryRunner.manager, workspaceId);
+        await this.workspaceCodingStatusMutationService.lockInTransaction(
+          queryRunner.manager,
+          workspaceId
+        );
       }
 
       const responseRepository = queryRunner ?

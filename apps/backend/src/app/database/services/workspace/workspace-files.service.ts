@@ -61,7 +61,10 @@ import {
 import { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-validation.service';
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
-import { WorkspaceResponseValidationService } from '../validation/workspace-response-validation.service';
+import {
+  InvalidResponseDeletionHooks,
+  WorkspaceResponseValidationService
+} from '../validation/workspace-response-validation.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceTestFilesValidationService } from '../validation/workspace-test-files-validation.service';
 import { CacheService } from '../../../cache/cache.service';
@@ -80,7 +83,7 @@ import {
 } from '../../../utils/regex-search.util';
 import { hasVisibleManualInstruction } from '../../../utils/manual-instruction.util';
 import { isExportWorkerProcess } from '../../../export-worker/export-worker-role';
-import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
+import { WorkspaceCodingStatusMutationService } from '../shared';
 
 type WorkspaceUnitVisibility = {
   globalIgnoredUnits: Set<string>;
@@ -197,6 +200,8 @@ export class WorkspaceFilesService implements OnModuleInit {
     private cacheService: CacheService,
     @Inject(forwardRef(() => WorkspaceTestResultsService))
     private readonly workspaceTestResultsService: WorkspaceTestResultsService,
+    private readonly workspaceCodingStatusMutationService:
+    WorkspaceCodingStatusMutationService,
     private readonly workspaceExclusionService?: WorkspaceExclusionService,
     @Optional()
     private readonly codingFreshnessService?: CodingFreshnessService,
@@ -1955,16 +1960,9 @@ ${bookletRefs}
         );
       };
       if (this.isCodingSchemeFileId(fileUpload.file_id)) {
-        await withWorkspaceTestResultsMutationLock(
-          this.fileUploadRepository.manager.connection,
+        await this.workspaceCodingStatusMutationService.run(
           workspaceId,
-          persistFileAndFreshness,
-          {
-            recoverAfterFailure: async () => {
-              await this.codingFreshnessService
-                ?.reconcileWorkspaceAfterRevisionFailure(workspaceId);
-            }
-          }
+          persistFileAndFreshness
         );
       } else {
         await persistFileAndFreshness();
@@ -2227,16 +2225,9 @@ ${bookletRefs}
         )))).filter((issue): issue is TestResultsUploadIssueDto => !!issue);
       };
       if (changedCodingSchemes.length > 0) {
-        await withWorkspaceTestResultsMutationLock(
-          this.fileUploadRepository.manager.connection,
+        await this.workspaceCodingStatusMutationService.run(
           workspaceId,
-          persistFilesAndFreshness,
-          {
-            recoverAfterFailure: async () => {
-              await this.codingFreshnessService
-                ?.reconcileWorkspaceAfterRevisionFailure(workspaceId);
-            }
-          }
+          persistFilesAndFreshness
         );
       } else {
         await persistFilesAndFreshness();
@@ -2989,16 +2980,14 @@ ${bookletRefs}
     workspaceId: number,
     responseIds: number[]
   ): Promise<number> {
-    const deletedCount = await this.workspaceResponseValidationService.deleteInvalidResponses(
+    return this.deleteInvalidResponsesCoordinated(
       workspaceId,
-      responseIds
+      hooks => this.workspaceResponseValidationService.deleteInvalidResponses(
+        workspaceId,
+        responseIds,
+        hooks
+      )
     );
-    if (deletedCount > 0) {
-      await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
-        workspaceId
-      );
-    }
-    return deletedCount;
   }
 
   async deleteAllInvalidResponses(
@@ -3009,16 +2998,56 @@ ${bookletRefs}
     | 'responseStatus'
     | 'duplicateResponses'
   ): Promise<number> {
-    const deletedCount = await this.workspaceResponseValidationService.deleteAllInvalidResponses(
+    return this.deleteInvalidResponsesCoordinated(
       workspaceId,
-      validationType
+      hooks => this.workspaceResponseValidationService
+        .deleteAllInvalidResponses(workspaceId, validationType, hooks)
     );
-    if (deletedCount > 0) {
-      await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
-        workspaceId
-      );
-    }
-    return deletedCount;
+  }
+
+  private async deleteInvalidResponsesCoordinated(
+    workspaceId: number,
+    deleteResponses: (
+      hooks: InvalidResponseDeletionHooks
+    ) => Promise<number>
+  ): Promise<number> {
+    return this.workspaceCodingStatusMutationService.run(
+      workspaceId,
+      async () => {
+        const affectedUnitIds = new Set<number>();
+        const deletedCount = await deleteResponses({
+          beforeDelete: async targets => {
+            targets.unitIds.forEach(unitId => affectedUnitIds.add(unitId));
+            await this.codingFreshnessService?.markCodingJobsStaleForResponseIds(
+              workspaceId,
+              targets.responseIds,
+              'RESULT_DELETED',
+              'stale_source'
+            );
+          }
+        });
+
+        if (deletedCount > 0) {
+          await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
+            workspaceId,
+            Array.from(affectedUnitIds),
+            'RESULT_DELETED'
+          );
+          await Promise.all([
+            this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
+              workspaceId
+            ),
+            this.workspaceTestResultsService.invalidateCodingStatisticsCache(
+              workspaceId
+            ),
+            this.workspaceTestResultsService.invalidateCodingAvailabilityCache(
+              workspaceId
+            )
+          ]);
+        }
+        return deletedCount;
+      }
+    );
   }
 
   async onModuleInit(): Promise<void> {

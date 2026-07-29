@@ -67,7 +67,7 @@ import {
   JobDefinitionRefreshItemDeltaDto,
   JobDefinitionRefreshPreviewDto
 } from '../../../../../../../api-dto/coding/job-refresh.dto';
-import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { WorkspaceCodingStatusMutationService } from '../shared';
 import { CodingFreshnessService } from './coding-freshness.service';
 import {
   getCodingIncompleteVariablesCacheKeys,
@@ -484,6 +484,8 @@ export class CodingJobService {
     private workspaceExclusionService: WorkspaceExclusionService,
     private usersService: UsersService,
     private codingAggregationPeerService: CodingAggregationPeerService,
+    private workspaceCodingStatusMutationService:
+    WorkspaceCodingStatusMutationService,
     @Optional()
     private codingFreshnessService?: CodingFreshnessService,
     @Optional()
@@ -2534,7 +2536,7 @@ export class CodingJobService {
 
     const createdCodingJob = await this.connection.transaction(
       async manager => {
-        await lockWorkspaceTestResultsMutationInTransaction(
+        await this.workspaceCodingStatusMutationService.lockInTransaction(
           manager,
           workspaceId
         );
@@ -7739,7 +7741,10 @@ export class CodingJobService {
     const createdJobs: DistributionCreatedJob[] = [];
 
     await this.connection.transaction(async manager => {
-      await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+      await this.workspaceCodingStatusMutationService.lockInTransaction(
+        manager,
+        workspaceId
+      );
       await this.assertDeriveErrorManualCodingEnabled(
         workspaceId,
         request,

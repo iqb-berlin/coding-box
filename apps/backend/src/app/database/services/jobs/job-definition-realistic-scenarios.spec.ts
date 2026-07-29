@@ -163,7 +163,8 @@ describe('JobDefinitionService realistic manual-coding edit scenarios', () => {
       workspaceFilesService as never,
       workspaceExclusionService as never,
       usersService as never,
-      new CodingAggregationPeerService(responseRepository as never)
+      new CodingAggregationPeerService(responseRepository as never),
+      { lockInTransaction: jest.fn().mockResolvedValue(undefined) } as never
     );
 
     jest.spyOn(codingJobService, 'getSlimResponsesForVariables').mockImplementation(

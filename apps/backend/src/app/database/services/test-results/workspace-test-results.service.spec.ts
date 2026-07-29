@@ -240,6 +240,9 @@ describe('WorkspaceTestResultsService', () => {
       responseManagementService,
       workspaceCoreService,
       workspaceExclusionService,
+      {
+        run: jest.fn(async (_workspaceId, mutation) => mutation({ revision: 1 }))
+      } as never,
       undefined,
       codingStatisticsService
     );

@@ -159,7 +159,8 @@ describe('CodingJobService distribution from job definitions', () => {
       workspaceFilesService as never,
       workspaceExclusionService as never,
       usersService as never,
-      new CodingAggregationPeerService(responseRepository as never)
+      new CodingAggregationPeerService(responseRepository as never),
+      { lockInTransaction: jest.fn().mockResolvedValue(undefined) } as never
     );
 
     jest.spyOn(

@@ -15,7 +15,7 @@ import {
   generateCodingProgressKey
 } from './coding-progress-key.util';
 import { CodingFreshnessService } from './coding-freshness.service';
-import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { WorkspaceCodingStatusMutationService } from '../shared';
 import { CodingValidationService } from './coding-validation.service';
 import { MissingsProfilesService } from './missings-profiles.service';
 import { getNonCodingIssueReviewJobSqlCondition } from './coding-job-type.util';
@@ -69,6 +69,8 @@ export class CodingResultsService {
     private codingAnalysisService: CodingAnalysisService,
     private missingsProfilesService: MissingsProfilesService,
     private workspaceExclusionService: WorkspaceExclusionService,
+    private workspaceCodingStatusMutationService:
+    WorkspaceCodingStatusMutationService,
     @Optional()
     private codingFreshnessService?: CodingFreshnessService
   ) { }
@@ -640,7 +642,10 @@ export class CodingResultsService {
     codingJobId: number,
     manager: EntityManager
   ): Promise<ApplyCodingResultsResult | null> {
-    await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+    await this.workspaceCodingStatusMutationService.lockInTransaction(
+      manager,
+      workspaceId
+    );
     const codingJob = await this.codingJobService.getCodingJobByIdForWorkspace(
       codingJobId,
       workspaceId,

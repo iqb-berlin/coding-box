@@ -3,7 +3,9 @@ import { HttpService } from '@nestjs/axios';
 import { DataSource } from 'typeorm';
 import * as https from 'https';
 import { catchError, firstValueFrom } from 'rxjs';
-import { Person, Response, Log } from '../shared';
+import {
+  Person, Response, Log, WorkspaceCodingStatusMutationService
+} from '../shared';
 
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
 import { PersonService } from './person.service';
@@ -30,7 +32,6 @@ import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { CodingAnalysisService } from '../coding/coding-analysis.service';
 import { TestResultsMutationSummary } from './person-persistence.service';
-import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
 export { Result };
 
@@ -70,6 +71,8 @@ export class TestcenterService {
     private cacheService: CacheService,
     private readonly workspaceTestResultsService: WorkspaceTestResultsService,
     private readonly connection: DataSource,
+    private readonly workspaceCodingStatusMutationService:
+    WorkspaceCodingStatusMutationService,
     @Optional()
     private readonly codingFreshnessService?: CodingFreshnessService,
     @Optional()
@@ -437,7 +440,7 @@ export class TestcenterService {
             if (personBatches.length === 0) continue;
 
             let responseImportMutatedData = false;
-            await withWorkspaceTestResultsMutationLock(this.connection, Number(workspace_id), async () => {
+            await this.workspaceCodingStatusMutationService.run(Number(workspace_id), async () => {
               const mutationSummary = this.createMutationSummary();
               for (const personBatch of personBatches) {
                 const batchSummary = await this.personService.processPersonBooklets(
@@ -457,11 +460,6 @@ export class TestcenterService {
                 mutationSummary,
                 issues
               );
-            }, {
-              recoverAfterFailure: async () => {
-                await this.codingFreshnessService
-                  ?.reconcileWorkspaceAfterRevisionFailure(Number(workspace_id));
-              }
             });
 
             if (responseImportMutatedData) {

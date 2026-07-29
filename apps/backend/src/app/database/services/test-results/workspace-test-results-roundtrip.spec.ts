@@ -299,7 +299,10 @@ describe('test results export/import roundtrip', () => {
       createMock<CodingValidationService>(),
       createMock<ResponseManagementService>(),
       createMock<WorkspaceCoreService>(),
-      createMock<WorkspaceExclusionService>()
+      createMock<WorkspaceExclusionService>(),
+      {
+        run: jest.fn(async (_workspaceId, mutation) => mutation({ revision: 1 }))
+      } as never
     );
   };
 
@@ -350,10 +353,14 @@ describe('test results export/import roundtrip', () => {
           release: jest.fn().mockResolvedValue(undefined)
         })
       } as unknown as DataSource,
+      {
+        run: jest.fn(async (_workspaceId, mutation) => mutation({ revision: 1 }))
+      } as never,
       createMock<CodingFreshnessService>({
         markUnitsPendingAfterImport: jest.fn().mockResolvedValue(undefined),
         markUnitsStaleAfterResultChange: jest.fn().mockResolvedValue(undefined)
-      })
+      }),
+      undefined
     );
   };
 

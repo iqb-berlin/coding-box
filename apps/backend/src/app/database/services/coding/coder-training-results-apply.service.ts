@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import {
@@ -11,7 +15,7 @@ import {
 } from '../../../../../../../api-dto/coding/training-discussion-apply.dto';
 import { ResponseEntity } from '../../entities/response.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
-import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { WorkspaceCodingStatusMutationService } from '../shared';
 import {
   normalizeExclusionBookletId,
   normalizeExclusionUnitId,
@@ -68,7 +72,9 @@ export class CoderTrainingResultsApplyService {
     private codingValidationService: CodingValidationService,
     private codingAnalysisService: CodingAnalysisService,
     private codingFreshnessService: CodingFreshnessService,
-    private workspaceExclusionService: WorkspaceExclusionService
+    private workspaceExclusionService: WorkspaceExclusionService,
+    private workspaceCodingStatusMutationService:
+    WorkspaceCodingStatusMutationService
   ) { }
 
   async previewTrainingDiscussionResults(
@@ -105,7 +111,7 @@ export class CoderTrainingResultsApplyService {
     await queryRunner.startTransaction('READ COMMITTED');
 
     try {
-      await lockWorkspaceTestResultsMutationInTransaction(
+      await this.workspaceCodingStatusMutationService.lockInTransaction(
         queryRunner.manager,
         workspaceId
       );
