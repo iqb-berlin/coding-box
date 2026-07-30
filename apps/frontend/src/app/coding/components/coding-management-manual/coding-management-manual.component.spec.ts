@@ -1120,6 +1120,21 @@ describe('CodingManagementManualComponent', () => {
     );
   });
 
+  it('shows a neutral status before planning data has been checked', () => {
+    component.selectedManualTabIndex = 0;
+    component.isLoadingMatchingMode = true;
+    component.isLoadingResponseAnalysis = true;
+    component.responseAnalysis = null;
+
+    expect(component.getPlanningStatusClass()).toBe('status-ready');
+    expect(component.getPlanningStatusIcon()).toBe('help_outline');
+    expect(component.getPlanningStatusTitle()).toBe('Kodierstand nicht geprüft');
+    expect(component.getPlanningStatusDescription()).toBe(
+      'Öffnen oder aktualisieren Sie die Planung, um den aktuellen Kodierstand zu prüfen.'
+    );
+    expect(component.getPlanningNextStepActionLabel()).toBe('Zur Planung');
+  });
+
   it('should describe loading planning data as an updating status', () => {
     setCompletePlanningState();
     setCodingProgress(10, 4);
@@ -1167,6 +1182,7 @@ describe('CodingManagementManualComponent', () => {
   });
 
   it('should show an updating status while the initial response analysis is loading', () => {
+    component.selectedManualTabIndex = 1;
     component.responseAnalysis = null;
     component.isLoadingResponseAnalysis = true;
 
@@ -3671,6 +3687,8 @@ describe('CodingManagementManualComponent', () => {
   }
 
   function setEmptyPlanningSnapshots(): void {
+    (component as unknown as { hasLoadedPlanningDataBundle: boolean })
+      .hasLoadedPlanningDataBundle = true;
     component.variableCoverageOverview = {
       totalVariables: 0,
       coveredVariables: 0,

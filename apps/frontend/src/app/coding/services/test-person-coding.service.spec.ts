@@ -1430,6 +1430,79 @@ describe('TestPersonCodingService', () => {
       expect(cachedResponse).toEqual(mockResponse);
     });
 
+    it('should expose a cached coding status overview only when all parts exist', () => {
+      const codingFreshness = {
+        workspaceId: mockWorkspaceId,
+        currentRevision: 0,
+        items: []
+      };
+      const autocodingReadiness = {
+        workspaceId: mockWorkspaceId,
+        autoCoderRun: 1 as const,
+        readiness: 'READY' as const,
+        blockers: [],
+        rawResponsesTotal: 10,
+        rawResponsesWithRelevantStatus: 10,
+        resultUnitsTotal: 2,
+        resultUnitKeysTotal: 2,
+        matchedUnitFiles: 2,
+        missingUnitFiles: [],
+        matchedCodingSchemes: 1,
+        missingCodingSchemes: [],
+        invalidCodingSchemes: [],
+        validVariablePairs: 1,
+        validResponses: 10,
+        codeableResponses: 10,
+        invalidVariableSamples: []
+      };
+      const appliedResultsOverview: AppliedResultsOverview = {
+        totalIncompleteResponses: 0,
+        appliedResponses: 0,
+        remainingResponses: 0,
+        completionPercentage: 100,
+        rawTotalIncompleteResponses: 0,
+        rawAppliedResponses: 0,
+        rawCompletionPercentage: 100,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
+      };
+
+      service.getCodingFreshness(mockWorkspaceId).subscribe();
+      httpMock
+        .expectOne(
+          `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness`
+        )
+        .flush(codingFreshness);
+      service.getAutocodingReadiness(mockWorkspaceId, 1).subscribe();
+      httpMock
+        .expectOne(
+          request => request.url ===
+              `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+            request.params.get('autoCoderRun') === '1'
+        )
+        .flush(autocodingReadiness);
+
+      expect(
+        service.getCachedCodingStatusOverview(mockWorkspaceId, 1)
+      ).toBeNull();
+
+      service.getAppliedResultsOverview(mockWorkspaceId).subscribe();
+      httpMock
+        .expectOne(
+          `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/applied-results-overview`
+        )
+        .flush(appliedResultsOverview);
+
+      expect(service.getCachedCodingStatusOverview(mockWorkspaceId, 1)).toEqual(
+        {
+          codingFreshness,
+          autocodingReadiness,
+          appliedResultsOverview
+        }
+      );
+    });
+
     it('should ignore stale cache-only autocoding readiness responses after invalidation', () => {
       const mockResponse = {
         workspaceId: mockWorkspaceId,
