@@ -13,6 +13,7 @@ function requireStatusNumber(status: string): number {
 }
 
 export const CODING_INCOMPLETE_STATUS = requireStatusNumber('CODING_INCOMPLETE');
+export const CODING_COMPLETE_STATUS = requireStatusNumber('CODING_COMPLETE');
 export const INTENDED_INCOMPLETE_STATUS = requireStatusNumber('INTENDED_INCOMPLETE');
 export const DERIVE_ERROR_STATUS = requireStatusNumber('DERIVE_ERROR');
 
