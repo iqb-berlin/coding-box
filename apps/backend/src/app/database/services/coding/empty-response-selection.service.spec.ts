@@ -21,13 +21,14 @@ describe('EmptyResponseSelectionService', () => {
     id: number,
     unitid: number,
     variableid: string,
-    value: string | null
+    value: string | null,
+    unitName = 'UNIT'
   ): ResponseEntity => ({
     id,
     unitid,
     variableid,
     value,
-    unit: { name: 'UNIT' }
+    unit: { name: unitName }
   } as ResponseEntity);
 
   const withStatus = (
@@ -91,6 +92,29 @@ describe('EmptyResponseSelectionService', () => {
     );
 
     expect(result.map(item => item.id)).toEqual([1, 2]);
+  });
+
+  it('normalizes unit names before identifying derived targets', async () => {
+    workspaceFilesService.getDerivedVariableMetadata.mockResolvedValue({
+      metadataAvailable: true,
+      derivedVariableMap: new Map([
+        ['r8s3f7', new Set(['DERIVED'])]
+      ]),
+      derivedVariablesBySourceMap: new Map([
+        [getManualCodingScopeKey('r8s3f7', 'SOURCE'), new Set(['DERIVED'])]
+      ])
+    });
+    sourceRows = [response(10, 1, 'SOURCE', 'answered', 'r8s3f7')];
+
+    const context = await service.createContext(17);
+    const result = await service.filterEffectivelyEmptyResponses(
+      [response(1, 1, 'DERIVED', '', 'r8s3f7')],
+      context
+    );
+
+    expect(context.derivedVariableMap.get('R8S3F7'))
+      .toEqual(new Set(['DERIVED']));
+    expect(result).toEqual([]);
   });
 
   it('resolves nested derived variables to their leaf sources', async () => {
