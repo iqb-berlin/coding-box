@@ -318,6 +318,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         if (previousProgress !== undefined &&
           previousProgress !== null &&
           progress === null) {
+          this.invalidateCodingStatusOverviewCache();
           if (this.resetCompletionRefreshHandledAfterGuardClear) {
             this.resetCompletionRefreshHandledAfterGuardClear = false;
             return;

@@ -1744,6 +1744,38 @@ describe('CodingManagementManualComponent', () => {
     expect(componentInternals.planningDataBundleCacheGeneration).toBeNull();
   });
 
+  it('should not cache a planning bundle after another bundle request failed', () => {
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      planningDataBundleLoadFailed: boolean;
+      isPlanningDataBundleLoadPending: boolean;
+      planningDataBundleCacheGeneration: number | null;
+      testPersonCodingService: {
+        beginManualCodingPlanningSnapshot(): number;
+        saveManualCodingPlanningSnapshot: jest.Mock;
+      };
+      trySavePlanningDataBundleSnapshot(): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.planningDataBundleLoadFailed = true;
+    componentInternals.isPlanningDataBundleLoadPending = true;
+    componentInternals.planningDataBundleCacheGeneration =
+      componentInternals.testPersonCodingService
+        .beginManualCodingPlanningSnapshot();
+    const saveSnapshotSpy = jest
+      .spyOn(
+        componentInternals.testPersonCodingService,
+        'saveManualCodingPlanningSnapshot'
+      )
+      .mockImplementation();
+
+    componentInternals.trySavePlanningDataBundleSnapshot();
+
+    expect(saveSnapshotSpy).not.toHaveBeenCalled();
+    expect(componentInternals.isPlanningDataBundleLoadPending).toBe(false);
+    expect(componentInternals.planningDataBundleCacheGeneration).toBeNull();
+  });
+
   it('should restore planning data without requests after navigation', () => {
     component.selectedManualTabIndex = 1;
     component.autoRefreshManualCodingJobs = false;
@@ -1816,17 +1848,25 @@ describe('CodingManagementManualComponent', () => {
       },
       cacheGeneration
     );
+    fixture.destroy();
+    fixture = TestBed.createComponent(CodingManagementManualComponent);
+    component = fixture.componentInstance;
+    component.selectedManualTabIndex = 1;
+    component.autoRefreshManualCodingJobs = false;
+    const restoredComponentInternals = component as unknown as typeof componentInternals;
+    restoredComponentInternals.appService.selectedWorkspaceId = 5;
+    restoredComponentInternals.hasLoadedManualCodingJobRefreshSetting = true;
     const requestSpies = [
-      jest.spyOn(componentInternals, 'loadVariableCoverageOverview'),
-      jest.spyOn(componentInternals, 'loadCaseCoverageOverview'),
-      jest.spyOn(componentInternals, 'loadCodingProgressOverview'),
-      jest.spyOn(componentInternals, 'loadCodingIncompleteVariables'),
-      jest.spyOn(componentInternals, 'loadManualFreshnessDecisionData'),
-      jest.spyOn(componentInternals, 'loadCodingFreshness'),
-      jest.spyOn(componentInternals, 'loadResponseAnalysis')
+      jest.spyOn(restoredComponentInternals, 'loadVariableCoverageOverview'),
+      jest.spyOn(restoredComponentInternals, 'loadCaseCoverageOverview'),
+      jest.spyOn(restoredComponentInternals, 'loadCodingProgressOverview'),
+      jest.spyOn(restoredComponentInternals, 'loadCodingIncompleteVariables'),
+      jest.spyOn(restoredComponentInternals, 'loadManualFreshnessDecisionData'),
+      jest.spyOn(restoredComponentInternals, 'loadCodingFreshness'),
+      jest.spyOn(restoredComponentInternals, 'loadResponseAnalysis')
     ].map(spy => spy.mockImplementation());
 
-    componentInternals.loadManualTabData('planning');
+    restoredComponentInternals.loadManualTabData('planning');
 
     expect(component.responseAnalysis).toBe(responseAnalysis);
     requestSpies.forEach(spy => expect(spy).not.toHaveBeenCalled());
@@ -1835,9 +1875,9 @@ describe('CodingManagementManualComponent', () => {
       'Planungsdaten aktualisieren'
     );
 
-    componentInternals.invalidateCodingStatusCache();
+    restoredComponentInternals.invalidateCodingStatusCache();
 
-    expect(componentInternals.hasLoadedPlanningDataBundle).toBe(false);
+    expect(restoredComponentInternals.hasLoadedPlanningDataBundle).toBe(false);
     expect(component.getPlanningStatusTitle()).toBe(
       'Planungsdaten aktualisieren'
     );
