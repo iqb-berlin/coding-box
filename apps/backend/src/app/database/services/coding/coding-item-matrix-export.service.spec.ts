@@ -705,6 +705,89 @@ describe('CodingItemMatrixExportService', () => {
     });
   });
 
+  it('exports a stored MIR result on a derived target without resolving its sources', async () => {
+    const service = createService();
+    const derived = column('1', 'UNIT1', 'DERIVED', true);
+    const manualSourceKey = 'UNIT1\u001FMANUAL_SOURCE';
+    const autoSourceKey = 'UNIT1\u001FAUTO_SOURCE';
+    const mir = {
+      id: 'mir',
+      label: 'missing response',
+      code: -98,
+      score: 0
+    };
+    const exportProfile = {
+      byId: new Map([
+        ...profile.byId,
+        ['mir', mir]
+      ]),
+      byCode: new Map([
+        ...profile.byCode,
+        [mir.code, mir]
+      ])
+    };
+    const design = {
+      units: new Map([[
+        'UNIT1',
+        { unitId: 'UNIT1', order: 0, testletKey: '0:T1' }
+      ]])
+    };
+    const values = new Map([
+      [derived.key, { code: -98, score: 0, status: 5 }],
+      [autoSourceKey, { code: 1, score: 1, status: 5 }],
+      [manualSourceKey, { code: null, score: null, status: 12 }]
+    ]);
+    const derivedSources = new Map([
+      [derived.key, [autoSourceKey, manualSourceKey]]
+    ]);
+
+    const cells = await (
+      service as never as {
+        resolveRowCells: (
+          columnsValue: unknown[],
+          designValue: unknown,
+          responseValues: unknown,
+          profileValue: unknown,
+          derivedValue: unknown,
+          configValue: ItemMatrixExportConfiguration
+        ) => Promise<Array<{
+          state: string;
+          code: number | null;
+          score: number | null;
+          unresolved: boolean;
+          failureReason?: string;
+        }>>;
+      }
+    ).resolveRowCells(
+      [derived],
+      design,
+      values,
+      exportProfile,
+      derivedSources,
+      configuration
+    );
+
+    expect(cells[0]).toMatchObject({
+      state: 'mir',
+      code: -98,
+      score: 0,
+      unresolved: false
+    });
+    expect(cells[0].failureReason).toBeUndefined();
+    const getExportValue = (
+      requestedValue: 'code' | 'score'
+    ) => (
+      service as unknown as {
+        getExportValue: (
+          cell: unknown,
+          requested: 'code' | 'score'
+        ) => string | number;
+      }
+    ).getExportValue(cells[0], requestedValue);
+    expect(getExportValue('code')).toBe(-98);
+    expect(getExportValue('score')).toBe(0);
+  });
+
   it('distinguishes unresolved statuses, derived failures and design conflicts', async () => {
     const service = createService();
     const direct = column('1', 'UNIT1', 'DIRECT');
