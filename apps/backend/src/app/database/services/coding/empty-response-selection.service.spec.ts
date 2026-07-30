@@ -2,6 +2,7 @@ import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
 import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
 import {
+  CODING_COMPLETE_STATUS,
   CODING_INCOMPLETE_STATUS,
   INTENDED_INCOMPLETE_STATUS
 } from '../../utils/manual-coding-candidate.util';
@@ -139,7 +140,7 @@ describe('EmptyResponseSelectionService', () => {
     expect(result).toEqual([]);
   });
 
-  it('checks every leaf source regardless of its coding status', async () => {
+  it('uses empty intended-incomplete sources for mixed MC+reason targets', async () => {
     workspaceFilesService.getDerivedVariableMetadata.mockResolvedValue({
       metadataAvailable: true,
       derivedVariableMap: new Map([
@@ -151,36 +152,200 @@ describe('EmptyResponseSelectionService', () => {
       ])
     });
     sourceRows = [
-      withStatus(response(10, 1, 'AUTO_SOURCE', 'selected'), 5),
       withStatus(
-        response(11, 1, 'MANUAL_SOURCE', ''),
-        INTENDED_INCOMPLETE_STATUS
-      )
+        response(10, 1, 'AUTO_SOURCE', 'selected'),
+        CODING_COMPLETE_STATUS
+      ),
+      {
+        ...withStatus(
+          response(11, 1, 'MANUAL_SOURCE', ''),
+          INTENDED_INCOMPLETE_STATUS
+        ),
+        status_v2: CODING_COMPLETE_STATUS,
+        code_v2: -98,
+        score_v2: 0
+      }
     ];
+    const target = withStatus(
+      response(1, 1, 'DERIVED', 'technical solver value'),
+      CODING_INCOMPLETE_STATUS
+    );
 
     const context = await service.createContext(17);
     const result = await service.filterEffectivelyEmptyResponses(
-      [response(1, 1, 'DERIVED', '')],
+      [target],
       context
     );
 
-    expect(result).toEqual([]);
+    expect(result).toEqual([target]);
+  });
 
-    sourceRows[0] = withStatus(
-      response(10, 1, 'AUTO_SOURCE', ''),
-      5
+  it('keeps mixed MC+reason targets open when an intended source is answered', async () => {
+    workspaceFilesService.getDerivedVariableMetadata.mockResolvedValue({
+      metadataAvailable: true,
+      derivedVariableMap: new Map([
+        ['UNIT', new Set(['DERIVED'])]
+      ]),
+      derivedVariablesBySourceMap: new Map([
+        [getManualCodingScopeKey('UNIT', 'AUTO_SOURCE'), new Set(['DERIVED'])],
+        [getManualCodingScopeKey('UNIT', 'MANUAL_SOURCE'), new Set(['DERIVED'])]
+      ])
+    });
+    sourceRows = [
+      withStatus(
+        response(10, 1, 'AUTO_SOURCE', ''),
+        CODING_COMPLETE_STATUS
+      ),
+      withStatus(
+        response(11, 1, 'MANUAL_SOURCE', 'reason'),
+        INTENDED_INCOMPLETE_STATUS
+      )
+    ];
+    const target = withStatus(
+      response(1, 1, 'DERIVED', ''),
+      CODING_INCOMPLETE_STATUS
     );
+
+    const context = await service.createContext(17);
+
     await expect(service.filterEffectivelyEmptyResponses(
-      [response(1, 1, 'DERIVED', '')],
+      [target],
       context
-    )).resolves.toEqual([response(1, 1, 'DERIVED', '')]);
+    )).resolves.toEqual([]);
+  });
+
+  it('keeps the all-leaf-sources fallback when no source is intended-incomplete', async () => {
+    workspaceFilesService.getDerivedVariableMetadata.mockResolvedValue({
+      metadataAvailable: true,
+      derivedVariableMap: new Map([
+        ['UNIT', new Set(['DERIVED'])]
+      ]),
+      derivedVariablesBySourceMap: new Map([
+        [getManualCodingScopeKey('UNIT', 'SOURCE_A'), new Set(['DERIVED'])],
+        [getManualCodingScopeKey('UNIT', 'SOURCE_B'), new Set(['DERIVED'])]
+      ])
+    });
+    sourceRows = [
+      withStatus(response(10, 1, 'SOURCE_A', ''), CODING_COMPLETE_STATUS),
+      withStatus(response(11, 1, 'SOURCE_B', ''), CODING_INCOMPLETE_STATUS)
+    ];
+    const target = withStatus(
+      response(1, 1, 'DERIVED', ''),
+      CODING_INCOMPLETE_STATUS
+    );
+
+    const context = await service.createContext(17);
+
+    await expect(service.filterEffectivelyEmptyResponses(
+      [target],
+      context
+    )).resolves.toEqual([target]);
 
     sourceRows[1] = withStatus(
-      response(11, 1, 'MANUAL_SOURCE', 'answered'),
+      response(11, 1, 'SOURCE_B', 'answered'),
       CODING_INCOMPLETE_STATUS
     );
     await expect(service.filterEffectivelyEmptyResponses(
-      [response(1, 1, 'DERIVED', '')],
+      [target],
+      context
+    )).resolves.toEqual([]);
+  });
+
+  it('fails closed for ambiguous MC+reason source status combinations', async () => {
+    workspaceFilesService.getDerivedVariableMetadata.mockResolvedValue({
+      metadataAvailable: true,
+      derivedVariableMap: new Map([
+        ['UNIT', new Set(['DERIVED'])]
+      ]),
+      derivedVariablesBySourceMap: new Map([
+        [getManualCodingScopeKey('UNIT', 'AUTO_SOURCE'), new Set(['DERIVED'])],
+        [getManualCodingScopeKey('UNIT', 'MANUAL_SOURCE'), new Set(['DERIVED'])],
+        [getManualCodingScopeKey('UNIT', 'OTHER_SOURCE'), new Set(['DERIVED'])]
+      ])
+    });
+    sourceRows = [
+      withStatus(response(10, 1, 'AUTO_SOURCE', ''), CODING_COMPLETE_STATUS),
+      withStatus(
+        response(11, 1, 'MANUAL_SOURCE', ''),
+        INTENDED_INCOMPLETE_STATUS
+      ),
+      withStatus(response(12, 1, 'OTHER_SOURCE', ''), CODING_INCOMPLETE_STATUS)
+    ];
+    const target = withStatus(
+      response(1, 1, 'DERIVED', ''),
+      CODING_INCOMPLETE_STATUS
+    );
+
+    const context = await service.createContext(17);
+
+    await expect(service.filterEffectivelyEmptyResponses(
+      [target],
+      context
+    )).resolves.toEqual([]);
+
+    sourceRows = sourceRows.map(source => withStatus(
+      source,
+      INTENDED_INCOMPLETE_STATUS
+    ));
+    await expect(service.filterEffectivelyEmptyResponses(
+      [target],
+      context
+    )).resolves.toEqual([]);
+  });
+
+  it('fails closed for missing source statuses on coding-incomplete targets', async () => {
+    workspaceFilesService.getDerivedVariableMetadata.mockResolvedValue({
+      metadataAvailable: true,
+      derivedVariableMap: new Map([
+        ['UNIT', new Set(['DERIVED'])]
+      ]),
+      derivedVariablesBySourceMap: new Map([
+        [getManualCodingScopeKey('UNIT', 'SOURCE'), new Set(['DERIVED'])]
+      ])
+    });
+    sourceRows = [response(10, 1, 'SOURCE', '')];
+    const target = withStatus(
+      response(1, 1, 'DERIVED', ''),
+      CODING_INCOMPLETE_STATUS
+    );
+
+    const context = await service.createContext(17);
+
+    await expect(service.filterEffectivelyEmptyResponses(
+      [target],
+      context
+    )).resolves.toEqual([]);
+
+    sourceRows[0] = withStatus(response(10, 1, 'SOURCE', ''), 64);
+    await expect(service.filterEffectivelyEmptyResponses(
+      [target],
+      context
+    )).resolves.toEqual([]);
+  });
+
+  it('fails closed when a leaf source has multiple response rows', async () => {
+    workspaceFilesService.getDerivedVariableMetadata.mockResolvedValue({
+      metadataAvailable: true,
+      derivedVariableMap: new Map([
+        ['UNIT', new Set(['DERIVED'])]
+      ]),
+      derivedVariablesBySourceMap: new Map([
+        [getManualCodingScopeKey('UNIT', 'SOURCE'), new Set(['DERIVED'])]
+      ])
+    });
+    sourceRows = [
+      withStatus(response(10, 1, 'SOURCE', ''), CODING_COMPLETE_STATUS),
+      withStatus(response(11, 1, 'SOURCE', ''), CODING_COMPLETE_STATUS)
+    ];
+    const target = withStatus(
+      response(1, 1, 'DERIVED', ''),
+      CODING_INCOMPLETE_STATUS
+    );
+
+    const context = await service.createContext(17);
+
+    await expect(service.filterEffectivelyEmptyResponses(
+      [target],
       context
     )).resolves.toEqual([]);
   });
