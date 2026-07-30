@@ -1340,6 +1340,9 @@ describe('CodingResultsService', () => {
       call[0] === 'response.status_v1 IN (:...statuses)'
     ));
     expect(statusFilterCall?.[1].statuses).not.toContain(statusStringToNumber('DERIVE_ERROR'));
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'response.status_v2 IS NULL'
+    );
     expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(17);
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
     expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(17);
@@ -1391,7 +1394,11 @@ describe('CodingResultsService', () => {
     expect(queryRunner.manager.update).toHaveBeenCalledWith(
       ResponseEntity,
       1,
-      expect.objectContaining({ code_v2: -98 })
+      {
+        code_v2: -98,
+        score_v2: 0,
+        status_v2: statusStringToNumber('CODING_COMPLETE')
+      }
     );
 
     const candidateBrackets = queryBuilder.andWhere.mock.calls

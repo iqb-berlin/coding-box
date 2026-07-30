@@ -8,6 +8,12 @@ import {
   splitManualCodingScopeKey
 } from '../../utils/manual-coding-scope.util';
 import {
+  CODING_COMPLETE_STATUS,
+  CODING_INCOMPLETE_STATUS,
+  INTENDED_INCOMPLETE_STATUS
+} from '../../utils/manual-coding-candidate.util';
+import { statusNumberToString } from '../../utils/response-status-converter';
+import {
   isAggregatableValue,
   isDerivedAggregationVariable
 } from './aggregation-metrics.util';
@@ -127,12 +133,17 @@ export class EmptyResponseSelectionService {
           sourceVariableIds
         })
         .getMany();
-      const sourceResponsesByKey = new Map(
-        sourceResponses.map(response => [
-          this.getUnitResponseKey(response.unitid, response.variableid),
-          response
-        ])
-      );
+      const sourceResponsesByKey = new Map<string, ResponseEntity | null>();
+      sourceResponses.forEach(sourceResponse => {
+        const sourceKey = this.getUnitResponseKey(
+          sourceResponse.unitid,
+          sourceResponse.variableid
+        );
+        sourceResponsesByKey.set(
+          sourceKey,
+          sourceResponsesByKey.has(sourceKey) ? null : sourceResponse
+        );
+      });
 
       chunk.forEach(plan => {
         const resolvedSources = Array.from(plan.sourceVariableIds).map(variableId => (
@@ -140,18 +151,67 @@ export class EmptyResponseSelectionService {
             this.getUnitResponseKey(plan.response.unitid, variableId)
           )
         ));
-        const allSourcesExist = resolvedSources.every(source => source !== undefined);
-        const allSourcesEmpty = resolvedSources.every(source => (
-          source !== undefined && !isAggregatableValue(source.value)
-        ));
+        const allSourcesExistExactlyOnce = resolvedSources.every(
+          (source): source is ResponseEntity => source !== undefined && source !== null
+        );
 
-        if (allSourcesExist && allSourcesEmpty) {
+        if (
+          allSourcesExistExactlyOnce &&
+          this.isDerivedResponseEffectivelyEmpty(plan.response, resolvedSources)
+        ) {
           selectedById.set(plan.response.id, plan.response);
         }
       });
     }
 
     return responses.filter(response => selectedById.has(response.id));
+  }
+
+  private isDerivedResponseEffectivelyEmpty(
+    target: ResponseEntity,
+    sources: ResponseEntity[]
+  ): boolean {
+    const allSourcesEmpty = sources.every(
+      source => !isAggregatableValue(source.value)
+    );
+
+    // The MC+reason exception is intentionally limited to the target state
+    // specified in #972. Other target states keep the conservative behavior
+    // introduced for derived responses in #970.
+    if (target.status_v1 !== CODING_INCOMPLETE_STATUS) {
+      return allSourcesEmpty;
+    }
+
+    const sourceStatuses = sources.map(source => source.status_v1);
+    const allSourceStatusesKnown = sourceStatuses.every(status => (
+      status !== null && statusNumberToString(status) !== null
+    ));
+    if (!allSourceStatusesKnown) {
+      return false;
+    }
+
+    const intendedIncompleteSources = sources.filter(
+      source => source.status_v1 === INTENDED_INCOMPLETE_STATUS
+    );
+    if (intendedIncompleteSources.length === 0) {
+      return allSourcesEmpty;
+    }
+
+    // A mixed MC+reason response is unambiguous only when all leaf sources
+    // belong to the automatic or manually intended status groups. Any third
+    // status fails closed instead of applying a potentially wrong MIR result.
+    const sourceStatusSet = new Set(sourceStatuses);
+    const isUnambiguousMcReasonCombination =
+      sourceStatusSet.size === 2 &&
+      sourceStatusSet.has(CODING_COMPLETE_STATUS) &&
+      sourceStatusSet.has(INTENDED_INCOMPLETE_STATUS);
+    if (!isUnambiguousMcReasonCombination) {
+      return false;
+    }
+
+    return intendedIncompleteSources.every(
+      source => !isAggregatableValue(source.value)
+    );
   }
 
   private invertDerivedSourceMap(
