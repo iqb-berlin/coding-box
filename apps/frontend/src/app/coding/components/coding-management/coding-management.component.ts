@@ -596,6 +596,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   private refreshCodingStatusOverviewAfterChange(): void {
+    this.hasLoadedFullCodingStatusOverview = false;
     if (!this.hasLoadedManualCodingJobRefreshSetting ||
       !this.autoRefreshManualCodingJobs) {
       return;
