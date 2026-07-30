@@ -1,0 +1,64 @@
+.monitoring-card {
+  margin: 16px;
+}
+
+.toolbar {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin: 16px 0;
+}
+
+.loading,
+.empty {
+  display: flex;
+  justify-content: center;
+  padding: 32px;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+}
+
+code,
+small {
+  display: block;
+}
+
+code {
+  max-width: 520px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+small {
+  color: var(--mat-sys-on-surface-variant);
+  margin-top: 4px;
+}
+
+.error {
+  color: var(--mat-sys-error);
+}
+
+.kind {
+  font-weight: 600;
+}
+
+.kind.resolved {
+  opacity: 0.6;
+}
+
+.status {
+  display: block;
+  margin-top: 4px;
+}
+
+th,
+td {
+  padding-right: 16px;
+  vertical-align: top;
+}

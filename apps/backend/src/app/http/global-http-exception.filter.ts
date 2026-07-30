@@ -34,6 +34,9 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
     const requestId = request.requestId || createRequestId();
 
     request.requestId = requestId;
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+      request.monitoringErrorMessage = this.getExceptionMessage(exception);
+    }
     if (!response.headersSent) {
       response.setHeader(REQUEST_ID_HEADER, requestId);
     }
@@ -113,13 +116,18 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
     status: number,
     requestId: string
   ): void {
-    const message = exception instanceof Error ? exception.message : String(exception);
+    const message = this.getExceptionMessage(exception);
     const stack = exception instanceof Error ? exception.stack : undefined;
 
     this.logger.error(
       `[${requestId}] ${request.method} ${request.originalUrl || request.url} failed with ${status}: ${message}`,
       stack
     );
+  }
+
+  private getExceptionMessage(exception: unknown): string {
+    return (exception instanceof Error ? exception.message : String(exception))
+      .slice(0, 1000);
   }
 
   private isObject(value: unknown): value is Record<string, unknown> {

@@ -1,0 +1,96 @@
+<mat-card class="monitoring-card">
+  <mat-card-header>
+    <mat-card-title>{{ 'request-monitoring.title' | translate }}</mat-card-title>
+    <mat-card-subtitle>{{ 'request-monitoring.description' | translate }}</mat-card-subtitle>
+  </mat-card-header>
+
+  <mat-card-content>
+    <div class="toolbar">
+      <mat-checkbox
+        [checked]="includeResolved"
+        (change)="toggleResolved($event.checked)">
+        {{ 'request-monitoring.include-resolved' | translate }}
+      </mat-checkbox>
+      <button mat-stroked-button type="button" (click)="load()">
+        <mat-icon>refresh</mat-icon>
+        {{ 'request-monitoring.refresh' | translate }}
+      </button>
+    </div>
+
+    @if (loading) {
+      <div class="loading"><mat-spinner diameter="36"></mat-spinner></div>
+    } @else if (incidents.length === 0) {
+      <p class="empty">{{ 'request-monitoring.empty' | translate }}</p>
+    } @else {
+      <div class="table-wrapper">
+        <table mat-table [dataSource]="incidents">
+          <ng-container matColumnDef="state">
+            <th mat-header-cell *matHeaderCellDef>{{ 'request-monitoring.state' | translate }}</th>
+            <td mat-cell *matCellDef="let incident">
+              <span class="kind" [class.resolved]="incident.resolvedAt">
+                {{ 'request-monitoring.kinds.' + incident.kind | translate }}
+              </span>
+              @if (incident.statusCode) {
+                <span class="status">HTTP {{ incident.statusCode }}</span>
+              }
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="request">
+            <th mat-header-cell *matHeaderCellDef>{{ 'request-monitoring.request' | translate }}</th>
+            <td mat-cell *matCellDef="let incident">
+              <code>{{ incident.method }} {{ incident.path }}</code>
+              @if (incident.workspaceId) {
+                <small>{{ 'request-monitoring.workspace' | translate }} {{ incident.workspaceId }}</small>
+              }
+              @if (incident.lastErrorMessage) {
+                <small class="error">{{ incident.lastErrorMessage }}</small>
+              }
+              <small>{{ 'request-monitoring.request-id' | translate }} {{ incident.lastRequestId }}</small>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="occurrences">
+            <th mat-header-cell *matHeaderCellDef>{{ 'request-monitoring.occurrences' | translate }}</th>
+            <td mat-cell *matCellDef="let incident">{{ incident.occurrenceCount }}</td>
+          </ng-container>
+
+          <ng-container matColumnDef="duration">
+            <th mat-header-cell *matHeaderCellDef>{{ 'request-monitoring.max-duration' | translate }}</th>
+            <td mat-cell *matCellDef="let incident">{{ incident.maxDurationMs }} ms</td>
+          </ng-container>
+
+          <ng-container matColumnDef="database">
+            <th mat-header-cell *matHeaderCellDef>{{ 'request-monitoring.database' | translate }}</th>
+            <td mat-cell *matCellDef="let incident">
+              @if (incident.postgresTotalCount !== null) {
+                {{ incident.postgresTotalCount }} / {{ incident.postgresIdleCount }} / {{ incident.postgresWaitingCount }}
+              } @else {
+                –
+              }
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="lastOccurred">
+            <th mat-header-cell *matHeaderCellDef>{{ 'request-monitoring.last-occurred' | translate }}</th>
+            <td mat-cell *matCellDef="let incident">
+              {{ incident.lastOccurredAt | date:'dd.MM.yyyy HH:mm:ss' }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef>{{ 'request-monitoring.actions' | translate }}</th>
+            <td mat-cell *matCellDef="let incident">
+              <button mat-button type="button" (click)="setResolved(incident)">
+                {{ (incident.resolvedAt ? 'request-monitoring.reopen' : 'request-monitoring.resolve') | translate }}
+              </button>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+        </table>
+      </div>
+    }
+  </mat-card-content>
+</mat-card>

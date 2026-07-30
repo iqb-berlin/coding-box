@@ -422,6 +422,7 @@
     "users-deleted": "Nutzer:in(en) gelöscht",
     "users-not-deleted": "Nutzer:in(en) konnten nicht gelöscht werden",
     "workspaces": "Arbeitsbereiche",
+    "monitoring": "Servermeldungen",
     "notifications": "Systemhinweise",
     "settings": "Einstellungen",
     "upload-resource-package": "Resource-Package hochladen/aktualisieren",
@@ -466,6 +467,33 @@
     "deleting-workspace-persons": "Personendaten werden gelöscht...",
     "deleting-workspace-finish": "Löschen wird abgeschlossen...",
     "deleting-workspace-success": "Arbeitsbereich erfolgreich gelöscht!"
+  },
+  "request-monitoring": {
+    "title": "Servermeldungen",
+    "description": "Langsame, fehlgeschlagene und abgebrochene Anfragen werden ohne Query-Parameter gruppiert. Ein erneutes Auftreten öffnet eine erledigte Meldung automatisch wieder.",
+    "include-resolved": "Erledigte Meldungen anzeigen",
+    "refresh": "Aktualisieren",
+    "empty": "Keine offenen Servermeldungen vorhanden.",
+    "state": "Art",
+    "request": "Anfrage",
+    "workspace": "Arbeitsbereich:",
+    "request-id": "Letzte Fehler-ID:",
+    "occurrences": "Anzahl",
+    "max-duration": "Max. Dauer",
+    "database": "PostgreSQL gesamt / frei / wartend",
+    "last-occurred": "Zuletzt",
+    "actions": "Aktionen",
+    "resolve": "Als erledigt markieren",
+    "reopen": "Wieder öffnen",
+    "load-error": "Servermeldungen konnten nicht geladen werden.",
+    "update-error": "Die Servermeldung konnte nicht aktualisiert werden.",
+    "kinds": {
+      "slow": "Langsam",
+      "failed": "Fehlgeschlagen",
+      "in_flight": "Läuft ungewöhnlich lange",
+      "aborted": "Abgebrochen",
+      "closed": "Verbindung geschlossen"
+    }
   },
   "system-notifications": {
     "banner-label": "Systemhinweis",

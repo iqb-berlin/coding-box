@@ -33,6 +33,9 @@ import { SystemNotification } from '../../database/entities/system-notification.
 import { PublicSystemNotificationController } from '../system-notifications/system-notification.controller';
 import { AdminSystemNotificationController } from '../system-notifications/admin-system-notification.controller';
 import { SystemNotificationService } from '../system-notifications/system-notification.service';
+import { RequestMonitoringIncident } from '../../database/entities/request-monitoring-incident.entity';
+import { RequestMonitoringIncidentController } from '../request-monitoring/request-monitoring-incident.controller';
+import { RequestMonitoringIncidentService } from '../request-monitoring/request-monitoring-incident.service';
 
 const processorProviders = {
   'database-export': DatabaseExportProcessor
@@ -58,7 +61,12 @@ export function getEnabledCoreAdminProcessors(
     AuthModule,
     CodingModule,
     HttpModule,
-    TypeOrmModule.forFeature([Setting, FileUpload, SystemNotification]),
+    TypeOrmModule.forFeature([
+      Setting,
+      FileUpload,
+      SystemNotification,
+      RequestMonitoringIncident
+    ]),
     BullModule.registerQueue({
       name: 'database-export'
     }),
@@ -80,14 +88,17 @@ export function getEnabledCoreAdminProcessors(
     ContentPoolSettingsController,
     LegalNoticeController,
     PublicSystemNotificationController,
-    AdminSystemNotificationController
+    AdminSystemNotificationController,
+    RequestMonitoringIncidentController
   ],
   providers: [
     DatabaseExportService,
     ...getEnabledCoreAdminProcessors(),
     ContentPoolIntegrationService,
     LegalNoticeService,
-    SystemNotificationService
-  ]
+    SystemNotificationService,
+    RequestMonitoringIncidentService
+  ],
+  exports: [RequestMonitoringIncidentService]
 })
 export class CoreAdminModule { }

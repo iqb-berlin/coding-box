@@ -5,6 +5,7 @@ export const REQUEST_ID_HEADER = 'X-Request-Id';
 export const REPLAY_ATTEMPT_ID_HEADER = 'X-Replay-Attempt-Id';
 
 export interface RequestWithRequestId extends Request {
+  monitoringErrorMessage?: string;
   requestId?: string;
 }
 

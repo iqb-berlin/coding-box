@@ -19,6 +19,7 @@ import { requestIdMiddleware } from './app/http/request-id.middleware';
 import { createPostgresPoolSnapshotProvider } from './app/database/postgres-pool-monitor';
 import { releaseCacheStartupWarmups } from './app/cache/cache-startup-warmup.queue';
 import { RuntimeConfigService } from './app/config/runtime-config.service';
+import { RequestMonitoringIncidentService } from './app/admin/request-monitoring/request-monitoring-incident.service';
 
 async function bootstrap() {
   if (isExportWorkerProcess()) {
@@ -37,6 +38,9 @@ async function bootstrap() {
   const getPoolSnapshot = createPostgresPoolSnapshotProvider(
     app.get(DataSource)
   );
+  const requestMonitoringIncidentService = app.get(
+    RequestMonitoringIncidentService
+  );
 
   app.use(requestIdMiddleware);
   app.useGlobalFilters(new GlobalHttpExceptionFilter());
@@ -51,6 +55,7 @@ async function bootstrap() {
     getPoolSnapshot,
     inFlightRequestThresholdMs: runtimeConfig.inFlightRequestThresholdMs,
     logStartedRequests: runtimeConfig.requestStartLogging,
+    reportIncident: incident => requestMonitoringIncidentService.record(incident),
     slowRequestThresholdMs: runtimeConfig.slowRequestThresholdMs
   }));
 

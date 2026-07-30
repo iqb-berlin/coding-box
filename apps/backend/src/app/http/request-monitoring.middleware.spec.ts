@@ -9,6 +9,7 @@ import {
   parseSlowRequestThresholdMs
 } from './request-monitoring.middleware';
 import { RequestWithRequestId } from './request-id';
+import { RequestMonitoringIncidentKind } from '../../../../../api-dto/request-monitoring/request-monitoring-incident.dto';
 
 describe('requestMonitoringMiddleware', () => {
   const createRequest = (request: Partial<RequestWithRequestId> = {}) => Object.assign(new EventEmitter(), {
@@ -95,6 +96,34 @@ describe('requestMonitoringMiddleware', () => {
       '[request-1] GET /api/admin/workspace/:id/coding/incomplete-variables/scope-summary failed with 500 in 100 ms'
     );
     expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('should persist aggregated incident data for administrators', async () => {
+    const reportIncident = jest.fn().mockResolvedValue(undefined);
+    const now = createClock(BigInt(0), BigInt(1500000000));
+    const middleware = createRequestMonitoringMiddleware({
+      logger: { error: jest.fn(), warn: jest.fn() },
+      now,
+      reportIncident,
+      slowRequestThresholdMs: 1000
+    });
+    const response = createResponse(200);
+
+    middleware(createRequest(), response, jest.fn());
+    response.emit('finish');
+    await Promise.resolve();
+
+    expect(reportIncident).toHaveBeenCalledWith({
+      durationMs: 1500,
+      errorMessage: undefined,
+      kind: RequestMonitoringIncidentKind.Slow,
+      method: 'GET',
+      path: '/api/admin/workspace/:id/coding/incomplete-variables/scope-summary',
+      poolSnapshot: undefined,
+      requestId: 'request-1',
+      statusCode: 200,
+      workspaceId: 3
+    });
   });
 
   it('should normalize repeated slashes in monitored paths', () => {

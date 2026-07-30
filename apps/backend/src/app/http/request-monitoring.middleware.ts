@@ -14,6 +14,7 @@ import {
   parseInFlightRequestThresholdMs,
   parseSlowRequestThresholdMs
 } from '../config/runtime-config.service';
+import { RequestMonitoringIncidentKind } from '../../../../../api-dto/request-monitoring/request-monitoring-incident.dto';
 
 export {
   DEFAULT_IN_FLIGHT_REQUEST_THRESHOLD_MS,
@@ -36,11 +37,24 @@ interface RequestMonitoringOptions {
   logStartedRequests?: boolean;
   logger?: RequestMonitoringLogger;
   now?: () => bigint;
+  reportIncident?: (incident: RequestMonitoringIncidentReport) => Promise<void> | void;
   setTimer?: (
     callback: () => void,
     delayMs: number
   ) => NodeJS.Timeout;
   slowRequestThresholdMs?: number;
+}
+
+export interface RequestMonitoringIncidentReport {
+  durationMs: number;
+  errorMessage?: string;
+  kind: RequestMonitoringIncidentKind;
+  method: string;
+  path: string;
+  poolSnapshot?: PostgresPoolSnapshot;
+  requestId: string;
+  statusCode?: number;
+  workspaceId?: number;
 }
 
 const NANOSECONDS_PER_MILLISECOND = BigInt(1000000);
@@ -71,7 +85,39 @@ export function createRequestMonitoringMiddleware(options: RequestMonitoringOpti
       `${request.method} ${getRequestPath(request)}${replayAttemptId ?
         ` attempt=${replayAttemptId}` :
         ''}`;
+    const requestPath = getRequestPath(request);
+    const workspaceId = getWorkspaceId(request);
     let terminalStateRecorded = false;
+
+    const reportIncident = (
+      kind: RequestMonitoringIncidentKind,
+      durationMs: number,
+      poolSnapshot?: PostgresPoolSnapshot,
+      statusCode?: number
+    ): void => {
+      if (!options.reportIncident) {
+        return;
+      }
+      try {
+        Promise.resolve(options.reportIncident({
+          durationMs,
+          errorMessage: request.monitoringErrorMessage,
+          kind,
+          method: request.method,
+          path: requestPath,
+          poolSnapshot,
+          requestId,
+          statusCode,
+          workspaceId
+        })).catch(error => logger.error(
+          `[${requestId}] Could not persist request monitoring incident: ${String(error)}`
+        ));
+      } catch (error) {
+        logger.error(
+          `[${requestId}] Could not persist request monitoring incident: ${String(error)}`
+        );
+      }
+    };
 
     if (options.logStartedRequests) {
       logger.log?.(`[${requestId}] ${requestDescription} started`);
@@ -81,11 +127,17 @@ export function createRequestMonitoringMiddleware(options: RequestMonitoringOpti
       if (terminalStateRecorded) {
         return;
       }
+      const poolSnapshot = options.getPoolSnapshot?.();
       logger.warn(
         `[${requestId}] ${requestDescription} still running after ` +
         `${inFlightRequestThresholdMs} ms${formatPoolSnapshot(
-          options.getPoolSnapshot?.()
+          poolSnapshot
         )}`
+      );
+      reportIncident(
+        RequestMonitoringIncidentKind.InFlight,
+        inFlightRequestThresholdMs,
+        poolSnapshot
       );
     }, inFlightRequestThresholdMs);
 
@@ -105,12 +157,25 @@ export function createRequestMonitoringMiddleware(options: RequestMonitoringOpti
         logger.warn(
           `[${requestId}] ${requestDescription} ${state} after ${durationMs} ms${formatPoolSnapshot(poolSnapshot)}`
         );
+        reportIncident(
+          state === 'aborted' ?
+            RequestMonitoringIncidentKind.Aborted :
+            RequestMonitoringIncidentKind.Closed,
+          durationMs,
+          poolSnapshot
+        );
         return;
       }
 
       if (response.statusCode >= 500) {
         logger.error(
           `[${requestId}] ${requestDescription} failed with ${response.statusCode} in ${durationMs} ms${formatPoolSnapshot(poolSnapshot)}`
+        );
+        reportIncident(
+          RequestMonitoringIncidentKind.Failed,
+          durationMs,
+          poolSnapshot,
+          response.statusCode
         );
         return;
       }
@@ -119,6 +184,12 @@ export function createRequestMonitoringMiddleware(options: RequestMonitoringOpti
         logger.warn(
           `[${requestId}] ${requestDescription} completed with ${response.statusCode} in ${durationMs} ms ` +
           `(slow request; threshold ${slowRequestThresholdMs} ms)${formatPoolSnapshot(poolSnapshot)}`
+        );
+        reportIncident(
+          RequestMonitoringIncidentKind.Slow,
+          durationMs,
+          poolSnapshot,
+          response.statusCode
         );
       }
     };
@@ -135,6 +206,13 @@ export function createRequestMonitoringMiddleware(options: RequestMonitoringOpti
 
     next();
   };
+}
+
+function getWorkspaceId(request: RequestWithRequestId): number | undefined {
+  const url = request.originalUrl || request.url || '';
+  const match = url.match(/\/workspace\/(\d+)(?:\/|$)/i);
+  const parsed = Number(match?.[1]);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function getHeaderValue(

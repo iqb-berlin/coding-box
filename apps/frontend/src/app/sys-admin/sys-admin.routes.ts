@@ -11,6 +11,7 @@ export const sysAdminRoutes: Routes = [
       { path: 'users', loadComponent: () => import('./components/users/users.component').then(m => m.UsersComponent) },
       { path: 'settings', loadComponent: () => import('./components/sys-admin-settings/sys-admin-settings.component').then(m => m.SysAdminSettingsComponent) },
       { path: 'notifications', loadComponent: () => import('./components/system-notifications/system-notifications.component').then(m => m.SystemNotificationsComponent) },
+      { path: 'monitoring', loadComponent: () => import('./components/request-monitoring-incidents/request-monitoring-incidents.component').then(m => m.RequestMonitoringIncidentsComponent) },
       { path: 'workspaces', loadComponent: () => import('./components/workspaces/workspaces.component').then(m => m.WorkspacesComponent) },
       { path: 'workspace/:ws', loadComponent: () => import('./components/workspaces/workspaces.component').then(m => m.WorkspacesComponent) },
       { path: '**', loadComponent: () => import('./components/users/users.component').then(m => m.UsersComponent) }
