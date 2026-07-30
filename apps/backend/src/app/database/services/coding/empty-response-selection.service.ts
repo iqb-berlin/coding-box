@@ -49,9 +49,14 @@ export class EmptyResponseSelectionService {
         };
       }
 
+      const derivedVariableMap = new Map<string, Set<string>>();
+      metadata.derivedVariableMap.forEach((variableIds, unitName) => {
+        derivedVariableMap.set(unitName.trim().toUpperCase(), variableIds);
+      });
+
       return {
         metadataAvailable: true,
-        derivedVariableMap: metadata.derivedVariableMap,
+        derivedVariableMap,
         sourceVariablesByDerivedKey: this.invertDerivedSourceMap(
           metadata.derivedVariablesBySourceMap
         )
