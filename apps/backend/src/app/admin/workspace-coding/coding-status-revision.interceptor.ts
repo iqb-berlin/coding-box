@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import {
-  Observable, concatMap, defer, from, map, switchMap
+  Observable, concatMap, from, map
 } from 'rxjs';
 import { touchWorkspaceCodingStatusRevision } from '../../database/services/shared/workspace-coding-status-revision.util';
 
@@ -56,10 +56,7 @@ export class CodingStatusRevisionInterceptor implements NestInterceptor {
       return next.handle();
     }
 
-    return defer(() => from(
-      touchWorkspaceCodingStatusRevision(this.connection.manager, workspaceId)
-    )).pipe(
-      switchMap(() => next.handle()),
+    return next.handle().pipe(
       concatMap(value => from(
         touchWorkspaceCodingStatusRevision(
           this.connection.manager,

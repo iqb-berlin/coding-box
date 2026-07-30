@@ -25,7 +25,7 @@ describe('CodingStatusRevisionInterceptor', () => {
     '/api/admin/workspace/7/coding/double-coded-review/12/draft',
     '/api/admin/workspace/7/coding/jobs/12/apply-results',
     '/api/admin/workspace/7/coding/reset-version'
-  ])('increments around a successful coding mutation at %s', async originalUrl => {
+  ])('increments after a successful coding mutation at %s', async originalUrl => {
     const query = jest.fn().mockResolvedValue([]);
     const interceptor = new CodingStatusRevisionInterceptor({
       manager: { query }
@@ -41,11 +41,11 @@ describe('CodingStatusRevisionInterceptor', () => {
       )
     ).resolves.toBe('ok');
 
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenCalledTimes(1);
     expect(next.handle).toHaveBeenCalledTimes(1);
   });
 
-  it('invalidates once before a failed coding mutation', async () => {
+  it('does not invalidate after a failed coding mutation', async () => {
     const query = jest.fn().mockResolvedValue([]);
     const interceptor = new CodingStatusRevisionInterceptor({
       manager: { query }
@@ -68,7 +68,7 @@ describe('CodingStatusRevisionInterceptor', () => {
       )
     ).rejects.toThrow('failed');
 
-    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).not.toHaveBeenCalled();
   });
 
   it('does not increment for reads or unrelated coding exports', async () => {
