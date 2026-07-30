@@ -30,6 +30,15 @@ const CODING_STATUS_MUTATION_PATHS = [
   '/coding/reset-version'
 ] as const;
 
+// These POST endpoints perform validation/calculation only. They deliberately
+// share their URL prefix with the corresponding apply endpoints, so the broad
+// mutation fragments above must not classify them as writes.
+const CODING_STATUS_READ_ONLY_POST_PATHS = [
+  /\/coding\/external-coding-import(?:\/stream)?$/,
+  /\/coding\/job-definitions\/[^/]+\/(?:refresh-preview|update-refresh-preview)$/,
+  /\/coding\/coder-trainings\/[^/]+\/apply-discussion-results-preview$/
+] as const;
+
 type WorkspaceRequest = {
   method?: string;
   originalUrl?: string;
@@ -70,6 +79,10 @@ export class CodingStatusRevisionInterceptor implements NestInterceptor {
       Number.isInteger(workspaceId) &&
       workspaceId > 0 &&
       MUTATING_HTTP_METHODS.has(method) &&
+      !(
+        method === 'POST' &&
+        CODING_STATUS_READ_ONLY_POST_PATHS.some(pattern => pattern.test(path))
+      ) &&
       CODING_STATUS_MUTATION_PATHS.some(fragment => path.includes(fragment))
     );
   }

@@ -93,4 +93,25 @@ describe('CodingStatusRevisionInterceptor', () => {
 
     expect(query).not.toHaveBeenCalled();
   });
+
+  it.each([
+    '/api/admin/workspace/7/coding/external-coding-import',
+    '/api/admin/workspace/7/coding/external-coding-import/stream',
+    '/api/admin/workspace/7/coding/job-definitions/12/refresh-preview',
+    '/api/admin/workspace/7/coding/job-definitions/12/update-refresh-preview',
+    '/api/admin/workspace/7/coding/coder-trainings/12/apply-discussion-results-preview'
+  ])('does not increment for the read-only POST endpoint %s', async originalUrl => {
+    const query = jest.fn().mockResolvedValue([]);
+    const interceptor = new CodingStatusRevisionInterceptor({
+      manager: { query }
+    } as never);
+    const next = { handle: jest.fn().mockReturnValue(of('ok')) } as CallHandler;
+
+    await lastValueFrom(
+      interceptor.intercept(createContext('POST', originalUrl), next)
+    );
+
+    expect(next.handle).toHaveBeenCalledTimes(1);
+    expect(query).not.toHaveBeenCalled();
+  });
 });
