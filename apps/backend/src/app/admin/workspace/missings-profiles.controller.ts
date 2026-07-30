@@ -7,6 +7,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
+import { MutatesCodingStatus } from '../workspace-coding/coding-status-mutation.decorator';
 
 @Controller('admin/workspace/:workspace_id/missings-profiles')
 export class MissingsProfilesController {
@@ -42,6 +43,7 @@ export class MissingsProfilesController {
   }
 
   @Put(':label')
+  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   async updateMissingsProfile(
@@ -53,6 +55,7 @@ export class MissingsProfilesController {
   }
 
   @Delete(':label')
+  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   async deleteMissingsProfile(

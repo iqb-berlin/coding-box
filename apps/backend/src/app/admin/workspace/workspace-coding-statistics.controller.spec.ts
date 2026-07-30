@@ -22,6 +22,9 @@ describe('WorkspaceCodingStatisticsController', () => {
     getReadiness: jest.Mock;
     getReadinessFromCache: jest.Mock;
   };
+  let codingFreshnessService: {
+    getWorkspaceStatusRevision: jest.Mock;
+  };
   let controller: WorkspaceCodingStatisticsController;
   const request = {
     protocol: 'http',
@@ -85,6 +88,13 @@ describe('WorkspaceCodingStatisticsController', () => {
       }),
       getReadinessFromCache: jest.fn().mockResolvedValue(null)
     };
+    codingFreshnessService = {
+      getWorkspaceStatusRevision: jest.fn().mockResolvedValue({
+        workspaceId: 5,
+        testResultsRevision: 7,
+        codingStatusRevision: '11'
+      })
+    };
 
     controller = new WorkspaceCodingStatisticsController(
       codingStatisticsService as never,
@@ -92,7 +102,7 @@ describe('WorkspaceCodingStatisticsController', () => {
       {} as never,
       {} as never,
       codingReviewService as never,
-      {} as never,
+      codingFreshnessService as never,
       {} as never,
       codingReadinessService as never,
       codingReplayService as never,
@@ -104,6 +114,16 @@ describe('WorkspaceCodingStatisticsController', () => {
       }
       return undefined;
     });
+  });
+
+  it('returns the workspace coding status revision', async () => {
+    await expect(controller.getCodingStatusRevision(5)).resolves.toEqual({
+      workspaceId: 5,
+      testResultsRevision: 7,
+      codingStatusRevision: '11'
+    });
+    expect(codingFreshnessService.getWorkspaceStatusRevision)
+      .toHaveBeenCalledWith(5);
   });
 
   it('requires coding-manager access for applied results overview', () => {

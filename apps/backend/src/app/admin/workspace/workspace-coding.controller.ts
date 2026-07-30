@@ -39,6 +39,7 @@ import {
 } from '../../database/services/coding/coding-response-query.service';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { JobQueueService } from '../../job-queue/job-queue.service';
+import { MutatesCodingStatus } from '../workspace-coding/coding-status-mutation.decorator';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -289,6 +290,7 @@ export class WorkspaceCodingController {
   }
 
   @Post(':workspace_id/coding/apply-empty-responses')
+  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   @ApiTags('coding')

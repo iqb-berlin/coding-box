@@ -5,3 +5,4 @@ export {
   lockWorkspaceTestResultsMutationInTransaction,
   withWorkspaceTestResultsMutationLock
 } from './workspace-test-results-lock.util';
+export * from './workspace-coding-status-revision.util';

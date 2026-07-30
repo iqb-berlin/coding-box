@@ -47,6 +47,7 @@ import {
   TrainingComparisonSortDirection,
   WithinTrainingCodingComparisonPageDto
 } from '../../../../../../api-dto/coding/training-comparison.dto';
+import { MutatesCodingStatus } from '../workspace-coding/coding-status-mutation.decorator';
 import { sanitizeCsvText } from '../../utils/csv.util';
 
 const TRAINING_RELIABILITY_EXPORT_HEADERS = [
@@ -524,6 +525,7 @@ export class WorkspaceCoderTrainingController {
   }
 
   @Post(':workspace_id/coding/coder-training-jobs')
+  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
@@ -900,6 +902,7 @@ export class WorkspaceCoderTrainingController {
   }
 
   @Post(':workspace_id/coding/coder-trainings/:trainingId/apply-discussion-results')
+  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   @ApiTags('coding')
@@ -943,6 +946,7 @@ export class WorkspaceCoderTrainingController {
   }
 
   @Put(':workspace_id/coding/coder-trainings/:trainingId')
+  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
@@ -1148,6 +1152,7 @@ export class WorkspaceCoderTrainingController {
   }
 
   @Delete(':workspace_id/coding/coder-trainings/:trainingId')
+  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })

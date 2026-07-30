@@ -134,6 +134,7 @@ interface SavedCodeProgress {
 }
 
 type PlanningStatusState =
+  'not-checked' |
   'loading' |
   'planning-data-required' |
   'preparation-required' |
@@ -2580,6 +2581,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         return 'status-attention';
       case 'complete':
         return 'status-complete';
+      case 'not-checked':
       case 'loading':
       case 'planning-data-required':
       case 'planning-ready':
@@ -2593,6 +2595,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private getPlanningStatusState(): PlanningStatusState {
     if (this.isPlanningStatusLoading()) {
       return 'loading';
+    }
+
+    if (this.activeManualTab !== 'planning' &&
+      !this.hasLoadedPlanningDataBundle) {
+      return 'not-checked';
     }
 
     if (this.shouldRequirePlanningDataRefresh()) {
@@ -2654,6 +2661,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   getPlanningStatusIcon(): string {
     switch (this.getPlanningStatusState()) {
+      case 'not-checked':
+        return 'help_outline';
       case 'loading':
         return 'sync';
       case 'planning-data-required':
@@ -2685,6 +2694,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   getPlanningStatusTitle(): string {
     switch (this.getPlanningStatusState()) {
+      case 'not-checked':
+        return 'Kodierstand nicht geprüft';
       case 'loading':
         return 'Status wird aktualisiert';
       case 'planning-data-required':
@@ -2720,6 +2731,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   getPlanningStatusDescription(): string {
     const planningStatusState = this.getPlanningStatusState();
+
+    if (planningStatusState === 'not-checked') {
+      return 'Öffnen oder aktualisieren Sie die Planung, um den aktuellen Kodierstand zu prüfen.';
+    }
 
     if (planningStatusState === 'loading') {
       return 'Die Planungs- und Kodierfortschritte werden geladen.';
@@ -2793,6 +2808,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   getPlanningNextStepTitle(): string {
     switch (this.getPlanningStatusState()) {
+      case 'not-checked':
+        return 'Kodierstand prüfen';
       case 'loading':
         return 'Planungsstand wird geladen';
       case 'planning-data-required':
@@ -2831,6 +2848,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const unavailableCases = this.getUnavailableCasesForNewJobs();
 
     switch (this.getPlanningStatusState()) {
+      case 'not-checked':
+        return 'Öffnen Sie die Planung, um den Kodierstand zu laden.';
       case 'loading':
         return 'Warten Sie kurz, bis die Planungsdaten aktualisiert sind.';
       case 'planning-data-required':
@@ -2875,6 +2894,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   getPlanningNextStepActionLabel(): string {
     switch (this.getPlanningStatusState()) {
+      case 'not-checked':
+        return 'Zur Planung';
       case 'warning':
         return this.hasVariableCoverageConflicts() ?
           'Zu den Jobdefinitionen' :
@@ -2982,6 +3003,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   getPlanningNextStepIcon(): string {
     switch (this.getPlanningStatusState()) {
+      case 'not-checked':
+        return 'fact_check';
       case 'planning-data-required':
         return 'refresh';
       case 'warning':
