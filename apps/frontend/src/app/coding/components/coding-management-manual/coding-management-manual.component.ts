@@ -2593,13 +2593,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private getPlanningStatusState(): PlanningStatusState {
-    if (this.isPlanningStatusLoading()) {
-      return 'loading';
-    }
-
     if (this.activeManualTab !== 'planning' &&
       !this.hasLoadedPlanningDataBundle) {
       return 'not-checked';
+    }
+
+    if (this.isPlanningStatusLoading()) {
+      return 'loading';
     }
 
     if (this.shouldRequirePlanningDataRefresh()) {

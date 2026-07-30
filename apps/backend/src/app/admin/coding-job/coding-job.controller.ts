@@ -30,7 +30,6 @@ import { CreateCodingJobDto } from './dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from './dto/update-coding-job.dto';
 import { AssignCodersDto } from './dto/assign-coders.dto';
 import { VariableDto } from '../variable-bundle/dto/variable.dto';
-import { MutatesCodingStatus } from '../workspace-coding/coding-status-mutation.decorator';
 
 @ApiTags('Admin Coding Jobs')
 @Controller('admin/workspace/:workspace_id/coding-job')
@@ -129,7 +128,6 @@ export class CodingJobController {
   }
 
   @Post()
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -178,7 +176,6 @@ export class CodingJobController {
   }
 
   @Put(':id')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -228,7 +225,6 @@ export class CodingJobController {
   }
 
   @Delete(':id')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -274,7 +270,6 @@ export class CodingJobController {
   }
 
   @Post(':id/assign-coders')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({

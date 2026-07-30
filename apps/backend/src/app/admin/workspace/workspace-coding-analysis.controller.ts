@@ -32,7 +32,6 @@ import { ManualCodeAvailabilityValidationDto } from '../../../../../../api-dto/c
 import { ResponseMatchingFlag } from '../../database/services/coding/coding-job.service';
 import { Setting } from '../../database/entities/setting.entity';
 import { getWorkspaceRegexSearchEnabled } from '../../utils/regex-search.util';
-import { MutatesCodingStatus } from '../workspace-coding/coding-status-mutation.decorator';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -708,7 +707,6 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Post(':workspace_id/coding/aggregation-settings')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
   @ApiTags('coding')
@@ -752,7 +750,6 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Post(':workspace_id/coding/apply-duplicate-aggregation')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
   @ApiTags('coding')
@@ -817,7 +814,6 @@ export class WorkspaceCodingAnalysisController {
   }
 
   @Post(':workspace_id/coding/response-analysis')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
   @ApiTags('coding')

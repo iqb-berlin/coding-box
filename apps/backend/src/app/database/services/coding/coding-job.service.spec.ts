@@ -100,7 +100,7 @@ describe('CodingJobService', () => {
   let responseRepository: ReturnType<typeof createRepo>;
   let fileUploadRepository: ReturnType<typeof createRepo>;
   let settingRepository: ReturnType<typeof createRepo>;
-  let connection: { transaction: jest.Mock; query: jest.Mock };
+  let connection: { transaction: jest.Mock };
   let cacheService: { delete: jest.Mock; incr: jest.Mock };
   let codingFreshnessService: { reconcileAppliedManualCodingJobs: jest.Mock };
   let codingFileCacheService: { getVariablePageMap: jest.Mock };
@@ -184,7 +184,6 @@ describe('CodingJobService', () => {
     settingRepository = createRepo();
     coderTrainingDiscussionResultRepository = createRepo();
     connection = {
-      query: jest.fn().mockResolvedValue([]),
       transaction: jest.fn(callback => callback({
         query: jest.fn().mockResolvedValue([]),
         getRepository: (entity: unknown) => {

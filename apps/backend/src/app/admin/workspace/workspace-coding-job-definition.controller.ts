@@ -36,7 +36,6 @@ import {
   JobDefinitionRefreshApplyResultDto,
   JobDefinitionRefreshPreviewDto
 } from '../../../../../../api-dto/coding/job-refresh.dto';
-import { MutatesCodingStatus } from '../workspace-coding/coding-status-mutation.decorator';
 
 const NUMBER_RECORD_SCHEMA = {
   type: 'object',
@@ -178,7 +177,6 @@ export class WorkspaceCodingJobDefinitionController {
   ) { }
 
   @Post(':workspace_id/coding/job-definitions')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
   @ApiTags('coding')
@@ -353,7 +351,6 @@ export class WorkspaceCodingJobDefinitionController {
   }
 
   @Put(':workspace_id/coding/job-definitions/:id')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
   @ApiTags('coding')
@@ -375,7 +372,6 @@ export class WorkspaceCodingJobDefinitionController {
   }
 
   @Put(':workspace_id/coding/job-definitions/:id/approve')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
   @ApiTags('coding')
@@ -397,7 +393,6 @@ export class WorkspaceCodingJobDefinitionController {
   }
 
   @Delete(':workspace_id/coding/job-definitions/:id')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
   @ApiTags('coding')
@@ -422,7 +417,6 @@ export class WorkspaceCodingJobDefinitionController {
   }
 
   @Post(':workspace_id/coding/job-definitions/:id/create-job')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
   @ApiTags('coding')
@@ -638,7 +632,6 @@ export class WorkspaceCodingJobDefinitionController {
   }
 
   @Post(':workspace_id/coding/job-definitions/:id/refresh-apply')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
   @ApiTags('coding')
@@ -658,7 +651,6 @@ export class WorkspaceCodingJobDefinitionController {
   }
 
   @Post(':workspace_id/coding/job-definitions/:id/update-refresh-apply')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
   @ApiTags('coding')

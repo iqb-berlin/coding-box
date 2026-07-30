@@ -30,9 +30,7 @@ import {
   CodingFreshnessVersion
 } from '../../../../../../../api-dto/coding/coding-freshness.dto';
 import { CodingJobFreshnessStatus } from '../../../../../../../api-dto/coding/job-refresh.dto';
-import { CodingStatusRevisionDto } from '../../../../../../../api-dto/coding/coding-status-revision.dto';
 import { statusStringToNumber } from '../../utils/response-status-converter';
-import { getWorkspaceCodingStatusRevision } from '../shared/workspace-coding-status-revision.util';
 import { IQB_STANDARD_MISSING_CODES, MissingsProfilesService } from './missings-profiles.service';
 import { getNonCodingIssueReviewJobSqlCondition } from './coding-job-type.util';
 import { getCodingVariableIdCandidateSql } from './coding-response-candidate.util';
@@ -127,19 +125,6 @@ export class CodingFreshnessService {
       'mir'
     );
     return missing.code;
-  }
-
-  async getWorkspaceStatusRevision(
-    workspaceId: number
-  ): Promise<CodingStatusRevisionDto> {
-    const revision = await getWorkspaceCodingStatusRevision(
-      this.connection,
-      workspaceId
-    );
-    return {
-      workspaceId,
-      ...revision
-    };
   }
 
   async getSummary(workspaceId: number): Promise<CodingFreshnessSummaryDto> {
