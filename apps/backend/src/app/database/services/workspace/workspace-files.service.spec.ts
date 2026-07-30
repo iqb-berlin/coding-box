@@ -3,6 +3,17 @@ import { WorkspaceFilesService } from './workspace-files.service';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
 import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
 import { NO_CODING_SCHEME_REF_NORMALIZED } from '../../entities/file_upload.entity';
+import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
+
+jest.mock('../shared/workspace-test-results-lock.util', () => ({
+  withWorkspaceTestResultsMutationLock: jest.fn(
+    (_connection: unknown, _workspaceId: number, callback: () => Promise<unknown>) => callback()
+  )
+}));
+
+const mockWithWorkspaceTestResultsMutationLock = jest.mocked(
+  withWorkspaceTestResultsMutationLock
+);
 
 describe('WorkspaceFilesService.handleFile', () => {
   beforeAll(() => {
@@ -233,7 +244,10 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     createQueryBuilder: jest.fn(),
     find: jest.fn(),
     findOne: jest.fn(),
-    upsert: jest.fn().mockResolvedValue(undefined)
+    upsert: jest.fn().mockResolvedValue(undefined),
+    manager: {
+      connection: {}
+    }
   };
   const mockCodingStatisticsService = {
     invalidateCache: jest.fn().mockResolvedValue(undefined),
@@ -442,6 +456,38 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
       .toHaveBeenCalledWith(1);
     expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache)
       .toHaveBeenCalledWith(1);
+    expect(mockWithWorkspaceTestResultsMutationLock).toHaveBeenCalledWith(
+      mockFileUploadRepository.manager.connection,
+      1,
+      expect.any(Function)
+    );
+  });
+
+  it('keeps failed uploads inside the coding-status mutation lock', async () => {
+    const service = makeService();
+    jest.spyOn(service, 'handleFile').mockReturnValue([
+      Promise.resolve({
+        failed: true,
+        filename: 'broken.zip',
+        reason: 'Invalid ZIP entry'
+      })
+    ]);
+
+    const result = await service.uploadTestFiles(1, [{
+      fieldname: 'files',
+      originalname: 'broken.zip',
+      encoding: '7bit',
+      mimetype: 'application/zip',
+      buffer: Buffer.from('broken'),
+      size: 6
+    }], false);
+
+    expect(result.failed).toBe(1);
+    expect(mockWithWorkspaceTestResultsMutationLock).toHaveBeenCalledWith(
+      mockFileUploadRepository.manager.connection,
+      1,
+      expect.any(Function)
+    );
   });
 
   it('extracts coding scheme refs for unit XML files uploaded as octet-stream', async () => {
@@ -566,6 +612,11 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     ]);
 
     expect(invalidateSpy).toHaveBeenCalledWith(1);
+    expect(mockWithWorkspaceTestResultsMutationLock).toHaveBeenCalledWith(
+      mockFileUploadRepository.manager.connection,
+      1,
+      expect.any(Function)
+    );
   });
 
   it('extracts coding scheme refs for Unit files imported from Testcenter', async () => {
@@ -732,7 +783,10 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
   };
 
   const mockFileUploadRepository = {
-    createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder)
+    createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+    manager: {
+      connection: {}
+    }
   };
 
   const mockCodingStatisticsService = {
@@ -781,6 +835,11 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
       { ids: [1, 2, 3] }
     );
     expect(mockQueryBuilder.execute).toHaveBeenCalled();
+    expect(mockWithWorkspaceTestResultsMutationLock).toHaveBeenCalledWith(
+      mockFileUploadRepository.manager.connection,
+      workspaceId,
+      expect.any(Function)
+    );
     expect(result).toBe(true);
   });
 
@@ -819,6 +878,20 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
     expect(result).toBe(false);
     expect(mockFileUploadRepository.createQueryBuilder).not.toHaveBeenCalled();
     expect(mockCodingStatisticsService.invalidateCache).not.toHaveBeenCalled();
+    expect(mockWithWorkspaceTestResultsMutationLock).not.toHaveBeenCalled();
+  });
+
+  it('should keep the mutation lock when no matching file was deleted', async () => {
+    const service = makeService();
+    mockQueryBuilder.execute.mockResolvedValueOnce({ affected: 0 });
+
+    await service.deleteTestFiles(1, ['1']);
+
+    expect(mockWithWorkspaceTestResultsMutationLock).toHaveBeenCalledWith(
+      mockFileUploadRepository.manager.connection,
+      1,
+      expect.any(Function)
+    );
   });
 
   it('should return false when not all requested files were deleted', async () => {
@@ -834,6 +907,87 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
   });
 });
 
+describe('WorkspaceFilesService.createDummyTestTakerFile', () => {
+  type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+
+  const mockFileUploadRepository = {
+    find: jest.fn(),
+    create: jest.fn((file: unknown) => file),
+    save: jest.fn(),
+    manager: {
+      connection: {}
+    }
+  };
+
+  function makeService(): WorkspaceFilesService {
+    return new WorkspaceFilesService(
+      mockFileUploadRepository as unknown as CtorParams[0],
+      {} as unknown as CtorParams[1],
+      {} as unknown as CtorParams[2],
+      {} as unknown as CtorParams[3],
+      {} as unknown as CtorParams[4],
+      {} as unknown as CtorParams[5],
+      {} as unknown as CtorParams[6],
+      {} as unknown as CtorParams[7],
+      {} as unknown as CtorParams[8],
+      {} as unknown as CtorParams[9],
+      { delete: jest.fn() } as unknown as CtorParams[10],
+      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11]
+    );
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFileUploadRepository.create.mockImplementation((file: unknown) => file);
+    mockFileUploadRepository.save.mockImplementation(async (file: unknown) => file);
+  });
+
+  it('should lock the mutation and invalidate caches after creating a dummy TestTakers file', async () => {
+    mockFileUploadRepository.find.mockResolvedValueOnce([
+      { file_id: 'BOOKLET_1' }
+    ]);
+    const service = makeService();
+    const invalidateSpy = jest
+      .spyOn(service, 'invalidateWorkspaceFileCaches')
+      .mockResolvedValue(undefined);
+
+    const result = await service.createDummyTestTakerFile(1);
+
+    expect(result).toBe(true);
+    expect(mockWithWorkspaceTestResultsMutationLock).toHaveBeenCalledWith(
+      mockFileUploadRepository.manager.connection,
+      1,
+      expect.any(Function)
+    );
+    expect(mockFileUploadRepository.save).toHaveBeenCalledTimes(1);
+    expect(invalidateSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('should invalidate caches when creating the TestTakers file fails after the booklet was saved', async () => {
+    mockFileUploadRepository.find
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ file_id: 'UNIT_1' }]);
+    mockFileUploadRepository.save
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(new Error('TestTakers save failed'));
+    const service = makeService();
+    const invalidateSpy = jest
+      .spyOn(service, 'invalidateWorkspaceFileCaches')
+      .mockResolvedValue(undefined);
+
+    const result = await service.createDummyTestTakerFile(1);
+
+    expect(result).toBe(false);
+    expect(mockWithWorkspaceTestResultsMutationLock).toHaveBeenCalledWith(
+      mockFileUploadRepository.manager.connection,
+      1,
+      expect.any(Function)
+    );
+    expect(mockFileUploadRepository.save).toHaveBeenCalledTimes(2);
+    expect(invalidateSpy).toHaveBeenCalledWith(1);
+  });
+});
+
 describe('WorkspaceFilesService response deletion cache invalidation', () => {
   type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
 
@@ -846,9 +1000,15 @@ describe('WorkspaceFilesService response deletion cache invalidation', () => {
     invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
   };
 
+  const mockFileUploadRepository = {
+    manager: {
+      connection: {}
+    }
+  };
+
   function makeService(): WorkspaceFilesService {
     return new WorkspaceFilesService(
-      {} as unknown as CtorParams[0],
+      mockFileUploadRepository as unknown as CtorParams[0],
       {} as unknown as CtorParams[1],
       {} as unknown as CtorParams[2],
       {} as unknown as CtorParams[3],
@@ -874,6 +1034,11 @@ describe('WorkspaceFilesService response deletion cache invalidation', () => {
     const deletedCount = await service.deleteInvalidResponses(1, [10, 11]);
 
     expect(deletedCount).toBe(2);
+    expect(mockWithWorkspaceTestResultsMutationLock).toHaveBeenCalledWith(
+      mockFileUploadRepository.manager.connection,
+      1,
+      expect.any(Function)
+    );
     expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
   });
 
@@ -884,6 +1049,11 @@ describe('WorkspaceFilesService response deletion cache invalidation', () => {
     const deletedCount = await service.deleteInvalidResponses(1, [10]);
 
     expect(deletedCount).toBe(0);
+    expect(mockWithWorkspaceTestResultsMutationLock).toHaveBeenCalledWith(
+      mockFileUploadRepository.manager.connection,
+      1,
+      expect.any(Function)
+    );
     expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache).not.toHaveBeenCalled();
   });
 
@@ -894,6 +1064,11 @@ describe('WorkspaceFilesService response deletion cache invalidation', () => {
     const deletedCount = await service.deleteAllInvalidResponses(1, 'variables');
 
     expect(deletedCount).toBe(3);
+    expect(mockWithWorkspaceTestResultsMutationLock).toHaveBeenCalledWith(
+      mockFileUploadRepository.manager.connection,
+      1,
+      expect.any(Function)
+    );
     expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
   });
 });

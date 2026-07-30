@@ -80,6 +80,7 @@ import {
 } from '../../../utils/regex-search.util';
 import { hasVisibleManualInstruction } from '../../../utils/manual-instruction.util';
 import { isExportWorkerProcess } from '../../../export-worker/export-worker-role';
+import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
 type WorkspaceUnitVisibility = {
   globalIgnoredUnits: Set<string>;
@@ -858,29 +859,35 @@ export class WorkspaceFilesService implements OnModuleInit {
       return false;
     }
 
-    const res = await this.fileUploadRepository
-      .createQueryBuilder()
-      .delete()
-      .from(FileUpload)
-      .where('workspace_id = :workspaceId', { workspaceId: workspace_id })
-      .andWhere('id IN (:...ids)', { ids: numericIds })
-      .execute();
+    return withWorkspaceTestResultsMutationLock(
+      this.fileUploadRepository.manager.connection,
+      workspace_id,
+      async () => {
+        const res = await this.fileUploadRepository
+          .createQueryBuilder()
+          .delete()
+          .from(FileUpload)
+          .where('workspace_id = :workspaceId', { workspaceId: workspace_id })
+          .andWhere('id IN (:...ids)', { ids: numericIds })
+          .execute();
 
-    // Invalidate memory caches inside this service
-    await this.invalidateWorkspaceFileCaches(workspace_id);
+        // Invalidate memory caches inside this service
+        await this.invalidateWorkspaceFileCaches(workspace_id);
 
-    // Invalidate coding statistics cache since test files changed
-    await this.codingStatisticsService.invalidateCache(workspace_id);
+        // Invalidate coding statistics cache since test files changed
+        await this.codingStatisticsService.invalidateCache(workspace_id);
 
-    const deletedCount = res.affected ?? 0;
-    const success = deletedCount === numericIds.length;
-    if (!success) {
-      this.logger.warn(
-        `Requested deletion of ${numericIds.length} test files for workspace ${workspace_id}, but deleted ${deletedCount}`
-      );
-    }
+        const deletedCount = res.affected ?? 0;
+        const success = deletedCount === numericIds.length;
+        if (!success) {
+          this.logger.warn(
+            `Requested deletion of ${numericIds.length} test files for workspace ${workspace_id}, but deleted ${deletedCount}`
+          );
+        }
 
-    return success;
+        return success;
+      }
+    );
   }
 
   async validateTestFiles(
@@ -911,28 +918,35 @@ export class WorkspaceFilesService implements OnModuleInit {
 
   async createDummyTestTakerFile(workspaceId: number): Promise<boolean> {
     try {
-      const booklets = await this.fileUploadRepository.find({
-        where: { workspace_id: workspaceId, file_type: 'Booklet' }
-      });
+      return await withWorkspaceTestResultsMutationLock(
+        this.fileUploadRepository.manager.connection,
+        workspaceId,
+        async () => {
+          let hasMutatedWorkspaceFiles = false;
 
-      if (!booklets || booklets.length === 0) {
-        const units = await this.fileUploadRepository.find({
-          where: { workspace_id: workspaceId, file_type: 'Unit' }
-        });
+          try {
+            const booklets = await this.fileUploadRepository.find({
+              where: { workspace_id: workspaceId, file_type: 'Booklet' }
+            });
 
-        if (!units || units.length === 0) {
-          this.logger.warn(
-            `No booklets or units found in workspace with ID ${workspaceId}.`
-          );
-          return false;
-        }
+            if (!booklets || booklets.length === 0) {
+              const units = await this.fileUploadRepository.find({
+                where: { workspace_id: workspaceId, file_type: 'Unit' }
+              });
 
-        // Create a fake booklet that includes all available units
-        const unitRefs = units
-          .map(unit => `  <Unit id="${unit.file_id}"/>`)
-          .join('\n');
-        const fakeBookletId = 'AUTO-GENERATED-BOOKLET';
-        const fakeBookletXml = `<?xml version="1.0" encoding="utf-8"?>
+              if (!units || units.length === 0) {
+                this.logger.warn(
+                  `No booklets or units found in workspace with ID ${workspaceId}.`
+                );
+                return false;
+              }
+
+              // Create a fake booklet that includes all available units
+              const unitRefs = units
+                .map(unit => `  <Unit id="${unit.file_id}"/>`)
+                .join('\n');
+              const fakeBookletId = 'AUTO-GENERATED-BOOKLET';
+              const fakeBookletXml = `<?xml version="1.0" encoding="utf-8"?>
 <Booklet>
   <Metadata>
     <Id>${fakeBookletId}</Id>
@@ -944,21 +958,22 @@ ${unitRefs}
   </Units>
 </Booklet>`;
 
-        const fakeBooklet = this.fileUploadRepository.create({
-          workspace_id: workspaceId,
-          filename: 'auto-generated-booklet.xml',
-          file_id: fakeBookletId,
-          file_type: 'Booklet',
-          file_size: fakeBookletXml.length,
-          data: fakeBookletXml
-        });
+              const fakeBooklet = this.fileUploadRepository.create({
+                workspace_id: workspaceId,
+                filename: 'auto-generated-booklet.xml',
+                file_id: fakeBookletId,
+                file_type: 'Booklet',
+                file_size: fakeBookletXml.length,
+                data: fakeBookletXml
+              });
 
-        await this.fileUploadRepository.save(fakeBooklet);
-        this.logger.log(
-          `Created fake booklet for workspace ${workspaceId} with ${units.length} units.`
-        );
+              await this.fileUploadRepository.save(fakeBooklet);
+              hasMutatedWorkspaceFiles = true;
+              this.logger.log(
+                `Created fake booklet for workspace ${workspaceId} with ${units.length} units.`
+              );
 
-        const dummyTestTakerXml = `<?xml version="1.0" encoding="utf-8"?>
+              const dummyTestTakerXml = `<?xml version="1.0" encoding="utf-8"?>
 <TestTakers>
   <Metadata>
     <Description>Auto-generated TestTakers file with auto-generated booklet</Description>
@@ -970,27 +985,28 @@ ${unitRefs}
   </Group>
 </TestTakers>`;
 
-        const newTestTakerFile = this.fileUploadRepository.create({
-          workspace_id: workspaceId,
-          filename: 'auto-generated-testtakers.xml',
-          file_id: 'AUTO-GENERATED-TESTTAKERS',
-          file_type: 'TestTakers',
-          file_size: dummyTestTakerXml.length,
-          data: dummyTestTakerXml
-        });
+              const newTestTakerFile = this.fileUploadRepository.create({
+                workspace_id: workspaceId,
+                filename: 'auto-generated-testtakers.xml',
+                file_id: 'AUTO-GENERATED-TESTTAKERS',
+                file_type: 'TestTakers',
+                file_size: dummyTestTakerXml.length,
+                data: dummyTestTakerXml
+              });
 
-        await this.fileUploadRepository.save(newTestTakerFile);
-        this.logger.log(
-          `Created dummy TestTakers file for workspace ${workspaceId} with auto-generated booklet.`
-        );
-        return true;
-      }
+              await this.fileUploadRepository.save(newTestTakerFile);
+              hasMutatedWorkspaceFiles = true;
+              this.logger.log(
+                `Created dummy TestTakers file for workspace ${workspaceId} with auto-generated booklet.`
+              );
+              return true;
+            }
 
-      const bookletRefs = booklets
-        .map(booklet => `    <Booklet>${booklet.file_id}</Booklet>`)
-        .join('\n');
+            const bookletRefs = booklets
+              .map(booklet => `    <Booklet>${booklet.file_id}</Booklet>`)
+              .join('\n');
 
-      const dummyTestTakerXml = `<?xml version="1.0" encoding="utf-8"?>
+            const dummyTestTakerXml = `<?xml version="1.0" encoding="utf-8"?>
 <TestTakers>
   <Metadata>
     <Description>Auto-generated TestTakers file including all booklets</Description>
@@ -1002,21 +1018,29 @@ ${bookletRefs}
   </Group>
 </TestTakers>`;
 
-      const newTestTakerFile = this.fileUploadRepository.create({
-        workspace_id: workspaceId,
-        filename: 'auto-generated-testtakers.xml',
-        file_id: 'AUTO-GENERATED-TESTTAKERS',
-        file_type: 'TestTakers',
-        file_size: dummyTestTakerXml.length,
-        data: dummyTestTakerXml
-      });
+            const newTestTakerFile = this.fileUploadRepository.create({
+              workspace_id: workspaceId,
+              filename: 'auto-generated-testtakers.xml',
+              file_id: 'AUTO-GENERATED-TESTTAKERS',
+              file_type: 'TestTakers',
+              file_size: dummyTestTakerXml.length,
+              data: dummyTestTakerXml
+            });
 
-      await this.fileUploadRepository.save(newTestTakerFile);
+            await this.fileUploadRepository.save(newTestTakerFile);
+            hasMutatedWorkspaceFiles = true;
 
-      this.logger.log(
-        `Created dummy TestTakers file for workspace ${workspaceId} with ${booklets.length} booklets.`
+            this.logger.log(
+              `Created dummy TestTakers file for workspace ${workspaceId} with ${booklets.length} booklets.`
+            );
+            return true;
+          } finally {
+            if (hasMutatedWorkspaceFiles) {
+              await this.invalidateWorkspaceFileCaches(workspaceId);
+            }
+          }
+        }
       );
-      return true;
     } catch (error) {
       this.logger.error(
         `Error creating dummy TestTakers file for workspace ${workspaceId}: ${error.message}`,
@@ -1297,24 +1321,30 @@ ${bookletRefs}
     };
 
     try {
-      const result = await processInBatches(
-        originalFiles,
-        MAX_CONCURRENT_UPLOADS,
-        overwriteExisting,
-        overwriteAllowList
-      );
-      // Invalidate memory caches inside this service
-      await this.invalidateWorkspaceFileCaches(workspace_id);
+      return await withWorkspaceTestResultsMutationLock(
+        this.fileUploadRepository.manager.connection,
+        workspace_id,
+        async () => {
+          const result = await processInBatches(
+            originalFiles,
+            MAX_CONCURRENT_UPLOADS,
+            overwriteExisting,
+            overwriteAllowList
+          );
+          // Invalidate memory caches inside this service
+          await this.invalidateWorkspaceFileCaches(workspace_id);
 
-      if (this.shouldInvalidateCodingStatisticsAfterUpload(result)) {
-        await this.codingStatisticsService.invalidateCache(workspace_id);
-      }
-      if (this.hasUploadedFiles(result)) {
-        await this.codingStatisticsService.invalidateIncompleteVariablesCache(
-          workspace_id
-        );
-      }
-      return result;
+          if (this.shouldInvalidateCodingStatisticsAfterUpload(result)) {
+            await this.codingStatisticsService.invalidateCache(workspace_id);
+          }
+          if (this.hasUploadedFiles(result)) {
+            await this.codingStatisticsService.invalidateIncompleteVariablesCache(
+              workspace_id
+            );
+          }
+          return result;
+        }
+      );
     } catch (error) {
       this.logger.error(
         `Unexpected error while uploading files for workspace ${workspace_id}:`,
@@ -2115,108 +2145,114 @@ ${bookletRefs}
         (normalized[0] as { workspace_id?: unknown } | undefined)?.workspace_id
       );
 
-      const requestedFileIds = normalized
-        .map(e => String((e as { file_id?: unknown }).file_id ?? ''))
-        .filter(Boolean);
+      return await withWorkspaceTestResultsMutationLock(
+        this.fileUploadRepository.manager.connection,
+        workspaceId,
+        async () => {
+          const requestedFileIds = normalized
+            .map(e => String((e as { file_id?: unknown }).file_id ?? ''))
+            .filter(Boolean);
 
-      const conflicts: TestFilesUploadConflictDto[] =
-        workspaceId && requestedFileIds.length ?
-          (
+          const conflicts: TestFilesUploadConflictDto[] =
+            workspaceId && requestedFileIds.length ?
+              (
+                await this.fileUploadRepository
+                  .createQueryBuilder('file')
+                  .select(['file.file_id', 'file.filename', 'file.file_type'])
+                  .where('file.workspace_id = :workspaceId', { workspaceId })
+                  .andWhere('file.file_id IN (:...fileIds)', {
+                    fileIds: requestedFileIds
+                  })
+                  .getMany()
+              ).map(f => ({
+                fileId: String(f.file_id || ''),
+                filename: String(f.filename || ''),
+                fileType: String(f.file_type || '')
+              })) :
+              [];
+
+          const conflictIds = new Set(conflicts.map(c => c.fileId));
+          const overwriteIdSet = new Set((overwriteFileIds || []).filter(Boolean));
+
+          const attemptedFiles: TestFilesUploadUploadedDto[] = normalized
+            .map(e => ({
+              fileId: String((e as { file_id?: unknown }).file_id ?? ''),
+              filename: String((e as { filename?: unknown }).filename ?? ''),
+              fileType: String((e as { file_type?: unknown }).file_type ?? '')
+            }))
+            .filter(f => !!f.fileId && !!f.filename);
+
+          const shouldOverwrite = (fileId: string): boolean => !!fileId && overwriteIdSet.has(fileId);
+
+          const insertableFiles = attemptedFiles.filter(
+            f => !conflictIds.has(f.fileId)
+          );
+          const overwriteFiles = attemptedFiles.filter(
+            f => conflictIds.has(f.fileId) && shouldOverwrite(f.fileId)
+          );
+          const remainingConflicts = conflicts.filter(
+            c => !shouldOverwrite(c.fileId)
+          );
+
+          const insertableEntries = normalized.filter(e => {
+            const id = String((e as { file_id?: unknown }).file_id ?? '');
+            return !!id && !conflictIds.has(id);
+          });
+          const overwriteEntries = normalized.filter(e => {
+            const id = String((e as { file_id?: unknown }).file_id ?? '');
+            return !!id && conflictIds.has(id) && shouldOverwrite(id);
+          });
+          const changedCodingSchemes =
+            await this.collectCodingSchemeChangesForFreshness(
+              workspaceId,
+              [...insertableEntries, ...overwriteEntries]
+            );
+
+          const registry = this.fileUploadRepository.create(insertableEntries);
+          if (registry.length > 0) {
             await this.fileUploadRepository
-              .createQueryBuilder('file')
-              .select(['file.file_id', 'file.filename', 'file.file_type'])
-              .where('file.workspace_id = :workspaceId', { workspaceId })
-              .andWhere('file.file_id IN (:...fileIds)', {
-                fileIds: requestedFileIds
-              })
-              .getMany()
-          ).map(f => ({
-            fileId: String(f.file_id || ''),
-            filename: String(f.filename || ''),
-            fileType: String(f.file_type || '')
-          })) :
-          [];
+              .createQueryBuilder()
+              .insert()
+              .into(FileUpload)
+              .values(registry)
+              .orIgnore()
+              .execute();
+          }
 
-      const conflictIds = new Set(conflicts.map(c => c.fileId));
-      const overwriteIdSet = new Set((overwriteFileIds || []).filter(Boolean));
-
-      const attemptedFiles: TestFilesUploadUploadedDto[] = normalized
-        .map(e => ({
-          fileId: String((e as { file_id?: unknown }).file_id ?? ''),
-          filename: String((e as { filename?: unknown }).filename ?? ''),
-          fileType: String((e as { file_type?: unknown }).file_type ?? '')
-        }))
-        .filter(f => !!f.fileId && !!f.filename);
-
-      const shouldOverwrite = (fileId: string): boolean => !!fileId && overwriteIdSet.has(fileId);
-
-      const insertableFiles = attemptedFiles.filter(
-        f => !conflictIds.has(f.fileId)
+          const overwriteRegistry = this.fileUploadRepository.create(
+            overwriteEntries.map(e => ({
+              ...(e as Record<string, unknown>),
+              created_at: new Date() as unknown as number
+            }))
+          );
+          if (overwriteRegistry.length > 0) {
+            await this.fileUploadRepository.upsert(overwriteRegistry, [
+              'file_id',
+              'workspace_id'
+            ]);
+          }
+          const freshnessIssues = (await Promise.all(changedCodingSchemes.map(change => (
+            this.markCodingSchemeFreshnessAfterFileChange(
+              workspaceId,
+              change.fileId,
+              change.previousData,
+              change.nextData
+            )
+          )))).filter((issue): issue is TestResultsUploadIssueDto => !!issue);
+          if (registry.length > 0 || overwriteRegistry.length > 0) {
+            await this.invalidateWorkspaceFileCaches(workspaceId);
+          }
+          return {
+            total: attemptedFiles.length,
+            uploaded: insertableFiles.length + overwriteFiles.length,
+            failed: 0,
+            uploadedFiles: [...insertableFiles, ...overwriteFiles],
+            conflicts: remainingConflicts.length ? remainingConflicts : undefined,
+            failedFiles: undefined,
+            issues: freshnessIssues.length ? freshnessIssues : undefined
+          };
+        }
       );
-      const overwriteFiles = attemptedFiles.filter(
-        f => conflictIds.has(f.fileId) && shouldOverwrite(f.fileId)
-      );
-      const remainingConflicts = conflicts.filter(
-        c => !shouldOverwrite(c.fileId)
-      );
-
-      const insertableEntries = normalized.filter(e => {
-        const id = String((e as { file_id?: unknown }).file_id ?? '');
-        return !!id && !conflictIds.has(id);
-      });
-      const overwriteEntries = normalized.filter(e => {
-        const id = String((e as { file_id?: unknown }).file_id ?? '');
-        return !!id && conflictIds.has(id) && shouldOverwrite(id);
-      });
-      const changedCodingSchemes =
-        await this.collectCodingSchemeChangesForFreshness(
-          workspaceId,
-          [...insertableEntries, ...overwriteEntries]
-        );
-
-      const registry = this.fileUploadRepository.create(insertableEntries);
-      if (registry.length > 0) {
-        await this.fileUploadRepository
-          .createQueryBuilder()
-          .insert()
-          .into(FileUpload)
-          .values(registry)
-          .orIgnore()
-          .execute();
-      }
-
-      const overwriteRegistry = this.fileUploadRepository.create(
-        overwriteEntries.map(e => ({
-          ...(e as Record<string, unknown>),
-          created_at: new Date() as unknown as number
-        }))
-      );
-      if (overwriteRegistry.length > 0) {
-        await this.fileUploadRepository.upsert(overwriteRegistry, [
-          'file_id',
-          'workspace_id'
-        ]);
-      }
-      const freshnessIssues = (await Promise.all(changedCodingSchemes.map(change => (
-        this.markCodingSchemeFreshnessAfterFileChange(
-          workspaceId,
-          change.fileId,
-          change.previousData,
-          change.nextData
-        )
-      )))).filter((issue): issue is TestResultsUploadIssueDto => !!issue);
-      if (registry.length > 0 || overwriteRegistry.length > 0) {
-        await this.invalidateWorkspaceFileCaches(workspaceId);
-      }
-      return {
-        total: attemptedFiles.length,
-        uploaded: insertableFiles.length + overwriteFiles.length,
-        failed: 0,
-        uploadedFiles: [...insertableFiles, ...overwriteFiles],
-        conflicts: remainingConflicts.length ? remainingConflicts : undefined,
-        failedFiles: undefined,
-        issues: freshnessIssues.length ? freshnessIssues : undefined
-      };
     } catch (error) {
       this.logger.error('Error during test center import', error);
       return {
@@ -2953,16 +2989,22 @@ ${bookletRefs}
     workspaceId: number,
     responseIds: number[]
   ): Promise<number> {
-    const deletedCount = await this.workspaceResponseValidationService.deleteInvalidResponses(
+    return withWorkspaceTestResultsMutationLock(
+      this.fileUploadRepository.manager.connection,
       workspaceId,
-      responseIds
+      async () => {
+        const deletedCount = await this.workspaceResponseValidationService.deleteInvalidResponses(
+          workspaceId,
+          responseIds
+        );
+        if (deletedCount > 0) {
+          await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
+            workspaceId
+          );
+        }
+        return deletedCount;
+      }
     );
-    if (deletedCount > 0) {
-      await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
-        workspaceId
-      );
-    }
-    return deletedCount;
   }
 
   async deleteAllInvalidResponses(
@@ -2973,16 +3015,22 @@ ${bookletRefs}
     | 'responseStatus'
     | 'duplicateResponses'
   ): Promise<number> {
-    const deletedCount = await this.workspaceResponseValidationService.deleteAllInvalidResponses(
+    return withWorkspaceTestResultsMutationLock(
+      this.fileUploadRepository.manager.connection,
       workspaceId,
-      validationType
+      async () => {
+        const deletedCount = await this.workspaceResponseValidationService.deleteAllInvalidResponses(
+          workspaceId,
+          validationType
+        );
+        if (deletedCount > 0) {
+          await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
+            workspaceId
+          );
+        }
+        return deletedCount;
+      }
     );
-    if (deletedCount > 0) {
-      await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
-        workspaceId
-      );
-    }
-    return deletedCount;
   }
 
   async onModuleInit(): Promise<void> {

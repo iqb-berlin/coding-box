@@ -55,4 +55,34 @@ describe('workspace test results mutation lock', () => {
     );
     expect(queryRunner.release).toHaveBeenCalledTimes(1);
   });
+
+  it('touches the status revision again and unlocks after a failed callback', async () => {
+    const callbackError = new Error('mutation failed');
+    const queryRunner = {
+      connect: jest.fn().mockResolvedValue(undefined),
+      query: jest.fn().mockResolvedValue([]),
+      release: jest.fn().mockResolvedValue(undefined)
+    };
+    const connection = {
+      createQueryRunner: jest.fn().mockReturnValue(queryRunner)
+    };
+
+    await expect(withWorkspaceTestResultsMutationLock(
+      connection as never,
+      3,
+      async () => {
+        throw callbackError;
+      }
+    )).rejects.toThrow(callbackError);
+
+    const revisionTouches = queryRunner.query.mock.calls.filter(
+      ([query]) => String(query).includes('INSERT INTO workspace_test_results_revision')
+    );
+    expect(revisionTouches).toHaveLength(2);
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_unlock($1::int, $2::int)',
+      expect.any(Array)
+    );
+    expect(queryRunner.release).toHaveBeenCalledTimes(1);
+  });
 });
