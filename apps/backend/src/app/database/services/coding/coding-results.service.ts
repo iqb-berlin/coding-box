@@ -1,6 +1,11 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, IsNull, Repository } from 'typeorm';
+import {
+  Brackets,
+  EntityManager,
+  IsNull,
+  Repository
+} from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
@@ -19,6 +24,7 @@ import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspa
 import { CodingValidationService } from './coding-validation.service';
 import { MissingsProfilesService } from './missings-profiles.service';
 import { getNonCodingIssueReviewJobSqlCondition } from './coding-job-type.util';
+import { EmptyResponseSelectionService } from './empty-response-selection.service';
 import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
@@ -68,6 +74,7 @@ export class CodingResultsService {
     private codingValidationService: CodingValidationService,
     private codingAnalysisService: CodingAnalysisService,
     private missingsProfilesService: MissingsProfilesService,
+    private emptyResponseSelectionService: EmptyResponseSelectionService,
     private workspaceExclusionService: WorkspaceExclusionService,
     @Optional()
     private codingFreshnessService?: CodingFreshnessService
@@ -785,11 +792,14 @@ export class CodingResultsService {
     this.logger.log(`Applying empty response coding for workspace ${workspaceId}`);
 
     try {
+      const emptyResponseContext =
+        await this.emptyResponseSelectionService.createContext(workspaceId);
+
       // Find all empty responses that don't have v2 coding yet
       // Only target unit responses (status_v1 = CODING_INCOMPLETE)
-      const emptyResponses = await this.responseRepository
+      const emptyResponseCandidateQuery = this.responseRepository
         .createQueryBuilder('response')
-        .leftJoin('response.unit', 'unit')
+        .leftJoinAndSelect('response.unit', 'unit')
         .leftJoin('unit.booklet', 'booklet')
         .leftJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
@@ -800,13 +810,42 @@ export class CodingResultsService {
             statusStringToNumber('INTENDED_INCOMPLETE')
           ]
         })
-        .andWhere('(response.value IS NULL OR TRIM(BOTH :whitespaces FROM response.value) = :emptyString OR response.value = :emptyArrayString)', {
-          whitespaces: ' \r\n\t',
-          emptyString: '',
-          emptyArrayString: '[]'
-        })
-        .andWhere('response.status_v2 IS NULL')
-        .getMany();
+        .andWhere('response.status_v2 IS NULL');
+
+      emptyResponseCandidateQuery.andWhere(new Brackets(candidateQuery => {
+        candidateQuery.where(
+          '(response.value IS NULL OR TRIM(BOTH :whitespaces FROM response.value) = :emptyString OR response.value = :emptyArrayString)',
+          {
+            whitespaces: ' \r\n\t',
+            emptyString: '',
+            emptyArrayString: '[]'
+          }
+        );
+
+        let derivedUnitIndex = 0;
+        emptyResponseContext.derivedVariableMap.forEach((variableIds, unitName) => {
+          if (variableIds.size === 0) {
+            return;
+          }
+
+          candidateQuery.orWhere(
+            `(UPPER(unit.name) = :derivedUnit${derivedUnitIndex} AND response.variableid IN (:...derivedVariables${derivedUnitIndex}))`,
+            {
+              [`derivedUnit${derivedUnitIndex}`]: unitName.toUpperCase(),
+              [`derivedVariables${derivedUnitIndex}`]: Array.from(variableIds)
+            }
+          );
+          derivedUnitIndex += 1;
+        });
+      }));
+
+      const emptyResponseCandidates =
+        await emptyResponseCandidateQuery.getMany();
+      const emptyResponses =
+        await this.emptyResponseSelectionService.filterEffectivelyEmptyResponses(
+          emptyResponseCandidates,
+          emptyResponseContext
+        );
 
       if (emptyResponses.length === 0) {
         return {

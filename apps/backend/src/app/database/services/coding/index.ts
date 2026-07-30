@@ -12,6 +12,7 @@ export { CodingReplayAnchorService } from './coding-replay-anchor.service';
 export { CodingReplayService } from './coding-replay.service';
 export { CodingResponseQueryService } from './coding-response-query.service';
 export { CodingResultsService } from './coding-results.service';
+export { EmptyResponseSelectionService } from './empty-response-selection.service';
 export { DoubleCodingReviewQueryService } from './double-coding-review-query.service';
 export { DoubleCodingReviewDecisionService } from './double-coding-review-decision.service';
 export { CodingStatisticsService } from './coding-statistics.service';

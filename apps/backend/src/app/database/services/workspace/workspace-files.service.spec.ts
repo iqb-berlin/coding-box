@@ -1383,6 +1383,55 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
     );
   });
 
+  it('should expose derived metadata only after a complete refresh', async () => {
+    const service = makeService();
+
+    const metadata = await service.getDerivedVariableMetadata(1);
+
+    expect(metadata.metadataAvailable).toBe(true);
+    expect(metadata.derivedVariableMap.get('UnitA')).toEqual(new Set([
+      'derived_alias',
+      'xml_derived_alias',
+      'scheme_only_alias',
+      'general_instruction_only'
+    ]));
+    expect(
+      metadata.derivedVariablesBySourceMap.get(
+        getManualCodingScopeKey('UnitA', 'base_alias')
+      )
+    ).toEqual(new Set(['derived_alias', 'xml_derived_alias']));
+    expect(cacheStore.get(
+      'workspace_files:v2:derived_variable_metadata_complete:1'
+    )).toBe(true);
+  });
+
+  it('should mark derived metadata unavailable after a parsing error', async () => {
+    mockFileUploadRepository.find.mockImplementation(({ where }) => {
+      if (where.file_type === 'Unit') {
+        return Promise.resolve(unitFiles);
+      }
+      if (where.file_type === 'Resource') {
+        return Promise.resolve([{
+          ...codingSchemes[0],
+          data: '{invalid json'
+        }]);
+      }
+      return Promise.resolve([]);
+    });
+    const service = makeService();
+
+    const metadata = await service.getDerivedVariableMetadata(1);
+
+    expect(metadata).toEqual({
+      metadataAvailable: false,
+      derivedVariableMap: new Map(),
+      derivedVariablesBySourceMap: new Map()
+    });
+    expect(cacheStore.get(
+      'workspace_files:v2:derived_variable_metadata_complete:1'
+    )).toBe(false);
+  });
+
   it('should cache variables with manual instructions by response alias', async () => {
     const service = makeService();
 
