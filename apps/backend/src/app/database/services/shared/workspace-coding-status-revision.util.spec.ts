@@ -21,7 +21,9 @@ describe('workspace coding status revision', () => {
       query: jest
         .fn()
         .mockResolvedValueOnce([{ acquired: true }])
+        .mockResolvedValueOnce([{ acquired: true }])
         .mockResolvedValueOnce([{ revision: '12', status_revision: '34' }])
+        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]),
       release: jest.fn().mockResolvedValue(undefined)
     };
@@ -43,15 +45,21 @@ describe('workspace coding status revision', () => {
       expect.stringContaining('pg_advisory_unlock_shared'),
       expect.any(Array)
     );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('pg_advisory_unlock('),
+      expect.any(Array)
+    );
     expect(queryRunner.release).toHaveBeenCalledTimes(1);
   });
 
-  it('marks the revision unstable while an exclusive mutation lock is held', async () => {
+  it('marks the revision unstable while a test-result mutation lock is held', async () => {
     const queryRunner = {
       connect: jest.fn().mockResolvedValue(undefined),
       query: jest
         .fn()
         .mockResolvedValueOnce([{ acquired: false }])
+        .mockResolvedValueOnce([{ acquired: true }])
+        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]),
       release: jest.fn().mockResolvedValue(undefined)
     };
@@ -70,6 +78,46 @@ describe('workspace coding status revision', () => {
     });
 
     expect(queryRunner.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('pg_advisory_unlock_shared'),
+      expect.any(Array)
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('pg_advisory_unlock('),
+      expect.any(Array)
+    );
+    expect(queryRunner.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks the revision unstable while a coding-status mutation is running', async () => {
+    const queryRunner = {
+      connect: jest.fn().mockResolvedValue(undefined),
+      query: jest
+        .fn()
+        .mockResolvedValueOnce([{ acquired: true }])
+        .mockResolvedValueOnce([{ acquired: false }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]),
+      release: jest.fn().mockResolvedValue(undefined)
+    };
+
+    await expect(
+      getWorkspaceCodingStatusRevision(
+        {
+          createQueryRunner: jest.fn().mockReturnValue(queryRunner)
+        },
+        7
+      )
+    ).resolves.toEqual({
+      revision: 0,
+      statusRevision: '0',
+      stable: false
+    });
+
+    expect(queryRunner.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('pg_advisory_unlock('),
+      expect.any(Array)
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
       expect.stringContaining('pg_advisory_unlock_shared'),
       expect.any(Array)
     );

@@ -5,10 +5,8 @@ import {
   NestInterceptor
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import {
-  Observable, concatMap, from, map
-} from 'rxjs';
-import { touchWorkspaceCodingStatusRevision } from '../../database/services/shared/workspace-coding-status-revision.util';
+import { from, lastValueFrom, Observable } from 'rxjs';
+import { withWorkspaceCodingStatusMutationLock } from '../../database/services/shared/workspace-coding-status-revision.util';
 
 const MUTATING_HTTP_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 // Keep this list aligned with HTTP mutations that change cached coding status.
@@ -56,14 +54,11 @@ export class CodingStatusRevisionInterceptor implements NestInterceptor {
       return next.handle();
     }
 
-    return next.handle().pipe(
-      concatMap(value => from(
-        touchWorkspaceCodingStatusRevision(
-          this.connection.manager,
-          workspaceId
-        )
-      ).pipe(map(() => value)))
-    );
+    return from(withWorkspaceCodingStatusMutationLock(
+      this.connection,
+      workspaceId,
+      () => lastValueFrom(next.handle())
+    ));
   }
 
   private isCodingStatusMutation(

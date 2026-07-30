@@ -3,6 +3,18 @@ import { lastValueFrom, Observable, of } from 'rxjs';
 import { CodingStatusRevisionInterceptor } from './coding-status-revision.interceptor';
 
 describe('CodingStatusRevisionInterceptor', () => {
+  const createConnection = () => {
+    const queryRunner = {
+      connect: jest.fn().mockResolvedValue(undefined),
+      query: jest.fn().mockResolvedValue([]),
+      release: jest.fn().mockResolvedValue(undefined)
+    };
+    const connection = {
+      createQueryRunner: jest.fn().mockReturnValue(queryRunner)
+    };
+    return { connection, queryRunner };
+  };
+
   const createContext = (
     method: string,
     originalUrl: string,
@@ -26,10 +38,8 @@ describe('CodingStatusRevisionInterceptor', () => {
     '/api/admin/workspace/7/coding/jobs/12/apply-results',
     '/api/admin/workspace/7/coding/reset-version'
   ])('increments after a successful coding mutation at %s', async originalUrl => {
-    const query = jest.fn().mockResolvedValue([]);
-    const interceptor = new CodingStatusRevisionInterceptor({
-      manager: { query }
-    } as never);
+    const { connection, queryRunner } = createConnection();
+    const interceptor = new CodingStatusRevisionInterceptor(connection as never);
     const next = { handle: jest.fn().mockReturnValue(of('ok')) } as CallHandler;
 
     await expect(
@@ -41,15 +51,25 @@ describe('CodingStatusRevisionInterceptor', () => {
       )
     ).resolves.toBe('ok');
 
-    expect(query).toHaveBeenCalledTimes(1);
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_lock_shared($1::int, $2::int)',
+      expect.any(Array)
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO workspace_test_results_revision'),
+      [7]
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_unlock_shared($1::int, $2::int)',
+      expect.any(Array)
+    );
+    expect(queryRunner.release).toHaveBeenCalledTimes(1);
     expect(next.handle).toHaveBeenCalledTimes(1);
   });
 
   it('does not invalidate after a failed coding mutation', async () => {
-    const query = jest.fn().mockResolvedValue([]);
-    const interceptor = new CodingStatusRevisionInterceptor({
-      manager: { query }
-    } as never);
+    const { connection, queryRunner } = createConnection();
+    const interceptor = new CodingStatusRevisionInterceptor(connection as never);
     const next = {
       handle: jest.fn().mockReturnValue(new Observable(subscriber => {
         subscriber.error(new Error('failed'));
@@ -68,14 +88,24 @@ describe('CodingStatusRevisionInterceptor', () => {
       )
     ).rejects.toThrow('failed');
 
-    expect(query).not.toHaveBeenCalled();
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_lock_shared($1::int, $2::int)',
+      expect.any(Array)
+    );
+    expect(queryRunner.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO workspace_test_results_revision'),
+      expect.any(Array)
+    );
+    expect(queryRunner.query).toHaveBeenCalledWith(
+      'SELECT pg_advisory_unlock_shared($1::int, $2::int)',
+      expect.any(Array)
+    );
+    expect(queryRunner.release).toHaveBeenCalledTimes(1);
   });
 
   it('does not increment for reads or unrelated coding exports', async () => {
-    const query = jest.fn().mockResolvedValue([]);
-    const interceptor = new CodingStatusRevisionInterceptor({
-      manager: { query }
-    } as never);
+    const { connection } = createConnection();
+    const interceptor = new CodingStatusRevisionInterceptor(connection as never);
     const next = { handle: jest.fn().mockReturnValue(of('ok')) } as CallHandler;
 
     await lastValueFrom(
@@ -91,7 +121,7 @@ describe('CodingStatusRevisionInterceptor', () => {
       )
     );
 
-    expect(query).not.toHaveBeenCalled();
+    expect(connection.createQueryRunner).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -101,10 +131,8 @@ describe('CodingStatusRevisionInterceptor', () => {
     '/api/admin/workspace/7/coding/job-definitions/12/update-refresh-preview',
     '/api/admin/workspace/7/coding/coder-trainings/12/apply-discussion-results-preview'
   ])('does not increment for the read-only POST endpoint %s', async originalUrl => {
-    const query = jest.fn().mockResolvedValue([]);
-    const interceptor = new CodingStatusRevisionInterceptor({
-      manager: { query }
-    } as never);
+    const { connection } = createConnection();
+    const interceptor = new CodingStatusRevisionInterceptor(connection as never);
     const next = { handle: jest.fn().mockReturnValue(of('ok')) } as CallHandler;
 
     await lastValueFrom(
@@ -112,6 +140,6 @@ describe('CodingStatusRevisionInterceptor', () => {
     );
 
     expect(next.handle).toHaveBeenCalledTimes(1);
-    expect(query).not.toHaveBeenCalled();
+    expect(connection.createQueryRunner).not.toHaveBeenCalled();
   });
 });

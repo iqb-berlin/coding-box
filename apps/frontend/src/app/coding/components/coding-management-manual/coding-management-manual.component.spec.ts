@@ -1681,6 +1681,27 @@ describe('CodingManagementManualComponent', () => {
     expect(component.shouldShowManualRefreshButton()).toBe(false);
   });
 
+  it('should load planning data on first open after restoring a status snapshot', () => {
+    component.autoRefreshManualCodingJobs = true;
+    const componentInternals = component as unknown as {
+      hasLoadedManualCodingJobRefreshSetting: boolean;
+      hasLoadedPlanningDataBundle: boolean;
+      restoredManualStatusSnapshot: unknown;
+      loadManualTabData(tab: 'planning'): void;
+      loadPlanningDataBundle(forceRefresh: boolean): void;
+    };
+    componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
+    componentInternals.hasLoadedPlanningDataBundle = false;
+    componentInternals.restoredManualStatusSnapshot = {};
+    const loadPlanningDataBundleSpy = jest
+      .spyOn(componentInternals, 'loadPlanningDataBundle')
+      .mockImplementation();
+
+    componentInternals.loadManualTabData('planning');
+
+    expect(loadPlanningDataBundleSpy).toHaveBeenCalledWith(false);
+  });
+
   it('should show manual refresh actions only when automatic refresh is disabled', () => {
     const componentInternals = component as unknown as {
       hasLoadedManualCodingJobRefreshSetting: boolean;

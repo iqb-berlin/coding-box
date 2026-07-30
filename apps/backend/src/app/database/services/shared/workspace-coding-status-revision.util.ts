@@ -1,6 +1,7 @@
 import { DataSource, EntityManager, QueryRunner } from 'typeorm';
 
 export const WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE = 774020251;
+export const WORKSPACE_CODING_STATUS_MUTATION_LOCK_NAMESPACE = 774020252;
 
 type QueryExecutor = Pick<EntityManager, 'query'> | Pick<QueryRunner, 'query'>;
 type QueryRunnerFactory = Pick<DataSource, 'createQueryRunner'>;
@@ -43,13 +44,54 @@ export async function touchWorkspaceCodingStatusRevision(
   );
 }
 
+export async function withWorkspaceCodingStatusMutationLock<T>(
+  connection: QueryRunnerFactory,
+  workspaceId: number,
+  callback: () => Promise<T>
+): Promise<T> {
+  const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId);
+  const queryRunner = connection.createQueryRunner();
+  let locked = false;
+
+  await queryRunner.connect();
+  try {
+    await queryRunner.query(
+      'SELECT pg_advisory_lock_shared($1::int, $2::int)',
+      [
+        WORKSPACE_CODING_STATUS_MUTATION_LOCK_NAMESPACE,
+        normalizedWorkspaceId
+      ]
+    );
+    locked = true;
+
+    const result = await callback();
+    await touchWorkspaceCodingStatusRevision(queryRunner, normalizedWorkspaceId);
+    return result;
+  } finally {
+    try {
+      if (locked) {
+        await queryRunner.query(
+          'SELECT pg_advisory_unlock_shared($1::int, $2::int)',
+          [
+            WORKSPACE_CODING_STATUS_MUTATION_LOCK_NAMESPACE,
+            normalizedWorkspaceId
+          ]
+        );
+      }
+    } finally {
+      await queryRunner.release();
+    }
+  }
+}
+
 export async function getWorkspaceCodingStatusRevision(
   connection: QueryRunnerFactory,
   workspaceId: number
 ): Promise<WorkspaceCodingStatusRevision> {
   const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId);
   const queryRunner = connection.createQueryRunner();
-  let sharedLockAcquired = false;
+  let testResultsLockAcquired = false;
+  let statusMutationLockAcquired = false;
 
   await queryRunner.connect();
   try {
@@ -57,7 +99,17 @@ export async function getWorkspaceCodingStatusRevision(
       'SELECT pg_try_advisory_lock_shared($1::int, $2::int) AS acquired',
       [WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE, normalizedWorkspaceId]
     )) as Array<{ acquired: boolean }>;
-    sharedLockAcquired = lockRows[0]?.acquired === true;
+    testResultsLockAcquired = lockRows[0]?.acquired === true;
+
+    const statusMutationLockRows = (await queryRunner.query(
+      'SELECT pg_try_advisory_lock($1::int, $2::int) AS acquired',
+      [
+        WORKSPACE_CODING_STATUS_MUTATION_LOCK_NAMESPACE,
+        normalizedWorkspaceId
+      ]
+    )) as Array<{ acquired: boolean }>;
+    statusMutationLockAcquired =
+      statusMutationLockRows[0]?.acquired === true;
 
     const rows = (await queryRunner.query(
       `
@@ -74,11 +126,20 @@ export async function getWorkspaceCodingStatusRevision(
     return {
       revision: Number(rows[0]?.revision || 0),
       statusRevision: String(rows[0]?.status_revision || 0),
-      stable: sharedLockAcquired
+      stable: testResultsLockAcquired && statusMutationLockAcquired
     };
   } finally {
     try {
-      if (sharedLockAcquired) {
+      if (statusMutationLockAcquired) {
+        await queryRunner.query(
+          'SELECT pg_advisory_unlock($1::int, $2::int)',
+          [
+            WORKSPACE_CODING_STATUS_MUTATION_LOCK_NAMESPACE,
+            normalizedWorkspaceId
+          ]
+        );
+      }
+      if (testResultsLockAcquired) {
         await queryRunner.query(
           'SELECT pg_advisory_unlock_shared($1::int, $2::int)',
           [WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE, normalizedWorkspaceId]

@@ -3338,8 +3338,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         if (!deferStatusChecks &&
           (forceRefresh ||
             (this.autoRefreshManualCodingJobs &&
-              !this.hasLoadedPlanningDataBundle &&
-              !this.restoredManualStatusSnapshot))) {
+              !this.hasLoadedPlanningDataBundle))) {
           this.loadPlanningDataBundle(forceRefresh);
         }
         return;
