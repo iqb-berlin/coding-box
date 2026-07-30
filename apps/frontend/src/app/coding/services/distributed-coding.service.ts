@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, catchError, throwError } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
+import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 
 export type DistributionVariable = { unitName: string; variableId: string; includeDeriveError?: boolean };
 
@@ -172,7 +173,7 @@ export class DistributedCodingService {
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/calculate-distribution`,
       body,
-      {}
+      { context: suppressGlobalHttpErrorContext() }
     )
       .pipe(
         catchError(error => throwError(() => new Error(this.getErrorMessage(error))))
