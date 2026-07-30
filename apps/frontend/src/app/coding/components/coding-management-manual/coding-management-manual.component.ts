@@ -751,6 +751,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
     const previousTab = this.activeManualTab;
     this.selectedManualTabIndex = index;
+    this.clearPendingPlanningLoadWhenInactive();
     if (this.isResponseAnalysisTab(previousTab) &&
       !this.isResponseAnalysisTab(this.activeManualTab)) {
       this.stopResponseAnalysisView();
@@ -767,6 +768,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     if (this.selectedManualTabIndex !== tabIndex) {
       const previousTab = this.activeManualTab;
       this.selectedManualTabIndex = tabIndex;
+      this.clearPendingPlanningLoadWhenInactive();
       if (this.isResponseAnalysisTab(previousTab) &&
         !this.isResponseAnalysisTab(tab)) {
         this.stopResponseAnalysisView();
@@ -3275,9 +3277,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         finalize(() => {
           this.isRestoringManualStatusSnapshot = false;
           if (this.hasLoadedManualCodingJobRefreshSetting &&
-              this.pendingAutomaticManualTabLoad === 'planning') {
+              this.pendingAutomaticManualTabLoad === 'planning' &&
+              this.activeManualTab === 'planning') {
             this.pendingAutomaticManualTabLoad = null;
             this.loadManualTabData('planning');
+          } else if (this.activeManualTab !== 'planning') {
+            this.pendingAutomaticManualTabLoad = null;
           }
         }),
         takeUntil(this.destroy$)
@@ -3358,6 +3363,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         return;
       default:
         this.refreshAllStatistics();
+    }
+  }
+
+  private clearPendingPlanningLoadWhenInactive(): void {
+    if (this.activeManualTab !== 'planning' &&
+        this.pendingAutomaticManualTabLoad === 'planning') {
+      this.pendingAutomaticManualTabLoad = null;
     }
   }
 

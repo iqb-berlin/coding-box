@@ -1681,6 +1681,23 @@ describe('CodingManagementManualComponent', () => {
     expect(component.shouldShowManualRefreshButton()).toBe(true);
   });
 
+  it('should cancel a deferred planning load when another tab becomes active', () => {
+    component.selectedManualTabIndex = component.manualCodingTabs.indexOf('planning');
+    const componentInternals = component as unknown as {
+      pendingAutomaticManualTabLoad: 'planning' | null;
+      loadManualTabData(tab: string): void;
+    };
+    componentInternals.pendingAutomaticManualTabLoad = 'planning';
+    jest.spyOn(componentInternals, 'loadManualTabData').mockImplementation();
+
+    component.onManualTabChanged(
+      component.manualCodingTabs.indexOf('training')
+    );
+
+    expect(componentInternals.pendingAutomaticManualTabLoad).toBeNull();
+    expect(componentInternals.loadManualTabData).toHaveBeenCalledWith('training');
+  });
+
   it('should wait for the initial revision and reject a mixed planning snapshot', () => {
     const initialRevision$ = new Subject<{
       workspaceId: number;
