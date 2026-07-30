@@ -620,6 +620,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.discardPendingPlanningDataBundle();
     this.cancelResponseAnalysisRequest();
     this.responseAnalysisRequestCancel$.complete();
     this.finalizeResponseAnalysisGuardOnDestroy();
@@ -680,6 +681,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private stopResponseAnalysisView(): void {
+    this.discardPendingPlanningDataBundle();
     this.cancelResponseAnalysisRequest();
     this.handOffResponseAnalysisGuardUntilComplete();
   }
@@ -3431,6 +3433,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private markPlanningDataBundleLoadFailed(): void {
     if (this.isPlanningDataBundleLoadPending) {
       this.planningDataBundleLoadFailed = true;
+    }
+  }
+
+  private discardPendingPlanningDataBundle(): void {
+    if (this.isPlanningDataBundleLoadPending) {
+      this.resetPlanningDataBundleState();
     }
   }
 

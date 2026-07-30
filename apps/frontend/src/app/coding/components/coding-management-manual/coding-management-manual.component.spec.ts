@@ -264,20 +264,37 @@ describe('CodingManagementManualComponent', () => {
     }
   });
 
-  it('should cancel response analysis when leaving the preparation flow', () => {
+  it('should discard a pending snapshot when leaving the planning flow', () => {
     const componentInternals = component as unknown as {
       appService: { selectedWorkspaceId: number };
+      hasLoadedPlanningDataBundle: boolean;
+      isPlanningDataBundleLoadPending: boolean;
+      planningDataBundleCacheGeneration: number | null;
       testPersonCodingService: {
+        beginManualCodingPlanningSnapshot(): number;
+        saveManualCodingPlanningSnapshot: jest.Mock;
         getResponseAnalysis: jest.Mock;
         setResponseAnalysisGuardRunning: (
           workspaceId: number,
           isRunning: boolean
         ) => void;
       };
+      trySavePlanningDataBundleSnapshot(): void;
     };
     componentInternals.appService.selectedWorkspaceId = 5;
-    component.selectedManualTabIndex = 0;
+    component.selectedManualTabIndex = 1;
+    componentInternals.hasLoadedPlanningDataBundle = true;
+    componentInternals.isPlanningDataBundleLoadPending = true;
+    componentInternals.planningDataBundleCacheGeneration =
+      componentInternals.testPersonCodingService
+        .beginManualCodingPlanningSnapshot();
     let responseAnalysisUnsubscribed = false;
+    const saveSnapshotSpy = jest
+      .spyOn(
+        componentInternals.testPersonCodingService,
+        'saveManualCodingPlanningSnapshot'
+      )
+      .mockImplementation();
     jest
       .spyOn(componentInternals.testPersonCodingService, 'setResponseAnalysisGuardRunning')
       .mockImplementation(() => undefined);
@@ -293,9 +310,46 @@ describe('CodingManagementManualComponent', () => {
     expect(component.isLoadingResponseAnalysis).toBe(true);
 
     component.onManualTabChanged(2);
+    componentInternals.trySavePlanningDataBundleSnapshot();
 
     expect(responseAnalysisUnsubscribed).toBe(true);
     expect(component.isLoadingResponseAnalysis).toBe(false);
+    expect(componentInternals.hasLoadedPlanningDataBundle).toBe(false);
+    expect(componentInternals.isPlanningDataBundleLoadPending).toBe(false);
+    expect(saveSnapshotSpy).not.toHaveBeenCalled();
+  });
+
+  it('should discard a pending planning snapshot before destroy finalizers run', () => {
+    const componentInternals = component as unknown as {
+      appService: { selectedWorkspaceId: number };
+      hasLoadedPlanningDataBundle: boolean;
+      isPlanningDataBundleLoadPending: boolean;
+      planningDataBundleCacheGeneration: number | null;
+      testPersonCodingService: {
+        beginManualCodingPlanningSnapshot(): number;
+        saveManualCodingPlanningSnapshot: jest.Mock;
+      };
+      trySavePlanningDataBundleSnapshot(): void;
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.hasLoadedPlanningDataBundle = true;
+    componentInternals.isPlanningDataBundleLoadPending = true;
+    componentInternals.planningDataBundleCacheGeneration =
+      componentInternals.testPersonCodingService
+        .beginManualCodingPlanningSnapshot();
+    const saveSnapshotSpy = jest
+      .spyOn(
+        componentInternals.testPersonCodingService,
+        'saveManualCodingPlanningSnapshot'
+      )
+      .mockImplementation();
+
+    component.ngOnDestroy();
+    componentInternals.trySavePlanningDataBundleSnapshot();
+
+    expect(componentInternals.hasLoadedPlanningDataBundle).toBe(false);
+    expect(componentInternals.isPlanningDataBundleLoadPending).toBe(false);
+    expect(saveSnapshotSpy).not.toHaveBeenCalled();
   });
 
   it('should hand off the response-analysis guard when leaving the preparation flow while analysis is calculating', () => {
