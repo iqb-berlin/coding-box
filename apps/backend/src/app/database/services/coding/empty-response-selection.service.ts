@@ -35,16 +35,25 @@ export class EmptyResponseSelectionService {
 
   async createContext(workspaceId: number): Promise<EmptyResponseSelectionContext> {
     try {
-      const [derivedVariableMap, derivedVariablesBySourceMap] = await Promise.all([
-        this.workspaceFilesService.getDerivedVariableMap(workspaceId),
-        this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId)
-      ]);
+      const metadata =
+        await this.workspaceFilesService.getDerivedVariableMetadata(workspaceId);
+
+      if (!metadata.metadataAvailable) {
+        this.logger.warn(
+          `Derived-variable metadata is incomplete for workspace ${workspaceId}`
+        );
+        return {
+          metadataAvailable: false,
+          derivedVariableMap: new Map(),
+          sourceVariablesByDerivedKey: new Map()
+        };
+      }
 
       return {
         metadataAvailable: true,
-        derivedVariableMap,
+        derivedVariableMap: metadata.derivedVariableMap,
         sourceVariablesByDerivedKey: this.invertDerivedSourceMap(
-          derivedVariablesBySourceMap
+          metadata.derivedVariablesBySourceMap
         )
       };
     } catch (error) {
