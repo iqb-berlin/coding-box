@@ -17,13 +17,13 @@ import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
 } from '../../database/services/workspace/workspace-exclusion.service';
-import { WorkspaceFilesService } from '../../database/services/workspace';
 import {
   createAggregationSummary,
   isAggregatableValue,
   isDerivedAggregationVariable,
   normalizeAggregationValue
 } from '../../database/services/coding/aggregation-metrics.util';
+import { EmptyResponseSelectionService } from '../../database/services/coding/empty-response-selection.service';
 import { getCodingAnalysisRunMarkerKey } from '../../database/services/coding/coding-analysis-cache-key.util';
 import {
   IQB_STANDARD_MISSING_CODES,
@@ -39,7 +39,7 @@ export class CodingAnalysisProcessor {
     private responseRepository: Repository<ResponseEntity>,
     private cacheService: CacheService,
     private workspaceExclusionService: WorkspaceExclusionService,
-    private workspaceFilesService: WorkspaceFilesService,
+    private emptyResponseSelectionService: EmptyResponseSelectionService,
     @Optional()
     private missingsProfilesService?: MissingsProfilesService
   ) { }
@@ -96,7 +96,9 @@ export class CodingAnalysisProcessor {
   ): Promise<ResponseAnalysisDto> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const defaultMirCode = await this.getDefaultMirCode(workspaceId);
-    const derivedVariableMap = await this.getDerivedVariableMap(workspaceId);
+    const emptyResponseContext =
+      await this.emptyResponseSelectionService.createContext(workspaceId);
+    const { derivedVariableMap } = emptyResponseContext;
 
     // 1. Identify relevant Unit+Variable combinations
     this.logger.log(`Identifying relevant variables for analysis in workspace ${workspaceId}...`);
@@ -178,13 +180,19 @@ export class CodingAnalysisProcessor {
 
       const responsesBatch = await qb.getMany();
       totalProcessed += responsesBatch.length;
+      const effectivelyEmptyResponses =
+        await this.emptyResponseSelectionService.filterEffectivelyEmptyResponses(
+          responsesBatch,
+          emptyResponseContext
+        );
 
       this.analyzeBatch(
         responsesBatch,
         matchingFlags,
         emptyResponses,
         duplicateValueGroups,
-        derivedVariableMap
+        derivedVariableMap,
+        new Set(effectivelyEmptyResponses.map(response => response.id))
       );
 
       // Explicitly free memory if possible (though GC handles function scope)
@@ -263,7 +271,8 @@ export class CodingAnalysisProcessor {
     matchingFlags: ResponseMatchingFlag[],
     emptyResponses: EmptyResponseDto[],
     duplicateValueGroups: DuplicateValueGroupDto[],
-    derivedVariableMap: Map<string, Set<string>>
+    derivedVariableMap: Map<string, Set<string>>,
+    effectivelyEmptyResponseIds: Set<number>
   ) {
     // We group by Unit+Variable within this batch
     // Since our query chunked by Unit+Variable, we can treat this batch as a collection of complete groups
@@ -275,7 +284,7 @@ export class CodingAnalysisProcessor {
       // Empty Check - IMPROVED LOGIC
       const value = response.value;
 
-      if (!isAggregatableValue(value)) {
+      if (effectivelyEmptyResponseIds.has(response.id)) {
         emptyResponses.push({
           unitName: response.unit?.name || '',
           unitAlias: response.unit?.alias || null,
@@ -289,6 +298,10 @@ export class CodingAnalysisProcessor {
           isCoded: response.status_v2 !== null,
           assignedCode: response.code_v2
         });
+        continue;
+      }
+
+      if (!isAggregatableValue(value)) {
         continue; // Skip empty for duplicates
       }
 
@@ -368,17 +381,5 @@ export class CodingAnalysisProcessor {
     };
 
     return result;
-  }
-
-  private async getDerivedVariableMap(
-    workspaceId: number
-  ): Promise<Map<string, Set<string>>> {
-    try {
-      return await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`Could not load derived variable map for workspace ${workspaceId}: ${message}`);
-      return new Map<string, Set<string>>();
-    }
   }
 }

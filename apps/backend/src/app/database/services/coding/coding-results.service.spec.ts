@@ -9,10 +9,7 @@ import { CodingValidationService } from './coding-validation.service';
 import { MissingsProfilesService } from './missings-profiles.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
-
-jest.mock('../workspace/workspace-files.service', () => ({
-  WorkspaceFilesService: jest.fn()
-}));
+import { EmptyResponseSelectionService } from './empty-response-selection.service';
 
 describe('CodingResultsService', () => {
   let service: CodingResultsService;
@@ -32,6 +29,10 @@ describe('CodingResultsService', () => {
   let codingStatisticsService: jest.Mocked<CodingStatisticsService>;
   let codingValidationService: jest.Mocked<Pick<CodingValidationService, 'invalidateIncompleteVariablesCache'>>;
   let codingAnalysisService: jest.Mocked<Pick<CodingAnalysisService, 'invalidateCache'>>;
+  let emptyResponseSelectionService: jest.Mocked<Pick<
+  EmptyResponseSelectionService,
+  'createContext' | 'filterEffectivelyEmptyResponses'
+  >>;
   let missingsProfilesService: jest.Mocked<Pick<
   MissingsProfilesService,
   'getMissingByIdForProfileOrDefault' | 'getMissingByCodeForProfileOrDefault'
@@ -120,6 +121,23 @@ describe('CodingResultsService', () => {
       invalidateCache: jest.fn().mockResolvedValue(undefined)
     };
 
+    emptyResponseSelectionService = {
+      createContext: jest.fn().mockResolvedValue({
+        metadataAvailable: true,
+        derivedVariableMap: new Map(),
+        sourceVariablesByDerivedKey: new Map()
+      }),
+      filterEffectivelyEmptyResponses: jest.fn(async (
+        responses,
+        context
+      ) => {
+        if (!context.metadataAvailable) {
+          return [];
+        }
+        return responses;
+      })
+    };
+
     missingsProfilesService = {
       getMissingByIdForProfileOrDefault: jest.fn(async (_workspaceId, _profileId, missingId) => {
         if (missingId === 'mci') {
@@ -160,6 +178,7 @@ describe('CodingResultsService', () => {
       codingValidationService as unknown as CodingValidationService,
       codingAnalysisService as unknown as CodingAnalysisService,
       missingsProfilesService as unknown as MissingsProfilesService,
+      emptyResponseSelectionService as unknown as EmptyResponseSelectionService,
       workspaceExclusionService as unknown as WorkspaceExclusionService,
       codingFreshnessService as unknown as CodingFreshnessService
     );
@@ -1321,8 +1340,87 @@ describe('CodingResultsService', () => {
       call[0] === 'response.status_v1 IN (:...statuses)'
     ));
     expect(statusFilterCall?.[1].statuses).not.toContain(statusStringToNumber('DERIVE_ERROR'));
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'response.status_v2 IS NULL'
+    );
     expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(17);
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
     expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(17);
+  });
+
+  it('does not code target-empty derived responses with non-empty sources', async () => {
+    const derivedResponse = { id: 1 } as ResponseEntity;
+    const baseResponse = { id: 2 } as ResponseEntity;
+    const queryBuilder = createQueryBuilderMock([derivedResponse, baseResponse]);
+    responseRepository.createQueryBuilder = jest.fn(() => queryBuilder) as never;
+    emptyResponseSelectionService.filterEffectivelyEmptyResponses
+      .mockResolvedValue([baseResponse]);
+
+    const result = await service.applyEmptyResponseCoding(17);
+
+    expect(result.updatedCount).toBe(1);
+    expect(queryRunner.manager.update).not.toHaveBeenCalledWith(
+      ResponseEntity,
+      1,
+      expect.any(Object)
+    );
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      2,
+      expect.objectContaining({ code_v2: -98 })
+    );
+  });
+
+  it('offers derived responses regardless of their technical target value', async () => {
+    const derivedResponse = {
+      id: 1,
+      value: 'technical solver value',
+      variableid: 'DERIVED',
+      unit: { name: 'UNIT' }
+    } as ResponseEntity;
+    const queryBuilder = createQueryBuilderMock([derivedResponse]);
+    responseRepository.createQueryBuilder = jest.fn(() => queryBuilder) as never;
+    emptyResponseSelectionService.createContext.mockResolvedValue({
+      metadataAvailable: true,
+      derivedVariableMap: new Map([['UNIT', new Set(['DERIVED'])]]),
+      sourceVariablesByDerivedKey: new Map()
+    });
+    emptyResponseSelectionService.filterEffectivelyEmptyResponses
+      .mockResolvedValue([derivedResponse]);
+
+    const result = await service.applyEmptyResponseCoding(17);
+
+    expect(result.updatedCount).toBe(1);
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      1,
+      {
+        code_v2: -98,
+        score_v2: 0,
+        status_v2: statusStringToNumber('CODING_COMPLETE')
+      }
+    );
+
+    const candidateBrackets = queryBuilder.andWhere.mock.calls
+      .map(call => call[0])
+      .find(condition => typeof condition !== 'string') as {
+      whereFactory: (builder: {
+        where: jest.Mock;
+        orWhere: jest.Mock;
+      }) => void;
+    };
+    const nestedBuilder = {
+      where: jest.fn(),
+      orWhere: jest.fn()
+    };
+    candidateBrackets.whereFactory(nestedBuilder);
+
+    expect(nestedBuilder.orWhere).toHaveBeenCalledWith(
+      expect.stringContaining('UPPER(unit.name)'),
+      {
+        derivedUnit0: 'UNIT',
+        derivedVariables0: ['DERIVED']
+      }
+    );
   });
 });
