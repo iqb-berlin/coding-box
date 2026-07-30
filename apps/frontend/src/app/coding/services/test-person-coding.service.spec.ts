@@ -24,6 +24,7 @@ import {
   WorkspaceSettingsService
 } from '../../ws-admin/services/workspace-settings.service';
 import { CodingBackgroundJobsService } from './coding-background-jobs.service';
+import type { ManualCodingPlanningSnapshot } from './manual-coding-planning-snapshot.model';
 
 describe('TestPersonCodingService', () => {
   let service: TestPersonCodingService;
@@ -1142,6 +1143,60 @@ describe('TestPersonCodingService', () => {
   });
 
   describe('coding freshness', () => {
+    const createPlanningSnapshot = (): ManualCodingPlanningSnapshot => ({
+      responseAnalysis: null,
+      codingProgressOverview: null,
+      variableCoverageOverview: null,
+      caseCoverageOverview: null,
+      codingIncompleteVariables: [],
+      manualCodingScopeSummary: null,
+      manualCodeAvailabilityWarnings: [],
+      appliedResultsOverview: null,
+      manualFreshnessJobSummary: null,
+      openDoubleCodingConflictCount: 0,
+      codingFreshnessSummary: {
+        workspaceId: mockWorkspaceId,
+        currentRevision: 0,
+        items: []
+      }
+    });
+
+    it('should keep a planning snapshot until its workspace is invalidated', () => {
+      const snapshot = createPlanningSnapshot();
+      const generation = service.beginManualCodingPlanningSnapshot();
+
+      service.saveManualCodingPlanningSnapshot(
+        mockWorkspaceId,
+        snapshot,
+        generation
+      );
+
+      expect(service.getManualCodingPlanningSnapshot(mockWorkspaceId)).toBe(
+        snapshot
+      );
+
+      service.invalidateCodingStatusCache(mockWorkspaceId);
+
+      expect(
+        service.getManualCodingPlanningSnapshot(mockWorkspaceId)
+      ).toBeNull();
+    });
+
+    it('should ignore a planning snapshot completed after invalidation', () => {
+      const generation = service.beginManualCodingPlanningSnapshot();
+
+      service.invalidateCodingStatusCache(mockWorkspaceId);
+      service.saveManualCodingPlanningSnapshot(
+        mockWorkspaceId,
+        createPlanningSnapshot(),
+        generation
+      );
+
+      expect(
+        service.getManualCodingPlanningSnapshot(mockWorkspaceId)
+      ).toBeNull();
+    });
+
     it('should reuse cached coding freshness until coding status is invalidated', () => {
       const mockResponse = {
         workspaceId: mockWorkspaceId,
