@@ -38,7 +38,6 @@ import {
   DoubleCodedReviewQueryDto,
   SaveDoubleCodedReviewDraftRequestDto
 } from './dto/double-coded-review-request.dto';
-import { MutatesCodingStatus } from '../workspace-coding/coding-status-mutation.decorator';
 
 const requestValidationPipe = new ValidationPipe({
   transform: true,
@@ -349,7 +348,6 @@ export class WorkspaceCodingReviewController {
   }
 
   @Post(':workspace_id/coding/double-coded-review/apply-resolutions')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   @ApiTags('coding')

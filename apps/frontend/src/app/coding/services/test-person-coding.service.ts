@@ -244,6 +244,12 @@ export interface AppliedResultsOverview {
   deriveErrorRawAppliedResponses?: number;
 }
 
+export interface CodingStatusOverviewSnapshot {
+  codingFreshness: CodingFreshnessSummaryDto;
+  autocodingReadiness: AutocodingReadinessDto;
+  appliedResultsOverview: AppliedResultsOverview;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -410,6 +416,28 @@ export class TestPersonCodingService {
       this.codingFreshnessScopeRequests,
       workspaceId
     );
+  }
+
+  getCachedCodingStatusOverview(
+    workspaceId: number,
+    autoCoderRun: 1 | 2 = 1
+  ): CodingStatusOverviewSnapshot | null {
+    const codingFreshness = this.codingFreshnessCache.get(workspaceId);
+    const autocodingReadiness = this.autocodingReadinessCache.get(
+      `${workspaceId}:${autoCoderRun}`
+    );
+    const appliedResultsOverview =
+      this.appliedResultsOverviewCache.get(workspaceId);
+
+    if (!codingFreshness || !autocodingReadiness || !appliedResultsOverview) {
+      return null;
+    }
+
+    return {
+      codingFreshness,
+      autocodingReadiness,
+      appliedResultsOverview
+    };
   }
 
   private createCodingFreshnessFallback(

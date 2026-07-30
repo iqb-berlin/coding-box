@@ -1122,6 +1122,9 @@ describe('CodingManagementManualComponent', () => {
 
   it('shows a neutral status before planning data has been checked', () => {
     component.selectedManualTabIndex = 0;
+    component.isLoadingMatchingMode = true;
+    component.isLoadingResponseAnalysis = true;
+    component.responseAnalysis = null;
 
     expect(component.getPlanningStatusClass()).toBe('status-ready');
     expect(component.getPlanningStatusIcon()).toBe('help_outline');
@@ -1179,6 +1182,7 @@ describe('CodingManagementManualComponent', () => {
   });
 
   it('should show an updating status while the initial response analysis is loading', () => {
+    component.selectedManualTabIndex = 1;
     component.responseAnalysis = null;
     component.isLoadingResponseAnalysis = true;
 

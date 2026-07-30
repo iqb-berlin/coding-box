@@ -31,7 +31,6 @@ import { VariableBundleDto } from './dto/variable-bundle.dto';
 import { CreateVariableBundleDto } from './dto/create-variable-bundle.dto';
 import { UpdateVariableBundleDto } from './dto/update-variable-bundle.dto';
 import { VariableDto } from './dto/variable.dto';
-import { MutatesCodingStatus } from '../workspace-coding/coding-status-mutation.decorator';
 
 @ApiTags('Variablenbündel')
 @Controller('admin/workspace/:workspace_id/variable-bundle')
@@ -135,7 +134,6 @@ export class VariableBundleController {
   }
 
   @Post()
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -171,7 +169,6 @@ export class VariableBundleController {
   }
 
   @Put(':id')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -221,7 +218,6 @@ export class VariableBundleController {
   }
 
   @Delete(':id')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -267,7 +263,6 @@ export class VariableBundleController {
   }
 
   @Post(':id/variables')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -317,7 +312,6 @@ export class VariableBundleController {
   }
 
   @Delete(':id/variables/:unitName/:variableId')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({

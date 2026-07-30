@@ -255,7 +255,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
           }
           if (effectiveAutoRefresh) {
             this.loadInitialCodingStatusOverview();
-          } else {
+          } else if (!evaluationMode) {
             this.loadCachedAutocodingReadiness();
           }
         });
@@ -552,6 +552,18 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const cachedOverview =
+      this.testPersonCodingService.getCachedCodingStatusOverview(workspaceId, 1);
+    if (cachedOverview) {
+      this.codingFreshnessSummary = cachedOverview.codingFreshness;
+      this.autocodingReadiness = cachedOverview.autocodingReadiness;
+      this.manualAppliedResultsOverview = cachedOverview.appliedResultsOverview;
+      this.autocodingReadinessLoadFailed = false;
+      this.manualAppliedResultsOverviewLoadFailed = false;
+      this.hasLoadedFullCodingStatusOverview = true;
+      return;
+    }
+
     this.testPersonCodingService.getCachedAutocodingReadiness(workspaceId, 1)
       .pipe(takeUntil(this.destroy$))
       .subscribe(readiness => {
@@ -561,7 +573,6 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
         this.autocodingReadiness = readiness;
         this.autocodingReadinessLoadFailed = false;
-        this.hasLoadedFullCodingStatusOverview = true;
       });
   }
 
@@ -616,7 +627,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.loadCodingFreshness();
     this.loadManualAppliedResultsOverview();
     if (includeAutocodingReadiness) {
-      this.loadAutocodingReadiness(false);
+      this.loadAutocodingReadiness(true);
     }
   }
 

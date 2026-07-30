@@ -18,7 +18,6 @@ import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { CodingJobOperationsService, CodingJobService } from '../../database/services/coding';
 import { ApplyCodingResultsResult } from '../../database/services/coding/coding-results.service';
 import { CodingJobFreshnessImpactDto } from '../../../../../../api-dto/coding/job-refresh.dto';
-import { MutatesCodingStatus } from '../workspace-coding/coding-status-mutation.decorator';
 
 @ApiTags('Admin Workspace Coding Results')
 @Controller('admin/workspace')
@@ -51,7 +50,6 @@ export class WorkspaceCodingResultsController {
   }
 
   @Post(':workspace_id/coding/jobs/:jobId/apply-results')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   @ApiTags('coding')
@@ -108,7 +106,6 @@ export class WorkspaceCodingResultsController {
   }
 
   @Post(':workspace_id/coding/jobs/bulk-apply-results')
-  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   @ApiTags('coding')
