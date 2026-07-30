@@ -354,11 +354,13 @@ describe('CodingManagementComponent', () => {
       expect(mockCodingManagementService.cancelViewBoundStatisticsFetches).toHaveBeenCalledWith(1);
     });
 
-    it('should only load lightweight coding freshness on init when auto-refresh is enabled', () => {
+    it('should fall back to a full status load on init when the readiness cache is empty', () => {
       expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledWith(1);
       expect(mockTestPersonCodingService.getCachedAutocodingReadiness).toHaveBeenCalledWith(1, 1);
-      expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
-      expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledWith(1);
+      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, false);
+      expect(component.hasLoadedFullCodingStatusOverview).toBe(true);
+      expect(component.isCodingStatusOverviewPendingManualRefresh).toBe(false);
     });
 
     it('should restore a session snapshot when auto-refresh is disabled', () => {
@@ -402,33 +404,23 @@ describe('CodingManagementComponent', () => {
       isolatedFixture.destroy();
     });
 
-    it('should not show full-check loading copy during the lightweight initial refresh', () => {
+    it('should show full-check loading copy during the cold-cache fallback', () => {
       fixture.destroy();
-      const codingFreshnessSubject = new Subject<{
-        workspaceId: number;
-        currentRevision: number;
-        items: never[];
-      }>();
-      (mockTestPersonCodingService.getCodingFreshness as jest.Mock)
-        .mockReturnValueOnce(codingFreshnessSubject.asObservable());
+      const autocodingReadinessSubject = new Subject<never>();
+      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock)
+        .mockReturnValueOnce(autocodingReadinessSubject.asObservable());
 
       const isolatedFixture = TestBed.createComponent(CodingManagementComponent);
       const isolatedComponent = isolatedFixture.componentInstance;
       isolatedFixture.detectChanges();
 
       const text = isolatedFixture.nativeElement.textContent;
-      expect(isolatedComponent.isLoadingCodingFreshness).toBe(true);
-      expect(isolatedComponent.isFullCodingStatusCheckLoading).toBe(false);
-      expect(text).toContain('Der vollständige Kodierstand wurde noch nicht geprüft');
-      expect(text).not.toContain('Zustand wird geprüft');
-      expect(isolatedFixture.nativeElement.querySelector('.coding-freshness-state-spinner')).toBeNull();
+      expect(isolatedComponent.isFullCodingStatusCheckLoading).toBe(true);
+      expect(text).toContain('Zustand wird geprüft');
+      expect(text).not.toContain('Der vollständige Kodierstand wurde noch nicht geprüft');
+      expect(isolatedFixture.nativeElement.querySelector('.coding-freshness-state-spinner')).not.toBeNull();
 
-      codingFreshnessSubject.next({
-        workspaceId: 1,
-        currentRevision: 0,
-        items: []
-      });
-      codingFreshnessSubject.complete();
+      autocodingReadinessSubject.complete();
       isolatedFixture.destroy();
     });
 
@@ -455,6 +447,7 @@ describe('CodingManagementComponent', () => {
           invalidVariableSamples: [],
           fromCache: true
         }));
+      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
 
       const isolatedFixture = TestBed.createComponent(CodingManagementComponent);
       const isolatedComponent = isolatedFixture.componentInstance;
@@ -469,14 +462,24 @@ describe('CodingManagementComponent', () => {
       isolatedFixture.destroy();
     });
 
-    it('should keep the manual full status refresh available after the initial light load', () => {
+    it('should hide the manual full status refresh after the automatic cold-cache fallback', () => {
+      expect(component.autoRefreshManualCodingJobs).toBe(true);
+      expect(component.hasLoadedFullCodingStatusOverview).toBe(true);
+      expect(component.shouldShowManualCodingStatusRefresh()).toBe(false);
+      expect(component.isCodingStatusOverviewPendingManualRefresh).toBe(false);
+    });
+
+    it('should keep the full status refresh available in manual mode', () => {
+      component.autoRefreshManualCodingJobs = false;
+      component.hasLoadedFullCodingStatusOverview = false;
+
       expect(component.shouldShowManualCodingStatusRefresh()).toBe(true);
       expect(component.isCodingStatusOverviewPendingManualRefresh).toBe(true);
 
       component.refreshCodingStatusOverview();
 
       expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, false);
-      expect(component.shouldShowManualCodingStatusRefresh()).toBe(false);
+      expect(component.shouldShowManualCodingStatusRefresh()).toBe(true);
       expect(component.isCodingStatusOverviewPendingManualRefresh).toBe(false);
     });
 
@@ -542,19 +545,10 @@ describe('CodingManagementComponent', () => {
       isolatedFixture.detectChanges();
 
       expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledWith(1);
-      expect(mockTestPersonCodingService.getCodingFreshnessScope).not.toHaveBeenCalled();
-      expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getCodingFreshnessScope).toHaveBeenCalledWith(1);
+      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, false);
 
       isolatedFixture.destroy();
-    });
-
-    it('should defer autocoding readiness until a forced coding status refresh', () => {
-      expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
-
-      component.refreshCodingStatusOverview();
-
-      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledTimes(1);
-      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, false);
     });
 
     it('should show full-check loading copy during a manual status refresh', () => {

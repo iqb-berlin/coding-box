@@ -97,6 +97,7 @@ describe('Kodierstatus-Sitzungsspeicher', () => {
 
     cy.visit('/');
     cy.wait('@authData');
+    cy.contains('a.workspace', 'E2E Workspace').should('be.visible');
     cy.window().then(window => {
       window.sessionStorage.setItem(
         `coding-status-snapshot:v1:${userId}:${workspaceId}:overview`,

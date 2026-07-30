@@ -1678,7 +1678,22 @@ describe('CodingManagementManualComponent', () => {
     expect(loadCodingFreshnessSpy).toHaveBeenCalledTimes(1);
     expect(loadResponseAnalysisSpy).toHaveBeenCalledTimes(1);
     expect(component.shouldRenderManualTabData('planning')).toBe(true);
+    expect(component.shouldShowManualRefreshButton()).toBe(false);
+  });
+
+  it('should show manual refresh actions only when automatic refresh is disabled', () => {
+    const componentInternals = component as unknown as {
+      hasLoadedManualCodingJobRefreshSetting: boolean;
+      appService: { selectedWorkspaceId: number };
+    };
+    componentInternals.appService.selectedWorkspaceId = 5;
+    componentInternals.hasLoadedManualCodingJobRefreshSetting = true;
+
+    component.autoRefreshManualCodingJobs = false;
     expect(component.shouldShowManualRefreshButton()).toBe(true);
+
+    component.autoRefreshManualCodingJobs = true;
+    expect(component.shouldShowManualRefreshButton()).toBe(false);
   });
 
   it('should cancel a deferred planning load when another tab becomes active', () => {

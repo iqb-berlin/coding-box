@@ -570,12 +570,16 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(readiness => {
         if (!readiness) {
+          if (this.autoRefreshManualCodingJobs) {
+            this.loadCodingStatusOverview(true);
+          }
           return;
         }
 
         this.autocodingReadiness = readiness;
         this.autocodingReadinessLoadFailed = false;
         this.hasLoadedFullCodingStatusOverview = true;
+        this.loadCodingFreshness(false);
       });
   }
 
@@ -705,7 +709,6 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   private loadInitialCodingStatusOverviewWithoutSnapshot(): void {
     this.hasLoadedFullCodingStatusOverview = false;
-    this.loadCodingFreshness(false);
     this.loadCachedAutocodingReadiness();
   }
 
@@ -836,8 +839,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return false;
     }
 
-    return !this.autoRefreshManualCodingJobs ||
-      !this.hasLoadedFullCodingStatusOverview;
+    return !this.autoRefreshManualCodingJobs;
   }
 
   startFreshnessCoding(version: 'v1' | 'v3'): void {
@@ -1201,7 +1203,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   get isCodingStatusOverviewPendingManualRefresh(): boolean {
     return !this.hasLoadedFullCodingStatusOverview &&
-      this.shouldShowManualCodingStatusRefresh() &&
+      !this.isStartingFreshnessCoding &&
+      !this.activeFreshnessJobId &&
       !this.hasAutocodingReadinessLoadFailed &&
       !this.isAutocodingReadinessBlocked &&
       !this.hasCodingFreshnessWarnings &&

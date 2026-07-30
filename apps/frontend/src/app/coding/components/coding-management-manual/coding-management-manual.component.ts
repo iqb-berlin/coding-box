@@ -725,8 +725,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   shouldShowManualRefreshButton(): boolean {
     return !!this.appService.selectedWorkspaceId &&
       this.hasLoadedManualCodingJobRefreshSetting &&
-      (this.activeManualTab === 'planning' ||
-        !this.autoRefreshManualCodingJobs);
+      !this.autoRefreshManualCodingJobs;
   }
 
   shouldShowManualTabLoadHint(tab: ManualCodingTab): boolean {
