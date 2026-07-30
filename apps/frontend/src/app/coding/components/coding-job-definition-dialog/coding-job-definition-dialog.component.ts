@@ -621,7 +621,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private loadDistributionPreview(): Observable<DistributionCalculationResponse | null> {
     if (
       this.data.mode !== 'definition' ||
-      this.codingJobForm.invalid ||
+      this.hasInvalidDistributionPreviewControls() ||
       this.selectedCoders.selected.length === 0 ||
       (
         this.selectedVariables.selected.length === 0 &&
@@ -648,6 +648,15 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       this.getDistributionSeed()
     )
       .pipe(catchError(() => of(null)));
+  }
+
+  private hasInvalidDistributionPreviewControls(): boolean {
+    return [
+      'doubleCodingAbsolute',
+      'doubleCodingPercentage',
+      'caseOrderingMode',
+      'maxCodingCases'
+    ].some(controlName => this.codingJobForm.get(controlName)?.invalid);
   }
 
   private buildDistributionPreviewSummary(
