@@ -13,7 +13,7 @@ describe('EmptyResponseSelectionService', () => {
   let responseRepository: jest.Mocked<Repository<ResponseEntity>>;
   let workspaceFilesService: jest.Mocked<Pick<
   WorkspaceFilesService,
-  'getDerivedVariableMap' | 'getDerivedVariablesBySourceMap'
+  'getDerivedVariableMetadata'
   >>;
   let sourceRows: ResponseEntity[];
 
@@ -49,8 +49,11 @@ describe('EmptyResponseSelectionService', () => {
       createQueryBuilder: jest.fn(() => queryBuilder)
     } as unknown as jest.Mocked<Repository<ResponseEntity>>;
     workspaceFilesService = {
-      getDerivedVariableMap: jest.fn().mockResolvedValue(new Map()),
-      getDerivedVariablesBySourceMap: jest.fn().mockResolvedValue(new Map())
+      getDerivedVariableMetadata: jest.fn().mockResolvedValue({
+        metadataAvailable: true,
+        derivedVariableMap: new Map(),
+        derivedVariablesBySourceMap: new Map()
+      })
     };
     service = new EmptyResponseSelectionService(
       responseRepository,
@@ -59,17 +62,18 @@ describe('EmptyResponseSelectionService', () => {
   });
 
   it('uses source values for derived targets while preserving base behavior', async () => {
-    workspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map([
-      ['UNIT', new Set(['DERIVED_EMPTY', 'DERIVED_NONEMPTY'])]
-    ]));
-    workspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(
-      new Map([
+    workspaceFilesService.getDerivedVariableMetadata.mockResolvedValue({
+      metadataAvailable: true,
+      derivedVariableMap: new Map([
+        ['UNIT', new Set(['DERIVED_EMPTY', 'DERIVED_NONEMPTY'])]
+      ]),
+      derivedVariablesBySourceMap: new Map([
         [
           getManualCodingScopeKey('UNIT', 'SOURCE'),
           new Set(['DERIVED_EMPTY', 'DERIVED_NONEMPTY'])
         ]
       ])
-    );
+    });
     sourceRows = [
       response(10, 2, 'SOURCE', ''),
       response(11, 3, 'SOURCE', 'answered')
@@ -90,15 +94,16 @@ describe('EmptyResponseSelectionService', () => {
   });
 
   it('resolves nested derived variables to their leaf sources', async () => {
-    workspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map([
-      ['UNIT', new Set(['INNER', 'OUTER'])]
-    ]));
-    workspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(
-      new Map([
+    workspaceFilesService.getDerivedVariableMetadata.mockResolvedValue({
+      metadataAvailable: true,
+      derivedVariableMap: new Map([
+        ['UNIT', new Set(['INNER', 'OUTER'])]
+      ]),
+      derivedVariablesBySourceMap: new Map([
         [getManualCodingScopeKey('UNIT', 'BASE'), new Set(['INNER'])],
         [getManualCodingScopeKey('UNIT', 'INNER'), new Set(['OUTER'])]
       ])
-    );
+    });
     sourceRows = [response(10, 1, 'BASE', 'answered')];
 
     const context = await service.createContext(17);
@@ -111,15 +116,16 @@ describe('EmptyResponseSelectionService', () => {
   });
 
   it('checks every leaf source regardless of its coding status', async () => {
-    workspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map([
-      ['UNIT', new Set(['DERIVED'])]
-    ]));
-    workspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(
-      new Map([
+    workspaceFilesService.getDerivedVariableMetadata.mockResolvedValue({
+      metadataAvailable: true,
+      derivedVariableMap: new Map([
+        ['UNIT', new Set(['DERIVED'])]
+      ]),
+      derivedVariablesBySourceMap: new Map([
         [getManualCodingScopeKey('UNIT', 'AUTO_SOURCE'), new Set(['DERIVED'])],
         [getManualCodingScopeKey('UNIT', 'MANUAL_SOURCE'), new Set(['DERIVED'])]
       ])
-    );
+    });
     sourceRows = [
       withStatus(response(10, 1, 'AUTO_SOURCE', 'selected'), 5),
       withStatus(
@@ -156,14 +162,15 @@ describe('EmptyResponseSelectionService', () => {
   });
 
   it('ignores the technical target value for derived variables', async () => {
-    workspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map([
-      ['UNIT', new Set(['DERIVED'])]
-    ]));
-    workspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(
-      new Map([
+    workspaceFilesService.getDerivedVariableMetadata.mockResolvedValue({
+      metadataAvailable: true,
+      derivedVariableMap: new Map([
+        ['UNIT', new Set(['DERIVED'])]
+      ]),
+      derivedVariablesBySourceMap: new Map([
         [getManualCodingScopeKey('UNIT', 'SOURCE'), new Set(['DERIVED'])]
       ])
-    );
+    });
     sourceRows = [response(10, 1, 'SOURCE', '')];
 
     const context = await service.createContext(17);
@@ -176,14 +183,15 @@ describe('EmptyResponseSelectionService', () => {
   });
 
   it('does not classify derived targets when a source response is missing', async () => {
-    workspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map([
-      ['UNIT', new Set(['DERIVED'])]
-    ]));
-    workspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(
-      new Map([
+    workspaceFilesService.getDerivedVariableMetadata.mockResolvedValue({
+      metadataAvailable: true,
+      derivedVariableMap: new Map([
+        ['UNIT', new Set(['DERIVED'])]
+      ]),
+      derivedVariablesBySourceMap: new Map([
         [getManualCodingScopeKey('UNIT', 'SOURCE'), new Set(['DERIVED'])]
       ])
-    );
+    });
 
     const context = await service.createContext(17);
     const result = await service.filterEffectivelyEmptyResponses(
@@ -195,9 +203,11 @@ describe('EmptyResponseSelectionService', () => {
   });
 
   it('fails closed when derived-variable metadata cannot be loaded', async () => {
-    workspaceFilesService.getDerivedVariableMap.mockRejectedValue(
-      new Error('metadata unavailable')
-    );
+    workspaceFilesService.getDerivedVariableMetadata.mockResolvedValue({
+      metadataAvailable: false,
+      derivedVariableMap: new Map(),
+      derivedVariablesBySourceMap: new Map()
+    });
 
     const context = await service.createContext(17);
     const result = await service.filterEffectivelyEmptyResponses(

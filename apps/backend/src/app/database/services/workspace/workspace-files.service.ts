@@ -140,6 +140,12 @@ type UploadedFileForCacheInvalidation = {
   fileType?: string;
 };
 
+export interface DerivedVariableMetadataSnapshot {
+  metadataAvailable: boolean;
+  derivedVariableMap: Map<string, Set<string>>;
+  derivedVariablesBySourceMap: Map<string, Set<string>>;
+}
+
 @Injectable()
 export class WorkspaceFilesService implements OnModuleInit {
   private readonly logger = new Logger(WorkspaceFilesService.name);
@@ -3056,7 +3062,15 @@ ${bookletRefs}
       `Refreshing unit variable cache for workspace ${workspaceId}`
     );
 
+    const derivedMetadataCompleteKey = this.getCacheKey(
+      workspaceId,
+      'derived_variable_metadata_complete'
+    );
+    let derivedMetadataComplete = true;
+
     try {
+      await this.cacheService.set(derivedMetadataCompleteKey, false);
+
       const unitFiles = await this.fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: 'Unit' }
       });
@@ -3183,6 +3197,7 @@ ${bookletRefs}
             }
           }
         } catch (error) {
+          derivedMetadataComplete = false;
           this.logger.error(
             `Error parsing coding scheme ${scheme.file_id}: ${error.message}`,
             error.stack
@@ -3443,6 +3458,7 @@ ${bookletRefs}
             }
           }
         } catch (e) {
+          derivedMetadataComplete = false;
           this.logger.warn(
             `Error parsing unit file ${unitFile.file_id}: ${
               (e as Error).message
@@ -3475,6 +3491,10 @@ ${bookletRefs}
         this.getCacheKey(workspaceId, 'manual_instruction_variables'),
         this.toRedisMap(manualInstructionAliasByUnit)
       );
+      await this.cacheService.set(
+        derivedMetadataCompleteKey,
+        derivedMetadataComplete
+      );
 
       this.logger.log(
         `Cached ${unitVariables.size} units with their variables for workspace ${workspaceId} to Redis`
@@ -3500,6 +3520,14 @@ ${bookletRefs}
         `Error refreshing unit variable cache for workspace ${workspaceId}: ${error.message}`,
         error.stack
       );
+      try {
+        await this.cacheService.set(derivedMetadataCompleteKey, false);
+      } catch (cacheError) {
+        this.logger.error(
+          `Could not mark derived-variable metadata as unavailable for workspace ${workspaceId}: ${cacheError.message}`,
+          cacheError.stack
+        );
+      }
     }
   }
 
@@ -3575,6 +3603,67 @@ ${bookletRefs}
       );
     }
     return this.fromRedisMap(cached);
+  }
+
+  async getDerivedVariableMetadata(
+    workspaceId: number
+  ): Promise<DerivedVariableMetadataSnapshot> {
+    const metadataCompleteKey = this.getCacheKey(
+      workspaceId,
+      'derived_variable_metadata_complete'
+    );
+    const derivedVariableKey = this.getCacheKey(
+      workspaceId,
+      'derived_variables'
+    );
+    const derivedVariablesBySourceKey = this.getCacheKey(
+      workspaceId,
+      'derived_variables_by_source'
+    );
+
+    const readMetadata = async () => Promise.all([
+      this.cacheService.get<boolean>(metadataCompleteKey),
+      this.cacheService.get<Record<string, string[]>>(derivedVariableKey),
+      this.cacheService.get<Record<string, string[]>>(
+        derivedVariablesBySourceKey
+      )
+    ]);
+
+    let [
+      metadataComplete,
+      derivedVariableData,
+      derivedVariablesBySourceData
+    ] = await readMetadata();
+
+    if (
+      metadataComplete == null ||
+      (
+        metadataComplete === true &&
+        (!derivedVariableData || !derivedVariablesBySourceData)
+      )
+    ) {
+      await this.refreshUnitVariableCache(workspaceId);
+      [
+        metadataComplete,
+        derivedVariableData,
+        derivedVariablesBySourceData
+      ] = await readMetadata();
+    }
+
+    const metadataAvailable =
+      metadataComplete === true &&
+      !!derivedVariableData &&
+      !!derivedVariablesBySourceData;
+
+    return {
+      metadataAvailable,
+      derivedVariableMap: metadataAvailable ?
+        this.fromRedisMap(derivedVariableData) :
+        new Map(),
+      derivedVariablesBySourceMap: metadataAvailable ?
+        this.fromRedisMap(derivedVariablesBySourceData) :
+        new Map()
+    };
   }
 
   /**
@@ -4185,6 +4274,9 @@ ${bookletRefs}
       ),
       this.cacheService.delete(
         this.getCacheKey(workspaceId, 'derived_variables_by_source')
+      ),
+      this.cacheService.delete(
+        this.getCacheKey(workspaceId, 'derived_variable_metadata_complete')
       ),
       this.cacheService.delete(
         this.getCacheKey(workspaceId, 'manual_instruction_variables')
