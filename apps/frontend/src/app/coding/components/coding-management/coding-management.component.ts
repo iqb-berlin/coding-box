@@ -255,6 +255,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
           }
           if (effectiveAutoRefresh) {
             this.loadInitialCodingStatusOverview();
+          } else {
+            this.loadCachedAutocodingReadiness();
           }
         });
       this.workspaceSettingsService

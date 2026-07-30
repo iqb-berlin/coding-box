@@ -30,6 +30,7 @@ import { ExternalCodingImportService } from '../../database/services/coding';
 import { ExternalCodingImportDto } from '../../../../../../api-dto/coding/external-coding-import.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
+import { MutatesCodingStatus } from '../workspace-coding/coding-status-mutation.decorator';
 
 const TEMP_DIR = '/tmp/external-coding-import';
 
@@ -116,6 +117,7 @@ export class WorkspaceCodingImportController {
   }
 
   @Post(':workspace_id/coding/external-coding-import/apply')
+  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
   @HttpCode(202)

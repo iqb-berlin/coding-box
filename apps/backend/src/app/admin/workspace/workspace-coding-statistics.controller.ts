@@ -46,8 +46,10 @@ import {
   StartCodingFreshnessJobDto
 } from '../../../../../../api-dto/coding/coding-freshness.dto';
 import { AutocodingReadinessDto } from '../../../../../../api-dto/coding/autocoding-readiness.dto';
+import { CodingStatusRevisionDto } from '../../../../../../api-dto/coding/coding-status-revision.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { sanitizeCsvText } from '../../utils/csv.util';
+import { MutatesCodingStatus } from '../workspace-coding/coding-status-mutation.decorator';
 
 type CodingStatisticsJobStatusResponse = {
   status: string;
@@ -1025,6 +1027,19 @@ export class WorkspaceCodingStatisticsController {
     );
   }
 
+  @Get(':workspace_id/coding/revision')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Coding status revision retrieved successfully.'
+  })
+  async getCodingStatusRevision(
+    @WorkspaceId() workspace_id: number
+  ): Promise<CodingStatusRevisionDto> {
+    return this.codingFreshnessService.getWorkspaceStatusRevision(workspace_id);
+  }
+
   @Get(':workspace_id/coding/freshness')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
@@ -1111,6 +1126,7 @@ export class WorkspaceCodingStatisticsController {
   }
 
   @Post(':workspace_id/coding/freshness/code')
+  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
@@ -2788,6 +2804,7 @@ export class WorkspaceCodingStatisticsController {
   }
 
   @Post(':workspace_id/coding/create-distributed-jobs')
+  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
   @ApiTags('coding')

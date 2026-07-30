@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { HttpModule } from '@nestjs/axios';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DatabaseModule } from '../../database/database.module';
@@ -23,6 +24,7 @@ import { WorkspaceCodingResultsController } from '../workspace/workspace-coding-
 import { WorkspaceTestCenterController } from '../workspace/workspace-test-center.controller';
 import { WorkspacePlayerController } from '../workspace/workspace-player.controller';
 import { Setting } from '../../database/entities/setting.entity';
+import { CodingStatusMutationInterceptor } from './coding-status-mutation.interceptor';
 
 @Module({
   imports: [
@@ -51,6 +53,10 @@ import { Setting } from '../../database/entities/setting.entity';
     WorkspaceCodingResultsController,
     WorkspaceTestCenterController,
     WorkspacePlayerController
-  ]
+  ],
+  providers: [{
+    provide: APP_INTERCEPTOR,
+    useClass: CodingStatusMutationInterceptor
+  }]
 })
 export class WorkspaceCodingAdminModule { }

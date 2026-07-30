@@ -57,6 +57,7 @@ import { SaveCodingNotesDto } from '../../admin/coding-job/dto/save-coding-notes
 import { TransferCodingCasesDto } from '../../admin/coding-job/dto/transfer-coding-cases.dto';
 import { TransferCodingCasesResultDto } from '../../admin/coding-job/dto/transfer-coding-cases-result.dto';
 import type { ReplayCodingSessionDto } from '../../../../../../api-dto/coding/replay-coding-session.dto';
+import { MutatesCodingStatus } from '../../admin/workspace-coding/coding-status-mutation.decorator';
 
 @ApiTags('WSG Admin Coding Jobs')
 @Controller('wsg-admin/workspace/:workspace_id/coding-job')
@@ -238,6 +239,7 @@ export class WsgCodingJobController {
   }
 
   @Post('transfer-cases')
+  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
   @ApiBearerAuth()
@@ -495,6 +497,7 @@ export class WsgCodingJobController {
   }
 
   @Post()
+  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
   @ApiBearerAuth()
@@ -548,6 +551,7 @@ export class WsgCodingJobController {
   }
 
   @Put(':id')
+  @MutatesCodingStatus()
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
@@ -593,6 +597,7 @@ export class WsgCodingJobController {
   }
 
   @Post(':id/submit-review')
+  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -634,6 +639,7 @@ export class WsgCodingJobController {
   }
 
   @Post(':id/start')
+  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -686,6 +692,7 @@ export class WsgCodingJobController {
   }
 
   @Post(':id/pause')
+  @MutatesCodingStatus()
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
@@ -723,6 +730,7 @@ export class WsgCodingJobController {
   }
 
   @Post(':id/resume')
+  @MutatesCodingStatus()
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
@@ -760,6 +768,7 @@ export class WsgCodingJobController {
   }
 
   @Post(':id/submit')
+  @MutatesCodingStatus()
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
@@ -839,6 +848,7 @@ export class WsgCodingJobController {
   }
 
   @Delete(':id')
+  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
   @ApiBearerAuth()
@@ -878,6 +888,7 @@ export class WsgCodingJobController {
   }
 
   @Post(':id/progress')
+  @MutatesCodingStatus()
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE)
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
@@ -994,6 +1005,7 @@ export class WsgCodingJobController {
   }
 
   @Post(':id/restart-open-units')
+  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
   @ApiBearerAuth()

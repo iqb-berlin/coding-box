@@ -23,6 +23,7 @@ import { WorkspaceId } from './workspace.decorator';
 import { CodingStatisticsService } from '../../database/services/coding';
 import { JournalService } from '../../database/services/shared';
 import { JobQueueService } from '../../job-queue/job-queue.service';
+import { MutatesCodingStatus } from '../workspace-coding/coding-status-mutation.decorator';
 
 interface RequestWithUser extends Request {
   user: {
@@ -45,6 +46,7 @@ export class WorkspaceCodingVersionController {
   ) { }
 
   @Post(':workspace_id/coding/reset-version')
+  @MutatesCodingStatus()
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   @ApiTags('coding')

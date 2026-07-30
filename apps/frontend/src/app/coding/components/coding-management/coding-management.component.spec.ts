@@ -636,6 +636,7 @@ describe('CodingManagementComponent', () => {
       fixture.destroy();
       (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
       (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getCachedAutocodingReadiness as jest.Mock).mockClear();
       (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
       (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
       (mockWorkspaceSettingsService.getAutoFetchCodingStatistics as jest.Mock)
@@ -650,6 +651,7 @@ describe('CodingManagementComponent', () => {
       expect(isolatedComponent.autoRefreshManualCodingJobs).toBe(false);
       expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v1');
       expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getCachedAutocodingReadiness).toHaveBeenCalledWith(1, 1);
       expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
 
@@ -678,7 +680,7 @@ describe('CodingManagementComponent', () => {
       expect(isolatedComponent.autoRefreshManualCodingJobs).toBe(false);
       expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
-      expect(mockTestPersonCodingService.getCachedAutocodingReadiness).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getCachedAutocodingReadiness).toHaveBeenCalledWith(1, 1);
       expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
 

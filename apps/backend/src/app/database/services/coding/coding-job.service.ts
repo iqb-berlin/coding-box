@@ -68,6 +68,7 @@ import {
   JobDefinitionRefreshPreviewDto
 } from '../../../../../../../api-dto/coding/job-refresh.dto';
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { touchWorkspaceCodingStatusRevision } from '../shared/workspace-coding-status-revision.util';
 import { CodingFreshnessService } from './coding-freshness.service';
 import {
   getCodingIncompleteVariablesCacheKeys,
@@ -4171,6 +4172,7 @@ export class CodingJobService {
       await codingJobUnitRepository.save(codingJobUnit);
       if (clearedProgress) {
         await this.reopenCodingJobAfterProgressCleared(codingJob, manager);
+        await touchWorkspaceCodingStatusRevision(manager, codingJob.workspace_id);
       }
 
       return codingJob;
@@ -4236,13 +4238,23 @@ export class CodingJobService {
       createdReviewUnit.notes = notesDto.notes?.trim() || null;
       this.clearNewCodeNeededProgressWithoutNotes(createdReviewUnit);
       await this.codingJobUnitRepository.save(createdReviewUnit);
+      await touchWorkspaceCodingStatusRevision(
+        this.connection,
+        sourceCodingJob.workspace_id
+      );
 
       return sourceCodingJob;
     }
 
     reviewUnit.notes = notesDto.notes?.trim() || null;
-    this.clearNewCodeNeededProgressWithoutNotes(reviewUnit);
+    const clearedProgress = this.clearNewCodeNeededProgressWithoutNotes(reviewUnit);
     await this.codingJobUnitRepository.save(reviewUnit);
+    if (clearedProgress) {
+      await touchWorkspaceCodingStatusRevision(
+        this.connection,
+        sourceCodingJob.workspace_id
+      );
+    }
 
     return sourceCodingJob;
   }
