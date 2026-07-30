@@ -313,6 +313,7 @@ type LogAnomalySessionRow = {
 export class WorkspaceTestResultsService {
   private readonly logger = new Logger(WorkspaceTestResultsService.name);
   private static readonly logAnomalyQueryBatchSize = 1000;
+  private static readonly logAnomalyProcessingBatchSize = 100;
   private static readonly responseValueSearchPrefixLength = 2000;
   private static readonly codingResponseStatuses = [
     statusStringToNumber('NOT_REACHED') || 1,
@@ -1066,21 +1067,28 @@ export class WorkspaceTestResultsService {
     );
   }
 
-  private getLogAnomalyIdBatches(ids: number[]): number[][] {
+  private getLogAnomalyIdBatches(
+    ids: number[],
+    batchSize = WorkspaceTestResultsService.logAnomalyQueryBatchSize
+  ): number[][] {
     const batches: number[][] = [];
     for (
       let index = 0;
       index < ids.length;
-      index += WorkspaceTestResultsService.logAnomalyQueryBatchSize
+      index += batchSize
     ) {
       batches.push(
-        ids.slice(
-          index,
-          index + WorkspaceTestResultsService.logAnomalyQueryBatchSize
-        )
+        ids.slice(index, index + batchSize)
       );
     }
     return batches;
+  }
+
+  private getLogAnomalyProcessingBatches(ids: number[]): number[][] {
+    return this.getLogAnomalyIdBatches(
+      ids,
+      WorkspaceTestResultsService.logAnomalyProcessingBatchSize
+    );
   }
 
   private async loadLogAnomalyRowsInBatches<T>(
@@ -1089,7 +1097,10 @@ export class WorkspaceTestResultsService {
   ): Promise<T[]> {
     const rows: T[] = [];
     for (const batchIds of this.getLogAnomalyIdBatches(ids)) {
-      rows.push(...await loadBatch(batchIds));
+      const batchRows = await loadBatch(batchIds);
+      for (const row of batchRows) {
+        rows.push(row);
+      }
     }
     return rows;
   }
@@ -1582,6 +1593,83 @@ export class WorkspaceTestResultsService {
     return result;
   }
 
+  private mergeLogAnomalySummary(
+    summary: LogAnomalyDashboardSummary,
+    anomaliesByBooklet: Map<number, LogAnomalySummary[]>
+  ): void {
+    anomaliesByBooklet.forEach(anomalies => {
+      if (anomalies.length === 0) {
+        return;
+      }
+      summary.affectedBooklets += 1;
+      summary.totalAnomalyRules += anomalies.length;
+
+      if (anomalies.some(anomaly => anomaly.severity === 'critical')) {
+        summary.criticalBooklets += 1;
+      }
+      if (anomalies.some(anomaly => anomaly.severity === 'warning')) {
+        summary.warningBooklets += 1;
+      }
+      if (anomalies.some(anomaly => anomaly.severity === 'info')) {
+        summary.infoBooklets += 1;
+      }
+
+      anomalies.forEach(anomaly => {
+        summary.totalAnomalyEvents += anomaly.count;
+        summary.byCode[anomaly.code] =
+          (summary.byCode[anomaly.code] || 0) + 1;
+      });
+    });
+  }
+
+  private toLogAnomalyDetailRow(
+    row: {
+      bookletId: number | string;
+      booklet: string | null;
+      personId: number | string;
+      code: string | null;
+      group: string | null;
+      login: string | null;
+    },
+    anomaliesByBooklet: Map<number, LogAnomalySummary[]>
+  ): LogAnomalyDetailRow | null {
+    const bookletId = Number(row.bookletId);
+    const anomalies = anomaliesByBooklet.get(bookletId) || [];
+    if (anomalies.length === 0) {
+      return null;
+    }
+    const maxSeverity = anomalies.reduce<LogAnomalySeverity>(
+      (current, anomaly) => {
+        const anomalySort = this.getLogAnomalySortValue(anomaly.severity);
+        const currentSort = this.getLogAnomalySortValue(current);
+        return anomalySort < currentSort ? anomaly.severity : current;
+      },
+      'info'
+    );
+    return {
+      bookletId,
+      booklet: String(row.booklet || ''),
+      personId: Number(row.personId),
+      code: String(row.code || ''),
+      group: String(row.group || ''),
+      login: String(row.login || ''),
+      maxSeverity,
+      anomalies
+    };
+  }
+
+  private compareLogAnomalyDetails(
+    a: LogAnomalyDetailRow,
+    b: LogAnomalyDetailRow
+  ): number {
+    const severityDelta =
+      this.getLogAnomalySortValue(a.maxSeverity) -
+      this.getLogAnomalySortValue(b.maxSeverity);
+    return severityDelta ||
+      a.code.localeCompare(b.code) ||
+      a.booklet.localeCompare(b.booklet);
+  }
+
   async getLogAnomalySummary(
     workspaceId: number,
     options: {
@@ -1629,41 +1717,20 @@ export class WorkspaceTestResultsService {
       return emptySummary;
     }
 
-    const anomaliesByBooklet = await this.findLogAnomaliesForBooklets(
-      bookletIds,
-      this.buildLogAnomalyThresholds(options),
-      exclusions
-    );
-
     const summary: LogAnomalyDashboardSummary = {
       ...emptySummary,
       totalBooklets: bookletIds.length,
       byCode: {}
     };
-
-    anomaliesByBooklet.forEach(anomalies => {
-      if (anomalies.length === 0) {
-        return;
-      }
-      summary.affectedBooklets += 1;
-      summary.totalAnomalyRules += anomalies.length;
-
-      if (anomalies.some(anomaly => anomaly.severity === 'critical')) {
-        summary.criticalBooklets += 1;
-      }
-      if (anomalies.some(anomaly => anomaly.severity === 'warning')) {
-        summary.warningBooklets += 1;
-      }
-      if (anomalies.some(anomaly => anomaly.severity === 'info')) {
-        summary.infoBooklets += 1;
-      }
-
-      anomalies.forEach(anomaly => {
-        summary.totalAnomalyEvents += anomaly.count;
-        summary.byCode[anomaly.code] =
-          (summary.byCode[anomaly.code] || 0) + 1;
-      });
-    });
+    const thresholds = this.buildLogAnomalyThresholds(options);
+    for (const batchIds of this.getLogAnomalyProcessingBatches(bookletIds)) {
+      const anomaliesByBooklet = await this.findLogAnomaliesForBooklets(
+        batchIds,
+        thresholds,
+        exclusions
+      );
+      this.mergeLogAnomalySummary(summary, anomaliesByBooklet);
+    }
 
     return summary;
   }
@@ -1726,55 +1793,31 @@ export class WorkspaceTestResultsService {
       );
       return !ignoredBooklets.has(normalizedBooklet);
     });
-    const bookletIds = filteredRows
-      .map(row => Number(row.bookletId))
-      .filter(id => Number.isFinite(id) && id > 0);
-
-    const anomaliesByBooklet = await this.findLogAnomaliesForBooklets(
-      bookletIds,
-      this.buildLogAnomalyThresholds(options),
-      exclusions
-    );
-
-    const details = filteredRows
-      .map((row): LogAnomalyDetailRow | null => {
-        const bookletId = Number(row.bookletId);
-        const anomalies = anomaliesByBooklet.get(bookletId) || [];
-        if (anomalies.length === 0) {
-          return null;
-        }
-        const maxSeverity = anomalies.reduce<LogAnomalySeverity>(
-          (current, anomaly) => {
-            const anomalySort = this.getLogAnomalySortValue(anomaly.severity);
-            const currentSort = this.getLogAnomalySortValue(current);
-            return anomalySort < currentSort ? anomaly.severity : current;
-          },
-          'info'
-        );
-        return {
-          bookletId,
-          booklet: String(row.booklet || ''),
-          personId: Number(row.personId),
-          code: String(row.code || ''),
-          group: String(row.group || ''),
-          login: String(row.login || ''),
-          maxSeverity,
-          anomalies
-        };
-      })
-      .filter((row): row is LogAnomalyDetailRow => row !== null)
-      .sort((a, b) => {
-        const severityDelta =
-          this.getLogAnomalySortValue(a.maxSeverity) -
-          this.getLogAnomalySortValue(b.maxSeverity);
-        return severityDelta ||
-          a.code.localeCompare(b.code) ||
-          a.booklet.localeCompare(b.booklet);
-      });
+    const thresholds = this.buildLogAnomalyThresholds(options);
+    let total = 0;
+    let details: LogAnomalyDetailRow[] = [];
+    for (const rowBatch of this.getLogAnomalyIdBatches(
+      filteredRows.map((_row, index) => index),
+      WorkspaceTestResultsService.logAnomalyProcessingBatchSize
+    )) {
+      const rowsInBatch = rowBatch.map(index => filteredRows[index]);
+      const anomaliesByBooklet = await this.findLogAnomaliesForBooklets(
+        rowsInBatch.map(row => Number(row.bookletId)),
+        thresholds,
+        exclusions
+      );
+      const batchDetails = rowsInBatch
+        .map(row => this.toLogAnomalyDetailRow(row, anomaliesByBooklet))
+        .filter((row): row is LogAnomalyDetailRow => row !== null);
+      total += batchDetails.length;
+      details = [...details, ...batchDetails]
+        .sort((a, b) => this.compareLogAnomalyDetails(a, b))
+        .slice(0, limit);
+    }
 
     return {
-      total: details.length,
-      data: details.slice(0, limit)
+      total,
+      data: details
     };
   }
 

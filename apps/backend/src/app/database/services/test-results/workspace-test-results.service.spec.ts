@@ -71,6 +71,13 @@ type WorkspaceTestResultsServiceWithLogAnomalyLookup = {
   ) => Promise<Map<number, unknown[]>>;
 };
 
+type WorkspaceTestResultsServiceWithBatchLoader = {
+  loadLogAnomalyRowsInBatches: <T>(
+    ids: number[],
+    loadBatch: (ids: number[]) => Promise<T[]>
+  ) => Promise<T[]>;
+};
+
 describe('WorkspaceTestResultsService', () => {
   let service: WorkspaceTestResultsService;
   let responseManagementService: ResponseManagementService;
@@ -1805,6 +1812,20 @@ describe('WorkspaceTestResultsService', () => {
       repeatedStartThreshold: 2
     };
 
+    it('collects very large query results without spreading them as arguments', async () => {
+      const batchRows = Array.from({ length: 150_000 }, (_, index) => index);
+      const serviceWithBatchLoader =
+        service as unknown as WorkspaceTestResultsServiceWithBatchLoader;
+
+      const rows = await serviceWithBatchLoader.loadLogAnomalyRowsInBatches(
+        [1],
+        async () => batchRows
+      );
+
+      expect(rows).toHaveLength(150_000);
+      expect(rows[149_999]).toBe(149_999);
+    });
+
     it('should split booklet-scoped log anomaly lookups into batches', async () => {
       const bookletIds = Array.from({ length: 1001 }, (_, index) => index + 1);
       const bookletLogQbs: Array<ReturnType<typeof mockQueryBuilder>> = [];
@@ -2098,6 +2119,31 @@ describe('WorkspaceTestResultsService', () => {
         logAnomaly1UnitProgressAvailableIgnoredUnits: ['IGNORED-UNIT'],
         logAnomaly1UnitProgressMissingIgnoredUnits: ['IGNORED-UNIT']
       });
+    });
+  });
+
+  describe('getLogAnomalySummary', () => {
+    it('processes large workspaces in bounded sequential batches', async () => {
+      const summaryQb = mockQueryBuilder();
+      (bookletRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValue(summaryQb);
+      summaryQb.getRawMany.mockResolvedValue(
+        Array.from({ length: 201 }, (_, index) => ({ id: index + 1 }))
+      );
+      const serviceWithLogAnomalyLookup =
+        service as unknown as WorkspaceTestResultsServiceWithLogAnomalyLookup;
+      const anomalyLookup = jest.spyOn(
+        serviceWithLogAnomalyLookup,
+        'findLogAnomaliesForBooklets'
+      ).mockResolvedValue(new Map());
+
+      const result = await service.getLogAnomalySummary(1);
+
+      expect(result.totalBooklets).toBe(201);
+      expect(anomalyLookup).toHaveBeenCalledTimes(3);
+      expect(anomalyLookup.mock.calls[0][0]).toHaveLength(100);
+      expect(anomalyLookup.mock.calls[1][0]).toHaveLength(100);
+      expect(anomalyLookup.mock.calls[2][0]).toEqual([201]);
     });
   });
 
