@@ -269,6 +269,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private planningDataBundleCacheGeneration: number | null = null;
   private deferredPlanningDataBundleForceRefresh: boolean | null = null;
   private isStartingPlanningDataBundleLoad = false;
+  private planningDataBundleLoadFailed = false;
 
   private pendingAutomaticManualTabLoad: ManualCodingTab | null = null;
 
@@ -3313,6 +3314,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.deferredPlanningDataBundleForceRefresh = null;
     this.hasLoadedPlanningDataBundle = true;
     this.isPlanningDataBundleLoadPending = true;
+    this.planningDataBundleLoadFailed = false;
     this.planningDataBundleCacheGeneration =
       this.testPersonCodingService.beginManualCodingPlanningSnapshot();
     this.isStartingPlanningDataBundleLoad = true;
@@ -3391,7 +3393,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (this.responseAnalysisError) {
+    if (this.responseAnalysisError || this.planningDataBundleLoadFailed) {
       this.isPlanningDataBundleLoadPending = false;
       this.planningDataBundleCacheGeneration = null;
       return;
@@ -3424,6 +3426,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     );
     this.isPlanningDataBundleLoadPending = false;
     this.planningDataBundleCacheGeneration = null;
+  }
+
+  private markPlanningDataBundleLoadFailed(): void {
+    if (this.isPlanningDataBundleLoadPending) {
+      this.planningDataBundleLoadFailed = true;
+    }
   }
 
   private isPlanningDataBundleBusy(): boolean {
@@ -3867,9 +3875,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (overview: CodingProgressOverview | null) => {
           this.codingProgressOverview = overview;
+          if (!overview) {
+            this.markPlanningDataBundleLoadFailed();
+          }
         },
         error: () => {
           this.codingProgressOverview = null;
+          this.markPlanningDataBundleLoadFailed();
         }
       });
   }
@@ -3913,6 +3925,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.manualFreshnessJobSummary = null;
+          this.markPlanningDataBundleLoadFailed();
         }
       });
   }
@@ -3961,6 +3974,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.openDoubleCodingConflictCount = 0;
+          this.markPlanningDataBundleLoadFailed();
         }
       });
   }
@@ -4084,6 +4098,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.variableCoverageOverview = null;
+          this.markPlanningDataBundleLoadFailed();
         }
       });
   }
@@ -4111,6 +4126,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.caseCoverageOverview = null;
+          this.markPlanningDataBundleLoadFailed();
         }
       });
   }
@@ -4197,6 +4213,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.codingIncompleteVariables = [];
+          this.markPlanningDataBundleLoadFailed();
           this.loadAppliedResultsOverview();
         }
       });
@@ -4217,6 +4234,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.manualCodingScopeSummary = null;
+          this.markPlanningDataBundleLoadFailed();
         }
       });
 
@@ -4237,6 +4255,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.setManualCodeAvailabilityWarnings([]);
+          this.markPlanningDataBundleLoadFailed();
         }
       });
   }
@@ -4326,6 +4345,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         next: overview => {
           if (!overview) {
             this.appliedResultsOverview = null;
+            this.markPlanningDataBundleLoadFailed();
             return;
           }
 
@@ -4342,6 +4362,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.appliedResultsOverview = null;
+          this.markPlanningDataBundleLoadFailed();
         }
       });
   }
@@ -4501,6 +4522,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.isPlanningDataBundleLoadPending = false;
     this.planningDataBundleCacheGeneration = null;
     this.deferredPlanningDataBundleForceRefresh = null;
+    this.planningDataBundleLoadFailed = false;
   }
 
   private formatApplyCodingResultsMessage(
@@ -5001,6 +5023,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.setResponseAnalysisGuardActive(false);
           this.responseAnalysis = null;
           this.responseAnalysisError = responseAnalysisError;
+          this.markPlanningDataBundleLoadFailed();
           this.trySavePlanningDataBundleSnapshot();
           this.snackBar.open(
             this.responseAnalysisError,

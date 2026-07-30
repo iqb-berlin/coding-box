@@ -1478,6 +1478,8 @@ describe('CodingManagementComponent', () => {
       (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
       (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
       (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+      (mockTestPersonCodingService.invalidateCodingStatusCache as jest.Mock)
+        .mockClear();
 
       resetProgressSubject.next(50);
       resetProgressSubject.next(null);
@@ -1486,6 +1488,8 @@ describe('CodingManagementComponent', () => {
       expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.invalidateCodingStatusCache)
+        .toHaveBeenCalledWith(1);
       expect(component.hasLoadedFullCodingStatusOverview).toBe(false);
     });
 
