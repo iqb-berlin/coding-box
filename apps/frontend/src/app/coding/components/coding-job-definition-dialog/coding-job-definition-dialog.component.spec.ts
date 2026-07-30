@@ -1605,6 +1605,19 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(mockDistributedCodingService.calculateDistribution).not.toHaveBeenCalled();
   }));
 
+  it('should calculate distribution while the unrelated required name is empty', fakeAsync(() => {
+    createComponent(undefined, false, false);
+    (mockDistributedCodingService.calculateDistribution as jest.Mock).mockClear();
+
+    expect(component.codingJobForm.get('name')?.invalid).toBe(true);
+
+    component.selectedCoders.select(component.availableCoders[0]);
+    component.selectedVariables.select(component.variables[0]);
+    tick(300);
+
+    expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledTimes(1);
+  }));
+
   it('should send a stable distribution seed when submitting a new definition for review', () => {
     createComponent();
     (mockCodingJobBackendService.createJobDefinition as jest.Mock).mockReturnValue(of({ id: 123 }));
