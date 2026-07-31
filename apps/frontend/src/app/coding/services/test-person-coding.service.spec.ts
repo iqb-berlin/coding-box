@@ -24,6 +24,7 @@ import {
   WorkspaceSettingsService
 } from '../../ws-admin/services/workspace-settings.service';
 import { CodingBackgroundJobsService } from './coding-background-jobs.service';
+import type { ManualCodingPlanningSnapshot } from './manual-coding-planning-snapshot.model';
 
 describe('TestPersonCodingService', () => {
   let service: TestPersonCodingService;
@@ -1142,6 +1143,60 @@ describe('TestPersonCodingService', () => {
   });
 
   describe('coding freshness', () => {
+    const createPlanningSnapshot = (): ManualCodingPlanningSnapshot => ({
+      responseAnalysis: null,
+      codingProgressOverview: null,
+      variableCoverageOverview: null,
+      caseCoverageOverview: null,
+      codingIncompleteVariables: [],
+      manualCodingScopeSummary: null,
+      manualCodeAvailabilityWarnings: [],
+      appliedResultsOverview: null,
+      manualFreshnessJobSummary: null,
+      openDoubleCodingConflictCount: 0,
+      codingFreshnessSummary: {
+        workspaceId: mockWorkspaceId,
+        currentRevision: 0,
+        items: []
+      }
+    });
+
+    it('should keep a planning snapshot until its workspace is invalidated', () => {
+      const snapshot = createPlanningSnapshot();
+      const generation = service.beginManualCodingPlanningSnapshot();
+
+      service.saveManualCodingPlanningSnapshot(
+        mockWorkspaceId,
+        snapshot,
+        generation
+      );
+
+      expect(service.getManualCodingPlanningSnapshot(mockWorkspaceId)).toBe(
+        snapshot
+      );
+
+      service.invalidateCodingStatusCache(mockWorkspaceId);
+
+      expect(
+        service.getManualCodingPlanningSnapshot(mockWorkspaceId)
+      ).toBeNull();
+    });
+
+    it('should ignore a planning snapshot completed after invalidation', () => {
+      const generation = service.beginManualCodingPlanningSnapshot();
+
+      service.invalidateCodingStatusCache(mockWorkspaceId);
+      service.saveManualCodingPlanningSnapshot(
+        mockWorkspaceId,
+        createPlanningSnapshot(),
+        generation
+      );
+
+      expect(
+        service.getManualCodingPlanningSnapshot(mockWorkspaceId)
+      ).toBeNull();
+    });
+
     it('should reuse cached coding freshness until coding status is invalidated', () => {
       const mockResponse = {
         workspaceId: mockWorkspaceId,
@@ -1428,6 +1483,79 @@ describe('TestPersonCodingService', () => {
           request.params.get('autoCoderRun') === '1'
       );
       expect(cachedResponse).toEqual(mockResponse);
+    });
+
+    it('should expose a cached coding status overview only when all parts exist', () => {
+      const codingFreshness = {
+        workspaceId: mockWorkspaceId,
+        currentRevision: 0,
+        items: []
+      };
+      const autocodingReadiness = {
+        workspaceId: mockWorkspaceId,
+        autoCoderRun: 1 as const,
+        readiness: 'READY' as const,
+        blockers: [],
+        rawResponsesTotal: 10,
+        rawResponsesWithRelevantStatus: 10,
+        resultUnitsTotal: 2,
+        resultUnitKeysTotal: 2,
+        matchedUnitFiles: 2,
+        missingUnitFiles: [],
+        matchedCodingSchemes: 1,
+        missingCodingSchemes: [],
+        invalidCodingSchemes: [],
+        validVariablePairs: 1,
+        validResponses: 10,
+        codeableResponses: 10,
+        invalidVariableSamples: []
+      };
+      const appliedResultsOverview: AppliedResultsOverview = {
+        totalIncompleteResponses: 0,
+        appliedResponses: 0,
+        remainingResponses: 0,
+        completionPercentage: 100,
+        rawTotalIncompleteResponses: 0,
+        rawAppliedResponses: 0,
+        rawCompletionPercentage: 100,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
+      };
+
+      service.getCodingFreshness(mockWorkspaceId).subscribe();
+      httpMock
+        .expectOne(
+          `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness`
+        )
+        .flush(codingFreshness);
+      service.getAutocodingReadiness(mockWorkspaceId, 1).subscribe();
+      httpMock
+        .expectOne(
+          request => request.url ===
+              `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+            request.params.get('autoCoderRun') === '1'
+        )
+        .flush(autocodingReadiness);
+
+      expect(
+        service.getCachedCodingStatusOverview(mockWorkspaceId, 1)
+      ).toBeNull();
+
+      service.getAppliedResultsOverview(mockWorkspaceId).subscribe();
+      httpMock
+        .expectOne(
+          `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/applied-results-overview`
+        )
+        .flush(appliedResultsOverview);
+
+      expect(service.getCachedCodingStatusOverview(mockWorkspaceId, 1)).toEqual(
+        {
+          codingFreshness,
+          autocodingReadiness,
+          appliedResultsOverview
+        }
+      );
     });
 
     it('should ignore stale cache-only autocoding readiness responses after invalidation', () => {

@@ -47,6 +47,7 @@ import {
   WorkspaceSettingsService
 } from '../../ws-admin/services/workspace-settings.service';
 import { CodingBackgroundJobsService } from './coding-background-jobs.service';
+import type { ManualCodingPlanningSnapshot } from './manual-coding-planning-snapshot.model';
 
 interface ExternalCodingImportWithPreviewDto {
   file: string;
@@ -244,6 +245,12 @@ export interface AppliedResultsOverview {
   deriveErrorRawAppliedResponses?: number;
 }
 
+export interface CodingStatusOverviewSnapshot {
+  codingFreshness: CodingFreshnessSummaryDto;
+  autocodingReadiness: AutocodingReadinessDto;
+  appliedResultsOverview: AppliedResultsOverview;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -296,6 +303,11 @@ export class TestPersonCodingService {
   private appliedResultsOverviewRequests = new Map<
   number,
   Observable<AppliedResultsOverview | null>
+  >();
+
+  private manualCodingPlanningSnapshots = new Map<
+  number,
+  ManualCodingPlanningSnapshot
   >();
 
   private responseAnalysisGuardPollTimers = new Map<
@@ -383,6 +395,7 @@ export class TestPersonCodingService {
       this.codingFreshnessScopeRequests.clear();
       this.appliedResultsOverviewCache.clear();
       this.appliedResultsOverviewRequests.clear();
+      this.manualCodingPlanningSnapshots.clear();
       return;
     }
 
@@ -390,6 +403,7 @@ export class TestPersonCodingService {
     this.codingFreshnessRequests.delete(workspaceId);
     this.appliedResultsOverviewCache.delete(workspaceId);
     this.appliedResultsOverviewRequests.delete(workspaceId);
+    this.manualCodingPlanningSnapshots.delete(workspaceId);
     this.deleteCacheKeysForWorkspace(
       this.autocodingReadinessCache,
       workspaceId
@@ -410,6 +424,48 @@ export class TestPersonCodingService {
       this.codingFreshnessScopeRequests,
       workspaceId
     );
+  }
+
+  getManualCodingPlanningSnapshot(
+    workspaceId: number
+  ): ManualCodingPlanningSnapshot | null {
+    return this.manualCodingPlanningSnapshots.get(workspaceId) ?? null;
+  }
+
+  beginManualCodingPlanningSnapshot(): number {
+    return this.codingStatusCacheGeneration;
+  }
+
+  saveManualCodingPlanningSnapshot(
+    workspaceId: number,
+    snapshot: ManualCodingPlanningSnapshot,
+    cacheGeneration: number
+  ): void {
+    if (cacheGeneration === this.codingStatusCacheGeneration) {
+      this.manualCodingPlanningSnapshots.set(workspaceId, snapshot);
+    }
+  }
+
+  getCachedCodingStatusOverview(
+    workspaceId: number,
+    autoCoderRun: 1 | 2 = 1
+  ): CodingStatusOverviewSnapshot | null {
+    const codingFreshness = this.codingFreshnessCache.get(workspaceId);
+    const autocodingReadiness = this.autocodingReadinessCache.get(
+      `${workspaceId}:${autoCoderRun}`
+    );
+    const appliedResultsOverview =
+      this.appliedResultsOverviewCache.get(workspaceId);
+
+    if (!codingFreshness || !autocodingReadiness || !appliedResultsOverview) {
+      return null;
+    }
+
+    return {
+      codingFreshness,
+      autocodingReadiness,
+      appliedResultsOverview
+    };
   }
 
   private createCodingFreshnessFallback(

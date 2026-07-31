@@ -1,7 +1,9 @@
 import { Job } from 'bull';
 import { ResponseAnalysisDto } from '../../../../../../api-dto/coding/response-analysis.dto';
 import { CacheService } from '../../cache/cache.service';
-import { WorkspaceExclusionService, WorkspaceFilesService } from '../../database/services/workspace';
+import { EmptyResponseSelectionService } from '../../database/services/coding/empty-response-selection.service';
+import { ResponseEntity } from '../../database/entities/response.entity';
+import { WorkspaceExclusionService } from '../../database/services/workspace';
 import { CodingAnalysisJobData } from '../job-queue.service';
 import { CodingAnalysisProcessor } from './coding-analysis.processor';
 
@@ -11,7 +13,7 @@ describe('CodingAnalysisProcessor', () => {
       {} as never,
       cacheService as CacheService,
       {} as WorkspaceExclusionService,
-      {} as WorkspaceFilesService
+      {} as EmptyResponseSelectionService
     );
     const analysis: ResponseAnalysisDto = {
       emptyResponses: {
@@ -89,5 +91,50 @@ describe('CodingAnalysisProcessor', () => {
     await expect(processor.handleResponseAnalysis(createJob('current-run'))).resolves.toBe(analysis);
 
     expect(cacheService.set).toHaveBeenCalledWith('response-analysis:7__t2', analysis);
+  });
+
+  it('reports an effectively empty derived response with a technical target value', () => {
+    const { processor } = createProcessor({});
+    const emptyResponses: ResponseAnalysisDto['emptyResponses']['items'] = [];
+    const duplicateValueGroups: ResponseAnalysisDto['duplicateValues']['groups'] = [];
+    const derivedResponse = {
+      id: 1,
+      value: 'technical solver value',
+      variableid: 'DERIVED',
+      unitid: 2,
+      unit: {
+        name: 'UNIT',
+        booklet: {
+          person: { login: 'person' },
+          bookletinfo: { name: 'booklet' }
+        }
+      }
+    } as ResponseEntity;
+
+    (processor as unknown as {
+      analyzeBatch: (
+        responses: ResponseEntity[],
+        matchingFlags: string[],
+        emptyItems: ResponseAnalysisDto['emptyResponses']['items'],
+        duplicateGroups: ResponseAnalysisDto['duplicateValues']['groups'],
+        derivedVariableMap: Map<string, Set<string>>,
+        effectivelyEmptyResponseIds: Set<number>
+      ) => void;
+    }).analyzeBatch(
+      [derivedResponse],
+      [],
+      emptyResponses,
+      duplicateValueGroups,
+      new Map([['UNIT', new Set(['DERIVED'])]]),
+      new Set([1])
+    );
+
+    expect(emptyResponses).toEqual([
+      expect.objectContaining({
+        responseId: 1,
+        value: 'technical solver value'
+      })
+    ]);
+    expect(duplicateValueGroups).toEqual([]);
   });
 });
