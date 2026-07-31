@@ -301,6 +301,12 @@ customize_settings() {
   # shellcheck source=.env.coding-box
   source ".env.${APP_NAME}"
 
+  if [ "${EXPORT_WORKER_PGOPTIONS:-}" = "-c" ]; then
+    printf >&2 "Invalid EXPORT_WORKER_PGOPTIONS in '.env.%s': the '-c' option requires a value.\n" "${APP_NAME}"
+    printf >&2 'Quote values containing spaces, for example: EXPORT_WORKER_PGOPTIONS="-c jit=off"\n'
+    exit 1
+  fi
+
   # Setup environment variables
   printf "5. Set Environment variables (default postgres password is generated randomly):\n\n"
 
