@@ -95,6 +95,12 @@ create_app_dir_backup() {
 load_docker_environment_variables() {
   # shellcheck source=.env.studio-lite
   source ".env.${APP_NAME}"
+
+  if [ "${EXPORT_WORKER_PGOPTIONS:-}" = "-c" ]; then
+    printf >&2 "Invalid EXPORT_WORKER_PGOPTIONS in '.env.%s': the '-c' option requires a value.\n" "${APP_NAME}"
+    printf >&2 'Quote values containing spaces, for example: EXPORT_WORKER_PGOPTIONS="-c jit=off"\n'
+    exit 1
+  fi
 }
 
 data_services_up() {
