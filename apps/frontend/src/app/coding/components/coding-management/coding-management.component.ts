@@ -255,6 +255,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
           }
           if (effectiveAutoRefresh) {
             this.loadInitialCodingStatusOverview();
+          } else if (!evaluationMode) {
+            this.loadCachedAutocodingReadiness();
           }
         });
       this.workspaceSettingsService
@@ -316,6 +318,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         if (previousProgress !== undefined &&
           previousProgress !== null &&
           progress === null) {
+          this.invalidateCodingStatusOverviewCache();
           if (this.resetCompletionRefreshHandledAfterGuardClear) {
             this.resetCompletionRefreshHandledAfterGuardClear = false;
             return;
@@ -550,6 +553,18 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const cachedOverview =
+      this.testPersonCodingService.getCachedCodingStatusOverview(workspaceId, 1);
+    if (cachedOverview) {
+      this.codingFreshnessSummary = cachedOverview.codingFreshness;
+      this.autocodingReadiness = cachedOverview.autocodingReadiness;
+      this.manualAppliedResultsOverview = cachedOverview.appliedResultsOverview;
+      this.autocodingReadinessLoadFailed = false;
+      this.manualAppliedResultsOverviewLoadFailed = false;
+      this.hasLoadedFullCodingStatusOverview = true;
+      return;
+    }
+
     this.testPersonCodingService.getCachedAutocodingReadiness(workspaceId, 1)
       .pipe(takeUntil(this.destroy$))
       .subscribe(readiness => {
@@ -559,7 +574,6 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
         this.autocodingReadiness = readiness;
         this.autocodingReadinessLoadFailed = false;
-        this.hasLoadedFullCodingStatusOverview = true;
       });
   }
 
@@ -583,6 +597,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   private refreshCodingStatusOverviewAfterChange(): void {
+    this.hasLoadedFullCodingStatusOverview = false;
     if (!this.hasLoadedManualCodingJobRefreshSetting ||
       !this.autoRefreshManualCodingJobs) {
       return;
@@ -614,7 +629,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.loadCodingFreshness();
     this.loadManualAppliedResultsOverview();
     if (includeAutocodingReadiness) {
-      this.loadAutocodingReadiness(false);
+      this.loadAutocodingReadiness(true);
     }
   }
 

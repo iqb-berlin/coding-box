@@ -29,7 +29,8 @@ import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { SelectionModel } from '@angular/cdk/collections';
 import { MatTooltip } from '@angular/material/tooltip';
 import {
-  debounceTime, forkJoin, Subject, Subscription, takeUntil, firstValueFrom
+  catchError, firstValueFrom, forkJoin, merge, Observable, of, Subject, Subscription,
+  switchMap, takeUntil, timer
 } from 'rxjs';
 import {
   CodingJob,
@@ -282,7 +283,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private definitionDistributionSeed?: string;
   private distributionPreviewSummary: DistributionPreviewSummary | null = null;
   private readonly distributionPreviewRefresh$ = new Subject<void>();
-  private distributionPreviewRequestId = 0;
+  private readonly distributionPreviewDebounceMs = 300;
   private selectionPreviewSubscription = new Subscription();
   existingJobDefinitions: JobDefinition[] = [];
   manualCodingScopeSummary: ManualCodingScopeSummary | null = null;
@@ -308,12 +309,26 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => this.restoreDefinitionRecoveryDraft());
     this.bindSelectionPreviewRefresh();
-    this.codingJobForm.valueChanges
-      .pipe(debounceTime(150), takeUntil(this.destroy$))
+    merge(
+      this.codingJobForm.get('doubleCodingAbsolute')!.valueChanges,
+      this.codingJobForm.get('doubleCodingPercentage')!.valueChanges,
+      this.codingJobForm.get('caseOrderingMode')!.valueChanges,
+      this.codingJobForm.get('maxCodingCases')!.valueChanges
+    )
+      .pipe(takeUntil(this.destroy$))
       .subscribe(() => this.queueDistributionPreviewRefresh());
     this.distributionPreviewRefresh$
-      .pipe(debounceTime(150), takeUntil(this.destroy$))
-      .subscribe(() => this.loadDistributionPreview());
+      .pipe(
+        switchMap(() => timer(this.distributionPreviewDebounceMs).pipe(
+          switchMap(() => this.loadDistributionPreview())
+        )),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(preview => {
+        this.distributionPreviewSummary = preview ?
+          this.buildDistributionPreviewSummary(preview) :
+          null;
+      });
     this.loadIncludeDeriveErrorSetting();
     this.loadVariableBundles();
     this.loadAvailableCoders();
@@ -603,30 +618,25 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     this.distributionPreviewRefresh$.next();
   }
 
-  private loadDistributionPreview(): void {
+  private loadDistributionPreview(): Observable<DistributionCalculationResponse | null> {
     if (
       this.data.mode !== 'definition' ||
-      this.codingJobForm.invalid ||
+      this.hasInvalidDistributionPreviewControls() ||
       this.selectedCoders.selected.length === 0 ||
       (
         this.selectedVariables.selected.length === 0 &&
         this.selectedVariableBundles.selected.length === 0
       )
     ) {
-      this.distributionPreviewSummary = null;
-      return;
+      return of(null);
     }
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.distributionPreviewSummary = null;
-      return;
+      return of(null);
     }
 
-    const requestId = this.distributionPreviewRequestId + 1;
-    this.distributionPreviewRequestId = requestId;
-
-    this.distributedCodingService.calculateDistribution(
+    return this.distributedCodingService.calculateDistribution(
       workspaceId,
       this.getSelectedDefinitionVariables(),
       this.mapCodersForDistribution(this.getSelectedCodersForDistribution()),
@@ -637,21 +647,16 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
       this.getDistributionSeed()
     )
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: preview => {
-          if (requestId !== this.distributionPreviewRequestId) {
-            return;
-          }
+      .pipe(catchError(() => of(null)));
+  }
 
-          this.distributionPreviewSummary = this.buildDistributionPreviewSummary(preview);
-        },
-        error: () => {
-          if (requestId === this.distributionPreviewRequestId) {
-            this.distributionPreviewSummary = null;
-          }
-        }
-      });
+  private hasInvalidDistributionPreviewControls(): boolean {
+    return [
+      'doubleCodingAbsolute',
+      'doubleCodingPercentage',
+      'caseOrderingMode',
+      'maxCodingCases'
+    ].some(controlName => this.codingJobForm.get(controlName)?.invalid);
   }
 
   private buildDistributionPreviewSummary(
