@@ -513,6 +513,7 @@
 
               <mat-paginator
                 [length]="totalItems"
+                [pageIndex]="currentPage - 1"
                 [pageSize]="pageSize"
                 [pageSizeOptions]="[5, 10, 25, 50]"
                 (page)="onPageChange($event)"
@@ -1033,6 +1034,7 @@
 
             <mat-paginator
               [length]="totalItems"
+              [pageIndex]="currentPage - 1"
               [pageSize]="pageSize"
               [pageSizeOptions]="[5, 10, 25, 50]"
               (page)="onPageChange($event)"
