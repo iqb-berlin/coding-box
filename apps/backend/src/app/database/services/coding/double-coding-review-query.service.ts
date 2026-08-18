@@ -1206,7 +1206,7 @@ export class DoubleCodingReviewQueryService {
       return directClause;
     }
 
-    return `(${directClause} OR (${codingJobAlias}.job_definition_id IS NULL AND EXISTS (
+    return `(${directClause} OR (${codingJobAlias}.job_definition_id IS NULL AND ${codingJobAlias}.training_id IS NULL AND EXISTS (
       SELECT 1
       FROM coding_job_variable_bundle scope_cjvb
       INNER JOIN job_definitions scope_jd
@@ -1257,6 +1257,7 @@ export class DoubleCodingReviewQueryService {
     const matchesLegacyBundleJobDefinition = !!(
       jobDefinitionIds?.length &&
       !jobDefinitionId &&
+      !trainingId &&
       scopedJobDefinitionBundleScope.bundleIds.length > 0 &&
       codingJobBundleIds.some(bundleId => this.isBundleVariableIncluded(
         scopedJobDefinitionBundleScope,
