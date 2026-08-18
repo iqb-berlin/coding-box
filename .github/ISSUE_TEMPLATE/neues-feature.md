@@ -2,32 +2,34 @@
 name: Neues Feature
 about: Vorschlag für neue Funktionen oder Erweiterungen
 title: ''
-labels: enhancement
+labels: ''
 assignees: ''
+type: Feature
 
 ---
 
-# Neues Feature
-_Vorschlag für neue Funktionen oder Erweiterungen_
-
 ### Beschreibung
-Kurze und klare Beschreibung des Problems. 
 
-_Bspw.: [Aktuell wird ... Das ist ungünstig/unübersichtlich/ ...] Es fehlt eine Möglichkeit, um `xyz` zu machen._
+- Beschreibe kurz und klar, welches Problem aufgetreten ist oder welche Anforderung mit diesem Feature gelöst werden soll.
+- *Bspw.: [Aktuell wird ... Das ist ungünstig/unübersichtlich/...] Es fehlt eine Möglichkeit, um `xyz` zu machen.*
 
 ### Lösungsansatz
-Beschreibe deinen Lösungsansatz. Was soll passieren oder sich ändern?
 
-### Workaround
-ggf. beschreiben, wie das Problem aktuell gelöst wird, welche Alternativen in Betracht gezogen wurden
+Beschreibe deinen Lösungsansatz. Was soll passieren oder sich ändern? Was müsste minimal geändert werden, um das Problem stabil zu lösen?
 
-### Referenz
-ggf. ein bisher genutztes Programm (z. B. Screenshot des IQB-Kodiertools), dessen Funktionalität übernommen werden soll
-_ODER_
-Eine Funktion aus einem R-Paket (z. B. `eatPrep::meanKappa()`), dessen Ergebnis hier angezeigt werden soll.
+### Bisherige Lösung (Workaround); falls nicht vorhanden, ggf. Alternativvorschlag
+
+- Beschreibe, wie das Problem bisher gelöst wurde bzw. wie das Problem alternativ gelöst werden könnte.
+- Wie viel Zeit hat das bzw. würde das in Anspruch genommen?
+- Welche Risiken/Probleme sind damit verbunden?
+
+### Impact
+
+Bis wann wird das Feature gebraucht?
+Wie oft bzw. wie regelmäßig soll das Feature langfristig verwendet werden?
 
 ---
 
 ### Weitere Informationen
-ggf. weitere Informationen, Skizzen oder Ähnliches.
-Auch Zusammenhänge mit anderen Issues
+
+Füge weitere Informationen, Skizzen oder Ähnliches ein. Gib auch an, ob das Feature auf den erweiterten Modus beschränkt sein soll oder nicht.
