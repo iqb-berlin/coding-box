@@ -2,50 +2,42 @@
 name: Fehlermeldung
 about: Etwas funktioniert nicht so, wie erwartet
 title: ''
-labels: bug
+labels: ''
 assignees: ''
+type: Bug
 
 ---
 
-# Fehlermeldung
-_Etwas funktioniert nicht so, wie erwartet_
+### Fehlerbeschreibung
 
-### Beschreibung
-Kurze und klare Zusammenfassung des Problems. 
+Klare und kurze Beschreibung des Problems.
 
-_Bspw.: Wenn ich ... machen will, dann passiert ..._
+### Nachstellen
 
-### Erwartetes Verhalten
-Was sollte eigentlich passieren?
-
-- Bei mehreren Punkten
-- gerne in Listen aufteilen 
-
-### Reproduktionsschritte
 Schritte zum Nachstellen des Verhaltens:
 
-_Bspw.:_
-1. Im Reiter **Testergebnisse** zu _Testpersonen_ navigieren,
-2. Mehrere Personen aus verschiedenen _Testgruppen_ auswählen,
-3. `Testperson(en) löschen` anklicken,
-4. Beobachten, ob alle ausgewählten Personen gelöscht wurden.
+1. Im Reiter **Kodierübersicht** zu *Automatisch Kodieren* navigieren,
+2. Eigenschaft `...` auf Wert `...` einstellen,
+3. Vorschau öffnen,
+4. Fehlermeldung erscheint.
 
-```
-Längere Fehlermeldungen,
-die über mehrere Zeilen gehen,
-können dabei in _code blocks_ gelegt werden.
-```
+### Erwartetes Verhalten
 
-### Beispiele
-ggf. Bsp. für Arbeitsbereiche / Aufgaben, bei denen das Problem auftrat
+Welches Verhalten wurde erwartet und was wurde stattdessen festgestellt?
+
+### Screenshots, Links, erschienene Fehlermeldungen
+
+- Bei Links auf Aufgaben im Studio bitte darauf achten, dass diese für uns sichtbar sind.
+- Außerdem wäre es gut, wenn die Aufgaben sich auf das Darstellen des Problems beschränken und nicht voll mit anderen Dingen sind und wir erst die Stelle suchen müssen, die Probleme macht.
+
+### Versionen
+
+- Verwendete Schemer- und Kodierboxversion
+- Betriebssystem: [z. B. iOS] (nur wichtig bei Mobilgeräten)
+- Browser [z. B. Chrome, Safari] mit Version
 
 ---
 
-### Versionen
-- Verwendete Schemer-  und Kodierboxversion
-- Betriebssystem: [z.B. iOS] (nur wichtig bei Mobilgeräten)
-- Browser [e.g. firefox, chrome, safari] mit Version
-
 ### Weitere Informationen
-ggf. weitere Informationen, Skizzen oder Ähnliches.
-Auch Zusammenhänge mit anderen Issues
+
+Ggf. weitere Informationen, Skizzen oder Ähnliches sowie Zusammenhänge mit anderen Issues.
