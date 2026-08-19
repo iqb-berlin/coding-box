@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialog } from '@angular/material/dialog';
+import { MatPaginator } from '@angular/material/paginator';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -373,15 +374,32 @@ describe('DoubleCodedReviewComponent', () => {
     );
   });
 
-  it('keeps the paginator on the requested page after data reloads', async () => {
+  it('restores the current page when the paginator is recreated', async () => {
     fixture.detectChanges();
     await fixture.whenStable();
-    component.currentPage = 2;
-
     fixture.detectChanges();
 
-    const paginator = fixture.debugElement.query(By.css('mat-paginator'));
-    expect(paginator.componentInstance.pageIndex).toBe(1);
+    component.totalItems = 200;
+    component.currentPage = 3;
+
+    const expectRestoredPage = (): void => {
+      component.isLoading = true;
+      fixture.detectChanges();
+      expect(fixture.debugElement.query(By.directive(MatPaginator))).toBeNull();
+
+      component.isLoading = false;
+      fixture.detectChanges();
+      const paginator = fixture.debugElement.query(By.directive(MatPaginator))
+        .componentInstance as MatPaginator;
+      expect(paginator.pageIndex).toBe(2);
+    };
+
+    expectRestoredPage();
+
+    component.dialogRef = {
+      close: jest.fn()
+    } as unknown as typeof component.dialogRef;
+    expectRestoredPage();
   });
 
   it('renders the reusable decision cell and updates its selection through Material select', async () => {

@@ -4,7 +4,8 @@ import {
   Brackets,
   EntityManager,
   IsNull,
-  Repository
+  Repository,
+  SelectQueryBuilder
 } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -57,6 +58,31 @@ interface PendingResponseUpdate {
   status_v2: number;
   protectExistingV2?: boolean;
 }
+
+export const buildAggregationUnitNameQuery = (
+  responseRepository: Repository<ResponseEntity>,
+  workspaceId: number,
+  codedVariableIds: string[]
+): SelectQueryBuilder<ResponseEntity> => responseRepository
+  .createQueryBuilder('response')
+  .distinct(true)
+  .select('unit.name', 'unitName')
+  .addSelect('response.variableid', 'variableId')
+  .leftJoin('response.unit', 'unit')
+  .leftJoin('unit.booklet', 'booklet')
+  .leftJoin('booklet.bookletinfo', 'bookletinfo')
+  .leftJoin('booklet.person', 'person')
+  .where('person.workspace_id = :workspaceId', { workspaceId })
+  .andWhere('person.consider = :consider', { consider: true })
+  .andWhere('response.status_v1 IN (:...statuses)', {
+    statuses: [
+      statusStringToNumber('CODING_INCOMPLETE'),
+      statusStringToNumber('INTENDED_INCOMPLETE')
+    ]
+  })
+  .andWhere('response.variableid IN (:...codedVariableIds)', {
+    codedVariableIds
+  });
 
 @Injectable()
 export class CodingResultsService {
@@ -312,25 +338,11 @@ export class CodingResultsService {
             const exclusions = await this.workspaceExclusionService
               .resolveExclusionsForQueries(workspaceId);
             if (codedVariableIds.length > 0) {
-              const unitNameQuery = this.responseRepository
-                .createQueryBuilder('response')
-                .select('DISTINCT unit.name', 'unitName')
-                .addSelect('response.variableid', 'variableId')
-                .leftJoin('response.unit', 'unit')
-                .leftJoin('unit.booklet', 'booklet')
-                .leftJoin('booklet.bookletinfo', 'bookletinfo')
-                .leftJoin('booklet.person', 'person')
-                .where('person.workspace_id = :workspaceId', { workspaceId })
-                .andWhere('person.consider = :consider', { consider: true })
-                .andWhere('response.status_v1 IN (:...statuses)', {
-                  statuses: [
-                    statusStringToNumber('CODING_INCOMPLETE'),
-                    statusStringToNumber('INTENDED_INCOMPLETE')
-                  ]
-                })
-                .andWhere('response.variableid IN (:...codedVariableIds)', {
-                  codedVariableIds
-                });
+              const unitNameQuery = buildAggregationUnitNameQuery(
+                this.responseRepository,
+                workspaceId,
+                codedVariableIds
+              );
               applyResolvedExclusionsToQuery(unitNameQuery, exclusions, {
                 parameterPrefix: 'aggregationSiblingUnits'
               });
