@@ -417,16 +417,6 @@
                                           >comment</mat-icon
                                         >
                                       }
-                                      @if (result.supervisorComment) {
-                                        <mat-icon
-                                          class="supervisor-comment-icon"
-                                          color="primary"
-                                          [matTooltip]="
-                                            result.supervisorComment
-                                          "
-                                          >rate_review</mat-icon
-                                        >
-                                      }
                                     </div>
                                   </div>
                                 }
@@ -949,14 +939,6 @@
                                         class="note-icon"
                                         [matTooltip]="result.notes"
                                         >comment</mat-icon
-                                      >
-                                    }
-                                    @if (result.supervisorComment) {
-                                      <mat-icon
-                                        class="supervisor-comment-icon"
-                                        color="primary"
-                                        [matTooltip]="result.supervisorComment"
-                                        >rate_review</mat-icon
                                       >
                                     }
                                   </div>
