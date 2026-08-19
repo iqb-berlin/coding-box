@@ -767,6 +767,56 @@ describe('DoubleCodingReviewQueryService', () => {
         { coderId: 4, code: 3, score: 1 }
       ]
     });
+    expect(result.data[1].coderResults.every(
+      coderResult => coderResult.supervisorComment === null
+    )).toBe(true);
+  });
+
+  it('uses the applied manager decision as the canonical applied result', async () => {
+    reviewDecisionRepository.find.mockResolvedValueOnce([{
+      id: 91,
+      workspace_id: workspaceId,
+      response_id: 11,
+      manager_user_id: 7,
+      manager_key: '7',
+      manager_name: 'Study Manager',
+      state: 'applied',
+      selected_code: 0,
+      effective_code: 0,
+      score: 0,
+      comment: 'Manager-owned comment',
+      created_at: new Date('2026-08-12T10:00:00.000Z'),
+      updated_at: new Date('2026-08-12T10:00:00.000Z'),
+      finalized_at: new Date('2026-08-12T10:00:00.000Z')
+    }]);
+    const group = {
+      responseId: 11,
+      isResolved: true,
+      appliedCode: -98,
+      appliedScore: 0,
+      appliedComment: 'Legacy coder-row copy',
+      managerDrafts: [],
+      managerHistory: []
+    };
+    const harness = service as unknown as {
+      attachManagerDecisions: (
+        selectedWorkspaceId: number,
+        groups: Array<typeof group>
+      ) => Promise<void>;
+    };
+
+    await harness.attachManagerDecisions(workspaceId, [group]);
+
+    expect(group).toMatchObject({
+      appliedCode: 0,
+      appliedScore: 0,
+      appliedComment: 'Manager-owned comment',
+      managerHistory: [expect.objectContaining({
+        managerUserId: 7,
+        state: 'applied',
+        comment: 'Manager-owned comment'
+      })]
+    });
   });
 
   it('uses matching coding issue review notes as the applied comment', async () => {

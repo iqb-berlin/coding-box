@@ -15,7 +15,6 @@ import { DoubleCodedReviewFacade } from './double-coded-review.facade';
 import {
   AppliedReviewResult,
   CatalogDecisionResult,
-  CoderResult,
   DecisionResult,
   DoubleCodedItem,
   ReplayDecisionResult
@@ -138,12 +137,9 @@ export class DoubleCodedDecisionCellComponent {
   }
 
   get appliedSourceLabel(): string {
-    const matchingResult = this.getAppliedMatchingCoderResult();
-    return matchingResult ?
-      this.getDecisionSourceLabel(matchingResult) :
-      this.translateService.instant(
-        'double-coded-review.applied-result.final-source'
-      );
+    return this.translateService.instant(
+      'double-coded-review.applied-result.final-source'
+    );
   }
 
   get appliedTooltip(): string {
@@ -198,10 +194,6 @@ export class DoubleCodedDecisionCellComponent {
     return code !== null && keys[code] ?
       this.translateService.instant(keys[code]) :
       '';
-  }
-
-  private getAppliedMatchingCoderResult(): CoderResult | undefined {
-    return this.facade.getAppliedMatchingCoderResult(this.item());
   }
 
   private isReplayDecision(

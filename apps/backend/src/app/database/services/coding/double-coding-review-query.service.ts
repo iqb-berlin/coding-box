@@ -640,7 +640,9 @@ export class DoubleCodingReviewQueryService {
             codingIssueOption: unit.coding_issue_option ?? null,
             score: resolvedCodeAndScore.score,
             notes: unit.notes,
-            supervisorComment: unit.supervisor_comment || null,
+            // Resolution comments belong to manager decisions. Keep legacy
+            // unit comments only as an applied-result fallback below.
+            supervisorComment: null,
             codedAt: unit.created_at
           };
 
@@ -781,6 +783,14 @@ export class DoubleCodingReviewQueryService {
       group.managerHistory = responseDecisions
         .filter(decision => decision.state !== 'draft')
         .map(decision => this.toManagerDecisionDto(decision));
+      const appliedDecision = group.managerHistory.find(
+        decision => decision.state === 'applied'
+      );
+      if (group.isResolved && appliedDecision) {
+        group.appliedCode = appliedDecision.effectiveCode;
+        group.appliedScore = appliedDecision.score;
+        group.appliedComment = appliedDecision.comment;
+      }
       this.addLegacyManagerHistory(group);
     });
   }
