@@ -1184,6 +1184,22 @@ describe('DoubleCodingReviewQueryService', () => {
         }
       }),
       makeCodingJobUnit({
+        coding_job_id: 106,
+        code: 3,
+        notes: 'Training note must not leak into the review',
+        coding_job: {
+          workspace_id: workspaceId,
+          job_definition_id: null,
+          training_id: 60,
+          name: 'Training With Same Bundle',
+          codingJobVariableBundles: [{ variable_bundle_id: 9 }],
+          codingJobCoders: [{
+            user_id: 6,
+            user: { username: 'Training Coder' }
+          }]
+        }
+      }),
+      makeCodingJobUnit({
         coding_job_id: 103,
         code: 4,
         variable_id: 'OTHER_VAR',
@@ -1257,6 +1273,10 @@ describe('DoubleCodingReviewQueryService', () => {
 
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       expect.stringContaining('scope_cjvb.variable_bundle_id IN (:...jobDefinitionBundleIds)'),
+      { jobDefinitionIds: [11], jobDefinitionBundleIds: [9] }
+    );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('cj.training_id IS NULL'),
       { jobDefinitionIds: [11], jobDefinitionBundleIds: [9] }
     );
     expect(variableBundleRepository.find).toHaveBeenCalledWith({
