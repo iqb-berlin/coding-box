@@ -108,6 +108,14 @@ export class DoubleCodedReviewQueryDto implements DoubleCodedReviewQuery {
     agreementFilter?: 'all' | 'match' | 'differ';
 
   @IsOptional()
+  @IsIn(['unitVariable', 'personInfo'])
+    sortBy?: 'unitVariable' | 'personInfo';
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+    sortDirection?: 'asc' | 'desc';
+
+  @IsOptional()
   @Transform(transformIdList)
   @IsArray()
   @IsInt({ each: true })

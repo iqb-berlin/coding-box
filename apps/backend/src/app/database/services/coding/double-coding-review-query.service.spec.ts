@@ -368,6 +368,75 @@ describe('DoubleCodingReviewQueryService', () => {
     expect(singleCoderSubQuery.having).toHaveBeenCalledWith('COUNT(DISTINCT single_cjc.user_id) = 1');
   });
 
+  it('uses unit and variable ordering by default', async () => {
+    await service.getDoubleCodedVariablesForReview(workspaceId);
+
+    expect(queryBuilder.orderBy).toHaveBeenCalledWith(
+      "MIN(LOWER(COALESCE(cju.unit_name, u.name, '')))",
+      'ASC'
+    );
+    expect(queryBuilder.addOrderBy).toHaveBeenCalledWith(
+      "MIN(LOWER(COALESCE(cju.variable_id, resp.variableid, '')))",
+      'ASC'
+    );
+    expect(queryBuilder.addOrderBy).toHaveBeenCalledWith('cju.response_id', 'ASC');
+  });
+
+  it('sorts by person before pagination and preserves that order in details', async () => {
+    queryBuilder.getRawMany.mockResolvedValueOnce([
+      { responseId: 11, responseStatus: null },
+      { responseId: 10, responseStatus: null }
+    ]);
+    codingJobUnitRepository.query.mockResolvedValueOnce([{ total: '2' }]);
+    const makeJob = (name: string, coderId: number) => ({
+      workspace_id: workspaceId,
+      job_definition_id: 11,
+      training_id: null,
+      name,
+      codingJobCoders: [{
+        user_id: coderId,
+        user: { username: `Coder ${coderId}` }
+      }]
+    });
+    codingJobUnitRepository.find.mockResolvedValueOnce([
+      makeCodingJobUnit({
+        response_id: 10,
+        coding_job_id: 100,
+        coding_job: makeJob('Job 10 A', 1)
+      }),
+      makeCodingJobUnit({
+        response_id: 10,
+        coding_job_id: 101,
+        coding_job: makeJob('Job 10 B', 2)
+      }),
+      makeCodingJobUnit({
+        response_id: 11,
+        coding_job_id: 110,
+        person_login: 'person-2',
+        coding_job: makeJob('Job 11 A', 3)
+      }),
+      makeCodingJobUnit({
+        response_id: 11,
+        coding_job_id: 111,
+        person_login: 'person-2',
+        coding_job: makeJob('Job 11 B', 4)
+      })
+    ]);
+
+    const result = await service.getDoubleCodedVariablesForReview(workspaceId, {
+      sortBy: 'personInfo',
+      sortDirection: 'desc'
+    });
+
+    expect(queryBuilder.orderBy).toHaveBeenCalledWith(
+      "MIN(LOWER(COALESCE(cju.person_login, p.login, '')))",
+      'DESC'
+    );
+    expect(queryBuilder.offset).toHaveBeenCalledWith(0);
+    expect(queryBuilder.limit).toHaveBeenCalledWith(50);
+    expect(result.data.map(item => item.responseId)).toEqual([11, 10]);
+  });
+
   it('resolves manual missing issue codes through the coding job profile for review results', async () => {
     const missingsProfilesService = {
       getMissingByIdForProfileOrDefault: jest.fn()
@@ -697,6 +766,56 @@ describe('DoubleCodingReviewQueryService', () => {
         { coderId: 3, code: 3, score: 1 },
         { coderId: 4, code: 3, score: 1 }
       ]
+    });
+    expect(result.data[1].coderResults.every(
+      coderResult => coderResult.supervisorComment === null
+    )).toBe(true);
+  });
+
+  it('uses the applied manager decision as the canonical applied result', async () => {
+    reviewDecisionRepository.find.mockResolvedValueOnce([{
+      id: 91,
+      workspace_id: workspaceId,
+      response_id: 11,
+      manager_user_id: 7,
+      manager_key: '7',
+      manager_name: 'Study Manager',
+      state: 'applied',
+      selected_code: 0,
+      effective_code: 0,
+      score: 0,
+      comment: 'Manager-owned comment',
+      created_at: new Date('2026-08-12T10:00:00.000Z'),
+      updated_at: new Date('2026-08-12T10:00:00.000Z'),
+      finalized_at: new Date('2026-08-12T10:00:00.000Z')
+    }]);
+    const group = {
+      responseId: 11,
+      isResolved: true,
+      appliedCode: -98,
+      appliedScore: 0,
+      appliedComment: 'Legacy coder-row copy',
+      managerDrafts: [],
+      managerHistory: []
+    };
+    const harness = service as unknown as {
+      attachManagerDecisions: (
+        selectedWorkspaceId: number,
+        groups: Array<typeof group>
+      ) => Promise<void>;
+    };
+
+    await harness.attachManagerDecisions(workspaceId, [group]);
+
+    expect(group).toMatchObject({
+      appliedCode: 0,
+      appliedScore: 0,
+      appliedComment: 'Manager-owned comment',
+      managerHistory: [expect.objectContaining({
+        managerUserId: 7,
+        state: 'applied',
+        comment: 'Manager-owned comment'
+      })]
     });
   });
 
@@ -1115,6 +1234,22 @@ describe('DoubleCodingReviewQueryService', () => {
         }
       }),
       makeCodingJobUnit({
+        coding_job_id: 106,
+        code: 3,
+        notes: 'Training note must not leak into the review',
+        coding_job: {
+          workspace_id: workspaceId,
+          job_definition_id: null,
+          training_id: 60,
+          name: 'Training With Same Bundle',
+          codingJobVariableBundles: [{ variable_bundle_id: 9 }],
+          codingJobCoders: [{
+            user_id: 6,
+            user: { username: 'Training Coder' }
+          }]
+        }
+      }),
+      makeCodingJobUnit({
         coding_job_id: 103,
         code: 4,
         variable_id: 'OTHER_VAR',
@@ -1188,6 +1323,10 @@ describe('DoubleCodingReviewQueryService', () => {
 
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       expect.stringContaining('scope_cjvb.variable_bundle_id IN (:...jobDefinitionBundleIds)'),
+      { jobDefinitionIds: [11], jobDefinitionBundleIds: [9] }
+    );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('cj.training_id IS NULL'),
       { jobDefinitionIds: [11], jobDefinitionBundleIds: [9] }
     );
     expect(variableBundleRepository.find).toHaveBeenCalledWith({
