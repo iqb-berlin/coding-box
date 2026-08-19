@@ -515,7 +515,10 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
       [...(item.managerDrafts || []), ...(item.managerHistory || [])].forEach(
         decision => {
-          if (decision.managerUserId === this.appService.userId) {
+          if (
+            decision.managerUserId === this.appService.userId &&
+            decision.state === 'draft'
+          ) {
             return;
           }
           const managerKey = this.getManagerDecisionKey(decision);
@@ -555,10 +558,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   getSelectionColumnHeader(): string {
-    return (
-      this.appService.authData.userName ||
-      this.appService.loggedUser?.preferred_username ||
-      this.translateService.instant('double-coded-review.columns.selection')
+    return this.translateService.instant(
+      'double-coded-review.columns.final-decision'
     );
   }
 

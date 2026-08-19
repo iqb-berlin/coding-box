@@ -2886,6 +2886,7 @@
       "given-answer": "Gegebene Antwort",
       "coder-results": "Kodierergebnisse",
       "selection": "Auswahl",
+      "final-decision": "Endgültige Entscheidung",
       "manager-unknown": "Manager unbekannt",
       "alternative-coder-names": "Weitere Namen: {{names}}"
     },
