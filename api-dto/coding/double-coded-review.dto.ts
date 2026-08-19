@@ -89,6 +89,9 @@ export interface DoubleCodedReviewResponseDto {
   limit: number;
 }
 
+export type DoubleCodedReviewSortBy = 'unitVariable' | 'personInfo';
+export type DoubleCodedReviewSortDirection = 'asc' | 'desc';
+
 export interface DoubleCodedReviewQuery {
   page?: number;
   limit?: number;
@@ -99,6 +102,8 @@ export interface DoubleCodedReviewQuery {
   statusFilter?: 'all' | 'done' | 'pending';
   resolvedFilter?: 'all' | 'resolved' | 'unresolved';
   agreementFilter?: 'all' | 'match' | 'differ';
+  sortBy?: DoubleCodedReviewSortBy;
+  sortDirection?: DoubleCodedReviewSortDirection;
   jobDefinitionIds?: number[];
   coderTrainingIds?: number[];
 }
