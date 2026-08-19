@@ -350,6 +350,30 @@ describe('DoubleCodedReviewComponent', () => {
     expect(component.canApplyReviewResults).toBe(true);
   });
 
+  it('requests server-side person sorting and resets pagination', async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const api = TestBed.inject(DoubleCodedReviewApiService) as unknown as {
+      getDoubleCodedVariablesForReview: jest.Mock;
+    };
+    api.getDoubleCodedVariablesForReview.mockClear();
+    component.currentPage = 3;
+
+    component.onSortChange({ active: 'personInfo', direction: 'desc' });
+
+    expect(component.currentPage).toBe(1);
+    expect(component.sortBy).toBe('personInfo');
+    expect(component.sortDirection).toBe('desc');
+    expect(api.getDoubleCodedVariablesForReview).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        page: 1,
+        sortBy: 'personInfo',
+        sortDirection: 'desc'
+      })
+    );
+  });
+
   it('restores the current page when the paginator is recreated', async () => {
     fixture.detectChanges();
     await fixture.whenStable();

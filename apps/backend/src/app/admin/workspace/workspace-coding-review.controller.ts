@@ -146,6 +146,18 @@ export class WorkspaceCodingReviewController {
     type: String
   })
   @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    description: 'Sort by unit/variable or person information',
+    enum: ['unitVariable', 'personInfo']
+  })
+  @ApiQuery({
+    name: 'sortDirection',
+    required: false,
+    description: 'Sort direction',
+    enum: ['asc', 'desc']
+  })
+  @ApiQuery({
     name: 'jobDefinitionIds',
     required: false,
     description: 'Comma-separated list of coding job definition IDs to include',

@@ -10,6 +10,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
+import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import {
@@ -68,7 +69,9 @@ import { getJobDefinitionDisplayLabel } from '../../utils/job-definition-display
 import {
   DoubleCodedManagerDecisionDto,
   DoubleCodedResolutionDecisionDto,
-  DoubleCodedReviewCodeDto
+  DoubleCodedReviewCodeDto,
+  DoubleCodedReviewSortBy,
+  DoubleCodedReviewSortDirection
 } from '../../../../../../../api-dto/coding/double-coded-review.dto';
 import { DoubleCodedDecisionCellComponent } from './double-coded-decision-cell.component';
 import { DoubleCodedReviewFacade } from './double-coded-review.facade';
@@ -112,6 +115,7 @@ interface DoubleCodedReviewDialogData {
     CommonModule,
     MatCardModule,
     MatTableModule,
+    MatSortModule,
     MatButtonModule,
     MatIconModule,
     MatPaginatorModule,
@@ -178,6 +182,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   totalItems = 0;
   currentPage = 1;
   pageSize = 50;
+  sortBy: DoubleCodedReviewSortBy = 'unitVariable';
+  sortDirection: DoubleCodedReviewSortDirection = 'asc';
   isLoading = false;
   showOnlyConflicts = false;
   agreementControl = new FormControl<'all' | 'match' | 'differ'>('all');
@@ -983,6 +989,16 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     this.loadData();
   }
 
+  onSortChange(sort: Sort): void {
+    if (sort.active !== 'unitVariable' && sort.active !== 'personInfo') {
+      return;
+    }
+    this.sortBy = sort.active;
+    this.sortDirection = sort.direction === 'desc' ? 'desc' : 'asc';
+    this.currentPage = 1;
+    this.loadData();
+  }
+
   areAllVisibleConflictsResolved(): boolean {
     const currentItems = this.dataSource.data;
     return currentItems.every(item => {
@@ -1039,6 +1055,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
           statusFilter: this.statusControl.value || undefined,
           resolvedFilter: this.resolvedControl.value || undefined,
           agreementFilter,
+          sortBy: this.sortBy,
+          sortDirection: this.sortDirection,
           jobDefinitionIds: this.getSelectedJobDefinitionIds(),
           coderTrainingIds: this.getSelectedCoderTrainingIds()
         }

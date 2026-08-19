@@ -16,6 +16,8 @@ describe('double-coded review request DTOs', () => {
       excludeTrainings: 'false',
       coderId: '9',
       agreementFilter: 'differ',
+      sortBy: 'personInfo',
+      sortDirection: 'desc',
       jobDefinitionIds: '11,12',
       coderTrainingIds: '21'
     });
@@ -28,6 +30,8 @@ describe('double-coded review request DTOs', () => {
       excludeTrainings: false,
       coderId: 9,
       agreementFilter: 'differ',
+      sortBy: 'personInfo',
+      sortDirection: 'desc',
       jobDefinitionIds: [11, 12],
       coderTrainingIds: [21]
     });
@@ -38,6 +42,8 @@ describe('double-coded review request DTOs', () => {
     { limit: '101' },
     { onlyConflicts: 'yes' },
     { agreementFilter: 'different' },
+    { sortBy: 'coder' },
+    { sortDirection: 'sideways' },
     { jobDefinitionIds: '12invalid' }
   ])('rejects an invalid review query: %o', async rawQuery => {
     const query = plainToInstance(DoubleCodedReviewQueryDto, rawQuery);

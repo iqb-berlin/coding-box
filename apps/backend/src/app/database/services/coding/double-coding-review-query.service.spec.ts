@@ -368,6 +368,75 @@ describe('DoubleCodingReviewQueryService', () => {
     expect(singleCoderSubQuery.having).toHaveBeenCalledWith('COUNT(DISTINCT single_cjc.user_id) = 1');
   });
 
+  it('uses unit and variable ordering by default', async () => {
+    await service.getDoubleCodedVariablesForReview(workspaceId);
+
+    expect(queryBuilder.orderBy).toHaveBeenCalledWith(
+      "MIN(LOWER(COALESCE(cju.unit_name, u.name, '')))",
+      'ASC'
+    );
+    expect(queryBuilder.addOrderBy).toHaveBeenCalledWith(
+      "MIN(LOWER(COALESCE(cju.variable_id, resp.variableid, '')))",
+      'ASC'
+    );
+    expect(queryBuilder.addOrderBy).toHaveBeenCalledWith('cju.response_id', 'ASC');
+  });
+
+  it('sorts by person before pagination and preserves that order in details', async () => {
+    queryBuilder.getRawMany.mockResolvedValueOnce([
+      { responseId: 11, responseStatus: null },
+      { responseId: 10, responseStatus: null }
+    ]);
+    codingJobUnitRepository.query.mockResolvedValueOnce([{ total: '2' }]);
+    const makeJob = (name: string, coderId: number) => ({
+      workspace_id: workspaceId,
+      job_definition_id: 11,
+      training_id: null,
+      name,
+      codingJobCoders: [{
+        user_id: coderId,
+        user: { username: `Coder ${coderId}` }
+      }]
+    });
+    codingJobUnitRepository.find.mockResolvedValueOnce([
+      makeCodingJobUnit({
+        response_id: 10,
+        coding_job_id: 100,
+        coding_job: makeJob('Job 10 A', 1)
+      }),
+      makeCodingJobUnit({
+        response_id: 10,
+        coding_job_id: 101,
+        coding_job: makeJob('Job 10 B', 2)
+      }),
+      makeCodingJobUnit({
+        response_id: 11,
+        coding_job_id: 110,
+        person_login: 'person-2',
+        coding_job: makeJob('Job 11 A', 3)
+      }),
+      makeCodingJobUnit({
+        response_id: 11,
+        coding_job_id: 111,
+        person_login: 'person-2',
+        coding_job: makeJob('Job 11 B', 4)
+      })
+    ]);
+
+    const result = await service.getDoubleCodedVariablesForReview(workspaceId, {
+      sortBy: 'personInfo',
+      sortDirection: 'desc'
+    });
+
+    expect(queryBuilder.orderBy).toHaveBeenCalledWith(
+      "MIN(LOWER(COALESCE(cju.person_login, p.login, '')))",
+      'DESC'
+    );
+    expect(queryBuilder.offset).toHaveBeenCalledWith(0);
+    expect(queryBuilder.limit).toHaveBeenCalledWith(50);
+    expect(result.data.map(item => item.responseId)).toEqual([11, 10]);
+  });
+
   it('resolves manual missing issue codes through the coding job profile for review results', async () => {
     const missingsProfilesService = {
       getMissingByIdForProfileOrDefault: jest.fn()

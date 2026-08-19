@@ -30,6 +30,8 @@ export class DoubleCodedReviewApiService {
       statusFilter,
       resolvedFilter,
       agreementFilter,
+      sortBy = 'unitVariable',
+      sortDirection = 'asc',
       jobDefinitionIds,
       coderTrainingIds
     } = query;
@@ -37,7 +39,9 @@ export class DoubleCodedReviewApiService {
       .set('page', page.toString())
       .set('limit', limit.toString())
       .set('onlyConflicts', onlyConflicts.toString())
-      .set('excludeTrainings', excludeTrainings.toString());
+      .set('excludeTrainings', excludeTrainings.toString())
+      .set('sortBy', sortBy)
+      .set('sortDirection', sortDirection);
 
     if (search?.trim()) {
       params = params.set('search', search.trim());
