@@ -384,10 +384,6 @@ export class DoubleCodingReviewDecisionService {
       workspaceId,
       decision.responseId
     );
-    if (decision.resolutionComment?.trim()) {
-      resolvedDecision.sourceUnit.supervisor_comment = decision.resolutionComment.trim();
-      await transactionalEntityManager.save(CodingJobUnit, resolvedDecision.sourceUnit);
-    }
 
     response.status_v2 = statusStringToNumber('CODING_COMPLETE');
     response.code_v2 = resolvedDecision.code;
