@@ -253,6 +253,8 @@ export class DoubleCodingReviewQueryService {
       statusFilter,
       resolvedFilter,
       agreementFilter,
+      sortBy = 'unitVariable',
+      sortDirection = 'asc',
       jobDefinitionIds,
       coderTrainingIds,
       includeRelations = true
@@ -440,7 +442,21 @@ export class DoubleCodingReviewQueryService {
         };
       }
 
-      query.orderBy('cju.response_id', 'ASC');
+      const orderDirection = sortDirection === 'desc' ? 'DESC' : 'ASC';
+      if (sortBy === 'personInfo') {
+        query
+          .orderBy("MIN(LOWER(COALESCE(cju.person_login, p.login, '')))", orderDirection)
+          .addOrderBy("MIN(LOWER(COALESCE(cju.person_code, p.code, '')))", orderDirection)
+          .addOrderBy("MIN(LOWER(COALESCE(cju.booklet_name, '')))", orderDirection)
+          .addOrderBy("MIN(LOWER(COALESCE(cju.unit_name, u.name, '')))", orderDirection)
+          .addOrderBy("MIN(LOWER(COALESCE(cju.variable_id, resp.variableid, '')))", orderDirection);
+      } else {
+        query
+          .orderBy("MIN(LOWER(COALESCE(cju.unit_name, u.name, '')))", orderDirection)
+          .addOrderBy("MIN(LOWER(COALESCE(cju.variable_id, resp.variableid, '')))", orderDirection)
+          .addOrderBy("MIN(LOWER(COALESCE(cju.person_login, p.login, '')))", orderDirection);
+      }
+      query.addOrderBy('cju.response_id', 'ASC');
       query.offset((page - 1) * limit).limit(limit);
       const paginatedRawResults = await query.getRawMany();
       const paginatedResponseIds = paginatedRawResults.map(row => row.responseId);
@@ -658,8 +674,15 @@ export class DoubleCodingReviewQueryService {
         }
       }
 
+      const responseOrder = new Map(
+        paginatedResponseIds.map((responseId, index) => [responseId, index])
+      );
       const data = Array.from(responseGroups.values())
-        .filter(group => group.coderResults.length > 1);
+        .filter(group => group.coderResults.length > 1)
+        .sort((a, b) => (
+          (responseOrder.get(a.responseId) ?? Number.MAX_SAFE_INTEGER) -
+          (responseOrder.get(b.responseId) ?? Number.MAX_SAFE_INTEGER)
+        ));
 
       const representativeUnitByResponseId = new Map<number, CodingJobUnit>();
       finalCodingJobUnits.forEach(unit => {
