@@ -210,18 +210,29 @@ describe('DoubleCodingReviewDecisionService', () => {
       workspaceId,
       3
     );
-    expect(sourceUnit.supervisor_comment).toBe('Replay checked');
+    expect(sourceUnit.supervisor_comment).toBe('old comment');
     expect(response.code_v2).toBe(3);
     expect(response.score_v2).toBe(7);
     expect(response.value).toBe('original answer');
     expect(transactionalEntityManager.update).toHaveBeenCalled();
-    expect(transactionalEntityManager.save).toHaveBeenCalledWith(
+    expect(transactionalEntityManager.save).not.toHaveBeenCalledWith(
       expect.any(Function),
       sourceUnit
     );
     expect(transactionalEntityManager.save).toHaveBeenCalledWith(
       expect.any(Function),
       response
+    );
+    expect(managerDecisionRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspace_id: workspaceId,
+        response_id: 10,
+        manager_user_id: manager.userId,
+        state: 'applied',
+        effective_code: 3,
+        score: 7,
+        comment: 'Replay checked'
+      })
     );
     expect(result).toMatchObject({
       success: true,

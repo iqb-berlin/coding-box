@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialog } from '@angular/material/dialog';
+import { MatPaginator } from '@angular/material/paginator';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -349,6 +350,58 @@ describe('DoubleCodedReviewComponent', () => {
     expect(component.canApplyReviewResults).toBe(true);
   });
 
+  it('requests server-side person sorting and resets pagination', async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const api = TestBed.inject(DoubleCodedReviewApiService) as unknown as {
+      getDoubleCodedVariablesForReview: jest.Mock;
+    };
+    api.getDoubleCodedVariablesForReview.mockClear();
+    component.currentPage = 3;
+
+    component.onSortChange({ active: 'personInfo', direction: 'desc' });
+
+    expect(component.currentPage).toBe(1);
+    expect(component.sortBy).toBe('personInfo');
+    expect(component.sortDirection).toBe('desc');
+    expect(api.getDoubleCodedVariablesForReview).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        page: 1,
+        sortBy: 'personInfo',
+        sortDirection: 'desc'
+      })
+    );
+  });
+
+  it('restores the current page when the paginator is recreated', async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    component.totalItems = 200;
+    component.currentPage = 3;
+
+    const expectRestoredPage = (): void => {
+      component.isLoading = true;
+      fixture.detectChanges();
+      expect(fixture.debugElement.query(By.directive(MatPaginator))).toBeNull();
+
+      component.isLoading = false;
+      fixture.detectChanges();
+      const paginator = fixture.debugElement.query(By.directive(MatPaginator))
+        .componentInstance as MatPaginator;
+      expect(paginator.pageIndex).toBe(2);
+    };
+
+    expectRestoredPage();
+
+    component.dialogRef = {
+      close: jest.fn()
+    } as unknown as typeof component.dialogRef;
+    expectRestoredPage();
+  });
+
   it('renders the reusable decision cell and updates its selection through Material select', async () => {
     const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.99);
     fixture.detectChanges();
@@ -634,6 +687,49 @@ describe('DoubleCodedReviewComponent', () => {
       effectiveCode: 1,
       comment: 'Second opinion'
     });
+  });
+
+  it('shows the current manager after applying a decision', async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const reviewItem = component.dataSource.data.find(
+      item => item.responseId === 504
+    )!;
+    reviewItem.managerHistory = [{
+      id: 42,
+      responseId: 504,
+      managerUserId: 99,
+      managerKey: '99',
+      managerName: 'Reviewer',
+      state: 'applied',
+      effectiveCode: 2,
+      selectedCode: 2,
+      score: 1,
+      comment: 'Final decision note',
+      createdAt: '2026-05-20T12:00:00.000Z',
+      updatedAt: '2026-05-20T12:00:00.000Z',
+      finalizedAt: '2026-05-20T12:00:00.000Z',
+      legacy: false
+    }];
+    const harness = component as unknown as {
+      updateDisplayedColumns: (items: typeof component.dataSource.data) => void;
+    };
+
+    harness.updateDisplayedColumns(component.dataSource.data);
+
+    expect(component.dynamicManagerColumns).toContain('manager_99');
+    expect(component.getManagerDecisionForColumn(
+      reviewItem,
+      'manager_99'
+    )).toMatchObject({
+      state: 'applied',
+      effectiveCode: 2,
+      comment: 'Final decision note'
+    });
+    expect(component.getSelectionColumnHeader()).toBe(
+      'double-coded-review.columns.final-decision'
+    );
   });
 
   it('shows the original general manager selection after profile resolution', async () => {
@@ -1367,6 +1463,9 @@ describe('DoubleCodedReviewComponent', () => {
       'Final decision note'
     );
     expect(
+      resolvedRow.querySelector('.applied-result-source')?.textContent
+    ).toContain('double-coded-review.applied-result.final-source');
+    expect(
       resolvedRow.querySelector('.decision-status.resolved')?.textContent
     ).toContain('double-coded-review.applied');
 
@@ -1380,6 +1479,7 @@ describe('DoubleCodedReviewComponent', () => {
     expect(coderACell.querySelector('.applied-code-match')).toBeNull();
     expect(coderBCell.querySelector('.applied-code-match')).toBeTruthy();
     expect(coderBCell.querySelector('.applied-match-icon')).toBeTruthy();
+    expect(coderBCell.querySelector('.supervisor-comment-icon')).toBeNull();
   });
 
   it('labels duplicate coder decisions with job source and counts progress by unique coders', async () => {

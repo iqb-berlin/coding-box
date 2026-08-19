@@ -214,12 +214,7 @@ export class DoubleCodedReviewFacade {
 
   getAppliedReviewResult(item: DoubleCodedItem): AppliedReviewResult | null {
     if (!item.isResolved) return null;
-    const comment =
-      item.appliedComment?.trim() ||
-      item.coderResults
-        .find(result => !!result.supervisorComment)
-        ?.supervisorComment?.trim() ||
-      null;
+    const comment = item.appliedComment?.trim() || null;
     if (item.appliedCode === null && item.appliedScore === null && !comment) {
       return null;
     }

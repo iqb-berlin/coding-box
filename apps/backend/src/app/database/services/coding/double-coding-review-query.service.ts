@@ -253,6 +253,8 @@ export class DoubleCodingReviewQueryService {
       statusFilter,
       resolvedFilter,
       agreementFilter,
+      sortBy = 'unitVariable',
+      sortDirection = 'asc',
       jobDefinitionIds,
       coderTrainingIds,
       includeRelations = true
@@ -440,7 +442,21 @@ export class DoubleCodingReviewQueryService {
         };
       }
 
-      query.orderBy('cju.response_id', 'ASC');
+      const orderDirection = sortDirection === 'desc' ? 'DESC' : 'ASC';
+      if (sortBy === 'personInfo') {
+        query
+          .orderBy("MIN(LOWER(COALESCE(cju.person_login, p.login, '')))", orderDirection)
+          .addOrderBy("MIN(LOWER(COALESCE(cju.person_code, p.code, '')))", orderDirection)
+          .addOrderBy("MIN(LOWER(COALESCE(cju.booklet_name, '')))", orderDirection)
+          .addOrderBy("MIN(LOWER(COALESCE(cju.unit_name, u.name, '')))", orderDirection)
+          .addOrderBy("MIN(LOWER(COALESCE(cju.variable_id, resp.variableid, '')))", orderDirection);
+      } else {
+        query
+          .orderBy("MIN(LOWER(COALESCE(cju.unit_name, u.name, '')))", orderDirection)
+          .addOrderBy("MIN(LOWER(COALESCE(cju.variable_id, resp.variableid, '')))", orderDirection)
+          .addOrderBy("MIN(LOWER(COALESCE(cju.person_login, p.login, '')))", orderDirection);
+      }
+      query.addOrderBy('cju.response_id', 'ASC');
       query.offset((page - 1) * limit).limit(limit);
       const paginatedRawResults = await query.getRawMany();
       const paginatedResponseIds = paginatedRawResults.map(row => row.responseId);
@@ -624,7 +640,9 @@ export class DoubleCodingReviewQueryService {
             codingIssueOption: unit.coding_issue_option ?? null,
             score: resolvedCodeAndScore.score,
             notes: unit.notes,
-            supervisorComment: unit.supervisor_comment || null,
+            // Resolution comments belong to manager decisions. Keep legacy
+            // unit comments only as an applied-result fallback below.
+            supervisorComment: null,
             codedAt: unit.created_at
           };
 
@@ -658,8 +676,15 @@ export class DoubleCodingReviewQueryService {
         }
       }
 
+      const responseOrder = new Map(
+        paginatedResponseIds.map((responseId, index) => [responseId, index])
+      );
       const data = Array.from(responseGroups.values())
-        .filter(group => group.coderResults.length > 1);
+        .filter(group => group.coderResults.length > 1)
+        .sort((a, b) => (
+          (responseOrder.get(a.responseId) ?? Number.MAX_SAFE_INTEGER) -
+          (responseOrder.get(b.responseId) ?? Number.MAX_SAFE_INTEGER)
+        ));
 
       const representativeUnitByResponseId = new Map<number, CodingJobUnit>();
       finalCodingJobUnits.forEach(unit => {
@@ -758,6 +783,14 @@ export class DoubleCodingReviewQueryService {
       group.managerHistory = responseDecisions
         .filter(decision => decision.state !== 'draft')
         .map(decision => this.toManagerDecisionDto(decision));
+      const appliedDecision = group.managerHistory.find(
+        decision => decision.state === 'applied'
+      );
+      if (group.isResolved && appliedDecision) {
+        group.appliedCode = appliedDecision.effectiveCode;
+        group.appliedScore = appliedDecision.score;
+        group.appliedComment = appliedDecision.comment;
+      }
       this.addLegacyManagerHistory(group);
     });
   }
@@ -1206,7 +1239,7 @@ export class DoubleCodingReviewQueryService {
       return directClause;
     }
 
-    return `(${directClause} OR (${codingJobAlias}.job_definition_id IS NULL AND EXISTS (
+    return `(${directClause} OR (${codingJobAlias}.job_definition_id IS NULL AND ${codingJobAlias}.training_id IS NULL AND EXISTS (
       SELECT 1
       FROM coding_job_variable_bundle scope_cjvb
       INNER JOIN job_definitions scope_jd
@@ -1257,6 +1290,7 @@ export class DoubleCodingReviewQueryService {
     const matchesLegacyBundleJobDefinition = !!(
       jobDefinitionIds?.length &&
       !jobDefinitionId &&
+      !trainingId &&
       scopedJobDefinitionBundleScope.bundleIds.length > 0 &&
       codingJobBundleIds.some(bundleId => this.isBundleVariableIncluded(
         scopedJobDefinitionBundleScope,
