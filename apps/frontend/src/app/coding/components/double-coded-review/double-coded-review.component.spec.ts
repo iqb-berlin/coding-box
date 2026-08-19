@@ -373,6 +373,17 @@ describe('DoubleCodedReviewComponent', () => {
     );
   });
 
+  it('keeps the paginator on the requested page after data reloads', async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    component.currentPage = 2;
+
+    fixture.detectChanges();
+
+    const paginator = fixture.debugElement.query(By.css('mat-paginator'));
+    expect(paginator.componentInstance.pageIndex).toBe(1);
+  });
+
   it('renders the reusable decision cell and updates its selection through Material select', async () => {
     const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.99);
     fixture.detectChanges();
