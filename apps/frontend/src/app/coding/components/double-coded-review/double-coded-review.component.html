@@ -249,11 +249,16 @@
                   <table
                     mat-table
                     [dataSource]="dataSource"
+                    matSort
+                    [matSortActive]="sortBy"
+                    [matSortDirection]="sortDirection"
+                    [matSortDisableClear]="true"
+                    (matSortChange)="onSortChange($event)"
                     class="review-table"
                   >
                     <!-- Unit & Variable Column -->
                     <ng-container matColumnDef="unitVariable">
-                      <th mat-header-cell *matHeaderCellDef>
+                      <th mat-header-cell *matHeaderCellDef mat-sort-header>
                         {{
                           'double-coded-review.columns.unit-variable'
                             | translate
@@ -271,7 +276,7 @@
 
                     <!-- Person Info Column -->
                     <ng-container matColumnDef="personInfo">
-                      <th mat-header-cell *matHeaderCellDef>
+                      <th mat-header-cell *matHeaderCellDef mat-sort-header>
                         {{
                           'double-coded-review.columns.person-info' | translate
                         }}
@@ -782,10 +787,19 @@
           <mat-card-content>
             <form [formGroup]="selectionForm">
               <div class="review-table-wrapper">
-                <table mat-table [dataSource]="dataSource" class="review-table">
+                <table
+                  mat-table
+                  [dataSource]="dataSource"
+                  matSort
+                  [matSortActive]="sortBy"
+                  [matSortDirection]="sortDirection"
+                  [matSortDisableClear]="true"
+                  (matSortChange)="onSortChange($event)"
+                  class="review-table"
+                >
                   <!-- Unit & Variable Column -->
                   <ng-container matColumnDef="unitVariable">
-                    <th mat-header-cell *matHeaderCellDef>
+                    <th mat-header-cell *matHeaderCellDef mat-sort-header>
                       {{
                         'double-coded-review.columns.unit-variable' | translate
                       }}
@@ -800,7 +814,7 @@
 
                   <!-- Person Info Column -->
                   <ng-container matColumnDef="personInfo">
-                    <th mat-header-cell *matHeaderCellDef>
+                    <th mat-header-cell *matHeaderCellDef mat-sort-header>
                       {{
                         'double-coded-review.columns.person-info' | translate
                       }}
