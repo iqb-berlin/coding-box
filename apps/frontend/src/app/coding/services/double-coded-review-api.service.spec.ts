@@ -44,6 +44,8 @@ describe('DoubleCodedReviewApiService', () => {
         statusFilter: 'done',
         resolvedFilter: 'unresolved',
         agreementFilter: 'differ',
+        sortBy: 'personInfo',
+        sortDirection: 'desc',
         jobDefinitionIds: [11, 12],
         coderTrainingIds: [21]
       }
@@ -61,6 +63,8 @@ describe('DoubleCodedReviewApiService', () => {
     expect(req.request.params.get('statusFilter')).toBe('done');
     expect(req.request.params.get('resolvedFilter')).toBe('unresolved');
     expect(req.request.params.get('agreementFilter')).toBe('differ');
+    expect(req.request.params.get('sortBy')).toBe('personInfo');
+    expect(req.request.params.get('sortDirection')).toBe('desc');
     expect(req.request.params.get('jobDefinitionIds')).toBe('11,12');
     expect(req.request.params.get('coderTrainingIds')).toBe('21');
     req.flush({
@@ -78,7 +82,7 @@ describe('DoubleCodedReviewApiService', () => {
     });
 
     const req = httpMock.expectOne(
-      `${serverUrl}admin/workspace/${workspaceId}/coding/double-coded-review?page=1&limit=50&onlyConflicts=false&excludeTrainings=false`
+      `${serverUrl}admin/workspace/${workspaceId}/coding/double-coded-review?page=1&limit=50&onlyConflicts=false&excludeTrainings=false&sortBy=unitVariable&sortDirection=asc`
     );
     req.flush({}, { status: 500, statusText: 'Server Error' });
   });
