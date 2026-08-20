@@ -27,7 +27,7 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import {
-  CodingFreshnessService,
+  AutoCodingRunGuardService,
   CodingJobService,
   CodingProcessService,
   CodingResponseQueryService,
@@ -48,7 +48,7 @@ export class WorkspaceCodingController {
     private codingResponseQueryService: CodingResponseQueryService,
     private codingJobService: CodingJobService,
     private codingResultsService: CodingResultsService,
-    private codingFreshnessService: CodingFreshnessService,
+    private autoCodingRunGuardService: AutoCodingRunGuardService,
     private jobQueueService: JobQueueService
   ) { }
 
@@ -113,7 +113,7 @@ export class WorkspaceCodingController {
   ): Promise<CodingStatistics> {
     const autoCoderRunNumber = this.parseAutoCoderRun(autoCoderRun);
     await this.jobQueueService.assertNoDependencyConflicts('test-person-coding', workspace_id);
-    await this.codingFreshnessService.assertAutoCodingRunCanStart(
+    await this.autoCodingRunGuardService.assertAutoCodingRunCanStart(
       workspace_id,
       autoCoderRunNumber
     );
