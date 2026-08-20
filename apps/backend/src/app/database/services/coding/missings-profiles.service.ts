@@ -6,6 +6,8 @@ import { CodingJob } from '../../entities/coding-job.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
 import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
 import { isReservedTechnicalCodingCode } from '../../../utils/coding-utils';
+import { CacheService } from '../../../cache/cache.service';
+import { getCodingIncompleteVariablesCacheVersionKey } from './coding-incomplete-variables-cache-key.util';
 
 export interface ResolvedMissingValue {
   id: string;
@@ -51,8 +53,15 @@ export class MissingsProfilesService {
     @InjectRepository(CodingJob)
     private codingJobRepository: Repository<CodingJob>,
     @InjectRepository(JobDefinition)
-    private jobDefinitionRepository: Repository<JobDefinition>
+    private jobDefinitionRepository: Repository<JobDefinition>,
+    private cacheService: CacheService
   ) {}
+
+  private async invalidateMissingDependentCaches(workspaceId: number): Promise<void> {
+    await this.cacheService.incr(
+      getCodingIncompleteVariablesCacheVersionKey(workspaceId)
+    );
+  }
 
   private toDto(profileEntity: MissingsProfile): MissingsProfilesDto {
     const profile = new MissingsProfilesDto();
@@ -500,6 +509,18 @@ export class MissingsProfilesService {
       .filter(code => Number.isInteger(code) && code < 0));
   }
 
+  private isUniqueConstraintViolation(error: unknown): boolean {
+    if (typeof error !== 'object' || error === null) {
+      return false;
+    }
+
+    const databaseError = error as {
+      code?: unknown;
+      driverError?: { code?: unknown };
+    };
+    return databaseError.code === '23505' || databaseError.driverError?.code === '23505';
+  }
+
   async ensureDefaultMissingsProfile(workspaceId: number): Promise<MissingsProfilesDto> {
     try {
       const existingProfile = await this.missingsProfileRepository.findOne({
@@ -522,8 +543,23 @@ export class MissingsProfilesService {
       profileEntity.label = defaultProfile.label;
       profileEntity.missings = defaultProfile.missings as string;
 
-      const savedProfile = await this.missingsProfileRepository.save(profileEntity);
-      return this.toDto(savedProfile);
+      try {
+        const savedProfile = await this.missingsProfileRepository.save(profileEntity);
+        return this.toDto(savedProfile);
+      } catch (error) {
+        if (!this.isUniqueConstraintViolation(error)) {
+          throw error;
+        }
+
+        const concurrentlyCreatedProfile = await this.missingsProfileRepository.findOne({
+          where: { workspace_id: workspaceId, label: this.defaultProfileLabel }
+        });
+        if (!concurrentlyCreatedProfile) {
+          throw error;
+        }
+
+        return await this.enrichIqbStandardEntityIfNeeded(concurrentlyCreatedProfile);
+      }
     } catch (error) {
       this.logger.error(`Error ensuring default missings profile for workspace ${workspaceId}: ${error.message}`, error.stack);
       throw error;
@@ -542,6 +578,23 @@ export class MissingsProfilesService {
   async getDefaultNegativeMissingCodes(workspaceId: number): Promise<Set<number>> {
     const defaultProfile = await this.ensureDefaultMissingsProfile(workspaceId);
     return this.getNegativeMissingCodesFromProfile(defaultProfile);
+  }
+
+  async getWorkspaceNegativeMissingCodes(workspaceId: number): Promise<Set<number>> {
+    const defaultProfile = await this.ensureDefaultMissingsProfile(workspaceId);
+    const profileEntities = await this.missingsProfileRepository.find({
+      where: { workspace_id: workspaceId }
+    });
+    const codes = this.getNegativeMissingCodesFromProfile(defaultProfile);
+
+    profileEntities
+      .filter(profile => profile.label !== this.defaultProfileLabel)
+      .forEach(profile => {
+        this.getNegativeMissingCodesFromProfile(this.toDto(profile))
+          .forEach(code => codes.add(code));
+      });
+
+    return codes;
   }
 
   async getNegativeMissingCodesForProfileOrDefault(
@@ -656,6 +709,7 @@ export class MissingsProfilesService {
       profileEntity.missings = normalizedProfile.missings as string;
 
       const savedProfile = await this.missingsProfileRepository.save(profileEntity);
+      await this.invalidateMissingDependentCaches(workspaceId);
 
       return this.toDto(savedProfile);
     } catch (error) {
@@ -694,6 +748,7 @@ export class MissingsProfilesService {
       existingProfile.missings = normalizedProfile.missings as string;
 
       const savedProfile = await this.missingsProfileRepository.save(existingProfile);
+      await this.invalidateMissingDependentCaches(workspaceId);
 
       return this.toDto(savedProfile);
     } catch (error) {
@@ -716,8 +771,12 @@ export class MissingsProfilesService {
       await this.assertProfileIsNotReferenced(existingProfile);
 
       const result = await this.missingsProfileRepository.delete({ workspace_id: workspaceId, label });
+      const deleted = Boolean(result.affected && result.affected > 0);
+      if (deleted) {
+        await this.invalidateMissingDependentCaches(workspaceId);
+      }
 
-      return result.affected ? result.affected > 0 : false;
+      return deleted;
     } catch (error) {
       this.logger.error(`Error deleting missings profile: ${error.message}`, error.stack);
       if (error instanceof BadRequestException) {
