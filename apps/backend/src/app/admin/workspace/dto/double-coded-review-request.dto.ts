@@ -180,6 +180,22 @@ implements ApplyDoubleCodedResolutionsRequestContract {
     decisions: DoubleCodedResolutionDecisionRequestDto[];
 }
 
+export class ReconcileDoubleCodedAggregationRequestDto {
+  @IsOptional()
+  @Transform(transformBoolean)
+  @IsBoolean()
+    dryRun?: boolean = true;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(1000)
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+    responseIds?: number[];
+}
+
 export class SaveDoubleCodedReviewDraftRequestDto
 implements SaveDoubleCodedReviewDraftContract {
   @Type(() => Number)

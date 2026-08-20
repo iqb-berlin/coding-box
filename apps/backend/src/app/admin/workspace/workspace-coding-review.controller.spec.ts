@@ -10,7 +10,8 @@ describe('WorkspaceCodingReviewController', () => {
     ['getDoubleCodedVariablesForReview', 2],
     ['saveDoubleCodedReviewDraft', 2],
     ['deleteDoubleCodedReviewDraft', 2],
-    ['applyDoubleCodedResolutions', 3]
+    ['applyDoubleCodedResolutions', 3],
+    ['reconcileDoubleCodedAggregation', 3]
   ] as const)('%s requires access level %i', (methodName, accessLevel) => {
     const handler = WorkspaceCodingReviewController.prototype[methodName];
 
