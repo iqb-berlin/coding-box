@@ -109,6 +109,10 @@ describe('CodingProgressService variable coverage conflicts', () => {
     delete: jest.Mock;
     getNumber: jest.Mock;
   };
+  let missingsProfilesService: {
+    getWorkspaceNegativeMissingCodes: jest.Mock;
+    getMissingByIdForProfileOrDefault: jest.Mock;
+  };
   let service: CodingProgressService;
 
   beforeEach(() => {
@@ -138,6 +142,17 @@ describe('CodingProgressService variable coverage conflicts', () => {
       delete: jest.fn().mockResolvedValue(true),
       getNumber: jest.fn().mockResolvedValue(0)
     };
+    missingsProfilesService = {
+      getWorkspaceNegativeMissingCodes: jest.fn().mockResolvedValue(
+        new Set([-18, -94, -96, -97, -98, -99])
+      ),
+      getMissingByIdForProfileOrDefault: jest.fn().mockResolvedValue({
+        id: 'mir',
+        label: 'Missing invalid response',
+        code: -98,
+        score: 0
+      })
+    };
 
     service = new CodingProgressService(
       responseRepository as never,
@@ -148,7 +163,8 @@ describe('CodingProgressService variable coverage conflicts', () => {
       workspaceFilesService as never,
       workspaceExclusionService as never,
       cacheService as never,
-      new CodingAggregationPeerService(responseRepository as never)
+      new CodingAggregationPeerService(responseRepository as never),
+      missingsProfilesService as never
     );
   });
 
@@ -343,7 +359,7 @@ describe('CodingProgressService variable coverage conflicts', () => {
       deriveErrorRemainingResponses: 0
     });
     expect(cacheService.set).toHaveBeenCalledWith(
-      'coding-progress:applied-results-overview:v2:5',
+      'coding-progress:applied-results-overview:v3:5',
       expect.objectContaining({
         cacheVersion: 0,
         data: expect.objectContaining({
@@ -356,6 +372,57 @@ describe('CodingProgressService variable coverage conflicts', () => {
       }),
       0
     );
+  });
+
+  it('counts final results with configured negative missing codes as applied', async () => {
+    const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+    const codingCompleteStatus = statusStringToNumber('CODING_COMPLETE');
+    const responses = [
+      {
+        responseId: '100', variableId: 'positive', codeV2: '2', statusV2: String(codingCompleteStatus)
+      },
+      {
+        responseId: '101', variableId: 'score-only', codeV2: null, statusV2: String(codingCompleteStatus)
+      },
+      {
+        responseId: '102', variableId: 'mir', codeV2: '-98', statusV2: String(codingCompleteStatus)
+      },
+      {
+        responseId: '103', variableId: 'mci', codeV2: '-97', statusV2: String(codingCompleteStatus)
+      },
+      {
+        responseId: '104', variableId: 'custom', codeV2: '-18', statusV2: String(codingCompleteStatus)
+      },
+      {
+        responseId: '105', variableId: 'invalid', codeV2: '-17', statusV2: String(codingCompleteStatus)
+      },
+      {
+        responseId: '106', variableId: 'unfinished', codeV2: '-98', statusV2: null
+      }
+    ].map(response => ({
+      unitName: 'UnitA',
+      value: `${response.variableId} value`,
+      statusV1: String(codingIncompleteStatus),
+      ...response
+    }));
+
+    responseRepository.createQueryBuilder
+      .mockReturnValueOnce(createQueryBuilder(responses))
+      .mockReturnValueOnce(createQueryBuilder(responses));
+    workspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
+      ['UNITA', new Set(responses.map(response => response.variableId))]
+    ]));
+
+    const result = await service.getAppliedResultsOverview(5);
+
+    expect(result).toMatchObject({
+      totalIncompleteResponses: 7,
+      appliedResponses: 5,
+      remainingResponses: 2,
+      rawAppliedResponses: 5
+    });
+    expect(missingsProfilesService.getWorkspaceNegativeMissingCodes)
+      .toHaveBeenCalledWith(5);
   });
 
   it('returns cached applied result progress without querying responses', async () => {
@@ -392,7 +459,7 @@ describe('CodingProgressService variable coverage conflicts', () => {
       0
     );
     expect(cacheService.get).toHaveBeenCalledWith(
-      'coding-progress:applied-results-overview:v2:5'
+      'coding-progress:applied-results-overview:v3:5'
     );
     expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
     expect(cacheService.set).not.toHaveBeenCalled();
@@ -402,7 +469,7 @@ describe('CodingProgressService variable coverage conflicts', () => {
     await service.invalidateAppliedResultsOverviewCache(5);
 
     expect(cacheService.delete).toHaveBeenCalledWith(
-      'coding-progress:applied-results-overview:v2:5'
+      'coding-progress:applied-results-overview:v3:5'
     );
   });
 
