@@ -36,6 +36,7 @@ import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import {
   ApplyDoubleCodedResolutionsRequestDto,
   DoubleCodedReviewQueryDto,
+  ReconcileDoubleCodedAggregationRequestDto,
   SaveDoubleCodedReviewDraftRequestDto
 } from './dto/double-coded-review-request.dto';
 
@@ -356,6 +357,85 @@ export class WorkspaceCodingReviewController {
     return this.doubleCodingReviewQueryService.getDoubleCodedVariablesForReview(
       workspace_id,
       query
+    );
+  }
+
+  @Post(':workspace_id/coding/double-coded-review/reconcile-aggregation')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description:
+      'Reconcile aggregation siblings for already applied manager decisions. Defaults to a read-only dry-run.',
+    schema: {
+      type: 'object',
+      properties: {
+        dryRun: {
+          type: 'boolean',
+          default: true,
+          description: 'Set to false to persist the reported sibling updates'
+        },
+        responseIds: {
+          type: 'array',
+          maxItems: 1000,
+          items: { type: 'number' },
+          description: 'Optional representative response IDs to limit the reconciliation'
+        }
+      }
+    }
+  })
+  @ApiOkResponse({
+    description: 'Aggregation reconciliation report',
+    schema: {
+      type: 'object',
+      properties: {
+        dryRun: { type: 'boolean' },
+        scannedDecisionCount: { type: 'number' },
+        representativeCount: { type: 'number' },
+        wouldUpdateCount: { type: 'number' },
+        updatedCount: { type: 'number' },
+        protectedPartialCount: { type: 'number' },
+        noOpCount: { type: 'number' },
+        skippedCount: { type: 'number' },
+        failedCount: { type: 'number' },
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              responseId: { type: 'number' },
+              sourceUnitId: { type: 'number', nullable: true },
+              status: {
+                type: 'string',
+                enum: ['would-update', 'updated', 'protected', 'no-op', 'skipped', 'failed']
+              },
+              siblingResponseIds: { type: 'array', items: { type: 'number' } },
+              protectedPartialResponseIds: {
+                type: 'array',
+                items: { type: 'number' }
+              },
+              reason: { type: 'string', nullable: true }
+            },
+            required: [
+              'responseId',
+              'sourceUnitId',
+              'status',
+              'siblingResponseIds',
+              'protectedPartialResponseIds'
+            ]
+          }
+        }
+      }
+    }
+  })
+  async reconcileDoubleCodedAggregation(
+  @WorkspaceId() workspace_id: number,
+    @Body(requestValidationPipe) body: ReconcileDoubleCodedAggregationRequestDto
+  ) {
+    return this.doubleCodingReviewDecisionService.reconcileAppliedAggregationResolutions(
+      workspace_id,
+      body
     );
   }
 
