@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { MissingsProfilesService } from './missings-profiles.service';
 import { MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
+import { getCodingIncompleteVariablesCacheVersionKey } from './coding-incomplete-variables-cache-key.util';
 
 const createRepo = () => ({
   find: jest.fn(),
@@ -25,16 +26,19 @@ describe('MissingsProfilesService', () => {
   let repo: ReturnType<typeof createRepo>;
   let codingJobRepository: ReturnType<typeof createRepo>;
   let jobDefinitionRepository: ReturnType<typeof createRepo>;
+  let cacheService: { incr: jest.Mock };
   let service: MissingsProfilesService;
 
   beforeEach(() => {
     repo = createRepo();
     codingJobRepository = createRepo();
     jobDefinitionRepository = createRepo();
+    cacheService = { incr: jest.fn().mockResolvedValue(1) };
     service = new MissingsProfilesService(
       repo as never,
       codingJobRepository as never,
-      jobDefinitionRepository as never
+      jobDefinitionRepository as never,
+      cacheService as never
     );
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; error: jest.Mock } }).logger, 'log').mockImplementation(jest.fn());
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; error: jest.Mock } }).logger, 'error').mockImplementation(jest.fn());
@@ -360,6 +364,19 @@ describe('MissingsProfilesService', () => {
     await expect(service.createMissingsProfile(1, profile)).resolves.toBeNull();
     await expect(service.deleteMissingsProfile(1, 'Profile')).resolves.toBe(true);
     await expect(service.deleteMissingsProfile(1, 'Profile')).resolves.toBe(false);
+    expect(cacheService.incr).toHaveBeenCalledTimes(3);
+    expect(cacheService.incr).toHaveBeenNthCalledWith(
+      1,
+      getCodingIncompleteVariablesCacheVersionKey(1)
+    );
+    expect(cacheService.incr).toHaveBeenNthCalledWith(
+      2,
+      getCodingIncompleteVariablesCacheVersionKey(1)
+    );
+    expect(cacheService.incr).toHaveBeenNthCalledWith(
+      3,
+      getCodingIncompleteVariablesCacheVersionKey(1)
+    );
   });
 
   it('creates and updates profiles from plain request bodies', async () => {
@@ -536,6 +553,47 @@ describe('MissingsProfilesService', () => {
     await expect(service.resolveMissingsProfileId(1, undefined)).resolves.toBe(7);
     await expect(service.getDefaultNegativeMissingCodes(1)).resolves.toEqual(new Set([-94, -96, -97, -98, -99]));
     await expect(service.getNegativeMissingCodesForProfileOrDefault(1, 0)).resolves.toEqual(new Set([-94, -96, -97, -98, -99]));
+  });
+
+  it('derives valid negative codes from all configured workspace profiles', async () => {
+    const defaultProfile = new MissingsProfilesDto();
+    defaultProfile.id = 7;
+    defaultProfile.label = 'IQB-Standard';
+    defaultProfile.setMissings([
+      {
+        id: 'mir', label: 'MIR', description: '', code: -98, score: 0
+      },
+      {
+        id: 'mci', label: 'MCI', description: '', code: -97, score: null
+      }
+    ]);
+    const customProfile = new MissingsProfilesDto();
+    customProfile.id = 8;
+    customProfile.label = 'Custom';
+    customProfile.setMissings([
+      {
+        id: 'mir', label: 'MIR', description: '', code: -18, score: 0
+      },
+      {
+        id: 'mci', label: 'MCI', description: '', code: -17, score: null
+      }
+    ]);
+    repo.findOne.mockResolvedValue({
+      id: defaultProfile.id,
+      workspace_id: 1,
+      label: defaultProfile.label,
+      missings: defaultProfile.missings
+    });
+    repo.find.mockResolvedValue([{
+      id: customProfile.id,
+      workspace_id: 1,
+      label: customProfile.label,
+      missings: customProfile.missings
+    }]);
+
+    await expect(service.getWorkspaceNegativeMissingCodes(1))
+      .resolves.toEqual(new Set([-98, -97, -99, -96, -94, -18, -17]));
+    expect(repo.find).toHaveBeenCalledWith({ where: { workspace_id: 1 } });
   });
 
   it('resolves missing code and score by missing id', async () => {
