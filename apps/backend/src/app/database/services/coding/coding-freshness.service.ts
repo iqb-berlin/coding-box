@@ -270,7 +270,8 @@ export class CodingFreshnessService {
 
   async assertAutoCodingRunCanStart(
     workspaceId: number,
-    autoCoderRun: number
+    autoCoderRun: number,
+    additionalBlockers: CodingFreshnessSummaryItemDto[] = []
   ): Promise<void> {
     if (autoCoderRun !== 2) {
       return;
@@ -284,6 +285,7 @@ export class CodingFreshnessService {
     }
 
     const blockers = await this.getAutoCodingRunBlockers(workspaceId, autoCoderRun);
+    additionalBlockers.forEach(blocker => this.mergeFreshnessBlocker(blockers, blocker));
     if (blockers.length === 0) {
       return;
     }
@@ -304,15 +306,9 @@ export class CodingFreshnessService {
       item.state !== 'CURRENT' &&
       item.unitCount > 0 &&
       (
-        (item.version === 'v1' && (item.state === 'PENDING' || item.state === 'STALE')) ||
-        (item.version === 'v2' && item.state === 'MANUAL_REVIEW_REQUIRED')
+        item.version === 'v1' && (item.state === 'PENDING' || item.state === 'STALE')
       )
     ));
-    const openManualCodingBlocker = await this.getOpenManualCodingFreshnessBlocker(workspaceId);
-    if (openManualCodingBlocker) {
-      this.mergeFreshnessBlocker(blockers, openManualCodingBlocker);
-    }
-
     const manualJobBlocker = await this.getManualCodingJobFreshnessBlocker(workspaceId);
 
     if (manualJobBlocker) {
@@ -686,6 +682,43 @@ export class CodingFreshnessService {
     if (codingJobIdsToClear.length > 0) {
       await this.markCodingJobsCurrent(workspaceId, codingJobIdsToClear, options.manager);
     }
+  }
+
+  async reconcileCompletedManualCodingFreshness(
+    workspaceId: number,
+    expectedRevision: number
+  ): Promise<number> {
+    const rows = await this.connection.query(
+      `
+        UPDATE coding_unit_freshness
+        SET state = 'CURRENT',
+            reason = 'MANUAL_CODING_APPLIED',
+            affected_response_count = 0,
+            source_revision = $2,
+            coded_revision = $2,
+            updated_at = now()
+        WHERE workspace_id = $1
+          AND version = 'v2'
+          AND state = 'MANUAL_REVIEW_REQUIRED'
+          AND $2 = COALESCE((
+            SELECT revision
+            FROM workspace_test_results_revision
+            WHERE workspace_id = $1
+          ), 0)
+        RETURNING id
+      `,
+      [workspaceId, expectedRevision]
+    ) as Array<{ id: number | string }> | undefined;
+    const reconciledCount = Array.isArray(rows) ? rows.length : 0;
+
+    if (reconciledCount > 0) {
+      this.logger.log(
+        `Reconciled ${reconciledCount} completed manual coding freshness entries ` +
+        `in workspace ${workspaceId}`
+      );
+    }
+
+    return reconciledCount;
   }
 
   async markVersionsPendingAfterReset(
@@ -2271,60 +2304,6 @@ export class CodingFreshnessService {
       'Aktualisieren Sie zuerst Auto-Coding 1 und prüfen Sie anschließend die manuelle Kodierung.';
   }
 
-  private async getOpenManualCodingFreshnessBlocker(
-    workspaceId: number
-  ): Promise<CodingFreshnessSummaryItemDto | null> {
-    const manualSourceStatuses = [
-      statusStringToNumber('CODING_INCOMPLETE'),
-      statusStringToNumber('INTENDED_INCOMPLETE')
-    ].filter((status): status is number => status !== null);
-    const appliedStatuses = [
-      statusStringToNumber('CODING_COMPLETE'),
-      statusStringToNumber('INVALID'),
-      statusStringToNumber('CODING_ERROR')
-    ].filter((status): status is number => status !== null);
-
-    const query = this.responseRepository
-      .createQueryBuilder('response')
-      .select('COUNT(DISTINCT response.unitid)', 'affectedUnits')
-      .addSelect('COUNT(DISTINCT response.id)', 'affectedResponses')
-      .leftJoin('response.unit', 'unit')
-      .leftJoin('unit.booklet', 'booklet')
-      .leftJoin('booklet.bookletinfo', 'bookletinfo')
-      .leftJoin('booklet.person', 'person')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.status_v1 IN (:...manualSourceStatuses)', { manualSourceStatuses })
-      .andWhere(
-        '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
-        { aggregatedCode: -111, defaultMirCode: await this.getDefaultMirCode(workspaceId) }
-      )
-      .andWhere(new Brackets(qb => {
-        qb.where('response.status_v2 IS NULL')
-          .orWhere('response.status_v2 NOT IN (:...appliedStatuses)', { appliedStatuses })
-          .orWhere('response.code_v2 < 0');
-      }));
-
-    await this.applyWorkspaceExclusions(workspaceId, query);
-
-    const row = await query.getRawOne<{
-      affectedUnits: number | string;
-      affectedResponses: number | string;
-    }>();
-    const affectedResponses = Number(row?.affectedResponses || 0);
-    if (affectedResponses === 0) {
-      return null;
-    }
-
-    const affectedUnits = Number(row?.affectedUnits || 0);
-    return {
-      version: 'v2',
-      state: 'MANUAL_REVIEW_REQUIRED',
-      unitCount: affectedUnits,
-      affectedResponseCount: affectedResponses
-    };
-  }
-
   private async getManualCodingJobFreshnessBlocker(
     workspaceId: number
   ): Promise<CodingFreshnessSummaryItemDto | null> {
@@ -2341,7 +2320,13 @@ export class CodingFreshnessService {
         WHERE cj.workspace_id = $1
           AND cj.training_id IS NULL
           AND ${getNonCodingIssueReviewJobSqlCondition('cj')}
-          AND cj.freshness_status IN ('review_required', 'stale_source')
+          AND (
+            cj.freshness_status IN ('review_required', 'stale_source')
+            OR (
+              cj.status <> 'results_applied'
+              AND cju.id IS NOT NULL
+            )
+          )
       `,
       [workspaceId]
     ) as ManualJobFreshnessRow[] | undefined;

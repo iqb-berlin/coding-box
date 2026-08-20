@@ -23,6 +23,7 @@ export { CodingAnalysisService } from './coding-analysis.service';
 export { CodingExportService } from './coding-export.service';
 export { CodingExportOrchestratorService } from './coding-export-orchestrator.service';
 export { CodingFreshnessService } from './coding-freshness.service';
+export { AutoCodingRunGuardService } from './auto-coding-run-guard.service';
 export { CodingItemMatrixExportService } from './coding-item-matrix-export.service';
 export { ExportArtifactService } from './export-artifact.service';
 export { ItemDatasetMetadataService } from './item-dataset-metadata.service';

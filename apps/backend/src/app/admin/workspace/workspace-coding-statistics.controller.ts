@@ -29,6 +29,7 @@ import {
   CodingStatisticsService,
   CodingJobService,
   CodingProgressService,
+  AutoCodingRunGuardService,
   DoubleCodingReviewQueryService,
   CodingFreshnessService,
   CodingProcessService,
@@ -255,6 +256,7 @@ export class WorkspaceCodingStatisticsController {
     private codingProgressService: CodingProgressService,
     private doubleCodingReviewQueryService: DoubleCodingReviewQueryService,
     private codingFreshnessService: CodingFreshnessService,
+    private autoCodingRunGuardService: AutoCodingRunGuardService,
     private codingProcessService: CodingProcessService,
     private codingReadinessService: CodingReadinessService,
     private codingReplayService: CodingReplayService,
@@ -1157,7 +1159,7 @@ export class WorkspaceCodingStatisticsController {
       };
     }
 
-    await this.codingFreshnessService.assertAutoCodingRunCanStart(
+    await this.autoCodingRunGuardService.assertAutoCodingRunCanStart(
       workspace_id,
       version === 'v3' ? 2 : 1
     );
