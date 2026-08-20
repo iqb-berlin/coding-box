@@ -315,7 +315,7 @@ export class CodingProgressService {
   }
 
   private getAppliedResultsOverviewCacheKey(workspaceId: number): string {
-    return `coding-progress:applied-results-overview:v2:${workspaceId}`;
+    return `coding-progress:applied-results-overview:v3:${workspaceId}`;
   }
 
   private async getAppliedResultsOverviewCacheVersion(workspaceId: number): Promise<number> {
@@ -337,11 +337,17 @@ export class CodingProgressService {
   }
 
   private async computeAppliedResultsOverview(workspaceId: number): Promise<AppliedResultsOverview> {
-    const responseScope = await this.getCoverageResponseScope(workspaceId);
+    const [responseScope, validNegativeMissingCodes] = await Promise.all([
+      this.getCoverageResponseScope(workspaceId),
+      this.getAppliedResultNegativeMissingCodes(workspaceId)
+    ]);
     const responses = responseScope.manualResponses;
     const appliedResponseIds = new Set(
       responses
-        .filter(response => this.isAppliedResultResponse(response))
+        .filter(response => this.isAppliedResultResponse(
+          response,
+          validNegativeMissingCodes
+        ))
         .map(response => response.responseId)
     );
     const effectiveProgress = await this.getEffectiveCaseProgress(
@@ -800,7 +806,20 @@ export class CodingProgressService {
     return new Set(raw.map(row => Number(row.responseId)));
   }
 
-  private isAppliedResultResponse(response: CoverageResponse): boolean {
+  private async getAppliedResultNegativeMissingCodes(
+    workspaceId: number
+  ): Promise<Set<number>> {
+    if (!this.missingsProfilesService) {
+      return new Set(Object.values(IQB_STANDARD_MISSING_CODES));
+    }
+
+    return this.missingsProfilesService.getWorkspaceNegativeMissingCodes(workspaceId);
+  }
+
+  private isAppliedResultResponse(
+    response: CoverageResponse,
+    validNegativeMissingCodes: ReadonlySet<number>
+  ): boolean {
     const appliedStatuses = [
       statusStringToNumber('CODING_COMPLETE'),
       statusStringToNumber('INVALID'),
@@ -810,7 +829,11 @@ export class CodingProgressService {
     return (
       response.statusV2 !== null &&
       appliedStatuses.includes(response.statusV2) &&
-      (response.codeV2 === null || response.codeV2 >= 0)
+      (
+        response.codeV2 === null ||
+        response.codeV2 >= 0 ||
+        validNegativeMissingCodes.has(response.codeV2)
+      )
     );
   }
 

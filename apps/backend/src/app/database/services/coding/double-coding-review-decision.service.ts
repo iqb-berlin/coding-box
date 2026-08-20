@@ -16,15 +16,22 @@ import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
 import { DoubleCodingReviewDecision } from '../../entities/double-coding-review-decision.entity';
 import { CodingStatisticsService } from './coding-statistics.service';
 import {
+  applyResolvedExclusionsToQuery,
   isExcludedByResolvedExclusions,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { MissingsProfilesService } from './missings-profiles.service';
 import { CODING_JOB_TYPE_CODING_ISSUE_REVIEW } from './coding-job-type.util';
-import { CodingJobService } from './coding-job.service';
+import {
+  CodingJobAggregationSettings,
+  CodingJobService,
+  ResponseMatchingFlag
+} from './coding-job.service';
 import { CodingAnalysisService } from './coding-analysis.service';
 import { CodingValidationService } from './coding-validation.service';
 import { CodingProgressService } from './coding-progress.service';
+import { CodingFreshnessService } from './coding-freshness.service';
+import { buildAggregationGroups } from './aggregation-metrics.util';
 import {
   DoubleCodedManagerDecisionDto,
   DoubleCodedResolutionDecisionDto,
@@ -43,6 +50,33 @@ type ResolvedDoubleCodedResolution = {
 type ResolvedReviewSelection = {
   code: number;
   score: number | null;
+};
+
+type AggregationSiblingApplication = {
+  updatedResponseIds: number[];
+  protectedPartialResponseIds: number[];
+};
+
+type AggregationReconciliationItem = {
+  responseId: number;
+  sourceUnitId: number | null;
+  status: 'would-update' | 'updated' | 'protected' | 'no-op' | 'skipped' | 'failed';
+  siblingResponseIds: number[];
+  protectedPartialResponseIds: number[];
+  reason?: string;
+};
+
+type AggregationReconciliationResult = {
+  dryRun: boolean;
+  scannedDecisionCount: number;
+  representativeCount: number;
+  wouldUpdateCount: number;
+  updatedCount: number;
+  protectedPartialCount: number;
+  noOpCount: number;
+  skippedCount: number;
+  failedCount: number;
+  items: AggregationReconciliationItem[];
 };
 
 @Injectable()
@@ -65,7 +99,8 @@ export class DoubleCodingReviewDecisionService {
     private codingJobService: CodingJobService,
     private missingsProfilesService: MissingsProfilesService,
     @InjectRepository(DoubleCodingReviewDecision)
-    private reviewDecisionRepository: Repository<DoubleCodingReviewDecision>
+    private reviewDecisionRepository: Repository<DoubleCodingReviewDecision>,
+    private codingFreshnessService: CodingFreshnessService
   ) { }
 
   private toManagerDecisionDto(
@@ -338,6 +373,280 @@ export class DoubleCodingReviewDecisionService {
     }
   }
 
+  async reconcileAppliedAggregationResolutions(
+    workspaceId: number,
+    options: { dryRun?: boolean; responseIds?: number[] } = {}
+  ): Promise<AggregationReconciliationResult> {
+    const dryRun = options.dryRun !== false;
+    const responseIds = options.responseIds ?
+      Array.from(new Set(options.responseIds)) :
+      undefined;
+    const decisions = await this.reviewDecisionRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        state: 'applied',
+        ...(responseIds?.length ? { response_id: In(responseIds) } : {})
+      },
+      order: { updated_at: 'DESC', id: 'DESC' }
+    });
+    const latestDecisionByResponseId = new Map<number, DoubleCodingReviewDecision>();
+    decisions.forEach(decision => {
+      if (!latestDecisionByResponseId.has(decision.response_id)) {
+        latestDecisionByResponseId.set(decision.response_id, decision);
+      }
+    });
+
+    const result: AggregationReconciliationResult = {
+      dryRun,
+      scannedDecisionCount: decisions.length,
+      representativeCount: latestDecisionByResponseId.size,
+      wouldUpdateCount: 0,
+      updatedCount: 0,
+      protectedPartialCount: 0,
+      noOpCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+      items: []
+    };
+
+    for (const decision of latestDecisionByResponseId.values()) {
+      try {
+        const item = await this.responseRepository.manager.transaction(
+          entityManager => this.reconcileAppliedAggregationResolutionInTransaction(
+            entityManager,
+            workspaceId,
+            decision,
+            dryRun
+          )
+        );
+        result.items.push(item);
+        result.protectedPartialCount += item.protectedPartialResponseIds.length;
+        if (item.status === 'would-update') {
+          result.wouldUpdateCount += item.siblingResponseIds.length;
+        } else if (item.status === 'updated') {
+          result.updatedCount += item.siblingResponseIds.length;
+        } else if (item.status === 'no-op' || item.status === 'protected') {
+          result.noOpCount += 1;
+        } else if (item.status === 'skipped') {
+          result.skippedCount += 1;
+        }
+      } catch (error) {
+        this.logger.error(
+          `Could not reconcile aggregation siblings for responseId ${decision.response_id}: ${error.message}`,
+          error.stack
+        );
+        result.failedCount += 1;
+        result.items.push({
+          responseId: decision.response_id,
+          sourceUnitId: null,
+          status: 'failed',
+          siblingResponseIds: [],
+          protectedPartialResponseIds: [],
+          reason: error.message
+        });
+      }
+    }
+
+    if (!dryRun && result.updatedCount > 0) {
+      await this.invalidateCodingCaches(workspaceId);
+    }
+    this.logger.log(
+      `${dryRun ? 'Dry-run for' : 'Applied'} aggregation reconciliation in workspace ${workspaceId}: representatives=${result.representativeCount}, ${dryRun ? 'wouldUpdate' : 'updated'}=${dryRun ? result.wouldUpdateCount : result.updatedCount}, protectedPartial=${result.protectedPartialCount}, skipped=${result.skippedCount}, failed=${result.failedCount}`
+    );
+    return result;
+  }
+
+  private async reconcileAppliedAggregationResolutionInTransaction(
+    entityManager: EntityManager,
+    workspaceId: number,
+    decision: DoubleCodingReviewDecision,
+    dryRun: boolean
+  ): Promise<AggregationReconciliationItem> {
+    const responseId = decision.response_id;
+    const representative = await entityManager.findOne(ResponseEntity, {
+      where: { id: responseId },
+      ...(!dryRun ? { lock: { mode: 'pessimistic_write' as const } } : {})
+    });
+    const emptyItem = {
+      responseId,
+      sourceUnitId: null,
+      siblingResponseIds: [],
+      protectedPartialResponseIds: []
+    };
+    if (!representative) {
+      return { ...emptyItem, status: 'skipped', reason: 'Representative response not found' };
+    }
+    if (representative.status_v2 !== statusStringToNumber('CODING_COMPLETE')) {
+      return {
+        ...emptyItem,
+        status: 'skipped',
+        reason: 'Applied manager decision has no completed v2 response'
+      };
+    }
+    if (representative.code_v2 === null) {
+      return {
+        ...emptyItem,
+        status: 'skipped',
+        reason: 'Completed representative has no v2 code'
+      };
+    }
+    if (
+      this.toNullableNumber(decision.effective_code) !==
+        this.toNullableNumber(representative.code_v2) ||
+      this.toNullableNumber(decision.score) !==
+        this.toNullableNumber(representative.score_v2)
+    ) {
+      return {
+        ...emptyItem,
+        status: 'skipped',
+        reason: 'Applied manager decision no longer matches the v2 response'
+      };
+    }
+
+    const source = await this.getReconciliationSourceUnit(
+      entityManager,
+      workspaceId,
+      decision
+    );
+    if (!source.sourceUnit || !source.aggregationSettings) {
+      return { ...emptyItem, status: 'skipped', reason: source.reason };
+    }
+
+    const application = await this.applyResolutionToAggregationSiblings(
+      entityManager,
+      workspaceId,
+      {
+        response: representative,
+        sourceUnit: source.sourceUnit,
+        selectionCode: representative.code_v2,
+        code: representative.code_v2,
+        score: representative.score_v2
+      },
+      representative,
+      { dryRun, aggregationSettings: source.aggregationSettings }
+    );
+    if (!dryRun && application.updatedResponseIds.length > 0) {
+      await this.codingFreshnessService.markManualCodingCurrent(
+        workspaceId,
+        application.updatedResponseIds,
+        {
+          clearCoveredReviewJobs: true,
+          manager: entityManager
+        }
+      );
+    }
+
+    let status: AggregationReconciliationItem['status'];
+    if (application.updatedResponseIds.length > 0) {
+      status = dryRun ? 'would-update' : 'updated';
+    } else if (application.protectedPartialResponseIds.length > 0) {
+      status = 'protected';
+    } else {
+      status = 'no-op';
+    }
+    return {
+      responseId,
+      sourceUnitId: source.sourceUnit.id,
+      status,
+      siblingResponseIds: application.updatedResponseIds,
+      protectedPartialResponseIds: application.protectedPartialResponseIds
+    };
+  }
+
+  private async getReconciliationSourceUnit(
+    entityManager: EntityManager,
+    workspaceId: number,
+    decision: DoubleCodingReviewDecision
+  ): Promise<{
+      sourceUnit: CodingJobUnit | null;
+      aggregationSettings: CodingJobAggregationSettings | null;
+      reason?: string;
+    }> {
+    const decisionTime = decision.finalized_at || decision.updated_at;
+    const sourceUnits = (await entityManager.find(CodingJobUnit, {
+      where: [
+        {
+          response_id: decision.response_id,
+          coding_job: { workspace_id: workspaceId, job_type: IsNull() }
+        },
+        {
+          response_id: decision.response_id,
+          coding_job: {
+            workspace_id: workspaceId,
+            job_type: Not(CODING_JOB_TYPE_CODING_ISSUE_REVIEW)
+          }
+        }
+      ],
+      relations: ['response', 'coding_job', 'coding_job.codingJobCoders'],
+      order: { id: 'ASC' }
+    })).filter(unit => {
+      const existedWhenDecisionWasApplied = !decisionTime || !unit.created_at ||
+        new Date(unit.created_at).getTime() <= new Date(decisionTime).getTime();
+      return unit.coding_job && existedWhenDecisionWasApplied &&
+        this.getDistinctCodingJobCoders(unit.coding_job.codingJobCoders || []).length === 1;
+    });
+    if (sourceUnits.length === 0) {
+      return {
+        sourceUnit: null,
+        aggregationSettings: null,
+        reason: 'No eligible single-coder source unit found'
+      };
+    }
+    if (!await this.isResolutionSourceAllowed(workspaceId, sourceUnits[0])) {
+      return {
+        sourceUnit: null,
+        aggregationSettings: null,
+        reason: 'Representative response is excluded from coding'
+      };
+    }
+
+    const settingsByUnit = await Promise.all(sourceUnits.map(async sourceUnit => ({
+      sourceUnit,
+      settings: await this.codingJobService.getAggregationSettingsForCodingJob(
+        sourceUnit.coding_job
+      )
+    })));
+    if (settingsByUnit.some(entry => !entry.settings.fromJobSnapshot)) {
+      return {
+        sourceUnit: null,
+        aggregationSettings: null,
+        reason: 'Stored aggregation snapshot is unavailable for at least one source job'
+      };
+    }
+    const settingsFingerprints = new Set(settingsByUnit.map(entry => JSON.stringify([
+      entry.settings.aggregationEnabled,
+      entry.settings.aggregationThreshold,
+      [...entry.settings.responseMatchingFlags].sort()
+    ])));
+    if (settingsFingerprints.size !== 1) {
+      return {
+        sourceUnit: null,
+        aggregationSettings: null,
+        reason: 'Source jobs have conflicting aggregation snapshots'
+      };
+    }
+
+    return {
+      sourceUnit: settingsByUnit[0].sourceUnit,
+      aggregationSettings: settingsByUnit[0].settings
+    };
+  }
+
+  private async invalidateCodingCaches(workspaceId: number): Promise<void> {
+    if (typeof this.codingStatisticsService.invalidateCache === 'function') {
+      await this.codingStatisticsService.invalidateCache(workspaceId);
+    }
+    if (typeof this.codingAnalysisService.invalidateCache === 'function') {
+      await this.codingAnalysisService.invalidateCache(workspaceId);
+    }
+    if (typeof this.codingValidationService.invalidateIncompleteVariablesCache === 'function') {
+      await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
+    }
+    if (typeof this.codingProgressService.invalidateAppliedResultsOverviewCache === 'function') {
+      await this.codingProgressService.invalidateAppliedResultsOverviewCache(workspaceId);
+    }
+  }
+
   private async applyDoubleCodedResolutionInTransaction(
     transactionalEntityManager: EntityManager,
     workspaceId: number,
@@ -390,6 +699,12 @@ export class DoubleCodingReviewDecisionService {
     response.score_v2 = resolvedDecision.score;
     response.value = this.getOriginalResponseValue(response.value);
     await transactionalEntityManager.save(ResponseEntity, response);
+    const aggregationApplication = await this.applyResolutionToAggregationSiblings(
+      transactionalEntityManager,
+      workspaceId,
+      resolvedDecision,
+      response
+    );
     await this.persistAppliedManagerDecision(
       transactionalEntityManager,
       workspaceId,
@@ -400,10 +715,154 @@ export class DoubleCodingReviewDecisionService {
       resolvedDecision.score,
       decision.resolutionComment?.trim() || null
     );
-    this.logger.debug(
-      `Applied resolution for responseId ${decision.responseId}: code=${resolvedDecision.code}, score=${resolvedDecision.score}`
+    await this.codingFreshnessService.markManualCodingCurrent(
+      workspaceId,
+      [response.id, ...aggregationApplication.updatedResponseIds],
+      {
+        clearCoveredReviewJobs: true,
+        manager: transactionalEntityManager
+      }
     );
-    return { responseId: decision.responseId, status: 'applied' };
+    this.logger.debug(
+      `Applied resolution for responseId ${decision.responseId}: code=${resolvedDecision.code}, score=${resolvedDecision.score}, aggregatedSiblings=${aggregationApplication.updatedResponseIds.length}, protectedPartialSiblings=${aggregationApplication.protectedPartialResponseIds.length}`
+    );
+    return {
+      responseId: decision.responseId,
+      status: 'applied',
+      ...(aggregationApplication.protectedPartialResponseIds.length > 0 ? {
+        message:
+          `${aggregationApplication.protectedPartialResponseIds.length} aggregation sibling(s) with existing v2 values were not overwritten`
+      } : {})
+    };
+  }
+
+  private async applyResolutionToAggregationSiblings(
+    entityManager: EntityManager,
+    workspaceId: number,
+    resolvedDecision: ResolvedDoubleCodedResolution,
+    representative: ResponseEntity,
+    options: {
+      dryRun?: boolean;
+      aggregationSettings?: CodingJobAggregationSettings;
+    } = {}
+  ): Promise<AggregationSiblingApplication> {
+    const aggregationSettings = options.aggregationSettings || await this.codingJobService
+      .getAggregationSettingsForCodingJob(resolvedDecision.sourceUnit.coding_job);
+    const aggregationThreshold = aggregationSettings.aggregationThreshold;
+    if (
+      !aggregationSettings.aggregationEnabled ||
+      aggregationThreshold === null ||
+      aggregationSettings.responseMatchingFlags.includes(
+        ResponseMatchingFlag.NO_AGGREGATION
+      )
+    ) {
+      return { updatedResponseIds: [], protectedPartialResponseIds: [] };
+    }
+
+    const unitName = resolvedDecision.sourceUnit.unit_name;
+    const variableId = resolvedDecision.sourceUnit.variable_id;
+    if (!unitName || !variableId) {
+      return { updatedResponseIds: [], protectedPartialResponseIds: [] };
+    }
+
+    const exclusions = await this.workspaceExclusionService
+      .resolveExclusionsForQueries(workspaceId);
+    const candidateQuery = entityManager
+      .getRepository(ResponseEntity)
+      .createQueryBuilder('response')
+      .leftJoinAndSelect('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.bookletinfo', 'bookletinfo')
+      .leftJoin('booklet.person', 'person')
+      .select([
+        'response.id',
+        'response.value',
+        'response.variableid',
+        'response.status_v2',
+        'response.code_v2',
+        'response.score_v2',
+        'unit.id',
+        'unit.name'
+      ])
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('response.status_v1 IN (:...statuses)', {
+        statuses: [
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE')
+        ]
+      })
+      .andWhere('UPPER(unit.name) = UPPER(:unitName)', { unitName })
+      .andWhere('response.variableid = :variableId', { variableId });
+    if (!options.dryRun) {
+      candidateQuery.setLock('pessimistic_write', undefined, ['response']);
+    }
+    applyResolvedExclusionsToQuery(candidateQuery, exclusions, {
+      parameterPrefix: 'reviewAggregationSiblings'
+    });
+    const candidates = await candidateQuery.getMany();
+    const candidateById = new Map(candidates.map(candidate => [candidate.id, candidate]));
+    candidateById.set(representative.id, {
+      ...representative,
+      unit: representative.unit || ({ name: unitName } as never)
+    });
+
+    const derivedVariableMap = await this.codingJobService
+      .getDerivedVariableMapForAggregation(workspaceId);
+    const groups = buildAggregationGroups(
+      Array.from(candidateById.values()).map(candidate => ({
+        responseId: candidate.id,
+        unitName: candidate.unit?.name || unitName,
+        variableId: candidate.variableid || variableId,
+        value: candidate.value,
+        statusV2: candidate.status_v2,
+        codeV2: candidate.code_v2,
+        scoreV2: candidate.score_v2
+      })),
+      aggregationSettings.responseMatchingFlags,
+      aggregationThreshold,
+      derivedVariableMap
+    );
+    const aggregationGroup = groups.find(group => group.responses.some(
+      candidate => candidate.responseId === representative.id
+    ));
+    if (!aggregationGroup || aggregationGroup.responses.length < aggregationThreshold) {
+      return { updatedResponseIds: [], protectedPartialResponseIds: [] };
+    }
+
+    const unresolvedStatuses = new Set([
+      null,
+      statusStringToNumber('CODING_INCOMPLETE'),
+      statusStringToNumber('INTENDED_INCOMPLETE'),
+      statusStringToNumber('CODE_SELECTION_PENDING')
+    ]);
+    const unresolvedSiblingResponses = aggregationGroup.responses
+      .filter(candidate => candidate.responseId !== representative.id)
+      .map(candidate => candidateById.get(candidate.responseId))
+      .filter((candidate): candidate is ResponseEntity => Boolean(candidate))
+      .filter(candidate => unresolvedStatuses.has(candidate.status_v2));
+    const protectedPartialResponses = unresolvedSiblingResponses.filter(candidate => (
+      candidate.code_v2 !== null || candidate.score_v2 !== null
+    ));
+    const siblingResponses = unresolvedSiblingResponses.filter(candidate => (
+      candidate.code_v2 === null && candidate.score_v2 === null
+    ));
+
+    if (!options.dryRun) {
+      siblingResponses.forEach(sibling => {
+        sibling.status_v2 = representative.status_v2;
+        sibling.code_v2 = representative.code_v2;
+        sibling.score_v2 = representative.score_v2;
+      });
+      if (siblingResponses.length > 0) {
+        await entityManager.save(ResponseEntity, siblingResponses);
+      }
+    }
+
+    return {
+      updatedResponseIds: siblingResponses.map(sibling => sibling.id),
+      protectedPartialResponseIds: protectedPartialResponses.map(sibling => sibling.id)
+    };
   }
 
   private async persistAppliedManagerDecision(

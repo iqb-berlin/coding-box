@@ -4,6 +4,7 @@ import { validate } from 'class-validator';
 import {
   ApplyDoubleCodedResolutionsRequestDto,
   DoubleCodedReviewQueryDto,
+  ReconcileDoubleCodedAggregationRequestDto,
   SaveDoubleCodedReviewDraftRequestDto
 } from './double-coded-review-request.dto';
 
@@ -116,6 +117,28 @@ describe('double-coded review request DTOs', () => {
     });
 
     await expect(validate(request)).resolves.toEqual([]);
+  });
+
+  it('defaults aggregation reconciliation to dry-run and validates response IDs', async () => {
+    const defaultRequest = plainToInstance(ReconcileDoubleCodedAggregationRequestDto, {});
+    const applyRequest = plainToInstance(ReconcileDoubleCodedAggregationRequestDto, {
+      dryRun: 'false',
+      responseIds: ['10', '11']
+    });
+
+    await expect(validate(defaultRequest)).resolves.toEqual([]);
+    await expect(validate(applyRequest)).resolves.toEqual([]);
+    expect(defaultRequest.dryRun).toBe(true);
+    expect(applyRequest).toMatchObject({ dryRun: false, responseIds: [10, 11] });
+  });
+
+  it('rejects invalid aggregation reconciliation controls', async () => {
+    const request = plainToInstance(ReconcileDoubleCodedAggregationRequestDto, {
+      dryRun: 'yes',
+      responseIds: [0]
+    });
+
+    expect(await validate(request)).not.toHaveLength(0);
   });
 
   it('validates a draft body', async () => {

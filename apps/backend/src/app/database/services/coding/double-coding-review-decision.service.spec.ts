@@ -1,6 +1,7 @@
 import { DoubleCodingReviewDecisionService } from './double-coding-review-decision.service';
 
 jest.mock('../workspace/workspace-exclusion.service', () => ({
+  applyResolvedExclusionsToQuery: jest.fn(),
   isExcludedByResolvedExclusions: jest.fn().mockReturnValue(false),
   WorkspaceExclusionService: jest.fn()
 }));
@@ -17,6 +18,8 @@ describe('DoubleCodingReviewDecisionService', () => {
   let codingJobService: {
     getCodingSchemeScoreForUnitCode: jest.Mock;
     getSelectableReviewCodeForUnit: jest.Mock;
+    getAggregationSettingsForCodingJob: jest.Mock;
+    getDerivedVariableMapForAggregation: jest.Mock;
   };
   let service: DoubleCodingReviewDecisionService;
 
@@ -78,6 +81,7 @@ describe('DoubleCodingReviewDecisionService', () => {
     codingJobService?: unknown;
     missingsProfilesService?: unknown;
     reviewDecisionRepository?: unknown;
+    codingFreshnessService?: unknown;
   } = {}): DoubleCodingReviewDecisionService => new DoubleCodingReviewDecisionService(
     (dependencies.responseRepository ?? {}) as never,
     (dependencies.codingStatisticsService ?? {}) as never,
@@ -93,7 +97,10 @@ describe('DoubleCodingReviewDecisionService', () => {
     (dependencies.missingsProfilesService ?? {
       getMissingByIdForProfileOrDefault: jest.fn()
     }) as never,
-    (dependencies.reviewDecisionRepository ?? {}) as never
+    (dependencies.reviewDecisionRepository ?? {}) as never,
+    (dependencies.codingFreshnessService ?? {
+      markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
+    }) as never
   );
 
   beforeEach(() => {
@@ -105,7 +112,13 @@ describe('DoubleCodingReviewDecisionService', () => {
           label: `Code ${code}`,
           score: 1
         })
-      )
+      ),
+      getAggregationSettingsForCodingJob: jest.fn().mockResolvedValue({
+        aggregationEnabled: false,
+        aggregationThreshold: null,
+        responseMatchingFlags: ['NO_AGGREGATION']
+      }),
+      getDerivedVariableMapForAggregation: jest.fn().mockResolvedValue(new Map())
     };
     service = createDecisionService();
   });
@@ -125,6 +138,7 @@ describe('DoubleCodingReviewDecisionService', () => {
       score: 7
     });
     const response = {
+      id: 10,
       value: 'supervisor note\n\n--- ORIGINAL RESPONSE ---\noriginal answer',
       status_v2: null,
       code_v2: null,
@@ -179,13 +193,17 @@ describe('DoubleCodingReviewDecisionService', () => {
     const codingProgressService = {
       invalidateAppliedResultsOverviewCache: jest.fn().mockResolvedValue(undefined)
     };
+    const codingFreshnessService = {
+      markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
+    };
     const localService = createDecisionService({
       responseRepository,
       codingStatisticsService,
       codingAnalysisService,
       codingValidationService,
       codingProgressService,
-      reviewDecisionRepository: managerDecisionRepository
+      reviewDecisionRepository: managerDecisionRepository,
+      codingFreshnessService
     });
 
     const result = await localService.applyDoubleCodedResolutions(workspaceId, [{
@@ -244,6 +262,468 @@ describe('DoubleCodingReviewDecisionService', () => {
     expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(workspaceId);
     expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
     expect(codingProgressService.invalidateAppliedResultsOverviewCache).toHaveBeenCalledWith(workspaceId);
+    expect(codingJobService.getDerivedVariableMapForAggregation).not.toHaveBeenCalled();
+    expect(codingFreshnessService.markManualCodingCurrent).toHaveBeenCalledWith(
+      workspaceId,
+      [10],
+      {
+        clearCoveredReviewJobs: true,
+        manager: transactionalEntityManager
+      }
+    );
+  });
+
+  it('applies a manager decision to unresolved aggregation siblings in the same transaction', async () => {
+    codingJobService.getAggregationSettingsForCodingJob.mockResolvedValueOnce({
+      aggregationEnabled: true,
+      aggregationThreshold: 2,
+      responseMatchingFlags: ['IGNORE_WHITESPACE']
+    });
+    const representative = {
+      id: 10,
+      variableid: 'VAR_1',
+      value: 'same answer',
+      status_v1: 8,
+      status_v2: 8,
+      code_v2: null,
+      score_v2: null,
+      unit: { id: 1, name: 'UNIT_1' }
+    };
+    const sibling = {
+      id: 11,
+      variableid: 'VAR_1',
+      value: 'sameanswer',
+      status_v1: 8,
+      status_v2: 8,
+      code_v2: null,
+      score_v2: null,
+      unit: { id: 2, name: 'UNIT_1' }
+    };
+    const partialSibling = {
+      id: 12,
+      variableid: 'VAR_1',
+      value: 'same answer',
+      status_v1: 8,
+      status_v2: 8,
+      code_v2: -111,
+      score_v2: null,
+      unit: { id: 3, name: 'UNIT_1' }
+    };
+    const sourceUnit = makeCodingJobUnit({
+      id: 77,
+      response_id: 10,
+      response: representative
+    });
+    const commentsQueryBuilder = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([])
+    };
+    const candidateQueryBuilder = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      setLock: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([representative, sibling, partialSibling])
+    };
+    const reviewDecisionRepository = {
+      find: jest.fn().mockResolvedValue([]),
+      create: jest.fn((decision: Record<string, unknown>) => decision),
+      save: jest.fn().mockResolvedValue(undefined)
+    };
+    const transactionalEntityManager = {
+      findOne: jest.fn()
+        .mockResolvedValueOnce(sourceUnit)
+        .mockResolvedValueOnce(representative),
+      save: jest.fn().mockResolvedValue(undefined),
+      update: jest.fn().mockResolvedValue(undefined),
+      getRepository: jest.fn().mockImplementation((entity: { name: string }) => {
+        if (entity.name === 'CodingJobUnit') {
+          return { createQueryBuilder: jest.fn().mockReturnValue(commentsQueryBuilder) };
+        }
+        if (entity.name === 'ResponseEntity') {
+          return { createQueryBuilder: jest.fn().mockReturnValue(candidateQueryBuilder) };
+        }
+        return reviewDecisionRepository;
+      })
+    };
+    const responseRepository = {
+      manager: {
+        transaction: jest.fn(async callback => callback(transactionalEntityManager))
+      }
+    };
+    const codingFreshnessService = {
+      markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
+    };
+    const localService = createDecisionService({
+      responseRepository,
+      reviewDecisionRepository,
+      codingFreshnessService
+    });
+
+    const result = await localService.applyDoubleCodedResolutions(workspaceId, [{
+      responseId: 10,
+      sourceUnitId: 77,
+      code: 3
+    }], manager);
+
+    expect(sibling).toMatchObject({
+      status_v2: 5,
+      code_v2: 3,
+      score_v2: 1
+    });
+    expect(partialSibling).toMatchObject({
+      status_v2: 8,
+      code_v2: -111,
+      score_v2: null
+    });
+    expect(transactionalEntityManager.save).toHaveBeenCalledWith(
+      expect.any(Function),
+      [sibling]
+    );
+    expect(codingFreshnessService.markManualCodingCurrent).toHaveBeenCalledWith(
+      workspaceId,
+      [10, 11],
+      {
+        clearCoveredReviewJobs: true,
+        manager: transactionalEntityManager
+      }
+    );
+    expect(result).toMatchObject({
+      success: true,
+      appliedCount: 1,
+      failedCount: 0,
+      results: [{
+        responseId: 10,
+        status: 'applied',
+        message: '1 aggregation sibling(s) with existing v2 values were not overwritten'
+      }]
+    });
+  });
+
+  it('dry-runs and applies reconciliation for historical aggregation siblings', async () => {
+    codingJobService.getAggregationSettingsForCodingJob.mockResolvedValue({
+      aggregationEnabled: true,
+      aggregationThreshold: 2,
+      responseMatchingFlags: ['IGNORE_WHITESPACE'],
+      aggregationSettingsVersion: 1,
+      fromJobSnapshot: true
+    });
+    const representative = {
+      id: 10,
+      variableid: 'VAR_1',
+      value: 'same answer',
+      status_v1: 8,
+      status_v2: 5,
+      code_v2: 3,
+      score_v2: 1,
+      unit: { id: 1, name: 'UNIT_1' }
+    };
+    const sibling = {
+      id: 11,
+      variableid: 'VAR_1',
+      value: 'sameanswer',
+      status_v1: 8,
+      status_v2: 8,
+      code_v2: null,
+      score_v2: null,
+      unit: { id: 2, name: 'UNIT_1' }
+    };
+    const partialSibling = {
+      id: 12,
+      variableid: 'VAR_1',
+      value: 'same answer',
+      status_v1: 8,
+      status_v2: 8,
+      code_v2: -111,
+      score_v2: null,
+      unit: { id: 3, name: 'UNIT_1' }
+    };
+    const sourceUnit = makeCodingJobUnit({
+      id: 77,
+      response_id: 10,
+      response: representative
+    });
+    const candidateQueryBuilder = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      setLock: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([representative, sibling, partialSibling])
+    };
+    const transactionalEntityManager = {
+      findOne: jest.fn().mockResolvedValue(representative),
+      find: jest.fn().mockResolvedValue([sourceUnit]),
+      save: jest.fn().mockResolvedValue(undefined),
+      getRepository: jest.fn().mockReturnValue({
+        createQueryBuilder: jest.fn().mockReturnValue(candidateQueryBuilder)
+      })
+    };
+    const responseRepository = {
+      manager: {
+        transaction: jest.fn(async callback => callback(transactionalEntityManager))
+      }
+    };
+    const reviewDecisionRepository = {
+      find: jest.fn().mockResolvedValue([{
+        id: 1,
+        workspace_id: workspaceId,
+        response_id: 10,
+        state: 'applied',
+        effective_code: 3,
+        score: 1,
+        updated_at: new Date('2026-05-19T00:00:00.000Z'),
+        finalized_at: new Date('2026-05-19T00:00:00.000Z')
+      }])
+    };
+    const codingStatisticsService = { invalidateCache: jest.fn() };
+    const codingAnalysisService = { invalidateCache: jest.fn() };
+    const codingValidationService = { invalidateIncompleteVariablesCache: jest.fn() };
+    const codingProgressService = { invalidateAppliedResultsOverviewCache: jest.fn() };
+    const codingFreshnessService = {
+      markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
+    };
+    const localService = createDecisionService({
+      responseRepository,
+      reviewDecisionRepository,
+      codingStatisticsService,
+      codingAnalysisService,
+      codingValidationService,
+      codingProgressService,
+      codingFreshnessService
+    });
+
+    const dryRunResult = await localService.reconcileAppliedAggregationResolutions(
+      workspaceId
+    );
+
+    expect(dryRunResult).toMatchObject({
+      dryRun: true,
+      representativeCount: 1,
+      wouldUpdateCount: 1,
+      updatedCount: 0,
+      protectedPartialCount: 1,
+      failedCount: 0
+    });
+    expect(sibling).toMatchObject({ status_v2: 8, code_v2: null, score_v2: null });
+    expect(partialSibling).toMatchObject({ status_v2: 8, code_v2: -111, score_v2: null });
+    expect(transactionalEntityManager.save).not.toHaveBeenCalled();
+    expect(candidateQueryBuilder.setLock).not.toHaveBeenCalled();
+    expect(codingFreshnessService.markManualCodingCurrent).not.toHaveBeenCalled();
+
+    const applyResult = await localService.reconcileAppliedAggregationResolutions(
+      workspaceId,
+      { dryRun: false, responseIds: [10] }
+    );
+
+    expect(applyResult).toMatchObject({
+      dryRun: false,
+      representativeCount: 1,
+      wouldUpdateCount: 0,
+      updatedCount: 1,
+      protectedPartialCount: 1,
+      failedCount: 0
+    });
+    expect(sibling).toMatchObject({ status_v2: 5, code_v2: 3, score_v2: 1 });
+    expect(partialSibling).toMatchObject({ status_v2: 8, code_v2: -111, score_v2: null });
+    expect(candidateQueryBuilder.setLock).toHaveBeenCalled();
+    expect(codingFreshnessService.markManualCodingCurrent).toHaveBeenCalledWith(
+      workspaceId,
+      [11],
+      {
+        clearCoveredReviewJobs: true,
+        manager: transactionalEntityManager
+      }
+    );
+    expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
+    expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(workspaceId);
+    expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
+    expect(codingProgressService.invalidateAppliedResultsOverviewCache).toHaveBeenCalledWith(workspaceId);
+  });
+
+  it('skips reconciliation when the applied decision no longer matches v2', async () => {
+    const transactionalEntityManager = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 10,
+        status_v2: 5,
+        code_v2: 3,
+        score_v2: 1
+      })
+    };
+    const responseRepository = {
+      manager: {
+        transaction: jest.fn(async callback => callback(transactionalEntityManager))
+      }
+    };
+    const reviewDecisionRepository = {
+      find: jest.fn().mockResolvedValue([{
+        id: 1,
+        workspace_id: workspaceId,
+        response_id: 10,
+        state: 'applied',
+        effective_code: 4,
+        score: 1,
+        updated_at: new Date('2026-05-19T00:00:00.000Z')
+      }])
+    };
+    const localService = createDecisionService({
+      responseRepository,
+      reviewDecisionRepository
+    });
+
+    const result = await localService.reconcileAppliedAggregationResolutions(workspaceId);
+
+    expect(result).toMatchObject({
+      representativeCount: 1,
+      wouldUpdateCount: 0,
+      skippedCount: 1,
+      failedCount: 0,
+      items: [{
+        responseId: 10,
+        status: 'skipped',
+        reason: 'Applied manager decision no longer matches the v2 response'
+      }]
+    });
+  });
+
+  it('skips reconciliation for conflicting historical aggregation snapshots', async () => {
+    const firstSourceUnit = makeCodingJobUnit({ id: 77 });
+    const secondSourceUnit = makeCodingJobUnit({
+      id: 78,
+      coding_job_id: 101,
+      coding_job: {
+        workspace_id: workspaceId,
+        job_definition_id: 12,
+        training_id: null,
+        name: 'Job B',
+        codingJobCoders: [{ user_id: 2, user: { username: 'Coder 2' } }]
+      }
+    });
+    codingJobService.getAggregationSettingsForCodingJob
+      .mockResolvedValueOnce({
+        aggregationEnabled: true,
+        aggregationThreshold: 2,
+        responseMatchingFlags: ['IGNORE_WHITESPACE'],
+        aggregationSettingsVersion: 1,
+        fromJobSnapshot: true
+      })
+      .mockResolvedValueOnce({
+        aggregationEnabled: true,
+        aggregationThreshold: 3,
+        responseMatchingFlags: ['IGNORE_WHITESPACE'],
+        aggregationSettingsVersion: 1,
+        fromJobSnapshot: true
+      });
+    const localService = createDecisionService();
+    const harness = localService as unknown as {
+      getReconciliationSourceUnit: (
+        entityManager: unknown,
+        selectedWorkspaceId: number,
+        decision: unknown
+      ) => Promise<{ sourceUnit: unknown; reason?: string }>;
+    };
+
+    const result = await harness.getReconciliationSourceUnit(
+      { find: jest.fn().mockResolvedValue([firstSourceUnit, secondSourceUnit]) },
+      workspaceId,
+      {
+        response_id: 10,
+        finalized_at: new Date('2026-05-19T00:00:00.000Z')
+      }
+    );
+
+    expect(result).toMatchObject({
+      sourceUnit: null,
+      reason: 'Source jobs have conflicting aggregation snapshots'
+    });
+  });
+
+  it('reports a failed decision when freshness fails so the transaction can roll back all updates', async () => {
+    const response = {
+      id: 10,
+      value: 'answer',
+      status_v2: 8,
+      code_v2: null,
+      score_v2: null
+    };
+    const sourceUnit = makeCodingJobUnit({ id: 77, response_id: 10, response });
+    const commentsQueryBuilder = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([])
+    };
+    const reviewDecisionRepository = {
+      find: jest.fn().mockResolvedValue([]),
+      create: jest.fn((decision: Record<string, unknown>) => decision),
+      save: jest.fn().mockResolvedValue(undefined)
+    };
+    const transactionalEntityManager = {
+      findOne: jest.fn()
+        .mockResolvedValueOnce(sourceUnit)
+        .mockResolvedValueOnce(response),
+      save: jest.fn().mockResolvedValue(undefined),
+      update: jest.fn().mockResolvedValue(undefined),
+      getRepository: jest.fn().mockImplementation((entity: { name: string }) => (
+        entity.name === 'CodingJobUnit' ?
+          { createQueryBuilder: jest.fn().mockReturnValue(commentsQueryBuilder) } :
+          reviewDecisionRepository
+      ))
+    };
+    let rolledBack = false;
+    const responseRepository = {
+      manager: {
+        transaction: jest.fn(async callback => {
+          try {
+            const result = await callback(transactionalEntityManager);
+            return result;
+          } catch (error) {
+            rolledBack = true;
+            throw error;
+          }
+        })
+      }
+    };
+    const codingStatisticsService = { invalidateCache: jest.fn() };
+    const codingAnalysisService = { invalidateCache: jest.fn() };
+    const codingValidationService = { invalidateIncompleteVariablesCache: jest.fn() };
+    const codingProgressService = { invalidateAppliedResultsOverviewCache: jest.fn() };
+    const codingFreshnessService = {
+      markManualCodingCurrent: jest.fn().mockRejectedValue(new Error('freshness failed'))
+    };
+    const localService = createDecisionService({
+      responseRepository,
+      reviewDecisionRepository,
+      codingStatisticsService,
+      codingAnalysisService,
+      codingValidationService,
+      codingProgressService,
+      codingFreshnessService
+    });
+
+    const result = await localService.applyDoubleCodedResolutions(workspaceId, [{
+      responseId: 10,
+      sourceUnitId: 77,
+      code: 3
+    }], manager);
+
+    expect(rolledBack).toBe(true);
+    expect(result).toMatchObject({
+      success: false,
+      appliedCount: 0,
+      failedCount: 1
+    });
+    expect(codingStatisticsService.invalidateCache).not.toHaveBeenCalled();
+    expect(codingAnalysisService.invalidateCache).not.toHaveBeenCalled();
+    expect(codingValidationService.invalidateIncompleteVariablesCache).not.toHaveBeenCalled();
+    expect(codingProgressService.invalidateAppliedResultsOverviewCache).not.toHaveBeenCalled();
   });
 
   it('resolves general review selections through the coding job missing profile', async () => {
