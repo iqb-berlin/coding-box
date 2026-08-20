@@ -509,6 +509,18 @@ export class MissingsProfilesService {
       .filter(code => Number.isInteger(code) && code < 0));
   }
 
+  private isUniqueConstraintViolation(error: unknown): boolean {
+    if (typeof error !== 'object' || error === null) {
+      return false;
+    }
+
+    const databaseError = error as {
+      code?: unknown;
+      driverError?: { code?: unknown };
+    };
+    return databaseError.code === '23505' || databaseError.driverError?.code === '23505';
+  }
+
   async ensureDefaultMissingsProfile(workspaceId: number): Promise<MissingsProfilesDto> {
     try {
       const existingProfile = await this.missingsProfileRepository.findOne({
@@ -531,8 +543,23 @@ export class MissingsProfilesService {
       profileEntity.label = defaultProfile.label;
       profileEntity.missings = defaultProfile.missings as string;
 
-      const savedProfile = await this.missingsProfileRepository.save(profileEntity);
-      return this.toDto(savedProfile);
+      try {
+        const savedProfile = await this.missingsProfileRepository.save(profileEntity);
+        return this.toDto(savedProfile);
+      } catch (error) {
+        if (!this.isUniqueConstraintViolation(error)) {
+          throw error;
+        }
+
+        const concurrentlyCreatedProfile = await this.missingsProfileRepository.findOne({
+          where: { workspace_id: workspaceId, label: this.defaultProfileLabel }
+        });
+        if (!concurrentlyCreatedProfile) {
+          throw error;
+        }
+
+        return await this.enrichIqbStandardEntityIfNeeded(concurrentlyCreatedProfile);
+      }
     } catch (error) {
       this.logger.error(`Error ensuring default missings profile for workspace ${workspaceId}: ${error.message}`, error.stack);
       throw error;

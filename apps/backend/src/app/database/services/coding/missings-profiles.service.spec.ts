@@ -233,6 +233,31 @@ describe('MissingsProfilesService', () => {
     ]);
   });
 
+  it('returns the same default profile when concurrent creation loses the unique constraint race', async () => {
+    let persistedProfile: Record<string, unknown> | null = null;
+    repo.findOne.mockImplementation(async () => persistedProfile);
+    repo.save.mockImplementation(async value => {
+      if (persistedProfile) {
+        throw Object.assign(new Error('duplicate key value violates unique constraint'), {
+          code: '23505'
+        });
+      }
+
+      persistedProfile = { ...value, id: 2 };
+      return persistedProfile;
+    });
+
+    const [firstProfile, secondProfile] = await Promise.all([
+      service.ensureDefaultMissingsProfile(1),
+      service.ensureDefaultMissingsProfile(1)
+    ]);
+
+    expect(firstProfile.id).toBe(2);
+    expect(secondProfile.id).toBe(2);
+    expect(repo.save).toHaveBeenCalledTimes(2);
+    expect(repo.findOne).toHaveBeenCalledTimes(3);
+  });
+
   it('synchronizes legacy IQB standard profiles to the canonical missings', async () => {
     repo.findOne.mockResolvedValueOnce({
       id: 7,
