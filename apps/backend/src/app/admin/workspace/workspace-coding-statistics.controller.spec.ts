@@ -113,6 +113,7 @@ describe('WorkspaceCodingStatisticsController', () => {
       codingReviewService as never,
       {} as never,
       {} as never,
+      {} as never,
       codingReadinessService as never,
       codingReplayService as never,
       {} as never,
