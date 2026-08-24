@@ -129,7 +129,7 @@ export class TestPersonCodingComponent implements OnInit {
   selectedGroups: string[] = [];
   groupsLoading = false;
 
-  autoCoderRun: number = 1;
+  autoCoderRun: 1 | 2 = 1;
   private lastNotifiedCompletedJobId: string | null = null;
 
   ngOnInit(): void {
@@ -596,8 +596,7 @@ export class TestPersonCodingComponent implements OnInit {
       data: {
         job,
         formattedDuration,
-        autoCoderRun:
-          (job as unknown as { autoCoderRun?: number }).autoCoderRun ?? 1
+        autoCoderRun: job.autoCoderRun
       }
     });
   }
