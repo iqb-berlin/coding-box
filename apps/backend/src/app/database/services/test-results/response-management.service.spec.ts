@@ -652,4 +652,37 @@ describe('ResponseManagementService', () => {
       manager
     );
   });
+
+  it('leaves commit, rollback, release, and cache invalidation to an external transaction owner', async () => {
+    const manager = {
+      query: jest.fn().mockResolvedValue([]),
+      update: jest.fn().mockResolvedValue({ affected: 1 })
+    };
+    const queryRunner = {
+      manager,
+      commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(),
+      release: jest.fn()
+    } as unknown as QueryRunner;
+    const service = createService();
+
+    await expect(service.updateResponsesInDatabase(
+      1,
+      [{ id: 10, code_v1: 1 }],
+      queryRunner,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { managedExternally: true }
+    )).resolves.toBe(true);
+
+    expect(manager.update).toHaveBeenCalledTimes(1);
+    expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
+    expect(queryRunner.rollbackTransaction).not.toHaveBeenCalled();
+    expect(queryRunner.release).not.toHaveBeenCalled();
+    expect(workspaceTestResultsService.invalidateWorkspaceStatsCache)
+      .not.toHaveBeenCalled();
+  });
 });

@@ -290,6 +290,34 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     jest.restoreAllMocks();
   });
 
+  it('loads only the matching Unit file for coding-scheme validation', async () => {
+    const service = makeService();
+    mockFileUploadRepository.find.mockResolvedValueOnce([{
+      file_id: 'UNIT_A.XML',
+      data: Buffer.from(
+        '<Unit><BaseVariables><Variable id="v1" alias="v1" type="string"/></BaseVariables></Unit>'
+      )
+    }]);
+
+    const result = await service.getVariableInfoForScheme(
+      7,
+      'unit_a.vocs.xml'
+    );
+
+    const findOptions = mockFileUploadRepository.find.mock.calls[0][0];
+    expect(findOptions.where).toEqual(expect.objectContaining({
+      workspace_id: 7,
+      file_type: 'Unit',
+      file_id_normalized: 'UNIT_A'
+    }));
+    expect(findOptions.select).toEqual(['file_id', 'data']);
+    expect(result).toEqual([expect.objectContaining({
+      id: 'v1',
+      alias: 'v1',
+      type: 'string'
+    })]);
+  });
+
   it('marks auto-coding and manual coding stale after coding scheme rule changes', async () => {
     const service = makeService();
     const oldData = createCodingScheme({ processing: [] });
