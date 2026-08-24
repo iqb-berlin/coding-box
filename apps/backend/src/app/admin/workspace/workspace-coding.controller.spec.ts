@@ -52,14 +52,27 @@ describe('WorkspaceCodingController', () => {
     expect(codingProcessService.codeTestPersons).not.toHaveBeenCalled();
   });
 
-  it('defaults missing autocoder run to the first run', async () => {
+  it('rejects a missing autocoder run before queue checks', async () => {
     const controller = createController();
 
-    await controller.codeTestPersons('1,2', 7, undefined as unknown as string);
+    await expect(
+      controller.codeTestPersons('1,2', 7, undefined as unknown as string)
+    ).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(autoCodingRunGuardService.assertAutoCodingRunCanStart)
-      .toHaveBeenCalledWith(7, 1);
-    expect(codingProcessService.codeTestPersons).toHaveBeenCalledWith(7, '1,2', 1);
+    expect(jobQueueService.assertNoDependencyConflicts).not.toHaveBeenCalled();
+    expect(autoCodingRunGuardService.assertAutoCodingRunCanStart).not.toHaveBeenCalled();
+    expect(codingProcessService.codeTestPersons).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty autocoder run before queue checks', async () => {
+    const controller = createController();
+
+    await expect(controller.codeTestPersons('1,2', 7, ''))
+      .rejects.toBeInstanceOf(BadRequestException);
+
+    expect(jobQueueService.assertNoDependencyConflicts).not.toHaveBeenCalled();
+    expect(autoCodingRunGuardService.assertAutoCodingRunCanStart).not.toHaveBeenCalled();
+    expect(codingProcessService.codeTestPersons).not.toHaveBeenCalled();
   });
 
   it('accepts a single autocoder run query value from an array', async () => {

@@ -33,11 +33,13 @@ describe('CodingExecutionService', () => {
 
   it('should code test persons', () => {
     const mockRes = { totalResponses: 1, statusCounts: {} };
-    service.codeTestPersons(1, [10]).subscribe(res => {
+    service.codeTestPersons(1, [10], 2).subscribe(res => {
       expect(res).toEqual(mockRes);
     });
 
-    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding?testPersons=10`);
+    const req = httpMock.expectOne(
+      `${mockServerUrl}admin/workspace/1/coding?testPersons=10&autoCoderRun=2`
+    );
     expect(req.request.method).toBe('GET');
     req.flush(mockRes);
   });

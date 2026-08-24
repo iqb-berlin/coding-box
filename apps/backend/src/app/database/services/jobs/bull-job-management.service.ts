@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Job } from 'bull';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
+import { requireAutoCoderRun } from '../../../job-queue/auto-coder-run.util';
 import { CodingStatistics } from '../shared';
 
 @Injectable()
@@ -81,13 +82,18 @@ export class BullJobManagementService {
         };
       }
 
-      await this.jobQueueService.assertNoDependencyConflicts('test-person-coding', bullJob.data.workspaceId);
-
-      const newJob = await this.jobQueueService.addTestPersonCodingJob({
-        workspaceId: bullJob.data.workspaceId,
-        personIds: bullJob.data.personIds,
-        groupNames: bullJob.data.groupNames
-      });
+      const restartData = {
+        ...bullJob.data,
+        isPaused: false,
+        autoCoderRun: requireAutoCoderRun(bullJob.data.autoCoderRun)
+      };
+      await this.jobQueueService.assertNoDependencyConflicts(
+        'test-person-coding',
+        restartData.workspaceId
+      );
+      const newJob = await this.jobQueueService.addTestPersonCodingJob(
+        restartData
+      );
 
       await this.jobQueueService.deleteTestPersonCodingJob(jobId);
 
@@ -190,7 +196,7 @@ export class BullJobManagementService {
           durationMs: state === 'completed' && bullJob.finishedOn && bullJob.timestamp ?
             bullJob.finishedOn - bullJob.timestamp :
             undefined,
-          autoCoderRun: bullJob.data.autoCoderRun || 1,
+          autoCoderRun: bullJob.data.autoCoderRun,
           source: bullJob.data.source,
           freshnessVersion: bullJob.data.freshnessVersion,
           freshnessStates: bullJob.data.freshnessStates,
