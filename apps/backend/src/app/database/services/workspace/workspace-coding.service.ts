@@ -48,7 +48,7 @@ export class WorkspaceCodingService {
   async processTestPersonsBatch(
     workspace_id: number,
     personIds: string[],
-    autoCoderRun: number = 1,
+    autoCoderRun: number,
     progressCallback?: (progress: number) => void,
     jobId?: string,
     unitIds?: number[],
@@ -79,7 +79,7 @@ export class WorkspaceCodingService {
   async codeTestPersons(
     workspace_id: number,
     testPersonIdsOrGroups: string,
-    autoCoderRun: number = 1
+    autoCoderRun: number
   ): Promise<CodingStatisticsWithJob> {
     return this.codingProcessService.codeTestPersons(
       workspace_id,

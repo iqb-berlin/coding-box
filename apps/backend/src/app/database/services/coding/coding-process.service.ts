@@ -80,7 +80,7 @@ export class CodingProcessService {
   async codeTestPersons(
     workspace_id: number,
     testPersonIdsOrGroups: string,
-    autoCoderRun: number = 1
+    autoCoderRun: number
   ): Promise<CodingStatisticsWithJob> {
     const resolvedAutoCoderRun = this.normalizeAutoCoderRun(autoCoderRun);
 
@@ -187,7 +187,7 @@ export class CodingProcessService {
   async codeUnitIds(
     workspace_id: number,
     unitIds: number[],
-    autoCoderRun: number = 1,
+    autoCoderRun: number,
     metadata: UnitCodingJobMetadata = {}
   ): Promise<CodingStatisticsWithJob> {
     const resolvedAutoCoderRun = this.normalizeAutoCoderRun(autoCoderRun);
@@ -261,7 +261,7 @@ export class CodingProcessService {
   async processTestPersonsBatch(
     workspace_id: number,
     personIds: string[],
-    autoCoderRun: number = 1,
+    autoCoderRun: number,
     progressCallback?: (progress: number) => void,
     jobId?: string,
     targetUnitIds?: number[],
@@ -918,7 +918,7 @@ export class CodingProcessService {
     fileIdToCodingSchemeMap: Map<string, CodingScheme>,
     allResponses: ResponseEntity[],
     statistics: CodingStatistics,
-    autoCoderRun: number = 1,
+    autoCoderRun: 1 | 2,
     jobId?: string,
     progressCallback?: (progress: number) => void
   ): Promise<{

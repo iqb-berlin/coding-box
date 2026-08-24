@@ -535,7 +535,7 @@ export class TestPersonCodingService {
   codeTestPersons(
     workspaceId: number,
     testPersonIds: string,
-    autoCoderRun: number = 1
+    autoCoderRun: 1 | 2
   ): Observable<CodingStatisticsWithJob> {
     const params = new HttpParams()
       .set('testPersons', testPersonIds)

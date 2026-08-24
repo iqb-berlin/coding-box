@@ -15,7 +15,8 @@ describe('TestPersonCodingProcessor', () => {
     id: 'job-1',
     data: {
       workspaceId: 1,
-      personIds: Array.from({ length: 100 }, (_, index) => `person-${index + 1}`)
+      personIds: Array.from({ length: 100 }, (_, index) => `person-${index + 1}`),
+      autoCoderRun: 1
     },
     getState: jest.fn().mockResolvedValue('active'),
     progress: jest.fn().mockResolvedValue(undefined),
@@ -89,4 +90,25 @@ describe('TestPersonCodingProcessor', () => {
       statusCounts: { CODED: 10 }
     });
   });
+
+  it.each([undefined, 3])(
+    'fails before processing when autoCoderRun is %s',
+    async autoCoderRun => {
+      const workspaceCodingService = {
+        processTestPersonsBatch: jest.fn()
+      };
+      const job = createJob(jest.fn());
+      (job.data as { autoCoderRun?: number }).autoCoderRun = autoCoderRun;
+      const processor = new TestPersonCodingProcessor(
+        workspaceCodingService as unknown as WorkspaceCodingService
+      );
+
+      await expect(processor.process(job)).rejects.toThrow(
+        'autoCoderRun must be 1 or 2'
+      );
+
+      expect(workspaceCodingService.processTestPersonsBatch).not.toHaveBeenCalled();
+      expect(job.progress).not.toHaveBeenCalled();
+    }
+  );
 });

@@ -159,4 +159,25 @@ describe('TestPersonCodingComponent', () => {
       jest.useRealTimers();
     }
   });
+
+  it('should not present a missing auto-coding run as run 1', () => {
+    const dialog = (component as unknown as { dialog: MatDialog }).dialog;
+    const openDialog = jest
+      .spyOn(dialog, 'open')
+      .mockReturnValue({} as never);
+
+    component.showJobResult({
+      jobId: 'legacy-job',
+      status: 'completed',
+      progress: 100,
+      result: { totalResponses: 1, statusCounts: { CODED: 1 } }
+    });
+
+    expect(openDialog).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        data: expect.objectContaining({ autoCoderRun: undefined })
+      })
+    );
+  });
 });

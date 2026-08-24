@@ -15,6 +15,7 @@ import {
   CodebookTrainingRequirementFilter
 } from '../../../../../api-dto/coding/codebook-content-setting';
 import { BackgroundExportRequest } from '../../../../../api-dto/coding/export-request.dto';
+import { AutoCoderRun, requireAutoCoderRun } from './auto-coder-run.util';
 
 type ProcessOverviewValidationTask = Pick<
 ValidationTask,
@@ -39,7 +40,7 @@ export interface TestPersonCodingJobData {
   unitIds?: number[];
   groupNames?: string;
   isPaused?: boolean;
-  autoCoderRun?: number;
+  autoCoderRun: AutoCoderRun;
   source?: 'manual-selection' | 'coding-freshness';
   freshnessVersion?: 'v1' | 'v3';
   freshnessStates?: ('PENDING' | 'STALE')[];
@@ -637,19 +638,23 @@ export class JobQueueService {
     data: TestPersonCodingJobData,
     options?: JobOptions
   ): Promise<Job<TestPersonCodingJobData>> {
+    const validatedData = {
+      ...data,
+      autoCoderRun: requireAutoCoderRun(data.autoCoderRun)
+    };
     const existing = await this.findActiveJob<TestPersonCodingJobData>(
       this.testPersonCodingQueue,
-      d => d.workspaceId === data.workspaceId
+      d => d.workspaceId === validatedData.workspaceId
     );
     if (existing) {
       throw new ConflictException(
-        `A test person coding job is already running for workspace ${data.workspaceId} (job ${existing.id})`
+        `A test person coding job is already running for workspace ${validatedData.workspaceId} (job ${existing.id})`
       );
     }
     this.logger.log(
-      `Adding test person coding job for workspace ${data.workspaceId}`
+      `Adding test person coding job for workspace ${validatedData.workspaceId}`
     );
-    return this.testPersonCodingQueue.add(data, options);
+    return this.testPersonCodingQueue.add(validatedData, options);
   }
 
   async getTestPersonCodingJob(
