@@ -121,7 +121,7 @@
 
           <ng-container matColumnDef="autoCoderRun">
             <th mat-header-cell *matHeaderCellDef>{{ 'test-person-coding.jobs.table.coding-run' | translate }}</th>
-            <td mat-cell *matCellDef="let job">{{ job.autoCoderRun || 1 }}</td>
+            <td mat-cell *matCellDef="let job">{{ job.autoCoderRun ?? '-' }}</td>
           </ng-container>
 
           <ng-container matColumnDef="duration">

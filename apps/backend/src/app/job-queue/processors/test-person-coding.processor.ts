@@ -7,6 +7,7 @@ import { Job } from 'bull';
 import { TestPersonCodingJobData } from '../job-queue.service';
 import { CodingStatistics } from '../../database/services/shared';
 import { WorkspaceCodingService } from '../../database/services/workspace';
+import { requireAutoCoderRun } from '../auto-coder-run.util';
 
 @Injectable()
 @Processor('test-person-coding')
@@ -53,6 +54,7 @@ export class TestPersonCodingProcessor {
     try {
       const BATCH_SIZE = 50;
       const totalPersons = job.data.personIds.length;
+      const autoCoderRun = requireAutoCoderRun(job.data.autoCoderRun);
       const combinedResult: CodingStatistics = { totalResponses: 0, statusCounts: {} };
 
       await job.progress(0);
@@ -82,7 +84,7 @@ export class TestPersonCodingProcessor {
         const batchResult = await this.workspaceCodingService.processTestPersonsBatch(
           job.data.workspaceId,
           batchPersonIds,
-          job.data.autoCoderRun || 1,
+          autoCoderRun,
           progressCallback,
           job.id.toString(),
           job.data.unitIds,

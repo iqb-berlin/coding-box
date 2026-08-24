@@ -11,15 +11,21 @@ export class CodingExecutionService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
 
-  codeTestPersons(workspace_id: number, testPersonIds: number[]): Observable<{
-    totalResponses: number;
-    statusCounts: {
-      [key: string]: number;
-    };
-    jobId?: string;
-    message?: string;
-  }> {
-    const params = new HttpParams().set('testPersons', testPersonIds.join(','));
+  codeTestPersons(
+    workspace_id: number,
+    testPersonIds: number[],
+    autoCoderRun: 1 | 2
+  ): Observable<{
+      totalResponses: number;
+      statusCounts: {
+        [key: string]: number;
+      };
+      jobId?: string;
+      message?: string;
+    }> {
+    const params = new HttpParams()
+      .set('testPersons', testPersonIds.join(','))
+      .set('autoCoderRun', autoCoderRun.toString());
     return this.http
       .get<{
       totalResponses: number;
