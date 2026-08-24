@@ -35,6 +35,10 @@ import {
   lockWorkspaceTestResultsMutation,
   unlockWorkspaceTestResultsMutation
 } from '../shared/workspace-test-results-lock.util';
+import {
+  lockWorkspaceFilesMutation,
+  unlockWorkspaceFilesMutation
+} from '../shared/workspace-files-lock.util';
 
 type UnitCodingJobMetadata = {
   source?: 'manual-selection' | 'coding-freshness';
@@ -53,14 +57,6 @@ type ProcessTestPersonsBatchOptions = {
 export type AutocoderPreflightContext = {
   codingSchemeValidations: Map<string, Promise<void>>;
   fileRevision: string;
-};
-
-export type PendingAutocoderFinalization = {
-  id: number;
-  workspaceId: number;
-  autoCoderRun: 1 | 2;
-  jobId: string;
-  attempts: number;
 };
 
 export type AutocoderBatchPlan = {
@@ -757,7 +753,6 @@ export class CodingProcessService {
     workspaceId: number,
     expectedRevision: string
   ): Promise<void> {
-    await queryRunner.query('LOCK TABLE file_upload IN SHARE MODE');
     const rows = await queryRunner.query(
       `SELECT MD5(COALESCE(STRING_AGG(
          CONCAT_WS(':', id::text, file_id, file_type, file_size::text,
@@ -785,6 +780,12 @@ export class CodingProcessService {
     try {
       await queryRunner.connect();
       await lockWorkspaceTestResultsMutation(queryRunner, workspaceId);
+      try {
+        await lockWorkspaceFilesMutation(queryRunner, workspaceId);
+      } catch (error) {
+        await unlockWorkspaceTestResultsMutation(queryRunner, workspaceId);
+        throw error;
+      }
       return queryRunner;
     } catch (error) {
       if (!queryRunner.isReleased) {
@@ -800,102 +801,19 @@ export class CodingProcessService {
     await queryRunner.startTransaction('READ COMMITTED');
   }
 
-  async scheduleAutocoderFinalization(
-    queryRunner: QueryRunner,
-    workspaceId: number,
-    autoCoderRun: 1 | 2,
-    jobId: string
-  ): Promise<number> {
-    const rows = await queryRunner.query(
-      `INSERT INTO autocoder_finalization_task
-         (workspace_id, auto_coder_run, job_id, next_attempt_at)
-       VALUES ($1, $2, $3, NOW() + INTERVAL '1 minute')
-       ON CONFLICT (job_id) DO UPDATE SET
-         workspace_id = EXCLUDED.workspace_id,
-         auto_coder_run = EXCLUDED.auto_coder_run,
-         next_attempt_at = NOW() + INTERVAL '1 minute',
-         locked_until = NULL,
-         updated_at = NOW()
-       RETURNING id`,
-      [workspaceId, autoCoderRun, jobId]
-    ) as Array<{ id: number | string }>;
-    return Number(rows[0].id);
-  }
-
-  async claimPendingAutocoderFinalizations(
-    limit = 10
-  ): Promise<PendingAutocoderFinalization[]> {
-    const rows = await this.responseRepository.query(
-      `WITH candidates AS (
-         SELECT id
-         FROM autocoder_finalization_task
-         WHERE next_attempt_at <= NOW()
-           AND (locked_until IS NULL OR locked_until < NOW())
-         ORDER BY next_attempt_at, id
-         FOR UPDATE SKIP LOCKED
-         LIMIT $1
-       )
-       UPDATE autocoder_finalization_task AS task
-       SET locked_until = NOW() + INTERVAL '5 minutes',
-           updated_at = NOW()
-       FROM candidates
-       WHERE task.id = candidates.id
-       RETURNING task.id,
-         task.workspace_id AS "workspaceId",
-         task.auto_coder_run AS "autoCoderRun",
-         task.job_id AS "jobId",
-         task.attempts`,
-      [Math.max(1, Math.floor(limit))]
-    ) as Array<{
-      id: number | string;
-      workspaceId: number | string;
-      autoCoderRun: number | string;
-      jobId: string;
-      attempts: number | string;
-    }>;
-    return rows.map(row => ({
-      id: Number(row.id),
-      workspaceId: Number(row.workspaceId),
-      autoCoderRun: this.normalizeAutoCoderRun(Number(row.autoCoderRun)),
-      jobId: row.jobId,
-      attempts: Number(row.attempts)
-    }));
-  }
-
-  async completeAutocoderFinalization(taskId: number): Promise<void> {
-    await this.responseRepository.query(
-      'DELETE FROM autocoder_finalization_task WHERE id = $1',
-      [taskId]
-    );
-  }
-
-  async recordAutocoderFinalizationFailure(
-    taskId: number,
-    error: unknown
-  ): Promise<void> {
-    const message = error instanceof Error ? error.message : String(error);
-    await this.responseRepository.query(
-      `UPDATE autocoder_finalization_task
-       SET attempts = attempts + 1,
-           last_error = $2,
-           next_attempt_at = NOW() +
-             (LEAST(POWER(2, attempts), 60)::text || ' minutes')::interval,
-           locked_until = NULL,
-           updated_at = NOW()
-       WHERE id = $1`,
-      [taskId, message.slice(0, 4000)]
-    );
-  }
-
   async releaseAutocoderPersistenceSession(
     queryRunner: QueryRunner,
     workspaceId: number
   ): Promise<void> {
     try {
-      await unlockWorkspaceTestResultsMutation(queryRunner, workspaceId);
+      await unlockWorkspaceFilesMutation(queryRunner, workspaceId);
     } finally {
-      if (!queryRunner.isReleased) {
-        await queryRunner.release();
+      try {
+        await unlockWorkspaceTestResultsMutation(queryRunner, workspaceId);
+      } finally {
+        if (!queryRunner.isReleased) {
+          await queryRunner.release();
+        }
       }
     }
   }

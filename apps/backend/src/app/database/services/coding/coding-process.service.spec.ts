@@ -296,6 +296,10 @@ describe('CodingProcessService', () => {
         'SELECT pg_advisory_lock($1::int, $2::int)',
         [774020251, 7]
       );
+      expect(mockQueryRunner.query).toHaveBeenCalledWith(
+        'SELECT pg_advisory_lock($1::int, $2::int)',
+        [774020252, 7]
+      );
       expect(mockQueryRunner.startTransaction).not.toHaveBeenCalled();
 
       await service.startAutocoderPersistenceTransaction(runner);
@@ -303,7 +307,11 @@ describe('CodingProcessService', () => {
         .toHaveBeenCalledWith('READ COMMITTED');
 
       await service.releaseAutocoderPersistenceSession(runner, 7);
-      expect(mockQueryRunner.query).toHaveBeenLastCalledWith(
+      expect(mockQueryRunner.query).toHaveBeenCalledWith(
+        'SELECT pg_advisory_unlock($1::int, $2::int)',
+        [774020252, 7]
+      );
+      expect(mockQueryRunner.query).toHaveBeenCalledWith(
         'SELECT pg_advisory_unlock($1::int, $2::int)',
         [774020251, 7]
       );
@@ -326,10 +334,8 @@ describe('CodingProcessService', () => {
       );
     });
 
-    it('rejects a changed file revision while holding the file table lock', async () => {
-      mockQueryRunner.query
-        .mockResolvedValueOnce(undefined)
-        .mockResolvedValueOnce([{ revision: 'files-v2' }]);
+    it('rejects a changed file revision while holding the workspace file lock', async () => {
+      mockQueryRunner.query.mockResolvedValueOnce([{ revision: 'files-v2' }]);
 
       await expect(service.assertAutocoderFileRevisionForCommit(
         mockQueryRunner as never,
@@ -337,27 +343,9 @@ describe('CodingProcessService', () => {
         'files-v1'
       )).rejects.toThrow('Test files changed during autocoder preflight');
 
-      expect(mockQueryRunner.query).toHaveBeenNthCalledWith(
-        1,
-        'LOCK TABLE file_upload IN SHARE MODE'
-      );
-    });
-  });
-
-  describe('autocoder finalization outbox', () => {
-    it('schedules finalization in the caller-owned transaction', async () => {
-      mockQueryRunner.query.mockResolvedValueOnce([{ id: '42' }]);
-
-      await expect(service.scheduleAutocoderFinalization(
-        mockQueryRunner as never,
-        7,
-        2,
-        'job-123'
-      )).resolves.toBe(42);
-
       expect(mockQueryRunner.query).toHaveBeenCalledWith(
-        expect.stringContaining('INSERT INTO autocoder_finalization_task'),
-        [7, 2, 'job-123']
+        expect.stringContaining('FROM file_upload'),
+        [7]
       );
     });
   });

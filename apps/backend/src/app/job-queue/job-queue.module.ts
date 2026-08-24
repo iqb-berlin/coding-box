@@ -13,6 +13,7 @@ import { CodingAnalysisProcessor } from './processors/coding-analysis.processor'
 import { VariableAnalysisProcessor } from './processors/variable-analysis.processor';
 import { ExternalCodingImportProcessor } from './processors/external-coding-import.processor';
 import { getEnabledProcessorNames } from './job-queue-processor-selection';
+import { AutocoderRunService } from './autocoder-run.service';
 // eslint-disable-next-line import/no-cycle
 import { CodingModule } from '../coding/coding.module';
 // eslint-disable-next-line import/no-cycle
@@ -56,6 +57,7 @@ export function getEnabledJobQueueProcessors(
     CacheClientModule
   ],
   providers: [
+    AutocoderRunService,
     ...getEnabledJobQueueProcessors()
   ],
   exports: [JobQueueClientModule]

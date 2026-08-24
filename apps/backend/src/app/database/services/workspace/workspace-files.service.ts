@@ -80,6 +80,7 @@ import {
 } from '../../../utils/regex-search.util';
 import { hasVisibleManualInstruction } from '../../../utils/manual-instruction.util';
 import { isExportWorkerProcess } from '../../../export-worker/export-worker-role';
+import { withWorkspaceFilesMutationLock } from '../shared/workspace-files-lock.util';
 
 type WorkspaceUnitVisibility = {
   globalIgnoredUnits: Set<string>;
@@ -849,6 +850,17 @@ export class WorkspaceFilesService implements OnModuleInit {
     workspace_id: number,
     fileIds: string[]
   ): Promise<boolean> {
+    return withWorkspaceFilesMutationLock(
+      this.fileUploadRepository.manager.connection,
+      workspace_id,
+      () => this.deleteTestFilesUnlocked(workspace_id, fileIds)
+    );
+  }
+
+  private async deleteTestFilesUnlocked(
+    workspace_id: number,
+    fileIds: string[]
+  ): Promise<boolean> {
     this.logger.log(`Delete test files for workspace ${workspace_id}`);
     const numericIds = Array.from(new Set(
       fileIds
@@ -916,6 +928,16 @@ export class WorkspaceFilesService implements OnModuleInit {
   }
 
   async createDummyTestTakerFile(workspaceId: number): Promise<boolean> {
+    return withWorkspaceFilesMutationLock(
+      this.fileUploadRepository.manager.connection,
+      workspaceId,
+      () => this.createDummyTestTakerFileUnlocked(workspaceId)
+    );
+  }
+
+  private async createDummyTestTakerFileUnlocked(
+    workspaceId: number
+  ): Promise<boolean> {
     try {
       const booklets = await this.fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: 'Booklet' }
@@ -1151,6 +1173,24 @@ ${bookletRefs}
   }
 
   async uploadTestFiles(
+    workspace_id: number,
+    originalFiles: FileIo[],
+    overwriteExisting: boolean,
+    overwriteFileIds?: string[]
+  ): Promise<TestFilesUploadResultDto> {
+    return withWorkspaceFilesMutationLock(
+      this.fileUploadRepository.manager.connection,
+      workspace_id,
+      () => this.uploadTestFilesUnlocked(
+        workspace_id,
+        originalFiles,
+        overwriteExisting,
+        overwriteFileIds
+      )
+    );
+  }
+
+  private async uploadTestFilesUnlocked(
     workspace_id: number,
     originalFiles: FileIo[],
     overwriteExisting: boolean,
@@ -2110,6 +2150,27 @@ ${bookletRefs}
     entries: Record<string, unknown>[]
   ): Promise<TestFilesUploadResultDto>;
   async testCenterImport(
+    entries: Record<string, unknown>[],
+    overwriteFileIds?: string[]
+  ): Promise<TestFilesUploadResultDto> {
+    const workspaceId = Number(
+      (entries[0] as { workspace_id?: unknown } | undefined)?.workspace_id
+    );
+    const runImport = () => this.testCenterImportUnlocked(
+      entries,
+      overwriteFileIds
+    );
+    if (Number.isInteger(workspaceId) && workspaceId > 0) {
+      return withWorkspaceFilesMutationLock(
+        this.fileUploadRepository.manager.connection,
+        workspaceId,
+        runImport
+      );
+    }
+    return runImport();
+  }
+
+  private async testCenterImportUnlocked(
     entries: Record<string, unknown>[],
     overwriteFileIds?: string[]
   ): Promise<TestFilesUploadResultDto> {

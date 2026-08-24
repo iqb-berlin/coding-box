@@ -1,10 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import type { QueryRunner } from 'typeorm';
-import {
-  type AutocoderPreflightContext,
-  CodingProcessService,
-  type AutocoderBatchPlan
-} from '../coding/coding-process.service';
+import { Injectable } from '@nestjs/common';
+import { CodingProcessService } from '../coding/coding-process.service';
 import { CodingValidationService } from '../coding/coding-validation.service';
 import { DoubleCodingReviewQueryService } from '../coding/double-coding-review-query.service';
 import { CodingAnalysisService } from '../coding/coding-analysis.service';
@@ -32,8 +27,6 @@ import { DoubleCodedReviewResponseDto } from '../../../../../../../api-dto/codin
 
 @Injectable()
 export class WorkspaceCodingService {
-  private readonly logger = new Logger(WorkspaceCodingService.name);
-
   constructor(
     private codingStatisticsService: CodingStatisticsService,
     private variableAnalysisReplayService: VariableAnalysisReplayService,
@@ -83,145 +76,6 @@ export class WorkspaceCodingService {
     );
 
     return statistics;
-  }
-
-  async preflightTestPersonsBatch(
-    workspace_id: number,
-    personIds: string[],
-    autoCoderRun: number,
-    jobId?: string,
-    unitIds?: number[],
-    freshnessSourceRevision?: number,
-    progressCallback?: (progress: number) => void,
-    preflightContext?: AutocoderPreflightContext
-  ): Promise<{
-      statistics: CodingStatistics;
-      plan?: AutocoderBatchPlan;
-    }> {
-    let plan: AutocoderBatchPlan | undefined;
-    const statistics = await this.codingProcessService.processTestPersonsBatch(
-      workspace_id,
-      personIds,
-      autoCoderRun,
-      progressCallback,
-      jobId,
-      unitIds,
-      freshnessSourceRevision,
-      {
-        persist: false,
-        preflightContext,
-        capturePlan: capturedPlan => {
-          plan = capturedPlan;
-        }
-      }
-    );
-    return { statistics, plan };
-  }
-
-  createAutocoderPreflightContext(
-    fileRevision: string
-  ): AutocoderPreflightContext {
-    return this.codingProcessService.createAutocoderPreflightContext(
-      fileRevision
-    );
-  }
-
-  async getAutocoderFileRevision(workspaceId: number): Promise<string> {
-    return this.codingProcessService.getAutocoderFileRevision(workspaceId);
-  }
-
-  async prepareAutocoderPreflight(workspaceId: number): Promise<string> {
-    return this.codingProcessService.prepareAutocoderPreflight(workspaceId);
-  }
-
-  async assertAutocoderFileRevision(
-    workspaceId: number,
-    expectedRevision: string
-  ): Promise<void> {
-    await this.codingProcessService.assertAutocoderFileRevision(
-      workspaceId,
-      expectedRevision
-    );
-  }
-
-  async assertAutocoderFileRevisionForCommit(
-    queryRunner: QueryRunner,
-    workspaceId: number,
-    expectedRevision: string
-  ): Promise<void> {
-    await this.codingProcessService.assertAutocoderFileRevisionForCommit(
-      queryRunner,
-      workspaceId,
-      expectedRevision
-    );
-  }
-
-  async beginAutocoderPersistenceSession(
-    workspaceId: number
-  ): Promise<QueryRunner> {
-    return this.codingProcessService.beginAutocoderPersistenceSession(
-      workspaceId
-    );
-  }
-
-  async startAutocoderPersistenceTransaction(
-    queryRunner: QueryRunner
-  ): Promise<void> {
-    await this.codingProcessService.startAutocoderPersistenceTransaction(
-      queryRunner
-    );
-  }
-
-  async scheduleAutocoderFinalization(
-    queryRunner: QueryRunner,
-    workspaceId: number,
-    autoCoderRun: 1 | 2,
-    jobId: string
-  ): Promise<number> {
-    return this.codingProcessService.scheduleAutocoderFinalization(
-      queryRunner,
-      workspaceId,
-      autoCoderRun,
-      jobId
-    );
-  }
-
-  async persistAutocoderBatchPlan(
-    plan: AutocoderBatchPlan,
-    queryRunner: QueryRunner,
-    jobId?: string,
-    progressCallback?: (progress: number) => void
-  ): Promise<boolean> {
-    return this.codingProcessService.persistAutocoderBatchPlan(
-      plan,
-      queryRunner,
-      jobId,
-      progressCallback
-    );
-  }
-
-  async commitAutocoderPersistenceTransaction(
-    queryRunner: QueryRunner
-  ): Promise<void> {
-    await queryRunner.commitTransaction();
-  }
-
-  async rollbackAutocoderPersistenceTransaction(
-    queryRunner: QueryRunner
-  ): Promise<void> {
-    if (queryRunner.isTransactionActive) {
-      await queryRunner.rollbackTransaction();
-    }
-  }
-
-  async releaseAutocoderPersistenceSession(
-    queryRunner: QueryRunner,
-    workspaceId: number
-  ): Promise<void> {
-    await this.codingProcessService.releaseAutocoderPersistenceSession(
-      queryRunner,
-      workspaceId
-    );
   }
 
   async finalizeAutocoderPersistence(
@@ -278,49 +132,6 @@ export class WorkspaceCodingService {
         `Autocoder cache finalization incomplete: ${failures.join('; ')}`
       );
     }
-  }
-
-  async completeAutocoderFinalization(taskId: number): Promise<void> {
-    await this.codingProcessService.completeAutocoderFinalization(taskId);
-  }
-
-  async recordAutocoderFinalizationFailure(
-    taskId: number,
-    error: unknown
-  ): Promise<void> {
-    await this.codingProcessService.recordAutocoderFinalizationFailure(
-      taskId,
-      error
-    );
-  }
-
-  async recoverPendingAutocoderFinalizations(limit = 10): Promise<number> {
-    const tasks = await this.codingProcessService
-      .claimPendingAutocoderFinalizations(limit);
-    let completed = 0;
-
-    for (const task of tasks) {
-      try {
-        await this.finalizeAutocoderPersistence(
-          task.workspaceId,
-          task.autoCoderRun
-        );
-        await this.completeAutocoderFinalization(task.id);
-        completed += 1;
-        this.logger.log(
-          `Recovered autocoder finalization task ${task.id} for job ${task.jobId}`
-        );
-      } catch (error) {
-        await this.recordAutocoderFinalizationFailure(task.id, error);
-        const message = error instanceof Error ? error.message : String(error);
-        this.logger.warn(
-          `Autocoder finalization task ${task.id} for job ${task.jobId} ` +
-          `remains pending after attempt ${task.attempts + 1}: ${message}`
-        );
-      }
-    }
-
-    return completed;
   }
 
   async codeTestPersons(
