@@ -2333,11 +2333,14 @@ ${bookletRefs}
     schemeFileId: string
   ): Promise<VariableInfo[]> {
     try {
+      const expectedUnitId = this.normalizeFileUnitId(schemeFileId);
       const unitFiles = await this.fileUploadRepository.find({
         where: {
           workspace_id: workspaceId,
-          file_type: 'Unit'
-        }
+          file_type: 'Unit',
+          file_id_normalized: expectedUnitId
+        },
+        select: ['file_id', 'data']
       });
 
       if (!unitFiles || unitFiles.length === 0) {
@@ -2345,9 +2348,8 @@ ${bookletRefs}
         return [];
       }
 
-      const expectedUnitId = schemeFileId.toUpperCase().replace(/\.VOCS$/, '');
       const filteredUnitFiles = unitFiles.filter(
-        file => file.file_id.toUpperCase() === expectedUnitId &&
+        file => this.normalizeFileIdForLookup(file.file_id) === expectedUnitId &&
           !file.file_id.toUpperCase().includes('VOCS')
       );
 

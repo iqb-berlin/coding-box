@@ -22,6 +22,26 @@ export async function lockWorkspaceTestResultsMutationInTransaction(
   );
 }
 
+export async function lockWorkspaceTestResultsMutation(
+  queryRunner: QueryRunner,
+  workspaceId: number
+): Promise<void> {
+  await queryRunner.query(
+    'SELECT pg_advisory_lock($1::int, $2::int)',
+    [WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE, normalizeWorkspaceId(workspaceId)]
+  );
+}
+
+export async function unlockWorkspaceTestResultsMutation(
+  queryRunner: QueryRunner,
+  workspaceId: number
+): Promise<void> {
+  await queryRunner.query(
+    'SELECT pg_advisory_unlock($1::int, $2::int)',
+    [WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE, normalizeWorkspaceId(workspaceId)]
+  );
+}
+
 export async function withWorkspaceTestResultsMutationLock<T>(
   connection: QueryRunnerFactory,
   workspaceId: number,
@@ -34,18 +54,15 @@ export async function withWorkspaceTestResultsMutationLock<T>(
   await queryRunner.connect();
 
   try {
-    await queryRunner.query(
-      'SELECT pg_advisory_lock($1::int, $2::int)',
-      [WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE, normalizedWorkspaceId]
-    );
+    await lockWorkspaceTestResultsMutation(queryRunner, normalizedWorkspaceId);
     locked = true;
     return await callback();
   } finally {
     try {
       if (locked) {
-        await queryRunner.query(
-          'SELECT pg_advisory_unlock($1::int, $2::int)',
-          [WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE, normalizedWorkspaceId]
+        await unlockWorkspaceTestResultsMutation(
+          queryRunner,
+          normalizedWorkspaceId
         );
       }
     } finally {

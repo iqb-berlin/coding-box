@@ -26,7 +26,8 @@ import {
 } from '../coding';
 import {
   ResponseManagementService,
-  VariableAnalysisReplayService
+  VariableAnalysisReplayService,
+  WorkspaceTestResultsService
 } from '../test-results';
 import { ExportValidationResultsService } from '../validation';
 import { BullJobManagementService } from '../jobs';
@@ -142,13 +143,20 @@ describe('WorkspaceCodingService', () => {
       message: 'Processing 2 test persons',
       totalResponses: 10,
       statusCounts: { VALID: 10 }
-    })
+    }),
+    claimPendingAutocoderFinalizations: jest.fn().mockResolvedValue([]),
+    completeAutocoderFinalization: jest.fn().mockResolvedValue(undefined),
+    recordAutocoderFinalizationFailure: jest.fn().mockResolvedValue(undefined)
   };
 
   const mockResponseManagementService = {
     updateResponsesInDatabase: jest.fn(),
     resolveDuplicateResponses: jest.fn(),
     deleteResponse: jest.fn()
+  };
+
+  const mockWorkspaceTestResultsService = {
+    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
   };
 
   const mockCodingValidationService = {
@@ -256,6 +264,10 @@ describe('WorkspaceCodingService', () => {
         {
           provide: ResponseManagementService,
           useValue: mockResponseManagementService
+        },
+        {
+          provide: WorkspaceTestResultsService,
+          useValue: mockWorkspaceTestResultsService
         },
         { provide: CodingResultsService, useValue: mockCodingResultsService },
         { provide: CodingJobService, useValue: mockCodingJobService },
@@ -376,6 +388,59 @@ describe('WorkspaceCodingService', () => {
 
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(mockCodingStatisticsService.refreshStatistics).toHaveBeenCalledWith(workspaceId, 'v3');
+    });
+  });
+
+  describe('finalizeAutocoderPersistence', () => {
+    it('invalidates workspace result caches after the external commit', async () => {
+      await service.finalizeAutocoderPersistence(7, 2);
+
+      expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache)
+        .toHaveBeenCalledWith(7);
+      expect(mockCodingStatisticsService.refreshStatistics)
+        .toHaveBeenCalledWith(7, 'v3');
+    });
+
+    it('attempts every finalization step when one cache invalidation fails', async () => {
+      mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache
+        .mockRejectedValueOnce(new Error('workspace cache unavailable'));
+
+      await expect(service.finalizeAutocoderPersistence(7, 1))
+        .rejects.toThrow(
+          /workspace statistics cache invalidation.*workspace cache unavailable/
+        );
+
+      expect(mockCodingValidationService.invalidateIncompleteVariablesCache)
+        .toHaveBeenCalledWith(7);
+      expect(mockCodingProgressService.invalidateAppliedResultsOverviewCache)
+        .toHaveBeenCalledWith(7);
+      expect(mockCodingAnalysisService.invalidateCache).toHaveBeenCalledWith(7);
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(7);
+      expect(mockCodingStatisticsService.refreshStatistics)
+        .toHaveBeenCalledWith(7, 'v1');
+    });
+  });
+
+  describe('recoverPendingAutocoderFinalizations', () => {
+    it('completes a durable pending finalization without persisting responses', async () => {
+      mockCodingProcessService.claimPendingAutocoderFinalizations
+        .mockResolvedValueOnce([{
+          id: 42,
+          workspaceId: 7,
+          autoCoderRun: 2,
+          jobId: 'job-123',
+          attempts: 1
+        }]);
+
+      await expect(service.recoverPendingAutocoderFinalizations())
+        .resolves.toBe(1);
+
+      expect(mockCodingStatisticsService.refreshStatistics)
+        .toHaveBeenCalledWith(7, 'v3');
+      expect(mockCodingProcessService.completeAutocoderFinalization)
+        .toHaveBeenCalledWith(42);
+      expect(mockCodingProcessService.processTestPersonsBatch)
+        .not.toHaveBeenCalled();
     });
   });
 

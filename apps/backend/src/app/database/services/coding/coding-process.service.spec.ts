@@ -19,7 +19,8 @@ import { ResponseEntity } from '../../entities/response.entity';
 
 jest.mock('@iqb/responses', () => ({
   CodingSchemeFactory: {
-    code: jest.fn().mockReturnValue([])
+    code: jest.fn().mockReturnValue([]),
+    validate: jest.fn().mockReturnValue([])
   }
 }));
 
@@ -51,7 +52,8 @@ describe('CodingProcessService', () => {
   };
 
   const mockWorkspaceFilesService = {
-    getUnitVariableMap: jest.fn()
+    getUnitVariableMap: jest.fn(),
+    getVariableInfoForScheme: jest.fn().mockResolvedValue([])
   };
 
   const mockCodingReadinessService = {
@@ -163,6 +165,7 @@ describe('CodingProcessService', () => {
   let mockUnitQueryBuilder: Partial<MockQueryBuilder>;
   let mockQueryRunner: {
     connect: jest.Mock;
+    query: jest.Mock;
     startTransaction: jest.Mock;
     commitTransaction: jest.Mock;
     rollbackTransaction: jest.Mock;
@@ -207,6 +210,7 @@ describe('CodingProcessService', () => {
 
     mockQueryRunner = {
       connect: jest.fn(),
+      query: jest.fn().mockResolvedValue([]),
       startTransaction: jest.fn().mockImplementation(async () => {
         mockQueryRunner.isTransactionActive = true;
       }),
@@ -236,7 +240,15 @@ describe('CodingProcessService', () => {
             resolveExclusionsForQueries: jest.fn().mockResolvedValue({ globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] })
           }
         },
-        { provide: getRepositoryToken(FileUpload), useValue: { find: jest.fn(), findBy: jest.fn(), findOne: jest.fn() } },
+        {
+          provide: getRepositoryToken(FileUpload),
+          useValue: {
+            find: jest.fn(),
+            findBy: jest.fn(),
+            findOne: jest.fn(),
+            query: jest.fn()
+          }
+        },
         { provide: getRepositoryToken(Persons), useValue: { find: jest.fn() } },
         { provide: getRepositoryToken(Unit), useValue: { createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder) } },
         { provide: getRepositoryToken(Booklet), useValue: { find: jest.fn(), createQueryBuilder: jest.fn() } },
@@ -244,6 +256,7 @@ describe('CodingProcessService', () => {
           provide: getRepositoryToken(ResponseEntity),
           useValue: {
             find: jest.fn().mockResolvedValue([]),
+            query: jest.fn(),
             createQueryBuilder: jest.fn().mockImplementation(() => mockQueryBuilder),
             manager: {
               connection: {
@@ -271,6 +284,82 @@ describe('CodingProcessService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  describe('autocoder persistence session', () => {
+    it('holds a session lock without opening an idle transaction', async () => {
+      const runner = await service.beginAutocoderPersistenceSession(7);
+
+      expect(runner).toBe(mockQueryRunner);
+      expect(mockQueryRunner.connect).toHaveBeenCalledTimes(1);
+      expect(mockQueryRunner.query).toHaveBeenCalledWith(
+        'SELECT pg_advisory_lock($1::int, $2::int)',
+        [774020251, 7]
+      );
+      expect(mockQueryRunner.startTransaction).not.toHaveBeenCalled();
+
+      await service.startAutocoderPersistenceTransaction(runner);
+      expect(mockQueryRunner.startTransaction)
+        .toHaveBeenCalledWith('READ COMMITTED');
+
+      await service.releaseAutocoderPersistenceSession(runner, 7);
+      expect(mockQueryRunner.query).toHaveBeenLastCalledWith(
+        'SELECT pg_advisory_unlock($1::int, $2::int)',
+        [774020251, 7]
+      );
+      expect(mockQueryRunner.release).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('autocoder file revision guard', () => {
+    it('clears parsed file caches before capturing the preflight revision', async () => {
+      const invalidateSpy = jest.spyOn(service, 'invalidateWorkspaceCaches');
+      (fileUploadRepository.query as jest.Mock)
+        .mockResolvedValueOnce([{ revision: 'files-v1' }]);
+
+      await expect(service.prepareAutocoderPreflight(7))
+        .resolves.toBe('files-v1');
+
+      expect(invalidateSpy).toHaveBeenCalledWith(7);
+      expect(invalidateSpy.mock.invocationCallOrder[0]).toBeLessThan(
+        (fileUploadRepository.query as jest.Mock).mock.invocationCallOrder[0]
+      );
+    });
+
+    it('rejects a changed file revision while holding the file table lock', async () => {
+      mockQueryRunner.query
+        .mockResolvedValueOnce(undefined)
+        .mockResolvedValueOnce([{ revision: 'files-v2' }]);
+
+      await expect(service.assertAutocoderFileRevisionForCommit(
+        mockQueryRunner as never,
+        7,
+        'files-v1'
+      )).rejects.toThrow('Test files changed during autocoder preflight');
+
+      expect(mockQueryRunner.query).toHaveBeenNthCalledWith(
+        1,
+        'LOCK TABLE file_upload IN SHARE MODE'
+      );
+    });
+  });
+
+  describe('autocoder finalization outbox', () => {
+    it('schedules finalization in the caller-owned transaction', async () => {
+      mockQueryRunner.query.mockResolvedValueOnce([{ id: '42' }]);
+
+      await expect(service.scheduleAutocoderFinalization(
+        mockQueryRunner as never,
+        7,
+        2,
+        'job-123'
+      )).resolves.toBe(42);
+
+      expect(mockQueryRunner.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO autocoder_finalization_task'),
+        [7, 2, 'job-123']
+      );
+    });
   });
 
   describe('codeUnitIds', () => {
@@ -1420,6 +1509,234 @@ describe('CodingProcessService', () => {
           subform: ''
         }
       ])).toThrow('Autocoder produced multiple updates for generated:1:03:');
+    });
+
+    it('rejects an actual invalid ID/alias chain before coding or writing', async () => {
+      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
+        '@iqb/responses'
+      );
+      (Autocoder.CodingSchemeFactory.validate as jest.Mock)
+        .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.validate);
+      const response06 = createMockResponse(6235425, 1, '06');
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([['TEST_UNIT_1', new Set(['06'])]])
+      );
+      mockWorkspaceFilesService.getVariableInfoForScheme.mockResolvedValueOnce([
+        {
+          id: 'radio-group-images_1',
+          alias: '06',
+          type: 'string',
+          multiple: false,
+          nullable: true,
+          format: '',
+          valuePositionLabels: []
+        },
+        {
+          id: '06',
+          alias: '07',
+          type: 'string',
+          multiple: false,
+          nullable: true,
+          format: '',
+          valuePositionLabels: []
+        },
+        {
+          id: '07',
+          alias: '08',
+          type: 'string',
+          multiple: false,
+          nullable: true,
+          format: '',
+          valuePositionLabels: []
+        }
+      ]);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce([mockUnits[0]])
+        .mockResolvedValueOnce([response06]);
+      (fileUploadRepository.find as jest.Mock)
+        .mockReset()
+        .mockResolvedValueOnce([
+          createMockFileUpload(
+            'ALIAS_1',
+            '<xml><codingSchemeRef>TEST-SCHEME-REF</codingSchemeRef></xml>'
+          )
+        ])
+        .mockResolvedValueOnce([
+          createMockFileUpload(
+            'TEST-SCHEME-REF',
+            JSON.stringify({
+              version: '3.4',
+              variableCodings: [
+                {
+                  id: 'radio-group-images_1',
+                  alias: '06',
+                  sourceType: 'BASE'
+                },
+                { id: '06', alias: '07', sourceType: 'BASE' },
+                { id: '07', alias: '08', sourceType: 'BASE' }
+              ]
+            })
+          )
+        ]);
+
+      await expect(service.processTestPersonsBatch(
+        workspaceId,
+        ['1'],
+        1,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { persist: false }
+      )).rejects.toThrow(
+        /rejected coding scheme "TEST-SCHEME-REF"[\s\S]*TEST_UNIT_1[\s\S]*INVALID_SOURCE for variable "06"/
+      );
+
+      expect(Autocoder.CodingSchemeFactory.code).not.toHaveBeenCalled();
+      expect(responseRepository.manager.connection.createQueryRunner)
+        .not.toHaveBeenCalled();
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .not.toHaveBeenCalled();
+    });
+
+    it('detects an actual pass-through plus derivation collision before writing', async () => {
+      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
+        '@iqb/responses'
+      );
+      (Autocoder.CodingSchemeFactory.validate as jest.Mock)
+        .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.validate);
+      (Autocoder.CodingSchemeFactory.code as jest.Mock)
+        .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.code);
+      const importedTarget = createMockResponse(379724, 1, '_01');
+      importedTarget.subform = undefined;
+      const sourceResponse = createMockResponse(379725, 1, 'source');
+      sourceResponse.subform = '';
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([['TEST_UNIT_1', new Set(['_01', 'source'])]])
+      );
+      mockWorkspaceFilesService.getVariableInfoForScheme.mockResolvedValueOnce([
+        {
+          id: '_01',
+          alias: '_01',
+          type: 'string',
+          multiple: false,
+          nullable: true,
+          format: '',
+          valuePositionLabels: []
+        },
+        {
+          id: 'source',
+          alias: 'source',
+          type: 'string',
+          multiple: false,
+          nullable: true,
+          format: '',
+          valuePositionLabels: []
+        }
+      ]);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce([mockUnits[0]])
+        .mockResolvedValueOnce([importedTarget, sourceResponse]);
+      (fileUploadRepository.find as jest.Mock)
+        .mockReset()
+        .mockResolvedValueOnce([
+          createMockFileUpload(
+            'ALIAS_1',
+            '<xml><codingSchemeRef>DERIVED-SCHEME</codingSchemeRef></xml>'
+          )
+        ])
+        .mockResolvedValueOnce([
+          createMockFileUpload(
+            'TEST-SCHEME-REF',
+            JSON.stringify({
+              version: '3.4',
+              variableCodings: [
+                { id: '_01', sourceType: 'BASE' },
+                { id: 'source', sourceType: 'BASE' },
+                {
+                  id: 'derived-_01',
+                  alias: '_01',
+                  sourceType: 'CONCAT_CODE',
+                  deriveSources: ['source', '_01']
+                }
+              ]
+            })
+          )
+        ]);
+
+      await expect(service.processTestPersonsBatch(
+        workspaceId,
+        ['1'],
+        1,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { persist: false }
+      )).rejects.toThrow(
+        /response:379724[\s\S]*target variable "_01"[\s\S]*Results:[\s\S]*possible origins: input\/pass-through "_01"[\s\S]*CONCAT_CODE coding "derived-_01"[\s\S]*not proven provenance/
+      );
+
+      expect(responseRepository.manager.connection.createQueryRunner)
+        .not.toHaveBeenCalled();
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .not.toHaveBeenCalled();
+    });
+
+    it('does not open a transaction during a successful preflight', async () => {
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockUnits)
+        .mockResolvedValueOnce(mockResponses);
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        autoCoderRun,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { persist: false }
+      );
+
+      expect(result.totalResponses).toBe(2);
+      expect(responseRepository.manager.connection.createQueryRunner)
+        .not.toHaveBeenCalled();
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .not.toHaveBeenCalled();
+    });
+
+    it('reuses coding-scheme validation across person batches', async () => {
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockUnits)
+        .mockResolvedValueOnce(mockResponses)
+        .mockResolvedValueOnce(mockUnits)
+        .mockResolvedValueOnce(mockResponses);
+      const preflightContext = service.createAutocoderPreflightContext('files-v1');
+
+      await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        autoCoderRun,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { persist: false, preflightContext }
+      );
+      await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        autoCoderRun,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { persist: false, preflightContext }
+      );
+
+      expect(mockWorkspaceFilesService.getVariableInfoForScheme)
+        .toHaveBeenCalledTimes(2);
     });
 
     it('should call progress callback at appropriate intervals', async () => {
