@@ -233,7 +233,16 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     createQueryBuilder: jest.fn(),
     find: jest.fn(),
     findOne: jest.fn(),
-    upsert: jest.fn().mockResolvedValue(undefined)
+    upsert: jest.fn().mockResolvedValue(undefined),
+    manager: {
+      connection: {
+        createQueryRunner: jest.fn(() => ({
+          connect: jest.fn().mockResolvedValue(undefined),
+          query: jest.fn().mockResolvedValue([]),
+          release: jest.fn().mockResolvedValue(undefined)
+        }))
+      }
+    }
   };
   const mockCodingStatisticsService = {
     invalidateCache: jest.fn().mockResolvedValue(undefined),
@@ -760,7 +769,16 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
   };
 
   const mockFileUploadRepository = {
-    createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder)
+    createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+    manager: {
+      connection: {
+        createQueryRunner: jest.fn(() => ({
+          connect: jest.fn().mockResolvedValue(undefined),
+          query: jest.fn().mockResolvedValue([]),
+          release: jest.fn().mockResolvedValue(undefined)
+        }))
+      }
+    }
   };
 
   const mockCodingStatisticsService = {

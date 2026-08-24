@@ -7,3 +7,8 @@ export {
   unlockWorkspaceTestResultsMutation,
   withWorkspaceTestResultsMutationLock
 } from './workspace-test-results-lock.util';
+export {
+  lockWorkspaceFilesMutation,
+  unlockWorkspaceFilesMutation,
+  withWorkspaceFilesMutationLock
+} from './workspace-files-lock.util';
