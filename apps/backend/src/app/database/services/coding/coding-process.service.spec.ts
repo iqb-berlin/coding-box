@@ -293,6 +293,9 @@ describe('CodingProcessService', () => {
       expect(runner).toBe(mockQueryRunner);
       expect(mockQueryRunner.connect).toHaveBeenCalledTimes(1);
       expect(mockQueryRunner.query).toHaveBeenCalledWith(
+        "SET lock_timeout = '30s'"
+      );
+      expect(mockQueryRunner.query).toHaveBeenCalledWith(
         'SELECT pg_advisory_lock($1::int, $2::int)',
         [774020251, 7]
       );
@@ -301,10 +304,6 @@ describe('CodingProcessService', () => {
         [774020252, 7]
       );
       expect(mockQueryRunner.startTransaction).not.toHaveBeenCalled();
-
-      await service.startAutocoderPersistenceTransaction(runner);
-      expect(mockQueryRunner.startTransaction)
-        .toHaveBeenCalledWith('READ COMMITTED');
 
       await service.releaseAutocoderPersistenceSession(runner, 7);
       expect(mockQueryRunner.query).toHaveBeenCalledWith(
@@ -315,38 +314,19 @@ describe('CodingProcessService', () => {
         'SELECT pg_advisory_unlock($1::int, $2::int)',
         [774020251, 7]
       );
+      expect(mockQueryRunner.query).toHaveBeenCalledWith('RESET lock_timeout');
       expect(mockQueryRunner.release).toHaveBeenCalledTimes(1);
     });
   });
 
-  describe('autocoder file revision guard', () => {
-    it('clears parsed file caches before capturing the preflight revision', async () => {
+  describe('autocoder preflight cache preparation', () => {
+    it('clears parsed file caches without an additional file fingerprint query', () => {
       const invalidateSpy = jest.spyOn(service, 'invalidateWorkspaceCaches');
-      (fileUploadRepository.query as jest.Mock)
-        .mockResolvedValueOnce([{ revision: 'files-v1' }]);
 
-      await expect(service.prepareAutocoderPreflight(7))
-        .resolves.toBe('files-v1');
+      service.prepareAutocoderPreflight(7);
 
       expect(invalidateSpy).toHaveBeenCalledWith(7);
-      expect(invalidateSpy.mock.invocationCallOrder[0]).toBeLessThan(
-        (fileUploadRepository.query as jest.Mock).mock.invocationCallOrder[0]
-      );
-    });
-
-    it('rejects a changed file revision while holding the workspace file lock', async () => {
-      mockQueryRunner.query.mockResolvedValueOnce([{ revision: 'files-v2' }]);
-
-      await expect(service.assertAutocoderFileRevisionForCommit(
-        mockQueryRunner as never,
-        7,
-        'files-v1'
-      )).rejects.toThrow('Test files changed during autocoder preflight');
-
-      expect(mockQueryRunner.query).toHaveBeenCalledWith(
-        expect.stringContaining('FROM file_upload'),
-        [7]
-      );
+      expect(fileUploadRepository.query).not.toHaveBeenCalled();
     });
   });
 
@@ -1567,15 +1547,15 @@ describe('CodingProcessService', () => {
           )
         ]);
 
-      await expect(service.processTestPersonsBatch(
+      await expect(service.prepareAutocoderBatch(
         workspaceId,
         ['1'],
         1,
         undefined,
+        'preflight-job',
         undefined,
         undefined,
-        undefined,
-        { persist: false }
+        service.createAutocoderPreflightContext()
       )).rejects.toThrow(
         /rejected coding scheme "TEST-SCHEME-REF"[\s\S]*TEST_UNIT_1[\s\S]*INVALID_SOURCE for variable "06"/
       );
@@ -1652,15 +1632,15 @@ describe('CodingProcessService', () => {
           )
         ]);
 
-      await expect(service.processTestPersonsBatch(
+      await expect(service.prepareAutocoderBatch(
         workspaceId,
         ['1'],
         1,
         undefined,
+        'preflight-job',
         undefined,
         undefined,
-        undefined,
-        { persist: false }
+        service.createAutocoderPreflightContext()
       )).rejects.toThrow(
         /response:379724[\s\S]*target variable "_01"[\s\S]*Results:[\s\S]*possible origins: input\/pass-through "_01"[\s\S]*CONCAT_CODE coding "derived-_01"[\s\S]*not proven provenance/
       );
@@ -1676,20 +1656,61 @@ describe('CodingProcessService', () => {
         .mockResolvedValueOnce(mockUnits)
         .mockResolvedValueOnce(mockResponses);
 
-      const result = await service.processTestPersonsBatch(
+      const result = await service.prepareAutocoderBatch(
         workspaceId,
         personIds,
         autoCoderRun,
         undefined,
+        'preflight-job',
         undefined,
         undefined,
-        undefined,
-        { persist: false }
+        service.createAutocoderPreflightContext()
       );
 
-      expect(result.totalResponses).toBe(2);
+      expect(result?.statistics.totalResponses).toBe(2);
       expect(responseRepository.manager.connection.createQueryRunner)
         .not.toHaveBeenCalled();
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .not.toHaveBeenCalled();
+    });
+
+    it('stops building a batch plan when its response budget is exhausted', async () => {
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce([mockUnits[0]])
+        .mockResolvedValueOnce([mockResponses[0]]);
+      (Autocoder.CodingSchemeFactory.code as jest.Mock).mockReturnValueOnce([
+        {
+          id: 'var1',
+          value: 'first',
+          status: 'CODING_COMPLETE',
+          code: 1,
+          score: 1,
+          subform: ''
+        },
+        {
+          id: 'derived-var',
+          value: 'second',
+          status: 'CODING_COMPLETE',
+          code: 1,
+          score: 1,
+          subform: ''
+        }
+      ]);
+
+      await expect(service.prepareAutocoderBatch(
+        workspaceId,
+        ['1'],
+        autoCoderRun,
+        undefined,
+        'preflight-job',
+        undefined,
+        undefined,
+        service.createAutocoderPreflightContext(),
+        1
+      )).rejects.toThrow(
+        'remaining in-memory plan budget of 1 responses'
+      );
+
       expect(mockResponseManagementService.updateResponsesInDatabase)
         .not.toHaveBeenCalled();
     });
@@ -1700,27 +1721,27 @@ describe('CodingProcessService', () => {
         .mockResolvedValueOnce(mockResponses)
         .mockResolvedValueOnce(mockUnits)
         .mockResolvedValueOnce(mockResponses);
-      const preflightContext = service.createAutocoderPreflightContext('files-v1');
+      const preflightContext = service.createAutocoderPreflightContext();
 
-      await service.processTestPersonsBatch(
+      await service.prepareAutocoderBatch(
         workspaceId,
         personIds,
         autoCoderRun,
         undefined,
+        'preflight-job',
         undefined,
         undefined,
-        undefined,
-        { persist: false, preflightContext }
+        preflightContext
       );
-      await service.processTestPersonsBatch(
+      await service.prepareAutocoderBatch(
         workspaceId,
         personIds,
         autoCoderRun,
         undefined,
+        'preflight-job',
         undefined,
         undefined,
-        undefined,
-        { persist: false, preflightContext }
+        preflightContext
       );
 
       expect(mockWorkspaceFilesService.getVariableInfoForScheme)

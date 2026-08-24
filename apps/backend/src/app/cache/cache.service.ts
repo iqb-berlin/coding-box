@@ -331,7 +331,7 @@ export class CacheService {
    * Delete values by pattern
    * @param pattern The pattern to match (e.g. "prefix:*")
    */
-  async deleteByPattern(pattern: string): Promise<void> {
+  async deleteByPattern(pattern: string): Promise<boolean> {
     try {
       const keyPrefix = this.getKeyPrefix();
       const scanPattern = keyPrefix ? `${keyPrefix}${pattern}` : pattern;
@@ -344,11 +344,13 @@ export class CacheService {
           await this.redis.del(...keys);
         }
       } while (cursor !== '0');
+      return true;
     } catch (error) {
       this.logger.error(
         `Error deleting by pattern: ${error.message}`,
         error.stack
       );
+      return false;
     }
   }
 

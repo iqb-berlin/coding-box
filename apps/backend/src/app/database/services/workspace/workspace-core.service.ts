@@ -18,7 +18,8 @@ import { EXCLUSION_CACHE_PREFIX } from './workspace-constants';
 import { WorkspaceTestResultsService } from '../test-results/workspace-test-results.service';
 import {
   CODING_STATISTICS_CACHE_VERSIONS,
-  getCodingStatisticsCacheKey
+  getCodingStatisticsCacheKey,
+  getLegacyCodingStatisticsCacheKeys
 } from '../coding/coding-statistics-cache-key.util';
 import {
   getCodingIncompleteVariablesCacheKeys,
@@ -206,9 +207,10 @@ export class WorkspaceCoreService {
       getCodingIncompleteVariablesCacheVersionKey(workspaceId)
     );
     await Promise.all([
-      ...CODING_STATISTICS_CACHE_VERSIONS.map(version => (
-        this.cacheService.delete(getCodingStatisticsCacheKey(workspaceId, version))
-      )),
+      ...CODING_STATISTICS_CACHE_VERSIONS.flatMap(version => [
+        getCodingStatisticsCacheKey(workspaceId, version),
+        ...getLegacyCodingStatisticsCacheKeys(workspaceId, version)
+      ]).map(cacheKey => this.cacheService.delete(cacheKey)),
       ...getCodingIncompleteVariablesCacheKeys(workspaceId)
         .map(cacheKey => this.cacheService.delete(cacheKey)),
       this.cacheService.delete(`flat_response_filter_options:version:${workspaceId}`),

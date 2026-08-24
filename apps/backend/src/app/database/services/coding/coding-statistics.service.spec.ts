@@ -315,6 +315,9 @@ describe('CodingStatisticsService', () => {
       await service.invalidateCache(1, 'v1');
 
       expect(mockCacheService.delete).toHaveBeenCalledWith(
+        'coding-statistics:schema-v5:1:v1'
+      );
+      expect(mockCacheService.delete).toHaveBeenCalledWith(
         'coding-statistics:schema-v4:1:v1'
       );
     });
@@ -324,6 +327,15 @@ describe('CodingStatisticsService', () => {
 
       await service.invalidateCache(1);
 
+      expect(mockCacheService.delete).toHaveBeenCalledWith(
+        'coding-statistics:schema-v5:1:v1'
+      );
+      expect(mockCacheService.delete).toHaveBeenCalledWith(
+        'coding-statistics:schema-v5:1:v2'
+      );
+      expect(mockCacheService.delete).toHaveBeenCalledWith(
+        'coding-statistics:schema-v5:1:v3'
+      );
       expect(mockCacheService.delete).toHaveBeenCalledWith(
         'coding-statistics:schema-v4:1:v1'
       );
@@ -467,7 +479,7 @@ describe('CodingStatisticsService', () => {
 
       expect(result.jobId).toBe('job-123');
       expect(mockCacheService.get).toHaveBeenCalledWith(
-        'coding-statistics:schema-v4:1:v1'
+        'coding-statistics:schema-v5:1:v1'
       );
       expect(mockJobQueueService.addCodingStatisticsJob).toHaveBeenCalledWith(
         1,
@@ -486,7 +498,7 @@ describe('CodingStatisticsService', () => {
       expect(result.jobId).toBe('');
       expect(result.message).toBe('Using cached coding statistics');
       expect(mockCacheService.get).toHaveBeenCalledWith(
-        'coding-statistics:schema-v4:1:v1'
+        'coding-statistics:schema-v5:1:v1'
       );
     });
 
