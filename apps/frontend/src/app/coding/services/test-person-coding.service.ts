@@ -61,6 +61,7 @@ interface ExternalCodingImportWithPreviewDto {
 
 export interface CodingStatistics {
   totalResponses: number;
+  warnings?: string[];
   statusCounts: {
     [key: string]: number;
   };

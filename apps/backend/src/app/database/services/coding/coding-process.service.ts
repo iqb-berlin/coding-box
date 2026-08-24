@@ -52,11 +52,11 @@ type ProcessTestPersonsBatchOptions = {
   persist?: boolean;
   capturePlan?: (plan: AutocoderBatchPlan) => void;
   preflightContext?: AutocoderPreflightContext;
+  maxCodedResponses?: number;
 };
 
 export type AutocoderPreflightContext = {
   codingSchemeValidations: Map<string, Promise<void>>;
-  fileRevision: string;
 };
 
 export type AutocoderBatchPlan = {
@@ -82,6 +82,7 @@ type AutocoderPersistenceSource = {
 };
 
 const CODING_INCOMPLETE_STATUS = statusStringToNumber('CODING_INCOMPLETE');
+const AUTOCODER_LOCK_TIMEOUT = '30s';
 
 @Injectable()
 export class CodingProcessService {
@@ -302,6 +303,58 @@ export class CodingProcessService {
   }
 
   async processTestPersonsBatch(
+    workspace_id: number,
+    personIds: string[],
+    autoCoderRun: number,
+    progressCallback?: (progress: number) => void,
+    jobId?: string,
+    targetUnitIds?: number[],
+    freshnessSourceRevision?: number
+  ): Promise<CodingStatistics> {
+    return this.processTestPersonsBatchInternal(
+      workspace_id,
+      personIds,
+      autoCoderRun,
+      progressCallback,
+      jobId,
+      targetUnitIds,
+      freshnessSourceRevision
+    );
+  }
+
+  async prepareAutocoderBatch(
+    workspaceId: number,
+    personIds: string[],
+    autoCoderRun: number,
+    progressCallback: ((progress: number) => void) | undefined,
+    jobId: string,
+    targetUnitIds: number[] | undefined,
+    freshnessSourceRevision: number | undefined,
+    preflightContext: AutocoderPreflightContext,
+    maxCodedResponses: number = Number.MAX_SAFE_INTEGER
+  ): Promise<AutocoderBatchPlan | null> {
+    let plan: AutocoderBatchPlan | null = null;
+    await this.processTestPersonsBatchInternal(
+      workspaceId,
+      personIds,
+      autoCoderRun,
+      progressCallback,
+      jobId,
+      targetUnitIds,
+      freshnessSourceRevision,
+      {
+        persist: false,
+        preflightContext,
+        maxCodedResponses,
+        capturePlan: capturedPlan => {
+          plan = capturedPlan;
+        }
+      }
+    );
+    return plan;
+  }
+
+  private async processTestPersonsBatchInternal(
     workspace_id: number,
     personIds: string[],
     autoCoderRun: number,
@@ -605,7 +658,8 @@ export class CodingProcessService {
         resolvedAutoCoderRun,
         jobId,
         progressCallback,
-        options.preflightContext
+        options.preflightContext,
+        options.maxCodedResponses
       );
 
       metrics.processing = Date.now() - processingStart;
@@ -704,72 +758,16 @@ export class CodingProcessService {
     }
   }
 
-  createAutocoderPreflightContext(
-    fileRevision: string
-  ): AutocoderPreflightContext {
+  createAutocoderPreflightContext(): AutocoderPreflightContext {
     return {
-      codingSchemeValidations: new Map<string, Promise<void>>(),
-      fileRevision
+      codingSchemeValidations: new Map<string, Promise<void>>()
     };
   }
 
-  async getAutocoderFileRevision(workspaceId: number): Promise<string> {
-    const rows = await this.fileUploadRepository.query(
-      `SELECT MD5(COALESCE(STRING_AGG(
-         CONCAT_WS(':', id::text, file_id, file_type, file_size::text,
-           created_at::text, MD5(data)),
-         ',' ORDER BY id
-       ), '')) AS revision
-       FROM file_upload
-       WHERE workspace_id = $1`,
-      [workspaceId]
-    ) as Array<{ revision?: string }>;
-    return rows[0]?.revision || '';
-  }
-
-  async prepareAutocoderPreflight(workspaceId: number): Promise<string> {
-    // File writes and in-memory cache invalidation are separate operations.
-    // Clear local caches before taking the database fingerprint so a just-
-    // committed file version can never be paired with stale parsed content.
+  prepareAutocoderPreflight(workspaceId: number): void {
+    // The workspace file lock keeps the preflight input stable. Clear local
+    // caches after acquiring it so the run cannot reuse an older parsed file.
     this.invalidateWorkspaceCaches(workspaceId);
-    return this.getAutocoderFileRevision(workspaceId);
-  }
-
-  async assertAutocoderFileRevision(
-    workspaceId: number,
-    expectedRevision: string
-  ): Promise<void> {
-    const currentRevision = await this.getAutocoderFileRevision(workspaceId);
-    if (currentRevision !== expectedRevision) {
-      throw new Error(
-        `Test files changed during autocoder preflight for workspace ${workspaceId}. ` +
-        'No autocoder results were persisted; start a new run with the current files.'
-      );
-    }
-  }
-
-  async assertAutocoderFileRevisionForCommit(
-    queryRunner: QueryRunner,
-    workspaceId: number,
-    expectedRevision: string
-  ): Promise<void> {
-    const rows = await queryRunner.query(
-      `SELECT MD5(COALESCE(STRING_AGG(
-         CONCAT_WS(':', id::text, file_id, file_type, file_size::text,
-           created_at::text, MD5(data)),
-         ',' ORDER BY id
-       ), '')) AS revision
-       FROM file_upload
-       WHERE workspace_id = $1`,
-      [workspaceId]
-    ) as Array<{ revision?: string }>;
-    const currentRevision = rows[0]?.revision || '';
-    if (currentRevision !== expectedRevision) {
-      throw new Error(
-        `Test files changed during autocoder preflight for workspace ${workspaceId}. ` +
-        'No autocoder results were persisted; start a new run with the current files.'
-      );
-    }
   }
 
   async beginAutocoderPersistenceSession(
@@ -779,6 +777,7 @@ export class CodingProcessService {
       this.responseRepository.manager.connection.createQueryRunner();
     try {
       await queryRunner.connect();
+      await queryRunner.query(`SET lock_timeout = '${AUTOCODER_LOCK_TIMEOUT}'`);
       await lockWorkspaceTestResultsMutation(queryRunner, workspaceId);
       try {
         await lockWorkspaceFilesMutation(queryRunner, workspaceId);
@@ -789,16 +788,11 @@ export class CodingProcessService {
       return queryRunner;
     } catch (error) {
       if (!queryRunner.isReleased) {
+        await this.resetAutocoderLockTimeout(queryRunner);
         await queryRunner.release();
       }
       throw error;
     }
-  }
-
-  async startAutocoderPersistenceTransaction(
-    queryRunner: QueryRunner
-  ): Promise<void> {
-    await queryRunner.startTransaction('READ COMMITTED');
   }
 
   async releaseAutocoderPersistenceSession(
@@ -812,9 +806,24 @@ export class CodingProcessService {
         await unlockWorkspaceTestResultsMutation(queryRunner, workspaceId);
       } finally {
         if (!queryRunner.isReleased) {
+          await this.resetAutocoderLockTimeout(queryRunner);
           await queryRunner.release();
         }
       }
+    }
+  }
+
+  private async resetAutocoderLockTimeout(
+    queryRunner: QueryRunner
+  ): Promise<void> {
+    try {
+      await queryRunner.query('RESET lock_timeout');
+    } catch (error) {
+      this.logger.warn(
+        `Could not reset autocoder lock timeout: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   }
 
@@ -1122,15 +1131,14 @@ export class CodingProcessService {
     autoCoderRun: 1 | 2,
     jobId?: string,
     progressCallback?: (progress: number) => void,
-    preflightContext?: AutocoderPreflightContext
+    preflightContext?: AutocoderPreflightContext,
+    maxCodedResponses: number = Number.MAX_SAFE_INTEGER
   ): Promise<{
       allCodedResponses: CodedResponse[];
       statistics: CodingStatistics;
     }> {
-    const allCodedResponses = [];
-    allCodedResponses.length = allResponses.length;
+    const allCodedResponses: CodedResponse[] = [];
     const persistenceSources: AutocoderPersistenceSource[] = [];
-    persistenceSources.length = allResponses.length;
     let responseIndex = 0;
     const batchSize = 50;
     const emptyScheme = new CodingScheme({});
@@ -1153,7 +1161,6 @@ export class CodingProcessService {
         if (codingSchemeRef) {
           const unitFileId = this.getUnitFileId(unit);
           const validationKey = [
-            preflightContext?.fileRevision || 'unversioned',
             codingSchemeRef,
             unitFileId || unit.id
           ].join(':');
@@ -1226,6 +1233,13 @@ export class CodingProcessService {
           scheme.variableCodings || []
         );
 
+        if (responseIndex + codedResults.length > maxCodedResponses) {
+          throw new Error(
+            'Auto-coding batch exceeds its remaining in-memory plan budget ' +
+            `of ${maxCodedResponses} responses.`
+          );
+        }
+
         for (const codedResult of codedResults) {
           const codedStatus = this.normalizeAutocoderStatus(codedResult.status);
           if (!statistics.statusCounts[codedStatus]) {
@@ -1278,8 +1292,8 @@ export class CodingProcessService {
             codedResponse.score_v3 = codedResult.score ?? null;
           }
 
-          allCodedResponses[responseIndex] = codedResponse;
-          persistenceSources[responseIndex] = {
+          allCodedResponses.push(codedResponse);
+          persistenceSources.push({
             resultId: String(codedResult.id),
             resultIndex: responseIndex,
             targetVariableId: String(
@@ -1296,7 +1310,7 @@ export class CodingProcessService {
               inputResponses,
               scheme.variableCodings || []
             )
-          };
+          });
           responseIndex += 1;
         }
       }
@@ -1309,8 +1323,6 @@ export class CodingProcessService {
       }
     }
 
-    allCodedResponses.length = responseIndex;
-    persistenceSources.length = responseIndex;
     this.assertUniqueAutocoderPersistenceTargets(
       allCodedResponses,
       persistenceSources

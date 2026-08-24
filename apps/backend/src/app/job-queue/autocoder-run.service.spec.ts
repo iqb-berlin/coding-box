@@ -39,6 +39,9 @@ describe('AutocoderRunService', () => {
       }),
       rollbackTransaction: jest.fn().mockImplementation(async () => {
         queryRunner.isTransactionActive = false;
+      }),
+      startTransaction: jest.fn().mockImplementation(async () => {
+        queryRunner.isTransactionActive = true;
       })
     };
     let nextPlan = 0;
@@ -46,31 +49,17 @@ describe('AutocoderRunService', () => {
       beginAutocoderPersistenceSession: jest
         .fn()
         .mockResolvedValue(queryRunner),
-      prepareAutocoderPreflight: jest.fn().mockResolvedValue('files-v1'),
+      prepareAutocoderPreflight: jest.fn(),
       createAutocoderPreflightContext: jest.fn().mockReturnValue({
-        codingSchemeValidations: new Map(),
-        fileRevision: 'files-v1'
+        codingSchemeValidations: new Map()
       }),
-      processTestPersonsBatch: jest
-        .fn()
-        .mockImplementation(async (...args: unknown[]) => {
-          nextPlan += 1;
-          const options = args[7] as {
-            capturePlan?: (plan: ReturnType<typeof createPlan>) => void;
-          };
-          options.capturePlan?.(createPlan(nextPlan));
-          return createPlan(nextPlan).statistics;
-        }),
-      assertAutocoderFileRevision: jest.fn().mockResolvedValue(undefined),
-      startAutocoderPersistenceTransaction: jest
+      prepareAutocoderBatch: jest
         .fn()
         .mockImplementation(async () => {
-          queryRunner.isTransactionActive = true;
+          nextPlan += 1;
+          return createPlan(nextPlan);
         }),
       persistAutocoderBatchPlan: jest.fn().mockResolvedValue(true),
-      assertAutocoderFileRevisionForCommit: jest
-        .fn()
-        .mockResolvedValue(undefined),
       releaseAutocoderPersistenceSession: jest
         .fn()
         .mockImplementation(async () => {
@@ -100,34 +89,34 @@ describe('AutocoderRunService', () => {
       statusCounts: { CODED: 10 }
     });
 
-    expect(codingProcessService.processTestPersonsBatch).toHaveBeenCalledTimes(
+    expect(codingProcessService.prepareAutocoderBatch).toHaveBeenCalledTimes(
       2
     );
     expect(
       codingProcessService.persistAutocoderBatchPlan
     ).toHaveBeenCalledTimes(2);
     expect(
-      codingProcessService.processTestPersonsBatch.mock.invocationCallOrder[1]
+      codingProcessService.prepareAutocoderBatch.mock.invocationCallOrder[1]
     ).toBeLessThan(
       codingProcessService.persistAutocoderBatchPlan.mock.invocationCallOrder[0]
     );
     expect(
       codingProcessService.persistAutocoderBatchPlan.mock.calls[0][0]
     ).toEqual(createPlan(1));
+    expect(
+      codingProcessService.prepareAutocoderBatch.mock.calls[0][8]
+    ).toBe(250_000);
+    expect(
+      codingProcessService.prepareAutocoderBatch.mock.calls[1][8]
+    ).toBe(249_999);
     expect(queryRunner.commitTransaction).toHaveBeenCalledTimes(1);
   });
 
   it('does not persist when a later preflight fails', async () => {
     const collision = new Error('duplicate persistence target');
     const { service, codingProcessService, queryRunner } = createServices();
-    codingProcessService.processTestPersonsBatch
-      .mockImplementationOnce(async (...args: unknown[]) => {
-        const options = args[7] as {
-          capturePlan?: (plan: ReturnType<typeof createPlan>) => void;
-        };
-        options.capturePlan?.(createPlan(1));
-        return createPlan(1).statistics;
-      })
+    codingProcessService.prepareAutocoderBatch
+      .mockResolvedValueOnce(createPlan(1))
       .mockRejectedValueOnce(collision);
 
     await expect(service.run(createJob())).rejects.toBe(collision);
@@ -149,15 +138,19 @@ describe('AutocoderRunService', () => {
     expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
   });
 
-  it('rolls back when test files changed before commit', async () => {
-    const fileChange = new Error('test files changed');
+  it('rejects a preflight that exceeds the in-memory plan limit', async () => {
     const { service, codingProcessService, queryRunner } = createServices();
-    codingProcessService.assertAutocoderFileRevisionForCommit.mockRejectedValueOnce(
-      fileChange
+    const oversizedPlan = createPlan(1);
+    oversizedPlan.codedResponses = new Array(250_001) as { id: number }[];
+    codingProcessService.prepareAutocoderBatch.mockResolvedValueOnce(
+      oversizedPlan
     );
 
-    await expect(service.run(createJob())).rejects.toBe(fileChange);
-    expect(queryRunner.rollbackTransaction).toHaveBeenCalledTimes(1);
+    await expect(service.run(createJob())).rejects.toThrow(
+      'exceeding the safe in-memory limit of 250000'
+    );
+    expect(codingProcessService.persistAutocoderBatchPlan).not.toHaveBeenCalled();
+    expect(queryRunner.rollbackTransaction).not.toHaveBeenCalled();
     expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
   });
 
@@ -195,7 +188,10 @@ describe('AutocoderRunService', () => {
 
     await expect(service.run(createJob())).resolves.toEqual({
       totalResponses: 10,
-      statusCounts: { CODED: 10 }
+      statusCounts: { CODED: 10 },
+      warnings: [
+        'Autocoder cache finalization remained incomplete after 3 attempts: cache unavailable'
+      ]
     });
     expect(queryRunner.commitTransaction).toHaveBeenCalledTimes(1);
     expect(

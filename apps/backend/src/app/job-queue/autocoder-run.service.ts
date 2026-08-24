@@ -12,6 +12,8 @@ import { TestPersonCodingJobData } from './job-queue.service';
 
 const BATCH_SIZE = 50;
 const FINALIZATION_ATTEMPTS = 3;
+const FINALIZATION_RETRY_DELAY_MS = 250;
+const MAX_PLANNED_RESPONSES = 250_000;
 
 @Injectable()
 export class AutocoderRunService {
@@ -78,25 +80,33 @@ export class AutocoderRunService {
   }
 
   private async finalizeCommittedJob(
-    job: Job<TestPersonCodingJobData>,
-    autoCoderRun: number
-  ): Promise<void> {
+    job: Job<TestPersonCodingJobData>
+  ): Promise<string | undefined> {
+    let finalizationWarning: string | undefined;
     for (let attempt = 1; attempt <= FINALIZATION_ATTEMPTS; attempt++) {
       try {
         await this.workspaceCodingService.finalizeAutocoderPersistence(
-          job.data.workspaceId,
-          autoCoderRun
+          job.data.workspaceId
         );
+        finalizationWarning = undefined;
         break;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const stack = error instanceof Error ? error.stack : undefined;
         if (attempt < FINALIZATION_ATTEMPTS) {
+          const retryDelay = FINALIZATION_RETRY_DELAY_MS * 2 ** (attempt - 1);
           this.logger.warn(
             `Auto-coding job ${job.id} committed, but finalization attempt ` +
-              `${attempt} failed: ${message}. Retrying cache finalization only.`
+              `${attempt} failed: ${message}. Retrying cache finalization in ` +
+              `${retryDelay} ms.`
           );
+          await new Promise(resolve => {
+            setTimeout(resolve, retryDelay);
+          });
         } else {
+          finalizationWarning =
+            'Autocoder cache finalization remained incomplete after ' +
+            `${FINALIZATION_ATTEMPTS} attempts: ${message}`;
           this.logger.error(
             `Auto-coding job ${job.id} committed, but finalization failed ` +
               `after ${FINALIZATION_ATTEMPTS} attempts: ${message}`,
@@ -115,6 +125,7 @@ export class AutocoderRunService {
           `to 100: ${message}`
       );
     }
+    return finalizationWarning;
   }
 
   async run(job: Job<TestPersonCodingJobData>): Promise<CodingStatistics> {
@@ -139,6 +150,7 @@ export class AutocoderRunService {
     const totalPersons = personIds.length;
     const totalBatches = Math.ceil(totalPersons / BATCH_SIZE);
     const plans: AutocoderBatchPlan[] = [];
+    let plannedResponses = 0;
     let queryRunner: QueryRunner | undefined;
     let committed = false;
 
@@ -147,12 +159,9 @@ export class AutocoderRunService {
         await this.codingProcessService.beginAutocoderPersistenceSession(
           job.data.workspaceId
         );
-      const fileRevision =
-        await this.codingProcessService.prepareAutocoderPreflight(
-          job.data.workspaceId
-        );
+      this.codingProcessService.prepareAutocoderPreflight(job.data.workspaceId);
       const preflightContext =
-        this.codingProcessService.createAutocoderPreflightContext(fileRevision);
+        this.codingProcessService.createAutocoderPreflightContext();
 
       for (let i = 0; i < personIds.length; i += BATCH_SIZE) {
         const batchNumber = i / BATCH_SIZE + 1;
@@ -165,7 +174,6 @@ export class AutocoderRunService {
           `Preflighting batch ${batchNumber} of ${totalBatches} ` +
             `(${batchPersonIds.length} persons)`
         );
-        let plan: AutocoderBatchPlan | undefined;
         const preflightProgress = async (progress: number) => {
           const completedShare = i / totalPersons;
           const currentShare =
@@ -174,7 +182,7 @@ export class AutocoderRunService {
             Math.min(Math.floor((completedShare + currentShare) * 90), 90)
           );
         };
-        await this.codingProcessService.processTestPersonsBatch(
+        const plan = await this.codingProcessService.prepareAutocoderBatch(
           job.data.workspaceId,
           batchPersonIds,
           autoCoderRun,
@@ -182,15 +190,20 @@ export class AutocoderRunService {
           job.id.toString(),
           job.data.unitIds,
           job.data.freshnessSourceRevision,
-          {
-            persist: false,
-            preflightContext,
-            capturePlan: capturedPlan => {
-              plan = capturedPlan;
-            }
-          }
+          preflightContext,
+          MAX_PLANNED_RESPONSES - plannedResponses
         );
-        if (plan) plans.push(plan);
+        if (plan) {
+          plannedResponses += plan.codedResponses.length;
+          if (plannedResponses > MAX_PLANNED_RESPONSES) {
+            throw new Error(
+              `Auto-coding preflight produced ${plannedResponses} planned ` +
+              'responses, exceeding the safe in-memory limit of ' +
+              `${MAX_PLANNED_RESPONSES}. Split the run into a smaller scope.`
+            );
+          }
+          plans.push(plan);
+        }
         await job.progress(
           Math.min(
             Math.floor(((i + batchPersonIds.length) / totalPersons) * 90),
@@ -203,13 +216,11 @@ export class AutocoderRunService {
         }
       }
 
-      await this.codingProcessService.assertAutocoderFileRevision(
-        job.data.workspaceId,
-        fileRevision
+      this.logger.log(
+        `Preflight completed with ${plannedResponses} planned responses in ` +
+          `${plans.length} batches`
       );
-      await this.codingProcessService.startAutocoderPersistenceTransaction(
-        queryRunner
-      );
+      await queryRunner.startTransaction('READ COMMITTED');
 
       for (let index = 0; index < plans.length; index++) {
         const batchNumber = index + 1;
@@ -252,14 +263,15 @@ export class AutocoderRunService {
         return { totalResponses: 0, statusCounts: {} };
       }
 
-      await this.codingProcessService.assertAutocoderFileRevisionForCommit(
-        queryRunner,
-        job.data.workspaceId,
-        fileRevision
-      );
       await queryRunner.commitTransaction();
       committed = true;
-      await this.finalizeCommittedJob(job, autoCoderRun);
+      const finalizationWarning = await this.finalizeCommittedJob(job);
+      if (finalizationWarning) {
+        combinedResult.warnings = [
+          ...(combinedResult.warnings || []),
+          finalizationWarning
+        ];
+      }
       this.logger.log(`Job ${job.id} completed successfully`);
       return combinedResult;
     } catch (error) {

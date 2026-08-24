@@ -25,6 +25,7 @@ import { isExportWorkerProcess } from '../../../export-worker/export-worker-role
 import {
   CODING_STATISTICS_CACHE_VERSIONS,
   getCodingStatisticsCacheKey,
+  getLegacyCodingStatisticsCacheKeys,
   type CodingStatisticsVersion
 } from './coding-statistics-cache-key.util';
 import {
@@ -46,7 +47,7 @@ export type { FleissKappaResult, KappaVariableSummary };
 @Injectable()
 export class CodingStatisticsService implements OnApplicationBootstrap {
   private readonly logger = new Logger(CodingStatisticsService.name);
-  private readonly CACHE_TTL_SECONDS = 0; // No expiration (TTL=0 means no EX flag in Redis) - persist until explicitly invalidated
+  private readonly CACHE_TTL_SECONDS = 600;
   private readonly STATISTICS_PRELOAD_CONCURRENCY = 2;
   private readonly statisticsJobRequests =
     new Map<string, Promise<{ jobId: string; message: string }>>();
@@ -302,19 +303,26 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     };
   }
 
-  async invalidateCache(workspace_id: number, version?: CodingStatisticsVersion): Promise<void> {
+  async invalidateCache(workspace_id: number, version?: CodingStatisticsVersion): Promise<boolean> {
     if (version) {
-      const cacheKey = getCodingStatisticsCacheKey(workspace_id, version);
-      await this.cacheService.delete(cacheKey);
+      const cacheKeys = [
+        getCodingStatisticsCacheKey(workspace_id, version),
+        ...getLegacyCodingStatisticsCacheKeys(workspace_id, version)
+      ];
+      const deletions = await Promise.all(
+        cacheKeys.map(cacheKey => this.cacheService.delete(cacheKey))
+      );
       this.logger.log(`Invalidated coding statistics cache for workspace ${workspace_id} (version: ${version})`);
-    } else {
-      const deletePromises = CODING_STATISTICS_CACHE_VERSIONS.map(v => {
-        const cacheKey = getCodingStatisticsCacheKey(workspace_id, v);
-        return this.cacheService.delete(cacheKey);
-      });
-      await Promise.all(deletePromises);
-      this.logger.log(`Invalidated all coding statistics caches for workspace ${workspace_id}`);
+      return deletions.every(deleted => deleted);
     }
+
+    const deletePromises = CODING_STATISTICS_CACHE_VERSIONS.flatMap(v => [
+      getCodingStatisticsCacheKey(workspace_id, v),
+      ...getLegacyCodingStatisticsCacheKeys(workspace_id, v)
+    ]).map(cacheKey => this.cacheService.delete(cacheKey));
+    const deletions = await Promise.all(deletePromises);
+    this.logger.log(`Invalidated all coding statistics caches for workspace ${workspace_id}`);
+    return deletions.every(deleted => deleted);
   }
 
   async invalidateIncompleteVariablesCache(workspace_id: number): Promise<void> {

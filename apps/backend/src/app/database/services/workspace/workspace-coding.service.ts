@@ -78,13 +78,10 @@ export class WorkspaceCodingService {
     return statistics;
   }
 
-  async finalizeAutocoderPersistence(
-    workspaceId: number,
-    autoCoderRun: number
-  ): Promise<void> {
+  async finalizeAutocoderPersistence(workspaceId: number): Promise<void> {
     const finalizationSteps: Array<{
       name: string;
-      run: () => Promise<unknown>;
+      run: () => Promise<boolean>;
     }> = [
       {
         name: 'workspace statistics cache invalidation',
@@ -112,20 +109,14 @@ export class WorkspaceCodingService {
     const results = await Promise.allSettled(
       finalizationSteps.map(step => Promise.resolve().then(step.run))
     );
-    const failures = results.flatMap((result, index) => (
-      result.status === 'rejected' ?
-        [`${finalizationSteps[index].name}: ${String(result.reason)}`] :
-        []
-    ));
-
-    try {
-      await this.codingStatisticsService.refreshStatistics(
-        workspaceId,
-        autoCoderRun === 2 ? 'v3' : 'v1'
-      );
-    } catch (error) {
-      failures.push(`coding statistics refresh: ${String(error)}`);
-    }
+    const failures = results.flatMap((result, index) => {
+      if (result.status === 'rejected') {
+        return [`${finalizationSteps[index].name}: ${String(result.reason)}`];
+      }
+      return result.value ? [] : [
+        `${finalizationSteps[index].name}: cache operation failed`
+      ];
+    });
 
     if (failures.length > 0) {
       throw new Error(
@@ -291,7 +282,7 @@ export class WorkspaceCodingService {
     );
   }
 
-  async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
+  async invalidateIncompleteVariablesCache(workspaceId: number): Promise<boolean> {
     return this.codingValidationService.invalidateIncompleteVariablesCache(
       workspaceId
     );

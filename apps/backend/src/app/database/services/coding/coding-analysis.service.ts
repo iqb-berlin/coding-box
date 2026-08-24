@@ -427,11 +427,11 @@ export class CodingAnalysisService {
   /**
    * Invalidates all cached analysis results for a given workspace
    */
-  async invalidateCache(workspaceId: number): Promise<void> {
+  async invalidateCache(workspaceId: number): Promise<boolean> {
     this.logger.log(`Invalidating response analysis cache for workspace ${workspaceId}`);
     // "response-analysis:1_*" matches all variations (flags, thresholds) for workspace 1
     const pattern = `${CODING_ANALYSIS_CACHE_KEY_PREFIX}:${workspaceId}_*`;
-    await this.cacheService.deleteByPattern(pattern);
+    return this.cacheService.deleteByPattern(pattern);
   }
 
   private async invalidateAggregationDependentCaches(workspaceId: number): Promise<void> {

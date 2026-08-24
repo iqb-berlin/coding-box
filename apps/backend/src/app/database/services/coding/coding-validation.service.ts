@@ -1729,13 +1729,13 @@ export class CodingValidationService {
     return getCodingIncompleteVariablesCacheKey(workspaceId);
   }
 
-  async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
+  async invalidateIncompleteVariablesCache(workspaceId: number): Promise<boolean> {
     const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
     const scopeCacheKey = this.generateManualCodingScopeCacheKey(workspaceId);
-    await this.cacheService.incr(
+    const version = await this.cacheService.incr(
       getCodingIncompleteVariablesCacheVersionKey(workspaceId)
     );
-    await Promise.all(
+    const deletions = await Promise.all(
       getCodingIncompleteVariablesCacheKeys(workspaceId)
         .map(key => this.cacheService.delete(key))
     );
@@ -1754,6 +1754,7 @@ export class CodingValidationService {
     this.logger.log(
       `Invalidated manual coding variables cache for workspace ${workspaceId}`
     );
+    return version > 0 && deletions.every(deleted => deleted);
   }
 
   private deleteInFlightEntriesForCacheKey<T>(
