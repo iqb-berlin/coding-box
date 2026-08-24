@@ -245,6 +245,27 @@ describe('CodingReadinessService', () => {
       .toHaveBeenCalledWith(expect.any(String), expect.any(Object), 600);
   });
 
+  it('expires unscoped readiness cache entries', async () => {
+    const queryMocks: Partial<ReadinessQueryMocks> = {};
+    const service = createService({
+      units: [createUnit(1, 'UNIT_OK')],
+      rawResponsesTotal: 1,
+      candidateRows: [
+        { unitid: 1, variableid: 'var1', response_count: 1 }
+      ],
+      unitFiles: [
+        createFile('UNIT_OK', '<Unit><codingSchemeRef>SCHEME_OK</codingSchemeRef></Unit>')
+      ],
+      codingSchemeFiles: [createFile('SCHEME_OK', createCodingScheme('var1'))],
+      unitVariableMap: new Map([['UNIT_OK', new Set(['var1'])]])
+    }, queryMocks);
+
+    await service.getReadiness(1, { forceRefresh: true });
+
+    expect(queryMocks.cacheService?.set)
+      .toHaveBeenCalledWith(expect.any(String), expect.any(Object), 600);
+  });
+
   it('invalidates cached and in-flight readiness entries for a workspace', async () => {
     const queryMocks: Partial<ReadinessQueryMocks> = {};
     const service = createService({
@@ -299,7 +320,7 @@ describe('CodingReadinessService', () => {
     expect(queryMocks.candidateQuery?.getRawMany).toHaveBeenCalledTimes(1);
     expect(queryMocks.cacheService?.set).toHaveBeenCalledTimes(1);
     expect(queryMocks.cacheService?.set)
-      .toHaveBeenCalledWith(expect.any(String), expect.any(Object), 0);
+      .toHaveBeenCalledWith(expect.any(String), expect.any(Object), 600);
   });
 
   it('returns cached readiness without recomputing diagnostics', async () => {

@@ -27,6 +27,7 @@ import {
   getCodingAnalysisCacheKey,
   getCodingAnalysisRunMarkerKey
 } from './coding-analysis-cache-key.util';
+import { tryWithWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
 export interface AggregationSettingsResult {
   success: boolean;
@@ -332,11 +333,34 @@ export class CodingAnalysisService {
     const normalizedFlags = this.codingJobService.normalizeResponseMatchingFlags(currentFlags);
 
     try {
-      await this.codingJobService.setAggregationThreshold(workspaceId, validThreshold);
-      const savedFlags = await this.codingJobService.setResponseMatchingMode(workspaceId, normalizedFlags);
-      const revertedCount = await this.revertMaterializedDuplicateAggregation(workspaceId);
-      await this.invalidateAggregationDependentCaches(workspaceId);
+      const lockAttempt = await tryWithWorkspaceTestResultsMutationLock(
+        this.responseRepository.manager.connection,
+        workspaceId,
+        async () => {
+          await this.codingJobService.setAggregationThreshold(workspaceId, validThreshold);
+          const savedFlags = await this.codingJobService
+            .setResponseMatchingMode(workspaceId, normalizedFlags);
+          const revertedCount =
+            await this.revertMaterializedDuplicateAggregation(workspaceId);
+          return { savedFlags, revertedCount };
+        }
+      );
 
+      if (!lockAttempt.acquired) {
+        return {
+          success: false,
+          threshold: validThreshold,
+          flags: normalizedFlags,
+          aggregationActive: !normalizedFlags.includes(ResponseMatchingFlag.NO_AGGREGATION),
+          revertedResponses: 0,
+          message:
+            'Aggregation settings cannot be changed while test results are being modified. ' +
+            'Please try again after auto-coding finishes.'
+        };
+      }
+
+      const { savedFlags, revertedCount } = lockAttempt.value;
+      await this.invalidateAggregationDependentCaches(workspaceId);
       return {
         success: true,
         threshold: validThreshold,

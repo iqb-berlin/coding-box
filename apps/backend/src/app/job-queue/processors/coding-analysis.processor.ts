@@ -30,6 +30,8 @@ import {
   MissingsProfilesService
 } from '../../database/services/coding/missings-profiles.service';
 
+const CODING_ANALYSIS_CACHE_TTL_SECONDS = 600;
+
 @Processor('response-analysis')
 export class CodingAnalysisProcessor {
   private readonly logger = new Logger(CodingAnalysisProcessor.name);
@@ -78,7 +80,11 @@ export class CodingAnalysisProcessor {
         }
       }
 
-      await this.cacheService.set(cacheKey, analysis);
+      await this.cacheService.set(
+        cacheKey,
+        analysis,
+        CODING_ANALYSIS_CACHE_TTL_SECONDS
+      );
 
       this.logger.log(`Response analysis for workspace ${workspaceId} completed and cached.`);
       return analysis;

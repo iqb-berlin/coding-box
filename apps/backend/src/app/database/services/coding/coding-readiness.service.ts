@@ -94,7 +94,7 @@ export class CodingReadinessService {
   private readonly logger = new Logger(CodingReadinessService.name);
   private readonly maxSamplesPerUnit = 8;
   private readonly maxSampleUnits = 10;
-  private readonly scopedCacheTtlSeconds = 600;
+  private readonly cacheTtlSeconds = 600;
   private readonly readinessInFlight = new Map<string, Promise<AutocodingReadinessDto>>();
 
   constructor(
@@ -1027,7 +1027,7 @@ export class CodingReadinessService {
       return false;
     }
 
-    return this.setCachedReadiness(cacheKey, signature, readiness, options);
+    return this.setCachedReadiness(cacheKey, signature, readiness);
   }
 
   private hasSameUnitScope(
@@ -1043,24 +1043,12 @@ export class CodingReadinessService {
   private setCachedReadiness(
     cacheKey: string,
     signature: ReadinessCacheSignature,
-    readiness: AutocodingReadinessDto,
-    options: AutocodingReadinessOptions
+    readiness: AutocodingReadinessDto
   ): Promise<boolean> {
     return this.cacheService.set(cacheKey, {
       signature,
       readiness
-    }, this.getCacheTtlSeconds(options));
-  }
-
-  private getCacheTtlSeconds(options: AutocodingReadinessOptions): number {
-    return this.isScopedReadiness(options) ? this.scopedCacheTtlSeconds : 0;
-  }
-
-  private isScopedReadiness(options: AutocodingReadinessOptions): boolean {
-    return this.uniquePositiveIds(
-      (options.personIds || []).map(id => Number(id))
-    ).length > 0 ||
-      this.uniquePositiveIds(options.unitIds || []).length > 0;
+    }, this.cacheTtlSeconds);
   }
 
   private isSameSignature(

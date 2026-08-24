@@ -4,6 +4,10 @@ const WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE = 774020251;
 
 type QueryRunnerFactory = Pick<DataSource, 'createQueryRunner'>;
 
+export type WorkspaceTestResultsMutationLockAttempt<T> =
+  | { acquired: true; value: T }
+  | { acquired: false };
+
 function normalizeWorkspaceId(workspaceId: number): number {
   const normalized = Number(workspaceId);
   if (!Number.isInteger(normalized) || normalized < 1) {
@@ -42,6 +46,17 @@ export async function unlockWorkspaceTestResultsMutation(
   );
 }
 
+async function tryLockWorkspaceTestResultsMutation(
+  queryRunner: QueryRunner,
+  workspaceId: number
+): Promise<boolean> {
+  const rows = await queryRunner.query(
+    'SELECT pg_try_advisory_lock($1::int, $2::int) AS locked',
+    [WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE, normalizeWorkspaceId(workspaceId)]
+  ) as Array<{ locked: boolean }>;
+  return rows[0]?.locked === true;
+}
+
 export async function withWorkspaceTestResultsMutationLock<T>(
   connection: QueryRunnerFactory,
   workspaceId: number,
@@ -57,6 +72,43 @@ export async function withWorkspaceTestResultsMutationLock<T>(
     await lockWorkspaceTestResultsMutation(queryRunner, normalizedWorkspaceId);
     locked = true;
     return await callback();
+  } finally {
+    try {
+      if (locked) {
+        await unlockWorkspaceTestResultsMutation(
+          queryRunner,
+          normalizedWorkspaceId
+        );
+      }
+    } finally {
+      await queryRunner.release();
+    }
+  }
+}
+
+export async function tryWithWorkspaceTestResultsMutationLock<T>(
+  connection: QueryRunnerFactory,
+  workspaceId: number,
+  callback: () => Promise<T>
+): Promise<WorkspaceTestResultsMutationLockAttempt<T>> {
+  const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId);
+  const queryRunner: QueryRunner = connection.createQueryRunner();
+  let locked = false;
+
+  await queryRunner.connect();
+
+  try {
+    locked = await tryLockWorkspaceTestResultsMutation(
+      queryRunner,
+      normalizedWorkspaceId
+    );
+    if (!locked) {
+      return { acquired: false };
+    }
+    return {
+      acquired: true,
+      value: await callback()
+    };
   } finally {
     try {
       if (locked) {
