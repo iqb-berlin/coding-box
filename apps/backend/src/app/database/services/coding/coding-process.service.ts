@@ -1801,37 +1801,60 @@ export class CodingProcessService {
     }
 
     const namespace = this.createAutocoderNamespace(variableCodings);
-    const canonicalResponses = responses.map(response => ({
-      ...response,
-      id: namespace.inputTechnicalIdByAlias.get(
-        this.normalizeVariableId(response.id)
-      ) || response.id,
-      // null, empty string and undefined all mean "no subform" in the
-      // database. The response library must receive one canonical form so it
-      // does not create a second placeholder for the same persistence target.
-      subform: response.subform || undefined
-    }));
+    const describeInput = (inputIndex: number): string => {
+      const origin = inputOrigins?.[inputIndex];
+      const rawVariableId = origin?.storedVariableId ||
+        String(responses[inputIndex].id);
+      if (!origin) {
+        return `input ${inputIndex + 1} (stored variable ` +
+          `"${rawVariableId}")`;
+      }
+      const originType = origin.isAutocoderGenerated ?
+        'autocoder-generated' :
+        'imported';
+      return `response:${origin.responseId} (stored variable ` +
+        `"${rawVariableId}", ${originType})`;
+    };
+    const canonicalResponses = responses.map((response, index) => {
+      const normalizedInputId = this.normalizeVariableId(response.id);
+      const mappedTechnicalId = namespace.inputTechnicalIdByAlias.get(
+        normalizedInputId
+      );
+      // Imported rows use public aliases. Generated rows may be legacy output
+      // persisted under a technical ID, so an ID that names both namespaces
+      // cannot be interpreted safely without an additional provenance marker.
+      const isAmbiguousGeneratedInput =
+        inputOrigins?.[index]?.isAutocoderGenerated === true &&
+        mappedTechnicalId !== undefined &&
+        this.normalizeVariableId(mappedTechnicalId) !== normalizedInputId &&
+        namespace.outputAliasByTechnicalId.has(normalizedInputId);
+
+      if (isAmbiguousGeneratedInput) {
+        throw new Error(
+          'Autocoder input namespace is ambiguous for ' +
+          `${describeInput(index)}, subform ` +
+          `"${String(response.subform || '')}": the stored variable ID is ` +
+          'both the output alias for technical variable ' +
+          `"${mappedTechnicalId}" and technical variable ` +
+          `"${response.id}".`
+        );
+      }
+
+      return {
+        ...response,
+        id: mappedTechnicalId || response.id,
+        // null, empty string and undefined all mean "no subform" in the
+        // database. The response library must receive one canonical form so it
+        // does not create a second placeholder for the same persistence target.
+        subform: response.subform || undefined
+      };
+    });
     const canonicalInputIndexes = new Map<string, number>();
     canonicalResponses.forEach((response, index) => {
       const subform = String(response.subform || '');
       const key = this.autocoderResultKey(response.id, subform);
       const previousIndex = canonicalInputIndexes.get(key);
       if (previousIndex !== undefined) {
-        const describeInput = (inputIndex: number): string => {
-          const origin = inputOrigins?.[inputIndex];
-          const rawVariableId = origin?.storedVariableId ||
-            String(responses[inputIndex].id);
-          if (!origin) {
-            return `input ${inputIndex + 1} (stored variable ` +
-              `"${rawVariableId}")`;
-          }
-          const originType = origin.isAutocoderGenerated ?
-            'autocoder-generated' :
-            'imported';
-          return `response:${origin.responseId} (stored variable ` +
-            `"${rawVariableId}", ${originType})`;
-        };
-
         throw new Error(
           'Autocoder input namespace collision for technical variable ' +
           `"${response.id}", subform "${subform}": ` +

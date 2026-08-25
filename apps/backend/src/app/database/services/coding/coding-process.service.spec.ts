@@ -2677,6 +2677,59 @@ describe('CodingProcessService', () => {
       }
     );
 
+    it('rejects a lone generated input with an ambiguous stored ID', () => {
+      const codeResponses = (
+        service as unknown as {
+          codeAutocoderResponses: (
+            responses: Array<{
+              id: string;
+              value: string;
+              status: 'CODING_COMPLETE';
+              subform?: string | null;
+            }>,
+            variableCodings: Array<{
+              id: string;
+              alias: string;
+              sourceType: string;
+            }>,
+            inputOrigins: Array<{
+              responseId: number;
+              storedVariableId: string;
+              isAutocoderGenerated: boolean;
+            }>
+          ) => unknown;
+        }
+      ).codeAutocoderResponses.bind(service);
+
+      expect(() => codeResponses([
+        {
+          id: '06',
+          value: 'legacy-technical-value',
+          status: 'CODING_COMPLETE',
+          subform: null
+        }
+      ], [
+        {
+          id: 'radio-group-images_1',
+          alias: '06',
+          sourceType: 'BASE'
+        },
+        { id: '06', alias: '07', sourceType: 'BASE' }
+      ], [
+        {
+          responseId: 6235426,
+          storedVariableId: '06',
+          isAutocoderGenerated: true
+        }
+      ])).toThrow(
+        'Autocoder input namespace is ambiguous for response:6235426 ' +
+        '(stored variable "06", autocoder-generated), subform "": the ' +
+        'stored variable ID is both the output alias for technical variable ' +
+        '"radio-group-images_1" and technical variable "06".'
+      );
+      expect(Autocoder.CodingSchemeFactory.code).not.toHaveBeenCalled();
+    });
+
     it('keeps a real response status instead of an alias-chain placeholder', () => {
       const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
         '@iqb/responses'
