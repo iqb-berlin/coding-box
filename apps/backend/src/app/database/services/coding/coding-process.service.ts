@@ -107,10 +107,12 @@ type CompleteDerivedTupleResolution =
 type CompleteDerivedRecalculation = {
   targetResults: Map<string, AutocoderResponse>;
   authoritativeResults: AutocoderResponse[] | null;
+  independentRecalculationAvailable: boolean;
 };
 
 const CODING_COMPLETE_STATUS = statusStringToNumber('CODING_COMPLETE');
 const CODING_INCOMPLETE_STATUS = statusStringToNumber('CODING_INCOMPLETE');
+const UNSET_STATUS = statusStringToNumber('UNSET') as number;
 const COMPARABLE_RECALCULATED_STATUSES = new Set([
   'VALUE_CHANGED',
   'NO_CODING',
@@ -1022,7 +1024,10 @@ export class CodingProcessService {
         'ResponseEntity.score_v1',
         'ResponseEntity.status_v2',
         'ResponseEntity.code_v2',
-        'ResponseEntity.score_v2'
+        'ResponseEntity.score_v2',
+        'ResponseEntity.status_v3',
+        'ResponseEntity.code_v3',
+        'ResponseEntity.score_v3'
       ])
       .where('ResponseEntity.unitid = ANY(:unitIds)', {
         unitIds
@@ -1310,32 +1315,38 @@ export class CodingProcessService {
           let inputCode: number | undefined;
           let inputScore: number | undefined;
           if (autoCoderRun === 2) {
-            const isOpenV2Placeholder =
-              response.status_v2 === CODING_INCOMPLETE_STATUS &&
-              response.code_v2 === null &&
-              response.score_v2 === null &&
-              response.inherits_v1_for_v2 === true;
-            const isIgnoredV2Placeholder =
-              response.code_v2 === null &&
-              response.score_v2 === null &&
-              response.status_v2 !== null &&
-              STATISTICS_IGNORED_STATUSES.includes(response.status_v2);
-            const hasV2Result =
-              !isOpenV2Placeholder &&
-              !isIgnoredV2Placeholder && (
-                response.status_v2 !== null ||
-                response.code_v2 !== null ||
-                response.score_v2 !== null
-              );
-            if (hasV2Result) {
-              inputStatus =
-                response.status_v2 ?? response.status_v1 ?? response.status;
-              inputCode = response.code_v2 ?? undefined;
-              inputScore = response.score_v2 ?? undefined;
+            if (response.autocoder_invalidated_version) {
+              inputStatus = response.status_v3 ?? UNSET_STATUS;
+              inputCode = response.code_v3 ?? undefined;
+              inputScore = response.score_v3 ?? undefined;
             } else {
-              inputStatus = response.status_v1 ?? response.status;
-              inputCode = response.code_v1 ?? undefined;
-              inputScore = response.score_v1 ?? undefined;
+              const isOpenV2Placeholder =
+                response.status_v2 === CODING_INCOMPLETE_STATUS &&
+                response.code_v2 === null &&
+                response.score_v2 === null &&
+                response.inherits_v1_for_v2 === true;
+              const isIgnoredV2Placeholder =
+                response.code_v2 === null &&
+                response.score_v2 === null &&
+                response.status_v2 !== null &&
+                STATISTICS_IGNORED_STATUSES.includes(response.status_v2);
+              const hasV2Result =
+                !isOpenV2Placeholder &&
+                !isIgnoredV2Placeholder && (
+                  response.status_v2 !== null ||
+                  response.code_v2 !== null ||
+                  response.score_v2 !== null
+                );
+              if (hasV2Result) {
+                inputStatus =
+                  response.status_v2 ?? response.status_v1 ?? response.status;
+                inputCode = response.code_v2 ?? undefined;
+                inputScore = response.score_v2 ?? undefined;
+              } else {
+                inputStatus = response.status_v1 ?? response.status;
+                inputCode = response.code_v1 ?? undefined;
+                inputScore = response.score_v1 ?? undefined;
+              }
             }
           }
           let responseValue = response.value as import('@iqbspecs/response/response.interface').ResponseValueType;
@@ -1394,6 +1405,7 @@ export class CodingProcessService {
               codedResult.id,
               codedSubform,
               completeDerivedRecalculation.targetResults,
+              completeDerivedRecalculation.independentRecalculationAvailable,
               scheme.variableCodings || []
             );
           let persistedStatus = codedStatus;
@@ -1689,9 +1701,14 @@ export class CodingProcessService {
     codedResultId: string,
     codedSubform: string,
     independentlyRecalculatedResults: Map<string, AutocoderResponse>,
+    independentRecalculationAvailable: boolean,
     variableCodings: VariableCodingData[]
   ): CompleteDerivedTupleResolution {
-    if (autoCoderRun !== 2 || !existingResponse) {
+    if (
+      autoCoderRun !== 2 ||
+      !existingResponse ||
+      !independentRecalculationAvailable
+    ) {
       return { action: 'NOT_APPLICABLE' };
     }
 
@@ -1814,7 +1831,8 @@ export class CodingProcessService {
     if (autoCoderRun !== 2) {
       return {
         targetResults: new Map(),
-        authoritativeResults: null
+        authoritativeResults: null,
+        independentRecalculationAvailable: true
       };
     }
 
@@ -1864,14 +1882,30 @@ export class CodingProcessService {
     if (targetsWithoutLevels.length === 0) {
       return {
         targetResults: new Map(),
-        authoritativeResults: null
+        authoritativeResults: null,
+        independentRecalculationAvailable: true
       };
     }
 
-    const dependencyLevels = new Map(
-      Autocoder.CodingSchemeFactory.getVariableDependencyTree(variableCodings)
-        .map(node => [node.id, node.level] as const)
-    );
+    let dependencyLevels: Map<string, number>;
+    try {
+      dependencyLevels = new Map(
+        Autocoder.CodingSchemeFactory.getVariableDependencyTree(variableCodings)
+          .map(node => [node.id, node.level] as const)
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        'Skipping independent complete-derived-result recalculation because ' +
+        `the coding-scheme dependency graph cannot be ordered: ${message}. ` +
+        'Falling back to the regular autocoder result.'
+      );
+      return {
+        targetResults: new Map(),
+        authoritativeResults: null,
+        independentRecalculationAvailable: false
+      };
+    }
     const targets = targetsWithoutLevels.map(target => {
       const level = dependencyLevels.get(target.codingId);
       if (level === undefined) {
@@ -1999,7 +2033,8 @@ export class CodingProcessService {
       targetResults: resultsByTarget,
       authoritativeResults: requiresAuthoritativeRecalculation ?
         Autocoder.CodingSchemeFactory.code(workingInput, variableCodings) :
-        null
+        null,
+      independentRecalculationAvailable: true
     };
   }
 

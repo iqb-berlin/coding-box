@@ -1357,6 +1357,147 @@ describe('CodingProcessService', () => {
         );
     });
 
+    it('keeps regular circular-scheme results when a complete derived tuple exists', async () => {
+      const firstResponse = createMockResponse(1, 1, 'a', '1');
+      firstResponse.is_autocoder_generated = true;
+      firstResponse.status_v1 = 8;
+      firstResponse.status_v2 = 5;
+      firstResponse.code_v2 = 4;
+      firstResponse.score_v2 = 0;
+      const secondResponse = createMockResponse(2, 1, 'b', '2');
+
+      configureDerivedSecondRun(
+        firstResponse,
+        secondResponse,
+        [],
+        [
+          {
+            id: 'a',
+            sourceType: 'CONCAT_CODE',
+            deriveSources: ['b'],
+            codes: []
+          },
+          {
+            id: 'b',
+            sourceType: 'CONCAT_CODE',
+            deriveSources: ['a'],
+            codes: []
+          }
+        ]
+      );
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      expect(result.statusCounts).toEqual({
+        CODING_COMPLETE: 1,
+        DERIVE_ERROR: 1
+      });
+      expect(Autocoder.CodingSchemeFactory.getVariableDependencyTree)
+        .toHaveBeenCalledTimes(1);
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .toHaveBeenCalledWith(
+          workspaceId,
+          expect.arrayContaining([
+            expect.objectContaining({
+              id: 1,
+              code_v3: 4,
+              score_v3: 0,
+              status_v3: 'CODING_COMPLETE'
+            }),
+            expect.objectContaining({ id: 2, status_v3: 'DERIVE_ERROR' })
+          ]),
+          expect.anything(),
+          undefined,
+          expect.any(Function),
+          undefined,
+          expect.any(Object),
+          expect.any(Object)
+        );
+    });
+
+    it.each(['v1', 'v2'] as const)(
+      'does not resurrect an invalidated %s tuple when the dependency graph is circular',
+      async invalidatedVersion => {
+        const firstResponse = createMockResponse(1, 1, 'a', '1');
+        firstResponse.is_autocoder_generated = true;
+        firstResponse.autocoder_invalidated_version = invalidatedVersion;
+        if (invalidatedVersion === 'v1') {
+          firstResponse.status_v1 = 5;
+          firstResponse.code_v1 = 4;
+          firstResponse.score_v1 = 0;
+        } else {
+          firstResponse.status_v2 = 5;
+          firstResponse.code_v2 = 4;
+          firstResponse.score_v2 = 0;
+        }
+        const secondResponse = createMockResponse(2, 1, 'b', '2');
+
+        configureDerivedSecondRun(
+          firstResponse,
+          secondResponse,
+          [],
+          [
+            {
+              id: 'a',
+              sourceType: 'CONCAT_CODE',
+              deriveSources: ['b'],
+              codes: []
+            },
+            {
+              id: 'b',
+              sourceType: 'CONCAT_CODE',
+              deriveSources: ['a'],
+              codes: []
+            }
+          ]
+        );
+
+        const result = await service.processTestPersonsBatch(
+          workspaceId,
+          personIds,
+          2
+        );
+
+        expect(result.statusCounts).toEqual({ DERIVE_ERROR: 2 });
+        const regularAutocoderInput =
+          (Autocoder.CodingSchemeFactory.code as jest.Mock).mock.calls[0][0];
+        expect(regularAutocoderInput).toEqual(expect.arrayContaining([
+          expect.objectContaining({
+            id: 'a',
+            status: 'UNSET',
+            code: undefined,
+            score: undefined
+          })
+        ]));
+        expect(mockResponseManagementService.updateResponsesInDatabase)
+          .toHaveBeenCalledWith(
+            workspaceId,
+            expect.arrayContaining([
+              expect.objectContaining({
+                id: 1,
+                code_v3: null,
+                score_v3: null,
+                status_v3: 'DERIVE_ERROR'
+              }),
+              expect.objectContaining({
+                id: 2,
+                status_v3: 'DERIVE_ERROR'
+              })
+            ]),
+            expect.anything(),
+            undefined,
+            expect.any(Function),
+            undefined,
+            expect.any(Object),
+            expect.any(Object)
+          );
+      }
+    );
+
     it('rejects duplicate independently recalculated derived results', async () => {
       const sourceResponse = createMockResponse(1, 1, 'source', 'source-value');
       sourceResponse.status_v2 = 5;
