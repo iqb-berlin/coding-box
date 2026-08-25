@@ -20,7 +20,12 @@ import { ResponseEntity } from '../../entities/response.entity';
 jest.mock('@iqb/responses', () => ({
   CodingSchemeFactory: {
     code: jest.fn().mockReturnValue([]),
-    validate: jest.fn().mockReturnValue([])
+    validate: jest.fn().mockReturnValue([]),
+    getVariableDependencyTree: jest.fn().mockImplementation(
+      variableCodings => jest.requireActual<typeof import('@iqb/responses')>(
+        '@iqb/responses'
+      ).CodingSchemeFactory.getVariableDependencyTree(variableCodings)
+    )
   }
 }));
 
@@ -139,6 +144,8 @@ describe('CodingProcessService', () => {
     score_v2: null,
     score_v3: null,
     is_autocoder_generated: false,
+    autocoder_invalidated_version: null,
+    inherits_v1_for_v2: false,
     subform: '',
     unit: undefined
   });
@@ -182,6 +189,7 @@ describe('CodingProcessService', () => {
     isReleased: boolean;
     manager: {
       update: jest.Mock;
+      query: jest.Mock;
       getRepository: jest.Mock;
     };
   };
@@ -233,6 +241,7 @@ describe('CodingProcessService', () => {
       isReleased: false,
       manager: {
         update: jest.fn().mockResolvedValue({ affected: 1 }),
+        query: jest.fn().mockResolvedValue([]),
         getRepository: jest.fn().mockReturnValue({
           createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder)
         })
@@ -262,7 +271,7 @@ describe('CodingProcessService', () => {
           provide: getRepositoryToken(ResponseEntity),
           useValue: {
             find: jest.fn().mockResolvedValue([]),
-            query: jest.fn(),
+            query: jest.fn().mockResolvedValue([]),
             createQueryBuilder: jest.fn().mockImplementation(() => mockQueryBuilder),
             manager: {
               connection: {
@@ -446,6 +455,76 @@ describe('CodingProcessService', () => {
         return Promise.resolve(null);
       });
     });
+
+    const configureDerivedSecondRun = (
+      sourceResponse: ResponseEntity,
+      derivedResponse: ResponseEntity,
+      additionalResponses: ResponseEntity[] = [],
+      variableCodings: object[] = [
+        { id: 'source', sourceType: 'BASE' },
+        {
+          id: 'derived-target',
+          alias: '_01',
+          sourceType: 'CONCAT_CODE',
+          deriveSources: ['source'],
+          codeModel: 'MANUAL_AND_RULES',
+          codes: [
+            {
+              id: 4,
+              score: 0,
+              ruleSets: [
+                {
+                  rules: [
+                    { method: 'MATCH', parameters: ['1'] }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    ) => {
+      const actualAutocoder = jest.requireActual<
+      typeof import('@iqb/responses')
+      >('@iqb/responses');
+      (Autocoder.CodingSchemeFactory.code as jest.Mock).mockImplementation(
+        actualAutocoder.CodingSchemeFactory.code
+      );
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([[
+          'TEST_UNIT_1',
+          new Set([
+            sourceResponse.variableid,
+            derivedResponse.variableid,
+            ...additionalResponses.map(response => response.variableid)
+          ])
+        ]])
+      );
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce([mockUnits[0]])
+        .mockResolvedValueOnce([
+          sourceResponse,
+          derivedResponse,
+          ...additionalResponses
+        ]);
+      (fileUploadRepository.find as jest.Mock)
+        .mockReset()
+        .mockResolvedValueOnce([
+          createMockFileUpload(
+            'ALIAS_1',
+            '<xml><codingSchemeRef>TEST-SCHEME-REF</codingSchemeRef></xml>'
+          )
+        ])
+        .mockResolvedValueOnce([
+          createMockFileUpload(
+            'TEST-SCHEME-REF',
+            JSON.stringify({
+              version: '3.4',
+              variableCodings
+            })
+          )
+        ]);
+    };
 
     it('should handle an empty person IDs array', async () => {
       // Override mocks to ensure no data is returned for empty array
@@ -850,6 +929,10 @@ describe('CodingProcessService', () => {
       responsesWithOpenV2Placeholder[0].code_v2 = null;
       responsesWithOpenV2Placeholder[0].score_v2 = null;
 
+      (responseRepository.query as jest.Mock).mockResolvedValueOnce([
+        { id: 1 }
+      ]);
+
       mockQueryBuilder.getMany
         .mockResolvedValueOnce([mockUnits[0]])
         .mockResolvedValueOnce(responsesWithOpenV2Placeholder);
@@ -864,6 +947,36 @@ describe('CodingProcessService', () => {
         status: 'CODING_COMPLETE',
         code: 1,
         score: 1
+      }));
+    });
+
+    it('does not inherit v1 for an applied incomplete v2 result', async () => {
+      const responseWithAppliedV2Result = createMockResponse(1, 1, 'var1');
+      responseWithAppliedV2Result.status_v1 = 5;
+      responseWithAppliedV2Result.code_v1 = 1;
+      responseWithAppliedV2Result.score_v1 = 1;
+      responseWithAppliedV2Result.status_v2 = 8;
+      responseWithAppliedV2Result.code_v2 = null;
+      responseWithAppliedV2Result.score_v2 = null;
+
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce([mockUnits[0]])
+        .mockResolvedValueOnce([responseWithAppliedV2Result]);
+
+      await service.processTestPersonsBatch(workspaceId, personIds, 2);
+
+      expect(responseRepository.query).toHaveBeenCalledWith(
+        expect.stringContaining("effective_status_applied_cj.status = 'results_applied'"),
+        [[1]]
+      );
+      const [inputResponses] = (
+        Autocoder.CodingSchemeFactory.code as jest.Mock
+      ).mock.calls[0];
+      expect(inputResponses[0]).toEqual(expect.objectContaining({
+        id: 'var1',
+        status: 'CODING_INCOMPLETE',
+        code: undefined,
+        score: undefined
       }));
     });
 
@@ -906,6 +1019,968 @@ describe('CodingProcessService', () => {
           subform: null
         })
       ]));
+    });
+
+    it('preserves a complete manual v2 tuple for an unchanged independently derived value', async () => {
+      const sourceResponse = createMockResponse(1, 1, 'source', 'source-value');
+      sourceResponse.status_v2 = 5;
+      sourceResponse.code_v2 = 1;
+      sourceResponse.score_v2 = 1;
+      const derivedResponse = createMockResponse(2, 1, '_01', '1');
+      derivedResponse.is_autocoder_generated = true;
+      derivedResponse.status_v1 = 8;
+      derivedResponse.code_v1 = null;
+      derivedResponse.score_v1 = null;
+      derivedResponse.status_v2 = 5;
+      derivedResponse.code_v2 = 4;
+      derivedResponse.score_v2 = 0;
+
+      configureDerivedSecondRun(sourceResponse, derivedResponse);
+      (Autocoder.CodingSchemeFactory.code as jest.Mock)
+        .mockImplementationOnce(() => [
+          {
+            id: '_01',
+            value: '1',
+            status: 'CODING_INCOMPLETE',
+            subform: ''
+          }
+        ]);
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .toHaveBeenCalledWith(
+          workspaceId,
+          expect.arrayContaining([
+            expect.objectContaining({
+              id: 2,
+              code_v3: 4,
+              status_v3: 'CODING_COMPLETE',
+              score_v3: 0
+            })
+          ]),
+          expect.anything(),
+          undefined,
+          expect.any(Function),
+          undefined,
+          expect.any(Object),
+          expect.objectContaining({
+            unitIds: [1],
+            autoCoderRun: 2,
+            markCurrentVersion: 'v3'
+          })
+        );
+      expect(result.statusCounts).toEqual({ CODING_COMPLETE: 1 });
+      expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledTimes(2);
+    });
+
+    it('inherits a complete v1 tuple through a pre-existing v2 UNSET state', async () => {
+      const sourceResponse = createMockResponse(1, 1, 'source', 'source-value');
+      sourceResponse.status_v2 = 5;
+      sourceResponse.code_v2 = 1;
+      sourceResponse.score_v2 = 1;
+      const derivedResponse = createMockResponse(2, 1, '_01', '1');
+      derivedResponse.is_autocoder_generated = true;
+      derivedResponse.status_v1 = 5;
+      derivedResponse.code_v1 = 4;
+      derivedResponse.score_v1 = 0;
+      derivedResponse.status_v2 = 0;
+      derivedResponse.code_v2 = null;
+      derivedResponse.score_v2 = null;
+      derivedResponse.autocoder_invalidated_version = null;
+
+      configureDerivedSecondRun(sourceResponse, derivedResponse);
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      const codedResponses =
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1];
+      expect(codedResponses).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 2,
+          autocoderInvalidatedVersion: null,
+          code_v3: 4,
+          status_v3: 'CODING_COMPLETE',
+          score_v3: 0
+        })
+      ]));
+      expect(
+        (Autocoder.CodingSchemeFactory.code as jest.Mock).mock.calls[0][0]
+      ).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: '_01',
+          status: 'CODING_COMPLETE',
+          code: 4,
+          score: 0
+        })
+      ]));
+      expect(result.statusCounts).toEqual({ CODING_COMPLETE: 2 });
+      expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not preserve v1 through an applied incomplete v2 result', async () => {
+      const sourceResponse = createMockResponse(1, 1, 'source', 'source-value');
+      sourceResponse.status_v2 = 5;
+      sourceResponse.code_v2 = 1;
+      sourceResponse.score_v2 = 1;
+      const derivedResponse = createMockResponse(2, 1, '_01', '1');
+      derivedResponse.is_autocoder_generated = true;
+      derivedResponse.status_v1 = 5;
+      derivedResponse.code_v1 = 4;
+      derivedResponse.score_v1 = 0;
+      derivedResponse.status_v2 = 8;
+      derivedResponse.code_v2 = null;
+      derivedResponse.score_v2 = null;
+
+      configureDerivedSecondRun(sourceResponse, derivedResponse);
+      (Autocoder.CodingSchemeFactory.code as jest.Mock)
+        .mockImplementationOnce(() => [{
+          id: '_01',
+          value: '1',
+          status: 'CODING_INCOMPLETE',
+          subform: ''
+        }]);
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      const codedResponses =
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1];
+      expect(codedResponses).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 2,
+          code_v3: null,
+          status_v3: 'CODING_INCOMPLETE',
+          score_v3: null
+        })
+      ]));
+      const derivedUpdate = codedResponses.find(response => response.id === 2);
+      expect(derivedUpdate).not.toHaveProperty('autocoderInvalidatedVersion');
+      expect(derivedUpdate).not.toHaveProperty('code_v1');
+      expect(result.statusCounts).toEqual({ CODING_INCOMPLETE: 1 });
+      expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not invalidate complete tuples on non-generated responses', async () => {
+      const sourceResponse = createMockResponse(1, 1, 'source', 'source-value');
+      sourceResponse.status_v2 = 5;
+      sourceResponse.code_v2 = 2;
+      sourceResponse.score_v2 = 1;
+      const importedResponse = createMockResponse(2, 1, '_01', '1');
+      importedResponse.status_v1 = 8;
+      importedResponse.status_v2 = 5;
+      importedResponse.code_v2 = 4;
+      importedResponse.score_v2 = 0;
+
+      configureDerivedSecondRun(
+        sourceResponse,
+        importedResponse,
+        [],
+        [
+          { id: 'source', sourceType: 'BASE' },
+          {
+            id: 'derived-target',
+            alias: '_01',
+            sourceType: 'CONCAT_CODE',
+            deriveSources: ['source'],
+            codeModel: 'MANUAL_AND_RULES',
+            codes: [
+              {
+                id: 6,
+                score: 1,
+                ruleSets: [
+                  {
+                    rules: [
+                      { method: 'MATCH', parameters: ['2'] }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      );
+
+      await service.processTestPersonsBatch(workspaceId, personIds, 2);
+
+      const codedResponses =
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1];
+      const importedUpdate = codedResponses.find(response => response.id === 2);
+      expect(importedUpdate).toEqual(expect.objectContaining({
+        id: 2,
+        code_v3: 4,
+        status_v3: 'CODING_COMPLETE',
+        score_v3: 0
+      }));
+      expect(importedUpdate).not.toHaveProperty('code_v2');
+      expect(importedUpdate).not.toHaveProperty('status_v2');
+      expect(importedUpdate).not.toHaveProperty('value');
+      expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledTimes(1);
+    });
+
+    it('preserves downstream manual tuples after preserving their derived source', async () => {
+      const baseResponse = createMockResponse(1, 1, 'base', 'base-value');
+      baseResponse.status_v2 = 5;
+      baseResponse.code_v2 = 1;
+      baseResponse.score_v2 = 1;
+      const firstDerivedResponse = createMockResponse(2, 1, 'A', '1');
+      firstDerivedResponse.is_autocoder_generated = true;
+      firstDerivedResponse.status_v1 = 8;
+      firstDerivedResponse.status_v2 = 5;
+      firstDerivedResponse.code_v2 = 7;
+      firstDerivedResponse.score_v2 = 0;
+      const secondDerivedResponse = createMockResponse(3, 1, 'B', '7');
+      secondDerivedResponse.is_autocoder_generated = true;
+      secondDerivedResponse.status_v1 = 8;
+      secondDerivedResponse.status_v2 = 5;
+      secondDerivedResponse.code_v2 = 9;
+      secondDerivedResponse.score_v2 = 0;
+
+      configureDerivedSecondRun(
+        baseResponse,
+        firstDerivedResponse,
+        [secondDerivedResponse],
+        [
+          { id: 'base', sourceType: 'BASE' },
+          {
+            id: 'derived-a',
+            alias: 'A',
+            sourceType: 'CONCAT_CODE',
+            deriveSources: ['base'],
+            codeModel: 'MANUAL_AND_RULES',
+            codes: []
+          },
+          {
+            id: 'derived-b',
+            alias: 'B',
+            sourceType: 'CONCAT_CODE',
+            deriveSources: ['derived-a'],
+            codeModel: 'MANUAL_AND_RULES',
+            codes: []
+          }
+        ]
+      );
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      const codedResponses =
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1];
+      expect(codedResponses).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 2,
+          code_v3: 7,
+          status_v3: 'CODING_COMPLETE',
+          score_v3: 0
+        }),
+        expect.objectContaining({
+          id: 3,
+          code_v3: 9,
+          status_v3: 'CODING_COMPLETE',
+          score_v3: 0
+        })
+      ]));
+      expect(result.statusCounts).toEqual({ CODING_COMPLETE: 3 });
+      expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledTimes(3);
+      expect(
+        (Autocoder.CodingSchemeFactory.code as jest.Mock).mock.results[1].value
+      ).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'A', value: '1', status: 'NO_CODING' })
+      ]));
+      expect(
+        (Autocoder.CodingSchemeFactory.code as jest.Mock).mock.results[2].value
+      ).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'B', value: '7', status: 'NO_CODING' })
+      ]));
+    });
+
+    it('keeps run 2 behavior for circular schemes without complete derived tuples', async () => {
+      const firstResponse = createMockResponse(1, 1, 'a', '1');
+      const secondResponse = createMockResponse(2, 1, 'b', '2');
+
+      configureDerivedSecondRun(
+        firstResponse,
+        secondResponse,
+        [],
+        [
+          {
+            id: 'a',
+            sourceType: 'CONCAT_CODE',
+            deriveSources: ['b'],
+            codes: []
+          },
+          {
+            id: 'b',
+            sourceType: 'CONCAT_CODE',
+            deriveSources: ['a'],
+            codes: []
+          }
+        ]
+      );
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      expect(result.statusCounts).toEqual({ DERIVE_ERROR: 2 });
+      expect(Autocoder.CodingSchemeFactory.getVariableDependencyTree)
+        .not.toHaveBeenCalled();
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .toHaveBeenCalledWith(
+          workspaceId,
+          expect.arrayContaining([
+            expect.objectContaining({ id: 1, status_v3: 'DERIVE_ERROR' }),
+            expect.objectContaining({ id: 2, status_v3: 'DERIVE_ERROR' })
+          ]),
+          expect.anything(),
+          undefined,
+          expect.any(Function),
+          undefined,
+          expect.any(Object),
+          expect.any(Object)
+        );
+    });
+
+    it('keeps regular circular-scheme results when a complete derived tuple exists', async () => {
+      const firstResponse = createMockResponse(1, 1, 'a', '1');
+      firstResponse.is_autocoder_generated = true;
+      firstResponse.status_v1 = 8;
+      firstResponse.status_v2 = 5;
+      firstResponse.code_v2 = 4;
+      firstResponse.score_v2 = 0;
+      const secondResponse = createMockResponse(2, 1, 'b', '2');
+
+      configureDerivedSecondRun(
+        firstResponse,
+        secondResponse,
+        [],
+        [
+          {
+            id: 'a',
+            sourceType: 'CONCAT_CODE',
+            deriveSources: ['b'],
+            codes: []
+          },
+          {
+            id: 'b',
+            sourceType: 'CONCAT_CODE',
+            deriveSources: ['a'],
+            codes: []
+          }
+        ]
+      );
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      expect(result.statusCounts).toEqual({
+        CODING_COMPLETE: 1,
+        DERIVE_ERROR: 1
+      });
+      expect(Autocoder.CodingSchemeFactory.getVariableDependencyTree)
+        .toHaveBeenCalledTimes(1);
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .toHaveBeenCalledWith(
+          workspaceId,
+          expect.arrayContaining([
+            expect.objectContaining({
+              id: 1,
+              code_v3: 4,
+              score_v3: 0,
+              status_v3: 'CODING_COMPLETE'
+            }),
+            expect.objectContaining({ id: 2, status_v3: 'DERIVE_ERROR' })
+          ]),
+          expect.anything(),
+          undefined,
+          expect.any(Function),
+          undefined,
+          expect.any(Object),
+          expect.any(Object)
+        );
+    });
+
+    it.each(['v1', 'v2'] as const)(
+      'does not resurrect an invalidated %s tuple when the dependency graph is circular',
+      async invalidatedVersion => {
+        const firstResponse = createMockResponse(1, 1, 'a', '1');
+        firstResponse.is_autocoder_generated = true;
+        firstResponse.autocoder_invalidated_version = invalidatedVersion;
+        if (invalidatedVersion === 'v1') {
+          firstResponse.status_v1 = 5;
+          firstResponse.code_v1 = 4;
+          firstResponse.score_v1 = 0;
+        } else {
+          firstResponse.status_v2 = 5;
+          firstResponse.code_v2 = 4;
+          firstResponse.score_v2 = 0;
+        }
+        const secondResponse = createMockResponse(2, 1, 'b', '2');
+
+        configureDerivedSecondRun(
+          firstResponse,
+          secondResponse,
+          [],
+          [
+            {
+              id: 'a',
+              sourceType: 'CONCAT_CODE',
+              deriveSources: ['b'],
+              codes: []
+            },
+            {
+              id: 'b',
+              sourceType: 'CONCAT_CODE',
+              deriveSources: ['a'],
+              codes: []
+            }
+          ]
+        );
+
+        const result = await service.processTestPersonsBatch(
+          workspaceId,
+          personIds,
+          2
+        );
+
+        expect(result.statusCounts).toEqual({ DERIVE_ERROR: 2 });
+        const regularAutocoderInput =
+          (Autocoder.CodingSchemeFactory.code as jest.Mock).mock.calls[0][0];
+        expect(regularAutocoderInput).toEqual(expect.arrayContaining([
+          expect.objectContaining({
+            id: 'a',
+            status: 'UNSET',
+            code: undefined,
+            score: undefined
+          })
+        ]));
+        expect(mockResponseManagementService.updateResponsesInDatabase)
+          .toHaveBeenCalledWith(
+            workspaceId,
+            expect.arrayContaining([
+              expect.objectContaining({
+                id: 1,
+                code_v3: null,
+                score_v3: null,
+                status_v3: 'DERIVE_ERROR'
+              }),
+              expect.objectContaining({
+                id: 2,
+                status_v3: 'DERIVE_ERROR'
+              })
+            ]),
+            expect.anything(),
+            undefined,
+            expect.any(Function),
+            undefined,
+            expect.any(Object),
+            expect.any(Object)
+          );
+      }
+    );
+
+    it('rejects duplicate independently recalculated derived results', async () => {
+      const sourceResponse = createMockResponse(1, 1, 'source', 'source-value');
+      sourceResponse.status_v2 = 5;
+      sourceResponse.code_v2 = 1;
+      sourceResponse.score_v2 = 1;
+      const derivedResponse = createMockResponse(2, 1, '_01', '1');
+      derivedResponse.is_autocoder_generated = true;
+      derivedResponse.status_v1 = 8;
+      derivedResponse.code_v1 = null;
+      derivedResponse.score_v1 = null;
+      derivedResponse.status_v2 = 5;
+      derivedResponse.code_v2 = 4;
+      derivedResponse.score_v2 = 0;
+      const rawResult = {
+        id: '_01',
+        value: '1',
+        status: 'CODING_INCOMPLETE',
+        subform: ''
+      };
+      const recalculatedResult = {
+        id: '_01',
+        value: '1',
+        status: 'CODING_COMPLETE',
+        code: 4,
+        score: 0,
+        subform: ''
+      };
+
+      configureDerivedSecondRun(sourceResponse, derivedResponse);
+      (Autocoder.CodingSchemeFactory.code as jest.Mock)
+        .mockImplementationOnce(() => [rawResult])
+        .mockImplementationOnce(() => [
+          recalculatedResult,
+          recalculatedResult
+        ]);
+
+      await expect(service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      )).rejects.toThrow(
+        'Autocoder returned multiple independently recalculated results'
+      );
+      expect(
+        mockResponseManagementService.updateResponsesInDatabase
+      ).not.toHaveBeenCalled();
+    });
+
+    it('invalidates a complete manual v2 tuple when the derived value changed', async () => {
+      const sourceResponse = createMockResponse(1, 1, 'source', 'source-value');
+      sourceResponse.status_v2 = 5;
+      sourceResponse.code_v2 = -98;
+      sourceResponse.score_v2 = 0;
+      const derivedResponse = createMockResponse(2, 1, '_01', '1');
+      derivedResponse.is_autocoder_generated = true;
+      derivedResponse.status_v1 = 8;
+      derivedResponse.code_v1 = null;
+      derivedResponse.score_v1 = null;
+      derivedResponse.status_v2 = 5;
+      derivedResponse.code_v2 = 4;
+      derivedResponse.score_v2 = 0;
+      const warnSpy = jest.spyOn(
+        (service as unknown as {
+          logger: { warn: (message: string) => void };
+        }).logger,
+        'warn'
+      );
+
+      configureDerivedSecondRun(sourceResponse, derivedResponse);
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      const codedResponses =
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1];
+      expect(codedResponses).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 2,
+          value: '-98',
+          status: 3,
+          autocoderInvalidatedVersion: 'v2',
+          code_v3: null,
+          status_v3: 'CODING_INCOMPLETE',
+          score_v3: null
+        })
+      ]));
+      const derivedUpdate = codedResponses.find(response => response.id === 2);
+      expect(derivedUpdate).not.toHaveProperty('code_v2');
+      expect(derivedUpdate).not.toHaveProperty('status_v2');
+      expect(derivedUpdate).not.toHaveProperty('score_v2');
+      expect(result.statusCounts).toEqual({
+        CODING_COMPLETE: 1,
+        CODING_INCOMPLETE: 1
+      });
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('recalculated derived value changed')
+      );
+      expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledTimes(3);
+      expect(
+        (Autocoder.CodingSchemeFactory.code as jest.Mock).mock.results[0].value
+      ).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: '_01',
+          value: '1',
+          status: 'CODING_COMPLETE',
+          code: 4
+        })
+      ]));
+      expect(
+        (Autocoder.CodingSchemeFactory.code as jest.Mock).mock.results[1].value
+      ).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: '_01',
+          value: '-98',
+          status: 'CODING_INCOMPLETE'
+        })
+      ]));
+    });
+
+    it('persists a changed derived value with its newly calculated tuple', async () => {
+      const sourceResponse = createMockResponse(1, 1, 'source', 'source-value');
+      sourceResponse.status_v2 = 5;
+      sourceResponse.code_v2 = 2;
+      sourceResponse.score_v2 = 1;
+      const derivedResponse = createMockResponse(2, 1, '_01', '1');
+      derivedResponse.is_autocoder_generated = true;
+      derivedResponse.status_v1 = 8;
+      derivedResponse.status_v2 = 5;
+      derivedResponse.code_v2 = 4;
+      derivedResponse.score_v2 = 0;
+
+      configureDerivedSecondRun(
+        sourceResponse,
+        derivedResponse,
+        [],
+        [
+          { id: 'source', sourceType: 'BASE' },
+          {
+            id: 'derived-target',
+            alias: '_01',
+            sourceType: 'CONCAT_CODE',
+            deriveSources: ['source'],
+            codeModel: 'MANUAL_AND_RULES',
+            codes: [
+              {
+                id: 6,
+                score: 1,
+                ruleSets: [
+                  {
+                    rules: [
+                      { method: 'MATCH', parameters: ['2'] }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      );
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      const codedResponses =
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1];
+      expect(codedResponses).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 2,
+          value: '2',
+          status: 3,
+          autocoderInvalidatedVersion: 'v2',
+          code_v3: 6,
+          status_v3: 'CODING_COMPLETE',
+          score_v3: 1
+        })
+      ]));
+      const derivedUpdate = codedResponses.find(response => response.id === 2);
+      expect(derivedUpdate).not.toHaveProperty('code_v2');
+      expect(derivedUpdate).not.toHaveProperty('status_v2');
+      expect(derivedUpdate).not.toHaveProperty('score_v2');
+      expect(result.statusCounts).toEqual({ CODING_COMPLETE: 2 });
+    });
+
+    it('recalculates downstream results after a protected derived value changed', async () => {
+      const baseResponse = createMockResponse(1, 1, 'base', 'base-value');
+      baseResponse.status_v2 = 5;
+      baseResponse.code_v2 = 2;
+      baseResponse.score_v2 = 1;
+      const protectedResponse = createMockResponse(2, 1, 'A', '1');
+      protectedResponse.is_autocoder_generated = true;
+      protectedResponse.status_v1 = 8;
+      protectedResponse.status_v2 = 5;
+      protectedResponse.code_v2 = 4;
+      protectedResponse.score_v2 = 0;
+      const downstreamResponse = createMockResponse(3, 1, 'B', '4');
+      downstreamResponse.is_autocoder_generated = true;
+      downstreamResponse.status_v1 = 8;
+      downstreamResponse.status_v2 = 8;
+
+      configureDerivedSecondRun(
+        baseResponse,
+        protectedResponse,
+        [downstreamResponse],
+        [
+          { id: 'base', sourceType: 'BASE' },
+          {
+            id: 'derived-a',
+            alias: 'A',
+            sourceType: 'CONCAT_CODE',
+            deriveSources: ['base'],
+            codeModel: 'MANUAL_AND_RULES',
+            codes: [{
+              id: 6,
+              score: 1,
+              ruleSets: [{
+                rules: [{ method: 'MATCH', parameters: ['2'] }]
+              }]
+            }]
+          },
+          {
+            id: 'derived-b',
+            alias: 'B',
+            sourceType: 'CONCAT_CODE',
+            deriveSources: ['derived-a'],
+            codeModel: 'MANUAL_AND_RULES',
+            codes: [
+              {
+                id: 8,
+                score: 1,
+                ruleSets: [{
+                  rules: [{ method: 'MATCH', parameters: ['6'] }]
+                }]
+              },
+              {
+                id: 9,
+                score: 0,
+                ruleSets: [{
+                  rules: [{ method: 'MATCH', parameters: ['4'] }]
+                }]
+              }
+            ]
+          }
+        ]
+      );
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      const codedResponses =
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1];
+      expect(codedResponses).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 2,
+          value: '2',
+          autocoderInvalidatedVersion: 'v2',
+          code_v3: 6,
+          status_v3: 'CODING_COMPLETE',
+          score_v3: 1
+        }),
+        expect.objectContaining({
+          id: 3,
+          value: '6',
+          status: 3,
+          code_v3: 8,
+          status_v3: 'CODING_COMPLETE',
+          score_v3: 1
+        })
+      ]));
+      expect(codedResponses).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 3, code_v3: 9 })
+      ]));
+      expect(result.statusCounts).toEqual({ CODING_COMPLETE: 3 });
+      expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledTimes(3);
+    });
+
+    it('does not restore an invalidated manual tuple on a repeated run 2', async () => {
+      const sourceResponse = createMockResponse(1, 1, 'source', 'source-value');
+      sourceResponse.status_v2 = 5;
+      sourceResponse.code_v2 = 2;
+      sourceResponse.score_v2 = 1;
+      const derivedResponse = createMockResponse(2, 1, '_01', '1');
+      derivedResponse.is_autocoder_generated = true;
+      derivedResponse.status_v1 = 8;
+      derivedResponse.status_v2 = 5;
+      derivedResponse.code_v2 = 4;
+      derivedResponse.score_v2 = 0;
+      const variableCodings = [
+        { id: 'source', sourceType: 'BASE' },
+        {
+          id: 'derived-target',
+          alias: '_01',
+          sourceType: 'CONCAT_CODE',
+          deriveSources: ['source'],
+          codeModel: 'MANUAL_AND_RULES',
+          codes: [
+            {
+              id: 6,
+              score: 1,
+              ruleSets: [
+                {
+                  rules: [
+                    { method: 'MATCH', parameters: ['2'] }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ];
+
+      configureDerivedSecondRun(
+        sourceResponse,
+        derivedResponse,
+        [],
+        variableCodings
+      );
+      await service.processTestPersonsBatch(workspaceId, personIds, 2);
+
+      const firstRunResponses =
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1];
+      const firstRunDerived = firstRunResponses.find(
+        response => response.id === derivedResponse.id
+      );
+      expect(firstRunDerived).toEqual(expect.objectContaining({
+        value: '2',
+        autocoderInvalidatedVersion: 'v2',
+        code_v3: 6,
+        status_v3: 'CODING_COMPLETE',
+        score_v3: 1
+      }));
+      expect(firstRunDerived).not.toHaveProperty('code_v2');
+      expect(firstRunDerived).not.toHaveProperty('status_v2');
+      expect(firstRunDerived).not.toHaveProperty('score_v2');
+
+      derivedResponse.value = firstRunDerived.value;
+      derivedResponse.autocoder_invalidated_version =
+        firstRunDerived.autocoderInvalidatedVersion;
+      derivedResponse.code_v3 = firstRunDerived.code_v3;
+      derivedResponse.status_v3 = 5;
+      derivedResponse.score_v3 = firstRunDerived.score_v3;
+      mockResponseManagementService.updateResponsesInDatabase.mockClear();
+      mockQueryRunner.isReleased = false;
+      configureDerivedSecondRun(
+        sourceResponse,
+        derivedResponse,
+        [],
+        variableCodings
+      );
+
+      const secondResult = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      const secondRunResponses =
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1];
+      expect(secondRunResponses).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 2,
+          code_v3: 6,
+          status_v3: 'CODING_COMPLETE',
+          score_v3: 1
+        })
+      ]));
+      expect(secondRunResponses).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 2, code_v3: 4 })
+      ]));
+      expect(secondResult.statusCounts).toEqual({ CODING_COMPLETE: 2 });
+    });
+
+    it('invalidates the inherited v1 tuple separately when its derived value changed', async () => {
+      const sourceResponse = createMockResponse(1, 1, 'source', 'source-value');
+      sourceResponse.status_v2 = 5;
+      sourceResponse.code_v2 = -98;
+      sourceResponse.score_v2 = 0;
+      const derivedResponse = createMockResponse(2, 1, '_01', '1');
+      derivedResponse.is_autocoder_generated = true;
+      derivedResponse.status_v1 = 5;
+      derivedResponse.code_v1 = 4;
+      derivedResponse.score_v1 = 0;
+      derivedResponse.status_v2 = null;
+      derivedResponse.code_v2 = null;
+      derivedResponse.score_v2 = null;
+      const warnSpy = jest.spyOn(
+        (service as unknown as {
+          logger: { warn: (message: string) => void };
+        }).logger,
+        'warn'
+      );
+
+      configureDerivedSecondRun(sourceResponse, derivedResponse);
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .toHaveBeenCalledWith(
+          workspaceId,
+          expect.arrayContaining([
+            expect.objectContaining({
+              id: 2,
+              value: '-98',
+              status: 3,
+              autocoderInvalidatedVersion: 'v1',
+              code_v3: null,
+              status_v3: 'CODING_INCOMPLETE',
+              score_v3: null
+            })
+          ]),
+          expect.anything(),
+          undefined,
+          expect.any(Function),
+          undefined,
+          expect.any(Object),
+          expect.objectContaining({
+            unitIds: [1],
+            autoCoderRun: 2,
+            markCurrentVersion: 'v3'
+          })
+        );
+      expect(result.statusCounts).toEqual({
+        CODING_COMPLETE: 1,
+        CODING_INCOMPLETE: 1
+      });
+      expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledTimes(3);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('complete V1 tuple')
+      );
+
+      const firstRunResponses =
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1];
+      const firstRunDerived = firstRunResponses.find(
+        response => response.id === derivedResponse.id
+      );
+      expect(firstRunDerived).not.toHaveProperty('code_v1');
+      expect(firstRunDerived).not.toHaveProperty('status_v1');
+      expect(firstRunDerived).not.toHaveProperty('score_v1');
+      derivedResponse.value = firstRunDerived.value;
+      derivedResponse.autocoder_invalidated_version =
+        firstRunDerived.autocoderInvalidatedVersion;
+      derivedResponse.code_v3 = firstRunDerived.code_v3;
+      derivedResponse.status_v3 = 8;
+      derivedResponse.score_v3 = firstRunDerived.score_v3;
+      mockResponseManagementService.updateResponsesInDatabase.mockClear();
+      mockQueryRunner.isReleased = false;
+      configureDerivedSecondRun(sourceResponse, derivedResponse);
+
+      const secondResult = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      const secondRunResponses =
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1];
+      expect(secondRunResponses).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 2,
+          code_v3: null,
+          status_v3: 'CODING_INCOMPLETE',
+          score_v3: null
+        })
+      ]));
+      expect(secondRunResponses).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 2, code_v3: 4 })
+      ]));
+      expect(secondResult.statusCounts).toEqual({
+        CODING_COMPLETE: 1,
+        CODING_INCOMPLETE: 1
+      });
     });
 
     it('should keep existing generated rows marked during repeated second autocoder runs', async () => {

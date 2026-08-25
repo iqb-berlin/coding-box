@@ -142,7 +142,8 @@ describe('DoubleCodingReviewDecisionService', () => {
       value: 'supervisor note\n\n--- ORIGINAL RESPONSE ---\noriginal answer',
       status_v2: null,
       code_v2: null,
-      score_v2: null
+      score_v2: null,
+      autocoder_invalidated_version: 'v1'
     };
     const sourceUnit = makeCodingJobUnit({
       id: 77,
@@ -239,6 +240,7 @@ describe('DoubleCodingReviewDecisionService', () => {
     expect(sourceUnit.supervisor_comment).toBe('old comment');
     expect(response.code_v2).toBe(3);
     expect(response.score_v2).toBe(7);
+    expect(response.autocoder_invalidated_version).toBeNull();
     expect(response.value).toBe('original answer');
     expect(transactionalEntityManager.update).toHaveBeenCalled();
     expect(transactionalEntityManager.save).not.toHaveBeenCalledWith(
@@ -295,6 +297,7 @@ describe('DoubleCodingReviewDecisionService', () => {
       status_v2: 8,
       code_v2: null,
       score_v2: null,
+      autocoder_invalidated_version: 'v1',
       unit: { id: 1, name: 'UNIT_1' }
     };
     const sibling = {
@@ -305,6 +308,7 @@ describe('DoubleCodingReviewDecisionService', () => {
       status_v2: 8,
       code_v2: null,
       score_v2: null,
+      autocoder_invalidated_version: 'v2',
       unit: { id: 2, name: 'UNIT_1' }
     };
     const partialSibling = {
@@ -315,6 +319,7 @@ describe('DoubleCodingReviewDecisionService', () => {
       status_v2: 8,
       code_v2: -111,
       score_v2: null,
+      autocoder_invalidated_version: 'v2',
       unit: { id: 3, name: 'UNIT_1' }
     };
     const sourceUnit = makeCodingJobUnit({
@@ -383,7 +388,8 @@ describe('DoubleCodingReviewDecisionService', () => {
     expect(sibling).toMatchObject({
       status_v2: 5,
       code_v2: 3,
-      score_v2: 1
+      score_v2: 1,
+      autocoder_invalidated_version: null
     });
     expect(partialSibling).toMatchObject({
       status_v2: 8,
@@ -430,6 +436,7 @@ describe('DoubleCodingReviewDecisionService', () => {
       status_v2: 5,
       code_v2: 3,
       score_v2: 1,
+      autocoder_invalidated_version: 'v1',
       unit: { id: 1, name: 'UNIT_1' }
     };
     const sibling = {
@@ -440,6 +447,7 @@ describe('DoubleCodingReviewDecisionService', () => {
       status_v2: 8,
       code_v2: null,
       score_v2: null,
+      autocoder_invalidated_version: 'v2',
       unit: { id: 2, name: 'UNIT_1' }
     };
     const partialSibling = {
@@ -450,6 +458,7 @@ describe('DoubleCodingReviewDecisionService', () => {
       status_v2: 8,
       code_v2: -111,
       score_v2: null,
+      autocoder_invalidated_version: 'v2',
       unit: { id: 3, name: 'UNIT_1' }
     };
     const sourceUnit = makeCodingJobUnit({
@@ -540,7 +549,12 @@ describe('DoubleCodingReviewDecisionService', () => {
       protectedPartialCount: 1,
       failedCount: 0
     });
-    expect(sibling).toMatchObject({ status_v2: 5, code_v2: 3, score_v2: 1 });
+    expect(sibling).toMatchObject({
+      status_v2: 5,
+      code_v2: 3,
+      score_v2: 1,
+      autocoder_invalidated_version: null
+    });
     expect(partialSibling).toMatchObject({ status_v2: 8, code_v2: -111, score_v2: null });
     expect(candidateQueryBuilder.setLock).toHaveBeenCalled();
     expect(codingFreshnessService.markManualCodingCurrent).toHaveBeenCalledWith(

@@ -109,3 +109,13 @@ CREATE UNIQUE INDEX "double_coding_review_decision_open_draft_idx"
   WHERE "state" = 'draft';
 
 -- rollback DROP TABLE IF EXISTS "public"."double_coding_review_decision";
+
+-- changeset jurei733:1013-autocoder-derived-invalidation-version
+-- comment: Persist the source coding version invalidated by a changed derived value
+ALTER TABLE "public"."response"
+  ADD COLUMN "autocoder_invalidated_version" VARCHAR(2) NULL,
+  ADD CONSTRAINT "response_autocoder_invalidated_version_check"
+    CHECK ("autocoder_invalidated_version" IN ('v1', 'v2'));
+
+-- rollback ALTER TABLE "public"."response" DROP CONSTRAINT IF EXISTS "response_autocoder_invalidated_version_check";
+-- rollback ALTER TABLE "public"."response" DROP COLUMN IF EXISTS "autocoder_invalidated_version";

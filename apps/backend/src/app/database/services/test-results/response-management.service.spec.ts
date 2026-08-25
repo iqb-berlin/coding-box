@@ -508,6 +508,50 @@ describe('ResponseManagementService', () => {
       .toHaveBeenCalledWith(1, [1], 'v1', manager);
   });
 
+  it('updates the value and raw status of an existing generated response', async () => {
+    const manager = {
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      query: jest.fn().mockResolvedValue([])
+    };
+    const queryRunner = {
+      manager,
+      commitTransaction: jest.fn().mockResolvedValue(undefined),
+      rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+      release: jest.fn().mockResolvedValue(undefined)
+    } as unknown as QueryRunner;
+    const service = createService();
+
+    await service.updateResponsesInDatabase(
+      1,
+      [
+        {
+          id: 42,
+          isAutocoderGenerated: true,
+          value: '2',
+          status: 3,
+          autocoderInvalidatedVersion: 'v2',
+          code_v3: 6,
+          status_v3: 'CODING_COMPLETE',
+          score_v3: 1
+        }
+      ],
+      queryRunner
+    );
+
+    expect(manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      42,
+      {
+        value: '2',
+        status: 3,
+        autocoder_invalidated_version: 'v2',
+        code_v3: 6,
+        status_v3: 5,
+        score_v3: 1
+      }
+    );
+  });
+
   it('invalidates coding statistics after deleting a response directly', async () => {
     const selectQueryBuilder = {
       leftJoinAndSelect: jest.fn().mockReturnThis(),

@@ -206,7 +206,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
     const updateData = queryRunner.manager.update.mock.calls[0][2] as Partial<ResponseEntity>;
@@ -246,7 +247,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
     expect(codingJobService.markCodingJobResultsApplied).toHaveBeenCalledWith(
@@ -282,7 +284,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: -98,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
   });
@@ -313,7 +316,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: -97,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
   });
@@ -344,7 +348,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: -99,
         score_v2: 4,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
   });
@@ -483,7 +488,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
     expect(codingFreshnessService.markManualCodingCurrent).toHaveBeenCalledWith(
@@ -529,7 +535,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
     expect(codingJobService.markCodingJobResultsApplied).toHaveBeenCalled();
@@ -644,7 +651,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
     expect(codingFreshnessService.markManualCodingCurrent).toHaveBeenCalledWith(
@@ -738,7 +746,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
   });
@@ -764,7 +773,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
   });
@@ -842,7 +852,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
     expect(queryRunner.manager.update).not.toHaveBeenCalledWith(
@@ -963,7 +974,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
   });
@@ -1123,7 +1135,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
     expect(queryRunner.manager.update).not.toHaveBeenCalledWith(
@@ -1188,7 +1201,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
   });
@@ -1326,7 +1340,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: -98,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
     expect(missingsProfilesService.getMissingByIdForProfileOrDefault).toHaveBeenCalledWith(
@@ -1425,7 +1440,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: -98,
         score_v2: 0,
-        status_v2: statusStringToNumber('CODING_COMPLETE')
+        status_v2: statusStringToNumber('CODING_COMPLETE'),
+        autocoder_invalidated_version: null
       }
     );
 
