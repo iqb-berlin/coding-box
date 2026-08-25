@@ -30,7 +30,10 @@ describe('CodingAnalysisService aggregation settings', () => {
       query: jest.fn()
         .mockResolvedValueOnce([{ locked: true }])
         .mockResolvedValueOnce([{ pg_advisory_unlock: true }]),
-      release: jest.fn().mockResolvedValue(undefined)
+      release: jest.fn().mockResolvedValue(undefined),
+      manager: {
+        getRepository: jest.fn()
+      }
     };
     const queryBuilder = {
       select: jest.fn().mockReturnThis(),
@@ -48,6 +51,7 @@ describe('CodingAnalysisService aggregation settings', () => {
         }
       }
     } as unknown as Repository<ResponseEntity>;
+    queryRunner.manager.getRepository.mockReturnValue(responseRepository);
     const codingJobService = {
       getAggregationThreshold: jest.fn().mockResolvedValue(2),
       getResponseMatchingMode: jest.fn().mockResolvedValue([]),
@@ -122,8 +126,16 @@ describe('CodingAnalysisService aggregation settings', () => {
       aggregationActive: true,
       revertedResponses: 2
     });
-    expect(codingJobService.setAggregationThreshold).toHaveBeenCalledWith(7, 100);
-    expect(codingJobService.setResponseMatchingMode).toHaveBeenCalledWith(7, [ResponseMatchingFlag.IGNORE_CASE]);
+    expect(codingJobService.setAggregationThreshold).toHaveBeenCalledWith(
+      7,
+      100,
+      queryRunner.manager
+    );
+    expect(codingJobService.setResponseMatchingMode).toHaveBeenCalledWith(
+      7,
+      [ResponseMatchingFlag.IGNORE_CASE],
+      queryRunner.manager
+    );
     expect(responseRepository.update).toHaveBeenCalledWith(
       { id: expect.anything() },
       { code_v2: null, score_v2: null, status_v2: null }
@@ -181,7 +193,7 @@ describe('CodingAnalysisService aggregation settings', () => {
   });
 
   it('keeps no aggregation exclusive when saving settings', async () => {
-    const { service, codingJobService } = createService();
+    const { service, codingJobService, queryRunner } = createService();
 
     const result = await service.saveAggregationSettings(7, 2, [
       ResponseMatchingFlag.NO_AGGREGATION,
@@ -192,7 +204,7 @@ describe('CodingAnalysisService aggregation settings', () => {
     expect(result.aggregationActive).toBe(false);
     expect(codingJobService.setResponseMatchingMode).toHaveBeenCalledWith(7, [
       ResponseMatchingFlag.NO_AGGREGATION
-    ]);
+    ], queryRunner.manager);
   });
 
   it('clears the selected analysis cache before a forced restart', async () => {

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
 import Persons from '../../entities/persons.entity';
 import { Unit } from '../../entities/unit.entity';
@@ -336,12 +336,23 @@ export class CodingAnalysisService {
       const lockAttempt = await tryWithWorkspaceTestResultsMutationLock(
         this.responseRepository.manager.connection,
         workspaceId,
-        async () => {
-          await this.codingJobService.setAggregationThreshold(workspaceId, validThreshold);
+        async queryRunner => {
+          await this.codingJobService.setAggregationThreshold(
+            workspaceId,
+            validThreshold,
+            queryRunner.manager
+          );
           const savedFlags = await this.codingJobService
-            .setResponseMatchingMode(workspaceId, normalizedFlags);
+            .setResponseMatchingMode(
+              workspaceId,
+              normalizedFlags,
+              queryRunner.manager
+            );
           const revertedCount =
-            await this.revertMaterializedDuplicateAggregation(workspaceId);
+            await this.revertMaterializedDuplicateAggregation(
+              workspaceId,
+              queryRunner.manager
+            );
           return { savedFlags, revertedCount };
         }
       );
@@ -480,8 +491,13 @@ export class CodingAnalysisService {
     return Math.min(100, Math.max(2, Math.round(parsed)));
   }
 
-  private async revertMaterializedDuplicateAggregation(workspaceId: number): Promise<number> {
-    const aggregatedResponses = await this.responseRepository
+  private async revertMaterializedDuplicateAggregation(
+    workspaceId: number,
+    manager?: EntityManager
+  ): Promise<number> {
+    const responseRepository = manager?.getRepository(ResponseEntity) ??
+      this.responseRepository;
+    const aggregatedResponses = await responseRepository
       .createQueryBuilder('response')
       .select('response.id', 'id')
       .innerJoin('response.unit', 'unit')
@@ -502,7 +518,7 @@ export class CodingAnalysisService {
     const chunkSize = 1000;
     for (let i = 0; i < responseIds.length; i += chunkSize) {
       const chunk = responseIds.slice(i, i + chunkSize);
-      await this.responseRepository.update(
+      await responseRepository.update(
         { id: In(chunk) },
         {
           code_v2: null,

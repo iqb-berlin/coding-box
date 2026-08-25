@@ -3,7 +3,8 @@ import { DataSource, QueryRunner } from 'typeorm';
 import {
   lockWorkspaceTestResultsMutation,
   lockWorkspaceTestResultsMutationInTransaction,
-  unlockWorkspaceTestResultsMutation
+  unlockWorkspaceTestResultsMutation,
+  withWorkspaceTestResultsMutationLock
 } from '../shared/workspace-test-results-lock.util';
 import {
   lockWorkspaceFilesMutation,
@@ -83,6 +84,31 @@ describePostgres('Autocoder PostgreSQL locking', () => {
     await unlockWorkspaceTestResultsMutation(holder, workspaceId);
     await expect(waiterLock).resolves.toBeUndefined();
     await unlockWorkspaceTestResultsMutation(waiter, workspaceId);
+  });
+
+  it('keeps pool capacity for callbacks across different workspace mutations', async () => {
+    const workspaceIds = [1_900_000_008, 1_900_000_009];
+    const callbacks = workspaceIds.map(() => jest.fn(
+      async () => dataSource.query(
+        'SELECT pg_backend_pid() AS "backendPid"'
+      )
+    ));
+
+    const results = await Promise.all(workspaceIds.map((workspaceId, index) => (
+      withWorkspaceTestResultsMutationLock(
+        dataSource,
+        workspaceId,
+        callbacks[index]
+      )
+    )));
+
+    expect(results).toHaveLength(workspaceIds.length);
+    results.forEach(result => {
+      expect(result).toEqual([
+        { backendPid: expect.any(Number) }
+      ]);
+    });
+    callbacks.forEach(callback => expect(callback).toHaveBeenCalledTimes(1));
   });
 
   it('fails concurrent file mutations fast without starving the constrained pool', async () => {

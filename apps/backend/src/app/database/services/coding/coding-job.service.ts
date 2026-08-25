@@ -5774,10 +5774,13 @@ export class CodingJobService {
 
   async setResponseMatchingMode(
     workspaceId: number,
-    flags: ResponseMatchingFlag[]
+    flags: ResponseMatchingFlag[],
+    manager?: EntityManager
   ): Promise<ResponseMatchingFlag[]> {
     const normalizedFlags = this.normalizeResponseMatchingFlags(flags);
-    await this.settingRepository.save({
+    const settingRepository = manager?.getRepository(Setting) ??
+      this.settingRepository;
+    await settingRepository.save({
       key: `workspace-${workspaceId}-response-matching-mode`,
       content: JSON.stringify({ flags: normalizedFlags })
     });
@@ -8133,18 +8136,21 @@ export class CodingJobService {
    */
   async setAggregationThreshold(
     workspaceId: number,
-    threshold: number | null
+    threshold: number | null,
+    manager?: EntityManager
   ): Promise<void> {
     const settingKey = `workspace-${workspaceId}-duplicate-aggregation-threshold`;
+    const settingRepository = manager?.getRepository(Setting) ??
+      this.settingRepository;
 
     if (threshold === null) {
       // Explicitly disable aggregation
-      await this.settingRepository.save({
+      await settingRepository.save({
         key: settingKey,
         content: 'disabled'
       });
     } else {
-      await this.settingRepository.save({
+      await settingRepository.save({
         key: settingKey,
         content: threshold.toString()
       });
