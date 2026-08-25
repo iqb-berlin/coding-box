@@ -1,5 +1,10 @@
 import {
-  BadRequestException, forwardRef, Inject, Injectable, Logger
+  BadRequestException,
+  ConflictException,
+  forwardRef,
+  Inject,
+  Injectable,
+  Logger
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Connection, In, Repository } from 'typeorm';
@@ -25,6 +30,12 @@ import {
   getCodingIncompleteVariablesCacheKeys,
   getCodingIncompleteVariablesCacheVersionKey
 } from '../coding/coding-incomplete-variables-cache-key.util';
+import {
+  tryWithWorkspaceFilesMutationLock
+} from '../shared/workspace-files-lock.util';
+import {
+  tryWithWorkspaceAutocoderInputMutationLocks
+} from '../shared/workspace-autocoder-input-lock.util';
 
 @Injectable()
 export class WorkspaceCoreService {
@@ -113,12 +124,26 @@ export class WorkspaceCoreService {
   async patch(workspaceData: WorkspaceFullDto): Promise<void> {
     this.logger.log(`Updating workspace with id: ${workspaceData.id}`);
     if (workspaceData.id) {
-      const workspaceGroupToUpdate = await this.workspaceRepository.findOne({
-        where: { id: workspaceData.id }
-      });
-      if (workspaceData.name) workspaceGroupToUpdate.name = workspaceData.name;
-      if (workspaceData.settings) workspaceGroupToUpdate.settings = workspaceData.settings;
-      await this.workspaceRepository.save(workspaceGroupToUpdate);
+      if (workspaceData.settings) {
+        await this.mutateAutocoderInputSettings(
+          workspaceData.id,
+          workspaceGroupToUpdate => {
+            if (workspaceData.name) {
+              workspaceGroupToUpdate.name = workspaceData.name;
+            }
+            workspaceGroupToUpdate.settings = workspaceData.settings;
+          }
+        );
+      } else {
+        const workspaceGroupToUpdate = await this.workspaceRepository.findOne({
+          where: { id: workspaceData.id }
+        });
+        if (!workspaceGroupToUpdate) {
+          throw new AdminWorkspaceNotFoundException(workspaceData.id, 'PATCH');
+        }
+        if (workspaceData.name) workspaceGroupToUpdate.name = workspaceData.name;
+        await this.workspaceRepository.save(workspaceGroupToUpdate);
+      }
       await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceData.id}`);
       if (workspaceData.settings) {
         await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceData.id);
@@ -134,33 +159,40 @@ export class WorkspaceCoreService {
     }
     this.logger.log(`Attempting to delete workspaces with IDs: ${ids.join(', ')}`);
 
-    const queryRunner = this.connection.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    const lockAttempt = await tryWithWorkspaceAutocoderInputMutationLocks(
+      this.connection,
+      ids,
+      async queryRunner => {
+        await queryRunner.startTransaction();
 
-    try {
-      await queryRunner.manager.delete(FileUpload, { workspace_id: In(ids) });
-      this.logger.log(`Deleted file uploads for workspaces with IDs: ${ids.join(', ')}`);
+        try {
+          await queryRunner.manager.delete(FileUpload, { workspace_id: In(ids) });
+          this.logger.log(`Deleted file uploads for workspaces with IDs: ${ids.join(', ')}`);
 
-      await queryRunner.manager.delete(Persons, { workspace_id: In(ids) });
-      this.logger.log(`Deleted persons for workspaces with IDs: ${ids.join(', ')}`);
+          await queryRunner.manager.delete(Persons, { workspace_id: In(ids) });
+          this.logger.log(`Deleted persons for workspaces with IDs: ${ids.join(', ')}`);
 
-      const result = await queryRunner.manager.delete(Workspace, { id: In(ids) });
-      this.logger.log(`Deleted workspaces with IDs: ${ids.join(', ')}`);
+          const result = await queryRunner.manager.delete(Workspace, { id: In(ids) });
+          this.logger.log(`Deleted workspaces with IDs: ${ids.join(', ')}`);
 
-      await queryRunner.commitTransaction();
+          await queryRunner.commitTransaction();
 
-      if (result.affected && result.affected > 0) {
-        this.logger.log(`Successfully deleted ${result.affected} workspace(s) with IDs: ${ids.join(', ')}`);
-      } else {
-        this.logger.warn(`No workspaces found with the specified IDs: ${ids.join(', ')}`);
+          if (result.affected && result.affected > 0) {
+            this.logger.log(`Successfully deleted ${result.affected} workspace(s) with IDs: ${ids.join(', ')}`);
+          } else {
+            this.logger.warn(`No workspaces found with the specified IDs: ${ids.join(', ')}`);
+          }
+        } catch (error) {
+          await queryRunner.rollbackTransaction();
+          this.logger.error(`Failed to delete workspaces with IDs: ${ids.join(', ')}. Error: ${error.message}`, error.stack);
+          throw error;
+        }
       }
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      this.logger.error(`Failed to delete workspaces with IDs: ${ids.join(', ')}. Error: ${error.message}`, error.stack);
-      throw error;
-    } finally {
-      await queryRunner.release();
+    );
+    if (!lockAttempt.acquired) {
+      throw new ConflictException(
+        'Workspaces cannot be deleted while an Autocoder or workspace mutation is running.'
+      );
     }
   }
 
@@ -173,14 +205,12 @@ export class WorkspaceCoreService {
   }
 
   async setIgnoredUnits(workspaceId: number, ignoredUnits: string[]): Promise<void> {
-    const workspace = await this.workspaceRepository.findOne({ where: { id: workspaceId } });
-    if (!workspace) throw new AdminWorkspaceNotFoundException(workspaceId, 'PATCH');
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const settings = (workspace.settings || {}) as any;
-    settings.ignoredUnits = ignoredUnits;
-    workspace.settings = settings;
-    await this.workspaceRepository.save(workspace);
+    await this.mutateAutocoderInputSettings(workspaceId, workspace => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const settings = { ...(workspace.settings || {}) } as any;
+      settings.ignoredUnits = ignoredUnits;
+      workspace.settings = settings;
+    });
     await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`);
     await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
     await this.invalidateCachesAffectedByExclusions(workspaceId);
@@ -192,14 +222,38 @@ export class WorkspaceCoreService {
   }
 
   async setWorkspaceSettings(workspaceId: number, newSettings: Partial<WorkspaceSettingsDto>): Promise<void> {
-    const workspace = await this.workspaceRepository.findOne({ where: { id: workspaceId } });
-    if (!workspace) throw new AdminWorkspaceNotFoundException(workspaceId, 'PATCH');
-
-    workspace.settings = { ...(workspace.settings || {}), ...newSettings };
-    await this.workspaceRepository.save(workspace);
+    await this.mutateAutocoderInputSettings(workspaceId, workspace => {
+      workspace.settings = { ...(workspace.settings || {}), ...newSettings };
+    });
     await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`);
     await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
     await this.invalidateCachesAffectedByExclusions(workspaceId);
+  }
+
+  private async mutateAutocoderInputSettings(
+    workspaceId: number,
+    mutate: (workspace: Workspace) => void
+  ): Promise<void> {
+    const lockAttempt = await tryWithWorkspaceFilesMutationLock(
+      this.connection,
+      workspaceId,
+      async queryRunner => {
+        const workspace = await queryRunner.manager.findOne(Workspace, {
+          where: { id: workspaceId }
+        });
+        if (!workspace) {
+          throw new AdminWorkspaceNotFoundException(workspaceId, 'PATCH');
+        }
+
+        mutate(workspace);
+        await queryRunner.manager.save(Workspace, workspace);
+      }
+    );
+    if (!lockAttempt.acquired) {
+      throw new ConflictException(
+        'Workspace settings cannot be changed while an Autocoder or file mutation is running.'
+      );
+    }
   }
 
   private async invalidateCachesAffectedByExclusions(workspaceId: number): Promise<void> {

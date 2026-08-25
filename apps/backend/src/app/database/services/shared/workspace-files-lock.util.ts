@@ -4,6 +4,10 @@ const WORKSPACE_FILES_LOCK_NAMESPACE = 774020252;
 
 type QueryRunnerFactory = Pick<DataSource, 'createQueryRunner'>;
 
+export type WorkspaceFilesMutationLockAttempt<T> =
+  | { acquired: true; value: T }
+  | { acquired: false };
+
 function normalizeWorkspaceId(workspaceId: number): number {
   const normalized = Number(workspaceId);
   if (!Number.isInteger(normalized) || normalized < 1) {
@@ -34,6 +38,17 @@ export async function unlockWorkspaceFilesMutation(
   ]);
 }
 
+export async function tryLockWorkspaceFilesMutation(
+  queryRunner: QueryRunner,
+  workspaceId: number
+): Promise<boolean> {
+  const rows = await queryRunner.query(
+    'SELECT pg_try_advisory_lock($1::int, $2::int) AS locked',
+    [WORKSPACE_FILES_LOCK_NAMESPACE, normalizeWorkspaceId(workspaceId)]
+  ) as Array<{ locked: boolean }>;
+  return rows[0]?.locked === true;
+}
+
 export async function withWorkspaceFilesMutationLock<T>(
   connection: QueryRunnerFactory,
   workspaceId: number,
@@ -48,6 +63,39 @@ export async function withWorkspaceFilesMutationLock<T>(
     await lockWorkspaceFilesMutation(queryRunner, normalizedWorkspaceId);
     locked = true;
     return await callback();
+  } finally {
+    try {
+      if (locked) {
+        await unlockWorkspaceFilesMutation(queryRunner, normalizedWorkspaceId);
+      }
+    } finally {
+      await queryRunner.release();
+    }
+  }
+}
+
+export async function tryWithWorkspaceFilesMutationLock<T>(
+  connection: QueryRunnerFactory,
+  workspaceId: number,
+  callback: (queryRunner: QueryRunner) => Promise<T>
+): Promise<WorkspaceFilesMutationLockAttempt<T>> {
+  const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId);
+  const queryRunner = connection.createQueryRunner();
+  let locked = false;
+
+  await queryRunner.connect();
+  try {
+    locked = await tryLockWorkspaceFilesMutation(
+      queryRunner,
+      normalizedWorkspaceId
+    );
+    if (!locked) {
+      return { acquired: false };
+    }
+    return {
+      acquired: true,
+      value: await callback(queryRunner)
+    };
   } finally {
     try {
       if (locked) {

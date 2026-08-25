@@ -46,7 +46,7 @@ export async function unlockWorkspaceTestResultsMutation(
   );
 }
 
-async function tryLockWorkspaceTestResultsMutation(
+export async function tryLockWorkspaceTestResultsMutation(
   queryRunner: QueryRunner,
   workspaceId: number
 ): Promise<boolean> {
