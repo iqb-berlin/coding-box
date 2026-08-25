@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import {
   tryWithWorkspaceFilesMutationLock,
   withWorkspaceFilesMutationLock
@@ -7,7 +8,9 @@ describe('workspace files mutation lock', () => {
   it('unlocks and releases after a successful mutation', async () => {
     const queryRunner = {
       connect: jest.fn().mockResolvedValue(undefined),
-      query: jest.fn().mockResolvedValue([]),
+      query: jest.fn()
+        .mockResolvedValueOnce([{ locked: true }])
+        .mockResolvedValueOnce([{ pg_advisory_unlock: true }]),
       release: jest.fn().mockResolvedValue(undefined)
     };
     const connection = {
@@ -18,13 +21,16 @@ describe('workspace files mutation lock', () => {
       withWorkspaceFilesMutationLock(
         connection as never,
         7,
-        async () => 'done'
+        async callbackQueryRunner => {
+          expect(callbackQueryRunner).toBe(queryRunner);
+          return 'done';
+        }
       )
     ).resolves.toBe('done');
 
     expect(queryRunner.query).toHaveBeenNthCalledWith(
       1,
-      'SELECT pg_advisory_lock($1::int, $2::int)',
+      'SELECT pg_try_advisory_lock($1::int, $2::int) AS locked',
       [774020252, 7]
     );
     expect(queryRunner.query).toHaveBeenNthCalledWith(
@@ -32,6 +38,28 @@ describe('workspace files mutation lock', () => {
       'SELECT pg_advisory_unlock($1::int, $2::int)',
       [774020252, 7]
     );
+    expect(queryRunner.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails fast with a conflict when the files lock is occupied', async () => {
+    const queryRunner = {
+      connect: jest.fn().mockResolvedValue(undefined),
+      query: jest.fn().mockResolvedValue([{ locked: false }]),
+      release: jest.fn().mockResolvedValue(undefined)
+    };
+    const connection = {
+      createQueryRunner: jest.fn().mockReturnValue(queryRunner)
+    };
+    const callback = jest.fn().mockResolvedValue('done');
+
+    await expect(withWorkspaceFilesMutationLock(
+      connection as never,
+      7,
+      callback
+    )).rejects.toBeInstanceOf(ConflictException);
+
+    expect(callback).not.toHaveBeenCalled();
+    expect(queryRunner.query).toHaveBeenCalledTimes(1);
     expect(queryRunner.release).toHaveBeenCalledTimes(1);
   });
 

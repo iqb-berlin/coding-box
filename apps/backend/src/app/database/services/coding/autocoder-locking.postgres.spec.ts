@@ -7,7 +7,8 @@ import {
 } from '../shared/workspace-test-results-lock.util';
 import {
   lockWorkspaceFilesMutation,
-  unlockWorkspaceFilesMutation
+  unlockWorkspaceFilesMutation,
+  withWorkspaceFilesMutationLock
 } from '../shared/workspace-files-lock.util';
 import FileUpload from '../../entities/file_upload.entity';
 import Workspace from '../../entities/workspace.entity';
@@ -82,6 +83,72 @@ describePostgres('Autocoder PostgreSQL locking', () => {
     await unlockWorkspaceTestResultsMutation(holder, workspaceId);
     await expect(waiterLock).resolves.toBeUndefined();
     await unlockWorkspaceTestResultsMutation(waiter, workspaceId);
+  });
+
+  it('fails concurrent file mutations fast without starving the constrained pool', async () => {
+    const workspaceId = 1_900_000_004;
+    const holder = await createRunner();
+    await lockWorkspaceFilesMutation(holder, workspaceId);
+    const callbacks = Array.from({ length: 4 }, () => jest.fn(
+      async () => dataSource.query('SELECT 1 AS mutated')
+    ));
+
+    const attempts = await Promise.allSettled(
+      callbacks.map(callback => withWorkspaceFilesMutationLock(
+        dataSource,
+        workspaceId,
+        callback
+      ))
+    );
+
+    expect(attempts).toHaveLength(callbacks.length);
+    attempts.forEach(attempt => {
+      expect(attempt.status).toBe('rejected');
+      if (attempt.status === 'rejected') {
+        expect(attempt.reason).toBeInstanceOf(ConflictException);
+      }
+    });
+    callbacks.forEach(callback => expect(callback).not.toHaveBeenCalled());
+    await expect(dataSource.query('SELECT 1 AS continued')).resolves.toEqual([
+      { continued: 1 }
+    ]);
+
+    await unlockWorkspaceFilesMutation(holder, workspaceId);
+  });
+
+  it('runs file mutations for different workspaces on their lock sessions', async () => {
+    const workspaceIds = [1_900_000_005, 1_900_000_006];
+    let enteredCallbacks = 0;
+    let releaseCallbacks: () => void = () => undefined;
+    const allCallbacksEntered = new Promise<void>(resolve => {
+      releaseCallbacks = resolve;
+    });
+    const callbacks = workspaceIds.map(() => jest.fn(
+      async (queryRunner: QueryRunner) => {
+        enteredCallbacks += 1;
+        if (enteredCallbacks === workspaceIds.length) {
+          releaseCallbacks();
+        }
+        await allCallbacksEntered;
+        return queryRunner.query('SELECT pg_backend_pid() AS "backendPid"');
+      }
+    ));
+
+    const results = await Promise.all(workspaceIds.map((workspaceId, index) => (
+      withWorkspaceFilesMutationLock(
+        dataSource,
+        workspaceId,
+        callbacks[index]
+      )
+    )));
+
+    expect(results).toHaveLength(workspaceIds.length);
+    results.forEach(result => {
+      expect(result).toEqual([
+        { backendPid: expect.any(Number) }
+      ]);
+    });
+    callbacks.forEach(callback => expect(callback).toHaveBeenCalledTimes(1));
   });
 
   it('serializes a manager transaction behind an active Autocoder session', async () => {

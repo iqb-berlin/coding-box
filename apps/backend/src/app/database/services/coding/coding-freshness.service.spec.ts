@@ -390,6 +390,44 @@ describe('CodingFreshnessService', () => {
     );
   });
 
+  it('uses the mutation manager when counting coding-scheme responses', async () => {
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    } as unknown as WorkspaceExclusionService;
+    service = new CodingFreshnessService(
+      freshnessRepository,
+      responseRepository,
+      connection,
+      workspaceExclusionService
+    );
+    const scopedQueryBuilder = queryBuilder();
+    const scopedResponseRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(scopedQueryBuilder)
+    };
+    const manager = {
+      getRepository: jest.fn().mockReturnValue(scopedResponseRepository)
+    };
+
+    await (
+      service as unknown as {
+        getResponseCountsByUnit: (
+          workspaceId: number,
+          unitIds: number[],
+          mutationManager: typeof manager
+        ) => Promise<Map<number, number>>;
+      }
+    ).getResponseCountsByUnit(1, [10], manager);
+
+    expect(manager.getRepository).toHaveBeenCalledWith(ResponseEntity);
+    expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
+    expect(workspaceExclusionService.resolveExclusionsForQueries)
+      .toHaveBeenCalledWith(1, manager);
+  });
+
   it('prefilters unit files by indexed normalized coding scheme refs', async () => {
     (connection.query as jest.Mock).mockResolvedValue([]);
 

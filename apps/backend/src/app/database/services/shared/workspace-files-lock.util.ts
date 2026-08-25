@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { DataSource, QueryRunner } from 'typeorm';
 
 const WORKSPACE_FILES_LOCK_NAMESPACE = 774020252;
@@ -52,26 +53,19 @@ export async function tryLockWorkspaceFilesMutation(
 export async function withWorkspaceFilesMutationLock<T>(
   connection: QueryRunnerFactory,
   workspaceId: number,
-  callback: () => Promise<T>
+  callback: (queryRunner: QueryRunner) => Promise<T>
 ): Promise<T> {
-  const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId);
-  const queryRunner = connection.createQueryRunner();
-  let locked = false;
-
-  await queryRunner.connect();
-  try {
-    await lockWorkspaceFilesMutation(queryRunner, normalizedWorkspaceId);
-    locked = true;
-    return await callback();
-  } finally {
-    try {
-      if (locked) {
-        await unlockWorkspaceFilesMutation(queryRunner, normalizedWorkspaceId);
-      }
-    } finally {
-      await queryRunner.release();
-    }
+  const lockAttempt = await tryWithWorkspaceFilesMutationLock(
+    connection,
+    workspaceId,
+    callback
+  );
+  if (!lockAttempt.acquired) {
+    throw new ConflictException(
+      'Workspace files cannot be changed while an Autocoder or another file mutation is running.'
+    );
   }
+  return lockAttempt.value;
 }
 
 export async function tryWithWorkspaceFilesMutationLock<T>(

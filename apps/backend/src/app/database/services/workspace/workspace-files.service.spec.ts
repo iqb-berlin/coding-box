@@ -238,7 +238,10 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
       connection: {
         createQueryRunner: jest.fn(() => ({
           connect: jest.fn().mockResolvedValue(undefined),
-          query: jest.fn().mockResolvedValue([]),
+          query: jest.fn().mockResolvedValue([{ locked: true }]),
+          manager: {
+            getRepository: jest.fn(() => mockFileUploadRepository)
+          },
           release: jest.fn().mockResolvedValue(undefined)
         }))
       }
@@ -774,7 +777,10 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
       connection: {
         createQueryRunner: jest.fn(() => ({
           connect: jest.fn().mockResolvedValue(undefined),
-          query: jest.fn().mockResolvedValue([]),
+          query: jest.fn().mockResolvedValue([{ locked: true }]),
+          manager: {
+            getRepository: jest.fn(() => mockFileUploadRepository)
+          },
           release: jest.fn().mockResolvedValue(undefined)
         }))
       }
@@ -826,6 +832,9 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
       'id IN (:...ids)',
       { ids: [1, 2, 3] }
     );
+    const queryRunner = mockFileUploadRepository.manager.connection
+      .createQueryRunner.mock.results[0].value;
+    expect(queryRunner.manager.getRepository).toHaveBeenCalledTimes(1);
     expect(mockQueryBuilder.execute).toHaveBeenCalled();
     expect(result).toBe(true);
   });
