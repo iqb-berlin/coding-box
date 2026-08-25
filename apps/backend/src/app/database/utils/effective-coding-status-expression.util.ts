@@ -40,7 +40,7 @@ function getEffectiveManualCodingStatusExpression(responseAlias: string): string
     END`;
 }
 
-function getOpenManualCodingPlaceholderCondition(responseAlias: string): string {
+export function getOpenManualCodingPlaceholderCondition(responseAlias: string): string {
   return `${responseAlias}.status_v2 = ${CODING_INCOMPLETE_STATUS}
         AND ${responseAlias}.code_v2 IS NULL
         AND ${responseAlias}.score_v2 IS NULL

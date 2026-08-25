@@ -558,7 +558,8 @@ export class CodingResultsService {
               {
                 code_v2: responseUpdate.code_v2,
                 score_v2: responseUpdate.score_v2,
-                status_v2: responseUpdate.status_v2
+                status_v2: responseUpdate.status_v2,
+                autocoder_invalidated_version: null
               }
             )
           })));
@@ -938,7 +939,8 @@ export class CodingResultsService {
           {
             code_v2: emptyResponseMissing.code,
             score_v2: emptyResponseMissing.score,
-            status_v2: statusStringToNumber('CODING_COMPLETE') // 5
+            status_v2: statusStringToNumber('CODING_COMPLETE'), // 5
+            autocoder_invalidated_version: null
           }
         ));
 
