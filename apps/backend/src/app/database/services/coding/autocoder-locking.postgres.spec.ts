@@ -1,12 +1,18 @@
+import { ConflictException } from '@nestjs/common';
 import { DataSource, QueryRunner } from 'typeorm';
 import {
   lockWorkspaceTestResultsMutation,
   lockWorkspaceTestResultsMutationInTransaction,
   unlockWorkspaceTestResultsMutation
 } from '../shared/workspace-test-results-lock.util';
+import {
+  lockWorkspaceFilesMutation,
+  unlockWorkspaceFilesMutation
+} from '../shared/workspace-files-lock.util';
 import FileUpload from '../../entities/file_upload.entity';
 import Workspace from '../../entities/workspace.entity';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 
 const describePostgres = process.env.POSTGRES_INTEGRATION_TESTS === 'true' ?
   describe :
@@ -138,5 +144,81 @@ describePostgres('Autocoder PostgreSQL locking', () => {
     await manager.commitTransaction();
     await expect(waiterLock).resolves.toBeUndefined();
     await unlockWorkspaceTestResultsMutation(waiter, workspaceId);
+  });
+
+  it('fails input mutations fast behind an active Autocoder lock', async () => {
+    const [insertedWorkspace] = await dataSource.query(
+      `INSERT INTO workspace (name, settings)
+       VALUES ($1, $2::jsonb)
+       RETURNING id`,
+      [`Autocoder lock integration test ${Date.now()}`, '{}']
+    ) as Array<{ id: number }>;
+    const workspaceId = Number(insertedWorkspace.id);
+    let autocoder: QueryRunner | undefined;
+    let filesLocked = false;
+    let testResultsLocked = false;
+
+    try {
+      autocoder = await createRunner();
+      await lockWorkspaceTestResultsMutation(autocoder, workspaceId);
+      testResultsLocked = true;
+      await lockWorkspaceFilesMutation(autocoder, workspaceId);
+      filesLocked = true;
+
+      const cacheService = {
+        delete: jest.fn().mockResolvedValue(undefined),
+        deleteByPattern: jest.fn().mockResolvedValue(undefined),
+        incr: jest.fn().mockResolvedValue(1)
+      };
+      const workspaceTestResultsService = {
+        invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
+      };
+      const workspaceCoreService = new WorkspaceCoreService(
+        dataSource.getRepository(Workspace),
+        dataSource,
+        cacheService as never,
+        workspaceTestResultsService as never
+      );
+
+      await expect(workspaceCoreService.setIgnoredUnits(
+        workspaceId,
+        ['UNIT-NEWLY-IGNORED']
+      )).rejects.toBeInstanceOf(ConflictException);
+      await expect(workspaceCoreService.remove([workspaceId]))
+        .rejects.toBeInstanceOf(ConflictException);
+
+      const unchangedWorkspace = await dataSource
+        .getRepository(Workspace)
+        .findOneByOrFail({ id: workspaceId });
+      expect(unchangedWorkspace.settings).toEqual({});
+
+      await unlockWorkspaceFilesMutation(autocoder, workspaceId);
+      filesLocked = false;
+      await workspaceCoreService.setIgnoredUnits(
+        workspaceId,
+        ['UNIT-NEWLY-IGNORED']
+      );
+
+      const workspace = await dataSource.getRepository(Workspace).findOneByOrFail({
+        id: workspaceId
+      });
+      expect(workspace.settings).toMatchObject({
+        ignoredUnits: ['UNIT-NEWLY-IGNORED']
+      });
+    } finally {
+      try {
+        if (autocoder && filesLocked) {
+          await unlockWorkspaceFilesMutation(autocoder, workspaceId);
+        }
+      } finally {
+        try {
+          if (autocoder && testResultsLocked) {
+            await unlockWorkspaceTestResultsMutation(autocoder, workspaceId);
+          }
+        } finally {
+          await dataSource.getRepository(Workspace).delete({ id: workspaceId });
+        }
+      }
+    }
   });
 });
