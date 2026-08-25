@@ -9,6 +9,7 @@ import {
   Brackets,
   DataSource,
   EntityManager,
+  In,
   Repository,
   SelectQueryBuilder
 } from 'typeorm';
@@ -484,25 +485,29 @@ export class CodingFreshnessService {
     scope: {
       autoCodingSchemeRefs?: string[];
       manualCodingSchemeRefs?: string[];
-    }
+    },
+    manager?: EntityManager
   ): Promise<void> {
     const autoCodingUnitIds = await this.getUnitIdsByCodingSchemeRefs(
       workspaceId,
-      scope.autoCodingSchemeRefs || []
+      scope.autoCodingSchemeRefs || [],
+      manager
     );
     const manualCodingUnitIds = await this.getUnitIdsByCodingSchemeRefs(
       workspaceId,
       [
         ...(scope.manualCodingSchemeRefs || []),
         ...(scope.autoCodingSchemeRefs || [])
-      ]
+      ],
+      manager
     );
     const allUnitIds = await this.filterIncludedUnitIds(
       workspaceId,
       this.uniquePositiveIds([
         ...autoCodingUnitIds,
         ...manualCodingUnitIds
-      ])
+      ]),
+      manager
     );
     if (allUnitIds.length === 0) {
       return;
@@ -514,13 +519,21 @@ export class CodingFreshnessService {
     const includedManualCodingUnitIds = manualCodingUnitIds
       .filter(unitId => includedUnitIdSet.has(unitId));
 
-    const revision = await this.incrementRevision(workspaceId);
+    const revision = await this.incrementRevision(workspaceId, manager);
     const responseCounts = await this.getResponseCountsByUnit(
       workspaceId,
-      allUnitIds
+      allUnitIds,
+      manager
     );
-    const workspacePresence = await this.getWorkspaceCodingPresence(workspaceId);
-    const unitPresence = await this.getUnitCodingPresence(workspaceId, allUnitIds);
+    const workspacePresence = await this.getWorkspaceCodingPresence(
+      workspaceId,
+      manager
+    );
+    const unitPresence = await this.getUnitCodingPresence(
+      workspaceId,
+      allUnitIds,
+      manager
+    );
     const rows: FreshnessUpsert[] = [];
 
     if (includedAutoCodingUnitIds.length > 0) {
@@ -559,14 +572,15 @@ export class CodingFreshnessService {
       ));
     });
 
-    await this.upsertRows(rows);
+    await this.upsertRows(rows, manager);
 
     if (includedAutoCodingUnitIds.length > 0) {
       await this.markCodingJobsStaleForUnitIds(
         workspaceId,
         includedAutoCodingUnitIds,
         'CODING_SCHEME_CHANGED',
-        'stale_source'
+        'stale_source',
+        manager
       );
     }
 
@@ -578,7 +592,8 @@ export class CodingFreshnessService {
         workspaceId,
         includedManualOnlyUnitIds,
         'CODING_SCHEME_CHANGED',
-        'review_required'
+        'review_required',
+        manager
       );
     }
   }
@@ -659,15 +674,34 @@ export class CodingFreshnessService {
     );
     const blockedUnitIdSet = new Set(blockedUnitIds);
     const clearableUnitIds = unitIds.filter(unitId => !blockedUnitIdSet.has(unitId));
+    const freshnessRepository = options.manager ?
+      options.manager.getRepository(CodingUnitFreshness) :
+      this.freshnessRepository;
+    const currentV3Rows = await freshnessRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        unit_id: In(unitIds),
+        version: 'v3',
+        state: 'CURRENT'
+      },
+      select: ['unit_id']
+    });
+    const currentV3UnitIds = this.uniquePositiveIds(
+      currentV3Rows.map(row => Number(row.unit_id))
+    );
 
-    if (clearableUnitIds.length > 0) {
+    if (clearableUnitIds.length > 0 || currentV3UnitIds.length > 0) {
       const revision = await this.getCurrentRevision(workspaceId, options.manager);
+      const affectedUnitIds = this.uniquePositiveIds([
+        ...clearableUnitIds,
+        ...currentV3UnitIds
+      ]);
       const responseCounts = await this.getResponseCountsByUnit(
         workspaceId,
-        clearableUnitIds,
+        affectedUnitIds,
         options.manager
       );
-      await this.upsertRows(clearableUnitIds.map(unitId => this.buildRow(
+      const rows = clearableUnitIds.map(unitId => this.buildRow(
         workspaceId,
         unitId,
         'v2',
@@ -676,7 +710,18 @@ export class CodingFreshnessService {
         responseCounts.get(unitId) || 0,
         revision,
         revision
-      )), options.manager);
+      ));
+      currentV3UnitIds.forEach(unitId => rows.push(this.buildRow(
+        workspaceId,
+        unitId,
+        'v3',
+        'STALE',
+        'MANUAL_CODING_APPLIED',
+        responseCounts.get(unitId) || 0,
+        revision,
+        null
+      )));
+      await this.upsertRows(rows, options.manager);
     }
 
     if (codingJobIdsToClear.length > 0) {
@@ -1296,7 +1341,8 @@ export class CodingFreshnessService {
 
   private async getUnitIdsByCodingSchemeRefs(
     workspaceId: number,
-    codingSchemeRefs: string[]
+    codingSchemeRefs: string[],
+    manager?: EntityManager
   ): Promise<number[]> {
     const schemeRefCandidates =
       this.getCodingSchemeRefCandidates(codingSchemeRefs);
@@ -1304,7 +1350,8 @@ export class CodingFreshnessService {
       return [];
     }
 
-    const rows = await this.connection.query(
+    const queryRunner = manager ?? this.connection;
+    const rows = await queryRunner.query(
       `
         WITH scheme_ref_candidates AS (
           SELECT unnest($2::text[]) AS scheme_ref
@@ -1347,11 +1394,11 @@ export class CodingFreshnessService {
     ) as Array<{ id: number | string }>;
 
     const indexedUnitIds = this.uniquePositiveIds(rows.map(row => Number(row.id)));
-    if (!await this.hasLegacyUnitCodingSchemeRefs(workspaceId)) {
+    if (!await this.hasLegacyUnitCodingSchemeRefs(workspaceId, manager)) {
       return indexedUnitIds;
     }
 
-    const legacyRows = await this.connection.query(
+    const legacyRows = await queryRunner.query(
       `
         WITH legacy_matching_unit_files AS (
           SELECT DISTINCT REGEXP_REPLACE(UPPER(unit_file.file_id), '\\.XML$', '', 'i') AS unit_ref
@@ -1413,8 +1460,12 @@ export class CodingFreshnessService {
     ]);
   }
 
-  private async hasLegacyUnitCodingSchemeRefs(workspaceId: number): Promise<boolean> {
-    const rows = await this.connection.query(
+  private async hasLegacyUnitCodingSchemeRefs(
+    workspaceId: number,
+    manager?: EntityManager
+  ): Promise<boolean> {
+    const queryRunner = manager ?? this.connection;
+    const rows = await queryRunner.query(
       `
         SELECT EXISTS (
           SELECT 1
@@ -1654,7 +1705,7 @@ export class CodingFreshnessService {
         .andWhere('person.consider = :consider', { consider: true })
         .andWhere('response.id IN (:...responseIds)', { responseIds: chunkIds });
 
-      await this.applyWorkspaceExclusions(workspaceId, query);
+      await this.applyWorkspaceExclusions(workspaceId, query, manager);
 
       return query.getRawMany<{ unitId: number | string }>();
     });
@@ -1762,7 +1813,8 @@ export class CodingFreshnessService {
 
   private async filterIncludedUnitIds(
     workspaceId: number,
-    unitIds: number[]
+    unitIds: number[],
+    manager?: EntityManager
   ): Promise<number[]> {
     const ids = this.uniquePositiveIds(unitIds);
     if (ids.length === 0 || !this.workspaceExclusionService) {
@@ -1770,14 +1822,20 @@ export class CodingFreshnessService {
     }
 
     try {
-      const exclusions =
-        await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+      const exclusions = manager ?
+        await this.workspaceExclusionService.resolveExclusionsForQueries(
+          workspaceId,
+          manager
+        ) :
+        await this.workspaceExclusionService.resolveExclusionsForQueries(
+          workspaceId
+        );
       if (!this.hasWorkspaceExclusions(exclusions)) {
         return ids;
       }
 
       const rows = await this.collectChunked(ids, this.ID_QUERY_BATCH_SIZE, chunkIds => {
-        const query = this.connection
+        const query = (manager ?? this.connection)
           .createQueryBuilder()
           .select('unit.id', 'id')
           .from('unit', 'unit')
@@ -1872,15 +1930,22 @@ export class CodingFreshnessService {
 
   private async applyWorkspaceExclusions<T>(
     workspaceId: number,
-    query: SelectQueryBuilder<T>
+    query: SelectQueryBuilder<T>,
+    manager?: EntityManager
   ): Promise<void> {
     if (!this.workspaceExclusionService) {
       return;
     }
 
     try {
-      const exclusions =
-        await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+      const exclusions = manager ?
+        await this.workspaceExclusionService.resolveExclusionsForQueries(
+          workspaceId,
+          manager
+        ) :
+        await this.workspaceExclusionService.resolveExclusionsForQueries(
+          workspaceId
+        );
       if (this.hasWorkspaceExclusions(exclusions)) {
         applyResolvedExclusionsToQuery(query, exclusions);
       }
@@ -1919,8 +1984,12 @@ export class CodingFreshnessService {
     return Array.from(new Set(states.filter(state => allowed.has(state))));
   }
 
-  private async incrementRevision(workspaceId: number): Promise<number> {
-    const raw = await this.connection.query(
+  private async incrementRevision(
+    workspaceId: number,
+    manager?: EntityManager
+  ): Promise<number> {
+    const queryRunner = manager ?? this.connection;
+    const raw = await queryRunner.query(
       `
         INSERT INTO workspace_test_results_revision (workspace_id, revision, updated_at)
         VALUES ($1, 1, now())
@@ -1935,9 +2004,13 @@ export class CodingFreshnessService {
   }
 
   private async getWorkspaceCodingPresence(
-    workspaceId: number
+    workspaceId: number,
+    manager?: EntityManager
   ): Promise<UnitCodingPresence> {
-    const raw = await this.responseRepository
+    const responseRepository = manager ?
+      manager.getRepository(ResponseEntity) :
+      this.responseRepository;
+    const raw = await responseRepository
       .createQueryBuilder('response')
       .select(this.existsVersionExpression('v1'), 'v1')
       .addSelect(this.existsVersionExpression('v2'), 'v2')
@@ -1949,7 +2022,7 @@ export class CodingFreshnessService {
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
 
-    await this.applyWorkspaceExclusions(workspaceId, raw);
+    await this.applyWorkspaceExclusions(workspaceId, raw, manager);
 
     const result = await raw.getRawOne<{ v1: boolean; v2: boolean; v3: boolean }>();
 
@@ -1971,7 +2044,8 @@ export class CodingFreshnessService {
 
   private async getUnitCodingPresence(
     workspaceId: number,
-    unitIds: number[]
+    unitIds: number[],
+    manager?: EntityManager
   ): Promise<Map<number, UnitCodingPresence>> {
     const ids = this.uniquePositiveIds(unitIds);
     const presenceByUnit = new Map<number, UnitCodingPresence>();
@@ -1981,7 +2055,10 @@ export class CodingFreshnessService {
     }
 
     const presenceRows = await this.collectChunked(ids, this.ID_QUERY_BATCH_SIZE, async chunkIds => {
-      const query = this.responseRepository
+      const responseRepository = manager ?
+        manager.getRepository(ResponseEntity) :
+        this.responseRepository;
+      const query = responseRepository
         .createQueryBuilder('response')
         .select('response.unitid', 'unitId')
         .addSelect(this.existsVersionExpression('v1'), 'v1')
@@ -1996,7 +2073,7 @@ export class CodingFreshnessService {
         .andWhere('response.unitid IN (:...unitIds)', { unitIds: chunkIds })
         .groupBy('response.unitid');
 
-      await this.applyWorkspaceExclusions(workspaceId, query);
+      await this.applyWorkspaceExclusions(workspaceId, query, manager);
 
       return query.getRawMany<{
         unitId: number | string;
@@ -2091,7 +2168,7 @@ export class CodingFreshnessService {
         .andWhere('response.is_autocoder_generated IS NOT TRUE')
         .groupBy('response.unitid');
 
-      await this.applyWorkspaceExclusions(workspaceId, query);
+      await this.applyWorkspaceExclusions(workspaceId, query, manager);
 
       return query.getRawMany<{ unitId: number | string; count: string }>();
     });
@@ -2142,7 +2219,7 @@ export class CodingFreshnessService {
         .groupBy('response.unitid');
 
       this.applyAutoCodingSourceFilter(query, autoCoderRun);
-      await this.applyWorkspaceExclusions(workspaceId, query);
+      await this.applyWorkspaceExclusions(workspaceId, query, manager);
 
       return query.getRawMany<{ unitId: number | string; count: string }>();
     });

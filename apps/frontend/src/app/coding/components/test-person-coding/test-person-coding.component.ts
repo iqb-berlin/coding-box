@@ -365,12 +365,16 @@ export class TestPersonCodingComponent implements OnInit {
           this.stopJobStatusPolling();
 
           if (status.status === 'completed') {
+            const warnings = status.result?.warnings || [];
             this.snackBar.open(
               this.translateService.instant(
-                'test-person-coding.job-completed'
+                warnings.length > 0 ?
+                  'test-person-coding.job-completed-with-warnings' :
+                  'test-person-coding.job-completed',
+                { warning: warnings.join(' ') }
               ),
               this.translateService.instant('close'),
-              { duration: 3000 }
+              { duration: warnings.length > 0 ? 8000 : 3000 }
             );
             this.handleAutoCodingCompleted(jobId);
           } else if (status.status === 'failed') {

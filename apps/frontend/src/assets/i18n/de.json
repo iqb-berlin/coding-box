@@ -2003,6 +2003,7 @@
     "coding-failed": "Kodierung der Testpersonen fehlgeschlagen",
     "job-deleted-by-id": "Kodierungsauftrag mit ID {{jobId}} wurde gelöscht",
     "job-completed": "Kodierungsauftrag erfolgreich abgeschlossen",
+    "job-completed-with-warnings": "Kodierungsauftrag abgeschlossen, aber mit Warnung: {{warning}}",
     "job-completed-with-error": "Kodierungsauftrag fehlgeschlagen: {{error}}",
     "job-cancelled": "Kodierungsauftrag wurde abgebrochen",
     "job-paused": "Kodierungsauftrag wurde pausiert",
@@ -2055,6 +2056,7 @@
       "status-column": "Kodierstatus",
       "count-column": "Anzahl",
       "autocoder-run": "Kodier-Lauf",
+      "warnings-header": "Warnungen zur Nachverarbeitung",
       "close": "Schließen"
     }
   },

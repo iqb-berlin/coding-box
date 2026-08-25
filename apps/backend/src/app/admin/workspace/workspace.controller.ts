@@ -16,6 +16,7 @@ import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiBody,
+  ApiConflictResponse,
   ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -157,6 +158,9 @@ export class WorkspaceController {
     type: String
   })
   @ApiOkResponse({ description: 'Admin workspaces deleted successfully.' })
+  @ApiConflictResponse({
+    description: 'A workspace is currently locked by another mutation.'
+  })
   @ApiNotFoundResponse({ description: 'Admin workspace not found.' })
   @ApiBadRequestResponse({ description: 'Invalid workspace IDs' })
   @ApiTags('admin workspaces')
@@ -176,6 +180,9 @@ export class WorkspaceController {
     description: 'Updated workspace data'
   })
   @ApiOkResponse({ description: 'Workspace updated successfully' })
+  @ApiConflictResponse({
+    description: 'Workspace settings are currently locked by another mutation.'
+  })
   @ApiBadRequestResponse({ description: 'Invalid workspace data' })
   @ApiNotFoundResponse({ description: 'Workspace not found' })
   @ApiTags('admin workspaces')

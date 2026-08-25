@@ -137,13 +137,13 @@ describe('CacheService', () => {
       .mockResolvedValueOnce(['5', ['a', 'b']])
       .mockResolvedValueOnce(['0', []]);
 
-    await service.deleteByPattern('prefix:*');
+    await expect(service.deleteByPattern('prefix:*')).resolves.toBe(true);
 
     expect(redis.scan).toHaveBeenCalledWith('0', 'MATCH', 'prefix:*', 'COUNT', 100);
     expect(redis.del).toHaveBeenCalledWith('a', 'b');
 
     redis.scan.mockRejectedValueOnce(new Error('redis down'));
-    await expect(service.deleteByPattern('prefix:*')).resolves.toBeUndefined();
+    await expect(service.deleteByPattern('prefix:*')).resolves.toBe(false);
   });
 
   it('deletes matching keys by scan pattern with redis key prefixing enabled', async () => {

@@ -1384,6 +1384,23 @@ describe('WorkspaceResponseValidationService.validateResponseStatus', () => {
   });
 });
 
+const createMutationLockMock = () => {
+  const queryRunner = {
+    connect: jest.fn().mockResolvedValue(undefined),
+    query: jest.fn().mockResolvedValue([]),
+    release: jest.fn().mockResolvedValue(undefined)
+  };
+  const connection = {
+    createQueryRunner: jest.fn(() => queryRunner)
+  };
+
+  return {
+    connection,
+    manager: { connection },
+    queryRunner
+  };
+};
+
 describe('WorkspaceResponseValidationService.deleteInvalidResponses', () => {
   const makeQueryBuilder = (units: Unit[]) => ({
     innerJoin: jest.fn().mockReturnThis(),
@@ -1394,6 +1411,8 @@ describe('WorkspaceResponseValidationService.deleteInvalidResponses', () => {
   });
 
   it('deletes specified response IDs', async () => {
+    const mutationLock = createMutationLockMock();
+    const deleteMock = jest.fn().mockResolvedValue({ affected: 1 } as DeleteResult);
     const personsRepo = {
       find: jest
         .fn()
@@ -1407,8 +1426,9 @@ describe('WorkspaceResponseValidationService.deleteInvalidResponses', () => {
         )
     } as unknown as Repository<Unit>;
     const responseRepo = {
-      delete: jest.fn().mockResolvedValue({ affected: 1 } as DeleteResult),
-      find: jest.fn().mockResolvedValue([{ id: 100, unitid: 10 }])
+      delete: deleteMock,
+      find: jest.fn().mockResolvedValue([{ id: 100, unitid: 10 }]),
+      manager: mutationLock.manager
     } as unknown as Repository<ResponseEntity>;
 
     const service = new WorkspaceResponseValidationService(
@@ -1420,7 +1440,24 @@ describe('WorkspaceResponseValidationService.deleteInvalidResponses', () => {
     );
     const result = await service.deleteInvalidResponses(1, [100]);
     expect(result).toBe(1);
-    expect(responseRepo.delete).toHaveBeenCalled();
+    expect(deleteMock).toHaveBeenCalled();
+    expect(mutationLock.queryRunner.query).toHaveBeenNthCalledWith(
+      1,
+      'SELECT pg_advisory_lock($1::int, $2::int)',
+      [774020251, 1]
+    );
+    expect(mutationLock.queryRunner.query).toHaveBeenNthCalledWith(
+      2,
+      'SELECT pg_advisory_unlock($1::int, $2::int)',
+      [774020251, 1]
+    );
+
+    const lockOrder = mutationLock.queryRunner.query.mock.invocationCallOrder[0];
+    const deleteOrder = deleteMock.mock.invocationCallOrder[0];
+    const unlockOrder = mutationLock.queryRunner.query.mock.invocationCallOrder[1];
+
+    expect(lockOrder).toBeLessThan(deleteOrder);
+    expect(deleteOrder).toBeLessThan(unlockOrder);
   });
 
   it('returns 0 when no response IDs provided', async () => {
@@ -1473,6 +1510,7 @@ describe('WorkspaceResponseValidationService.deleteAllInvalidResponses', () => {
   });
 
   it('deletes invalid variable responses', async () => {
+    const mutationLock = createMutationLockMock();
     const filesRepo = {
       find: jest
         .fn()
@@ -1504,7 +1542,8 @@ describe('WorkspaceResponseValidationService.deleteAllInvalidResponses', () => {
             unit: { id: 10, name: 'U1' }
           }
         ]),
-      delete: jest.fn().mockResolvedValue({ affected: 1 } as DeleteResult)
+      delete: jest.fn().mockResolvedValue({ affected: 1 } as DeleteResult),
+      manager: mutationLock.manager
     } as unknown as Repository<ResponseEntity>;
 
     const service = new WorkspaceResponseValidationService(
@@ -1516,9 +1555,12 @@ describe('WorkspaceResponseValidationService.deleteAllInvalidResponses', () => {
     );
     const result = await service.deleteAllInvalidResponses(1, 'variables');
     expect(result).toBe(1);
+    expect(mutationLock.connection.createQueryRunner).toHaveBeenCalledTimes(1);
+    expect(mutationLock.queryRunner.query).toHaveBeenCalledTimes(2);
   });
 
   it('deletes duplicate responses keeping best candidate', async () => {
+    const mutationLock = createMutationLockMock();
     const personsRepo = {
       find: jest
         .fn()
@@ -1554,7 +1596,8 @@ describe('WorkspaceResponseValidationService.deleteAllInvalidResponses', () => {
           id: 101, unitid: 10, variableid: 'A1', value: 'y', status: 1
         }
       ]),
-      delete: jest.fn().mockResolvedValue({ affected: 1 } as DeleteResult)
+      delete: jest.fn().mockResolvedValue({ affected: 1 } as DeleteResult),
+      manager: mutationLock.manager
     } as unknown as Repository<ResponseEntity>;
 
     const service = new WorkspaceResponseValidationService(
@@ -1572,6 +1615,7 @@ describe('WorkspaceResponseValidationService.deleteAllInvalidResponses', () => {
   });
 
   it('prefers non-empty value, then newest response id', async () => {
+    const mutationLock = createMutationLockMock();
     const personsRepo = {
       find: jest
         .fn()
@@ -1629,7 +1673,8 @@ describe('WorkspaceResponseValidationService.deleteAllInvalidResponses', () => {
         }
         return Promise.resolve(duplicateRows);
       }),
-      delete: deleteMock
+      delete: deleteMock,
+      manager: mutationLock.manager
     } as unknown as Repository<ResponseEntity>;
 
     const service = new WorkspaceResponseValidationService(

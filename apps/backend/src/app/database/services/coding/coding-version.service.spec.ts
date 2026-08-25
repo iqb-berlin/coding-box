@@ -23,10 +23,21 @@ describe('CodingVersionService', () => {
     getMany: jest.fn()
   };
 
+  const mockLockQueryRunner = {
+    connect: jest.fn().mockResolvedValue(undefined),
+    query: jest.fn().mockResolvedValue([]),
+    release: jest.fn().mockResolvedValue(undefined)
+  };
+
+  const mockConnection = {
+    createQueryRunner: jest.fn(() => mockLockQueryRunner)
+  };
+
   const mockResponseRepository = {
     createQueryBuilder: jest.fn(() => mockQueryBuilder),
     update: jest.fn(),
-    delete: jest.fn()
+    delete: jest.fn(),
+    manager: { connection: mockConnection }
   };
 
   const mockCodingStatisticsService = {
@@ -99,6 +110,9 @@ describe('CodingVersionService', () => {
     mockResponseRepository.delete.mockReset();
     mockResponseRepository.update.mockResolvedValue({ affected: 0 });
     mockResponseRepository.delete.mockResolvedValue({ affected: 0 });
+    mockLockQueryRunner.connect.mockResolvedValue(undefined);
+    mockLockQueryRunner.query.mockResolvedValue([]);
+    mockLockQueryRunner.release.mockResolvedValue(undefined);
     mockCodingAnalysisService.invalidateCache.mockClear();
     mockCodingValidationService.invalidateIncompleteVariablesCache.mockClear();
     mockCodingFreshnessService.markVersionsPendingAfterReset.mockClear();
@@ -158,6 +172,37 @@ describe('CodingVersionService', () => {
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledTimes(3);
       expect(mockCodingAnalysisService.invalidateCache).toHaveBeenCalledWith(1);
       expect(mockCodingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(1);
+    });
+
+    it('holds the workspace mutation lock for the complete reset', async () => {
+      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce([{ id: 1, unitid: 10 }])
+        .mockResolvedValue([]);
+      mockResponseRepository.update.mockResolvedValue({ affected: 1 });
+
+      await service.resetCodingVersion(7, 'v1');
+
+      expect(mockConnection.createQueryRunner).toHaveBeenCalledTimes(1);
+      expect(mockLockQueryRunner.query).toHaveBeenNthCalledWith(
+        1,
+        'SELECT pg_advisory_lock($1::int, $2::int)',
+        [774020251, 7]
+      );
+      expect(mockLockQueryRunner.query).toHaveBeenNthCalledWith(
+        2,
+        'SELECT pg_advisory_unlock($1::int, $2::int)',
+        [774020251, 7]
+      );
+
+      const lockOrder = mockLockQueryRunner.query.mock.invocationCallOrder[0];
+      const updateOrder = mockResponseRepository.update.mock.invocationCallOrder[0];
+      const unlockOrder = mockLockQueryRunner.query.mock.invocationCallOrder[1];
+      const releaseOrder = mockLockQueryRunner.release.mock.invocationCallOrder[0];
+
+      expect(lockOrder).toBeLessThan(updateOrder);
+      expect(updateOrder).toBeLessThan(unlockOrder);
+      expect(unlockOrder).toBeLessThan(releaseOrder);
     });
 
     it('should reset v2 version and cascade to v3', async () => {

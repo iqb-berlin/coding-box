@@ -1,11 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceCoreService } from './workspace-core.service';
 import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/workspace-settings-dto';
 import FileUpload from '../../entities/file_upload.entity';
+import Workspace from '../../entities/workspace.entity';
 import { CacheService } from '../../../cache/cache.service';
 import { EXCLUSION_CACHE_PREFIX } from './workspace-constants';
 import {
@@ -46,8 +47,19 @@ export class WorkspaceExclusionService {
     await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`);
   }
 
-  async getExclusions(workspaceId: number): Promise<WorkspaceSettingsDto> {
-    const workspace = await this.workspaceCoreService.findOne(workspaceId);
+  async getExclusions(
+    workspaceId: number,
+    manager?: EntityManager
+  ): Promise<WorkspaceSettingsDto> {
+    const workspace = manager ?
+      await manager.getRepository(Workspace).findOne({
+        where: { id: workspaceId },
+        select: { id: true, name: true, settings: true }
+      }) :
+      await this.workspaceCoreService.findOne(workspaceId);
+    if (!workspace) {
+      return {};
+    }
     return (workspace.settings as WorkspaceSettingsDto) || {};
   }
 
@@ -79,15 +91,19 @@ export class WorkspaceExclusionService {
     return false;
   }
 
-  async resolveExclusionsForQueries(workspaceId: number): Promise<ResolvedWorkspaceExclusions> {
+  async resolveExclusionsForQueries(
+    workspaceId: number,
+    manager?: EntityManager
+  ): Promise<ResolvedWorkspaceExclusions> {
     const cacheKey = `${EXCLUSION_CACHE_PREFIX}${workspaceId}`;
-    const cached = await this.cacheService.get<ResolvedWorkspaceExclusions>(cacheKey);
+    const cached = manager ? null :
+      await this.cacheService.get<ResolvedWorkspaceExclusions>(cacheKey);
 
     if (cached) {
       return cached;
     }
 
-    const exclusions = await this.getExclusions(workspaceId);
+    const exclusions = await this.getExclusions(workspaceId, manager);
 
     const globalIgnoredUnits = (exclusions.ignoredUnits || []).map(normalizeExclusionUnitId);
     const ignoredBooklets = (exclusions.ignoredBooklets || []).map(normalizeExclusionBookletId);
@@ -98,7 +114,9 @@ export class WorkspaceExclusionService {
       // Find the unique booklets we need to parse.
       const bookletsToParse = Array.from(new Set(exclusions.ignoredTestlets.map(t => normalizeExclusionBookletId(t.bookletId))));
 
-      const bookletFiles = await this.fileUploadRepository.find({
+      const repository = manager?.getRepository(FileUpload) ||
+        this.fileUploadRepository;
+      const bookletFiles = await repository.find({
         where: {
           workspace_id: workspaceId,
           file_type: 'Booklet'
@@ -141,7 +159,9 @@ export class WorkspaceExclusionService {
     }
 
     const result = { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits };
-    await this.cacheService.set(cacheKey, result, 3600); // Cache for 1 hour
+    if (!manager) {
+      await this.cacheService.set(cacheKey, result, 3600); // Cache for 1 hour
+    }
     return result;
   }
 }

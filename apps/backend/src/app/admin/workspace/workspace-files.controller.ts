@@ -20,6 +20,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   ApiBearerAuth,
   ApiConsumes,
+  ApiConflictResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -548,6 +549,9 @@ export class WorkspaceFilesController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   @ApiOkResponse({ description: 'Ignored units updated' })
+  @ApiConflictResponse({
+    description: 'Workspace settings are currently locked by another mutation.'
+  })
   async updateIgnoredUnits(
     @Param('workspace_id') workspaceId: number,
       @Body() body: { ignoredUnits: string[] }
@@ -572,6 +576,9 @@ export class WorkspaceFilesController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   @ApiOkResponse({ description: 'Workspace Settings updated' })
+  @ApiConflictResponse({
+    description: 'Workspace settings are currently locked by another mutation.'
+  })
   async updateWorkspaceSettings(
     @Param('workspace_id') workspaceId: number,
       @Body() body: WorkspaceSettingsDto
