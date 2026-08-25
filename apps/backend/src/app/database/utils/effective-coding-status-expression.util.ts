@@ -24,6 +24,7 @@ export function getEffectiveCodingStatusExpression(
     const statusV3Expression = getNumericStatusExpression(responseAlias, 'v3');
     const manualStatusExpression = getEffectiveManualCodingStatusExpression(responseAlias);
     return `CASE
+      WHEN ${responseAlias}.autocoder_invalidated_version IS NOT NULL THEN ${statusV3Expression}
       WHEN ${statusV3Expression} IN (${STATISTICS_IGNORED_STATUS_LIST}) THEN ${manualStatusExpression}
       ELSE COALESCE(${statusV3Expression}, ${manualStatusExpression})
     END`;
