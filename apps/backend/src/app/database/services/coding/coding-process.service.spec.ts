@@ -82,6 +82,14 @@ describe('CodingProcessService', () => {
     getIgnoredUnits: jest.fn().mockResolvedValue([])
   };
 
+  const mockWorkspaceExclusionService = {
+    resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+      globalIgnoredUnits: [],
+      ignoredBooklets: [],
+      testletIgnoredUnits: []
+    })
+  };
+
   const mockCodingStatisticsService = {
     refreshStatistics: jest.fn()
   };
@@ -236,9 +244,7 @@ describe('CodingProcessService', () => {
         CodingProcessService,
         {
           provide: WorkspaceExclusionService,
-          useValue: {
-            resolveExclusionsForQueries: jest.fn().mockResolvedValue({ globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] })
-          }
+          useValue: mockWorkspaceExclusionService
         },
         {
           provide: getRepositoryToken(FileUpload),
@@ -1671,6 +1677,52 @@ describe('CodingProcessService', () => {
       expect(responseRepository.manager.connection.createQueryRunner)
         .not.toHaveBeenCalled();
       expect(mockResponseManagementService.updateResponsesInDatabase)
+        .not.toHaveBeenCalled();
+    });
+
+    it('routes all PostgreSQL preflight reads through the locked entity manager', async () => {
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockUnits)
+        .mockResolvedValueOnce(mockResponses);
+      const preflightManager = {
+        getRepository: jest.fn((entity: unknown) => {
+          if (entity === Persons) return personsRepository;
+          if (entity === Booklet) return bookletRepository;
+          if (entity === Unit) return unitRepository;
+          if (entity === ResponseEntity) return responseRepository;
+          if (entity === FileUpload) return fileUploadRepository;
+          throw new Error('Unexpected preflight repository');
+        })
+      };
+
+      await service.prepareAutocoderBatch(
+        workspaceId,
+        personIds,
+        autoCoderRun,
+        undefined,
+        'preflight-job',
+        undefined,
+        undefined,
+        service.createAutocoderPreflightContext(),
+        Number.MAX_SAFE_INTEGER,
+        preflightManager as never
+      );
+
+      expect(preflightManager.getRepository).toHaveBeenCalledWith(Persons);
+      expect(preflightManager.getRepository).toHaveBeenCalledWith(Booklet);
+      expect(preflightManager.getRepository).toHaveBeenCalledWith(Unit);
+      expect(preflightManager.getRepository).toHaveBeenCalledWith(ResponseEntity);
+      expect(preflightManager.getRepository).toHaveBeenCalledWith(FileUpload);
+      expect(mockWorkspaceExclusionService.resolveExclusionsForQueries)
+        .toHaveBeenCalledWith(workspaceId, preflightManager);
+      expect(mockCodingReadinessService.filterResponsesCodeable)
+        .toHaveBeenCalledWith(
+          workspaceId,
+          mockResponses,
+          mockUnits,
+          preflightManager
+        );
+      expect(responseRepository.manager.connection.createQueryRunner)
         .not.toHaveBeenCalled();
     });
 

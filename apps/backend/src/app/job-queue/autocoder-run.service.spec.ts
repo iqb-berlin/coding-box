@@ -31,7 +31,9 @@ describe('AutocoderRunService', () => {
   }) as unknown as Job<TestPersonCodingJobData>;
 
   const createServices = () => {
+    const preflightManager = { getRepository: jest.fn() };
     const queryRunner = {
+      manager: preflightManager,
       isTransactionActive: false,
       isReleased: false,
       commitTransaction: jest.fn().mockImplementation(async () => {
@@ -76,13 +78,19 @@ describe('AutocoderRunService', () => {
     return {
       service,
       queryRunner,
+      preflightManager,
       codingProcessService,
       workspaceCodingService
     };
   };
 
   it('preflights every batch before persisting the in-memory plans', async () => {
-    const { service, codingProcessService, queryRunner } = createServices();
+    const {
+      service,
+      codingProcessService,
+      queryRunner,
+      preflightManager
+    } = createServices();
 
     await expect(service.run(createJob())).resolves.toEqual({
       totalResponses: 10,
@@ -109,6 +117,12 @@ describe('AutocoderRunService', () => {
     expect(
       codingProcessService.prepareAutocoderBatch.mock.calls[1][8]
     ).toBe(249_999);
+    expect(
+      codingProcessService.prepareAutocoderBatch.mock.calls[0][9]
+    ).toBe(preflightManager);
+    expect(
+      codingProcessService.prepareAutocoderBatch.mock.calls[1][9]
+    ).toBe(preflightManager);
     expect(queryRunner.commitTransaction).toHaveBeenCalledTimes(1);
   });
 

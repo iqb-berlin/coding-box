@@ -9,6 +9,7 @@ import {
   Brackets,
   DataSource,
   EntityManager,
+  In,
   Repository,
   SelectQueryBuilder
 } from 'typeorm';
@@ -659,15 +660,34 @@ export class CodingFreshnessService {
     );
     const blockedUnitIdSet = new Set(blockedUnitIds);
     const clearableUnitIds = unitIds.filter(unitId => !blockedUnitIdSet.has(unitId));
+    const freshnessRepository = options.manager ?
+      options.manager.getRepository(CodingUnitFreshness) :
+      this.freshnessRepository;
+    const currentV3Rows = await freshnessRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        unit_id: In(unitIds),
+        version: 'v3',
+        state: 'CURRENT'
+      },
+      select: ['unit_id']
+    });
+    const currentV3UnitIds = this.uniquePositiveIds(
+      currentV3Rows.map(row => Number(row.unit_id))
+    );
 
-    if (clearableUnitIds.length > 0) {
+    if (clearableUnitIds.length > 0 || currentV3UnitIds.length > 0) {
       const revision = await this.getCurrentRevision(workspaceId, options.manager);
+      const affectedUnitIds = this.uniquePositiveIds([
+        ...clearableUnitIds,
+        ...currentV3UnitIds
+      ]);
       const responseCounts = await this.getResponseCountsByUnit(
         workspaceId,
-        clearableUnitIds,
+        affectedUnitIds,
         options.manager
       );
-      await this.upsertRows(clearableUnitIds.map(unitId => this.buildRow(
+      const rows = clearableUnitIds.map(unitId => this.buildRow(
         workspaceId,
         unitId,
         'v2',
@@ -676,7 +696,18 @@ export class CodingFreshnessService {
         responseCounts.get(unitId) || 0,
         revision,
         revision
-      )), options.manager);
+      ));
+      currentV3UnitIds.forEach(unitId => rows.push(this.buildRow(
+        workspaceId,
+        unitId,
+        'v3',
+        'STALE',
+        'MANUAL_CODING_APPLIED',
+        responseCounts.get(unitId) || 0,
+        revision,
+        null
+      )));
+      await this.upsertRows(rows, options.manager);
     }
 
     if (codingJobIdsToClear.length > 0) {

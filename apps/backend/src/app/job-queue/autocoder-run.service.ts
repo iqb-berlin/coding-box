@@ -191,7 +191,8 @@ export class AutocoderRunService {
           job.data.unitIds,
           job.data.freshnessSourceRevision,
           preflightContext,
-          MAX_PLANNED_RESPONSES - plannedResponses
+          MAX_PLANNED_RESPONSES - plannedResponses,
+          queryRunner.manager
         );
         if (plan) {
           plannedResponses += plan.codedResponses.length;

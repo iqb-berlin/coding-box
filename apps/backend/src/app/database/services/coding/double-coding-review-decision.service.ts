@@ -32,6 +32,7 @@ import { CodingValidationService } from './coding-validation.service';
 import { CodingProgressService } from './coding-progress.service';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { buildAggregationGroups } from './aggregation-metrics.util';
+import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
 import {
   DoubleCodedManagerDecisionDto,
   DoubleCodedResolutionDecisionDto,
@@ -302,37 +303,61 @@ export class DoubleCodingReviewDecisionService {
         `Applying ${decisions.length} double-coded resolutions in workspace ${workspaceId}`
       );
 
-      let appliedCount = 0;
-      let failedCount = 0;
-      let skippedCount = 0;
-      const results: DoubleCodedResolutionResultDto[] = [];
+      const application = await this.responseRepository.manager.transaction(
+        async transactionalEntityManager => {
+          await lockWorkspaceTestResultsMutationInTransaction(
+            transactionalEntityManager,
+            workspaceId
+          );
 
-      for (const decision of decisions) {
-        try {
-          const result = await this.responseRepository.manager.transaction(
-            transactionalEntityManager => this.applyDoubleCodedResolutionInTransaction(
-              transactionalEntityManager,
-              workspaceId,
-              decision,
-              manager
-            )
-          );
-          results.push(result);
-          if (result.status === 'applied') appliedCount += 1;
-          if (result.status === 'skipped') skippedCount += 1;
-        } catch (error) {
-          this.logger.error(
-            `Error applying resolution for responseId ${decision.responseId}: ${error.message}`,
-            error.stack
-          );
-          failedCount += 1;
-          results.push({
-            responseId: decision.responseId,
-            status: 'failed',
-            message: error.message
-          });
+          let appliedCount = 0;
+          let failedCount = 0;
+          let skippedCount = 0;
+          const results: DoubleCodedResolutionResultDto[] = [];
+
+          for (const decision of decisions) {
+            try {
+              const result = await this.runInSavepoint(
+                transactionalEntityManager,
+                'double_coding_resolution',
+                () => this.applyDoubleCodedResolutionInTransaction(
+                  transactionalEntityManager,
+                  workspaceId,
+                  decision,
+                  manager
+                )
+              );
+              results.push(result);
+              if (result.status === 'applied') appliedCount += 1;
+              if (result.status === 'skipped') skippedCount += 1;
+            } catch (error) {
+              this.logger.error(
+                `Error applying resolution for responseId ${decision.responseId}: ${error.message}`,
+                error.stack
+              );
+              failedCount += 1;
+              results.push({
+                responseId: decision.responseId,
+                status: 'failed',
+                message: error.message
+              });
+            }
+          }
+
+          return {
+            appliedCount,
+            failedCount,
+            skippedCount,
+            results
+          };
         }
-      }
+      );
+      const {
+        appliedCount,
+        failedCount,
+        skippedCount,
+        results
+      } = application;
 
       if (appliedCount > 0 && typeof this.codingStatisticsService.invalidateCache === 'function') {
         await this.codingStatisticsService.invalidateCache(workspaceId);
@@ -409,16 +434,30 @@ export class DoubleCodingReviewDecisionService {
       items: []
     };
 
-    for (const decision of latestDecisionByResponseId.values()) {
+    const reconcileDecision = async (
+      decision: DoubleCodingReviewDecision,
+      entityManager?: EntityManager
+    ): Promise<void> => {
       try {
-        const item = await this.responseRepository.manager.transaction(
-          entityManager => this.reconcileAppliedAggregationResolutionInTransaction(
+        const item = entityManager ?
+          await this.runInSavepoint(
             entityManager,
-            workspaceId,
-            decision,
-            dryRun
-          )
-        );
+            'aggregation_reconciliation',
+            () => this.reconcileAppliedAggregationResolutionInTransaction(
+              entityManager,
+              workspaceId,
+              decision,
+              false
+            )
+          ) :
+          await this.responseRepository.manager.transaction(
+            manager => this.reconcileAppliedAggregationResolutionInTransaction(
+              manager,
+              workspaceId,
+              decision,
+              true
+            )
+          );
         result.items.push(item);
         result.protectedPartialCount += item.protectedPartialResponseIds.length;
         if (item.status === 'would-update') {
@@ -445,6 +484,22 @@ export class DoubleCodingReviewDecisionService {
           reason: error.message
         });
       }
+    };
+
+    if (dryRun) {
+      for (const decision of latestDecisionByResponseId.values()) {
+        await reconcileDecision(decision);
+      }
+    } else {
+      await this.responseRepository.manager.transaction(async entityManager => {
+        await lockWorkspaceTestResultsMutationInTransaction(
+          entityManager,
+          workspaceId
+        );
+        for (const decision of latestDecisionByResponseId.values()) {
+          await reconcileDecision(decision, entityManager);
+        }
+      });
     }
 
     if (!dryRun && result.updatedCount > 0) {
@@ -454,6 +509,23 @@ export class DoubleCodingReviewDecisionService {
       `${dryRun ? 'Dry-run for' : 'Applied'} aggregation reconciliation in workspace ${workspaceId}: representatives=${result.representativeCount}, ${dryRun ? 'wouldUpdate' : 'updated'}=${dryRun ? result.wouldUpdateCount : result.updatedCount}, protectedPartial=${result.protectedPartialCount}, skipped=${result.skippedCount}, failed=${result.failedCount}`
     );
     return result;
+  }
+
+  private async runInSavepoint<T>(
+    entityManager: EntityManager,
+    savepoint: 'double_coding_resolution' | 'aggregation_reconciliation',
+    callback: () => Promise<T>
+  ): Promise<T> {
+    await entityManager.query(`SAVEPOINT ${savepoint}`);
+    try {
+      const result = await callback();
+      await entityManager.query(`RELEASE SAVEPOINT ${savepoint}`);
+      return result;
+    } catch (error) {
+      await entityManager.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+      await entityManager.query(`RELEASE SAVEPOINT ${savepoint}`);
+      throw error;
+    }
   }
 
   private async reconcileAppliedAggregationResolutionInTransaction(
@@ -592,7 +664,11 @@ export class DoubleCodingReviewDecisionService {
         reason: 'No eligible single-coder source unit found'
       };
     }
-    if (!await this.isResolutionSourceAllowed(workspaceId, sourceUnits[0])) {
+    if (!await this.isResolutionSourceAllowed(
+      workspaceId,
+      sourceUnits[0],
+      entityManager
+    )) {
       return {
         sourceUnit: null,
         aggregationSettings: null,
@@ -603,7 +679,8 @@ export class DoubleCodingReviewDecisionService {
     const settingsByUnit = await Promise.all(sourceUnits.map(async sourceUnit => ({
       sourceUnit,
       settings: await this.codingJobService.getAggregationSettingsForCodingJob(
-        sourceUnit.coding_job
+        sourceUnit.coding_job,
+        entityManager
       )
     })));
     if (settingsByUnit.some(entry => !entry.settings.fromJobSnapshot)) {
@@ -747,7 +824,10 @@ export class DoubleCodingReviewDecisionService {
     } = {}
   ): Promise<AggregationSiblingApplication> {
     const aggregationSettings = options.aggregationSettings || await this.codingJobService
-      .getAggregationSettingsForCodingJob(resolvedDecision.sourceUnit.coding_job);
+      .getAggregationSettingsForCodingJob(
+        resolvedDecision.sourceUnit.coding_job,
+        entityManager
+      );
     const aggregationThreshold = aggregationSettings.aggregationThreshold;
     if (
       !aggregationSettings.aggregationEnabled ||
@@ -766,7 +846,7 @@ export class DoubleCodingReviewDecisionService {
     }
 
     const exclusions = await this.workspaceExclusionService
-      .resolveExclusionsForQueries(workspaceId);
+      .resolveExclusionsForQueries(workspaceId, entityManager);
     const candidateQuery = entityManager
       .getRepository(ResponseEntity)
       .createQueryBuilder('response')
@@ -808,7 +888,7 @@ export class DoubleCodingReviewDecisionService {
     });
 
     const derivedVariableMap = await this.codingJobService
-      .getDerivedVariableMapForAggregation(workspaceId);
+      .getDerivedVariableMapForAggregation(workspaceId, entityManager);
     const groups = buildAggregationGroups(
       Array.from(candidateById.values()).map(candidate => ({
         responseId: candidate.id,
@@ -968,7 +1048,11 @@ export class DoubleCodingReviewDecisionService {
       return null;
     }
 
-    if (!await this.isResolutionSourceAllowed(workspaceId, selectedCodingJobUnit)) {
+    if (!await this.isResolutionSourceAllowed(
+      workspaceId,
+      selectedCodingJobUnit,
+      manager
+    )) {
       this.logger.warn(`Skipped unavailable responseId ${decision.responseId} for jobId ${selectedJobId}`);
       return null;
     }
@@ -997,12 +1081,21 @@ export class DoubleCodingReviewDecisionService {
       decision.responseId,
       sourceUnitId
     );
-    if (!sourceUnit || !await this.isResolutionSourceAllowed(workspaceId, sourceUnit)) {
+    if (!sourceUnit || !await this.isResolutionSourceAllowed(
+      workspaceId,
+      sourceUnit,
+      manager
+    )) {
       this.logger.warn(`Skipped unavailable review source for responseId ${decision.responseId}`);
       return null;
     }
 
-    const resolvedSelection = await this.resolveReviewSelection(workspaceId, sourceUnit, selectedCode);
+    const resolvedSelection = await this.resolveReviewSelection(
+      workspaceId,
+      sourceUnit,
+      selectedCode,
+      manager
+    );
     if (!resolvedSelection) {
       this.logger.warn(
         `Skipped unavailable coding result for responseId ${decision.responseId} and jobId ${selectedJobId}`
@@ -1058,12 +1151,21 @@ export class DoubleCodingReviewDecisionService {
       return null;
     }
 
-    if (!await this.isResolutionSourceAllowed(workspaceId, sourceUnit)) {
+    if (!await this.isResolutionSourceAllowed(
+      workspaceId,
+      sourceUnit,
+      manager
+    )) {
       this.logger.warn(`Skipped unavailable replay responseId ${decision.responseId}`);
       return null;
     }
 
-    const resolvedSelection = await this.resolveReviewSelection(workspaceId, sourceUnit, code);
+    const resolvedSelection = await this.resolveReviewSelection(
+      workspaceId,
+      sourceUnit,
+      code,
+      manager
+    );
     if (!resolvedSelection) {
       this.logger.warn(`Unsupported replay code for responseId ${decision.responseId}: ${code}`);
       return null;
@@ -1081,7 +1183,8 @@ export class DoubleCodingReviewDecisionService {
   private async resolveReviewSelection(
     workspaceId: number,
     sourceUnit: CodingJobUnit,
-    code: number
+    code: number,
+    manager?: EntityManager
   ): Promise<ResolvedReviewSelection | undefined> {
     if (code < 0) {
       if (!this.allowedCodingIssueCodes.has(code)) {
@@ -1094,7 +1197,8 @@ export class DoubleCodingReviewDecisionService {
       const missing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
         workspaceId,
         sourceUnit.coding_job?.missings_profile_id ?? null,
-        missingId
+        missingId,
+        manager
       );
       return {
         code: missing.code,
@@ -1106,7 +1210,8 @@ export class DoubleCodingReviewDecisionService {
       const selectableCode = await this.codingJobService.getSelectableReviewCodeForUnit(
         sourceUnit,
         workspaceId,
-        code
+        code,
+        manager
       );
       return {
         code: selectableCode.code,
@@ -1152,14 +1257,16 @@ export class DoubleCodingReviewDecisionService {
 
   private async isResolutionSourceAllowed(
     workspaceId: number,
-    sourceUnit: CodingJobUnit
+    sourceUnit: CodingJobUnit,
+    manager?: EntityManager
   ): Promise<boolean> {
     if (sourceUnit.coding_job?.workspace_id !== workspaceId) {
       this.logger.warn(`Workspace mismatch for responseId ${sourceUnit.response_id}`);
       return false;
     }
 
-    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const exclusions = await this.workspaceExclusionService
+      .resolveExclusionsForQueries(workspaceId, manager);
     return !isExcludedByResolvedExclusions(
       exclusions,
       sourceUnit.booklet_name,
