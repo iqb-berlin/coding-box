@@ -85,6 +85,22 @@ type AutocoderPersistenceSource = {
   possibleOrigins: string[];
 };
 
+type AutocoderNamespace = {
+  variableCodings: VariableCodingData[];
+  inputTechnicalIdByAlias: Map<string, string>;
+  outputAliasByTechnicalId: Map<string, string>;
+  shadowingPairs: Array<{
+    baseTechnicalId: string;
+    derivedTechnicalId: string;
+  }>;
+};
+
+type AutocoderInputOrigin = {
+  responseId: number;
+  storedVariableId: string;
+  isAutocoderGenerated: boolean;
+};
+
 type CompleteDerivedTuple = {
   version: 'v1' | 'v2';
   code: number | null;
@@ -1368,9 +1384,14 @@ export class CodingProcessService {
           };
         });
 
-        const codedResults = Autocoder.CodingSchemeFactory.code(
+        const codedResults = this.codeAutocoderResponses(
           inputResponses,
-          scheme.variableCodings || []
+          scheme.variableCodings || [],
+          responses.map(response => ({
+            responseId: response.id,
+            storedVariableId: String(response.variableid),
+            isAutocoderGenerated: response.is_autocoder_generated === true
+          }))
         );
         const completeDerivedRecalculation =
           this.recalculateCompleteDerivedResults(
@@ -1589,16 +1610,32 @@ export class CodingProcessService {
         manager
       ) :
       [];
+    let namespace: AutocoderNamespace;
+    try {
+      namespace = this.createAutocoderNamespace(
+        scheme.variableCodings || []
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Autocoder rejected coding scheme "${codingSchemeRef}" ` +
+        `for unit "${unit.name}" (${unit.id}): ${message}.`
+      );
+    }
+
     const breakingProblems = Autocoder.CodingSchemeFactory.validate(
       baseVariables,
-      scheme.variableCodings || []
+      namespace.variableCodings
     ).filter(problem => problem.breaking);
 
     if (breakingProblems.length > 0) {
-      const details = breakingProblems.map(problem => (
-        `${problem.type} for variable "${problem.variableId}"` +
-        `${problem.code ? ` (${problem.code})` : ''}`
-      )).join(', ');
+      const details = breakingProblems.map(problem => {
+        const outputAlias = namespace.outputAliasByTechnicalId.get(
+          this.normalizeVariableId(problem.variableId)
+        ) || problem.variableId;
+        return `${problem.type} for variable "${outputAlias}"` +
+          `${problem.code ? ` (${problem.code})` : ''}`;
+      }).join(', ');
       throw new Error(
         `Autocoder rejected coding scheme "${codingSchemeRef}" ` +
         `for unit "${unit.name}" (${unit.id}): ${details}.`
@@ -1639,6 +1676,230 @@ export class CodingProcessService {
     });
 
     return technicalIdFallbackByAlias;
+  }
+
+  private createAutocoderNamespace(
+    variableCodings: VariableCodingData[]
+  ): AutocoderNamespace {
+    const codingsByTechnicalId = new Map<string, VariableCodingData[]>();
+    const codingsByOutputAlias = new Map<string, VariableCodingData[]>();
+
+    variableCodings.forEach(coding => {
+      const technicalId = String(coding.id || '');
+      if (!technicalId) {
+        throw new Error('coding contains an empty technical variable ID');
+      }
+
+      const normalizedTechnicalId = this.normalizeVariableId(technicalId);
+      codingsByTechnicalId.set(normalizedTechnicalId, [
+        ...(codingsByTechnicalId.get(normalizedTechnicalId) || []),
+        coding
+      ]);
+
+      const outputAlias = String(coding.alias || coding.id);
+      const normalizedOutputAlias = this.normalizeVariableId(outputAlias);
+      codingsByOutputAlias.set(normalizedOutputAlias, [
+        ...(codingsByOutputAlias.get(normalizedOutputAlias) || []),
+        coding
+      ]);
+    });
+
+    const duplicateTechnicalId = Array.from(codingsByTechnicalId.entries())
+      .find(([, codings]) => codings.length > 1);
+    if (duplicateTechnicalId) {
+      throw new Error(
+        `duplicate technical variable ID "${duplicateTechnicalId[0]}"`
+      );
+    }
+
+    const shadowingPairs: AutocoderNamespace['shadowingPairs'] = [];
+    codingsByOutputAlias.forEach((codings, normalizedAlias) => {
+      if (codings.length === 1) {
+        return;
+      }
+
+      const baseCoding = codings.find(coding => (
+        coding.sourceType === 'BASE' &&
+        this.normalizeVariableId(coding.id) === normalizedAlias
+      ));
+      const derivedCodings = codings.filter(coding => (
+        coding !== baseCoding &&
+        coding.sourceType !== 'BASE' &&
+        coding.sourceType !== 'BASE_NO_VALUE' &&
+        this.normalizeVariableId(coding.alias || coding.id) ===
+          normalizedAlias &&
+        (coding.deriveSources || []).some(source => (
+          this.normalizeVariableId(source) === normalizedAlias
+        ))
+      ));
+      const isAllowedDerivedShadow = Boolean(
+        baseCoding &&
+        codings.length === 2 &&
+        derivedCodings.length === 1
+      );
+
+      if (!isAllowedDerivedShadow || !baseCoding) {
+        throw new Error(`duplicate output alias "${normalizedAlias}"`);
+      }
+
+      shadowingPairs.push({
+        baseTechnicalId: String(baseCoding.id),
+        derivedTechnicalId: String(derivedCodings[0].id)
+      });
+    });
+
+    const shadowingDerivedIds = new Set(
+      shadowingPairs.map(pair => (
+        this.normalizeVariableId(pair.derivedTechnicalId)
+      ))
+    );
+    const inputTechnicalIdByAlias = new Map<string, string>();
+    const outputAliasByTechnicalId = new Map<string, string>();
+
+    variableCodings.forEach(coding => {
+      const technicalId = String(coding.id);
+      const outputAlias = String(coding.alias || coding.id);
+      outputAliasByTechnicalId.set(
+        this.normalizeVariableId(technicalId),
+        outputAlias
+      );
+
+      // In the supported derived-shadowing pattern, the imported alias is the
+      // base variable. The derived coding owns the final output only after its
+      // derivation has run.
+      if (!shadowingDerivedIds.has(this.normalizeVariableId(technicalId))) {
+        inputTechnicalIdByAlias.set(
+          this.normalizeVariableId(outputAlias),
+          technicalId
+        );
+      }
+    });
+
+    return {
+      variableCodings: variableCodings.map(coding => ({
+        ...coding,
+        // The response library otherwise merges the technical-ID and alias
+        // namespaces. Internally use technical IDs only and map results back
+        // to their public aliases after coding.
+        alias: String(coding.id)
+      })),
+      inputTechnicalIdByAlias,
+      outputAliasByTechnicalId,
+      shadowingPairs
+    };
+  }
+
+  private codeAutocoderResponses(
+    responses: AutocoderResponse[],
+    variableCodings: VariableCodingData[],
+    inputOrigins?: AutocoderInputOrigin[]
+  ): AutocoderResponse[] {
+    if (inputOrigins && inputOrigins.length !== responses.length) {
+      throw new Error(
+        'Autocoder input provenance does not match the response count.'
+      );
+    }
+
+    const namespace = this.createAutocoderNamespace(variableCodings);
+    const describeInput = (inputIndex: number): string => {
+      const origin = inputOrigins?.[inputIndex];
+      const rawVariableId = origin?.storedVariableId ||
+        String(responses[inputIndex].id);
+      if (!origin) {
+        return `input ${inputIndex + 1} (stored variable ` +
+          `"${rawVariableId}")`;
+      }
+      const originType = origin.isAutocoderGenerated ?
+        'autocoder-generated' :
+        'imported';
+      return `response:${origin.responseId} (stored variable ` +
+        `"${rawVariableId}", ${originType})`;
+    };
+    const canonicalResponses = responses.map((response, index) => {
+      const normalizedInputId = this.normalizeVariableId(response.id);
+      const mappedTechnicalId = namespace.inputTechnicalIdByAlias.get(
+        normalizedInputId
+      );
+      // Imported rows use public aliases. Generated rows may be legacy output
+      // persisted under a technical ID, so an ID that names both namespaces
+      // cannot be interpreted safely without an additional provenance marker.
+      const isAmbiguousGeneratedInput =
+        inputOrigins?.[index]?.isAutocoderGenerated === true &&
+        mappedTechnicalId !== undefined &&
+        this.normalizeVariableId(mappedTechnicalId) !== normalizedInputId &&
+        namespace.outputAliasByTechnicalId.has(normalizedInputId);
+
+      if (isAmbiguousGeneratedInput) {
+        throw new Error(
+          'Autocoder input namespace is ambiguous for ' +
+          `${describeInput(index)}, subform ` +
+          `"${String(response.subform || '')}": the stored variable ID is ` +
+          'both the output alias for technical variable ' +
+          `"${mappedTechnicalId}" and technical variable ` +
+          `"${response.id}".`
+        );
+      }
+
+      return {
+        ...response,
+        id: mappedTechnicalId || response.id,
+        // null, empty string and undefined all mean "no subform" in the
+        // database. The response library must receive one canonical form so it
+        // does not create a second placeholder for the same persistence target.
+        subform: response.subform || undefined
+      };
+    });
+    const canonicalInputIndexes = new Map<string, number>();
+    canonicalResponses.forEach((response, index) => {
+      const subform = String(response.subform || '');
+      const key = this.autocoderResultKey(response.id, subform);
+      const previousIndex = canonicalInputIndexes.get(key);
+      if (previousIndex !== undefined) {
+        throw new Error(
+          'Autocoder input namespace collision for technical variable ' +
+          `"${response.id}", subform "${subform}": ` +
+          `${describeInput(previousIndex)} and ${describeInput(index)}.`
+        );
+      }
+      canonicalInputIndexes.set(key, index);
+    });
+
+    const canonicalResults = Autocoder.CodingSchemeFactory.code(
+      canonicalResponses,
+      namespace.variableCodings
+    );
+    const derivedResultKeys = new Set<string>();
+
+    namespace.shadowingPairs.forEach(pair => {
+      canonicalResults
+        .filter(result => (
+          this.normalizeVariableId(result.id) ===
+            this.normalizeVariableId(pair.derivedTechnicalId)
+        ))
+        .forEach(result => {
+          derivedResultKeys.add(this.autocoderResultKey(
+            pair.baseTechnicalId,
+            String(result.subform || '')
+          ));
+        });
+    });
+
+    return canonicalResults
+      .filter(result => !namespace.shadowingPairs.some(pair => (
+        this.normalizeVariableId(result.id) ===
+          this.normalizeVariableId(pair.baseTechnicalId) &&
+        derivedResultKeys.has(this.autocoderResultKey(
+          pair.baseTechnicalId,
+          String(result.subform || '')
+        ))
+      )))
+      .map(result => ({
+        ...result,
+        id: namespace.outputAliasByTechnicalId.get(
+          this.normalizeVariableId(result.id)
+        ) || result.id,
+        subform: result.subform || undefined
+      }));
   }
 
   private findExistingResponseForAutocoderResult(
@@ -1948,7 +2209,7 @@ export class CodingProcessService {
           score: undefined
         } : response;
       });
-      const recalculatedResults = Autocoder.CodingSchemeFactory.code(
+      const recalculatedResults = this.codeAutocoderResponses(
         recalculationInput,
         variableCodings
       );
@@ -2032,7 +2293,7 @@ export class CodingProcessService {
     return {
       targetResults: resultsByTarget,
       authoritativeResults: requiresAuthoritativeRecalculation ?
-        Autocoder.CodingSchemeFactory.code(workingInput, variableCodings) :
+        this.codeAutocoderResponses(workingInput, variableCodings) :
         null,
       independentRecalculationAvailable: true
     };

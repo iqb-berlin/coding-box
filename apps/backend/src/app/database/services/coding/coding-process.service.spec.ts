@@ -1016,7 +1016,7 @@ describe('CodingProcessService', () => {
           status: 'CODING_COMPLETE',
           code: 0,
           score: 0,
-          subform: null
+          subform: undefined
         })
       ]));
     });
@@ -1116,7 +1116,7 @@ describe('CodingProcessService', () => {
         (Autocoder.CodingSchemeFactory.code as jest.Mock).mock.calls[0][0]
       ).toEqual(expect.arrayContaining([
         expect.objectContaining({
-          id: '_01',
+          id: 'derived-target',
           status: 'CODING_COMPLETE',
           code: 4,
           score: 0
@@ -1299,12 +1299,20 @@ describe('CodingProcessService', () => {
       expect(
         (Autocoder.CodingSchemeFactory.code as jest.Mock).mock.results[1].value
       ).toEqual(expect.arrayContaining([
-        expect.objectContaining({ id: 'A', value: '1', status: 'NO_CODING' })
+        expect.objectContaining({
+          id: 'derived-a',
+          value: '1',
+          status: 'NO_CODING'
+        })
       ]));
       expect(
         (Autocoder.CodingSchemeFactory.code as jest.Mock).mock.results[2].value
       ).toEqual(expect.arrayContaining([
-        expect.objectContaining({ id: 'B', value: '7', status: 'NO_CODING' })
+        expect.objectContaining({
+          id: 'derived-b',
+          value: '7',
+          status: 'NO_CODING'
+        })
       ]));
     });
 
@@ -1603,7 +1611,7 @@ describe('CodingProcessService', () => {
         (Autocoder.CodingSchemeFactory.code as jest.Mock).mock.results[0].value
       ).toEqual(expect.arrayContaining([
         expect.objectContaining({
-          id: '_01',
+          id: 'derived-target',
           value: '1',
           status: 'CODING_COMPLETE',
           code: 4
@@ -1613,7 +1621,7 @@ describe('CodingProcessService', () => {
         (Autocoder.CodingSchemeFactory.code as jest.Mock).mock.results[1].value
       ).toEqual(expect.arrayContaining([
         expect.objectContaining({
-          id: '_01',
+          id: 'derived-target',
           value: '-98',
           status: 'CODING_INCOMPLETE'
         })
@@ -2446,7 +2454,7 @@ describe('CodingProcessService', () => {
       ];
       (Autocoder.CodingSchemeFactory.code as jest.Mock).mockReturnValueOnce([
         {
-          id: '02',
+          id: '04',
           value: 'response 02',
           status: 'CODING_COMPLETE',
           code: 102,
@@ -2454,7 +2462,7 @@ describe('CodingProcessService', () => {
           subform: ''
         },
         {
-          id: '04',
+          id: '07',
           value: 'response 04',
           status: 'CODING_COMPLETE',
           code: 104,
@@ -2462,7 +2470,7 @@ describe('CodingProcessService', () => {
           subform: ''
         },
         {
-          id: '03',
+          id: '05',
           value: 'derived 03',
           status: 'CODING_COMPLETE',
           code: 103,
@@ -2470,7 +2478,7 @@ describe('CodingProcessService', () => {
           subform: ''
         },
         {
-          id: '05',
+          id: '09',
           value: 'response 05',
           status: 'CODING_COMPLETE',
           code: 105,
@@ -2560,13 +2568,250 @@ describe('CodingProcessService', () => {
       ])).toThrow('Autocoder produced multiple updates for generated:1:03:');
     });
 
-    it('rejects an actual invalid ID/alias chain before coding or writing', async () => {
+    it('rejects genuinely duplicate output aliases before coding', () => {
+      const createNamespace = (
+        service as unknown as {
+          createAutocoderNamespace: (
+            variableCodings: Array<{
+              id: string;
+              alias: string;
+              sourceType: string;
+            }>
+          ) => unknown;
+        }
+      ).createAutocoderNamespace.bind(service);
+
+      expect(() => createNamespace([
+        { id: 'technical-a', alias: 'DUPLICATE', sourceType: 'BASE' },
+        { id: 'technical-b', alias: 'DUPLICATE', sourceType: 'BASE' }
+      ])).toThrow('duplicate output alias "DUPLICATE"');
+      expect(Autocoder.CodingSchemeFactory.code).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['public alias first', true],
+      ['technical ID first', false]
+    ])(
+      'rejects canonical input collisions with %s',
+      async (_description, aliasFirst) => {
+        const publicAliasResponse = createMockResponse(
+          6235425,
+          1,
+          '06',
+          'public-alias-value'
+        );
+        const legacyTechnicalResponse = createMockResponse(
+          6235426,
+          1,
+          'radio-group-images_1',
+          'legacy-technical-value'
+        );
+        legacyTechnicalResponse.is_autocoder_generated = true;
+        const orderedResponses = aliasFirst ?
+          [publicAliasResponse, legacyTechnicalResponse] :
+          [legacyTechnicalResponse, publicAliasResponse];
+
+        mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+          new Map([[
+            'TEST_UNIT_1',
+            new Set(['06', 'radio-group-images_1'])
+          ]])
+        );
+        mockQueryBuilder.getMany
+          .mockResolvedValueOnce([mockUnits[0]])
+          .mockResolvedValueOnce(orderedResponses);
+        (fileUploadRepository.find as jest.Mock)
+          .mockReset()
+          .mockResolvedValueOnce([
+            createMockFileUpload(
+              'ALIAS_1',
+              '<xml><codingSchemeRef>TEST-SCHEME-REF</codingSchemeRef></xml>'
+            )
+          ])
+          .mockResolvedValueOnce([
+            createMockFileUpload(
+              'TEST-SCHEME-REF',
+              JSON.stringify({
+                version: '3.4',
+                variableCodings: [{
+                  id: 'radio-group-images_1',
+                  alias: '06',
+                  sourceType: 'BASE'
+                }]
+              })
+            )
+          ]);
+
+        let collisionError: Error | undefined;
+        try {
+          await service.prepareAutocoderBatch(
+            workspaceId,
+            ['1'],
+            2,
+            undefined,
+            'preflight-job',
+            undefined,
+            undefined,
+            service.createAutocoderPreflightContext()
+          );
+        } catch (error) {
+          collisionError = error as Error;
+        }
+
+        expect(collisionError?.message).toContain(
+          'Autocoder input namespace collision for technical variable ' +
+          '"radio-group-images_1"'
+        );
+        expect(collisionError?.message).toContain(
+          'response:6235425 (stored variable "06", imported)'
+        );
+        expect(collisionError?.message).toContain(
+          'response:6235426 (stored variable "radio-group-images_1", ' +
+          'autocoder-generated)'
+        );
+        expect(Autocoder.CodingSchemeFactory.code).not.toHaveBeenCalled();
+        expect(responseRepository.manager.connection.createQueryRunner)
+          .not.toHaveBeenCalled();
+        expect(mockResponseManagementService.updateResponsesInDatabase)
+          .not.toHaveBeenCalled();
+      }
+    );
+
+    it('rejects a lone generated input with an ambiguous stored ID', () => {
+      const codeResponses = (
+        service as unknown as {
+          codeAutocoderResponses: (
+            responses: Array<{
+              id: string;
+              value: string;
+              status: 'CODING_COMPLETE';
+              subform?: string | null;
+            }>,
+            variableCodings: Array<{
+              id: string;
+              alias: string;
+              sourceType: string;
+            }>,
+            inputOrigins: Array<{
+              responseId: number;
+              storedVariableId: string;
+              isAutocoderGenerated: boolean;
+            }>
+          ) => unknown;
+        }
+      ).codeAutocoderResponses.bind(service);
+
+      expect(() => codeResponses([
+        {
+          id: '06',
+          value: 'legacy-technical-value',
+          status: 'CODING_COMPLETE',
+          subform: null
+        }
+      ], [
+        {
+          id: 'radio-group-images_1',
+          alias: '06',
+          sourceType: 'BASE'
+        },
+        { id: '06', alias: '07', sourceType: 'BASE' }
+      ], [
+        {
+          responseId: 6235426,
+          storedVariableId: '06',
+          isAutocoderGenerated: true
+        }
+      ])).toThrow(
+        'Autocoder input namespace is ambiguous for response:6235426 ' +
+        '(stored variable "06", autocoder-generated), subform "": the ' +
+        'stored variable ID is both the output alias for technical variable ' +
+        '"radio-group-images_1" and technical variable "06".'
+      );
+      expect(Autocoder.CodingSchemeFactory.code).not.toHaveBeenCalled();
+    });
+
+    it('keeps a real response status instead of an alias-chain placeholder', () => {
+      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
+        '@iqb/responses'
+      );
+      (Autocoder.CodingSchemeFactory.code as jest.Mock)
+        .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.code);
+      const codeResponses = (
+        service as unknown as {
+          codeAutocoderResponses: (
+            responses: Array<{
+              id: string;
+              value: string;
+              status: 'VALUE_CHANGED' | 'INVALID';
+              subform?: string | null;
+            }>,
+            variableCodings: Array<{
+              id: string;
+              alias: string;
+              sourceType: string;
+              codeModel: string;
+              codes: never[];
+            }>
+          ) => Array<{
+            id: string;
+            value: unknown;
+            status: string;
+            subform?: string;
+          }>;
+        }
+      ).codeAutocoderResponses.bind(service);
+
+      const results = codeResponses([
+        {
+          id: '07',
+          value: 'answer',
+          status: 'VALUE_CHANGED',
+          subform: null
+        },
+        {
+          id: '08',
+          value: '',
+          status: 'INVALID',
+          subform: null
+        }
+      ], [
+        {
+          id: '08',
+          alias: '07',
+          sourceType: 'BASE',
+          codeModel: 'MANUAL_AND_RULES',
+          codes: []
+        },
+        {
+          id: 'radio-group-images_1',
+          alias: '08',
+          sourceType: 'BASE',
+          codeModel: 'MANUAL_AND_RULES',
+          codes: []
+        }
+      ]);
+
+      expect(results.filter(result => result.id === '08')).toEqual([
+        expect.objectContaining({
+          id: '08',
+          value: '',
+          status: 'INVALID',
+          subform: undefined
+        })
+      ]);
+      expect(results.filter(result => result.id === '07')).toHaveLength(1);
+    });
+
+    it('accepts a valid technical-ID/output-alias chain without duplicate targets', async () => {
       const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
         '@iqb/responses'
       );
       (Autocoder.CodingSchemeFactory.validate as jest.Mock)
         .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.validate);
-      const response06 = createMockResponse(6235425, 1, '06');
+      (Autocoder.CodingSchemeFactory.code as jest.Mock)
+        .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.code);
+      const response06 = createMockResponse(6235425, 1, '06', '');
+      response06.subform = null as unknown as string;
       mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
         new Map([['TEST_UNIT_1', new Set(['06'])]])
       );
@@ -2628,27 +2873,52 @@ describe('CodingProcessService', () => {
           )
         ]);
 
-      await expect(service.prepareAutocoderBatch(
+      const plan = await service.prepareAutocoderBatch(
         workspaceId,
         ['1'],
-        1,
+        2,
         undefined,
         'preflight-job',
         undefined,
         undefined,
         service.createAutocoderPreflightContext()
-      )).rejects.toThrow(
-        /rejected coding scheme "TEST-SCHEME-REF"[\s\S]*TEST_UNIT_1[\s\S]*INVALID_SOURCE for variable "06"/
       );
 
-      expect(Autocoder.CodingSchemeFactory.code).not.toHaveBeenCalled();
+      expect(plan.codedResponses.filter(response => (
+        response.id === 6235425
+      ))).toHaveLength(1);
+      expect(plan.autoCoderRun).toBe(2);
+      expect(plan.codedResponses).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 6235425,
+          status_v3: expect.any(String)
+        }),
+        expect.objectContaining({ variableid: '07', isNew: true }),
+        expect.objectContaining({ variableid: '08', isNew: true })
+      ]));
+      expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'radio-group-images_1',
+            subform: undefined
+          })
+        ]),
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'radio-group-images_1',
+            alias: 'radio-group-images_1'
+          }),
+          expect.objectContaining({ id: '06', alias: '06' }),
+          expect.objectContaining({ id: '07', alias: '07' })
+        ])
+      );
       expect(responseRepository.manager.connection.createQueryRunner)
         .not.toHaveBeenCalled();
       expect(mockResponseManagementService.updateResponsesInDatabase)
         .not.toHaveBeenCalled();
     });
 
-    it('detects an actual pass-through plus derivation collision before writing', async () => {
+    it('resolves the supported base-to-derived shadow without first-wins behavior', async () => {
       const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
         '@iqb/responses'
       );
@@ -2713,7 +2983,7 @@ describe('CodingProcessService', () => {
           )
         ]);
 
-      await expect(service.prepareAutocoderBatch(
+      const plan = await service.prepareAutocoderBatch(
         workspaceId,
         ['1'],
         1,
@@ -2722,10 +2992,15 @@ describe('CodingProcessService', () => {
         undefined,
         undefined,
         service.createAutocoderPreflightContext()
-      )).rejects.toThrow(
-        /response:379724[\s\S]*target variable "_01"[\s\S]*Results:[\s\S]*possible origins: input\/pass-through "_01"[\s\S]*CONCAT_CODE coding "derived-_01"[\s\S]*not proven provenance/
       );
 
+      expect(plan.codedResponses.filter(response => (
+        response.id === 379724
+      ))).toHaveLength(1);
+      expect(plan.codedResponses).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 379724 }),
+        expect.objectContaining({ id: 379725 })
+      ]));
       expect(responseRepository.manager.connection.createQueryRunner)
         .not.toHaveBeenCalled();
       expect(mockResponseManagementService.updateResponsesInDatabase)
