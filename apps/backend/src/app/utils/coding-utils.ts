@@ -160,17 +160,23 @@ export function getLatestCode<T extends number | string = number>(
     };
   }
 
-  // Priority: v3 > v2 > v1
-  if (response.code_v3 !== null && response.code_v3 !== undefined) {
+  // Priority: v3 > v2 > v1. A tuple exists when either code or score is set.
+  if (
+    (response.code_v3 !== null && response.code_v3 !== undefined) ||
+    (response.score_v3 !== null && response.score_v3 !== undefined)
+  ) {
     return {
-      code: response.code_v3,
+      code: response.code_v3 ?? null,
       score: response.score_v3 ?? null,
       version: 'v3'
     };
   }
-  if (response.code_v2 !== null && response.code_v2 !== undefined) {
+  if (
+    (response.code_v2 !== null && response.code_v2 !== undefined) ||
+    (response.score_v2 !== null && response.score_v2 !== undefined)
+  ) {
     return {
-      code: response.code_v2,
+      code: response.code_v2 ?? null,
       score: response.score_v2 ?? null,
       version: 'v2'
     };
