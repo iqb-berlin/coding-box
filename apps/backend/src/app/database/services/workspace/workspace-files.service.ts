@@ -115,6 +115,11 @@ interface VocsCode {
   [key: string]: unknown;
 }
 
+type WorkspaceFilesMutationContext = {
+  manager: EntityManager;
+  fileUploadRepository: Repository<FileUpload>;
+};
+
 interface VocsVariableCoding {
   id?: unknown;
   alias?: unknown;
@@ -634,7 +639,8 @@ export class WorkspaceFilesService implements OnModuleInit {
     workspaceId: number,
     fileId: unknown,
     previousData: unknown,
-    nextData: unknown
+    nextData: unknown,
+    manager?: EntityManager
   ): Promise<TestResultsUploadIssueDto | undefined> {
     if (!this.codingFreshnessService || !this.isCodingSchemeFileId(fileId)) {
       return undefined;
@@ -651,13 +657,22 @@ export class WorkspaceFilesService implements OnModuleInit {
     }
 
     try {
-      await this.codingFreshnessService.markUnitsStaleAfterCodingSchemeChange(
-        workspaceId,
-        {
-          autoCodingSchemeRefs: impact.autoCodingChanged ? [unitName] : [],
-          manualCodingSchemeRefs: impact.manualCodingChanged ? [unitName] : []
-        }
-      );
+      const scope = {
+        autoCodingSchemeRefs: impact.autoCodingChanged ? [unitName] : [],
+        manualCodingSchemeRefs: impact.manualCodingChanged ? [unitName] : []
+      };
+      if (manager) {
+        await this.codingFreshnessService.markUnitsStaleAfterCodingSchemeChange(
+          workspaceId,
+          scope,
+          manager
+        );
+      } else {
+        await this.codingFreshnessService.markUnitsStaleAfterCodingSchemeChange(
+          workspaceId,
+          scope
+        );
+      }
       return undefined;
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
@@ -853,13 +868,27 @@ export class WorkspaceFilesService implements OnModuleInit {
     return withWorkspaceFilesMutationLock(
       this.fileUploadRepository.manager.connection,
       workspace_id,
-      () => this.deleteTestFilesUnlocked(workspace_id, fileIds)
+      queryRunner => this.deleteTestFilesUnlocked(
+        workspace_id,
+        fileIds,
+        this.getWorkspaceFilesMutationContext(queryRunner)
+      )
     );
+  }
+
+  private getWorkspaceFilesMutationContext(
+    queryRunner: QueryRunner
+  ): WorkspaceFilesMutationContext {
+    return {
+      manager: queryRunner.manager,
+      fileUploadRepository: queryRunner.manager.getRepository(FileUpload)
+    };
   }
 
   private async deleteTestFilesUnlocked(
     workspace_id: number,
-    fileIds: string[]
+    fileIds: string[],
+    mutationContext: WorkspaceFilesMutationContext
   ): Promise<boolean> {
     this.logger.log(`Delete test files for workspace ${workspace_id}`);
     const numericIds = Array.from(new Set(
@@ -876,7 +905,7 @@ export class WorkspaceFilesService implements OnModuleInit {
       return false;
     }
 
-    const res = await this.fileUploadRepository
+    const res = await mutationContext.fileUploadRepository
       .createQueryBuilder()
       .delete()
       .from(FileUpload)
@@ -931,20 +960,25 @@ export class WorkspaceFilesService implements OnModuleInit {
     return withWorkspaceFilesMutationLock(
       this.fileUploadRepository.manager.connection,
       workspaceId,
-      () => this.createDummyTestTakerFileUnlocked(workspaceId)
+      queryRunner => this.createDummyTestTakerFileUnlocked(
+        workspaceId,
+        this.getWorkspaceFilesMutationContext(queryRunner)
+      )
     );
   }
 
   private async createDummyTestTakerFileUnlocked(
-    workspaceId: number
+    workspaceId: number,
+    mutationContext: WorkspaceFilesMutationContext
   ): Promise<boolean> {
+    const { fileUploadRepository } = mutationContext;
     try {
-      const booklets = await this.fileUploadRepository.find({
+      const booklets = await fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: 'Booklet' }
       });
 
       if (!booklets || booklets.length === 0) {
-        const units = await this.fileUploadRepository.find({
+        const units = await fileUploadRepository.find({
           where: { workspace_id: workspaceId, file_type: 'Unit' }
         });
 
@@ -972,7 +1006,7 @@ ${unitRefs}
   </Units>
 </Booklet>`;
 
-        const fakeBooklet = this.fileUploadRepository.create({
+        const fakeBooklet = fileUploadRepository.create({
           workspace_id: workspaceId,
           filename: 'auto-generated-booklet.xml',
           file_id: fakeBookletId,
@@ -981,7 +1015,7 @@ ${unitRefs}
           data: fakeBookletXml
         });
 
-        await this.fileUploadRepository.save(fakeBooklet);
+        await fileUploadRepository.save(fakeBooklet);
         this.logger.log(
           `Created fake booklet for workspace ${workspaceId} with ${units.length} units.`
         );
@@ -998,7 +1032,7 @@ ${unitRefs}
   </Group>
 </TestTakers>`;
 
-        const newTestTakerFile = this.fileUploadRepository.create({
+        const newTestTakerFile = fileUploadRepository.create({
           workspace_id: workspaceId,
           filename: 'auto-generated-testtakers.xml',
           file_id: 'AUTO-GENERATED-TESTTAKERS',
@@ -1007,7 +1041,7 @@ ${unitRefs}
           data: dummyTestTakerXml
         });
 
-        await this.fileUploadRepository.save(newTestTakerFile);
+        await fileUploadRepository.save(newTestTakerFile);
         this.logger.log(
           `Created dummy TestTakers file for workspace ${workspaceId} with auto-generated booklet.`
         );
@@ -1030,7 +1064,7 @@ ${bookletRefs}
   </Group>
 </TestTakers>`;
 
-      const newTestTakerFile = this.fileUploadRepository.create({
+      const newTestTakerFile = fileUploadRepository.create({
         workspace_id: workspaceId,
         filename: 'auto-generated-testtakers.xml',
         file_id: 'AUTO-GENERATED-TESTTAKERS',
@@ -1039,7 +1073,7 @@ ${bookletRefs}
         data: dummyTestTakerXml
       });
 
-      await this.fileUploadRepository.save(newTestTakerFile);
+      await fileUploadRepository.save(newTestTakerFile);
 
       this.logger.log(
         `Created dummy TestTakers file for workspace ${workspaceId} with ${booklets.length} booklets.`
@@ -1181,11 +1215,12 @@ ${bookletRefs}
     return withWorkspaceFilesMutationLock(
       this.fileUploadRepository.manager.connection,
       workspace_id,
-      () => this.uploadTestFilesUnlocked(
+      queryRunner => this.uploadTestFilesUnlocked(
         workspace_id,
         originalFiles,
         overwriteExisting,
-        overwriteFileIds
+        overwriteFileIds,
+        this.getWorkspaceFilesMutationContext(queryRunner)
       )
     );
   }
@@ -1194,7 +1229,8 @@ ${bookletRefs}
     workspace_id: number,
     originalFiles: FileIo[],
     overwriteExisting: boolean,
-    overwriteFileIds?: string[]
+    overwriteFileIds: string[] | undefined,
+    mutationContext: WorkspaceFilesMutationContext
   ): Promise<TestFilesUploadResultDto> {
     this.logger.log(`Uploading test files for workspace ${workspace_id}`);
 
@@ -1309,7 +1345,8 @@ ${bookletRefs}
             workspace_id,
             file,
             overwriteExistingParam,
-            overwriteAllowListParam
+            overwriteAllowListParam,
+            mutationContext
           );
           promises.forEach(p => tasks.push({ filename: file.originalname, promise: p })
           );
@@ -1440,7 +1477,8 @@ ${bookletRefs}
     workspaceId: number,
     file: FileIo,
     overwriteExisting: boolean,
-    overwriteAllowList?: Set<string>
+    overwriteAllowList?: Set<string>,
+    mutationContext?: WorkspaceFilesMutationContext
   ): Array<Promise<unknown>> {
     const filePromises: Array<Promise<unknown>> = [];
     const fileExtension = path.extname(file.originalname || '').toLowerCase();
@@ -1462,7 +1500,8 @@ ${bookletRefs}
           workspaceId,
           file,
           overwriteExisting,
-          overwriteAllowList
+          overwriteAllowList,
+          mutationContext
         ).catch(error => this.toFailedUploadResult(file.originalname, error)
         )
       );
@@ -1478,7 +1517,8 @@ ${bookletRefs}
             workspaceId,
             file,
             overwriteExisting,
-            overwriteAllowList
+            overwriteAllowList,
+            mutationContext
           ).catch(error => this.toFailedUploadResult(file.originalname, error)
           )
         );
@@ -1489,7 +1529,8 @@ ${bookletRefs}
             workspaceId,
             file,
             overwriteExisting,
-            overwriteAllowList
+            overwriteAllowList,
+            mutationContext
           ).catch(error => this.toFailedUploadResult(file.originalname, error)
           )
         );
@@ -1500,7 +1541,8 @@ ${bookletRefs}
             workspaceId,
             file,
             overwriteExisting,
-            overwriteAllowList
+            overwriteAllowList,
+            mutationContext
           ).catch(error => this.toFailedUploadResult(file.originalname, error)
           )
         );
@@ -1513,7 +1555,8 @@ ${bookletRefs}
             workspaceId,
             file,
             overwriteExisting,
-            overwriteAllowList
+            overwriteAllowList,
+            mutationContext
           )
         );
         break;
@@ -1573,8 +1616,11 @@ ${bookletRefs}
     workspaceId: number,
     file: FileIo,
     overwriteExisting: boolean,
-    overwriteAllowList?: Set<string>
+    overwriteAllowList?: Set<string>,
+    mutationContext?: WorkspaceFilesMutationContext
   ): Promise<unknown> {
+    const fileUploadRepository =
+      mutationContext?.fileUploadRepository ?? this.fileUploadRepository;
     try {
       if (!file.buffer || !file.buffer.length) {
         this.logger.warn('Empty file buffer');
@@ -1643,7 +1689,7 @@ ${bookletRefs}
         fileType === 'TestTakers' ? fileId || file.originalname : fileId;
       const resolvedFileIdNormalized = (resolvedFileId || '').toUpperCase();
 
-      const existingFile = await this.fileUploadRepository.findOne({
+      const existingFile = await fileUploadRepository.findOne({
         where: { file_id: resolvedFileId, workspace_id: workspaceId }
       });
       if (existingFile) {
@@ -1698,7 +1744,7 @@ ${bookletRefs}
         extractedInfo
       };
 
-      await this.fileUploadRepository.upsert(
+      await fileUploadRepository.upsert(
         this.withNormalizedFileLookupFields({
           workspace_id: workspaceId,
           filename: file.originalname,
@@ -1727,8 +1773,11 @@ ${bookletRefs}
     workspaceId: number,
     file: FileIo,
     overwriteExisting: boolean,
-    overwriteAllowList?: Set<string>
+    overwriteAllowList?: Set<string>,
+    mutationContext?: WorkspaceFilesMutationContext
   ): Promise<unknown> {
+    const fileUploadRepository =
+      mutationContext?.fileUploadRepository ?? this.fileUploadRepository;
     try {
       const playerCode = file.buffer.toString();
       const playerContent = cheerio.load(playerCode);
@@ -1751,7 +1800,7 @@ ${bookletRefs}
       if (metadata['@type'] === 'schemer') {
         const resourceFileId =
           this.workspaceFileParsingService.getSchemerId(file);
-        const existing = await this.fileUploadRepository.findOne({
+        const existing = await fileUploadRepository.findOne({
           where: { file_id: resourceFileId, workspace_id: workspaceId }
         });
         const resourceFileIdNormalized = (resourceFileId || '').toUpperCase();
@@ -1770,7 +1819,7 @@ ${bookletRefs}
             fileType: 'Schemer'
           };
         }
-        await this.fileUploadRepository.upsert(
+        await fileUploadRepository.upsert(
           this.withNormalizedFileLookupFields({
             filename: file.originalname,
             workspace_id: workspaceId,
@@ -1792,7 +1841,7 @@ ${bookletRefs}
       }
 
       const resourceFileId = this.workspaceFileParsingService.getPlayerId(file);
-      const existing = await this.fileUploadRepository.findOne({
+      const existing = await fileUploadRepository.findOne({
         where: { file_id: resourceFileId, workspace_id: workspaceId }
       });
       const resourceFileIdNormalized = (resourceFileId || '').toUpperCase();
@@ -1811,7 +1860,7 @@ ${bookletRefs}
           fileType: 'Resource'
         };
       }
-      await this.fileUploadRepository.upsert(
+      await fileUploadRepository.upsert(
         this.withNormalizedFileLookupFields({
           filename: file.originalname,
           workspace_id: workspaceId,
@@ -1833,7 +1882,7 @@ ${bookletRefs}
     } catch (error) {
       const resourceFileId =
         this.workspaceFileParsingService.getResourceId(file);
-      await this.fileUploadRepository.upsert(
+      await fileUploadRepository.upsert(
         this.withNormalizedFileLookupFields({
           filename: file.originalname,
           workspace_id: workspaceId,
@@ -1859,8 +1908,11 @@ ${bookletRefs}
     workspaceId: number,
     file: FileIo,
     overwriteExisting: boolean,
-    overwriteAllowList?: Set<string>
+    overwriteAllowList?: Set<string>,
+    mutationContext?: WorkspaceFilesMutationContext
   ): Promise<unknown> {
+    const fileUploadRepository =
+      mutationContext?.fileUploadRepository ?? this.fileUploadRepository;
     this.logger.log(
       `Processing octet-stream file: ${file.originalname} for workspace ${workspaceId}`
     );
@@ -1931,7 +1983,7 @@ ${bookletRefs}
         extractedInfo
       };
 
-      const fileUpload = this.fileUploadRepository.create(
+      const fileUpload = fileUploadRepository.create(
         this.withNormalizedFileLookupFields({
           workspace_id: workspaceId,
           filename: file.originalname,
@@ -1944,7 +1996,7 @@ ${bookletRefs}
         })
       );
 
-      const existing = await this.fileUploadRepository.findOne({
+      const existing = await fileUploadRepository.findOne({
         where: { file_id: fileUpload.file_id, workspace_id: workspaceId }
       });
       const fileIdNormalized = (fileUpload.file_id || '').toUpperCase();
@@ -1986,7 +2038,7 @@ ${bookletRefs}
 
       this.logger.log(`[OctetStream] Proceeding to upsert ${fileIdNormalized}`);
 
-      await this.fileUploadRepository.upsert(fileUpload, [
+      await fileUploadRepository.upsert(fileUpload, [
         'file_id',
         'workspace_id'
       ]);
@@ -1994,7 +2046,8 @@ ${bookletRefs}
         workspaceId,
         fileUpload.file_id,
         existing?.data,
-        fileContent
+        fileContent,
+        mutationContext?.manager
       );
       this.logger.log(
         `Successfully processed octet-stream file: ${file.originalname} as ${fileType}`
@@ -2029,7 +2082,8 @@ ${bookletRefs}
     workspaceId: number,
     file: FileIo,
     overwriteExisting: boolean,
-    overwriteAllowList?: Set<string>
+    overwriteAllowList?: Set<string>,
+    mutationContext?: WorkspaceFilesMutationContext
   ): Promise<unknown[]> {
     this.logger.log(
       `Processing ZIP file: ${file.originalname} for workspace ${workspaceId}`
@@ -2066,7 +2120,8 @@ ${bookletRefs}
               workspaceId,
               nestedFile,
               overwriteExisting,
-              overwriteAllowList
+              overwriteAllowList,
+              mutationContext
             );
             return Promise.all(nestedPromises);
           })
@@ -2110,7 +2165,8 @@ ${bookletRefs}
 
   private async collectCodingSchemeChangesForFreshness(
     workspaceId: number,
-    entries: Record<string, unknown>[]
+    entries: Record<string, unknown>[],
+    fileUploadRepository: Repository<FileUpload>
   ): Promise<Array<{ fileId: string; previousData: unknown; nextData: unknown }>> {
     if (!workspaceId || entries.length === 0) {
       return [];
@@ -2129,7 +2185,7 @@ ${bookletRefs}
     const fileIds = Array.from(new Set(
       codingSchemeEntries.map(entry => entry.fileId)
     ));
-    const existingFiles = await this.fileUploadRepository.find({
+    const existingFiles = await fileUploadRepository.find({
       where: {
         workspace_id: workspaceId,
         file_id: In(fileIds)
@@ -2156,24 +2212,27 @@ ${bookletRefs}
     const workspaceId = Number(
       (entries[0] as { workspace_id?: unknown } | undefined)?.workspace_id
     );
-    const runImport = () => this.testCenterImportUnlocked(
-      entries,
-      overwriteFileIds
-    );
     if (Number.isInteger(workspaceId) && workspaceId > 0) {
       return withWorkspaceFilesMutationLock(
         this.fileUploadRepository.manager.connection,
         workspaceId,
-        runImport
+        queryRunner => this.testCenterImportUnlocked(
+          entries,
+          overwriteFileIds,
+          this.getWorkspaceFilesMutationContext(queryRunner)
+        )
       );
     }
-    return runImport();
+    return this.testCenterImportUnlocked(entries, overwriteFileIds);
   }
 
   private async testCenterImportUnlocked(
     entries: Record<string, unknown>[],
-    overwriteFileIds?: string[]
+    overwriteFileIds?: string[],
+    mutationContext?: WorkspaceFilesMutationContext
   ): Promise<TestFilesUploadResultDto> {
+    const fileUploadRepository =
+      mutationContext?.fileUploadRepository ?? this.fileUploadRepository;
     try {
       const normalized = await this.enrichTestCenterImportEntries(
         Array.isArray(entries) ? entries : []
@@ -2189,7 +2248,7 @@ ${bookletRefs}
       const conflicts: TestFilesUploadConflictDto[] =
         workspaceId && requestedFileIds.length ?
           (
-            await this.fileUploadRepository
+            await fileUploadRepository
               .createQueryBuilder('file')
               .select(['file.file_id', 'file.filename', 'file.file_type'])
               .where('file.workspace_id = :workspaceId', { workspaceId })
@@ -2238,12 +2297,13 @@ ${bookletRefs}
       const changedCodingSchemes =
         await this.collectCodingSchemeChangesForFreshness(
           workspaceId,
-          [...insertableEntries, ...overwriteEntries]
+          [...insertableEntries, ...overwriteEntries],
+          fileUploadRepository
         );
 
-      const registry = this.fileUploadRepository.create(insertableEntries);
+      const registry = fileUploadRepository.create(insertableEntries);
       if (registry.length > 0) {
-        await this.fileUploadRepository
+        await fileUploadRepository
           .createQueryBuilder()
           .insert()
           .into(FileUpload)
@@ -2252,14 +2312,14 @@ ${bookletRefs}
           .execute();
       }
 
-      const overwriteRegistry = this.fileUploadRepository.create(
+      const overwriteRegistry = fileUploadRepository.create(
         overwriteEntries.map(e => ({
           ...(e as Record<string, unknown>),
           created_at: new Date() as unknown as number
         }))
       );
       if (overwriteRegistry.length > 0) {
-        await this.fileUploadRepository.upsert(overwriteRegistry, [
+        await fileUploadRepository.upsert(overwriteRegistry, [
           'file_id',
           'workspace_id'
         ]);
@@ -2269,7 +2329,8 @@ ${bookletRefs}
           workspaceId,
           change.fileId,
           change.previousData,
-          change.nextData
+          change.nextData,
+          mutationContext?.manager
         )
       )))).filter((issue): issue is TestResultsUploadIssueDto => !!issue);
       if (registry.length > 0 || overwriteRegistry.length > 0) {
