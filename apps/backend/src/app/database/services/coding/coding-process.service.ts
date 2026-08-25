@@ -4,13 +4,16 @@ import {
   Brackets, EntityManager, In, Repository, QueryRunner
 } from 'typeorm';
 import { VariableCodingData, CodingScheme } from '@iqbspecs/coding-scheme';
+import type { Response as AutocoderResponse } from '@iqbspecs/response/response.interface';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
 
 import {
+  STATISTICS_IGNORED_STATUSES,
   statusNumberToString,
   statusStringToNumber
 } from '../../utils/response-status-converter';
+import { getOpenManualCodingPlaceholderCondition } from '../../utils/effective-coding-status-expression.util';
 import FileUpload from '../../entities/file_upload.entity';
 import Persons from '../../entities/persons.entity';
 import { Unit } from '../../entities/unit.entity';
@@ -82,7 +85,40 @@ type AutocoderPersistenceSource = {
   possibleOrigins: string[];
 };
 
+type CompleteDerivedTuple = {
+  version: 'v1' | 'v2';
+  code: number | null;
+  score: number | null;
+};
+
+type CompleteDerivedTupleResolution =
+  { action: 'NOT_APPLICABLE' } |
+  { action: 'PRESERVE'; tuple: CompleteDerivedTuple } |
+  {
+    action: 'RECALCULATE_INVALIDATED';
+    recalculatedResult: AutocoderResponse;
+  } |
+  {
+    action: 'DERIVED_VALUE_CHANGED';
+    tuple: CompleteDerivedTuple;
+    recalculatedResult: AutocoderResponse;
+  };
+
+type CompleteDerivedRecalculation = {
+  targetResults: Map<string, AutocoderResponse>;
+  authoritativeResults: AutocoderResponse[] | null;
+  independentRecalculationAvailable: boolean;
+};
+
+const CODING_COMPLETE_STATUS = statusStringToNumber('CODING_COMPLETE');
 const CODING_INCOMPLETE_STATUS = statusStringToNumber('CODING_INCOMPLETE');
+const UNSET_STATUS = statusStringToNumber('UNSET') as number;
+const COMPARABLE_RECALCULATED_STATUSES = new Set([
+  'VALUE_CHANGED',
+  'NO_CODING',
+  'CODING_INCOMPLETE',
+  'CODING_COMPLETE'
+]);
 const AUTOCODER_LOCK_TIMEOUT = '30s';
 
 @Injectable()
@@ -923,6 +959,48 @@ export class CodingProcessService {
     return query.getMany();
   }
 
+  private async markEffectiveV2Placeholders(
+    responses: ResponseEntity[],
+    manager: EntityManager | undefined,
+    repository: Repository<ResponseEntity>
+  ): Promise<void> {
+    const candidateIds = responses
+      .filter(response => (
+        response.status_v2 === CODING_INCOMPLETE_STATUS &&
+        response.code_v2 === null &&
+        response.score_v2 === null
+      ))
+      .map(response => response.id);
+
+    responses.forEach(response => {
+      response.inherits_v1_for_v2 = false;
+    });
+
+    if (candidateIds.length === 0) {
+      return;
+    }
+
+    const executeQuery = manager ?
+      manager.query.bind(manager) :
+      repository.query.bind(repository);
+    const placeholderCondition = getOpenManualCodingPlaceholderCondition(
+      'candidate_response'
+    );
+    const rows: Array<{ id: number | string }> = await executeQuery(
+      `
+        SELECT candidate_response.id
+        FROM response candidate_response
+        WHERE candidate_response.id = ANY($1::int[])
+          AND ${placeholderCondition}
+      `,
+      [candidateIds]
+    );
+    const placeholderIds = new Set(rows.map(row => Number(row.id)));
+    responses.forEach(response => {
+      response.inherits_v1_for_v2 = placeholderIds.has(response.id);
+    });
+  }
+
   private async fetchResponses(
     unitIds: number[],
     autoCoderRun: number,
@@ -940,12 +1018,16 @@ export class CodingProcessService {
         'ResponseEntity.status',
         'ResponseEntity.subform',
         'ResponseEntity.is_autocoder_generated',
+        'ResponseEntity.autocoder_invalidated_version',
         'ResponseEntity.status_v1',
         'ResponseEntity.code_v1',
         'ResponseEntity.score_v1',
         'ResponseEntity.status_v2',
         'ResponseEntity.code_v2',
-        'ResponseEntity.score_v2'
+        'ResponseEntity.score_v2',
+        'ResponseEntity.status_v3',
+        'ResponseEntity.code_v3',
+        'ResponseEntity.score_v3'
       ])
       .where('ResponseEntity.unitid = ANY(:unitIds)', {
         unitIds
@@ -983,7 +1065,9 @@ export class CodingProcessService {
       );
     }
 
-    return query.getMany();
+    const responses = await query.getMany();
+    await this.markEffectiveV2Placeholders(responses, manager, repository);
+    return responses;
   }
 
   private async getTestFilesWithCache(
@@ -1231,25 +1315,38 @@ export class CodingProcessService {
           let inputCode: number | undefined;
           let inputScore: number | undefined;
           if (autoCoderRun === 2) {
-            const isOpenV2Placeholder =
-              response.status_v2 === CODING_INCOMPLETE_STATUS &&
-              response.code_v2 === null &&
-              response.score_v2 === null;
-            const hasV2Result =
-              !isOpenV2Placeholder && (
-                response.status_v2 !== null ||
-                response.code_v2 !== null ||
-                response.score_v2 !== null
-              );
-            if (hasV2Result) {
-              inputStatus =
-                response.status_v2 ?? response.status_v1 ?? response.status;
-              inputCode = response.code_v2 ?? undefined;
-              inputScore = response.score_v2 ?? undefined;
+            if (response.autocoder_invalidated_version) {
+              inputStatus = response.status_v3 ?? UNSET_STATUS;
+              inputCode = response.code_v3 ?? undefined;
+              inputScore = response.score_v3 ?? undefined;
             } else {
-              inputStatus = response.status_v1 ?? response.status;
-              inputCode = response.code_v1 ?? undefined;
-              inputScore = response.score_v1 ?? undefined;
+              const isOpenV2Placeholder =
+                response.status_v2 === CODING_INCOMPLETE_STATUS &&
+                response.code_v2 === null &&
+                response.score_v2 === null &&
+                response.inherits_v1_for_v2 === true;
+              const isIgnoredV2Placeholder =
+                response.code_v2 === null &&
+                response.score_v2 === null &&
+                response.status_v2 !== null &&
+                STATISTICS_IGNORED_STATUSES.includes(response.status_v2);
+              const hasV2Result =
+                !isOpenV2Placeholder &&
+                !isIgnoredV2Placeholder && (
+                  response.status_v2 !== null ||
+                  response.code_v2 !== null ||
+                  response.score_v2 !== null
+                );
+              if (hasV2Result) {
+                inputStatus =
+                  response.status_v2 ?? response.status_v1 ?? response.status;
+                inputCode = response.code_v2 ?? undefined;
+                inputScore = response.score_v2 ?? undefined;
+              } else {
+                inputStatus = response.status_v1 ?? response.status;
+                inputCode = response.code_v1 ?? undefined;
+                inputScore = response.score_v1 ?? undefined;
+              }
             }
           }
           let responseValue = response.value as import('@iqbspecs/response/response.interface').ResponseValueType;
@@ -1275,21 +1372,25 @@ export class CodingProcessService {
           inputResponses,
           scheme.variableCodings || []
         );
+        const completeDerivedRecalculation =
+          this.recalculateCompleteDerivedResults(
+            autoCoderRun,
+            responses,
+            inputResponses,
+            scheme.variableCodings || []
+          );
+        const resultsToPersist =
+          completeDerivedRecalculation.authoritativeResults || codedResults;
 
-        if (responseIndex + codedResults.length > maxCodedResponses) {
+        if (responseIndex + resultsToPersist.length > maxCodedResponses) {
           throw new Error(
             'Auto-coding batch exceeds its remaining in-memory plan budget ' +
             `of ${maxCodedResponses} responses.`
           );
         }
 
-        for (const codedResult of codedResults) {
+        for (const codedResult of resultsToPersist) {
           const codedStatus = this.normalizeAutocoderStatus(codedResult.status);
-          if (!statistics.statusCounts[codedStatus]) {
-            statistics.statusCounts[codedStatus] = 0;
-          }
-          statistics.statusCounts[codedStatus] += 1;
-
           const codedSubform = codedResult.subform || '';
           const existingResponse = this.findExistingResponseForAutocoderResult(
             responses,
@@ -1297,32 +1398,117 @@ export class CodingProcessService {
             codedSubform,
             technicalIdFallbackByAlias
           );
+          const completeTupleResolution =
+            this.resolveCompleteDerivedTuple(
+              autoCoderRun,
+              existingResponse,
+              codedResult.id,
+              codedSubform,
+              completeDerivedRecalculation.targetResults,
+              completeDerivedRecalculation.independentRecalculationAvailable,
+              scheme.variableCodings || []
+            );
+          let persistedStatus = codedStatus;
+          let persistedCode = codedResult.code ?? null;
+          let persistedScore = codedResult.score ?? null;
+
+          if (completeTupleResolution.action === 'PRESERVE') {
+            persistedStatus = 'CODING_COMPLETE';
+            persistedCode = completeTupleResolution.tuple.code;
+            persistedScore = completeTupleResolution.tuple.score;
+          } else if (
+            completeTupleResolution.action === 'DERIVED_VALUE_CHANGED' ||
+            completeTupleResolution.action === 'RECALCULATE_INVALIDATED'
+          ) {
+            const recalculatedResult =
+              completeTupleResolution.recalculatedResult;
+            persistedStatus = this.normalizeAutocoderStatus(
+              recalculatedResult.status
+            );
+            persistedCode = recalculatedResult.code ?? null;
+            persistedScore = recalculatedResult.score ?? null;
+          }
+
+          if (!statistics.statusCounts[persistedStatus]) {
+            statistics.statusCounts[persistedStatus] = 0;
+          }
+          statistics.statusCounts[persistedStatus] += 1;
+
+          if (
+            completeTupleResolution.action === 'PRESERVE' &&
+            existingResponse &&
+            (
+              codedStatus !== 'CODING_COMPLETE' ||
+              persistedCode !== (codedResult.code ?? null) ||
+              persistedScore !== (codedResult.score ?? null)
+            )
+          ) {
+            this.logger.warn(
+              `Preserving complete ${completeTupleResolution.tuple.version.toUpperCase()} ` +
+              'tuple for response ' +
+              `${existingResponse.id}, variable ` +
+              `"${existingResponse.variableid}", because its independently ` +
+              'recalculated derived value is unchanged.'
+            );
+          } else if (
+            completeTupleResolution.action === 'DERIVED_VALUE_CHANGED' &&
+            existingResponse
+          ) {
+            this.logger.warn(
+              `Not preserving complete ${completeTupleResolution.tuple.version.toUpperCase()} ` +
+              'tuple for response ' +
+              `${existingResponse.id}, variable ` +
+              `"${existingResponse.variableid}", because the recalculated ` +
+              'derived value changed.'
+            );
+          }
 
           const codedResponse: CodedResponse = {
             id: existingResponse ? existingResponse.id : -1
           };
+          const hasAuthoritativeDerivedValueChange =
+            completeDerivedRecalculation.authoritativeResults !== null &&
+            existingResponse?.is_autocoder_generated === true &&
+            this.normalizeAutocoderValueForComparison(codedResult.value) !==
+              this.normalizeAutocoderValueForComparison(
+                existingResponse.value
+              );
 
           if (existingResponse?.is_autocoder_generated) {
             codedResponse.isAutocoderGenerated = true;
             codedResponse.unitid = existingResponse.unitid;
             codedResponse.variableid = existingResponse.variableid;
             codedResponse.subform = existingResponse.subform;
+            if (
+              completeTupleResolution.action === 'DERIVED_VALUE_CHANGED' ||
+              completeTupleResolution.action === 'RECALCULATE_INVALIDATED' ||
+              hasAuthoritativeDerivedValueChange
+            ) {
+              codedResponse.value = this.serializeAutocoderValue(
+                completeTupleResolution.action === 'DERIVED_VALUE_CHANGED' ||
+                completeTupleResolution.action === 'RECALCULATE_INVALIDATED' ?
+                  completeTupleResolution.recalculatedResult.value :
+                  codedResult.value
+              );
+              codedResponse.status = statusStringToNumber('VALUE_CHANGED');
+            }
           } else if (!existingResponse) {
             codedResponse.isNew = true;
             codedResponse.unitid = unit.id;
             codedResponse.variableid = codedResult.id;
-            codedResponse.value = typeof codedResult.value === 'object' && codedResult.value !== null ?
-              JSON.stringify(codedResult.value) :
-              String(codedResult.value ?? '');
+            codedResponse.value = this.serializeAutocoderValue(
+              codedResult.value
+            );
             codedResponse.status = statusStringToNumber('VALUE_CHANGED');
             codedResponse.subform = codedResult.subform;
             codedResponse.isAutocoderGenerated = true;
           }
 
           if (autoCoderRun === 1) {
-            codedResponse.code_v1 = codedResult.code ?? null;
-            codedResponse.status_v1 = codedStatus;
-            codedResponse.score_v1 = codedResult.score ?? null;
+            codedResponse.autocoderInvalidatedVersion = null;
+            codedResponse.code_v1 = persistedCode;
+            codedResponse.status_v1 = persistedStatus;
+            codedResponse.score_v1 = persistedScore;
             codedResponse.code_v2 = null;
             codedResponse.status_v2 = null;
             codedResponse.score_v2 = null;
@@ -1330,9 +1516,19 @@ export class CodingProcessService {
             codedResponse.status_v3 = null;
             codedResponse.score_v3 = null;
           } else if (autoCoderRun === 2) {
-            codedResponse.code_v3 = codedResult.code ?? null;
-            codedResponse.status_v3 = codedStatus;
-            codedResponse.score_v3 = codedResult.score ?? null;
+            codedResponse.code_v3 = persistedCode;
+            codedResponse.status_v3 = persistedStatus;
+            codedResponse.score_v3 = persistedScore;
+            if (
+              completeTupleResolution.action === 'DERIVED_VALUE_CHANGED'
+            ) {
+              this.invalidateCompleteDerivedTuple(
+                codedResponse,
+                completeTupleResolution.tuple
+              );
+            } else if (completeTupleResolution.action === 'PRESERVE') {
+              codedResponse.autocoderInvalidatedVersion = null;
+            }
           }
 
           allCodedResponses.push(codedResponse);
@@ -1346,8 +1542,8 @@ export class CodingProcessService {
             unitName: unit.name,
             codingSchemeRef,
             subform: String(codedResult.subform || ''),
-            status: codedStatus,
-            code: codedResult.code ?? null,
+            status: persistedStatus,
+            code: persistedCode,
             possibleOrigins: this.describeAutocoderResultCandidates(
               String(codedResult.id),
               inputResponses,
@@ -1497,6 +1693,382 @@ export class CodingProcessService {
         hasMatchingSubform(response)
       ))
     );
+  }
+
+  private resolveCompleteDerivedTuple(
+    autoCoderRun: 1 | 2,
+    existingResponse: ResponseEntity | undefined,
+    codedResultId: string,
+    codedSubform: string,
+    independentlyRecalculatedResults: Map<string, AutocoderResponse>,
+    independentRecalculationAvailable: boolean,
+    variableCodings: VariableCodingData[]
+  ): CompleteDerivedTupleResolution {
+    if (
+      autoCoderRun !== 2 ||
+      !existingResponse ||
+      !independentRecalculationAvailable
+    ) {
+      return { action: 'NOT_APPLICABLE' };
+    }
+
+    const tuple = this.getCompleteDerivedTuple(existingResponse);
+    const hasInvalidatedTuple =
+      this.hasInvalidatedCompleteDerivedTuple(existingResponse);
+    if (!tuple && !hasInvalidatedTuple) {
+      return { action: 'NOT_APPLICABLE' };
+    }
+
+    const normalizedResultId = this.normalizeVariableId(codedResultId);
+    const matchingCodings = variableCodings.filter(coding => (
+      this.normalizeVariableId(coding.alias || coding.id) ===
+        normalizedResultId
+    ));
+
+    if (
+      matchingCodings.length !== 1 ||
+      (matchingCodings[0].deriveSources?.length || 0) === 0
+    ) {
+      return { action: 'NOT_APPLICABLE' };
+    }
+
+    const recalculatedResult = independentlyRecalculatedResults.get(
+      this.autocoderResultKey(codedResultId, codedSubform)
+    );
+
+    if (!recalculatedResult) {
+      throw new Error(
+        'Autocoder did not return independently recalculated result ' +
+        `"${codedResultId}" for response ${existingResponse.id}.`
+      );
+    }
+
+    if (!tuple) {
+      return {
+        action: 'RECALCULATE_INVALIDATED',
+        recalculatedResult
+      };
+    }
+
+    const hasUnchangedDerivedValue =
+      this.hasUnchangedDerivedValue(existingResponse, recalculatedResult);
+
+    return hasUnchangedDerivedValue ?
+      { action: 'PRESERVE', tuple } :
+      { action: 'DERIVED_VALUE_CHANGED', tuple, recalculatedResult };
+  }
+
+  private getCompleteDerivedTuple(
+    response: ResponseEntity
+  ): CompleteDerivedTuple | null {
+    if (response.is_autocoder_generated !== true) {
+      return null;
+    }
+
+    const hasV2Tuple = response.code_v2 !== null || response.score_v2 !== null;
+    if (
+      response.autocoder_invalidated_version !== 'v2' &&
+      response.status_v2 === CODING_COMPLETE_STATUS &&
+      hasV2Tuple
+    ) {
+      return {
+        version: 'v2',
+        code: response.code_v2,
+        score: response.score_v2
+      };
+    }
+
+    if (response.autocoder_invalidated_version) {
+      return null;
+    }
+
+    const hasNoV2Tuple =
+      response.code_v2 === null &&
+      response.score_v2 === null;
+    const inheritsV1Status =
+      response.status_v2 === null ||
+      (
+        response.status_v2 === CODING_INCOMPLETE_STATUS &&
+        response.inherits_v1_for_v2 === true
+      ) ||
+      (
+        response.status_v2 !== null &&
+        STATISTICS_IGNORED_STATUSES.includes(response.status_v2)
+      );
+    const hasNoV2Result = hasNoV2Tuple && inheritsV1Status;
+    const hasV1Tuple = response.code_v1 !== null || response.score_v1 !== null;
+    if (
+      hasNoV2Result &&
+      response.status_v1 === CODING_COMPLETE_STATUS &&
+      hasV1Tuple
+    ) {
+      return {
+        version: 'v1',
+        code: response.code_v1,
+        score: response.score_v1
+      };
+    }
+
+    return null;
+  }
+
+  private hasInvalidatedCompleteDerivedTuple(
+    response: ResponseEntity
+  ): boolean {
+    return response.is_autocoder_generated === true &&
+      (
+        response.autocoder_invalidated_version === 'v1' ||
+        response.autocoder_invalidated_version === 'v2'
+      );
+  }
+
+  private recalculateCompleteDerivedResults(
+    autoCoderRun: 1 | 2,
+    responses: ResponseEntity[],
+    inputResponses: AutocoderResponse[],
+    variableCodings: VariableCodingData[]
+  ): CompleteDerivedRecalculation {
+    if (autoCoderRun !== 2) {
+      return {
+        targetResults: new Map(),
+        authoritativeResults: null,
+        independentRecalculationAvailable: true
+      };
+    }
+
+    const targetsWithoutLevels = variableCodings.flatMap(coding => {
+      if ((coding.deriveSources?.length || 0) === 0) {
+        return [];
+      }
+
+      const outputId = coding.alias || coding.id;
+      const normalizedOutputId = this.normalizeVariableId(outputId);
+      const exactOutputResponses = responses
+        .filter(response => (
+          this.normalizeVariableId(response.variableid) ===
+            normalizedOutputId &&
+          (
+            this.getCompleteDerivedTuple(response) !== null ||
+            this.hasInvalidatedCompleteDerivedTuple(response)
+          )
+        ));
+      const legacyTechnicalIdResponses = exactOutputResponses.length === 0 &&
+        coding.alias ?
+        responses.filter(response => (
+          response.is_autocoder_generated === true &&
+          this.normalizeVariableId(response.variableid) ===
+            this.normalizeVariableId(coding.id) &&
+          (
+            this.getCompleteDerivedTuple(response) !== null ||
+            this.hasInvalidatedCompleteDerivedTuple(response)
+          )
+        )) :
+        [];
+      return [...exactOutputResponses, ...legacyTechnicalIdResponses]
+        .map(response => {
+          const tuple = this.getCompleteDerivedTuple(response);
+          return {
+            outputId,
+            codingId: coding.id,
+            inputId: this.normalizeVariableId(response.variableid),
+            subform: String(response.subform || ''),
+            response,
+            tuple
+          };
+        })
+        .filter(target => target !== null);
+    });
+
+    if (targetsWithoutLevels.length === 0) {
+      return {
+        targetResults: new Map(),
+        authoritativeResults: null,
+        independentRecalculationAvailable: true
+      };
+    }
+
+    let dependencyLevels: Map<string, number>;
+    try {
+      dependencyLevels = new Map(
+        Autocoder.CodingSchemeFactory.getVariableDependencyTree(variableCodings)
+          .map(node => [node.id, node.level] as const)
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        'Skipping independent complete-derived-result recalculation because ' +
+        `the coding-scheme dependency graph cannot be ordered: ${message}. ` +
+        'Falling back to the regular autocoder result.'
+      );
+      return {
+        targetResults: new Map(),
+        authoritativeResults: null,
+        independentRecalculationAvailable: false
+      };
+    }
+    const targets = targetsWithoutLevels.map(target => {
+      const level = dependencyLevels.get(target.codingId);
+      if (level === undefined) {
+        throw new Error(
+          `Autocoder dependency level is missing for derived target "${target.outputId}".`
+        );
+      }
+      return { ...target, level };
+    });
+
+    const resultsByTarget = new Map<string, AutocoderResponse>();
+    let requiresAuthoritativeRecalculation = false;
+    let workingInput: AutocoderResponse[] = inputResponses.map(response => ({
+      ...response,
+      // The response library treats null and empty subforms as no subform.
+      // Normalize them to undefined so its no-subform pipeline does not
+      // duplicate stale pass-through responses during recalculation.
+      subform: response.subform || undefined
+    }));
+    const levels = Array.from(new Set(targets.map(target => target.level)))
+      .sort((a, b) => a - b);
+
+    levels.forEach(level => {
+      const levelTargets = targets.filter(target => target.level === level);
+      const levelInputKeys = new Set(levelTargets.map(target => (
+        this.autocoderResultKey(target.inputId, target.subform)
+      )));
+      const levelOutputKeys = new Set(levelTargets.map(target => (
+        this.autocoderResultKey(target.outputId, target.subform)
+      )));
+      const recalculationInput = workingInput.map(response => {
+        const key = this.autocoderResultKey(
+          response.id,
+          String(response.subform || '')
+        );
+        return levelInputKeys.has(key) ? {
+          ...response,
+          status: 'UNSET' as const,
+          code: undefined,
+          score: undefined
+        } : response;
+      });
+      const recalculatedResults = Autocoder.CodingSchemeFactory.code(
+        recalculationInput,
+        variableCodings
+      );
+      const levelResults = new Map<string, AutocoderResponse>();
+
+      recalculatedResults.forEach(result => {
+        const key = this.autocoderResultKey(
+          result.id,
+          String(result.subform || '')
+        );
+        if (!levelOutputKeys.has(key)) {
+          return;
+        }
+        if (levelResults.has(key)) {
+          throw new Error(
+            'Autocoder returned multiple independently recalculated results ' +
+            `for derived target "${result.id}".`
+          );
+        }
+        levelResults.set(key, result);
+      });
+
+      const nextStatesByInput = new Map<string, AutocoderResponse>();
+      levelTargets.forEach(target => {
+        const outputKey = this.autocoderResultKey(
+          target.outputId,
+          target.subform
+        );
+        const recalculatedResult = levelResults.get(outputKey);
+        if (!recalculatedResult) {
+          throw new Error(
+            'Autocoder did not return independently recalculated result ' +
+            `"${target.outputId}" for response ${target.response.id}.`
+          );
+        }
+        resultsByTarget.set(outputKey, recalculatedResult);
+
+        const inputKey = this.autocoderResultKey(
+          target.inputId,
+          target.subform
+        );
+        const currentInput = workingInput.find(response => (
+          this.autocoderResultKey(
+            response.id,
+            String(response.subform || '')
+          ) === inputKey
+        ));
+        if (!currentInput) {
+          throw new Error(
+            `Autocoder input is missing for derived response ${target.response.id}.`
+          );
+        }
+
+        const shouldRestoreTuple = target.tuple &&
+          this.hasUnchangedDerivedValue(target.response, recalculatedResult);
+        if (!shouldRestoreTuple) {
+          requiresAuthoritativeRecalculation = true;
+        }
+        nextStatesByInput.set(inputKey, shouldRestoreTuple ? {
+          ...currentInput,
+          status: 'CODING_COMPLETE',
+          code: target.tuple.code ?? undefined,
+          score: target.tuple.score ?? undefined
+        } : {
+          ...currentInput,
+          value: recalculatedResult.value,
+          status: recalculatedResult.status,
+          code: recalculatedResult.code,
+          score: recalculatedResult.score
+        });
+      });
+
+      workingInput = workingInput.map(response => (
+        nextStatesByInput.get(this.autocoderResultKey(
+          response.id,
+          String(response.subform || '')
+        )) || response
+      ));
+    });
+
+    return {
+      targetResults: resultsByTarget,
+      authoritativeResults: requiresAuthoritativeRecalculation ?
+        Autocoder.CodingSchemeFactory.code(workingInput, variableCodings) :
+        null,
+      independentRecalculationAvailable: true
+    };
+  }
+
+  private autocoderResultKey(variableId: unknown, subform: string): string {
+    return `${this.normalizeVariableId(variableId)}\u0000${subform}`;
+  }
+
+  private normalizeAutocoderValueForComparison(value: unknown): string {
+    if (typeof value === 'object' && value !== null) {
+      return JSON.stringify(value) ?? '';
+    }
+    return String(value ?? '');
+  }
+
+  private serializeAutocoderValue(value: unknown): string {
+    return typeof value === 'object' && value !== null ?
+      JSON.stringify(value) :
+      String(value ?? '');
+  }
+
+  private invalidateCompleteDerivedTuple(
+    codedResponse: CodedResponse,
+    tuple: CompleteDerivedTuple
+  ): void {
+    codedResponse.autocoderInvalidatedVersion = tuple.version;
+  }
+
+  private hasUnchangedDerivedValue(
+    response: ResponseEntity,
+    recalculatedResult: AutocoderResponse
+  ): boolean {
+    return COMPARABLE_RECALCULATED_STATUSES.has(recalculatedResult.status) &&
+      this.normalizeAutocoderValueForComparison(recalculatedResult.value) ===
+        this.normalizeAutocoderValueForComparison(response.value);
   }
 
   private assertUniqueAutocoderPersistenceTargets(

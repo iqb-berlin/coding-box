@@ -43,6 +43,13 @@ type TestCodingJobUnit = {
   };
   response?: {
     status_v1?: number | null;
+    code_v1?: number | null;
+    score_v1?: number | null;
+    code_v2?: number | null;
+    score_v2?: number | null;
+    code_v3?: number | null;
+    score_v3?: number | null;
+    autocoder_invalidated_version?: 'v1' | 'v2' | null;
     unit?: {
       name?: string;
       booklet?: {
@@ -155,6 +162,7 @@ const createCodingJobQueryBuilder = (units: TestCodingJobUnit[]) => {
 
 function createService(overrides: {
   codingJobUnits?: unknown[];
+  autoOnlyResponses?: Array<Partial<ResponseEntity>>;
   codingListVariables?: Array<{ unitName: string; variableId: string }>;
   pageMap?: Map<string, string>;
   exclusions?: {
@@ -164,8 +172,17 @@ function createService(overrides: {
   };
   missingsProfilesService?: { getMissingByIdForProfileOrDefault: jest.Mock };
 } = {}) {
+  const responseQueryBuilder = {
+    innerJoin: jest.fn().mockReturnThis(),
+    leftJoin: jest.fn().mockReturnThis(),
+    innerJoinAndSelect: jest.fn().mockReturnThis(),
+    leftJoinAndSelect: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    getMany: jest.fn().mockResolvedValue(overrides.autoOnlyResponses ?? [])
+  };
   const responseRepository: MockedRepo<ResponseEntity> = {
-    createQueryBuilder: jest.fn()
+    createQueryBuilder: jest.fn().mockReturnValue(responseQueryBuilder)
   };
   const codingJobUnits = (overrides.codingJobUnits ?? [baseUnit]) as TestCodingJobUnit[];
   const codingJobUnitQueryBuilders: ReturnType<typeof createCodingJobUnitQueryBuilder>[] = [];
@@ -219,6 +236,7 @@ function createService(overrides: {
     codingJobVariableRepository,
     codingJobUnitRepository,
     codingJobUnitQueryBuilders,
+    responseQueryBuilder,
     codingListService,
     workspaceExclusionService
   };
@@ -647,6 +665,160 @@ describe('CodingResultsExportService', () => {
     expect(worksheet.getRow(2).getCell(4).value).toBe(7);
     expect(worksheet.getRow(2).getCell(5).value).toBe('Ja');
     expect(worksheet.getRow(2).getCell(6).value).toBe('7,8');
+  });
+
+  it('does not export invalidated manual or v2 codes as current results', async () => {
+    const { service } = createService({
+      codingJobUnits: [{
+        ...baseUnit,
+        code: 7,
+        score: 70,
+        response: {
+          ...baseUnit.response,
+          code_v1: 1,
+          score_v1: 10,
+          code_v2: 7,
+          score_v2: 70,
+          code_v3: null,
+          score_v3: null,
+          autocoder_invalidated_version: 'v2'
+        }
+      }]
+    });
+
+    const buffer = await service.exportCodingResultsAggregated(
+      1,
+      false,
+      false,
+      false,
+      false,
+      'most-frequent',
+      false,
+      false,
+      '',
+      undefined,
+      true
+    );
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const worksheet = workbook.worksheets[0];
+
+    expect(worksheet.getRow(1).getCell(4).value).toBe('UNIT1_VAR1');
+    expect(worksheet.getRow(2).getCell(4).value).toBe('');
+  });
+
+  it('attributes a marked v3 result only to the autocoder', async () => {
+    const markedResponse = {
+      ...baseUnit.response,
+      code_v1: 1,
+      score_v1: 10,
+      code_v2: 2,
+      score_v2: 20,
+      code_v3: 9,
+      score_v3: 90,
+      autocoder_invalidated_version: 'v2' as const
+    };
+    const { service, responseQueryBuilder } = createService({
+      codingJobUnits: [
+        {
+          ...baseUnit,
+          code: 7,
+          score: 70,
+          coding_job: {
+            codingJobCoders: [{ user: { id: 11, username: 'coder-a' } }]
+          },
+          response: markedResponse
+        },
+        {
+          ...baseUnit,
+          code: 8,
+          score: 80,
+          coding_job: {
+            codingJobCoders: [{ user: { id: 12, username: 'coder-b' } }]
+          },
+          response: markedResponse
+        }
+      ],
+      autoOnlyResponses: [{
+        ...markedResponse,
+        variableid: 'VAR1'
+      } as Partial<ResponseEntity>]
+    });
+
+    const buffer = await service.exportCodingResultsAggregated(
+      1,
+      false,
+      false,
+      false,
+      false,
+      'new-row-per-variable'
+    );
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const worksheet = workbook.worksheets[0];
+    const headers = worksheet.getRow(1).values as unknown[];
+
+    expect(worksheet.getRow(2).getCell(headers.indexOf('coder-a')).value).toBe('');
+    expect(worksheet.getRow(2).getCell(headers.indexOf('coder-b')).value).toBe('');
+    expect(worksheet.getRow(2).getCell(headers.indexOf('Autocoder')).value).toBe('9');
+    expect(responseQueryBuilder.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('NOT EXISTS')
+    );
+    expect(responseQueryBuilder.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('autocoder_invalidated_version IS NOT NULL')
+    );
+  });
+
+  it('uses marker-aware v3 tuples for auto-only current results', async () => {
+    const autoResponseBase = {
+      status_v1: 5,
+      code_v1: 1,
+      score_v1: 10,
+      code_v2: 2,
+      score_v2: 20,
+      autocoder_invalidated_version: 'v2' as const,
+      unit: {
+        name: 'UNIT1',
+        booklet: {
+          bookletinfo: { name: 'BOOKLET1' },
+          person: {
+            login: 'login-1',
+            code: 'code-1',
+            group: 'group-1'
+          }
+        }
+      }
+    };
+    const { service, responseQueryBuilder } = createService({
+      codingJobUnits: [],
+      autoOnlyResponses: [
+        {
+          ...autoResponseBase,
+          variableid: 'CURRENT',
+          code_v3: 9,
+          score_v3: 90
+        } as Partial<ResponseEntity>,
+        {
+          ...autoResponseBase,
+          variableid: 'EMPTY',
+          code_v3: null,
+          score_v3: null
+        } as Partial<ResponseEntity>
+      ]
+    });
+
+    const buffer = await service.exportCodingResultsAggregated(1);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const worksheet = workbook.worksheets[0];
+
+    expect(worksheet.getRow(1).getCell(4).value).toBe('UNIT1_CURRENT');
+    expect(worksheet.getRow(1).getCell(5).value).toBe('UNIT1_EMPTY');
+    expect(worksheet.getRow(2).getCell(4).value).toBe(9);
+    expect(worksheet.getRow(2).getCell(5).value).toBe('');
+    expect(responseQueryBuilder.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('autocoder_invalidated_version IS NOT NULL')
+    );
   });
 
   it('includes DERIVE_ERROR job-only variables in manual-only by-variable export', async () => {

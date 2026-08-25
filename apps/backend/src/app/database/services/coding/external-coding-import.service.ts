@@ -430,7 +430,8 @@ export class ExternalCodingImportService {
                     .set({
                       status_v2: statusStringToNumber(validation.validatedStatus) ?? null,
                       code_v2: validation.validatedCode,
-                      score_v2: validation.validatedScore
+                      score_v2: validation.validatedScore,
+                      autocoder_invalidated_version: null
                     })
                     .where('id = :responseId', { responseId: validation.responseId })
                     .execute();

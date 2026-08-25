@@ -195,6 +195,19 @@ export class ResponseManagementService {
               if (response.score_v3 !== undefined) {
                 updateData.score_v3 = response.score_v3;
               }
+              if (response.autocoderInvalidatedVersion !== undefined) {
+                updateData.autocoder_invalidated_version =
+                  response.autocoderInvalidatedVersion;
+              }
+
+              if (!response.isNew && response.isAutocoderGenerated) {
+                if (response.value !== undefined) {
+                  updateData.value = response.value;
+                }
+                if (response.status !== undefined) {
+                  updateData.status = response.status;
+                }
+              }
 
               if (response.isNew) {
                 const newEntity: Partial<ResponseEntity> = {
@@ -221,6 +234,10 @@ export class ResponseManagementService {
                   newEntity.status_v3 = response.status_v3 === null ? null : statusStringToNumber(response.status_v3);
                 }
                 if (response.score_v3 !== undefined) newEntity.score_v3 = response.score_v3;
+                if (response.autocoderInvalidatedVersion !== undefined) {
+                  newEntity.autocoder_invalidated_version =
+                    response.autocoderInvalidatedVersion;
+                }
 
                 if (response.isAutocoderGenerated) {
                   return this.upsertAutocoderGeneratedResponse(
@@ -554,7 +571,8 @@ export class ResponseManagementService {
         score_v2: null,
         code_v3: null,
         status_v3: null,
-        score_v3: null
+        score_v3: null,
+        autocoder_invalidated_version: null
       } :
       {
         code_v3: null,
