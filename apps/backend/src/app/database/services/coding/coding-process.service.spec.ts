@@ -2677,58 +2677,91 @@ describe('CodingProcessService', () => {
       }
     );
 
-    it('rejects a lone generated input with an ambiguous stored ID', () => {
-      const codeResponses = (
-        service as unknown as {
-          codeAutocoderResponses: (
-            responses: Array<{
-              id: string;
-              value: string;
-              status: 'CODING_COMPLETE';
-              subform?: string | null;
-            }>,
-            variableCodings: Array<{
-              id: string;
-              alias: string;
-              sourceType: string;
-            }>,
-            inputOrigins: Array<{
-              responseId: number;
-              storedVariableId: string;
-              isAutocoderGenerated: boolean;
-            }>
-          ) => unknown;
-        }
-      ).codeAutocoderResponses.bind(service);
-
-      expect(() => codeResponses([
-        {
-          id: '06',
-          value: 'legacy-technical-value',
-          status: 'CODING_COMPLETE',
+    it.each([
+      {
+        description: 'a lone ambiguous generated ID',
+        storedIds: ['06'],
+        expectedEvidence:
+          'alias-only evidence: none; technical-only evidence: none'
+      },
+      {
+        description: 'a technical-ID-encoded generated chain',
+        storedIds: ['radio-group-images_1', '06', '07'],
+        expectedEvidence:
+          'alias-only evidence: none; technical-only evidence: ' +
+          '"RADIO-GROUP-IMAGES_1"'
+      },
+      {
+        description: 'an incomplete generated alias chain',
+        storedIds: ['06', '08'],
+        expectedEvidence:
+          'alias-only evidence: "08"; technical-only evidence: none; ' +
+          'missing output aliases: "07"'
+      },
+      {
+        description: 'mixed alias and technical namespace evidence',
+        storedIds: ['radio-group-images_1', '06', '07', '08'],
+        expectedEvidence:
+          'alias-only evidence: "08"; technical-only evidence: ' +
+          '"RADIO-GROUP-IMAGES_1"'
+      },
+      {
+        description: 'alias evidence supplied only by imported rows',
+        storedIds: ['06', '07', '08'],
+        generatedIds: ['06'],
+        expectedEvidence:
+          'alias-only evidence: none; technical-only evidence: none; ' +
+          'missing output aliases: "07", "08"'
+      }
+    ])(
+      'rejects $description',
+      ({ storedIds, generatedIds = storedIds, expectedEvidence }) => {
+        const codeResponses = (
+          service as unknown as {
+            codeAutocoderResponses: (
+              responses: Array<{
+                id: string;
+                value: string;
+                status: 'CODING_COMPLETE';
+                subform?: string | null;
+              }>,
+              variableCodings: Array<{
+                id: string;
+                alias: string;
+                sourceType: string;
+              }>,
+              inputOrigins: Array<{
+                responseId: number;
+                storedVariableId: string;
+                isAutocoderGenerated: boolean;
+              }>
+            ) => unknown;
+          }
+        ).codeAutocoderResponses.bind(service);
+        const responses = storedIds.map(id => ({
+          id,
+          value: `${id}-value`,
+          status: 'CODING_COMPLETE' as const,
           subform: null
-        }
-      ], [
-        {
-          id: 'radio-group-images_1',
-          alias: '06',
-          sourceType: 'BASE'
-        },
-        { id: '06', alias: '07', sourceType: 'BASE' }
-      ], [
-        {
-          responseId: 6235426,
-          storedVariableId: '06',
-          isAutocoderGenerated: true
-        }
-      ])).toThrow(
-        'Autocoder input namespace is ambiguous for response:6235426 ' +
-        '(stored variable "06", autocoder-generated), subform "": the ' +
-        'stored variable ID is both the output alias for technical variable ' +
-        '"radio-group-images_1" and technical variable "06".'
-      );
-      expect(Autocoder.CodingSchemeFactory.code).not.toHaveBeenCalled();
-    });
+        }));
+        const inputOrigins = storedIds.map((storedVariableId, index) => ({
+          responseId: 6235425 + index,
+          storedVariableId,
+          isAutocoderGenerated: generatedIds.includes(storedVariableId)
+        }));
+
+        expect(() => codeResponses(responses, [
+          {
+            id: 'radio-group-images_1',
+            alias: '06',
+            sourceType: 'BASE'
+          },
+          { id: '06', alias: '07', sourceType: 'BASE' },
+          { id: '07', alias: '08', sourceType: 'BASE' }
+        ], inputOrigins)).toThrow(expectedEvidence);
+        expect(Autocoder.CodingSchemeFactory.code).not.toHaveBeenCalled();
+      }
+    );
 
     it('keeps a real response status instead of an alias-chain placeholder', () => {
       const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
@@ -2802,7 +2835,7 @@ describe('CodingProcessService', () => {
       expect(results.filter(result => result.id === '07')).toHaveLength(1);
     });
 
-    it('accepts a valid technical-ID/output-alias chain without duplicate targets', async () => {
+    it('accepts generated output aliases from a previous run', async () => {
       const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
         '@iqb/responses'
       );
@@ -2811,9 +2844,16 @@ describe('CodingProcessService', () => {
       (Autocoder.CodingSchemeFactory.code as jest.Mock)
         .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.code);
       const response06 = createMockResponse(6235425, 1, '06', '');
+      const response07 = createMockResponse(6235421, 1, '07', '');
+      const response08 = createMockResponse(6235424, 1, '08', '');
       response06.subform = null as unknown as string;
+      response07.subform = null as unknown as string;
+      response08.subform = null as unknown as string;
+      response06.is_autocoder_generated = true;
+      response07.is_autocoder_generated = true;
+      response08.is_autocoder_generated = true;
       mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
-        new Map([['TEST_UNIT_1', new Set(['06'])]])
+        new Map([['TEST_UNIT_1', new Set(['06', '07', '08'])]])
       );
       mockWorkspaceFilesService.getVariableInfoForScheme.mockResolvedValueOnce([
         {
@@ -2846,7 +2886,7 @@ describe('CodingProcessService', () => {
       ]);
       mockQueryBuilder.getMany
         .mockResolvedValueOnce([mockUnits[0]])
-        .mockResolvedValueOnce([response06]);
+        .mockResolvedValueOnce([response06, response07, response08]);
       (fileUploadRepository.find as jest.Mock)
         .mockReset()
         .mockResolvedValueOnce([
@@ -2884,24 +2924,33 @@ describe('CodingProcessService', () => {
         service.createAutocoderPreflightContext()
       );
 
-      expect(plan.codedResponses.filter(response => (
-        response.id === 6235425
-      ))).toHaveLength(1);
       expect(plan.autoCoderRun).toBe(2);
       expect(plan.codedResponses).toEqual(expect.arrayContaining([
         expect.objectContaining({
           id: 6235425,
           status_v3: expect.any(String)
         }),
-        expect.objectContaining({ variableid: '07', isNew: true }),
-        expect.objectContaining({ variableid: '08', isNew: true })
+        expect.objectContaining({
+          id: 6235421,
+          status_v3: expect.any(String)
+        }),
+        expect.objectContaining({
+          id: 6235424,
+          status_v3: expect.any(String)
+        })
+      ]));
+      expect(plan.codedResponses).toHaveLength(3);
+      expect(plan.codedResponses).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ isNew: true })
       ]));
       expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({
             id: 'radio-group-images_1',
             subform: undefined
-          })
+          }),
+          expect.objectContaining({ id: '06', subform: undefined }),
+          expect.objectContaining({ id: '07', subform: undefined })
         ]),
         expect.arrayContaining([
           expect.objectContaining({
