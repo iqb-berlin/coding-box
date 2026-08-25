@@ -1410,6 +1410,105 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     );
   });
 
+  it('exports a score-only v2 tuple instead of falling back to v1', async () => {
+    const createQueryBuilder = (rawRows: unknown[] = []) => ({
+      innerJoin: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      distinct: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      addGroupBy: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue(rawRows)
+    });
+
+    const variableRecordsQuery = createQueryBuilder([{
+      unitName: 'UNIT',
+      variableId: 'VAR'
+    }]);
+    const autoVariablesQuery = createQueryBuilder([]);
+    const coderRecordsQuery = createQueryBuilder([{ userName: 'Coder A' }]);
+    const personResultsQuery = createQueryBuilder([{
+      id: '10',
+      login: 'login-a',
+      code: 'code-a',
+      group: 'group-a',
+      bookletName: 'BOOKLET-A'
+    }]);
+    const manualCodingQuery = createQueryBuilder([{
+      personId: '10',
+      unitName: 'UNIT',
+      variableId: 'VAR',
+      cju_code: null,
+      cju_score: null,
+      coding_issue_option: null,
+      code_v1: '1',
+      score_v1: '10',
+      code_v2: null,
+      score_v2: '20',
+      code_v3: null,
+      score_v3: null,
+      autocoder_invalidated_version: null,
+      notes: null,
+      username: 'Coder A',
+      jobId: '1',
+      trainingId: null,
+      missingsProfileId: null,
+      responseId: '100',
+      responseValue: ''
+    }]);
+    const autoCodingQuery = createQueryBuilder([]);
+
+    const service = new CodingExportService(
+      {
+        createQueryBuilder: jest.fn()
+          .mockReturnValueOnce(autoVariablesQuery)
+          .mockReturnValueOnce(personResultsQuery)
+          .mockReturnValueOnce(autoCodingQuery)
+      } as unknown as Repository<ResponseEntity>,
+      {
+        createQueryBuilder: jest.fn().mockReturnValue(coderRecordsQuery)
+      } as unknown as Repository<CodingJob>,
+      {} as Repository<CodingJobVariable>,
+      {
+        createQueryBuilder: jest.fn()
+          .mockReturnValueOnce(variableRecordsQuery)
+          .mockReturnValueOnce(manualCodingQuery)
+      } as unknown as Repository<CodingJobUnit>,
+      { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
+      { findBy: jest.fn() } as unknown as Repository<User>,
+      {} as CodingListService,
+      {} as WorkspaceCoreService,
+      {
+        resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+          globalIgnoredUnits: [],
+          ignoredBooklets: [],
+          testletIgnoredUnits: []
+        })
+      } as unknown as WorkspaceExclusionService
+    );
+
+    const buffer = await service.exportCodingResultsAggregated(
+      7,
+      false,
+      false,
+      false,
+      false,
+      'new-row-per-variable'
+    );
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const worksheet = workbook.getWorksheet('Coding Results')!;
+    const headers = worksheet.getRow(1).values as unknown[];
+
+    expect(worksheet.getRow(2).getCell(headers.indexOf('Coder A Code')).value).toBeNull();
+    expect(worksheet.getRow(2).getCell(headers.indexOf('Coder A Score')).value).toBe(20);
+  });
+
   it('exports profile-specific manual missing scores in score-bearing aggregated export', async () => {
     const createQueryBuilder = (rawRows: unknown[] = []) => {
       const qb = {

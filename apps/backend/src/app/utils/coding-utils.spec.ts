@@ -33,6 +33,42 @@ describe('coding utils', () => {
     });
   });
 
+  it('prefers a score-only v2 tuple to a complete v1 tuple', () => {
+    const response = {
+      code_v1: 1,
+      score_v1: 10,
+      code_v2: null,
+      score_v2: 20,
+      code_v3: null,
+      score_v3: null,
+      autocoder_invalidated_version: null
+    };
+
+    expect(getLatestCode(response)).toEqual({
+      code: null,
+      score: 20,
+      version: 'v2'
+    });
+  });
+
+  it('prefers a score-only v3 tuple to older complete tuples', () => {
+    const response = {
+      code_v1: 1,
+      score_v1: 10,
+      code_v2: 2,
+      score_v2: 20,
+      code_v3: null,
+      score_v3: 30,
+      autocoder_invalidated_version: null
+    };
+
+    expect(getLatestCode(response)).toEqual({
+      code: null,
+      score: 30,
+      version: 'v3'
+    });
+  });
+
   it('does not fall back to stale manual, v2, or v1 values after invalidation', () => {
     const response = {
       code_v1: 1,
