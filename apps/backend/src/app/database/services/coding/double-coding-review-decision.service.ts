@@ -774,6 +774,7 @@ export class DoubleCodingReviewDecisionService {
     response.status_v2 = statusStringToNumber('CODING_COMPLETE');
     response.code_v2 = resolvedDecision.code;
     response.score_v2 = resolvedDecision.score;
+    response.autocoder_invalidated_version = null;
     response.value = this.getOriginalResponseValue(response.value);
     await transactionalEntityManager.save(ResponseEntity, response);
     const aggregationApplication = await this.applyResolutionToAggregationSiblings(
@@ -933,6 +934,7 @@ export class DoubleCodingReviewDecisionService {
         sibling.status_v2 = representative.status_v2;
         sibling.code_v2 = representative.code_v2;
         sibling.score_v2 = representative.score_v2;
+        sibling.autocoder_invalidated_version = null;
       });
       if (siblingResponses.length > 0) {
         await entityManager.save(ResponseEntity, siblingResponses);
