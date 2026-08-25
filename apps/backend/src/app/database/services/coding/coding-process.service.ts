@@ -89,10 +89,17 @@ type AutocoderNamespace = {
   variableCodings: VariableCodingData[];
   inputTechnicalIdByAlias: Map<string, string>;
   outputAliasByTechnicalId: Map<string, string>;
+  componentById: Map<string, AutocoderNamespaceComponent>;
   shadowingPairs: Array<{
     baseTechnicalId: string;
     derivedTechnicalId: string;
   }>;
+};
+
+type AutocoderNamespaceComponent = {
+  aliasOnlyIds: Set<string>;
+  outputAliasIds: Set<string>;
+  technicalOnlyIds: Set<string>;
 };
 
 type AutocoderInputOrigin = {
@@ -1785,8 +1792,78 @@ export class CodingProcessService {
       })),
       inputTechnicalIdByAlias,
       outputAliasByTechnicalId,
+      componentById: this.createAutocoderNamespaceComponents(variableCodings),
       shadowingPairs
     };
+  }
+
+  private createAutocoderNamespaceComponents(
+    variableCodings: VariableCodingData[]
+  ): Map<string, AutocoderNamespaceComponent> {
+    const technicalIds = new Set<string>();
+    const outputAliases = new Set<string>();
+    const neighbors = new Map<string, Set<string>>();
+    const addNode = (id: string): void => {
+      if (!neighbors.has(id)) {
+        neighbors.set(id, new Set<string>());
+      }
+    };
+
+    variableCodings.forEach(coding => {
+      const technicalId = this.normalizeVariableId(coding.id);
+      const outputAlias = this.normalizeVariableId(coding.alias || coding.id);
+      technicalIds.add(technicalId);
+      outputAliases.add(outputAlias);
+      addNode(technicalId);
+      addNode(outputAlias);
+      if (technicalId !== outputAlias) {
+        neighbors.get(technicalId)!.add(outputAlias);
+        neighbors.get(outputAlias)!.add(technicalId);
+      }
+    });
+
+    const componentById = new Map<string, AutocoderNamespaceComponent>();
+    const visited = new Set<string>();
+    neighbors.forEach((_unused, startId) => {
+      if (visited.has(startId)) {
+        return;
+      }
+
+      const componentIds = new Set<string>();
+      const pending = [startId];
+      while (pending.length > 0) {
+        const currentId = pending.pop()!;
+        if (visited.has(currentId)) {
+          continue;
+        }
+        visited.add(currentId);
+        componentIds.add(currentId);
+        neighbors.get(currentId)?.forEach(neighbor => {
+          if (!visited.has(neighbor)) {
+            pending.push(neighbor);
+          }
+        });
+      }
+
+      const component: AutocoderNamespaceComponent = {
+        aliasOnlyIds: new Set(
+          Array.from(componentIds).filter(
+            id => outputAliases.has(id) && !technicalIds.has(id)
+          )
+        ),
+        outputAliasIds: new Set(
+          Array.from(componentIds).filter(id => outputAliases.has(id))
+        ),
+        technicalOnlyIds: new Set(
+          Array.from(componentIds).filter(
+            id => technicalIds.has(id) && !outputAliases.has(id)
+          )
+        )
+      };
+      componentIds.forEach(id => componentById.set(id, component));
+    });
+
+    return componentById;
   }
 
   private codeAutocoderResponses(
@@ -1801,6 +1878,17 @@ export class CodingProcessService {
     }
 
     const namespace = this.createAutocoderNamespace(variableCodings);
+    const generatedInputIdsBySubform = new Map<string, Set<string>>();
+    responses.forEach((response, index) => {
+      if (inputOrigins?.[index]?.isAutocoderGenerated !== true) {
+        return;
+      }
+      const subform = String(response.subform || '');
+      const inputIds =
+        generatedInputIdsBySubform.get(subform) || new Set<string>();
+      inputIds.add(this.normalizeVariableId(response.id));
+      generatedInputIdsBySubform.set(subform, inputIds);
+    });
     const describeInput = (inputIndex: number): string => {
       const origin = inputOrigins?.[inputIndex];
       const rawVariableId = origin?.storedVariableId ||
@@ -1820,9 +1908,6 @@ export class CodingProcessService {
       const mappedTechnicalId = namespace.inputTechnicalIdByAlias.get(
         normalizedInputId
       );
-      // Imported rows use public aliases. Generated rows may be legacy output
-      // persisted under a technical ID, so an ID that names both namespaces
-      // cannot be interpreted safely without an additional provenance marker.
       const isAmbiguousGeneratedInput =
         inputOrigins?.[index]?.isAutocoderGenerated === true &&
         mappedTechnicalId !== undefined &&
@@ -1830,14 +1915,43 @@ export class CodingProcessService {
         namespace.outputAliasByTechnicalId.has(normalizedInputId);
 
       if (isAmbiguousGeneratedInput) {
-        throw new Error(
-          'Autocoder input namespace is ambiguous for ' +
-          `${describeInput(index)}, subform ` +
-          `"${String(response.subform || '')}": the stored variable ID is ` +
-          'both the output alias for technical variable ' +
-          `"${mappedTechnicalId}" and technical variable ` +
-          `"${response.id}".`
+        const subform = String(response.subform || '');
+        const component = namespace.componentById.get(normalizedInputId);
+        // Only rows previously produced by the Autocoder can prove how an
+        // ambiguous generated ID was persisted. Imported rows may use the
+        // same public aliases but provide no provenance for this row.
+        const inputIds =
+          generatedInputIdsBySubform.get(subform) || new Set<string>();
+        const aliasEvidence = Array.from(component?.aliasOnlyIds || []).filter(
+          id => inputIds.has(id)
         );
+        const technicalEvidence = Array.from(
+          component?.technicalOnlyIds || []
+        ).filter(id => inputIds.has(id));
+        const missingOutputAliases = Array.from(
+          component?.outputAliasIds || []
+        ).filter(id => !inputIds.has(id));
+        const hasProvenAliasNamespace =
+          aliasEvidence.length > 0 &&
+          technicalEvidence.length === 0 &&
+          missingOutputAliases.length === 0;
+
+        if (!hasProvenAliasNamespace) {
+          const formatEvidence = (ids: string[]): string => (
+            ids.length > 0 ? ids.map(id => `"${id}"`).join(', ') : 'none'
+          );
+          throw new Error(
+            'Autocoder input namespace is ambiguous for ' +
+              `${describeInput(index)}, subform "${subform}": stored variable ` +
+              `"${response.id}" is both the output alias for technical ` +
+              `variable "${mappedTechnicalId}" and a technical variable. ` +
+              'Alias encoding is not proven for this namespace component ' +
+              `(alias-only evidence: ${formatEvidence(aliasEvidence)}; ` +
+              'technical-only evidence: ' +
+              `${formatEvidence(technicalEvidence)}; missing output aliases: ` +
+              `${formatEvidence(missingOutputAliases)}).`
+          );
+        }
       }
 
       return {
