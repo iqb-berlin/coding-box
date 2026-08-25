@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { EntityManager, IsNull, Repository } from 'typeorm';
 import { MissingsProfile } from '../../entities/missings-profile.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
@@ -119,7 +119,10 @@ export class MissingsProfilesService {
     }
   }
 
-  private async enrichIqbStandardEntityIfNeeded(profileEntity: MissingsProfile): Promise<MissingsProfilesDto> {
+  private async enrichIqbStandardEntityIfNeeded(
+    profileEntity: MissingsProfile,
+    manager?: EntityManager
+  ): Promise<MissingsProfilesDto> {
     const profile = this.toDto(profileEntity);
     if (profile.label !== this.defaultProfileLabel) {
       return profile;
@@ -131,13 +134,21 @@ export class MissingsProfilesService {
     }
 
     profileEntity.missings = enriched.profile.missings as string;
-    const savedProfile = await this.missingsProfileRepository.save(profileEntity);
+    const repository = manager?.getRepository(MissingsProfile) ||
+      this.missingsProfileRepository;
+    const savedProfile = await repository.save(profileEntity);
     return this.toDto(savedProfile);
   }
 
-  private async getMissingsProfileById(workspaceId: number, id: number): Promise<MissingsProfilesDto | null> {
+  private async getMissingsProfileById(
+    workspaceId: number,
+    id: number,
+    manager?: EntityManager
+  ): Promise<MissingsProfilesDto | null> {
     try {
-      const profileEntity = await this.missingsProfileRepository.findOne({
+      const repository = manager?.getRepository(MissingsProfile) ||
+        this.missingsProfileRepository;
+      const profileEntity = await repository.findOne({
         where: { id, workspace_id: workspaceId }
       });
 
@@ -145,7 +156,7 @@ export class MissingsProfilesService {
         return null;
       }
 
-      return await this.enrichIqbStandardEntityIfNeeded(profileEntity);
+      return await this.enrichIqbStandardEntityIfNeeded(profileEntity, manager);
     } catch (error) {
       this.logger.error(`Error getting missings profile by id: ${error.message}`, error.stack);
       return null;
@@ -521,9 +532,14 @@ export class MissingsProfilesService {
     return databaseError.code === '23505' || databaseError.driverError?.code === '23505';
   }
 
-  async ensureDefaultMissingsProfile(workspaceId: number): Promise<MissingsProfilesDto> {
+  async ensureDefaultMissingsProfile(
+    workspaceId: number,
+    manager?: EntityManager
+  ): Promise<MissingsProfilesDto> {
     try {
-      const existingProfile = await this.missingsProfileRepository.findOne({
+      const repository = manager?.getRepository(MissingsProfile) ||
+        this.missingsProfileRepository;
+      const existingProfile = await repository.findOne({
         where: { workspace_id: workspaceId, label: this.defaultProfileLabel }
       });
 
@@ -531,7 +547,7 @@ export class MissingsProfilesService {
         const enriched = this.synchronizeIqbStandardProfile(this.toDto(existingProfile));
         if (enriched.changed) {
           existingProfile.missings = enriched.profile.missings as string;
-          const savedProfile = await this.missingsProfileRepository.save(existingProfile);
+          const savedProfile = await repository.save(existingProfile);
           return this.toDto(savedProfile);
         }
         return enriched.profile;
@@ -544,21 +560,24 @@ export class MissingsProfilesService {
       profileEntity.missings = defaultProfile.missings as string;
 
       try {
-        const savedProfile = await this.missingsProfileRepository.save(profileEntity);
+        const savedProfile = await repository.save(profileEntity);
         return this.toDto(savedProfile);
       } catch (error) {
         if (!this.isUniqueConstraintViolation(error)) {
           throw error;
         }
 
-        const concurrentlyCreatedProfile = await this.missingsProfileRepository.findOne({
+        const concurrentlyCreatedProfile = await repository.findOne({
           where: { workspace_id: workspaceId, label: this.defaultProfileLabel }
         });
         if (!concurrentlyCreatedProfile) {
           throw error;
         }
 
-        return await this.enrichIqbStandardEntityIfNeeded(concurrentlyCreatedProfile);
+        return await this.enrichIqbStandardEntityIfNeeded(
+          concurrentlyCreatedProfile,
+          manager
+        );
       }
     } catch (error) {
       this.logger.error(`Error ensuring default missings profile for workspace ${workspaceId}: ${error.message}`, error.stack);
@@ -566,8 +585,14 @@ export class MissingsProfilesService {
     }
   }
 
-  async getDefaultMissingsProfileId(workspaceId: number): Promise<number> {
-    const defaultProfile = await this.ensureDefaultMissingsProfile(workspaceId);
+  async getDefaultMissingsProfileId(
+    workspaceId: number,
+    manager?: EntityManager
+  ): Promise<number> {
+    const defaultProfile = await this.ensureDefaultMissingsProfile(
+      workspaceId,
+      manager
+    );
     if (!defaultProfile.id) {
       throw new BadRequestException('Default missings profile has no id');
     }
@@ -613,10 +638,19 @@ export class MissingsProfilesService {
   async getMissingByIdForProfileOrDefault(
     workspaceId: number,
     profileId: number | null | undefined,
-    missingId: string
+    missingId: string,
+    manager?: EntityManager
   ): Promise<ResolvedMissingValue> {
-    const resolvedProfileId = await this.resolveMissingsProfileId(workspaceId, profileId);
-    const profile = await this.getMissingsProfileById(workspaceId, resolvedProfileId);
+    const resolvedProfileId = await this.resolveMissingsProfileId(
+      workspaceId,
+      profileId,
+      manager
+    );
+    const profile = await this.getMissingsProfileById(
+      workspaceId,
+      resolvedProfileId,
+      manager
+    );
     if (!profile) {
       throw new BadRequestException(`Missing profile ${resolvedProfileId} not found`);
     }
@@ -650,17 +684,22 @@ export class MissingsProfilesService {
 
   async resolveMissingsProfileId(
     workspaceId: number,
-    profileId?: number | null
+    profileId?: number | null,
+    manager?: EntityManager
   ): Promise<number> {
     if (profileId === null || profileId === undefined || profileId === 0) {
-      return this.getDefaultMissingsProfileId(workspaceId);
+      return this.getDefaultMissingsProfileId(workspaceId, manager);
     }
 
     if (!Number.isInteger(profileId) || profileId < 1) {
       throw new BadRequestException(`Invalid missings profile id: ${profileId}`);
     }
 
-    const profile = await this.getMissingsProfileById(workspaceId, profileId);
+    const profile = await this.getMissingsProfileById(
+      workspaceId,
+      profileId,
+      manager
+    );
     if (!profile) {
       throw new BadRequestException(`Missing profile ${profileId} not found`);
     }

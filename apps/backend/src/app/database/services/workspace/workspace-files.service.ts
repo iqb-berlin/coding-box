@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  FindOperator, In, Like, QueryRunner, Repository
+  EntityManager, FindOperator, In, Like, QueryRunner, Repository
 } from 'typeorm';
 import * as cheerio from 'cheerio';
 import AdmZip = require('adm-zip');
@@ -2391,11 +2391,14 @@ ${bookletRefs}
 
   async getVariableInfoForScheme(
     workspaceId: number,
-    schemeFileId: string
+    schemeFileId: string,
+    manager?: EntityManager
   ): Promise<VariableInfo[]> {
     try {
       const expectedUnitId = this.normalizeFileUnitId(schemeFileId);
-      const unitFiles = await this.fileUploadRepository.find({
+      const repository = manager?.getRepository(FileUpload) ||
+        this.fileUploadRepository;
+      const unitFiles = await repository.find({
         where: {
           workspace_id: workspaceId,
           file_type: 'Unit',
@@ -3120,7 +3123,10 @@ ${bookletRefs}
     }
   }
 
-  private async refreshUnitVariableCacheInternal(workspaceId: number): Promise<void> {
+  private async refreshUnitVariableCacheInternal(
+    workspaceId: number,
+    manager?: EntityManager
+  ): Promise<void> {
     this.logger.log(
       `Refreshing unit variable cache for workspace ${workspaceId}`
     );
@@ -3134,11 +3140,13 @@ ${bookletRefs}
     try {
       await this.cacheService.set(derivedMetadataCompleteKey, false);
 
-      const unitFiles = await this.fileUploadRepository.find({
+      const repository = manager?.getRepository(FileUpload) ||
+        this.fileUploadRepository;
+      const unitFiles = await repository.find({
         where: { workspace_id: workspaceId, file_type: 'Unit' }
       });
 
-      const codingSchemes = await this.fileUploadRepository.find({
+      const codingSchemes = await repository.find({
         where: {
           workspace_id: workspaceId,
           file_type: 'Resource',
@@ -3595,13 +3603,18 @@ ${bookletRefs}
   }
 
   async getUnitVariableMap(
-    workspaceId: number
+    workspaceId: number,
+    manager?: EntityManager
   ): Promise<Map<string, Set<string>>> {
     const cacheKey = this.getCacheKey(workspaceId, 'unit_variables');
     const cached =
       await this.cacheService.get<Record<string, string[]>>(cacheKey);
     if (!cached) {
-      await this.refreshUnitVariableCache(workspaceId);
+      if (manager) {
+        await this.refreshUnitVariableCacheInternal(workspaceId, manager);
+      } else {
+        await this.refreshUnitVariableCache(workspaceId);
+      }
       return this.fromRedisMap(
         await this.cacheService.get<Record<string, string[]>>(cacheKey)
       );
@@ -3635,13 +3648,18 @@ ${bookletRefs}
    * Derived variables have their own manual coding tasks (they are not BASE type).
    */
   async getDerivedVariableMap(
-    workspaceId: number
+    workspaceId: number,
+    manager?: EntityManager
   ): Promise<Map<string, Set<string>>> {
     const cacheKey = this.getCacheKey(workspaceId, 'derived_variables');
     const cached =
       await this.cacheService.get<Record<string, string[]>>(cacheKey);
     if (!cached) {
-      await this.refreshUnitVariableCache(workspaceId);
+      if (manager) {
+        await this.refreshUnitVariableCacheInternal(workspaceId, manager);
+      } else {
+        await this.refreshUnitVariableCache(workspaceId);
+      }
       return this.fromRedisMap(
         await this.cacheService.get<Record<string, string[]>>(cacheKey)
       );

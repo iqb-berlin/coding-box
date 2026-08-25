@@ -31,6 +31,7 @@ describe('CodingFreshnessService', () => {
   beforeEach(() => {
     freshnessRepository = {
       createQueryBuilder: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
       upsert: jest.fn().mockResolvedValue({})
     } as unknown as Repository<CodingUnitFreshness>;
 
@@ -900,6 +901,46 @@ describe('CodingFreshnessService', () => {
     );
   });
 
+  it('marks an already completed second Autocoder run stale after v2 changes', async () => {
+    (connection.query as jest.Mock)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ revision: 13 }])
+      .mockResolvedValueOnce({});
+    (freshnessRepository.find as jest.Mock).mockResolvedValueOnce([
+      { unit_id: 20 }
+    ]);
+    const unitIdsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{ unitId: '20' }])
+    });
+    const responseCountsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{ unitId: '20', count: '2' }])
+    });
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(unitIdsQb)
+      .mockReturnValueOnce(responseCountsQb);
+
+    await service.markManualCodingCurrent(1, [99], { codingJobId: 10 });
+
+    expect(freshnessRepository.upsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          unit_id: 20,
+          version: 'v2',
+          state: 'CURRENT',
+          coded_revision: 13
+        }),
+        expect.objectContaining({
+          unit_id: 20,
+          version: 'v3',
+          state: 'STALE',
+          reason: 'MANUAL_CODING_APPLIED',
+          coded_revision: null
+        })
+      ]),
+      ['workspace_id', 'unit_id', 'version']
+    );
+  });
+
   it('reconciles obsolete manual review markers only at the expected workspace revision', async () => {
     (connection.query as jest.Mock).mockResolvedValue([{ id: 7 }, { id: 8 }]);
 
@@ -944,6 +985,42 @@ describe('CodingFreshnessService', () => {
       expect.stringContaining("SET freshness_status = 'current'"),
       [1, [10]]
     );
+  });
+
+  it('marks v3 stale even while another manual coding job keeps v2 blocked', async () => {
+    (connection.query as jest.Mock)
+      .mockResolvedValueOnce([{ unitId: '20' }])
+      .mockResolvedValueOnce([{ revision: 13 }])
+      .mockResolvedValueOnce({});
+    (freshnessRepository.find as jest.Mock).mockResolvedValueOnce([
+      { unit_id: 20 }
+    ]);
+    const unitIdsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{ unitId: '20' }])
+    });
+    const responseCountsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{ unitId: '20', count: '2' }])
+    });
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(unitIdsQb)
+      .mockReturnValueOnce(responseCountsQb);
+
+    await service.markManualCodingCurrent(1, [99], { codingJobId: 10 });
+
+    expect(freshnessRepository.upsert).toHaveBeenCalledWith(
+      [expect.objectContaining({
+        unit_id: 20,
+        version: 'v3',
+        state: 'STALE',
+        reason: 'MANUAL_CODING_APPLIED',
+        coded_revision: null
+      })],
+      ['workspace_id', 'unit_id', 'version']
+    );
+    expect((freshnessRepository.upsert as jest.Mock).mock.calls[0][0])
+      .not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ version: 'v2' })
+      ]));
   });
 
   it('does not apply the aggregate import count to imported units with zero responses', async () => {

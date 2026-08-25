@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  Brackets, In, Repository, QueryRunner
+  Brackets, EntityManager, In, Repository, QueryRunner
 } from 'typeorm';
 import { VariableCodingData, CodingScheme } from '@iqbspecs/coding-scheme';
 import * as Autocoder from '@iqb/responses';
@@ -53,6 +53,7 @@ type ProcessTestPersonsBatchOptions = {
   capturePlan?: (plan: AutocoderBatchPlan) => void;
   preflightContext?: AutocoderPreflightContext;
   maxCodedResponses?: number;
+  preflightManager?: EntityManager;
 };
 
 export type AutocoderPreflightContext = {
@@ -331,7 +332,8 @@ export class CodingProcessService {
     targetUnitIds: number[] | undefined,
     freshnessSourceRevision: number | undefined,
     preflightContext: AutocoderPreflightContext,
-    maxCodedResponses: number = Number.MAX_SAFE_INTEGER
+    maxCodedResponses: number = Number.MAX_SAFE_INTEGER,
+    preflightManager?: EntityManager
   ): Promise<AutocoderBatchPlan | null> {
     let plan: AutocoderBatchPlan | null = null;
     await this.processTestPersonsBatchInternal(
@@ -346,6 +348,7 @@ export class CodingProcessService {
         persist: false,
         preflightContext,
         maxCodedResponses,
+        preflightManager,
         capturePlan: capturedPlan => {
           plan = capturedPlan;
         }
@@ -391,7 +394,11 @@ export class CodingProcessService {
     try {
       // Step 1: Get persons - 10% progress
       const personsQueryStart = Date.now();
-      const persons = await this.fetchPersons(workspace_id, personIds);
+      const persons = await this.fetchPersons(
+        workspace_id,
+        personIds,
+        options.preflightManager
+      );
       metrics.personsQuery = Date.now() - personsQueryStart;
 
       if (!persons || persons.length === 0) {
@@ -416,7 +423,10 @@ export class CodingProcessService {
 
       // Step 2: Get booklets - 20% progress
       const bookletQueryStart = Date.now();
-      const booklets = await this.fetchBooklets(personIdsArray);
+      const booklets = await this.fetchBooklets(
+        personIdsArray,
+        options.preflightManager
+      );
       metrics.bookletQuery = Date.now() - bookletQueryStart;
 
       if (!booklets || booklets.length === 0) {
@@ -443,7 +453,12 @@ export class CodingProcessService {
 
       // Step 3: Get units - 30% progress
       const unitQueryStart = Date.now();
-      const units = await this.fetchUnits(workspace_id, bookletIds, targetUnitIds);
+      const units = await this.fetchUnits(
+        workspace_id,
+        bookletIds,
+        targetUnitIds,
+        options.preflightManager
+      );
       metrics.unitQuery = Date.now() - unitQueryStart;
 
       if (!units || units.length === 0) {
@@ -498,7 +513,8 @@ export class CodingProcessService {
       const responseQueryStart = Date.now();
       const allResponses = await this.fetchResponses(
         unitIdsArray,
-        resolvedAutoCoderRun
+        resolvedAutoCoderRun,
+        options.preflightManager
       );
       metrics.responseQuery = Date.now() - responseQueryStart;
 
@@ -524,7 +540,8 @@ export class CodingProcessService {
       const filteredResponses = await this.codingReadinessService.filterResponsesCodeable(
         workspace_id,
         allResponses,
-        units
+        units,
+        options.preflightManager
       );
 
       this.logger.log(
@@ -572,7 +589,8 @@ export class CodingProcessService {
       // Use cache for test files
       const fileIdToTestFileMap = await this.getTestFilesWithCache(
         workspace_id,
-        unitAliasesArray
+        unitAliasesArray,
+        options.preflightManager
       );
       metrics.fileQuery = Date.now() - fileQueryStart;
 
@@ -620,7 +638,8 @@ export class CodingProcessService {
       const fileIdToCodingSchemeMap = await this.getCodingSchemeFiles(
         workspace_id,
         codingSchemeRefs,
-        jobId
+        jobId,
+        options.preflightManager
       );
       metrics.schemeQuery = Date.now() - schemeQueryStart;
       // No separate parsing step needed as it's handled by the cache helper
@@ -659,7 +678,8 @@ export class CodingProcessService {
         jobId,
         progressCallback,
         options.preflightContext,
-        options.maxCodedResponses
+        options.maxCodedResponses,
+        options.preflightManager
       );
 
       metrics.processing = Date.now() - processingStart;
@@ -854,16 +874,22 @@ export class CodingProcessService {
 
   private async fetchPersons(
     workspaceId: number,
-    personIds: string[]
+    personIds: string[],
+    manager?: EntityManager
   ): Promise<Persons[]> {
-    return this.personsRepository.find({
+    const repository = manager?.getRepository(Persons) || this.personsRepository;
+    return repository.find({
       where: { workspace_id: workspaceId, id: In(personIds) },
       select: ['id', 'group', 'login', 'code', 'uploaded_at']
     });
   }
 
-  private async fetchBooklets(personIds: number[]): Promise<Booklet[]> {
-    return this.bookletRepository.createQueryBuilder('booklet')
+  private async fetchBooklets(
+    personIds: number[],
+    manager?: EntityManager
+  ): Promise<Booklet[]> {
+    const repository = manager?.getRepository(Booklet) || this.bookletRepository;
+    return repository.createQueryBuilder('booklet')
       .where('booklet.personid = ANY(:personIds)', { personIds })
       .select(['booklet.id', 'booklet.personid'])
       .getMany();
@@ -872,10 +898,16 @@ export class CodingProcessService {
   private async fetchUnits(
     workspace_id: number,
     bookletIds: number[],
-    unitIds?: number[]
+    unitIds?: number[],
+    manager?: EntityManager
   ): Promise<Unit[]> {
-    const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspace_id);
-    const query = this.unitRepository.createQueryBuilder('unit')
+    const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } =
+      await this.workspaceExclusionService.resolveExclusionsForQueries(
+        workspace_id,
+        manager
+      );
+    const repository = manager?.getRepository(Unit) || this.unitRepository;
+    const query = repository.createQueryBuilder('unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.bookletinfo', 'bookletinfo')
       .where('unit.bookletid = ANY(:bookletIds)', { bookletIds })
@@ -893,9 +925,12 @@ export class CodingProcessService {
 
   private async fetchResponses(
     unitIds: number[],
-    autoCoderRun: number
+    autoCoderRun: number,
+    manager?: EntityManager
   ): Promise<ResponseEntity[]> {
-    const query = this.responseRepository
+    const repository = manager?.getRepository(ResponseEntity) ||
+      this.responseRepository;
+    const query = repository
       .createQueryBuilder('ResponseEntity')
       .select([
         'ResponseEntity.id',
@@ -953,8 +988,11 @@ export class CodingProcessService {
 
   private async getTestFilesWithCache(
     workspace_id: number,
-    unitAliasesArray: string[]
+    unitAliasesArray: string[],
+    manager?: EntityManager
   ): Promise<Map<string, FileUpload>> {
+    const repository = manager?.getRepository(FileUpload) ||
+      this.fileUploadRepository;
     const cacheEntry = this.testFileCache.get(workspace_id);
     const now = Date.now();
 
@@ -973,7 +1011,7 @@ export class CodingProcessService {
       this.logger.log(
         `Fetching ${missingAliases.length} missing test files for workspace ${workspace_id}`
       );
-      const missingFiles = await this.fileUploadRepository.find({
+      const missingFiles = await repository.find({
         where: { workspace_id, file_id: In(missingAliases) },
         select: ['file_id', 'data', 'filename']
       });
@@ -988,7 +1026,7 @@ export class CodingProcessService {
     }
 
     this.logger.log(`Fetching all test files for workspace ${workspace_id}`);
-    const testFiles = await this.fileUploadRepository.find({
+    const testFiles = await repository.find({
       where: { workspace_id, file_id: In(unitAliasesArray) },
       select: ['file_id', 'data', 'filename']
     });
@@ -1004,8 +1042,11 @@ export class CodingProcessService {
 
   private async getCodingSchemesWithCache(
     workspaceId: number,
-    codingSchemeRefs: string[]
+    codingSchemeRefs: string[],
+    manager?: EntityManager
   ): Promise<Map<string, CodingScheme>> {
+    const repository = manager?.getRepository(FileUpload) ||
+      this.fileUploadRepository;
     const now = Date.now();
     const result = new Map<string, CodingScheme>();
     const emptyScheme = new CodingScheme({});
@@ -1029,7 +1070,7 @@ export class CodingProcessService {
     this.logger.log(
       `Fetching ${missingSchemeRefs.length} missing coding schemes`
     );
-    const codingSchemeFiles = await this.fileUploadRepository.find({
+    const codingSchemeFiles = await repository.find({
       where: { workspace_id: workspaceId, file_id: In(missingSchemeRefs) },
       select: ['file_id', 'data', 'filename']
     });
@@ -1132,7 +1173,8 @@ export class CodingProcessService {
     jobId?: string,
     progressCallback?: (progress: number) => void,
     preflightContext?: AutocoderPreflightContext,
-    maxCodedResponses: number = Number.MAX_SAFE_INTEGER
+    maxCodedResponses: number = Number.MAX_SAFE_INTEGER,
+    preflightManager?: EntityManager
   ): Promise<{
       allCodedResponses: CodedResponse[];
       statistics: CodingStatistics;
@@ -1171,7 +1213,8 @@ export class CodingProcessService {
               codingSchemeRef,
               unitFileId,
               unit,
-              scheme
+              scheme,
+              preflightManager
             );
             codingSchemeValidations.set(validationKey, validation);
           }
@@ -1340,12 +1383,14 @@ export class CodingProcessService {
     codingSchemeRef: string,
     unitFileId: string | undefined,
     unit: Unit,
-    scheme: CodingScheme
+    scheme: CodingScheme,
+    manager?: EntityManager
   ): Promise<void> {
     const baseVariables = unitFileId ?
       await this.workspaceFilesService.getVariableInfoForScheme(
         workspaceId,
-        unitFileId
+        unitFileId,
+        manager
       ) :
       [];
     const breakingProblems = Autocoder.CodingSchemeFactory.validate(
@@ -1543,11 +1588,13 @@ export class CodingProcessService {
   private async getCodingSchemeFiles(
     workspaceId: number,
     codingSchemeRefs: Set<string>,
-    jobId?: string
+    jobId?: string,
+    manager?: EntityManager
   ): Promise<Map<string, CodingScheme>> {
     const fileIdToCodingSchemeMap = await this.getCodingSchemesWithCache(
       workspaceId,
-      [...codingSchemeRefs]
+      [...codingSchemeRefs],
+      manager
     );
     if (jobId && (await this.isJobCancelled(jobId))) {
       this.logger.log(

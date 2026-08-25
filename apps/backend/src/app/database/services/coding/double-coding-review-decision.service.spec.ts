@@ -167,6 +167,7 @@ describe('DoubleCodingReviewDecisionService', () => {
       save: jest.fn().mockResolvedValue(undefined)
     };
     const transactionalEntityManager = {
+      query: jest.fn().mockResolvedValue(undefined),
       findOne: jest.fn()
         .mockResolvedValueOnce(sourceUnit)
         .mockResolvedValueOnce(response),
@@ -196,12 +197,16 @@ describe('DoubleCodingReviewDecisionService', () => {
     const codingFreshnessService = {
       markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
     };
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue(emptyExclusions)
+    };
     const localService = createDecisionService({
       responseRepository,
       codingStatisticsService,
       codingAnalysisService,
       codingValidationService,
       codingProgressService,
+      workspaceExclusionService,
       reviewDecisionRepository: managerDecisionRepository,
       codingFreshnessService
     });
@@ -226,8 +231,11 @@ describe('DoubleCodingReviewDecisionService', () => {
     expect(codingJobService.getSelectableReviewCodeForUnit).toHaveBeenCalledWith(
       sourceUnit,
       workspaceId,
-      3
+      3,
+      transactionalEntityManager
     );
+    expect(workspaceExclusionService.resolveExclusionsForQueries)
+      .toHaveBeenCalledWith(workspaceId, transactionalEntityManager);
     expect(sourceUnit.supervisor_comment).toBe('old comment');
     expect(response.code_v2).toBe(3);
     expect(response.score_v2).toBe(7);
@@ -336,6 +344,7 @@ describe('DoubleCodingReviewDecisionService', () => {
       save: jest.fn().mockResolvedValue(undefined)
     };
     const transactionalEntityManager = {
+      query: jest.fn().mockResolvedValue(undefined),
       findOne: jest.fn()
         .mockResolvedValueOnce(sourceUnit)
         .mockResolvedValueOnce(representative),
@@ -458,6 +467,7 @@ describe('DoubleCodingReviewDecisionService', () => {
       getMany: jest.fn().mockResolvedValue([representative, sibling, partialSibling])
     };
     const transactionalEntityManager = {
+      query: jest.fn().mockResolvedValue(undefined),
       findOne: jest.fn().mockResolvedValue(representative),
       find: jest.fn().mockResolvedValue([sourceUnit]),
       save: jest.fn().mockResolvedValue(undefined),
@@ -549,6 +559,7 @@ describe('DoubleCodingReviewDecisionService', () => {
 
   it('skips reconciliation when the applied decision no longer matches v2', async () => {
     const transactionalEntityManager = {
+      query: jest.fn().mockResolvedValue(undefined),
       findOne: jest.fn().mockResolvedValue({
         id: 10,
         status_v2: 5,
@@ -644,7 +655,7 @@ describe('DoubleCodingReviewDecisionService', () => {
     });
   });
 
-  it('reports a failed decision when freshness fails so the transaction can roll back all updates', async () => {
+  it('rolls a failed decision back to its savepoint while retaining the workspace lock', async () => {
     const response = {
       id: 10,
       value: 'answer',
@@ -666,6 +677,7 @@ describe('DoubleCodingReviewDecisionService', () => {
       save: jest.fn().mockResolvedValue(undefined)
     };
     const transactionalEntityManager = {
+      query: jest.fn().mockResolvedValue(undefined),
       findOne: jest.fn()
         .mockResolvedValueOnce(sourceUnit)
         .mockResolvedValueOnce(response),
@@ -677,18 +689,9 @@ describe('DoubleCodingReviewDecisionService', () => {
           reviewDecisionRepository
       ))
     };
-    let rolledBack = false;
     const responseRepository = {
       manager: {
-        transaction: jest.fn(async callback => {
-          try {
-            const result = await callback(transactionalEntityManager);
-            return result;
-          } catch (error) {
-            rolledBack = true;
-            throw error;
-          }
-        })
+        transaction: jest.fn(async callback => callback(transactionalEntityManager))
       }
     };
     const codingStatisticsService = { invalidateCache: jest.fn() };
@@ -714,7 +717,17 @@ describe('DoubleCodingReviewDecisionService', () => {
       code: 3
     }], manager);
 
-    expect(rolledBack).toBe(true);
+    expect(transactionalEntityManager.query).toHaveBeenNthCalledWith(
+      1,
+      'SELECT pg_advisory_xact_lock($1::int, $2::int)',
+      [774020251, workspaceId]
+    );
+    expect(transactionalEntityManager.query).toHaveBeenCalledWith(
+      'ROLLBACK TO SAVEPOINT double_coding_resolution'
+    );
+    expect(transactionalEntityManager.query).toHaveBeenCalledWith(
+      'RELEASE SAVEPOINT double_coding_resolution'
+    );
     expect(result).toMatchObject({
       success: false,
       appliedCount: 0,
@@ -759,7 +772,7 @@ describe('DoubleCodingReviewDecisionService', () => {
       score: 0
     });
     expect(missingsProfilesService.getMissingByIdForProfileOrDefault)
-      .toHaveBeenCalledWith(workspaceId, 77, 'mir');
+      .toHaveBeenCalledWith(workspaceId, 77, 'mir', undefined);
   });
 
   it('persists the original general selection next to its profile-resolved code', async () => {
@@ -837,7 +850,12 @@ describe('DoubleCodingReviewDecisionService', () => {
       1501
     );
     expect(codingJobService.getSelectableReviewCodeForUnit)
-      .toHaveBeenCalledWith(currentSourceUnit, workspaceId, 999);
+      .toHaveBeenCalledWith(
+        currentSourceUnit,
+        workspaceId,
+        999,
+        entityManager
+      );
   });
 
   it('rejects selected coder results without the current review source', async () => {
@@ -885,6 +903,7 @@ describe('DoubleCodingReviewDecisionService', () => {
       coding_job_id: 100
     });
     const transactionalEntityManager = {
+      query: jest.fn().mockResolvedValue(undefined),
       findOne: jest.fn().mockResolvedValue(sourceUnit),
       save: jest.fn(),
       update: jest.fn(),
@@ -910,7 +929,8 @@ describe('DoubleCodingReviewDecisionService', () => {
     expect(codingJobService.getSelectableReviewCodeForUnit).toHaveBeenCalledWith(
       sourceUnit,
       workspaceId,
-      999
+      999,
+      transactionalEntityManager
     );
     expect(transactionalEntityManager.save).not.toHaveBeenCalled();
     expect(transactionalEntityManager.update).not.toHaveBeenCalled();
@@ -924,6 +944,7 @@ describe('DoubleCodingReviewDecisionService', () => {
 
   it('never applies internal workflow marker codes from legacy job selections', async () => {
     const transactionalEntityManager = {
+      query: jest.fn().mockResolvedValue(undefined),
       findOne: jest.fn()
         .mockResolvedValueOnce(makeCodingJobUnit({ response_id: 10, code: -1 }))
         .mockResolvedValueOnce(makeCodingJobUnit({ response_id: 11, code: -2 }))
@@ -1002,6 +1023,7 @@ describe('DoubleCodingReviewDecisionService', () => {
       findOneOrFail: jest.fn().mockResolvedValue(savedDecision)
     };
     const transactionalEntityManager = {
+      query: jest.fn().mockResolvedValue(undefined),
       findOne: jest.fn()
         .mockResolvedValueOnce(sourceUnit)
         .mockResolvedValueOnce(response),
@@ -1039,7 +1061,12 @@ describe('DoubleCodingReviewDecisionService', () => {
         relations: ['response', 'coding_job', 'coding_job.codingJobCoders']
       })
     );
-    expect(codingJobService.getSelectableReviewCodeForUnit).toHaveBeenCalledWith(sourceUnit, workspaceId, 3);
+    expect(codingJobService.getSelectableReviewCodeForUnit).toHaveBeenCalledWith(
+      sourceUnit,
+      workspaceId,
+      3,
+      undefined
+    );
     expect(transactionalEntityManager.findOne).toHaveBeenLastCalledWith(
       expect.any(Function),
       expect.objectContaining({
@@ -1082,6 +1109,7 @@ describe('DoubleCodingReviewDecisionService', () => {
 
   it('skips explicit replay decisions with invalid code or score values', async () => {
     const transactionalEntityManager = {
+      query: jest.fn().mockResolvedValue(undefined),
       findOne: jest.fn(),
       save: jest.fn(),
       update: jest.fn(),
