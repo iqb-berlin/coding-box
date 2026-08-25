@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import {
@@ -39,10 +39,16 @@ export class EmptyResponseSelectionService {
     private readonly workspaceFilesService: WorkspaceFilesService
   ) { }
 
-  async createContext(workspaceId: number): Promise<EmptyResponseSelectionContext> {
+  async createContext(
+    workspaceId: number,
+    manager?: EntityManager
+  ): Promise<EmptyResponseSelectionContext> {
     try {
       const metadata =
-        await this.workspaceFilesService.getDerivedVariableMetadata(workspaceId);
+        await this.workspaceFilesService.getDerivedVariableMetadata(
+          workspaceId,
+          manager
+        );
 
       if (!metadata.metadataAvailable) {
         this.logger.warn(
@@ -82,7 +88,8 @@ export class EmptyResponseSelectionService {
 
   async filterEffectivelyEmptyResponses(
     responses: ResponseEntity[],
-    context: EmptyResponseSelectionContext
+    context: EmptyResponseSelectionContext,
+    manager?: EntityManager
   ): Promise<ResponseEntity[]> {
     if (!context.metadataAvailable) {
       return [];
@@ -126,7 +133,9 @@ export class EmptyResponseSelectionService {
         chunk.flatMap(plan => Array.from(plan.sourceVariableIds))
       ));
 
-      const sourceResponses = await this.responseRepository
+      const responseRepository = manager?.getRepository(ResponseEntity) ??
+        this.responseRepository;
+      const sourceResponses = await responseRepository
         .createQueryBuilder('source')
         .where('source.unitid IN (:...unitIds)', { unitIds })
         .andWhere('source.variableid IN (:...sourceVariableIds)', {

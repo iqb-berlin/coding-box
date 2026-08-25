@@ -3849,7 +3849,8 @@ export class CodingJobService {
   async getSelectableReviewCodeForUnit(
     codingJobUnit: CodingJobUnit,
     workspaceId: number,
-    codeId: number
+    codeId: number,
+    manager?: EntityManager
   ): Promise<SelectableReviewCode> {
     if (!Number.isInteger(codeId) || codeId < 0) {
       throw new BadRequestException(
@@ -3860,7 +3861,8 @@ export class CodingJobService {
     const schemeCode = await this.getCodingSchemeCodeForUnit(
       codingJobUnit,
       workspaceId,
-      codeId
+      codeId,
+      manager
     );
     const selectableCode = this.toSelectableReviewCode(schemeCode);
     if (!selectableCode) {
@@ -3913,11 +3915,13 @@ export class CodingJobService {
   private async getCodingSchemeCodeForUnit(
     codingJobUnit: CodingJobUnit,
     workspaceId: number,
-    codeId: number
+    codeId: number,
+    manager?: EntityManager
   ): Promise<CodingSchemeCode> {
     const codingScheme = await this.getRequiredCodingSchemeForUnit(
       codingJobUnit,
-      workspaceId
+      workspaceId,
+      manager
     );
     const variableCoding = this.findVariableCoding(
       codingScheme,
@@ -3960,18 +3964,21 @@ export class CodingJobService {
 
   private async getCodingSchemeForUnit(
     codingJobUnit: CodingJobUnit,
-    workspaceId: number
+    workspaceId: number,
+    manager?: EntityManager
   ): Promise<CodingScheme | undefined> {
     const codingSchemesByUnit = await this.getCodingSchemesForUnits(
       [codingJobUnit],
-      workspaceId
+      workspaceId,
+      manager
     );
     return codingSchemesByUnit.get(codingJobUnit);
   }
 
   private async getCodingSchemesForUnits(
     codingJobUnits: CodingJobUnit[],
-    workspaceId: number
+    workspaceId: number,
+    manager?: EntityManager
   ): Promise<Map<CodingJobUnit, CodingScheme>> {
     const codingSchemesByUnit = new Map<CodingJobUnit, CodingScheme>();
     const unitFileCandidatesByUnit = new Map<CodingJobUnit, string[]>();
@@ -3989,7 +3996,9 @@ export class CodingJobService {
       return codingSchemesByUnit;
     }
 
-    const unitFiles = await this.fileUploadRepository.find({
+    const fileUploadRepository = manager?.getRepository(FileUpload) ||
+      this.fileUploadRepository;
+    const unitFiles = await fileUploadRepository.find({
       where: {
         workspace_id: workspaceId,
         file_id: In([...unitFileIds])
@@ -4032,7 +4041,8 @@ export class CodingJobService {
 
     const codingSchemes = await this.getCodingSchemes(
       [...codingSchemeRefs],
-      workspaceId
+      workspaceId,
+      manager
     );
     codingSchemeRefsByUnit.forEach((refs, unit) => {
       const scheme = refs
@@ -4050,11 +4060,13 @@ export class CodingJobService {
 
   private async getRequiredCodingSchemeForUnit(
     codingJobUnit: CodingJobUnit,
-    workspaceId: number
+    workspaceId: number,
+    manager?: EntityManager
   ): Promise<CodingScheme> {
     const codingScheme = await this.getCodingSchemeForUnit(
       codingJobUnit,
-      workspaceId
+      workspaceId,
+      manager
     );
     if (!codingScheme) {
       throw new BadRequestException(
@@ -5324,7 +5336,8 @@ export class CodingJobService {
 
   private async getCodingSchemes(
     unitAliases: string[],
-    workspaceId: number
+    workspaceId: number,
+    manager?: EntityManager
   ): Promise<Map<string, CodingScheme>> {
     const codingSchemeRefs = unitAliases.filter(alias => alias !== null);
     const codingSchemes = new Map<string, CodingScheme>();
@@ -5333,7 +5346,9 @@ export class CodingJobService {
       return codingSchemes;
     }
 
-    const codingSchemeFiles = await this.fileUploadRepository.find({
+    const repository = manager?.getRepository(FileUpload) ||
+      this.fileUploadRepository;
+    const codingSchemeFiles = await repository.find({
       where: {
         workspace_id: workspaceId,
         file_id: In(codingSchemeRefs)
@@ -5653,11 +5668,12 @@ export class CodingJobService {
   }
 
   async getCurrentAggregationSettingsSnapshot(
-    workspaceId: number
+    workspaceId: number,
+    manager?: EntityManager
   ): Promise<CodingJobAggregationSettings> {
     const [aggregationThreshold, responseMatchingFlags] = await Promise.all([
-      this.getAggregationThreshold(workspaceId),
-      this.getResponseMatchingMode(workspaceId)
+      this.getAggregationThreshold(workspaceId, manager),
+      this.getResponseMatchingMode(workspaceId, manager)
     ]);
     const aggregationEnabled =
       aggregationThreshold !== null &&
@@ -5673,7 +5689,8 @@ export class CodingJobService {
   }
 
   async getAggregationSettingsForCodingJob(
-    codingJob: CodingJob
+    codingJob: CodingJob,
+    manager?: EntityManager
   ): Promise<CodingJobAggregationSettings> {
     if (
       codingJob.aggregation_settings_version !== null &&
@@ -5703,14 +5720,21 @@ export class CodingJobService {
       };
     }
 
-    return this.getCurrentAggregationSettingsSnapshot(codingJob.workspace_id);
+    return this.getCurrentAggregationSettingsSnapshot(
+      codingJob.workspace_id,
+      manager
+    );
   }
 
   async getDerivedVariableMapForAggregation(
-    workspaceId: number
+    workspaceId: number,
+    manager?: EntityManager
   ): Promise<Map<string, Set<string>>> {
     const derivedVariableMap =
-      await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
+      await this.workspaceFilesService.getDerivedVariableMap(
+        workspaceId,
+        manager
+      );
     const derivedVariableSets = new Map<string, Set<string>>();
     derivedVariableMap.forEach((vars, unitNameKey) => {
       derivedVariableSets.set(unitNameKey.toUpperCase(), vars);
@@ -5750,10 +5774,13 @@ export class CodingJobService {
 
   async setResponseMatchingMode(
     workspaceId: number,
-    flags: ResponseMatchingFlag[]
+    flags: ResponseMatchingFlag[],
+    manager?: EntityManager
   ): Promise<ResponseMatchingFlag[]> {
     const normalizedFlags = this.normalizeResponseMatchingFlags(flags);
-    await this.settingRepository.save({
+    const settingRepository = manager?.getRepository(Setting) ??
+      this.settingRepository;
+    await settingRepository.save({
       key: `workspace-${workspaceId}-response-matching-mode`,
       content: JSON.stringify({ flags: normalizedFlags })
     });
@@ -8109,18 +8136,21 @@ export class CodingJobService {
    */
   async setAggregationThreshold(
     workspaceId: number,
-    threshold: number | null
+    threshold: number | null,
+    manager?: EntityManager
   ): Promise<void> {
     const settingKey = `workspace-${workspaceId}-duplicate-aggregation-threshold`;
+    const settingRepository = manager?.getRepository(Setting) ??
+      this.settingRepository;
 
     if (threshold === null) {
       // Explicitly disable aggregation
-      await this.settingRepository.save({
+      await settingRepository.save({
         key: settingKey,
         content: 'disabled'
       });
     } else {
-      await this.settingRepository.save({
+      await settingRepository.save({
         key: settingKey,
         content: threshold.toString()
       });

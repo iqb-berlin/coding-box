@@ -4,6 +4,7 @@ import {
   Brackets,
   EntityManager,
   IsNull,
+  QueryRunner,
   Repository,
   SelectQueryBuilder
 } from 'typeorm';
@@ -21,7 +22,10 @@ import {
   generateCodingProgressKey
 } from './coding-progress-key.util';
 import { CodingFreshnessService } from './coding-freshness.service';
-import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import {
+  lockWorkspaceTestResultsMutationInTransaction,
+  withWorkspaceTestResultsMutationLock
+} from '../shared/workspace-test-results-lock.util';
 import { CodingValidationService } from './coding-validation.service';
 import { MissingsProfilesService } from './missings-profiles.service';
 import { getNonCodingIssueReviewJobSqlCondition } from './coding-job-type.util';
@@ -804,12 +808,57 @@ export class CodingResultsService {
     this.logger.log(`Applying empty response coding for workspace ${workspaceId}`);
 
     try {
+      const result = await withWorkspaceTestResultsMutationLock(
+        this.responseRepository.manager.connection,
+        workspaceId,
+        queryRunner => this.applyEmptyResponseCodingLocked(
+          workspaceId,
+          queryRunner
+        )
+      );
+
+      if (result.updatedCount > 0) {
+        await this.invalidateIncompleteVariablesCache(workspaceId);
+        await this.codingStatisticsService.invalidateCache(workspaceId);
+        await this.codingAnalysisService.invalidateCache(workspaceId);
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Error applying empty response coding: ${error.message}`,
+        error.stack
+      );
+      return {
+        success: false,
+        updatedCount: 0,
+        message: `Fehler: ${error.message}`
+      };
+    }
+  }
+
+  private async applyEmptyResponseCodingLocked(
+    workspaceId: number,
+    queryRunner: QueryRunner
+  ): Promise<{
+      success: boolean;
+      updatedCount: number;
+      message: string;
+    }> {
+    await queryRunner.startTransaction('READ COMMITTED');
+
+    try {
+      const responseRepository =
+        queryRunner.manager.getRepository(ResponseEntity);
       const emptyResponseContext =
-        await this.emptyResponseSelectionService.createContext(workspaceId);
+        await this.emptyResponseSelectionService.createContext(
+          workspaceId,
+          queryRunner.manager
+        );
 
       // Find all empty responses that don't have v2 coding yet
       // Only target unit responses (status_v1 = CODING_INCOMPLETE)
-      const emptyResponseCandidateQuery = this.responseRepository
+      const emptyResponseCandidateQuery = responseRepository
         .createQueryBuilder('response')
         .leftJoinAndSelect('response.unit', 'unit')
         .leftJoin('unit.booklet', 'booklet')
@@ -856,10 +905,12 @@ export class CodingResultsService {
       const emptyResponses =
         await this.emptyResponseSelectionService.filterEffectivelyEmptyResponses(
           emptyResponseCandidates,
-          emptyResponseContext
+          emptyResponseContext,
+          queryRunner.manager
         );
 
       if (emptyResponses.length === 0) {
+        await queryRunner.commitTransaction();
         return {
           success: true,
           updatedCount: 0,
@@ -871,73 +922,54 @@ export class CodingResultsService {
       const emptyResponseMissing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
         workspaceId,
         null,
-        'mir'
+        'mir',
+        queryRunner.manager
       );
-      const queryRunner = this.responseRepository.manager.connection.createQueryRunner();
-      await queryRunner.connect();
-      await queryRunner.startTransaction('READ COMMITTED');
 
-      try {
-        const batchSize = 500;
-        let totalUpdated = 0;
+      const batchSize = 500;
+      let totalUpdated = 0;
 
-        for (let i = 0; i < emptyResponses.length; i += batchSize) {
-          const batch = emptyResponses.slice(i, i + batchSize);
+      for (let i = 0; i < emptyResponses.length; i += batchSize) {
+        const batch = emptyResponses.slice(i, i + batchSize);
 
-          const updatePromises = batch.map(response => queryRunner.manager.update(
-            ResponseEntity,
-            response.id,
-            {
-              code_v2: emptyResponseMissing.code,
-              score_v2: emptyResponseMissing.score,
-              status_v2: statusStringToNumber('CODING_COMPLETE') // 5
-            }
-          )
-          );
+        const updatePromises = batch.map(response => queryRunner.manager.update(
+          ResponseEntity,
+          response.id,
+          {
+            code_v2: emptyResponseMissing.code,
+            score_v2: emptyResponseMissing.score,
+            status_v2: statusStringToNumber('CODING_COMPLETE') // 5
+          }
+        ));
 
-          await Promise.all(updatePromises);
-          totalUpdated += batch.length;
+        await Promise.all(updatePromises);
+        totalUpdated += batch.length;
 
-          this.logger.log(
-            `Updated batch of ${batch.length} empty responses (${totalUpdated}/${emptyResponses.length})`
-          );
-        }
-
-        await queryRunner.commitTransaction();
-
-        await this.invalidateIncompleteVariablesCache(workspaceId);
-        await this.codingStatisticsService.invalidateCache(workspaceId);
-        await this.codingAnalysisService.invalidateCache(workspaceId);
-
-        this.logger.log(`Successfully applied coding to ${totalUpdated} empty responses`);
-
-        return {
-          success: true,
-          updatedCount: totalUpdated,
-          message: `${totalUpdated} leere Antworten erfolgreich kodiert`
-        };
-      } catch (error) {
-        await queryRunner.rollbackTransaction();
-        this.logger.error(
-          `Error updating empty responses: ${error.message}`,
-          error.stack
+        this.logger.log(
+          `Updated batch of ${batch.length} empty responses (${totalUpdated}/${emptyResponses.length})`
         );
-        throw new Error(
-          `Fehler beim Kodieren der leeren Antworten: ${error.message}`
-        );
-      } finally {
-        await queryRunner.release();
       }
+
+      await queryRunner.commitTransaction();
+
+      this.logger.log(`Successfully applied coding to ${totalUpdated} empty responses`);
+
+      return {
+        success: true,
+        updatedCount: totalUpdated,
+        message: `${totalUpdated} leere Antworten erfolgreich kodiert`
+      };
     } catch (error) {
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
       this.logger.error(
-        `Error applying empty response coding: ${error.message}`,
+        `Error updating empty responses: ${error.message}`,
         error.stack
       );
-      return {
-        success: false,
-        updatedCount: 0,
-        message: `Fehler: ${error.message}`
-      };
+      throw new Error(
+        `Fehler beim Kodieren der leeren Antworten: ${error.message}`
+      );
     }
   }
 }

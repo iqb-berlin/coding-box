@@ -359,7 +359,7 @@ describe('CodingProgressService variable coverage conflicts', () => {
       deriveErrorRemainingResponses: 0
     });
     expect(cacheService.set).toHaveBeenCalledWith(
-      'coding-progress:applied-results-overview:v3:5',
+      'coding-progress:applied-results-overview:v4:5',
       expect.objectContaining({
         cacheVersion: 0,
         data: expect.objectContaining({
@@ -370,7 +370,7 @@ describe('CodingProgressService variable coverage conflicts', () => {
           deriveErrorRawAppliedResponses: 1
         })
       }),
-      0
+      600
     );
   });
 
@@ -459,7 +459,7 @@ describe('CodingProgressService variable coverage conflicts', () => {
       0
     );
     expect(cacheService.get).toHaveBeenCalledWith(
-      'coding-progress:applied-results-overview:v3:5'
+      'coding-progress:applied-results-overview:v4:5'
     );
     expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
     expect(cacheService.set).not.toHaveBeenCalled();
@@ -468,6 +468,9 @@ describe('CodingProgressService variable coverage conflicts', () => {
   it('invalidates cached applied result progress for the workspace', async () => {
     await service.invalidateAppliedResultsOverviewCache(5);
 
+    expect(cacheService.delete).toHaveBeenCalledWith(
+      'coding-progress:applied-results-overview:v4:5'
+    );
     expect(cacheService.delete).toHaveBeenCalledWith(
       'coding-progress:applied-results-overview:v3:5'
     );

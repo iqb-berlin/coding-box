@@ -1833,8 +1833,8 @@ export class WorkspaceTestResultsService {
     };
   }
 
-  async invalidateWorkspaceStatsCache(workspaceId: number): Promise<void> {
-    await Promise.all([
+  async invalidateWorkspaceStatsCache(workspaceId: number): Promise<boolean> {
+    const results = await Promise.all([
       this.cacheService.delete(`${OVERVIEW_STATS_CACHE_PREFIX}${workspaceId}`),
       this.cacheService.deleteByPattern(`${FLAT_FREQUENCIES_CACHE_PREFIX}${workspaceId}-*`),
       this.cacheService.delete(`flat_response_filter_options:version:${workspaceId}`),
@@ -1842,6 +1842,9 @@ export class WorkspaceTestResultsService {
       this.cacheService.incr(getCodingReadinessCacheVersionKey(workspaceId)),
       this.cacheService.deleteByPattern(getCodingReadinessCachePattern(workspaceId))
     ]);
+    return results.every(result => (
+      typeof result === 'number' ? result > 0 : result === true
+    ));
   }
 
   async invalidateCodingStatisticsCache(workspaceId: number): Promise<void> {

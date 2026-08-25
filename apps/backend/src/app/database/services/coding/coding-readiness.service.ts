@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  Brackets, In, Repository, SelectQueryBuilder
+  Brackets, EntityManager, In, Repository, SelectQueryBuilder
 } from 'typeorm';
 import { createHash } from 'crypto';
 import * as cheerio from 'cheerio';
@@ -94,7 +94,7 @@ export class CodingReadinessService {
   private readonly logger = new Logger(CodingReadinessService.name);
   private readonly maxSamplesPerUnit = 8;
   private readonly maxSampleUnits = 10;
-  private readonly scopedCacheTtlSeconds = 600;
+  private readonly cacheTtlSeconds = 600;
   private readonly readinessInFlight = new Map<string, Promise<AutocodingReadinessDto>>();
 
   constructor(
@@ -223,12 +223,14 @@ export class CodingReadinessService {
   async filterResponsesCodeable(
     workspaceId: number,
     responses: ResponseEntity[],
-    units: Unit[]
+    units: Unit[],
+    manager?: EntityManager
   ): Promise<ResponseEntity[]> {
     const variableDiagnostics = await this.filterResponsesValidVariablesWithDiagnostics(
       workspaceId,
       responses,
-      units
+      units,
+      manager
     );
     const unitsWithValidResponses = this.getUnitsWithResponses(
       units,
@@ -236,12 +238,14 @@ export class CodingReadinessService {
     );
     const unitFileDiagnostics = await this.getUnitFileDiagnostics(
       workspaceId,
-      this.uniqueUnitFileIds(unitsWithValidResponses)
+      this.uniqueUnitFileIds(unitsWithValidResponses),
+      manager
     );
     const codingSchemeDiagnostics = await this.getCodingSchemeDiagnostics(
       workspaceId,
       unitsWithValidResponses,
-      unitFileDiagnostics.unitFileMap
+      unitFileDiagnostics.unitFileMap,
+      manager
     );
 
     return variableDiagnostics.validResponses.filter(
@@ -484,7 +488,8 @@ export class CodingReadinessService {
 
   private async getUnitFileDiagnostics(
     workspaceId: number,
-    unitFileIds: string[]
+    unitFileIds: string[],
+    manager?: EntityManager
   ): Promise<UnitFileDiagnostics> {
     if (unitFileIds.length === 0) {
       return {
@@ -494,7 +499,9 @@ export class CodingReadinessService {
       };
     }
 
-    const unitFiles = await this.fileUploadRepository.find({
+    const repository = manager?.getRepository(FileUpload) ||
+      this.fileUploadRepository;
+    const unitFiles = await repository.find({
       where: {
         workspace_id: workspaceId,
         file_id: In(unitFileIds)
@@ -514,7 +521,8 @@ export class CodingReadinessService {
   private async getCodingSchemeDiagnostics(
     workspaceId: number,
     units: Unit[],
-    unitFileMap: Map<string, FileUpload>
+    unitFileMap: Map<string, FileUpload>,
+    manager?: EntityManager
   ): Promise<CodingSchemeDiagnostics> {
     const unitToSchemeRef = new Map<number, string>();
     const schemeRefs = new Set<string>();
@@ -538,7 +546,7 @@ export class CodingReadinessService {
 
     const codingSchemeFiles = schemeRefs.size === 0 ?
       [] :
-      await this.fileUploadRepository.find({
+      await (manager?.getRepository(FileUpload) || this.fileUploadRepository).find({
         where: {
           workspace_id: workspaceId,
           file_id: In(Array.from(schemeRefs))
@@ -652,9 +660,13 @@ export class CodingReadinessService {
   private async filterResponsesValidVariablesWithDiagnostics(
     workspaceId: number,
     responses: ResponseEntity[],
-    units: Unit[]
+    units: Unit[],
+    manager?: EntityManager
   ): Promise<VariableFilterDiagnostics> {
-    const unitVariables = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+    const unitVariables = await this.workspaceFilesService.getUnitVariableMap(
+      workspaceId,
+      manager
+    );
     const validVariableSets = this.buildValidVariableSets(unitVariables);
     const unitIdToNameMap = this.buildUnitIdToNameMap(units);
     const validResponses: ResponseEntity[] = [];
@@ -1027,7 +1039,7 @@ export class CodingReadinessService {
       return false;
     }
 
-    return this.setCachedReadiness(cacheKey, signature, readiness, options);
+    return this.setCachedReadiness(cacheKey, signature, readiness);
   }
 
   private hasSameUnitScope(
@@ -1043,24 +1055,12 @@ export class CodingReadinessService {
   private setCachedReadiness(
     cacheKey: string,
     signature: ReadinessCacheSignature,
-    readiness: AutocodingReadinessDto,
-    options: AutocodingReadinessOptions
+    readiness: AutocodingReadinessDto
   ): Promise<boolean> {
     return this.cacheService.set(cacheKey, {
       signature,
       readiness
-    }, this.getCacheTtlSeconds(options));
-  }
-
-  private getCacheTtlSeconds(options: AutocodingReadinessOptions): number {
-    return this.isScopedReadiness(options) ? this.scopedCacheTtlSeconds : 0;
-  }
-
-  private isScopedReadiness(options: AutocodingReadinessOptions): boolean {
-    return this.uniquePositiveIds(
-      (options.personIds || []).map(id => Number(id))
-    ).length > 0 ||
-      this.uniquePositiveIds(options.unitIds || []).length > 0;
+    }, this.cacheTtlSeconds);
   }
 
   private isSameSignature(

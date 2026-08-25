@@ -108,6 +108,7 @@ export type TcMergeLastState = {
 
 export interface CodingStatistics {
   totalResponses: number;
+  warnings?: string[];
   baseResponseCount?: number;
   derivedResponseCount?: number;
   derivedVariableCount?: number;

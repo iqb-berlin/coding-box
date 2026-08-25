@@ -16,13 +16,16 @@ describe('CodingResultsService', () => {
   let responseRepository: jest.Mocked<Repository<ResponseEntity>>;
   let queryRunner: {
     connect: jest.Mock;
+    query: jest.Mock;
     startTransaction: jest.Mock;
     commitTransaction: jest.Mock;
     rollbackTransaction: jest.Mock;
     release: jest.Mock;
+    isTransactionActive: boolean;
     manager: {
       query: jest.Mock;
       update: jest.Mock;
+      getRepository: jest.Mock;
     };
   };
   let codingJobService: jest.Mocked<CodingJobService>;
@@ -58,13 +61,16 @@ describe('CodingResultsService', () => {
   beforeEach(() => {
     queryRunner = {
       connect: jest.fn().mockResolvedValue(undefined),
+      query: jest.fn().mockResolvedValue([]),
       startTransaction: jest.fn().mockResolvedValue(undefined),
       commitTransaction: jest.fn().mockResolvedValue(undefined),
       rollbackTransaction: jest.fn().mockResolvedValue(undefined),
       release: jest.fn().mockResolvedValue(undefined),
+      isTransactionActive: true,
       manager: {
         query: jest.fn().mockResolvedValue([]),
-        update: jest.fn().mockResolvedValue({ affected: 1 })
+        update: jest.fn().mockResolvedValue({ affected: 1 }),
+        getRepository: jest.fn(() => responseRepository)
       }
     };
 
@@ -1326,7 +1332,8 @@ describe('CodingResultsService', () => {
     expect(missingsProfilesService.getMissingByIdForProfileOrDefault).toHaveBeenCalledWith(
       17,
       null,
-      'mir'
+      'mir',
+      queryRunner.manager
     );
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       'response.status_v1 IN (:...statuses)',
@@ -1347,6 +1354,26 @@ describe('CodingResultsService', () => {
     expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(17);
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
     expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(17);
+    expect(emptyResponseSelectionService.createContext).toHaveBeenCalledWith(
+      17,
+      queryRunner.manager
+    );
+    expect(emptyResponseSelectionService.filterEffectivelyEmptyResponses)
+      .toHaveBeenCalledWith(rows, expect.any(Object), queryRunner.manager);
+    expect(queryRunner.query).toHaveBeenNthCalledWith(
+      1,
+      'SELECT pg_advisory_lock($1::int, $2::int)',
+      expect.any(Array)
+    );
+    expect(queryRunner.query).toHaveBeenNthCalledWith(
+      2,
+      'SELECT pg_advisory_unlock($1::int, $2::int)',
+      expect.any(Array)
+    );
+    expect(queryRunner.query.mock.invocationCallOrder[1]).toBeLessThan(
+      codingValidationService.invalidateIncompleteVariablesCache
+        .mock.invocationCallOrder[0]
+    );
   });
 
   it('does not code target-empty derived responses with non-empty sources', async () => {

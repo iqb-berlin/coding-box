@@ -23,6 +23,10 @@ type AutocoderCleanup = {
   expectedSourceRevision?: number;
 };
 
+type ResponseUpdateTransactionOptions = {
+  managedExternally?: boolean;
+};
+
 @Injectable()
 export class ResponseManagementService {
   private readonly logger = new Logger(ResponseManagementService.name);
@@ -44,18 +48,38 @@ export class ResponseManagementService {
     isJobCancelled?: (jobId: string) => Promise<boolean>,
     progressCallback?: (progress: number) => void,
     metrics?: { [key: string]: number },
-    autocoderCleanup?: AutocoderCleanup
+    autocoderCleanup?: AutocoderCleanup,
+    transactionOptions: ResponseUpdateTransactionOptions = {}
   ): Promise<boolean> {
     const updateStart = Date.now();
     const updatedAutocoderGeneratedResponseIds = new Set<number>();
+    const managedExternally = transactionOptions.managedExternally === true;
+
+    const commitAndRelease = async (): Promise<void> => {
+      if (managedExternally) return;
+      await queryRunner.commitTransaction();
+      await queryRunner.release();
+      if (workspaceId) {
+        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+      }
+    };
+
+    const rollbackAndRelease = async (): Promise<void> => {
+      if (managedExternally) return;
+      try {
+        await queryRunner.rollbackTransaction();
+      } catch (rollbackError) {
+        this.logger.error(
+          'Fehler beim Rollback der Transaktion:',
+          rollbackError.message
+        );
+      }
+      await queryRunner.release();
+    };
+
     try {
       if (allCodedResponses.length === 0 && !autocoderCleanup) {
-        await queryRunner.release();
-
-        if (workspaceId) {
-          await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
-        }
-
+        await commitAndRelease();
         return true;
       }
 
@@ -97,11 +121,7 @@ export class ResponseManagementService {
           autocoderCleanup,
           queryRunner
         );
-        await queryRunner.commitTransaction();
-        await queryRunner.release();
-        if (workspaceId) {
-          await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
-        }
+        await commitAndRelease();
         return true;
       }
 
@@ -127,8 +147,7 @@ export class ResponseManagementService {
             `Job ${jobId} was cancelled or paused before updating batch #${index + 1
             }`
           );
-          await queryRunner.rollbackTransaction();
-          await queryRunner.release();
+          await rollbackAndRelease();
           return false;
         }
 
@@ -263,7 +282,7 @@ export class ResponseManagementService {
         autocoderCleanup,
         queryRunner
       );
-      await queryRunner.commitTransaction();
+      await commitAndRelease();
       this.logger.log(
         `${allCodedResponses.length} Responses wurden erfolgreich aktualisiert.`
       );
@@ -272,25 +291,11 @@ export class ResponseManagementService {
         metrics.update = Date.now() - updateStart;
       }
 
-      await queryRunner.release();
-
-      if (workspaceId) {
-        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
-      }
-
       return true;
     } catch (error) {
       if (error instanceof AutocoderSourceRevisionStaleError) {
         this.logger.warn(error.message);
-        try {
-          await queryRunner.rollbackTransaction();
-        } catch (rollbackError) {
-          this.logger.error(
-            'Fehler beim Rollback der Transaktion:',
-            rollbackError.message
-          );
-        }
-        await queryRunner.release();
+        await rollbackAndRelease();
         throw error;
       }
 
@@ -298,15 +303,7 @@ export class ResponseManagementService {
         'Fehler beim Aktualisieren der Responses:',
         error.message
       );
-      try {
-        await queryRunner.rollbackTransaction();
-      } catch (rollbackError) {
-        this.logger.error(
-          'Fehler beim Rollback der Transaktion:',
-          rollbackError.message
-        );
-      }
-      await queryRunner.release();
+      await rollbackAndRelease();
       throw error;
     }
   }
