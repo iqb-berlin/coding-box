@@ -3748,7 +3748,8 @@ ${bookletRefs}
   }
 
   async getDerivedVariableMetadata(
-    workspaceId: number
+    workspaceId: number,
+    manager?: EntityManager
   ): Promise<DerivedVariableMetadataSnapshot> {
     const metadataCompleteKey = this.getCacheKey(
       workspaceId,
@@ -3784,7 +3785,11 @@ ${bookletRefs}
         (!derivedVariableData || !derivedVariablesBySourceData)
       )
     ) {
-      await this.refreshUnitVariableCache(workspaceId);
+      if (manager) {
+        await this.refreshUnitVariableCacheInternal(workspaceId, manager);
+      } else {
+        await this.refreshUnitVariableCache(workspaceId);
+      }
       [
         metadataComplete,
         derivedVariableData,
