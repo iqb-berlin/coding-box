@@ -1830,6 +1830,14 @@ export class CodingProcessService {
     }
 
     const namespace = this.createAutocoderNamespace(variableCodings);
+    // A generated derived target in this validated shadow uses the same ID as
+    // the structural variable's public alias by design. The generic alias-chain
+    // proof cannot contain an alias-only ID for this two-node namespace.
+    const baseNoValueShadowDerivedIds = new Set(
+      namespace.outputShadows
+        .filter(shadow => shadow.kind === 'BASE_NO_VALUE_DERIVED')
+        .map(shadow => this.normalizeVariableId(shadow.derivedTechnicalId))
+    );
     const generatedInputIdsBySubform = new Map<string, Set<string>>();
     responses.forEach((response, index) => {
       if (inputOrigins?.[index]?.isAutocoderGenerated !== true) {
@@ -1866,7 +1874,10 @@ export class CodingProcessService {
         this.normalizeVariableId(mappedTechnicalId) !== normalizedInputId &&
         namespace.outputAliasByTechnicalId.has(normalizedInputId);
 
-      if (isAmbiguousGeneratedInput) {
+      if (
+        isAmbiguousGeneratedInput &&
+        !baseNoValueShadowDerivedIds.has(normalizedInputId)
+      ) {
         const subform = String(response.subform || '');
         const component = namespace.componentById.get(normalizedInputId);
         // Only rows previously produced by the Autocoder can prove how an
