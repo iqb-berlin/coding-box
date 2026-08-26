@@ -11,7 +11,8 @@ import { generateReplayUrlFromRequest } from '../../../utils/replay-url.util';
 import {
   calculateModalValue,
   formatModalCandidates,
-  getLatestCode,
+  getCurrentCoding,
+  getCurrentManualCoding,
   getModalTieLabel,
   buildCoderMapping,
   buildCoderNameMapping,
@@ -42,6 +43,29 @@ import {
   applyNonCodingIssueReviewJobFilter,
   CODING_JOB_TYPE_CODING_ISSUE_REVIEW
 } from './coding-job-type.util';
+
+const getCurrentCodingTuplePresenceCondition = (
+  responseAlias: string
+): string => `(
+  ${responseAlias}.autocoder_invalidated_version IS NOT NULL OR
+  ${responseAlias}.code_v3 IS NOT NULL OR
+  ${responseAlias}.score_v3 IS NOT NULL OR
+  ${responseAlias}.code_v2 IS NOT NULL OR
+  ${responseAlias}.score_v2 IS NOT NULL OR
+  ${responseAlias}.code_v1 IS NOT NULL OR
+  ${responseAlias}.score_v1 IS NOT NULL
+)`;
+
+const getCurrentAutocodingCandidateCondition = (
+  responseAlias: string
+): string => `(
+  ${responseAlias}.autocoder_invalidated_version IS NOT NULL OR
+  NOT EXISTS (
+    SELECT 1
+    FROM coding_job_unit current_autocoding_cju
+    WHERE current_autocoding_cju.response_id = ${responseAlias}.id
+  )
+)`;
 
 @Injectable()
 export class CodingResultsExportService {
@@ -514,7 +538,9 @@ export class CodingResultsExportService {
 
         const compositeVariableKey = `${unitName}_${variableId}`;
 
-        const rawCode = unit.code ?? unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null;
+        const rawCode = unit.response ?
+          getCurrentManualCoding(unit.response, { code: unit.code }).code :
+          unit.code ?? null;
         const mapped = await this.mapCodeAndScoreForExport(
           workspaceId,
           rawCode,
@@ -565,10 +591,9 @@ export class CodingResultsExportService {
           .innerJoinAndSelect('unit.booklet', 'booklet')
           .innerJoinAndSelect('booklet.person', 'person')
           .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-          .leftJoin('coding_job_unit', 'cju', 'cju.response_id = response.id')
           .where('person.workspace_id = :workspaceId', { workspaceId })
-          .andWhere('cju.id IS NULL')
-          .andWhere('response.code_v1 IS NOT NULL')
+          .andWhere(getCurrentAutocodingCandidateCondition('response'))
+          .andWhere(getCurrentCodingTuplePresenceCondition('response'))
           .andWhere('response.status_v1 NOT IN (:...excludedStatuses)', { excludedStatuses: EXCLUDED_STATUSES })
           .getMany();
 
@@ -594,7 +619,7 @@ export class CodingResultsExportService {
             testPersonVariableComments.get(testPersonKey)!.set(compositeVariableKey, []);
           }
 
-          const code = mapCodeForExport(resp.code_v1);
+          const code = mapCodeForExport(getCurrentCoding(resp).code);
           if (code !== null) {
             testPersonVariableCodes.get(testPersonKey)!.get(compositeVariableKey)!.push(code);
           }
@@ -858,8 +883,14 @@ export class CodingResultsExportService {
           dataMap.set(rowKey, new Map());
         }
 
-        const rawCode = unit.code ?? unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null;
-        const rawScore = unit.score ?? unit.response?.score_v3 ?? unit.response?.score_v2 ?? unit.response?.score_v1 ?? null;
+        const currentCoding = unit.response ?
+          getCurrentManualCoding(unit.response, {
+            code: unit.code,
+            score: unit.score
+          }) :
+          { code: unit.code ?? null, score: unit.score ?? null };
+        const rawCode = currentCoding.code;
+        const rawScore = currentCoding.score;
         const mapped = await this.mapCodeAndScoreForExport(
           workspaceId,
           rawCode,
@@ -883,10 +914,9 @@ export class CodingResultsExportService {
           .innerJoinAndSelect('unit.booklet', 'booklet')
           .innerJoinAndSelect('booklet.person', 'person')
           .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-          .leftJoin('coding_job_unit', 'cju', 'cju.response_id = response.id')
           .where('person.workspace_id = :workspaceId', { workspaceId })
-          .andWhere('cju.id IS NULL')
-          .andWhere('response.code_v1 IS NOT NULL')
+          .andWhere(getCurrentAutocodingCandidateCondition('response'))
+          .andWhere(getCurrentCodingTuplePresenceCondition('response'))
           .andWhere('response.status_v1 NOT IN (:...excludedStatuses)', { excludedStatuses: EXCLUDED_STATUSES })
           .getMany();
 
@@ -923,9 +953,10 @@ export class CodingResultsExportService {
             dataMap.set(rowKey, new Map());
           }
 
+          const currentCoding = getCurrentCoding(resp);
           dataMap.get(rowKey)!.set(autoCoderName, {
-            code: mapCodeForExport(resp.code_v1),
-            score: resp.score_v1,
+            code: mapCodeForExport(currentCoding.code),
+            score: currentCoding.score,
             comment: null,
             codingIssueOption: null
           });
@@ -1182,8 +1213,14 @@ export class CodingResultsExportService {
           dataMap.set(testPersonKey, new Map());
         }
 
-        const rawCode = unit.code ?? unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null;
-        const rawScore = unit.score ?? unit.response?.score_v3 ?? unit.response?.score_v2 ?? unit.response?.score_v1 ?? null;
+        const currentCoding = unit.response ?
+          getCurrentManualCoding(unit.response, {
+            code: unit.code,
+            score: unit.score
+          }) :
+          { code: unit.code ?? null, score: unit.score ?? null };
+        const rawCode = currentCoding.code;
+        const rawScore = currentCoding.score;
         const mapped = await this.mapCodeAndScoreForExport(
           workspaceId,
           rawCode,
@@ -1207,10 +1244,9 @@ export class CodingResultsExportService {
           .innerJoinAndSelect('unit.booklet', 'booklet')
           .innerJoinAndSelect('booklet.person', 'person')
           .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-          .leftJoin('coding_job_unit', 'cju', 'cju.response_id = response.id')
           .where('person.workspace_id = :workspaceId', { workspaceId })
-          .andWhere('cju.id IS NULL')
-          .andWhere('response.code_v1 IS NOT NULL')
+          .andWhere(getCurrentAutocodingCandidateCondition('response'))
+          .andWhere(getCurrentCodingTuplePresenceCondition('response'))
           .andWhere('response.status_v1 NOT IN (:...excludedStatuses)', { excludedStatuses: EXCLUDED_STATUSES })
           .getMany();
 
@@ -1249,9 +1285,10 @@ export class CodingResultsExportService {
             dataMap.set(testPersonKey, new Map());
           }
 
+          const currentCoding = getCurrentCoding(resp);
           dataMap.get(testPersonKey)!.set(columnKey, {
-            code: mapCodeForExport(resp.code_v1),
-            score: resp.score_v1,
+            code: mapCodeForExport(currentCoding.code),
+            score: currentCoding.score,
             comment: null,
             codingIssueOption: null
           });
@@ -1496,17 +1533,15 @@ export class CodingResultsExportService {
               testPersonList.push(testPersonKey);
             }
 
-            let latestScore: number | null = null;
-            let latestCode: number | null = null;
-            if (unit.response) {
-              const latestCoding = getLatestCode(unit.response);
-              latestCode = latestCoding.code;
-              latestScore = latestCoding.score;
-            }
+            const currentCoding = unit.response ?
+              getCurrentManualCoding(unit.response, {
+                code: unit.code
+              }) :
+              { code: unit.code ?? null, score: null };
 
             testPersonMap.get(testPersonKey)!.set(compositeKey, {
-              code: unit.code ?? latestCode,
-              score: latestScore,
+              code: currentCoding.code,
+              score: currentCoding.score,
               codingIssueOption: unit.coding_issue_option ?? null
             });
 

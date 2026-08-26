@@ -123,7 +123,7 @@ describe('TestPersonCodingService', () => {
       };
 
       service
-        .codeTestPersons(mockWorkspaceId, mockTestPersonIds)
+        .codeTestPersons(mockWorkspaceId, mockTestPersonIds, 1)
         .subscribe(response => {
           expect(response).toEqual(mockResponse);
         });
@@ -143,7 +143,7 @@ describe('TestPersonCodingService', () => {
       const mockTestPersonIds = '1,2,3';
 
       service
-        .codeTestPersons(mockWorkspaceId, mockTestPersonIds)
+        .codeTestPersons(mockWorkspaceId, mockTestPersonIds, 1)
         .subscribe(response => {
           expect(response.totalResponses).toBe(0);
           expect(response.statusCounts).toEqual({});

@@ -1,12 +1,119 @@
 import {
   calculateModalValue,
   formatModalCandidates,
+  getCurrentCoding,
+  getCurrentManualCoding,
+  getLatestCode,
   getModalTieLabel,
   isReservedTechnicalCodingCode,
   mapCodeForExport
 } from './coding-utils';
 
 describe('coding utils', () => {
+  it('keeps the existing manual and version fallback order without invalidation', () => {
+    const response = {
+      code_v1: 1,
+      score_v1: 10,
+      code_v2: 2,
+      score_v2: 20,
+      code_v3: null,
+      score_v3: null,
+      autocoder_invalidated_version: null
+    };
+
+    expect(getLatestCode(response)).toEqual({
+      code: 2,
+      score: 20,
+      version: 'v2'
+    });
+    expect(getCurrentCoding(response, { code: 0, score: 0 })).toEqual({
+      code: 0,
+      score: 0,
+      version: 'manual'
+    });
+  });
+
+  it('prefers a score-only v2 tuple to a complete v1 tuple', () => {
+    const response = {
+      code_v1: 1,
+      score_v1: 10,
+      code_v2: null,
+      score_v2: 20,
+      code_v3: null,
+      score_v3: null,
+      autocoder_invalidated_version: null
+    };
+
+    expect(getLatestCode(response)).toEqual({
+      code: null,
+      score: 20,
+      version: 'v2'
+    });
+  });
+
+  it('prefers a score-only v3 tuple to older complete tuples', () => {
+    const response = {
+      code_v1: 1,
+      score_v1: 10,
+      code_v2: 2,
+      score_v2: 20,
+      code_v3: null,
+      score_v3: 30,
+      autocoder_invalidated_version: null
+    };
+
+    expect(getLatestCode(response)).toEqual({
+      code: null,
+      score: 30,
+      version: 'v3'
+    });
+  });
+
+  it('does not fall back to stale manual, v2, or v1 values after invalidation', () => {
+    const response = {
+      code_v1: 1,
+      score_v1: 10,
+      code_v2: 2,
+      score_v2: 20,
+      code_v3: null,
+      score_v3: null,
+      autocoder_invalidated_version: 'v2'
+    };
+
+    expect(getLatestCode(response)).toEqual({
+      code: null,
+      score: null,
+      version: 'v3'
+    });
+    expect(getCurrentCoding(response, { code: 4, score: 40 })).toEqual({
+      code: null,
+      score: null,
+      version: 'v3'
+    });
+  });
+
+  it('uses a new v3 tuple after invalidation', () => {
+    const response = {
+      code_v1: 1,
+      score_v1: 10,
+      code_v2: 2,
+      score_v2: 20,
+      code_v3: 3,
+      score_v3: 30,
+      autocoder_invalidated_version: 'v2'
+    };
+
+    expect(getCurrentCoding(response, { code: 4, score: 40 })).toEqual({
+      code: 3,
+      score: 30,
+      version: 'v3'
+    });
+    expect(getCurrentManualCoding(response, { code: 4, score: 40 })).toEqual({
+      code: null,
+      score: null
+    });
+  });
+
   it('does not export the legacy duplicate aggregation marker as a code', () => {
     expect(mapCodeForExport(-111)).toBeNull();
   });

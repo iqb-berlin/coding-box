@@ -24,6 +24,7 @@ import {
   EXCLUDED_STATUSES,
   statusNumberToString
 } from '../../utils/response-status-converter';
+import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
 interface UnitVariableDefinitions {
   aliases: Set<string>;
@@ -1420,6 +1421,21 @@ export class WorkspaceResponseValidationService {
     workspaceId: number,
     responseIds: number[]
   ): Promise<number> {
+    if (!workspaceId || !responseIds || responseIds.length === 0) {
+      return this.deleteInvalidResponsesUnlocked(workspaceId, responseIds);
+    }
+
+    return withWorkspaceTestResultsMutationLock(
+      this.responseRepository.manager.connection,
+      workspaceId,
+      () => this.deleteInvalidResponsesUnlocked(workspaceId, responseIds)
+    );
+  }
+
+  private async deleteInvalidResponsesUnlocked(
+    workspaceId: number,
+    responseIds: number[]
+  ): Promise<number> {
     try {
       if (!workspaceId) {
         this.logger.error('Workspace ID is required');
@@ -1523,6 +1539,28 @@ export class WorkspaceResponseValidationService {
     | 'responseStatus'
     | 'duplicateResponses'
   ): Promise<number> {
+    if (!workspaceId) {
+      return this.deleteAllInvalidResponsesUnlocked(
+        workspaceId,
+        validationType
+      );
+    }
+
+    return withWorkspaceTestResultsMutationLock(
+      this.responseRepository.manager.connection,
+      workspaceId,
+      () => this.deleteAllInvalidResponsesUnlocked(workspaceId, validationType)
+    );
+  }
+
+  private async deleteAllInvalidResponsesUnlocked(
+    workspaceId: number,
+    validationType:
+    | 'variables'
+    | 'variableTypes'
+    | 'responseStatus'
+    | 'duplicateResponses'
+  ): Promise<number> {
     try {
       if (!workspaceId) {
         this.logger.error('Workspace ID is required');
@@ -1570,7 +1608,7 @@ export class WorkspaceResponseValidationService {
           return 0;
         }
 
-        return await this.deleteInvalidResponses(workspaceId, responseIds);
+        return await this.deleteInvalidResponsesUnlocked(workspaceId, responseIds);
       }
 
       let invalidResponses: InvalidVariableDto[] = [];
@@ -1616,7 +1654,7 @@ export class WorkspaceResponseValidationService {
         return 0;
       }
 
-      return await this.deleteInvalidResponses(workspaceId, responseIds);
+      return await this.deleteInvalidResponsesUnlocked(workspaceId, responseIds);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(

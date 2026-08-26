@@ -159,4 +159,57 @@ describe('TestPersonCodingComponent', () => {
       jest.useRealTimers();
     }
   });
+
+  it('should surface warnings when a completed job needs follow-up', () => {
+    jest.useFakeTimers();
+    try {
+      const warning = 'Cache finalization remained incomplete';
+      const completedStatus: JobStatus = {
+        status: 'completed',
+        progress: 100,
+        result: {
+          totalResponses: 1,
+          statusCounts: { CODED: 1 },
+          warnings: [warning]
+        }
+      };
+      const snackBar = TestBed.inject(MatSnackBar);
+      (mockTestPersonCodingService.getJobStatus as jest.Mock)
+        .mockReturnValueOnce(of(completedStatus));
+
+      component.startJobStatusPolling('warning-job');
+
+      expect(snackBar.open).toHaveBeenCalledWith(
+        'test-person-coding.job-completed-with-warnings',
+        'close',
+        { duration: 8000 }
+      );
+      expect(component.getLastObservedJobStatus('warning-job'))
+        .toBe('completed');
+    } finally {
+      component.stopJobStatusPolling();
+      jest.useRealTimers();
+    }
+  });
+
+  it('should not present a missing auto-coding run as run 1', () => {
+    const dialog = (component as unknown as { dialog: MatDialog }).dialog;
+    const openDialog = jest
+      .spyOn(dialog, 'open')
+      .mockReturnValue({} as never);
+
+    component.showJobResult({
+      jobId: 'legacy-job',
+      status: 'completed',
+      progress: 100,
+      result: { totalResponses: 1, statusCounts: { CODED: 1 } }
+    });
+
+    expect(openDialog).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({
+        data: expect.objectContaining({ autoCoderRun: undefined })
+      })
+    );
+  });
 });

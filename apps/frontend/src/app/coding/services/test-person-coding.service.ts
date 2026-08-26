@@ -61,6 +61,7 @@ interface ExternalCodingImportWithPreviewDto {
 
 export interface CodingStatistics {
   totalResponses: number;
+  warnings?: string[];
   statusCounts: {
     [key: string]: number;
   };
@@ -535,7 +536,7 @@ export class TestPersonCodingService {
   codeTestPersons(
     workspaceId: number,
     testPersonIds: string,
-    autoCoderRun: number = 1
+    autoCoderRun: 1 | 2
   ): Observable<CodingStatisticsWithJob> {
     const params = new HttpParams()
       .set('testPersons', testPersonIds)

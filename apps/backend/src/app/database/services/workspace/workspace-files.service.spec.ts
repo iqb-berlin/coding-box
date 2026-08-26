@@ -233,7 +233,19 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     createQueryBuilder: jest.fn(),
     find: jest.fn(),
     findOne: jest.fn(),
-    upsert: jest.fn().mockResolvedValue(undefined)
+    upsert: jest.fn().mockResolvedValue(undefined),
+    manager: {
+      connection: {
+        createQueryRunner: jest.fn(() => ({
+          connect: jest.fn().mockResolvedValue(undefined),
+          query: jest.fn().mockResolvedValue([{ locked: true }]),
+          manager: {
+            getRepository: jest.fn(() => mockFileUploadRepository)
+          },
+          release: jest.fn().mockResolvedValue(undefined)
+        }))
+      }
+    }
   };
   const mockCodingStatisticsService = {
     invalidateCache: jest.fn().mockResolvedValue(undefined),
@@ -288,6 +300,34 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('loads only the matching Unit file for coding-scheme validation', async () => {
+    const service = makeService();
+    mockFileUploadRepository.find.mockResolvedValueOnce([{
+      file_id: 'UNIT_A.XML',
+      data: Buffer.from(
+        '<Unit><BaseVariables><Variable id="v1" alias="v1" type="string"/></BaseVariables></Unit>'
+      )
+    }]);
+
+    const result = await service.getVariableInfoForScheme(
+      7,
+      'unit_a.vocs.xml'
+    );
+
+    const findOptions = mockFileUploadRepository.find.mock.calls[0][0];
+    expect(findOptions.where).toEqual(expect.objectContaining({
+      workspace_id: 7,
+      file_type: 'Unit',
+      file_id_normalized: 'UNIT_A'
+    }));
+    expect(findOptions.select).toEqual(['file_id', 'data']);
+    expect(result).toEqual([expect.objectContaining({
+      id: 'v1',
+      alias: 'v1',
+      type: 'string'
+    })]);
   });
 
   it('marks auto-coding and manual coding stale after coding scheme rule changes', async () => {
@@ -732,7 +772,19 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
   };
 
   const mockFileUploadRepository = {
-    createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder)
+    createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+    manager: {
+      connection: {
+        createQueryRunner: jest.fn(() => ({
+          connect: jest.fn().mockResolvedValue(undefined),
+          query: jest.fn().mockResolvedValue([{ locked: true }]),
+          manager: {
+            getRepository: jest.fn(() => mockFileUploadRepository)
+          },
+          release: jest.fn().mockResolvedValue(undefined)
+        }))
+      }
+    }
   };
 
   const mockCodingStatisticsService = {
@@ -780,6 +832,9 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
       'id IN (:...ids)',
       { ids: [1, 2, 3] }
     );
+    const queryRunner = mockFileUploadRepository.manager.connection
+      .createQueryRunner.mock.results[0].value;
+    expect(queryRunner.manager.getRepository).toHaveBeenCalledTimes(1);
     expect(mockQueryBuilder.execute).toHaveBeenCalled();
     expect(result).toBe(true);
   });

@@ -12,7 +12,8 @@ import { generateReplayUrl, generateReplayUrlFromRequest } from '../../../utils/
 import {
   calculateModalValue,
   formatModalCandidates,
-  getLatestCode,
+  getCurrentCoding,
+  getCurrentManualCoding,
   getModalTieLabel,
   buildCoderNameMapping,
   mapCodeForExport,
@@ -42,6 +43,29 @@ import {
 } from '../../utils/manual-coding-candidate.util';
 import { applyNonCodingIssueReviewJobFilter } from './coding-job-type.util';
 
+const getCurrentCodingTuplePresenceCondition = (
+  responseAlias: string
+): string => `(
+  ${responseAlias}.autocoder_invalidated_version IS NOT NULL OR
+  ${responseAlias}.code_v3 IS NOT NULL OR
+  ${responseAlias}.score_v3 IS NOT NULL OR
+  ${responseAlias}.code_v2 IS NOT NULL OR
+  ${responseAlias}.score_v2 IS NOT NULL OR
+  ${responseAlias}.code_v1 IS NOT NULL OR
+  ${responseAlias}.score_v1 IS NOT NULL
+)`;
+
+const getCurrentAutocodingCandidateCondition = (
+  responseAlias: string
+): string => `(
+  ${responseAlias}.autocoder_invalidated_version IS NOT NULL OR
+  NOT EXISTS (
+    SELECT 1
+    FROM coding_job_unit current_autocoding_cju
+    WHERE current_autocoding_cju.response_id = ${responseAlias}.id
+  )
+)`;
+
 interface ByVariableCombination {
   unitName: string;
   variableId: string;
@@ -69,6 +93,7 @@ interface CompactByVariableRawRow {
   code_v1: string | number | null;
   code_v2: string | number | null;
   code_v3: string | number | null;
+  autocoder_invalidated_version: string | null;
   status_v1: string | number | null;
   username: string | null;
   notes: string | null;
@@ -1088,7 +1113,7 @@ export class CodingExportService {
         .addSelect('response.variableid', 'variableId')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
-        .andWhere('response.code_v1 IS NOT NULL');
+        .andWhere(getCurrentCodingTuplePresenceCondition('response'));
       applyResolvedExclusionsToQuery(autoVariables, exclusions);
       const autoVariableRows = await autoVariables
         .groupBy('unit.name')
@@ -1200,6 +1225,7 @@ export class CodingExportService {
         .addSelect('cju.code', 'cju_code')
         .addSelect('cju.coding_issue_option', 'coding_issue_option')
         .addSelect('resp.code_v3', 'code_v3')
+        .addSelect('resp.autocoder_invalidated_version', 'autocoder_invalidated_version')
         .addSelect('resp.code_v2', 'code_v2')
         .addSelect('resp.code_v1', 'code_v1')
         .addSelect('cju.notes', 'notes')
@@ -1260,6 +1286,7 @@ export class CodingExportService {
             score_v1: null,
             score_v2: null,
             score_v3: null,
+            autocoder_invalidated_version: null,
             notes: discussionResult.notes
           });
         }
@@ -1271,14 +1298,19 @@ export class CodingExportService {
         .innerJoin('resp.unit', 'unit')
         .innerJoin('unit.booklet', 'booklet')
         .innerJoin('booklet.person', 'person')
-        .leftJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
         .select('person.id', 'personId')
         .addSelect('unit.name', 'unitName')
         .addSelect('resp.variableid', 'variableId')
+        .addSelect('resp.code_v3', 'code_v3')
+        .addSelect('resp.score_v3', 'score_v3')
+        .addSelect('resp.autocoder_invalidated_version', 'autocoder_invalidated_version')
+        .addSelect('resp.code_v2', 'code_v2')
+        .addSelect('resp.score_v2', 'score_v2')
         .addSelect('resp.code_v1', 'code_v1')
+        .addSelect('resp.score_v1', 'score_v1')
         .where('person.id IN (:...ids)', { ids: batchPersonIds })
-        .andWhere('cju.id IS NULL')
-        .andWhere('resp.code_v1 IS NOT NULL')
+        .andWhere(getCurrentAutocodingCandidateCondition('resp'))
+        .andWhere(getCurrentCodingTuplePresenceCondition('resp'))
         .getRawMany();
 
       // Group data by person and variable
@@ -1291,7 +1323,9 @@ export class CodingExportService {
         const varData = personData.get(pid)!;
         if (!varData.has(compositeKey)) varData.set(compositeKey, { codings: [], comments: [] });
         const d = varData.get(compositeKey)!;
-        const rawCode = row.cju_code ?? row.code_v3 ?? row.code_v2 ?? row.code_v1;
+        const rawCode = getCurrentManualCoding(row, {
+          code: row.cju_code
+        }).code;
         const mapped = await this.mapCodeAndScoreForExport(
           workspaceId,
           rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null,
@@ -1320,7 +1354,8 @@ export class CodingExportService {
         const varData = personData.get(pid)!;
         if (!varData.has(compositeKey)) varData.set(compositeKey, { codings: [], comments: [] });
         const d = varData.get(compositeKey)!;
-        const code = mapCodeForExport(row.code_v1 !== null && row.code_v1 !== undefined ? parseInt(row.code_v1, 10) : null);
+        const rawCode = getCurrentCoding(row).code;
+        const code = mapCodeForExport(this.toIntegerOrNull(rawCode));
         if (code !== null) {
           d.codings.push({ code, codingIssueOption: null });
         }
@@ -1517,7 +1552,7 @@ export class CodingExportService {
         .addSelect('response.variableid', 'variableId')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
-        .andWhere('response.code_v1 IS NOT NULL');
+        .andWhere(getCurrentCodingTuplePresenceCondition('response'));
       applyResolvedExclusionsToQuery(autoVariables, exclusions);
       const autoVariableRows = await autoVariables
         .groupBy('unit.name')
@@ -1652,6 +1687,7 @@ export class CodingExportService {
         .addSelect('cju.coding_issue_option', 'coding_issue_option')
         .addSelect('cju.score', 'cju_score')
         .addSelect('resp.code_v3', 'code_v3')
+        .addSelect('resp.autocoder_invalidated_version', 'autocoder_invalidated_version')
         .addSelect('resp.score_v3', 'score_v3')
         .addSelect('resp.code_v2', 'code_v2')
         .addSelect('resp.score_v2', 'score_v2')
@@ -1706,6 +1742,7 @@ export class CodingExportService {
             score_v1: null,
             score_v2: null,
             score_v3: null,
+            autocoder_invalidated_version: null,
             notes: discussionResult.notes
           });
         }
@@ -1717,16 +1754,20 @@ export class CodingExportService {
         .innerJoin('resp.unit', 'unit')
         .innerJoin('unit.booklet', 'booklet')
         .innerJoin('booklet.person', 'person')
-        .leftJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
         .select('person.id', 'personId')
         .addSelect('unit.name', 'unitName')
         .addSelect('resp.variableid', 'variableId')
         .addSelect(includeResponseValues ? 'resp.value' : "''", 'responseValue')
+        .addSelect('resp.code_v3', 'code_v3')
+        .addSelect('resp.score_v3', 'score_v3')
+        .addSelect('resp.autocoder_invalidated_version', 'autocoder_invalidated_version')
+        .addSelect('resp.code_v2', 'code_v2')
+        .addSelect('resp.score_v2', 'score_v2')
         .addSelect('resp.code_v1', 'code_v1')
         .addSelect('resp.score_v1', 'score_v1')
         .where('person.id IN (:...ids)', { ids: batchPersonIds })
-        .andWhere('cju.id IS NULL')
-        .andWhere('resp.code_v1 IS NOT NULL')
+        .andWhere(getCurrentAutocodingCandidateCondition('resp'))
+        .andWhere(getCurrentCodingTuplePresenceCondition('resp'))
         .getRawMany();
 
       // Group data by person and variable
@@ -1754,8 +1795,12 @@ export class CodingExportService {
         if (!varMap.has(compositeKey)) varMap.set(compositeKey, new Map());
         const coderMap = varMap.get(compositeKey)!;
 
-        const rawCode = row.cju_code ?? row.code_v3 ?? row.code_v2 ?? row.code_v1;
-        const rawScore = row.cju_score ?? row.score_v3 ?? row.score_v2 ?? row.score_v1;
+        const currentCoding = getCurrentManualCoding(row, {
+          code: row.cju_code,
+          score: row.cju_score
+        });
+        const rawCode = currentCoding.code;
+        const rawScore = currentCoding.score;
         const mapped = await this.mapCodeAndScoreForExport(
           workspaceId,
           rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null,
@@ -1787,9 +1832,12 @@ export class CodingExportService {
         const varMap = personData.get(pid)!;
         if (!varMap.has(compositeKey)) varMap.set(compositeKey, new Map());
         const coderMap = varMap.get(compositeKey)!;
+        const currentCoding = getCurrentCoding(row);
+        const rawCode = currentCoding.code;
+        const rawScore = currentCoding.score;
         coderMap.set(coderName, {
-          code: mapCodeForExport(row.code_v1 !== null && row.code_v1 !== undefined ? parseInt(row.code_v1, 10) : null),
-          score: row.score_v1 !== null && row.score_v1 !== undefined ? parseInt(row.score_v1, 10) : null,
+          code: mapCodeForExport(this.toIntegerOrNull(rawCode)),
+          score: this.toIntegerOrNull(rawScore),
           comment: null,
           codingIssueOption: null
         });
@@ -2031,7 +2079,7 @@ export class CodingExportService {
         .addSelect('response.variableid', 'variableId')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
-        .andWhere('response.code_v1 IS NOT NULL');
+        .andWhere(getCurrentCodingTuplePresenceCondition('response'));
       applyResolvedExclusionsToQuery(autoVariables, exclusions);
       const autoVariableRows = await autoVariables
         .groupBy('unit.name')
@@ -2120,6 +2168,7 @@ export class CodingExportService {
         .addSelect('resp.code_v1', 'code_v1')
         .addSelect('resp.code_v2', 'code_v2')
         .addSelect('resp.code_v3', 'code_v3')
+        .addSelect('resp.autocoder_invalidated_version', 'autocoder_invalidated_version')
         .addSelect('cju.notes', 'notes')
         .addSelect('user.username', 'username')
         .addSelect('cj.id', 'jobId')
@@ -2168,6 +2217,7 @@ export class CodingExportService {
             score_v1: null,
             score_v2: null,
             score_v3: null,
+            autocoder_invalidated_version: null,
             notes: discussionResult.notes
           });
         }
@@ -2179,14 +2229,19 @@ export class CodingExportService {
         .innerJoin('resp.unit', 'unit')
         .innerJoin('unit.booklet', 'booklet')
         .innerJoin('booklet.person', 'person')
-        .leftJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
         .select('person.id', 'personId')
         .addSelect('unit.name', 'unitName')
         .addSelect('resp.variableid', 'variableId')
+        .addSelect('resp.code_v3', 'code_v3')
+        .addSelect('resp.score_v3', 'score_v3')
+        .addSelect('resp.autocoder_invalidated_version', 'autocoder_invalidated_version')
+        .addSelect('resp.code_v2', 'code_v2')
+        .addSelect('resp.score_v2', 'score_v2')
         .addSelect('resp.code_v1', 'code_v1')
+        .addSelect('resp.score_v1', 'score_v1')
         .where('person.id IN (:...ids)', { ids: batchPersonIds })
-        .andWhere('cju.id IS NULL')
-        .andWhere('resp.code_v1 IS NOT NULL')
+        .andWhere(getCurrentAutocodingCandidateCondition('resp'))
+        .andWhere(getCurrentCodingTuplePresenceCondition('resp'))
         .getRawMany();
 
       const personData = new Map<number, Map<string, {
@@ -2204,7 +2259,9 @@ export class CodingExportService {
         if (!personData.has(pid)) personData.set(pid, new Map());
         const dataMapForPerson = personData.get(pid)!;
 
-        const rawCode = row.cju_code ?? row.code_v3 ?? row.code_v2 ?? row.code_v1;
+        const rawCode = getCurrentManualCoding(row, {
+          code: row.cju_code
+        }).code;
         const mapped = await this.mapCodeAndScoreForExport(
           workspaceId,
           rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null,
@@ -2225,8 +2282,9 @@ export class CodingExportService {
         const columnKey = `${row.unitName}_${row.variableId}_Autocoder`;
         if (!personData.has(pid)) personData.set(pid, new Map());
         const dataMapForPerson = personData.get(pid)!;
+        const rawCode = getCurrentCoding(row).code;
         dataMapForPerson.set(columnKey, {
-          code: mapCodeForExport(row.code_v1 !== null && row.code_v1 !== undefined ? parseInt(row.code_v1, 10) : null),
+          code: mapCodeForExport(this.toIntegerOrNull(rawCode)),
           comment: null,
           codingIssueOption: null
         });
@@ -2580,6 +2638,7 @@ export class CodingExportService {
             .addSelect('resp.code_v1', 'code_v1')
             .addSelect('resp.code_v2', 'code_v2')
             .addSelect('resp.code_v3', 'code_v3')
+            .addSelect('resp.autocoder_invalidated_version', 'autocoder_invalidated_version')
             .addSelect('cju.notes', 'notes')
             .addSelect('person.id', 'pId')
             .addSelect('bookletinfo.name', 'bookletName')
@@ -2598,8 +2657,9 @@ export class CodingExportService {
               personDataMap.set(pid, {});
             }
             const pData = personDataMap.get(pid)!;
-            const latest = getLatestCode(resp);
-            const rawCode = resp.cju_code ?? latest.code;
+            const rawCode = getCurrentManualCoding(resp, {
+              code: resp.cju_code
+            }).code;
             const mapped = await this.mapCodeAndScoreForExport(
               workspaceId,
               rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null,
@@ -2914,6 +2974,7 @@ export class CodingExportService {
           .addSelect('resp.code_v1', 'code_v1')
           .addSelect('resp.code_v2', 'code_v2')
           .addSelect('resp.code_v3', 'code_v3')
+          .addSelect('resp.autocoder_invalidated_version', 'autocoder_invalidated_version')
           .addSelect('resp.status_v1', 'status_v1')
           .addSelect('user.username', 'username')
           .addSelect('cju.notes', 'notes')
@@ -2962,8 +3023,9 @@ export class CodingExportService {
           }
           const p = personGroup.get(pid)!;
           if (d.username) {
-            const latest = getLatestCode(d);
-            const rawCode = d.cju_code ?? latest.code;
+            const rawCode = getCurrentManualCoding(d, {
+              code: d.cju_code
+            }).code;
             const mapped = await this.mapCodeAndScoreForExport(
               workspaceId,
               rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null,
@@ -3273,6 +3335,7 @@ export class CodingExportService {
         .addSelect('resp.code_v1', 'code_v1')
         .addSelect('resp.code_v2', 'code_v2')
         .addSelect('resp.code_v3', 'code_v3')
+        .addSelect('resp.autocoder_invalidated_version', 'autocoder_invalidated_version')
         .addSelect('resp.status_v1', 'status_v1')
         .addSelect('user.username', 'username')
         .addSelect('cju.notes', 'notes')
@@ -3500,8 +3563,9 @@ export class CodingExportService {
   ): Promise<void> {
     if (!row.username) return;
 
-    const latest = getLatestCode(row as unknown as ResponseEntity);
-    const rawCode = row.cju_code ?? latest.code;
+    const rawCode = getCurrentManualCoding(row, {
+      code: row.cju_code
+    }).code;
     const parsedCode = this.toIntegerOrNull(rawCode);
     const mapped = await this.mapCodeAndScoreForExport(
       workspaceId,
