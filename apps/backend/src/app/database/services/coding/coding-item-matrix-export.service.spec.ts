@@ -174,6 +174,19 @@ const resolvePartialDerivedTarget = async (
   return cells[0];
 };
 
+const partialInvalidSourceTypes = [
+  'CONCAT_CODE',
+  'SUM_CODE',
+  'SUM_SCORE'
+] as const;
+
+const otherDerivedSourceTypes = [
+  'COPY_VALUE',
+  'UNIQUE_VALUES',
+  'SOLVER',
+  'MANUAL'
+] as const;
+
 describe('CodingItemMatrixExportService', () => {
   it('handles output stream errors when Excel preparation fails', async () => {
     const outputStream = new PassThrough();
@@ -1001,65 +1014,94 @@ describe('CodingItemMatrixExportService', () => {
     });
   });
 
-  it('accepts stored omissions in partial SUM_SCORE responses', async () => {
-    const cell = await resolvePartialDerivedTarget('SUM_SCORE', [
-      { code: 1, score: 1, status: 5 },
-      { code: -83, score: 0, status: 5 }
-    ]);
+  it.each(partialInvalidSourceTypes)(
+    'exports response-status omissions in partial %s responses as MIR',
+    async sourceType => {
+      const cell = await resolvePartialDerivedTarget(sourceType, [
+        { code: 1, score: 1, status: 5 },
+        { code: null, score: null, status: 2 }
+      ]);
 
-    expect(cell).toMatchObject({
-      state: 'mir',
-      code: -81,
-      score: 0,
-      unresolved: false
-    });
-  });
+      expect(cell).toMatchObject({
+        state: 'mir',
+        code: -81,
+        score: 0,
+        unresolved: false
+      });
+    }
+  );
 
-  it('preserves a coding error in a partial SUM_SCORE response', async () => {
-    const cell = await resolvePartialDerivedTarget('SUM_SCORE', [
-      { code: 1, score: 1, status: 5 },
-      { code: -83, score: 0, status: 5 },
-      { code: -82, score: null, status: 5 }
-    ]);
+  it.each(partialInvalidSourceTypes)(
+    'accepts stored omissions in partial %s responses',
+    async sourceType => {
+      const cell = await resolvePartialDerivedTarget(sourceType, [
+        { code: 1, score: 1, status: 5 },
+        { code: -83, score: 0, status: 5 }
+      ]);
 
-    expect(cell).toMatchObject({
-      state: 'mci',
-      code: -82,
-      score: null,
-      unresolved: false
-    });
-  });
+      expect(cell).toMatchObject({
+        state: 'mir',
+        code: -81,
+        score: 0,
+        unresolved: false
+      });
+    }
+  );
 
-  it('does not turn not-reached sources into MIR', async () => {
-    const cell = await resolvePartialDerivedTarget('SUM_SCORE', [
-      { code: 1, score: 1, status: 5 },
-      { code: -83, score: 0, status: 5 },
-      { code: -84, score: null, status: 5 }
-    ]);
+  it.each(partialInvalidSourceTypes)(
+    'preserves a coding error in a partial %s response',
+    async sourceType => {
+      const cell = await resolvePartialDerivedTarget(sourceType, [
+        { code: 1, score: 1, status: 5 },
+        { code: -83, score: 0, status: 5 },
+        { code: -82, score: null, status: 5 }
+      ]);
 
-    expect(cell).toMatchObject({
-      state: 'error',
-      code: null,
-      score: null,
-      unresolved: true,
-      failureReason: 'derived-result-missing'
-    });
-  });
+      expect(cell).toMatchObject({
+        state: 'mci',
+        code: -82,
+        score: null,
+        unresolved: false
+      });
+    }
+  );
 
-  it('keeps partial non-SUM_SCORE derivations unresolved', async () => {
-    const cell = await resolvePartialDerivedTarget('CONCAT_CODE', [
-      { code: 1, score: 1, status: 5 },
-      { code: null, score: null, status: 2 }
-    ]);
+  it.each(partialInvalidSourceTypes)(
+    'does not turn not-reached sources in %s responses into MIR',
+    async sourceType => {
+      const cell = await resolvePartialDerivedTarget(sourceType, [
+        { code: 1, score: 1, status: 5 },
+        { code: -83, score: 0, status: 5 },
+        { code: -84, score: null, status: 5 }
+      ]);
 
-    expect(cell).toMatchObject({
-      state: 'error',
-      code: null,
-      score: null,
-      unresolved: true,
-      failureReason: 'derived-result-missing'
-    });
-  });
+      expect(cell).toMatchObject({
+        state: 'error',
+        code: null,
+        score: null,
+        unresolved: true,
+        failureReason: 'derived-result-missing'
+      });
+    }
+  );
+
+  it.each(otherDerivedSourceTypes)(
+    'keeps partial %s derivations unresolved',
+    async sourceType => {
+      const cell = await resolvePartialDerivedTarget(sourceType, [
+        { code: 1, score: 1, status: 5 },
+        { code: null, score: null, status: 2 }
+      ]);
+
+      expect(cell).toMatchObject({
+        state: 'error',
+        code: null,
+        score: null,
+        unresolved: true,
+        failureReason: 'derived-result-missing'
+      });
+    }
+  );
 
   it('distinguishes unresolved statuses, derived failures and design conflicts', async () => {
     const service = createService();
