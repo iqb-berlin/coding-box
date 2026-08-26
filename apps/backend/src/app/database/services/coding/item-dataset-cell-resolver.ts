@@ -91,6 +91,12 @@ const requiredMissingIds: IqbStandardMissingId[] = [
   'mbd'
 ];
 
+const partialInvalidMissingSourceTypes: ReadonlySet<string> = new Set([
+  'CONCAT_CODE',
+  'SUM_CODE',
+  'SUM_SCORE'
+]);
+
 export class ItemDatasetCellResolver {
   private static readonly yieldEveryOperations = 50;
 
@@ -200,7 +206,7 @@ export class ItemDatasetCellResolver {
       );
       const targetValue = responseValues.get(column.key);
       const isPartialInvalidResponse =
-        column.sourceType === 'SUM_SCORE' &&
+        partialInvalidMissingSourceTypes.has(column.sourceType || '') &&
         this.hasStatus(targetValue, 'INVALID') &&
         derivedResolution.hasResolvedSource === true &&
         derivedResolution.hasOmittedSource === true &&
