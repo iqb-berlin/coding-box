@@ -156,7 +156,8 @@ export class ItemDatasetMetadataService {
         itemId: item.itemId,
         itemLabel: item.itemLabel,
         itemOrder,
-        isDerived: item.variable.isDerived === true
+        isDerived: item.variable.isDerived === true,
+        sourceType: item.variable.sourceType
       });
     });
 
