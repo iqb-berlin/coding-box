@@ -3343,6 +3343,88 @@ describe('CodingProcessService', () => {
         .not.toHaveBeenCalled();
     });
 
+    it('accepts a run-1-generated MMB102 target through its BASE_NO_VALUE shadow', () => {
+      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
+        '@iqb/responses'
+      );
+      (Autocoder.CodingSchemeFactory.code as jest.Mock)
+        .mockImplementation(actualAutocoder.CodingSchemeFactory.code);
+      const codeResponses = (
+        service as unknown as {
+          codeAutocoderResponses: (
+            responses: object[],
+            variableCodings: object[],
+            inputOrigins: object[]
+          ) => Array<{
+            id: string;
+            status: string;
+            code?: number;
+            score?: number;
+          }>;
+        }
+      ).codeAutocoderResponses.bind(service);
+      const variableCodings = [
+        { id: '01a', sourceType: 'BASE' },
+        {
+          id: 'M0_XX00_CMCa',
+          alias: '01',
+          sourceType: 'BASE_NO_VALUE',
+          codes: []
+        },
+        {
+          id: '01',
+          sourceType: 'SUM_SCORE',
+          deriveSources: ['01a'],
+          codeModel: 'MANUAL_AND_RULES',
+          codes: [{
+            id: 1,
+            score: 1,
+            ruleSets: [{
+              rules: [{ method: 'MATCH', parameters: ['1'] }]
+            }]
+          }]
+        }
+      ];
+
+      const results = codeResponses([
+        {
+          id: '01a',
+          value: 'selected',
+          status: 'CODING_COMPLETE',
+          code: 1,
+          score: 1
+        },
+        {
+          id: '01',
+          value: null,
+          status: 'INVALID'
+        }
+      ], variableCodings, [
+        {
+          responseId: 6101,
+          storedVariableId: '01a',
+          isAutocoderGenerated: false
+        },
+        {
+          responseId: 6100,
+          storedVariableId: '01',
+          isAutocoderGenerated: true
+        }
+      ]);
+
+      expect(results).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: '01',
+          status: 'CODING_COMPLETE',
+          code: 1,
+          score: 1
+        })
+      ]));
+      expect(results.find(result => (
+        result.id === 'M0_XX00_CMCa'
+      ))).toBeUndefined();
+    });
+
     it('keeps partial MMB102 sources invalid without leaking the structural target', () => {
       const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
         '@iqb/responses'

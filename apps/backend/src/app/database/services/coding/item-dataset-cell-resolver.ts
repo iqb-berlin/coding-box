@@ -589,10 +589,12 @@ export class ItemDatasetCellResolver {
     }
     const sources = derivedSources.get(key);
     if (!sources || sources.length === 0) {
-      const state = cellsByResponseKey.get(key)?.state || 'error';
+      const resolvedSource = cellsByResponseKey.get(key);
+      const state = resolvedSource?.state || 'error';
       const sourceValue = responseValues.get(key);
       const hasResolvedSource = state === 'valid';
-      const hasOmittedSource = state === 'mbi_mbo' ||
+      const hasOmittedSource = resolvedSource ?
+        state === 'mbi_mbo' :
         this.isOmittedResponse(sourceValue);
       return {
         state,
@@ -643,9 +645,7 @@ export class ItemDatasetCellResolver {
       const resolvedSource = cellsByResponseKey.get(sourceKey);
       if (resolvedSource) {
         const hasResolvedSource = resolvedSource.state === 'valid';
-        const hasOmittedSource =
-          resolvedSource.state === 'mbi_mbo' ||
-          this.isOmittedResponse(sourceValue);
+        const hasOmittedSource = resolvedSource.state === 'mbi_mbo';
         resolutions.push({
           state: resolvedSource.state,
           failureReason: resolvedSource.failureReason,

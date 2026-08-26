@@ -128,7 +128,8 @@ const createService = (
 
 const resolvePartialDerivedTarget = async (
   sourceType: string,
-  sourceValues: ItemDatasetResponseValue[]
+  sourceValues: ItemDatasetResponseValue[],
+  resolutionConfiguration: ItemMatrixExportConfiguration = configuration
 ) => {
   const service = createService();
   const derived = column('01', 'TEST_CMC', '01', true, sourceType);
@@ -168,7 +169,7 @@ const resolvePartialDerivedTarget = async (
     values,
     profile,
     new Map([[derived.key, sourceKeys]]),
-    configuration
+    resolutionConfiguration
   );
 
   return cells[0];
@@ -1074,6 +1075,32 @@ describe('CodingItemMatrixExportService', () => {
         { code: -83, score: 0, status: 5 },
         { code: -84, score: null, status: 5 }
       ]);
+
+      expect(cell).toMatchObject({
+        state: 'error',
+        code: null,
+        score: null,
+        unresolved: true,
+        failureReason: 'derived-result-missing'
+      });
+    }
+  );
+
+  it.each(partialInvalidSourceTypes)(
+    'does not turn trailing omissions recoded to MNR in partial %s responses into MIR',
+    async sourceType => {
+      const cell = await resolvePartialDerivedTarget(
+        sourceType,
+        [
+          { code: 1, score: 1, status: 5 },
+          { code: null, score: null, status: 2 }
+        ],
+        {
+          ...configuration,
+          notReachedScope: 'testlet',
+          recodeTrailingOmissions: true
+        }
+      );
 
       expect(cell).toMatchObject({
         state: 'error',
