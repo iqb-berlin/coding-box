@@ -1021,6 +1021,117 @@ describe('CodingProcessService', () => {
       ]));
     });
 
+    it('recalculates a legacy generated INVALID derived response in run 2', async () => {
+      const sourceResponse = createMockResponse(
+        1,
+        1,
+        'source',
+        'source-value'
+      );
+      sourceResponse.status_v2 = 5;
+      sourceResponse.code_v2 = 1;
+      sourceResponse.score_v2 = 1;
+      const derivedResponse = createMockResponse(2, 1, '_01', '');
+      derivedResponse.is_autocoder_generated = true;
+      derivedResponse.status_v1 = 7;
+      derivedResponse.code_v1 = null;
+      derivedResponse.score_v1 = null;
+
+      configureDerivedSecondRun(sourceResponse, derivedResponse);
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      expect(
+        (Autocoder.CodingSchemeFactory.code as jest.Mock).mock.calls[0][0]
+      ).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 'derived-target',
+          status: 'UNSET',
+          code: undefined,
+          score: undefined
+        })
+      ]));
+
+      expect(
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1]
+      ).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 2,
+          code_v3: 4,
+          status_v3: 'CODING_COMPLETE',
+          score_v3: 0
+        })
+      ]));
+      expect(result.statusCounts).toEqual({ CODING_COMPLETE: 2 });
+    });
+
+    it('does not reinterpret an imported INVALID base response in run 2', async () => {
+      const invalidBaseResponse = createMockResponse(1, 1, 'source', '');
+      invalidBaseResponse.status_v1 = 7;
+      invalidBaseResponse.code_v1 = null;
+      invalidBaseResponse.score_v1 = null;
+      const derivedResponse = createMockResponse(2, 1, '_01', '');
+      derivedResponse.is_autocoder_generated = true;
+      derivedResponse.status_v1 = 7;
+
+      configureDerivedSecondRun(invalidBaseResponse, derivedResponse);
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      expect(
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1]
+      ).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 1,
+          code_v3: null,
+          status_v3: 'INVALID',
+          score_v3: null
+        })
+      ]));
+      expect(result.statusCounts).toEqual({ INVALID: 2 });
+    });
+
+    it('does not treat an output alias as a colliding derived technical ID', () => {
+      const generatedResponse = createMockResponse(1, 1, '06', '');
+      generatedResponse.is_autocoder_generated = true;
+      generatedResponse.status_v1 = 7;
+      const isLegacyGeneratedInvalidDerivedResponse = (
+        service as unknown as {
+          isLegacyGeneratedInvalidDerivedResponse: (
+            response: ResponseEntity,
+            inputStatus: number,
+            inputCode: undefined,
+            inputScore: undefined,
+            variableCodings: object[]
+          ) => boolean;
+        }
+      ).isLegacyGeneratedInvalidDerivedResponse.bind(service);
+
+      expect(isLegacyGeneratedInvalidDerivedResponse(
+        generatedResponse,
+        7,
+        undefined,
+        undefined,
+        [
+          { id: 'base-06', alias: '06', sourceType: 'BASE' },
+          {
+            id: '06',
+            alias: '07',
+            sourceType: 'CONCAT_CODE',
+            deriveSources: ['base-06']
+          }
+        ]
+      )).toBe(false);
+    });
+
     it('preserves a complete manual v2 tuple for an unchanged independently derived value', async () => {
       const sourceResponse = createMockResponse(1, 1, 'source', 'source-value');
       sourceResponse.status_v2 = 5;
