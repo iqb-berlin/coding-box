@@ -856,6 +856,62 @@ describe('CodingItemMatrixExportService', () => {
     ))[0].failureReason).toBe('derived-design-conflict');
   });
 
+  it('resolves absent MZV005 items only when each item owns its source pair', async () => {
+    const service = createService();
+    const item01 = column('01', 'MZV005', '01', true);
+    const item02 = column('02', 'MZV005', '02', true);
+    const design = {
+      units: new Map([[
+        'MZV005',
+        { unitId: 'MZV005', order: 0, testletKey: '0:MZ' }
+      ]])
+    };
+    const resolve = (sources: Map<string, string[]>) => (
+      service as never as {
+        resolveRowCells: (
+          columnsValue: unknown[],
+          designValue: unknown,
+          responseValues: unknown,
+          profileValue: unknown,
+          derivedValue: unknown,
+          configValue: ItemMatrixExportConfiguration
+        ) => Promise<Array<{
+          state: string;
+          code: number | null;
+          failureReason?: string;
+        }>>;
+      }
+    ).resolveRowCells(
+      [item01, item02],
+      design,
+      new Map(),
+      profile,
+      sources,
+      configuration
+    );
+    const sourceKey = (variableId: string) => (
+      `MZV005\u001F${variableId}`
+    );
+
+    const productionMapping = await resolve(new Map([
+      [item01.key, [sourceKey('01a'), sourceKey('01b')]],
+      [item02.key, [sourceKey('01b'), sourceKey('02a')]]
+    ]));
+    expect(productionMapping.map(cell => cell.failureReason)).toEqual([
+      'derived-source-unresolved',
+      'derived-source-unresolved'
+    ]);
+
+    const correctedMapping = await resolve(new Map([
+      [item01.key, [sourceKey('01a'), sourceKey('01b')]],
+      [item02.key, [sourceKey('02a'), sourceKey('02b')]]
+    ]));
+    expect(correctedMapping).toEqual([
+      expect.objectContaining({ state: 'mnr', code: -84 }),
+      expect.objectContaining({ state: 'mnr', code: -84 })
+    ]);
+  });
+
   it('keeps complete grouped diagnostics while limiting row samples globally', () => {
     const service = createService();
     const diagnosticsApi = service as never as {

@@ -33,6 +33,10 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { CodingReadinessService } from './coding-readiness.service';
+import {
+  AutocoderOutputShadow,
+  createAutocoderOutputShadows
+} from './autocoder-output-shadow.util';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import {
   lockWorkspaceTestResultsMutation,
@@ -90,10 +94,7 @@ type AutocoderNamespace = {
   inputTechnicalIdByAlias: Map<string, string>;
   outputAliasByTechnicalId: Map<string, string>;
   componentById: Map<string, AutocoderNamespaceComponent>;
-  shadowingPairs: Array<{
-    baseTechnicalId: string;
-    derivedTechnicalId: string;
-  }>;
+  outputShadows: AutocoderOutputShadow[];
 };
 
 type AutocoderNamespaceComponent = {
@@ -1704,75 +1705,10 @@ export class CodingProcessService {
   private createAutocoderNamespace(
     variableCodings: VariableCodingData[]
   ): AutocoderNamespace {
-    const codingsByTechnicalId = new Map<string, VariableCodingData[]>();
-    const codingsByOutputAlias = new Map<string, VariableCodingData[]>();
-
-    variableCodings.forEach(coding => {
-      const technicalId = String(coding.id || '');
-      if (!technicalId) {
-        throw new Error('coding contains an empty technical variable ID');
-      }
-
-      const normalizedTechnicalId = this.normalizeVariableId(technicalId);
-      codingsByTechnicalId.set(normalizedTechnicalId, [
-        ...(codingsByTechnicalId.get(normalizedTechnicalId) || []),
-        coding
-      ]);
-
-      const outputAlias = String(coding.alias || coding.id);
-      const normalizedOutputAlias = this.normalizeVariableId(outputAlias);
-      codingsByOutputAlias.set(normalizedOutputAlias, [
-        ...(codingsByOutputAlias.get(normalizedOutputAlias) || []),
-        coding
-      ]);
-    });
-
-    const duplicateTechnicalId = Array.from(codingsByTechnicalId.entries())
-      .find(([, codings]) => codings.length > 1);
-    if (duplicateTechnicalId) {
-      throw new Error(
-        `duplicate technical variable ID "${duplicateTechnicalId[0]}"`
-      );
-    }
-
-    const shadowingPairs: AutocoderNamespace['shadowingPairs'] = [];
-    codingsByOutputAlias.forEach((codings, normalizedAlias) => {
-      if (codings.length === 1) {
-        return;
-      }
-
-      const baseCoding = codings.find(coding => (
-        coding.sourceType === 'BASE' &&
-        this.normalizeVariableId(coding.id) === normalizedAlias
-      ));
-      const derivedCodings = codings.filter(coding => (
-        coding !== baseCoding &&
-        coding.sourceType !== 'BASE' &&
-        coding.sourceType !== 'BASE_NO_VALUE' &&
-        this.normalizeVariableId(coding.alias || coding.id) ===
-          normalizedAlias &&
-        (coding.deriveSources || []).some(source => (
-          this.normalizeVariableId(source) === normalizedAlias
-        ))
-      ));
-      const isAllowedDerivedShadow = Boolean(
-        baseCoding &&
-        codings.length === 2 &&
-        derivedCodings.length === 1
-      );
-
-      if (!isAllowedDerivedShadow || !baseCoding) {
-        throw new Error(`duplicate output alias "${normalizedAlias}"`);
-      }
-
-      shadowingPairs.push({
-        baseTechnicalId: String(baseCoding.id),
-        derivedTechnicalId: String(derivedCodings[0].id)
-      });
-    });
+    const outputShadows = createAutocoderOutputShadows(variableCodings);
 
     const shadowingDerivedIds = new Set(
-      shadowingPairs.map(pair => (
+      outputShadows.map(pair => (
         this.normalizeVariableId(pair.derivedTechnicalId)
       ))
     );
@@ -1809,7 +1745,7 @@ export class CodingProcessService {
       inputTechnicalIdByAlias,
       outputAliasByTechnicalId,
       componentById: this.createAutocoderNamespaceComponents(variableCodings),
-      shadowingPairs
+      outputShadows
     };
   }
 
@@ -2000,7 +1936,7 @@ export class CodingProcessService {
     );
     const derivedResultKeys = new Set<string>();
 
-    namespace.shadowingPairs.forEach(pair => {
+    namespace.outputShadows.forEach(pair => {
       canonicalResults
         .filter(result => (
           this.normalizeVariableId(result.id) ===
@@ -2015,13 +1951,16 @@ export class CodingProcessService {
     });
 
     return canonicalResults
-      .filter(result => !namespace.shadowingPairs.some(pair => (
+      .filter(result => !namespace.outputShadows.some(pair => (
         this.normalizeVariableId(result.id) ===
           this.normalizeVariableId(pair.baseTechnicalId) &&
-        derivedResultKeys.has(this.autocoderResultKey(
-          pair.baseTechnicalId,
-          String(result.subform || '')
-        ))
+        (
+          pair.kind === 'BASE_NO_VALUE_DERIVED' ||
+          derivedResultKeys.has(this.autocoderResultKey(
+            pair.baseTechnicalId,
+            String(result.subform || '')
+          ))
+        )
       )))
       .map(result => ({
         ...result,
