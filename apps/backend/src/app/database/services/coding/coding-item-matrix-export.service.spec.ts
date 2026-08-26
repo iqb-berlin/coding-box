@@ -8,6 +8,9 @@ import {
   ItemMatrixExportConfiguration
 } from './coding-item-matrix-export.service';
 import { ItemDatasetMetadataService } from './item-dataset-metadata.service';
+import type {
+  ItemDatasetResponseValue
+} from './item-dataset-cell-resolver';
 import { ItemMatrixExportIncompleteError } from './item-matrix-export-incomplete.error';
 
 const collectStream = (stream: NodeJS.ReadableStream): Promise<string> => new Promise((resolve, reject) => {
@@ -67,7 +70,8 @@ const column = (
   itemId: string,
   unitId = 'UNIT1',
   variableId = `VAR${itemId}`,
-  isDerived = false
+  isDerived = false,
+  sourceType?: string
 ) => ({
   key: `${unitId}\u001F${variableId}`,
   header: `${unitId}_${itemId}`,
@@ -78,7 +82,8 @@ const column = (
   itemId,
   itemLabel: itemId,
   itemOrder: Number(itemId.replace(/\D/g, '')) || 0,
-  isDerived
+  isDerived,
+  sourceType
 });
 
 const createService = (
@@ -119,6 +124,54 @@ const createService = (
     (overrides.missingsProfilesService || {}) as never,
     metadataService
   );
+};
+
+const resolvePartialDerivedTarget = async (
+  sourceType: string,
+  sourceValues: ItemDatasetResponseValue[]
+) => {
+  const service = createService();
+  const derived = column('01', 'TEST_CMC', '01', true, sourceType);
+  const sourceKeys = sourceValues.map((_, index) => (
+    `TEST_CMC\u001F01${String.fromCharCode(97 + index)}`
+  ));
+  const values = new Map<string, ItemDatasetResponseValue>([
+    [derived.key, { code: null, score: null, status: 7 }],
+    ...sourceValues.map((value, index) => [sourceKeys[index], value] as const)
+  ]);
+
+  const cells = await (
+    service as never as {
+      resolveRowCells: (
+        columnsValue: unknown[],
+        designValue: unknown,
+        responseValues: unknown,
+        profileValue: unknown,
+        derivedValue: unknown,
+        configValue: ItemMatrixExportConfiguration
+      ) => Promise<Array<{
+        state: string;
+        code: number | null;
+        score: number | null;
+        unresolved: boolean;
+        failureReason?: string;
+      }>>;
+    }
+  ).resolveRowCells(
+    [derived],
+    {
+      units: new Map([[
+        'TEST_CMC',
+        { unitId: 'TEST_CMC', order: 0, testletKey: '0:CMC' }
+      ]])
+    },
+    values,
+    profile,
+    new Map([[derived.key, sourceKeys]]),
+    configuration
+  );
+
+  return cells[0];
 };
 
 describe('CodingItemMatrixExportService', () => {
@@ -788,6 +841,226 @@ describe('CodingItemMatrixExportService', () => {
     expect(getExportValue('score')).toBe(0);
   });
 
+  it.each([
+    {
+      unitId: 'MMB102',
+      itemId: '01',
+      sourceIds: ['01a', '01b', '01c', '01d'],
+      answeredSourceIds: ['01a', '01b']
+    },
+    {
+      unitId: 'MMB137',
+      itemId: '02',
+      sourceIds: ['01a', '01b', '01c'],
+      answeredSourceIds: ['01a']
+    },
+    {
+      unitId: 'MDV012',
+      itemId: '01',
+      sourceIds: ['01a', '01b', '01c'],
+      answeredSourceIds: ['01a', '01c']
+    }
+  ])(
+    'exports a partially answered $unitId target with the configured MIR',
+    async ({
+      unitId,
+      itemId,
+      sourceIds,
+      answeredSourceIds
+    }) => {
+      const service = createService();
+      const derived = column(itemId, unitId, '01', true, 'SUM_SCORE');
+      const mir = {
+        id: 'mir',
+        label: 'missing invalid response',
+        code: -98,
+        score: 0
+      };
+      const exportProfile = {
+        byId: new Map([
+          ...profile.byId,
+          ['mir', mir]
+        ]),
+        byCode: new Map([
+          ...profile.byCode,
+          [mir.code, mir]
+        ])
+      };
+      const design = {
+        units: new Map([[
+          unitId,
+          { unitId, order: 0, testletKey: '0:CMC' }
+        ]])
+      };
+      const responseKey = (variableId: string) => (
+        `${unitId}\u001F${variableId}`
+      );
+      const values = new Map<string, ItemDatasetResponseValue>([
+        [derived.key, { code: null, score: null, status: 7 }],
+        ...sourceIds.map(sourceId => [
+          responseKey(sourceId),
+          answeredSourceIds.includes(sourceId) ?
+            { code: 1, score: 1, status: 5 } :
+            { code: null, score: null, status: 2 }
+        ] as const)
+      ]);
+      const derivedSources = new Map([[
+        derived.key,
+        sourceIds.map(responseKey)
+      ]]);
+
+      const cells = await (
+        service as never as {
+          resolveRowCells: (
+            columnsValue: unknown[],
+            designValue: unknown,
+            responseValues: unknown,
+            profileValue: unknown,
+            derivedValue: unknown,
+            configValue: ItemMatrixExportConfiguration
+          ) => Promise<Array<{
+            state: string;
+            code: number | null;
+            score: number | null;
+            unresolved: boolean;
+            failureReason?: string;
+          }>>;
+        }
+      ).resolveRowCells(
+        [derived],
+        design,
+        values,
+        exportProfile,
+        derivedSources,
+        configuration
+      );
+
+      expect(cells[0]).toMatchObject({
+        state: 'mir',
+        code: -98,
+        score: 0,
+        unresolved: false
+      });
+      expect(cells[0].failureReason).toBeUndefined();
+    }
+  );
+
+  it('keeps an INVALID derived target with complete sources unresolved', async () => {
+    const service = createService();
+    const derived = column('01', 'MMB102', '01', true, 'SUM_SCORE');
+    const design = {
+      units: new Map([[
+        'MMB102',
+        { unitId: 'MMB102', order: 0, testletKey: '0:CMC' }
+      ]])
+    };
+    const sourceIds = ['01a', '01b', '01c', '01d'];
+    const responseKey = (variableId: string) => (
+      `MMB102\u001F${variableId}`
+    );
+    const values = new Map<string, ItemDatasetResponseValue>([
+      [derived.key, { code: null, score: null, status: 7 }],
+      ...sourceIds.map(sourceId => [
+        responseKey(sourceId),
+        { code: 1, score: 1, status: 5 }
+      ] as const)
+    ]);
+
+    const cells = await (
+      service as never as {
+        resolveRowCells: (
+          columnsValue: unknown[],
+          designValue: unknown,
+          responseValues: unknown,
+          profileValue: unknown,
+          derivedValue: unknown,
+          configValue: ItemMatrixExportConfiguration
+        ) => Promise<Array<{
+          state: string;
+          code: number | null;
+          score: number | null;
+          unresolved: boolean;
+          failureReason?: string;
+        }>>;
+      }
+    ).resolveRowCells(
+      [derived],
+      design,
+      values,
+      profile,
+      new Map([[derived.key, sourceIds.map(responseKey)]]),
+      configuration
+    );
+
+    expect(cells[0]).toMatchObject({
+      state: 'error',
+      code: null,
+      score: null,
+      unresolved: true,
+      failureReason: 'derived-result-missing'
+    });
+  });
+
+  it('accepts stored omissions in partial SUM_SCORE responses', async () => {
+    const cell = await resolvePartialDerivedTarget('SUM_SCORE', [
+      { code: 1, score: 1, status: 5 },
+      { code: -83, score: 0, status: 5 }
+    ]);
+
+    expect(cell).toMatchObject({
+      state: 'mir',
+      code: -81,
+      score: 0,
+      unresolved: false
+    });
+  });
+
+  it('preserves a coding error in a partial SUM_SCORE response', async () => {
+    const cell = await resolvePartialDerivedTarget('SUM_SCORE', [
+      { code: 1, score: 1, status: 5 },
+      { code: -83, score: 0, status: 5 },
+      { code: -82, score: null, status: 5 }
+    ]);
+
+    expect(cell).toMatchObject({
+      state: 'mci',
+      code: -82,
+      score: null,
+      unresolved: false
+    });
+  });
+
+  it('does not turn not-reached sources into MIR', async () => {
+    const cell = await resolvePartialDerivedTarget('SUM_SCORE', [
+      { code: 1, score: 1, status: 5 },
+      { code: -83, score: 0, status: 5 },
+      { code: -84, score: null, status: 5 }
+    ]);
+
+    expect(cell).toMatchObject({
+      state: 'error',
+      code: null,
+      score: null,
+      unresolved: true,
+      failureReason: 'derived-result-missing'
+    });
+  });
+
+  it('keeps partial non-SUM_SCORE derivations unresolved', async () => {
+    const cell = await resolvePartialDerivedTarget('CONCAT_CODE', [
+      { code: 1, score: 1, status: 5 },
+      { code: null, score: null, status: 2 }
+    ]);
+
+    expect(cell).toMatchObject({
+      state: 'error',
+      code: null,
+      score: null,
+      unresolved: true,
+      failureReason: 'derived-result-missing'
+    });
+  });
+
   it('distinguishes unresolved statuses, derived failures and design conflicts', async () => {
     const service = createService();
     const direct = column('1', 'UNIT1', 'DIRECT');
@@ -1440,6 +1713,63 @@ describe('CodingItemMatrixExportService', () => {
     expect(options.mappingIssues[0].message).toContain(
       "Spaltenname 'Aufgabe_ITEM1' kollidiert"
     );
+  });
+
+  it('carries the derived source type into item dataset columns', async () => {
+    const queryBuilder = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      distinct: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([])
+    };
+    const service = createService({
+      unitRepository: {
+        createQueryBuilder: jest.fn().mockReturnValue(queryBuilder)
+      },
+      metadataResolver: {
+        buildItemMapping: jest.fn().mockResolvedValue({
+          items: [{
+            unitName: 'MMB102',
+            variableId: '01',
+            sourceVariableId: '01',
+            itemId: '01',
+            itemLabel: 'CMC',
+            variable: {
+              isDerived: true,
+              sourceType: 'SUM_SCORE'
+            }
+          }],
+          issues: [],
+          fallbacks: [],
+          byLogicalKey: new Map()
+        })
+      }
+    });
+
+    const result = await (
+      service as never as {
+        buildColumns: (workspaceId: number) => Promise<{
+          columns: Array<{
+            unitId: string;
+            variableId: string;
+            isDerived: boolean;
+            sourceType?: string;
+          }>;
+        }>;
+      }
+    ).buildColumns(7);
+
+    expect(result.columns).toEqual([
+      expect.objectContaining({
+        unitId: 'MMB102',
+        variableId: '01',
+        isDerived: true,
+        sourceType: 'SUM_SCORE'
+      })
+    ]);
   });
 
   it('reports item headers that collide with fixed identification columns', async () => {
