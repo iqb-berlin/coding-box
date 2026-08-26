@@ -90,7 +90,11 @@ describe('CodingAnalysisProcessor', () => {
 
     await expect(processor.handleResponseAnalysis(createJob('current-run'))).resolves.toBe(analysis);
 
-    expect(cacheService.set).toHaveBeenCalledWith('response-analysis:7__t2', analysis);
+    expect(cacheService.set).toHaveBeenCalledWith(
+      'response-analysis:7__t2',
+      analysis,
+      600
+    );
   });
 
   it('reports an effectively empty derived response with a technical target value', () => {

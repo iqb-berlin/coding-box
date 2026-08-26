@@ -190,7 +190,7 @@ interface ManualCodingVariableLookups {
 export class CodingProgressService {
   private readonly logger = new Logger(CodingProgressService.name);
 
-  private readonly APPLIED_RESULTS_OVERVIEW_CACHE_TTL_SECONDS = 0;
+  private readonly APPLIED_RESULTS_OVERVIEW_CACHE_TTL_SECONDS = 600;
 
   constructor(
     @InjectRepository(ResponseEntity)
@@ -308,14 +308,20 @@ export class CodingProgressService {
     return this.getAppliedResultsOverview(workspaceId, true);
   }
 
-  async invalidateAppliedResultsOverviewCache(workspaceId: number): Promise<void> {
-    const cacheKey = this.getAppliedResultsOverviewCacheKey(workspaceId);
-    await this.cacheService.delete(cacheKey);
+  async invalidateAppliedResultsOverviewCache(workspaceId: number): Promise<boolean> {
+    const cacheKeys = [
+      this.getAppliedResultsOverviewCacheKey(workspaceId),
+      `coding-progress:applied-results-overview:v3:${workspaceId}`
+    ];
+    const deletions = await Promise.all(
+      cacheKeys.map(cacheKey => this.cacheService.delete(cacheKey))
+    );
     this.logger.log(`Invalidated applied results overview cache for workspace ${workspaceId}`);
+    return deletions.every(deleted => deleted);
   }
 
   private getAppliedResultsOverviewCacheKey(workspaceId: number): string {
-    return `coding-progress:applied-results-overview:v3:${workspaceId}`;
+    return `coding-progress:applied-results-overview:v4:${workspaceId}`;
   }
 
   private async getAppliedResultsOverviewCacheVersion(workspaceId: number): Promise<number> {

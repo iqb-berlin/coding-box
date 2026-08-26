@@ -91,7 +91,8 @@ describe('ExternalCodingImportService', () => {
     expect(updateQuery.set).toHaveBeenCalledWith({
       status_v2: statusStringToNumber('CODING_COMPLETE'),
       code_v2: 1,
-      score_v2: 1
+      score_v2: 1,
+      autocoder_invalidated_version: null
     });
     expect(codingFreshnessService.markManualCodingCurrent).toHaveBeenCalledWith(
       17,
@@ -180,7 +181,8 @@ describe('ExternalCodingImportService', () => {
     expect(updateQuery.set).toHaveBeenCalledWith({
       status_v2: statusStringToNumber('DERIVE_ERROR'),
       code_v2: null,
-      score_v2: null
+      score_v2: null,
+      autocoder_invalidated_version: null
     });
     expect(result.affectedRows[0]).toMatchObject({
       originalCodedStatus: 'DERIVE_ERROR',
@@ -271,7 +273,8 @@ describe('ExternalCodingImportService', () => {
     expect(updateQuery.set).toHaveBeenCalledWith({
       status_v2: statusStringToNumber('CODING_COMPLETE'),
       code_v2: 1,
-      score_v2: 2
+      score_v2: 2,
+      autocoder_invalidated_version: null
     });
   });
 

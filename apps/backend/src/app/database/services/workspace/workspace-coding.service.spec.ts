@@ -26,7 +26,8 @@ import {
 } from '../coding';
 import {
   ResponseManagementService,
-  VariableAnalysisReplayService
+  VariableAnalysisReplayService,
+  WorkspaceTestResultsService
 } from '../test-results';
 import { ExportValidationResultsService } from '../validation';
 import { BullJobManagementService } from '../jobs';
@@ -85,7 +86,7 @@ describe('WorkspaceCodingService', () => {
 
   const mockCodingStatisticsService = {
     getCodingStatistics: jest.fn(),
-    invalidateCache: jest.fn(),
+    invalidateCache: jest.fn().mockResolvedValue(true),
     refreshStatistics: jest.fn()
   };
 
@@ -151,10 +152,14 @@ describe('WorkspaceCodingService', () => {
     deleteResponse: jest.fn()
   };
 
+  const mockWorkspaceTestResultsService = {
+    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(true)
+  };
+
   const mockCodingValidationService = {
     validateCodingCompleteness: jest.fn(),
     getCodingIncompleteVariables: jest.fn(),
-    invalidateIncompleteVariablesCache: jest.fn(),
+    invalidateIncompleteVariablesCache: jest.fn().mockResolvedValue(true),
     getVariableCasesInJobs: jest.fn()
   };
 
@@ -167,14 +172,14 @@ describe('WorkspaceCodingService', () => {
   const mockCodingAnalysisService = {
     getVariableAnalysis: jest.fn(),
     getResponseAnalysis: jest.fn(),
-    invalidateCache: jest.fn()
+    invalidateCache: jest.fn().mockResolvedValue(true)
   };
 
   const mockCodingProgressService = {
     getCodingProgressOverview: jest.fn(),
     getVariableCoverageOverview: jest.fn(),
     getCaseCoverageOverview: jest.fn(),
-    invalidateAppliedResultsOverviewCache: jest.fn()
+    invalidateAppliedResultsOverviewCache: jest.fn().mockResolvedValue(true)
   };
 
   const mockCodingReplayService = {
@@ -256,6 +261,10 @@ describe('WorkspaceCodingService', () => {
         {
           provide: ResponseManagementService,
           useValue: mockResponseManagementService
+        },
+        {
+          provide: WorkspaceTestResultsService,
+          useValue: mockWorkspaceTestResultsService
         },
         { provide: CodingResultsService, useValue: mockCodingResultsService },
         { provide: CodingJobService, useValue: mockCodingJobService },
@@ -376,6 +385,43 @@ describe('WorkspaceCodingService', () => {
 
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(mockCodingStatisticsService.refreshStatistics).toHaveBeenCalledWith(workspaceId, 'v3');
+    });
+  });
+
+  describe('finalizeAutocoderPersistence', () => {
+    it('invalidates workspace result caches after the external commit', async () => {
+      await service.finalizeAutocoderPersistence(7);
+
+      expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache)
+        .toHaveBeenCalledWith(7);
+      expect(mockCodingStatisticsService.invalidateCache)
+        .toHaveBeenCalledWith(7);
+    });
+
+    it('attempts every finalization step when one cache invalidation fails', async () => {
+      mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache
+        .mockRejectedValueOnce(new Error('workspace cache unavailable'));
+
+      await expect(service.finalizeAutocoderPersistence(7))
+        .rejects.toThrow(
+          /workspace statistics cache invalidation.*workspace cache unavailable/
+        );
+
+      expect(mockCodingValidationService.invalidateIncompleteVariablesCache)
+        .toHaveBeenCalledWith(7);
+      expect(mockCodingProgressService.invalidateAppliedResultsOverviewCache)
+        .toHaveBeenCalledWith(7);
+      expect(mockCodingAnalysisService.invalidateCache).toHaveBeenCalledWith(7);
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(7);
+    });
+
+    it('reports cache operations that return false', async () => {
+      mockCodingStatisticsService.invalidateCache.mockResolvedValueOnce(false);
+
+      await expect(service.finalizeAutocoderPersistence(7))
+        .rejects.toThrow(
+          /coding statistics cache invalidation: cache operation failed/
+        );
     });
   });
 
@@ -789,7 +835,7 @@ describe('WorkspaceCodingService', () => {
     describe('invalidateIncompleteVariablesCache', () => {
       it('should delegate cache invalidation to CodingValidationService', async () => {
         const privateService = service as unknown as {
-          invalidateIncompleteVariablesCache: (id: number) => Promise<void>;
+          invalidateIncompleteVariablesCache: (id: number) => Promise<boolean>;
         };
         await privateService.invalidateIncompleteVariablesCache(1);
 

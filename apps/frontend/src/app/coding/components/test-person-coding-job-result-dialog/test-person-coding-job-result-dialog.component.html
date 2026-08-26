@@ -30,6 +30,13 @@
     </div>
   </div>
 
+  <section *ngIf="warnings.length > 0" class="warnings" role="status">
+    <h3>{{ 'test-person-coding.job-result-dialog.warnings-header' | translate }}</h3>
+    <ul>
+      <li *ngFor="let warning of warnings">{{ warning }}</li>
+    </ul>
+  </section>
+
   <h3>{{ 'test-person-coding.job-result-dialog.status-header' | translate }}</h3>
 
   <table mat-table [dataSource]="statusRows" class="mat-elevation-z1 full-width-table">

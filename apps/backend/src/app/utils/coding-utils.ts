@@ -1,5 +1,4 @@
 import * as crypto from 'crypto';
-import { ResponseEntity } from '../database/entities/response.entity';
 import { CodingJobUnit } from '../database/entities/coding-job-unit.entity';
 
 export interface ExpectedCombinationDto {
@@ -125,22 +124,122 @@ export function generateExpectedCombinationsHash(
     .substring(0, 16);
 }
 
+export interface VersionedCodingValues<T extends number | string = number> {
+  code_v1?: T | null;
+  score_v1?: T | null;
+  code_v2?: T | null;
+  score_v2?: T | null;
+  code_v3?: T | null;
+  score_v3?: T | null;
+  autocoder_invalidated_version?: 'v1' | 'v2' | string | null;
+}
+
+export interface CodingValues<T extends number | string = number> {
+  code?: T | null;
+  score?: T | null;
+}
+
+export interface ResolvedCodingValues<T extends number | string = number> {
+  code: T | null;
+  score: T | null;
+  version: 'manual' | 'v1' | 'v2' | 'v3';
+}
+
 /**
- * Determines the latest valid code and score from a response entity,
- * checking versions in descending order (v3 -> v2 -> v1).
- *
- * @param response - The response entity containing v1, v2, and v3 results
- * @returns The code, score, and version string identifying where the result came from
+ * Determines the latest current code and score from versioned response data.
+ * An invalidation marker makes V3 authoritative, including an empty V3 tuple.
  */
-export function getLatestCode(response: ResponseEntity): { code: number | null; score: number | null; version: string } {
-  // Priority: v3 > v2 > v1
-  if (response.code_v3 !== null && response.code_v3 !== undefined) {
-    return { code: response.code_v3, score: response.score_v3, version: 'v3' };
+export function getLatestCode<T extends number | string = number>(
+  response: VersionedCodingValues<T>
+): ResolvedCodingValues<T> {
+  if (response.autocoder_invalidated_version) {
+    return {
+      code: response.code_v3 ?? null,
+      score: response.score_v3 ?? null,
+      version: 'v3'
+    };
   }
-  if (response.code_v2 !== null && response.code_v2 !== undefined) {
-    return { code: response.code_v2, score: response.score_v2, version: 'v2' };
+
+  // Priority: v3 > v2 > v1. A tuple exists when either code or score is set.
+  if (
+    (response.code_v3 !== null && response.code_v3 !== undefined) ||
+    (response.score_v3 !== null && response.score_v3 !== undefined)
+  ) {
+    return {
+      code: response.code_v3 ?? null,
+      score: response.score_v3 ?? null,
+      version: 'v3'
+    };
   }
-  return { code: response.code_v1, score: response.score_v1, version: 'v1' };
+  if (
+    (response.code_v2 !== null && response.code_v2 !== undefined) ||
+    (response.score_v2 !== null && response.score_v2 !== undefined)
+  ) {
+    return {
+      code: response.code_v2 ?? null,
+      score: response.score_v2 ?? null,
+      version: 'v2'
+    };
+  }
+  return {
+    code: response.code_v1 ?? null,
+    score: response.score_v1 ?? null,
+    version: 'v1'
+  };
+}
+
+/**
+ * Resolves the current effective coding tuple. An autocoder invalidation marker
+ * makes V3 authoritative even when it is incomplete; older manual/V1/V2
+ * values remain stored as history but must not reappear as the current result.
+ */
+export function getCurrentCoding<T extends number | string = number>(
+  response: VersionedCodingValues<T>,
+  manualCoding: CodingValues<T> = {}
+): ResolvedCodingValues<T> {
+  const latest = getLatestCode(response);
+  if (response.autocoder_invalidated_version) {
+    return latest;
+  }
+
+  const hasManualValue =
+    (
+      manualCoding.code !== null &&
+      manualCoding.code !== undefined
+    ) ||
+    (
+      manualCoding.score !== null &&
+      manualCoding.score !== undefined
+    );
+  if (!hasManualValue) {
+    return latest;
+  }
+
+  return {
+    code: manualCoding.code ?? latest.code,
+    score: manualCoding.score ?? latest.score,
+    version: 'manual'
+  };
+}
+
+/**
+ * Resolves the manual contribution to a current-results export. An
+ * invalidation marker suppresses the job-unit tuple; callers that include
+ * automatic results must add the authoritative V3 tuple separately.
+ */
+export function getCurrentManualCoding<T extends number | string = number>(
+  response: VersionedCodingValues<T>,
+  manualCoding: CodingValues<T>
+): CodingValues<T> {
+  if (response.autocoder_invalidated_version) {
+    return { code: null, score: null };
+  }
+
+  const currentCoding = getCurrentCoding(response, manualCoding);
+  return {
+    code: currentCoding.code,
+    score: currentCoding.score
+  };
 }
 
 export interface ManualMissingCodeMapping {

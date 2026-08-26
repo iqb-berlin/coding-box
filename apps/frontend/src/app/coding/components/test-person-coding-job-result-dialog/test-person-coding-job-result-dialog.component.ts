@@ -22,6 +22,7 @@ interface DialogData {
 export class TestPersonCodingJobResultDialogComponent {
   displayedColumns = ['status', 'count'];
   statusRows: { status: string; count: number }[] = [];
+  warnings: string[] = [];
   effectiveTotal = 0;
 
   constructor(
@@ -29,6 +30,7 @@ export class TestPersonCodingJobResultDialogComponent {
     private dialogRef: MatDialogRef<TestPersonCodingJobResultDialogComponent>
   ) {
     const result = data.job.result;
+    this.warnings = result?.warnings || [];
     if (result?.statusCounts) {
       const ignoredStatuses = [
         '0', '1', '2', '3', '10',

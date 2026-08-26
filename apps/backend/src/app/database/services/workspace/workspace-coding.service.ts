@@ -12,6 +12,7 @@ import { CodingResponseQueryService } from '../coding/coding-response-query.serv
 import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { CodingExportService } from '../coding/coding-export.service';
 import { VariableAnalysisReplayService } from '../test-results/variable-analysis-replay.service';
+import { WorkspaceTestResultsService } from '../test-results/workspace-test-results.service';
 import { ExportValidationResultsService } from '../validation/export-validation-results.service';
 import { ExternalCodingImportService, ExternalCodingImportBody } from '../coding/external-coding-import.service';
 import { BullJobManagementService } from '../jobs/bull-job-management.service';
@@ -42,13 +43,14 @@ export class WorkspaceCodingService {
     private codingVersionService: CodingVersionService,
     private codingJobOperationsService: CodingJobOperationsService,
     private codebookGenerationService: CodebookGenerationService,
-    private codingResponseQueryService: CodingResponseQueryService
+    private codingResponseQueryService: CodingResponseQueryService,
+    private workspaceTestResultsService: WorkspaceTestResultsService
   ) { }
 
   async processTestPersonsBatch(
     workspace_id: number,
     personIds: string[],
-    autoCoderRun: number = 1,
+    autoCoderRun: number,
     progressCallback?: (progress: number) => void,
     jobId?: string,
     unitIds?: number[],
@@ -76,10 +78,57 @@ export class WorkspaceCodingService {
     return statistics;
   }
 
+  async finalizeAutocoderPersistence(workspaceId: number): Promise<void> {
+    const finalizationSteps: Array<{
+      name: string;
+      run: () => Promise<boolean>;
+    }> = [
+      {
+        name: 'workspace statistics cache invalidation',
+        run: () => this.workspaceTestResultsService
+          .invalidateWorkspaceStatsCache(workspaceId)
+      },
+      {
+        name: 'incomplete variables cache invalidation',
+        run: () => this.invalidateIncompleteVariablesCache(workspaceId)
+      },
+      {
+        name: 'applied results cache invalidation',
+        run: () => this.codingProgressService
+          .invalidateAppliedResultsOverviewCache(workspaceId)
+      },
+      {
+        name: 'coding analysis cache invalidation',
+        run: () => this.codingAnalysisService.invalidateCache(workspaceId)
+      },
+      {
+        name: 'coding statistics cache invalidation',
+        run: () => this.codingStatisticsService.invalidateCache(workspaceId)
+      }
+    ];
+    const results = await Promise.allSettled(
+      finalizationSteps.map(step => Promise.resolve().then(step.run))
+    );
+    const failures = results.flatMap((result, index) => {
+      if (result.status === 'rejected') {
+        return [`${finalizationSteps[index].name}: ${String(result.reason)}`];
+      }
+      return result.value ? [] : [
+        `${finalizationSteps[index].name}: cache operation failed`
+      ];
+    });
+
+    if (failures.length > 0) {
+      throw new Error(
+        `Autocoder cache finalization incomplete: ${failures.join('; ')}`
+      );
+    }
+  }
+
   async codeTestPersons(
     workspace_id: number,
     testPersonIdsOrGroups: string,
-    autoCoderRun: number = 1
+    autoCoderRun: number
   ): Promise<CodingStatisticsWithJob> {
     return this.codingProcessService.codeTestPersons(
       workspace_id,
@@ -233,7 +282,7 @@ export class WorkspaceCodingService {
     );
   }
 
-  async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
+  async invalidateIncompleteVariablesCache(workspaceId: number): Promise<boolean> {
     return this.codingValidationService.invalidateIncompleteVariablesCache(
       workspaceId
     );
