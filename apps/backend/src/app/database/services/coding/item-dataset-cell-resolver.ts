@@ -28,6 +28,7 @@ export interface ItemDatasetColumn {
   itemLabel: string;
   itemOrder: number;
   isDerived: boolean;
+  sourceType?: string;
 }
 
 export interface ItemDatasetResponseValue {
@@ -77,6 +78,9 @@ export interface ResolvedItemDatasetCell {
 interface DerivedStateResolution {
   state: ItemDatasetMissingState;
   failureReason?: ItemMatrixCellFailureReason;
+  hasResolvedSource: boolean;
+  hasOmittedSource: boolean;
+  hasIneligibleSource: boolean;
 }
 
 const requiredMissingIds: IqbStandardMissingId[] = [
@@ -194,19 +198,32 @@ export class ItemDatasetCellResolver {
         recursion,
         operationCounter
       );
-      cells[index] =
+      const targetValue = responseValues.get(column.key);
+      const isPartialInvalidResponse =
+        column.sourceType === 'SUM_SCORE' &&
+        this.hasStatus(targetValue, 'INVALID') &&
+        derivedResolution.hasResolvedSource === true &&
+        derivedResolution.hasOmittedSource === true &&
+        derivedResolution.hasIneligibleSource === false &&
+        !derivedResolution.failureReason;
+      if (isPartialInvalidResponse) {
+        cells[index] = this.fromMissing(profile.byId.get('mir')!);
+      } else if (
         derivedResolution.state !== 'valid' &&
-        derivedResolution.state !== 'error' ?
-          this.fromMissing(
-            profile.byId.get(
-              derivedResolution.state as IqbStandardMissingId
-            )!
-          ) :
-          this.unresolvedCell(
-            derivedResolution.state === 'valid' ?
-              'derived-result-missing' :
-              derivedResolution.failureReason || 'derived-source-unresolved'
-          );
+        derivedResolution.state !== 'error'
+      ) {
+        cells[index] = this.fromMissing(
+          profile.byId.get(
+            derivedResolution.state as IqbStandardMissingId
+          )!
+        );
+      } else {
+        cells[index] = this.unresolvedCell(
+          derivedResolution.state === 'valid' ?
+            'derived-result-missing' :
+            derivedResolution.failureReason || 'derived-source-unresolved'
+        );
+      }
       cellsByResponseKey.set(column.key, cells[index]);
     }
     return cells;
@@ -556,13 +573,26 @@ export class ItemDatasetCellResolver {
     operationCounter: { value: number }
   ): Generator<void, DerivedStateResolution, void> {
     if (recursion.has(key)) {
-      return { state: 'error', failureReason: 'derived-cycle' };
+      return {
+        state: 'error',
+        failureReason: 'derived-cycle',
+        hasResolvedSource: false,
+        hasOmittedSource: false,
+        hasIneligibleSource: true
+      };
     }
     const sources = derivedSources.get(key);
     if (!sources || sources.length === 0) {
       const state = cellsByResponseKey.get(key)?.state || 'error';
+      const sourceValue = responseValues.get(key);
+      const hasResolvedSource = state === 'valid';
+      const hasOmittedSource = state === 'mbi_mbo' ||
+        this.isOmittedResponse(sourceValue);
       return {
         state,
+        hasResolvedSource,
+        hasOmittedSource,
+        hasIneligibleSource: !hasResolvedSource && !hasOmittedSource,
         ...(state === 'error' ?
           { failureReason: 'derived-source-unresolved' as const } :
           {})
@@ -577,10 +607,16 @@ export class ItemDatasetCellResolver {
         sourceValue &&
         (sourceValue.code !== null || sourceValue.score !== null)
       ) {
+        const state =
+          cellsByResponseKey.get(sourceKey)?.state ||
+          this.resolveInitialCell(sourceValue, profile).state;
+        const hasResolvedSource = state === 'valid';
+        const hasOmittedSource = state === 'mbi_mbo';
         resolutions.push({
-          state:
-            cellsByResponseKey.get(sourceKey)?.state ||
-            this.resolveInitialCell(sourceValue, profile).state
+          state,
+          hasResolvedSource,
+          hasOmittedSource,
+          hasIneligibleSource: !hasResolvedSource && !hasOmittedSource
         });
         continue;
       }
@@ -600,29 +636,60 @@ export class ItemDatasetCellResolver {
       }
       const resolvedSource = cellsByResponseKey.get(sourceKey);
       if (resolvedSource) {
+        const hasResolvedSource = resolvedSource.state === 'valid';
+        const hasOmittedSource =
+          resolvedSource.state === 'mbi_mbo' ||
+          this.isOmittedResponse(sourceValue);
         resolutions.push({
           state: resolvedSource.state,
-          failureReason: resolvedSource.failureReason
+          failureReason: resolvedSource.failureReason,
+          hasResolvedSource,
+          hasOmittedSource,
+          hasIneligibleSource: !hasResolvedSource && !hasOmittedSource
         });
         continue;
       }
       if (sourceValue) {
         const sourceCell = this.resolveInitialCell(sourceValue, profile);
+        const hasResolvedSource = sourceCell.state === 'valid';
+        const hasOmittedSource = sourceCell.state === 'mbi_mbo' ||
+          this.isOmittedResponse(sourceValue);
         resolutions.push({
           state: sourceCell.state,
-          failureReason: sourceCell.failureReason
+          failureReason: sourceCell.failureReason,
+          hasResolvedSource,
+          hasOmittedSource,
+          hasIneligibleSource: !hasResolvedSource && !hasOmittedSource
         });
       } else {
         resolutions.push({
           state: 'error',
-          failureReason: 'derived-source-unresolved'
+          failureReason: 'derived-source-unresolved',
+          hasResolvedSource: false,
+          hasOmittedSource: false,
+          hasIneligibleSource: true
         });
       }
     }
     recursion.delete(key);
+    const hasResolvedSource = resolutions.some(
+      resolution => resolution.hasResolvedSource === true
+    );
+    const hasOmittedSource = resolutions.some(
+      resolution => resolution.hasOmittedSource === true
+    );
+    const hasIneligibleSource = resolutions.some(
+      resolution => resolution.hasIneligibleSource === true
+    );
     const failureReason = this.getDerivedFailureReason(resolutions);
     if (failureReason) {
-      return { state: 'error', failureReason };
+      return {
+        state: 'error',
+        failureReason,
+        hasResolvedSource,
+        hasOmittedSource,
+        hasIneligibleSource
+      };
     }
     const states = resolutions.map(resolution => resolution.state);
     const state = aggregateItemDatasetMissingStates(states);
@@ -631,14 +698,39 @@ export class ItemDatasetCellResolver {
       states.includes('mbd') &&
       states.some(sourceState => sourceState !== 'mbd')
     ) {
-      return { state, failureReason: 'derived-design-conflict' };
+      return {
+        state,
+        failureReason: 'derived-design-conflict',
+        hasResolvedSource,
+        hasOmittedSource,
+        hasIneligibleSource
+      };
     }
     return {
       state,
+      hasResolvedSource,
+      hasOmittedSource,
+      hasIneligibleSource,
       ...(state === 'error' ?
         { failureReason: 'derived-source-unresolved' as const } :
         {})
     };
+  }
+
+  private hasStatus(
+    value: ItemDatasetResponseValue | undefined,
+    status: string
+  ): boolean {
+    return value?.status !== null && value?.status !== undefined &&
+      statusNumberToString(value.status) === status;
+  }
+
+  private isOmittedResponse(
+    value: ItemDatasetResponseValue | undefined
+  ): boolean {
+    return this.hasStatus(value, 'UNSET') ||
+      this.hasStatus(value, 'DISPLAYED') ||
+      this.hasStatus(value, 'PARTLY_DISPLAYED');
   }
 
   private getDerivedFailureReason(
