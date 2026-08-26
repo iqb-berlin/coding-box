@@ -135,6 +135,7 @@ type CompleteDerivedRecalculation = {
 
 const CODING_COMPLETE_STATUS = statusStringToNumber('CODING_COMPLETE');
 const CODING_INCOMPLETE_STATUS = statusStringToNumber('CODING_INCOMPLETE');
+const INVALID_STATUS = statusStringToNumber('INVALID');
 const UNSET_STATUS = statusStringToNumber('UNSET') as number;
 const COMPARABLE_RECALCULATED_STATUSES = new Set([
   'VALUE_CHANGED',
@@ -1371,6 +1372,21 @@ export class CodingProcessService {
                 inputScore = response.score_v1 ?? undefined;
               }
             }
+
+            // Older run-1 data can contain empty generated derived targets as
+            // INVALID. Re-open only those untouched legacy targets so run 2
+            // derives them again; imported and V2-reviewed rows stay intact.
+            if (
+              this.isLegacyGeneratedInvalidDerivedResponse(
+                response,
+                inputStatus,
+                inputCode,
+                inputScore,
+                scheme.variableCodings || []
+              )
+            ) {
+              inputStatus = UNSET_STATUS;
+            }
           }
           let responseValue = response.value as import('@iqbspecs/response/response.interface').ResponseValueType;
           const isArrayString = /^\[.*]$/.test(response.value);
@@ -2068,6 +2084,48 @@ export class CodingProcessService {
         hasMatchingSubform(response)
       ))
     );
+  }
+
+  private isLegacyGeneratedInvalidDerivedResponse(
+    response: ResponseEntity,
+    inputStatus: number | null,
+    inputCode: number | undefined,
+    inputScore: number | undefined,
+    variableCodings: VariableCodingData[]
+  ): boolean {
+    if (
+      response.is_autocoder_generated !== true ||
+      response.autocoder_invalidated_version !== null ||
+      inputStatus !== INVALID_STATUS ||
+      inputCode !== undefined ||
+      inputScore !== undefined ||
+      response.status_v2 !== null ||
+      response.code_v2 !== null ||
+      response.score_v2 !== null
+    ) {
+      return false;
+    }
+
+    const normalizedVariableId = this.normalizeVariableId(
+      response.variableid
+    );
+    const isDerivedCoding = (coding: VariableCodingData) => (
+      (coding.deriveSources?.length || 0) > 0
+    );
+    const outputMatches = variableCodings.filter(coding => (
+      this.normalizeVariableId(coding.alias || coding.id) ===
+        normalizedVariableId
+    ));
+    if (outputMatches.length > 0) {
+      return outputMatches.filter(isDerivedCoding).length === 1;
+    }
+
+    const matchingDerivedCodings = variableCodings.filter(coding => (
+      isDerivedCoding(coding) &&
+      this.normalizeVariableId(coding.id) === normalizedVariableId
+    ));
+
+    return matchingDerivedCodings.length === 1;
   }
 
   private resolveCompleteDerivedTuple(
