@@ -33,6 +33,10 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { CodingReadinessService } from './coding-readiness.service';
+import {
+  AutocoderOutputShadow,
+  createAutocoderOutputShadows
+} from './autocoder-output-shadow.util';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import {
   lockWorkspaceTestResultsMutation,
@@ -89,10 +93,14 @@ type AutocoderNamespace = {
   variableCodings: VariableCodingData[];
   inputTechnicalIdByAlias: Map<string, string>;
   outputAliasByTechnicalId: Map<string, string>;
-  shadowingPairs: Array<{
-    baseTechnicalId: string;
-    derivedTechnicalId: string;
-  }>;
+  componentById: Map<string, AutocoderNamespaceComponent>;
+  outputShadows: AutocoderOutputShadow[];
+};
+
+type AutocoderNamespaceComponent = {
+  aliasOnlyIds: Set<string>;
+  outputAliasIds: Set<string>;
+  technicalOnlyIds: Set<string>;
 };
 
 type AutocoderInputOrigin = {
@@ -128,6 +136,7 @@ type CompleteDerivedRecalculation = {
 
 const CODING_COMPLETE_STATUS = statusStringToNumber('CODING_COMPLETE');
 const CODING_INCOMPLETE_STATUS = statusStringToNumber('CODING_INCOMPLETE');
+const INVALID_STATUS = statusStringToNumber('INVALID');
 const UNSET_STATUS = statusStringToNumber('UNSET') as number;
 const COMPARABLE_RECALCULATED_STATUSES = new Set([
   'VALUE_CHANGED',
@@ -1364,6 +1373,21 @@ export class CodingProcessService {
                 inputScore = response.score_v1 ?? undefined;
               }
             }
+
+            // Older run-1 data can contain empty generated derived targets as
+            // INVALID. Re-open only those untouched legacy targets so run 2
+            // derives them again; imported and V2-reviewed rows stay intact.
+            if (
+              this.isLegacyGeneratedInvalidDerivedResponse(
+                response,
+                inputStatus,
+                inputCode,
+                inputScore,
+                scheme.variableCodings || []
+              )
+            ) {
+              inputStatus = UNSET_STATUS;
+            }
           }
           let responseValue = response.value as import('@iqbspecs/response/response.interface').ResponseValueType;
           const isArrayString = /^\[.*]$/.test(response.value);
@@ -1681,75 +1705,10 @@ export class CodingProcessService {
   private createAutocoderNamespace(
     variableCodings: VariableCodingData[]
   ): AutocoderNamespace {
-    const codingsByTechnicalId = new Map<string, VariableCodingData[]>();
-    const codingsByOutputAlias = new Map<string, VariableCodingData[]>();
-
-    variableCodings.forEach(coding => {
-      const technicalId = String(coding.id || '');
-      if (!technicalId) {
-        throw new Error('coding contains an empty technical variable ID');
-      }
-
-      const normalizedTechnicalId = this.normalizeVariableId(technicalId);
-      codingsByTechnicalId.set(normalizedTechnicalId, [
-        ...(codingsByTechnicalId.get(normalizedTechnicalId) || []),
-        coding
-      ]);
-
-      const outputAlias = String(coding.alias || coding.id);
-      const normalizedOutputAlias = this.normalizeVariableId(outputAlias);
-      codingsByOutputAlias.set(normalizedOutputAlias, [
-        ...(codingsByOutputAlias.get(normalizedOutputAlias) || []),
-        coding
-      ]);
-    });
-
-    const duplicateTechnicalId = Array.from(codingsByTechnicalId.entries())
-      .find(([, codings]) => codings.length > 1);
-    if (duplicateTechnicalId) {
-      throw new Error(
-        `duplicate technical variable ID "${duplicateTechnicalId[0]}"`
-      );
-    }
-
-    const shadowingPairs: AutocoderNamespace['shadowingPairs'] = [];
-    codingsByOutputAlias.forEach((codings, normalizedAlias) => {
-      if (codings.length === 1) {
-        return;
-      }
-
-      const baseCoding = codings.find(coding => (
-        coding.sourceType === 'BASE' &&
-        this.normalizeVariableId(coding.id) === normalizedAlias
-      ));
-      const derivedCodings = codings.filter(coding => (
-        coding !== baseCoding &&
-        coding.sourceType !== 'BASE' &&
-        coding.sourceType !== 'BASE_NO_VALUE' &&
-        this.normalizeVariableId(coding.alias || coding.id) ===
-          normalizedAlias &&
-        (coding.deriveSources || []).some(source => (
-          this.normalizeVariableId(source) === normalizedAlias
-        ))
-      ));
-      const isAllowedDerivedShadow = Boolean(
-        baseCoding &&
-        codings.length === 2 &&
-        derivedCodings.length === 1
-      );
-
-      if (!isAllowedDerivedShadow || !baseCoding) {
-        throw new Error(`duplicate output alias "${normalizedAlias}"`);
-      }
-
-      shadowingPairs.push({
-        baseTechnicalId: String(baseCoding.id),
-        derivedTechnicalId: String(derivedCodings[0].id)
-      });
-    });
+    const outputShadows = createAutocoderOutputShadows(variableCodings);
 
     const shadowingDerivedIds = new Set(
-      shadowingPairs.map(pair => (
+      outputShadows.map(pair => (
         this.normalizeVariableId(pair.derivedTechnicalId)
       ))
     );
@@ -1785,8 +1744,78 @@ export class CodingProcessService {
       })),
       inputTechnicalIdByAlias,
       outputAliasByTechnicalId,
-      shadowingPairs
+      componentById: this.createAutocoderNamespaceComponents(variableCodings),
+      outputShadows
     };
+  }
+
+  private createAutocoderNamespaceComponents(
+    variableCodings: VariableCodingData[]
+  ): Map<string, AutocoderNamespaceComponent> {
+    const technicalIds = new Set<string>();
+    const outputAliases = new Set<string>();
+    const neighbors = new Map<string, Set<string>>();
+    const addNode = (id: string): void => {
+      if (!neighbors.has(id)) {
+        neighbors.set(id, new Set<string>());
+      }
+    };
+
+    variableCodings.forEach(coding => {
+      const technicalId = this.normalizeVariableId(coding.id);
+      const outputAlias = this.normalizeVariableId(coding.alias || coding.id);
+      technicalIds.add(technicalId);
+      outputAliases.add(outputAlias);
+      addNode(technicalId);
+      addNode(outputAlias);
+      if (technicalId !== outputAlias) {
+        neighbors.get(technicalId)!.add(outputAlias);
+        neighbors.get(outputAlias)!.add(technicalId);
+      }
+    });
+
+    const componentById = new Map<string, AutocoderNamespaceComponent>();
+    const visited = new Set<string>();
+    neighbors.forEach((_unused, startId) => {
+      if (visited.has(startId)) {
+        return;
+      }
+
+      const componentIds = new Set<string>();
+      const pending = [startId];
+      while (pending.length > 0) {
+        const currentId = pending.pop()!;
+        if (visited.has(currentId)) {
+          continue;
+        }
+        visited.add(currentId);
+        componentIds.add(currentId);
+        neighbors.get(currentId)?.forEach(neighbor => {
+          if (!visited.has(neighbor)) {
+            pending.push(neighbor);
+          }
+        });
+      }
+
+      const component: AutocoderNamespaceComponent = {
+        aliasOnlyIds: new Set(
+          Array.from(componentIds).filter(
+            id => outputAliases.has(id) && !technicalIds.has(id)
+          )
+        ),
+        outputAliasIds: new Set(
+          Array.from(componentIds).filter(id => outputAliases.has(id))
+        ),
+        technicalOnlyIds: new Set(
+          Array.from(componentIds).filter(
+            id => technicalIds.has(id) && !outputAliases.has(id)
+          )
+        )
+      };
+      componentIds.forEach(id => componentById.set(id, component));
+    });
+
+    return componentById;
   }
 
   private codeAutocoderResponses(
@@ -1801,6 +1830,25 @@ export class CodingProcessService {
     }
 
     const namespace = this.createAutocoderNamespace(variableCodings);
+    // A generated derived target in this validated shadow uses the same ID as
+    // the structural variable's public alias by design. The generic alias-chain
+    // proof cannot contain an alias-only ID for this two-node namespace.
+    const baseNoValueShadowDerivedIds = new Set(
+      namespace.outputShadows
+        .filter(shadow => shadow.kind === 'BASE_NO_VALUE_DERIVED')
+        .map(shadow => this.normalizeVariableId(shadow.derivedTechnicalId))
+    );
+    const generatedInputIdsBySubform = new Map<string, Set<string>>();
+    responses.forEach((response, index) => {
+      if (inputOrigins?.[index]?.isAutocoderGenerated !== true) {
+        return;
+      }
+      const subform = String(response.subform || '');
+      const inputIds =
+        generatedInputIdsBySubform.get(subform) || new Set<string>();
+      inputIds.add(this.normalizeVariableId(response.id));
+      generatedInputIdsBySubform.set(subform, inputIds);
+    });
     const describeInput = (inputIndex: number): string => {
       const origin = inputOrigins?.[inputIndex];
       const rawVariableId = origin?.storedVariableId ||
@@ -1820,24 +1868,53 @@ export class CodingProcessService {
       const mappedTechnicalId = namespace.inputTechnicalIdByAlias.get(
         normalizedInputId
       );
-      // Imported rows use public aliases. Generated rows may be legacy output
-      // persisted under a technical ID, so an ID that names both namespaces
-      // cannot be interpreted safely without an additional provenance marker.
       const isAmbiguousGeneratedInput =
         inputOrigins?.[index]?.isAutocoderGenerated === true &&
         mappedTechnicalId !== undefined &&
         this.normalizeVariableId(mappedTechnicalId) !== normalizedInputId &&
         namespace.outputAliasByTechnicalId.has(normalizedInputId);
 
-      if (isAmbiguousGeneratedInput) {
-        throw new Error(
-          'Autocoder input namespace is ambiguous for ' +
-          `${describeInput(index)}, subform ` +
-          `"${String(response.subform || '')}": the stored variable ID is ` +
-          'both the output alias for technical variable ' +
-          `"${mappedTechnicalId}" and technical variable ` +
-          `"${response.id}".`
+      if (
+        isAmbiguousGeneratedInput &&
+        !baseNoValueShadowDerivedIds.has(normalizedInputId)
+      ) {
+        const subform = String(response.subform || '');
+        const component = namespace.componentById.get(normalizedInputId);
+        // Only rows previously produced by the Autocoder can prove how an
+        // ambiguous generated ID was persisted. Imported rows may use the
+        // same public aliases but provide no provenance for this row.
+        const inputIds =
+          generatedInputIdsBySubform.get(subform) || new Set<string>();
+        const aliasEvidence = Array.from(component?.aliasOnlyIds || []).filter(
+          id => inputIds.has(id)
         );
+        const technicalEvidence = Array.from(
+          component?.technicalOnlyIds || []
+        ).filter(id => inputIds.has(id));
+        const missingOutputAliases = Array.from(
+          component?.outputAliasIds || []
+        ).filter(id => !inputIds.has(id));
+        const hasProvenAliasNamespace =
+          aliasEvidence.length > 0 &&
+          technicalEvidence.length === 0 &&
+          missingOutputAliases.length === 0;
+
+        if (!hasProvenAliasNamespace) {
+          const formatEvidence = (ids: string[]): string => (
+            ids.length > 0 ? ids.map(id => `"${id}"`).join(', ') : 'none'
+          );
+          throw new Error(
+            'Autocoder input namespace is ambiguous for ' +
+              `${describeInput(index)}, subform "${subform}": stored variable ` +
+              `"${response.id}" is both the output alias for technical ` +
+              `variable "${mappedTechnicalId}" and a technical variable. ` +
+              'Alias encoding is not proven for this namespace component ' +
+              `(alias-only evidence: ${formatEvidence(aliasEvidence)}; ` +
+              'technical-only evidence: ' +
+              `${formatEvidence(technicalEvidence)}; missing output aliases: ` +
+              `${formatEvidence(missingOutputAliases)}).`
+          );
+        }
       }
 
       return {
@@ -1870,7 +1947,7 @@ export class CodingProcessService {
     );
     const derivedResultKeys = new Set<string>();
 
-    namespace.shadowingPairs.forEach(pair => {
+    namespace.outputShadows.forEach(pair => {
       canonicalResults
         .filter(result => (
           this.normalizeVariableId(result.id) ===
@@ -1885,13 +1962,16 @@ export class CodingProcessService {
     });
 
     return canonicalResults
-      .filter(result => !namespace.shadowingPairs.some(pair => (
+      .filter(result => !namespace.outputShadows.some(pair => (
         this.normalizeVariableId(result.id) ===
           this.normalizeVariableId(pair.baseTechnicalId) &&
-        derivedResultKeys.has(this.autocoderResultKey(
-          pair.baseTechnicalId,
-          String(result.subform || '')
-        ))
+        (
+          pair.kind === 'BASE_NO_VALUE_DERIVED' ||
+          derivedResultKeys.has(this.autocoderResultKey(
+            pair.baseTechnicalId,
+            String(result.subform || '')
+          ))
+        )
       )))
       .map(result => ({
         ...result,
@@ -1954,6 +2034,48 @@ export class CodingProcessService {
         hasMatchingSubform(response)
       ))
     );
+  }
+
+  private isLegacyGeneratedInvalidDerivedResponse(
+    response: ResponseEntity,
+    inputStatus: number | null,
+    inputCode: number | undefined,
+    inputScore: number | undefined,
+    variableCodings: VariableCodingData[]
+  ): boolean {
+    if (
+      response.is_autocoder_generated !== true ||
+      response.autocoder_invalidated_version !== null ||
+      inputStatus !== INVALID_STATUS ||
+      inputCode !== undefined ||
+      inputScore !== undefined ||
+      response.status_v2 !== null ||
+      response.code_v2 !== null ||
+      response.score_v2 !== null
+    ) {
+      return false;
+    }
+
+    const normalizedVariableId = this.normalizeVariableId(
+      response.variableid
+    );
+    const isDerivedCoding = (coding: VariableCodingData) => (
+      (coding.deriveSources?.length || 0) > 0
+    );
+    const outputMatches = variableCodings.filter(coding => (
+      this.normalizeVariableId(coding.alias || coding.id) ===
+        normalizedVariableId
+    ));
+    if (outputMatches.length > 0) {
+      return outputMatches.filter(isDerivedCoding).length === 1;
+    }
+
+    const matchingDerivedCodings = variableCodings.filter(coding => (
+      isDerivedCoding(coding) &&
+      this.normalizeVariableId(coding.id) === normalizedVariableId
+    ));
+
+    return matchingDerivedCodings.length === 1;
   }
 
   private resolveCompleteDerivedTuple(

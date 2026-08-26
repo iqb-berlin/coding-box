@@ -1021,6 +1021,117 @@ describe('CodingProcessService', () => {
       ]));
     });
 
+    it('recalculates a legacy generated INVALID derived response in run 2', async () => {
+      const sourceResponse = createMockResponse(
+        1,
+        1,
+        'source',
+        'source-value'
+      );
+      sourceResponse.status_v2 = 5;
+      sourceResponse.code_v2 = 1;
+      sourceResponse.score_v2 = 1;
+      const derivedResponse = createMockResponse(2, 1, '_01', '');
+      derivedResponse.is_autocoder_generated = true;
+      derivedResponse.status_v1 = 7;
+      derivedResponse.code_v1 = null;
+      derivedResponse.score_v1 = null;
+
+      configureDerivedSecondRun(sourceResponse, derivedResponse);
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      expect(
+        (Autocoder.CodingSchemeFactory.code as jest.Mock).mock.calls[0][0]
+      ).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 'derived-target',
+          status: 'UNSET',
+          code: undefined,
+          score: undefined
+        })
+      ]));
+
+      expect(
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1]
+      ).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 2,
+          code_v3: 4,
+          status_v3: 'CODING_COMPLETE',
+          score_v3: 0
+        })
+      ]));
+      expect(result.statusCounts).toEqual({ CODING_COMPLETE: 2 });
+    });
+
+    it('does not reinterpret an imported INVALID base response in run 2', async () => {
+      const invalidBaseResponse = createMockResponse(1, 1, 'source', '');
+      invalidBaseResponse.status_v1 = 7;
+      invalidBaseResponse.code_v1 = null;
+      invalidBaseResponse.score_v1 = null;
+      const derivedResponse = createMockResponse(2, 1, '_01', '');
+      derivedResponse.is_autocoder_generated = true;
+      derivedResponse.status_v1 = 7;
+
+      configureDerivedSecondRun(invalidBaseResponse, derivedResponse);
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      expect(
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1]
+      ).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 1,
+          code_v3: null,
+          status_v3: 'INVALID',
+          score_v3: null
+        })
+      ]));
+      expect(result.statusCounts).toEqual({ INVALID: 2 });
+    });
+
+    it('does not treat an output alias as a colliding derived technical ID', () => {
+      const generatedResponse = createMockResponse(1, 1, '06', '');
+      generatedResponse.is_autocoder_generated = true;
+      generatedResponse.status_v1 = 7;
+      const isLegacyGeneratedInvalidDerivedResponse = (
+        service as unknown as {
+          isLegacyGeneratedInvalidDerivedResponse: (
+            response: ResponseEntity,
+            inputStatus: number,
+            inputCode: undefined,
+            inputScore: undefined,
+            variableCodings: object[]
+          ) => boolean;
+        }
+      ).isLegacyGeneratedInvalidDerivedResponse.bind(service);
+
+      expect(isLegacyGeneratedInvalidDerivedResponse(
+        generatedResponse,
+        7,
+        undefined,
+        undefined,
+        [
+          { id: 'base-06', alias: '06', sourceType: 'BASE' },
+          {
+            id: '06',
+            alias: '07',
+            sourceType: 'CONCAT_CODE',
+            deriveSources: ['base-06']
+          }
+        ]
+      )).toBe(false);
+    });
+
     it('preserves a complete manual v2 tuple for an unchanged independently derived value', async () => {
       const sourceResponse = createMockResponse(1, 1, 'source', 'source-value');
       sourceResponse.status_v2 = 5;
@@ -2589,6 +2700,71 @@ describe('CodingProcessService', () => {
     });
 
     it.each([
+      [
+        'a BASE_NO_VALUE variable with coding rules',
+        [
+          {
+            id: 'structural-target',
+            alias: '01',
+            sourceType: 'BASE_NO_VALUE',
+            codes: [{ id: 1, score: 1 }]
+          },
+          {
+            id: '01',
+            alias: '01',
+            sourceType: 'SUM_SCORE',
+            deriveSources: ['01a']
+          }
+        ]
+      ],
+      [
+        'a derived technical ID different from the shared alias',
+        [
+          {
+            id: 'structural-target',
+            alias: '01',
+            sourceType: 'BASE_NO_VALUE',
+            codes: []
+          },
+          {
+            id: 'derived-target',
+            alias: '01',
+            sourceType: 'SUM_SCORE',
+            deriveSources: ['01a']
+          }
+        ]
+      ],
+      [
+        'a BASE_NO_VALUE technical ID used as a derivation source',
+        [
+          {
+            id: 'structural-target',
+            alias: '01',
+            sourceType: 'BASE_NO_VALUE',
+            codes: []
+          },
+          {
+            id: '01',
+            alias: '01',
+            sourceType: 'SUM_SCORE',
+            deriveSources: ['structural-target']
+          }
+        ]
+      ]
+    ])('rejects unsafe BASE_NO_VALUE shadowing with %s', (_case, codings) => {
+      const createNamespace = (
+        service as unknown as {
+          createAutocoderNamespace: (variableCodings: object[]) => unknown;
+        }
+      ).createAutocoderNamespace.bind(service);
+
+      expect(() => createNamespace(codings)).toThrow(
+        'duplicate output alias "01"'
+      );
+      expect(Autocoder.CodingSchemeFactory.code).not.toHaveBeenCalled();
+    });
+
+    it.each([
       ['public alias first', true],
       ['technical ID first', false]
     ])(
@@ -2677,58 +2853,91 @@ describe('CodingProcessService', () => {
       }
     );
 
-    it('rejects a lone generated input with an ambiguous stored ID', () => {
-      const codeResponses = (
-        service as unknown as {
-          codeAutocoderResponses: (
-            responses: Array<{
-              id: string;
-              value: string;
-              status: 'CODING_COMPLETE';
-              subform?: string | null;
-            }>,
-            variableCodings: Array<{
-              id: string;
-              alias: string;
-              sourceType: string;
-            }>,
-            inputOrigins: Array<{
-              responseId: number;
-              storedVariableId: string;
-              isAutocoderGenerated: boolean;
-            }>
-          ) => unknown;
-        }
-      ).codeAutocoderResponses.bind(service);
-
-      expect(() => codeResponses([
-        {
-          id: '06',
-          value: 'legacy-technical-value',
-          status: 'CODING_COMPLETE',
+    it.each([
+      {
+        description: 'a lone ambiguous generated ID',
+        storedIds: ['06'],
+        expectedEvidence:
+          'alias-only evidence: none; technical-only evidence: none'
+      },
+      {
+        description: 'a technical-ID-encoded generated chain',
+        storedIds: ['radio-group-images_1', '06', '07'],
+        expectedEvidence:
+          'alias-only evidence: none; technical-only evidence: ' +
+          '"RADIO-GROUP-IMAGES_1"'
+      },
+      {
+        description: 'an incomplete generated alias chain',
+        storedIds: ['06', '08'],
+        expectedEvidence:
+          'alias-only evidence: "08"; technical-only evidence: none; ' +
+          'missing output aliases: "07"'
+      },
+      {
+        description: 'mixed alias and technical namespace evidence',
+        storedIds: ['radio-group-images_1', '06', '07', '08'],
+        expectedEvidence:
+          'alias-only evidence: "08"; technical-only evidence: ' +
+          '"RADIO-GROUP-IMAGES_1"'
+      },
+      {
+        description: 'alias evidence supplied only by imported rows',
+        storedIds: ['06', '07', '08'],
+        generatedIds: ['06'],
+        expectedEvidence:
+          'alias-only evidence: none; technical-only evidence: none; ' +
+          'missing output aliases: "07", "08"'
+      }
+    ])(
+      'rejects $description',
+      ({ storedIds, generatedIds = storedIds, expectedEvidence }) => {
+        const codeResponses = (
+          service as unknown as {
+            codeAutocoderResponses: (
+              responses: Array<{
+                id: string;
+                value: string;
+                status: 'CODING_COMPLETE';
+                subform?: string | null;
+              }>,
+              variableCodings: Array<{
+                id: string;
+                alias: string;
+                sourceType: string;
+              }>,
+              inputOrigins: Array<{
+                responseId: number;
+                storedVariableId: string;
+                isAutocoderGenerated: boolean;
+              }>
+            ) => unknown;
+          }
+        ).codeAutocoderResponses.bind(service);
+        const responses = storedIds.map(id => ({
+          id,
+          value: `${id}-value`,
+          status: 'CODING_COMPLETE' as const,
           subform: null
-        }
-      ], [
-        {
-          id: 'radio-group-images_1',
-          alias: '06',
-          sourceType: 'BASE'
-        },
-        { id: '06', alias: '07', sourceType: 'BASE' }
-      ], [
-        {
-          responseId: 6235426,
-          storedVariableId: '06',
-          isAutocoderGenerated: true
-        }
-      ])).toThrow(
-        'Autocoder input namespace is ambiguous for response:6235426 ' +
-        '(stored variable "06", autocoder-generated), subform "": the ' +
-        'stored variable ID is both the output alias for technical variable ' +
-        '"radio-group-images_1" and technical variable "06".'
-      );
-      expect(Autocoder.CodingSchemeFactory.code).not.toHaveBeenCalled();
-    });
+        }));
+        const inputOrigins = storedIds.map((storedVariableId, index) => ({
+          responseId: 6235425 + index,
+          storedVariableId,
+          isAutocoderGenerated: generatedIds.includes(storedVariableId)
+        }));
+
+        expect(() => codeResponses(responses, [
+          {
+            id: 'radio-group-images_1',
+            alias: '06',
+            sourceType: 'BASE'
+          },
+          { id: '06', alias: '07', sourceType: 'BASE' },
+          { id: '07', alias: '08', sourceType: 'BASE' }
+        ], inputOrigins)).toThrow(expectedEvidence);
+        expect(Autocoder.CodingSchemeFactory.code).not.toHaveBeenCalled();
+      }
+    );
 
     it('keeps a real response status instead of an alias-chain placeholder', () => {
       const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
@@ -2802,7 +3011,7 @@ describe('CodingProcessService', () => {
       expect(results.filter(result => result.id === '07')).toHaveLength(1);
     });
 
-    it('accepts a valid technical-ID/output-alias chain without duplicate targets', async () => {
+    it('accepts generated output aliases from a previous run', async () => {
       const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
         '@iqb/responses'
       );
@@ -2811,9 +3020,16 @@ describe('CodingProcessService', () => {
       (Autocoder.CodingSchemeFactory.code as jest.Mock)
         .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.code);
       const response06 = createMockResponse(6235425, 1, '06', '');
+      const response07 = createMockResponse(6235421, 1, '07', '');
+      const response08 = createMockResponse(6235424, 1, '08', '');
       response06.subform = null as unknown as string;
+      response07.subform = null as unknown as string;
+      response08.subform = null as unknown as string;
+      response06.is_autocoder_generated = true;
+      response07.is_autocoder_generated = true;
+      response08.is_autocoder_generated = true;
       mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
-        new Map([['TEST_UNIT_1', new Set(['06'])]])
+        new Map([['TEST_UNIT_1', new Set(['06', '07', '08'])]])
       );
       mockWorkspaceFilesService.getVariableInfoForScheme.mockResolvedValueOnce([
         {
@@ -2846,7 +3062,7 @@ describe('CodingProcessService', () => {
       ]);
       mockQueryBuilder.getMany
         .mockResolvedValueOnce([mockUnits[0]])
-        .mockResolvedValueOnce([response06]);
+        .mockResolvedValueOnce([response06, response07, response08]);
       (fileUploadRepository.find as jest.Mock)
         .mockReset()
         .mockResolvedValueOnce([
@@ -2884,24 +3100,33 @@ describe('CodingProcessService', () => {
         service.createAutocoderPreflightContext()
       );
 
-      expect(plan.codedResponses.filter(response => (
-        response.id === 6235425
-      ))).toHaveLength(1);
       expect(plan.autoCoderRun).toBe(2);
       expect(plan.codedResponses).toEqual(expect.arrayContaining([
         expect.objectContaining({
           id: 6235425,
           status_v3: expect.any(String)
         }),
-        expect.objectContaining({ variableid: '07', isNew: true }),
-        expect.objectContaining({ variableid: '08', isNew: true })
+        expect.objectContaining({
+          id: 6235421,
+          status_v3: expect.any(String)
+        }),
+        expect.objectContaining({
+          id: 6235424,
+          status_v3: expect.any(String)
+        })
+      ]));
+      expect(plan.codedResponses).toHaveLength(3);
+      expect(plan.codedResponses).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ isNew: true })
       ]));
       expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledWith(
         expect.arrayContaining([
           expect.objectContaining({
             id: 'radio-group-images_1',
             subform: undefined
-          })
+          }),
+          expect.objectContaining({ id: '06', subform: undefined }),
+          expect.objectContaining({ id: '07', subform: undefined })
         ]),
         expect.arrayContaining([
           expect.objectContaining({
@@ -3005,6 +3230,345 @@ describe('CodingProcessService', () => {
         .not.toHaveBeenCalled();
       expect(mockResponseManagementService.updateResponsesInDatabase)
         .not.toHaveBeenCalled();
+    });
+
+    it('updates the existing MMB102 target through its BASE_NO_VALUE shadow', async () => {
+      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
+        '@iqb/responses'
+      );
+      (Autocoder.CodingSchemeFactory.code as jest.Mock)
+        .mockImplementation(actualAutocoder.CodingSchemeFactory.code);
+      const importedTarget = createMockResponse(6100, 1, '01', '', 7);
+      importedTarget.status_v1 = 7;
+      const sourceResponses = ['01a', '01b', '01c', '01d']
+        .map((variableId, index) => {
+          const response = createMockResponse(
+            6101 + index,
+            1,
+            variableId,
+            'selected',
+            5
+          );
+          response.status_v1 = 5;
+          response.code_v1 = 1;
+          response.score_v1 = 1;
+          return response;
+        });
+      const mmb102VariableCodings = [
+        ...['01a', '01b', '01c', '01d'].map(id => ({
+          id,
+          sourceType: 'BASE'
+        })),
+        {
+          id: 'M0_XX00_CMCa',
+          alias: '01',
+          sourceType: 'BASE_NO_VALUE',
+          codes: []
+        },
+        {
+          id: '01',
+          sourceType: 'SUM_SCORE',
+          deriveSources: ['01a', '01b', '01c', '01d'],
+          codeModel: 'MANUAL_AND_RULES',
+          codes: [{
+            id: 1,
+            score: 1,
+            ruleSets: [{
+              rules: [{ method: 'MATCH', parameters: ['4'] }]
+            }]
+          }]
+        }
+      ];
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([[
+          'TEST_UNIT_1',
+          new Set(['01', '01a', '01b', '01c', '01d'])
+        ]])
+      );
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce([mockUnits[0]])
+        .mockResolvedValueOnce([importedTarget, ...sourceResponses]);
+      (fileUploadRepository.find as jest.Mock)
+        .mockReset()
+        .mockResolvedValueOnce([
+          createMockFileUpload(
+            'ALIAS_1',
+            '<xml><codingSchemeRef>TEST-SCHEME-REF</codingSchemeRef></xml>'
+          )
+        ])
+        .mockResolvedValueOnce([
+          createMockFileUpload(
+            'TEST-SCHEME-REF',
+            JSON.stringify({
+              version: '3.4',
+              variableCodings: mmb102VariableCodings
+            })
+          )
+        ]);
+
+      const plan = await service.prepareAutocoderBatch(
+        workspaceId,
+        ['1'],
+        2,
+        undefined,
+        'preflight-job',
+        undefined,
+        undefined,
+        service.createAutocoderPreflightContext()
+      );
+
+      const targetUpdates = plan.codedResponses.filter(response => (
+        response.id === importedTarget.id
+      ));
+      expect(targetUpdates).toEqual([
+        expect.objectContaining({
+          id: importedTarget.id,
+          status_v3: 'CODING_COMPLETE',
+          code_v3: 1,
+          score_v3: 1
+        })
+      ]);
+      expect(plan.codedResponses).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          isNew: true,
+          variableid: '01'
+        })
+      ]));
+      expect(plan.codedResponses.filter(response => (
+        response.variableid === 'M0_XX00_CMCa'
+      ))).toHaveLength(0);
+      expect(responseRepository.manager.connection.createQueryRunner)
+        .not.toHaveBeenCalled();
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .not.toHaveBeenCalled();
+    });
+
+    it('accepts a run-1-generated MMB102 target through its BASE_NO_VALUE shadow', () => {
+      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
+        '@iqb/responses'
+      );
+      (Autocoder.CodingSchemeFactory.code as jest.Mock)
+        .mockImplementation(actualAutocoder.CodingSchemeFactory.code);
+      const codeResponses = (
+        service as unknown as {
+          codeAutocoderResponses: (
+            responses: object[],
+            variableCodings: object[],
+            inputOrigins: object[]
+          ) => Array<{
+            id: string;
+            status: string;
+            code?: number;
+            score?: number;
+          }>;
+        }
+      ).codeAutocoderResponses.bind(service);
+      const variableCodings = [
+        { id: '01a', sourceType: 'BASE' },
+        {
+          id: 'M0_XX00_CMCa',
+          alias: '01',
+          sourceType: 'BASE_NO_VALUE',
+          codes: []
+        },
+        {
+          id: '01',
+          sourceType: 'SUM_SCORE',
+          deriveSources: ['01a'],
+          codeModel: 'MANUAL_AND_RULES',
+          codes: [{
+            id: 1,
+            score: 1,
+            ruleSets: [{
+              rules: [{ method: 'MATCH', parameters: ['1'] }]
+            }]
+          }]
+        }
+      ];
+
+      const results = codeResponses([
+        {
+          id: '01a',
+          value: 'selected',
+          status: 'CODING_COMPLETE',
+          code: 1,
+          score: 1
+        },
+        {
+          id: '01',
+          value: null,
+          status: 'INVALID'
+        }
+      ], variableCodings, [
+        {
+          responseId: 6101,
+          storedVariableId: '01a',
+          isAutocoderGenerated: false
+        },
+        {
+          responseId: 6100,
+          storedVariableId: '01',
+          isAutocoderGenerated: true
+        }
+      ]);
+
+      expect(results).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: '01',
+          status: 'CODING_COMPLETE',
+          code: 1,
+          score: 1
+        })
+      ]));
+      expect(results.find(result => (
+        result.id === 'M0_XX00_CMCa'
+      ))).toBeUndefined();
+    });
+
+    it('keeps partial MMB102 sources invalid without leaking the structural target', () => {
+      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
+        '@iqb/responses'
+      );
+      (Autocoder.CodingSchemeFactory.code as jest.Mock)
+        .mockImplementation(actualAutocoder.CodingSchemeFactory.code);
+      const codeResponses = (
+        service as unknown as {
+          codeAutocoderResponses: (
+            responses: object[],
+            variableCodings: object[]
+          ) => Array<{
+            id: string;
+            status: string;
+            code?: number;
+            score?: number;
+          }>;
+        }
+      ).codeAutocoderResponses.bind(service);
+      const variableCodings = [
+        ...['01a', '01b', '01c', '01d'].map(id => ({
+          id,
+          sourceType: 'BASE'
+        })),
+        {
+          id: 'M0_XX00_CMCa',
+          alias: '01',
+          sourceType: 'BASE_NO_VALUE',
+          codes: []
+        },
+        {
+          id: '01',
+          sourceType: 'SUM_SCORE',
+          deriveSources: ['01a', '01b', '01c', '01d'],
+          codeModel: 'MANUAL_AND_RULES',
+          codes: []
+        }
+      ];
+      const sourceResponses = ['01a', '01b', '01c'].map(id => ({
+        id,
+        value: 'selected',
+        status: 'CODING_COMPLETE',
+        code: 1,
+        score: 1
+      }));
+
+      const results = codeResponses([
+        ...sourceResponses,
+        {
+          id: '01d',
+          value: null,
+          status: 'DISPLAYED'
+        },
+        {
+          id: '01',
+          value: null,
+          status: 'INVALID'
+        }
+      ], variableCodings);
+
+      expect(results.filter(result => result.id === '01')).toEqual([
+        expect.objectContaining({
+          id: '01',
+          status: 'INVALID'
+        })
+      ]);
+      expect(results.filter(result => (
+        result.id === 'M0_XX00_CMCa'
+      ))).toHaveLength(0);
+    });
+
+    it('derives MZV005 item 02 only from its own source pair', () => {
+      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
+        '@iqb/responses'
+      );
+      (Autocoder.CodingSchemeFactory.code as jest.Mock)
+        .mockImplementation(actualAutocoder.CodingSchemeFactory.code);
+      const codeResponses = (
+        service as unknown as {
+          codeAutocoderResponses: (
+            responses: object[],
+            variableCodings: object[]
+          ) => Array<{
+            id: string;
+            value: unknown;
+            status: string;
+            code?: number;
+          }>;
+        }
+      ).codeAutocoderResponses.bind(service);
+      const derivedCoding = (
+        id: string,
+        alias: string,
+        deriveSources: string[]
+      ) => ({
+        id,
+        alias,
+        sourceType: 'CONCAT_CODE',
+        deriveSources,
+        codeModel: 'MANUAL_AND_RULES',
+        codes: [{
+          id: 1,
+          score: 1,
+          ruleSets: [{
+            rules: [{ method: 'MATCH', parameters: ['1_1'] }]
+          }]
+        }]
+      });
+      const sourceCodings = [
+        ['text-field-simple_1766055524921_1', '01a'],
+        ['text-field-simple_1766054982415_1', '01b'],
+        ['text-field-simple_1766055021100_1', '02a'],
+        ['text-field-simple_1766055537277_1', '02b']
+      ].map(([id, alias]) => ({ id, alias, sourceType: 'BASE' }));
+      const variableCodings = [
+        ...sourceCodings,
+        derivedCoding('d_1752498297171', '01', [
+          'text-field-simple_1766055524921_1',
+          'text-field-simple_1766054982415_1'
+        ]),
+        derivedCoding('d_1752498377846', '02', [
+          'text-field-simple_1766055021100_1',
+          'text-field-simple_1766055537277_1'
+        ])
+      ];
+      const responses = ['01a', '01b', '02a', '02b'].map(id => ({
+        id,
+        value: 'selected',
+        status: 'CODING_COMPLETE',
+        code: id === '01b' ? 9 : 1,
+        score: 1
+      }));
+
+      const results = codeResponses(responses, variableCodings);
+
+      expect(results).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: '02',
+          value: '1_1',
+          status: 'CODING_COMPLETE',
+          code: 1
+        })
+      ]));
+      expect(results.find(result => result.id === '01')?.value).toBe('1_9');
     });
 
     it('does not open a transaction during a successful preflight', async () => {
