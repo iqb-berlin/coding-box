@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import {
   DEFAULT_CODING_FILE_LOAD_CONCURRENCY,
+  DEFAULT_AUTOCODER_SCHEMA_VALIDATION_MODE,
   DEFAULT_IN_FLIGHT_REQUEST_THRESHOLD_MS,
   DEFAULT_RESPONSE_CACHE_ITEM_CONCURRENCY,
   DEFAULT_RESPONSE_CACHE_WORKSPACE_CONCURRENCY,
@@ -27,6 +28,8 @@ describe('RuntimeConfigService', () => {
     expect(config.inFlightRequestThresholdMs)
       .toBe(DEFAULT_IN_FLIGHT_REQUEST_THRESHOLD_MS);
     expect(config.requestStartLogging).toBe(false);
+    expect(config.autocoderSchemaValidationMode)
+      .toBe(DEFAULT_AUTOCODER_SCHEMA_VALIDATION_MODE);
   });
 
   it('keeps combined response warmup concurrency within the pool budget', () => {
@@ -56,5 +59,24 @@ describe('RuntimeConfigService', () => {
     expect(config.slowRequestThresholdMs).toBe(2500);
     expect(config.inFlightRequestThresholdMs).toBe(12_000);
     expect(config.requestStartLogging).toBe(true);
+  });
+
+  it.each(['strict', 'compatible'] as const)(
+    'accepts the %s Autocoder schema validation mode',
+    mode => {
+      const config = new RuntimeConfigService(new ConfigService({
+        AUTOCODER_SCHEMA_VALIDATION_MODE: mode
+      }));
+
+      expect(config.autocoderSchemaValidationMode).toBe(mode);
+    }
+  );
+
+  it('rejects an unknown Autocoder schema validation mode', () => {
+    expect(() => new RuntimeConfigService(new ConfigService({
+      AUTOCODER_SCHEMA_VALIDATION_MODE: 'off'
+    }))).toThrow(
+      'AUTOCODER_SCHEMA_VALIDATION_MODE must be "strict" or "compatible".'
+    );
   });
 });
