@@ -2944,6 +2944,64 @@ describe('CodingProcessService', () => {
       }
     );
 
+    it('accepts a lone ambiguous generated UNSET placeholder', () => {
+      const codeResponses = (
+        service as unknown as {
+          codeAutocoderResponses: (
+            responses: Array<{
+              id: string;
+              value: string;
+              status: 'UNSET';
+              subform?: string | null;
+              code?: number | null;
+              score?: number | null;
+            }>,
+            variableCodings: Array<{
+              id: string;
+              alias: string;
+              sourceType: string;
+            }>,
+            inputOrigins: Array<{
+              responseId: number;
+              storedVariableId: string;
+              isAutocoderGenerated: boolean;
+            }>
+          ) => unknown;
+        }
+      ).codeAutocoderResponses.bind(service);
+      (Autocoder.CodingSchemeFactory.code as jest.Mock).mockReturnValueOnce([]);
+
+      expect(() => codeResponses([
+        {
+          id: '06',
+          value: '',
+          status: 'UNSET',
+          subform: null,
+          code: null,
+          score: null
+        }
+      ], [
+        {
+          id: 'radio-group-images_1',
+          alias: '06',
+          sourceType: 'BASE'
+        },
+        { id: '06', alias: '07', sourceType: 'BASE' },
+        { id: '07', alias: '08', sourceType: 'BASE' }
+      ], [{
+        responseId: 6235425,
+        storedVariableId: '06',
+        isAutocoderGenerated: true
+      }])).not.toThrow();
+      expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledWith(
+        [expect.objectContaining({
+          id: 'radio-group-images_1',
+          subform: undefined
+        })],
+        expect.any(Array)
+      );
+    });
+
     it('keeps a real response status instead of an alias-chain placeholder', () => {
       const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
         '@iqb/responses'
