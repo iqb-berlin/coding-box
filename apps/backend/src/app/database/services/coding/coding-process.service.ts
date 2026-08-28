@@ -1904,9 +1904,20 @@ export class CodingProcessService {
         mappedTechnicalId !== undefined &&
         this.normalizeVariableId(mappedTechnicalId) !== normalizedInputId &&
         namespace.outputAliasByTechnicalId.has(normalizedInputId);
+      const isEmptyGeneratedPlaceholder =
+        inputOrigins?.[index]?.isAutocoderGenerated === true &&
+        response.status === 'UNSET' &&
+        (
+          response.value === '' ||
+          response.value === null ||
+          response.value === undefined
+        ) &&
+        (response.code === null || response.code === undefined) &&
+        (response.score === null || response.score === undefined);
 
       if (
         isAmbiguousGeneratedInput &&
+        !isEmptyGeneratedPlaceholder &&
         !baseNoValueShadowDerivedIds.has(normalizedInputId)
       ) {
         const subform = String(response.subform || '');
