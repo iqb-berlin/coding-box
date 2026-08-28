@@ -16,6 +16,7 @@ import Persons from '../../entities/persons.entity';
 import { Unit } from '../../entities/unit.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import { ResponseEntity } from '../../entities/response.entity';
+import { RuntimeConfigService } from '../../../config/runtime-config.service';
 
 jest.mock('@iqb/responses', () => ({
   CodingSchemeFactory: {
@@ -285,7 +286,11 @@ describe('CodingProcessService', () => {
         { provide: WorkspaceFilesService, useValue: mockWorkspaceFilesService },
         { provide: CodingReadinessService, useValue: mockCodingReadinessService },
         { provide: CodingStatisticsService, useValue: mockCodingStatisticsService },
-        { provide: WorkspaceCoreService, useValue: mockWorkspaceCoreService }
+        { provide: WorkspaceCoreService, useValue: mockWorkspaceCoreService },
+        {
+          provide: RuntimeConfigService,
+          useValue: { autocoderSchemaValidationMode: 'compatible' }
+        }
       ]
     }).compile();
 
