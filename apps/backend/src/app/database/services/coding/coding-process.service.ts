@@ -46,6 +46,8 @@ import {
   lockWorkspaceFilesMutation,
   unlockWorkspaceFilesMutation
 } from '../shared/workspace-files-lock.util';
+import { RuntimeConfigService } from '../../../config/runtime-config.service';
+import { applyAutocoderSchemaValidationMode } from './autocoder-schema-validation.util';
 
 type UnitCodingJobMetadata = {
   source?: 'manual-selection' | 'coding-freshness';
@@ -166,7 +168,8 @@ export class CodingProcessService {
     private workspaceCoreService: WorkspaceCoreService,
     private workspaceExclusionService: WorkspaceExclusionService,
     private codingReadinessService: CodingReadinessService,
-    private workspaceFilesService: WorkspaceFilesService
+    private workspaceFilesService: WorkspaceFilesService,
+    private runtimeConfigService: RuntimeConfigService
   ) { }
 
   private codingSchemeCache: Map<
@@ -1647,10 +1650,38 @@ export class CodingProcessService {
       );
     }
 
-    const breakingProblems = Autocoder.CodingSchemeFactory.validate(
+    const validation = applyAutocoderSchemaValidationMode(
+      Autocoder.CodingSchemeFactory.validate(
+        baseVariables,
+        namespace.variableCodings
+      ),
+      this.runtimeConfigService.autocoderSchemaValidationMode,
       baseVariables,
       namespace.variableCodings
-    ).filter(problem => problem.breaking);
+    );
+
+    if (validation.toleratedProblems.length > 0) {
+      const problemCounts = validation.toleratedProblems.reduce(
+        (counts, problem) => {
+          counts.set(problem.type, (counts.get(problem.type) || 0) + 1);
+          return counts;
+        },
+        new Map<string, number>()
+      );
+      const problemSummary = [...problemCounts.entries()]
+        .map(([type, count]) => `${type}=${count}`)
+        .join(', ');
+      this.logger.warn(
+        [
+          'Autocoder schema compatibility mode tolerated',
+          `${validation.toleratedProblems.length} legacy source problem(s)`,
+          `for coding scheme "${codingSchemeRef}" and unit`,
+          `"${unit.name}" (${unit.id}): ${problemSummary}`
+        ].join(' ')
+      );
+    }
+
+    const breakingProblems = validation.blockingProblems;
 
     if (breakingProblems.length > 0) {
       const details = breakingProblems.map(problem => {
