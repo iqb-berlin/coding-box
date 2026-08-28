@@ -7,6 +7,9 @@ export const DEFAULT_RESPONSE_CACHE_WORKSPACE_CONCURRENCY = 1;
 export const DEFAULT_RESPONSE_CACHE_ITEM_CONCURRENCY = 4;
 export const DEFAULT_SLOW_REQUEST_THRESHOLD_MS = 1000;
 export const DEFAULT_IN_FLIGHT_REQUEST_THRESHOLD_MS = 10_000;
+export const DEFAULT_AUTOCODER_SCHEMA_VALIDATION_MODE = 'compatible' as const;
+
+export type AutocoderSchemaValidationMode = 'strict' | 'compatible';
 
 export const POSTGRES_POOL_MAX_ENV = 'POSTGRES_POOL_MAX';
 export const CODING_FILE_LOAD_CONCURRENCY_ENV =
@@ -19,6 +22,8 @@ export const SLOW_REQUEST_THRESHOLD_ENV = 'SLOW_REQUEST_THRESHOLD_MS';
 export const IN_FLIGHT_REQUEST_THRESHOLD_ENV =
   'IN_FLIGHT_REQUEST_THRESHOLD_MS';
 export const REQUEST_START_LOGGING_ENV = 'REQUEST_START_LOGGING';
+export const AUTOCODER_SCHEMA_VALIDATION_MODE_ENV =
+  'AUTOCODER_SCHEMA_VALIDATION_MODE';
 
 export function parsePositiveInteger(
   value: unknown,
@@ -53,6 +58,24 @@ export function parseBooleanFlag(value: unknown): boolean {
     ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
 }
 
+export function parseAutocoderSchemaValidationMode(
+  value: unknown
+): AutocoderSchemaValidationMode {
+  if (value === undefined || value === null || value === '') {
+    return DEFAULT_AUTOCODER_SCHEMA_VALIDATION_MODE;
+  }
+
+  const normalizedValue = String(value).trim().toLowerCase();
+  if (normalizedValue === 'strict' || normalizedValue === 'compatible') {
+    return normalizedValue;
+  }
+
+  throw new Error(
+    `${AUTOCODER_SCHEMA_VALIDATION_MODE_ENV} must be ` +
+    '"strict" or "compatible".'
+  );
+}
+
 export function parseSlowRequestThresholdMs(value: unknown): number {
   return parsePositiveMilliseconds(value, DEFAULT_SLOW_REQUEST_THRESHOLD_MS);
 }
@@ -73,6 +96,7 @@ export class RuntimeConfigService {
   readonly slowRequestThresholdMs: number;
   readonly inFlightRequestThresholdMs: number;
   readonly requestStartLogging: boolean;
+  readonly autocoderSchemaValidationMode: AutocoderSchemaValidationMode;
 
   constructor(configService: ConfigService) {
     this.postgresPoolMax = parsePositiveInteger(
@@ -120,6 +144,9 @@ export class RuntimeConfigService {
     );
     this.requestStartLogging = parseBooleanFlag(
       configService.get(REQUEST_START_LOGGING_ENV)
+    );
+    this.autocoderSchemaValidationMode = parseAutocoderSchemaValidationMode(
+      configService.get(AUTOCODER_SCHEMA_VALIDATION_MODE_ENV)
     );
   }
 }
