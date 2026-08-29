@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as Autocoder from '@iqb/responses';
+import { VariableCodingData } from '@iqbspecs/coding-scheme';
 import { Repository } from 'typeorm';
 import { CodingProcessService } from './coding-process.service';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
@@ -150,6 +151,9 @@ describe('CodingProcessService', () => {
     subform: '',
     unit: undefined
   });
+
+  const solverReference = (variable: string): string => `\${${variable}}`;
+  const solverSum = (left: string, right: string): string => `${solverReference(left)} + ${solverReference(right)}`;
 
   const createMockFileUpload = (fileId: string, data: string) => ({
     file_id: fileId,
@@ -2909,6 +2913,110 @@ describe('CodingProcessService', () => {
         { id: 'technical-b', alias: 'DUPLICATE', sourceType: 'BASE' }
       ])).toThrow('duplicate output alias "DUPLICATE"');
       expect(Autocoder.CodingSchemeFactory.code).not.toHaveBeenCalled();
+    });
+
+    it('rewrites solver alias references to the canonical technical namespace', () => {
+      const createNamespace = (
+        service as unknown as {
+          createAutocoderNamespace: (
+            variableCodings: VariableCodingData[]
+          ) => { variableCodings: VariableCodingData[] };
+        }
+      ).createAutocoderNamespace.bind(service);
+      const namespace = createNamespace([
+        {
+          id: 'text-field_1',
+          alias: '01a',
+          sourceType: 'BASE'
+        },
+        {
+          id: 'derived_1',
+          alias: '01',
+          sourceType: 'SOLVER',
+          deriveSources: ['text-field_1'],
+          sourceParameters: {
+            processing: [],
+            solverExpression: solverSum('01a: INC: 0', '01a[0]')
+          }
+        }
+      ]);
+
+      expect(namespace.variableCodings).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 'derived_1',
+          alias: 'derived_1',
+          sourceParameters: expect.objectContaining({
+            solverExpression: solverSum(
+              'text-field_1: INC: 0',
+              'text-field_1[0]'
+            )
+          })
+        })
+      ]));
+    });
+
+    it('codes solver expressions after canonical namespace routing', () => {
+      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
+        '@iqb/responses'
+      );
+      (Autocoder.CodingSchemeFactory.code as jest.Mock)
+        .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.code);
+      const codeResponses = (
+        service as unknown as {
+          codeAutocoderResponses: (
+            responses: Array<Record<string, unknown>>,
+            variableCodings: VariableCodingData[]
+          ) => Array<Record<string, unknown>>;
+        }
+      ).codeAutocoderResponses.bind(service);
+      const variableCodings: VariableCodingData[] = [
+        {
+          id: 'text-field_1',
+          alias: '01a',
+          sourceType: 'BASE'
+        },
+        {
+          id: 'derived_1',
+          alias: '01',
+          sourceType: 'SOLVER',
+          deriveSources: ['text-field_1'],
+          sourceParameters: {
+            processing: [],
+            solverExpression:
+              `${solverReference('01a')} == 9000 ? 1 : 0`
+          },
+          codes: [
+            {
+              id: 1,
+              score: 1,
+              ruleSets: [
+                {
+                  rules: [{ method: 'NUMERIC_MATCH', parameters: ['1'] }]
+                }
+              ]
+            }
+          ]
+        }
+      ];
+
+      expect(codeResponses([
+        {
+          id: '01a',
+          value: '9000',
+          status: 'INTENDED_INCOMPLETE',
+          code: 0,
+          score: 0
+        },
+        { id: '01', value: '', status: 'UNSET' }
+      ], variableCodings)).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: '01',
+          value: 1,
+          status: 'CODING_COMPLETE',
+          code: 1,
+          score: 1
+        })
+      ]));
     });
 
     it.each([
