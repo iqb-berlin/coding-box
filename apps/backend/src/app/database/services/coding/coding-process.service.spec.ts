@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as Autocoder from '@iqb/responses';
+import { VariableCodingData } from '@iqbspecs/coding-scheme';
 import { Repository } from 'typeorm';
 import { CodingProcessService } from './coding-process.service';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
@@ -16,6 +17,7 @@ import Persons from '../../entities/persons.entity';
 import { Unit } from '../../entities/unit.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import { ResponseEntity } from '../../entities/response.entity';
+import { RuntimeConfigService } from '../../../config/runtime-config.service';
 
 jest.mock('@iqb/responses', () => ({
   CodingSchemeFactory: {
@@ -149,6 +151,9 @@ describe('CodingProcessService', () => {
     subform: '',
     unit: undefined
   });
+
+  const solverReference = (variable: string): string => `\${${variable}}`;
+  const solverSum = (left: string, right: string): string => `${solverReference(left)} + ${solverReference(right)}`;
 
   const createMockFileUpload = (fileId: string, data: string) => ({
     file_id: fileId,
@@ -285,7 +290,11 @@ describe('CodingProcessService', () => {
         { provide: WorkspaceFilesService, useValue: mockWorkspaceFilesService },
         { provide: CodingReadinessService, useValue: mockCodingReadinessService },
         { provide: CodingStatisticsService, useValue: mockCodingStatisticsService },
-        { provide: WorkspaceCoreService, useValue: mockWorkspaceCoreService }
+        { provide: WorkspaceCoreService, useValue: mockWorkspaceCoreService },
+        {
+          provide: RuntimeConfigService,
+          useValue: { autocoderSchemaValidationMode: 'compatible' }
+        }
       ]
     }).compile();
 
@@ -1665,7 +1674,7 @@ describe('CodingProcessService', () => {
       ).not.toHaveBeenCalled();
     });
 
-    it('invalidates a complete manual v2 tuple when the derived value changed', async () => {
+    it('preserves a complete manual v2 tuple when recalculation is incomplete', async () => {
       const sourceResponse = createMockResponse(1, 1, 'source', 'source-value');
       sourceResponse.status_v2 = 5;
       sourceResponse.code_v2 = -98;
@@ -1698,26 +1707,24 @@ describe('CodingProcessService', () => {
       expect(codedResponses).toEqual(expect.arrayContaining([
         expect.objectContaining({
           id: 2,
-          value: '-98',
-          status: 3,
-          autocoderInvalidatedVersion: 'v2',
-          code_v3: null,
-          status_v3: 'CODING_INCOMPLETE',
-          score_v3: null
+          code_v3: 4,
+          status_v3: 'CODING_COMPLETE',
+          score_v3: 0
         })
       ]));
       const derivedUpdate = codedResponses.find(response => response.id === 2);
+      expect(derivedUpdate).not.toHaveProperty('value');
+      expect(derivedUpdate.autocoderInvalidatedVersion).toBeNull();
       expect(derivedUpdate).not.toHaveProperty('code_v2');
       expect(derivedUpdate).not.toHaveProperty('status_v2');
       expect(derivedUpdate).not.toHaveProperty('score_v2');
-      expect(result.statusCounts).toEqual({
-        CODING_COMPLETE: 1,
-        CODING_INCOMPLETE: 1
-      });
+      expect(result.statusCounts).toEqual({ CODING_COMPLETE: 2 });
       expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('recalculated derived value changed')
+        expect.stringContaining(
+          'independent recalculation did not produce a complete result'
+        )
       );
-      expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledTimes(3);
+      expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledTimes(2);
       expect(
         (Autocoder.CodingSchemeFactory.code as jest.Mock).mock.results[0].value
       ).toEqual(expect.arrayContaining([
@@ -1735,6 +1742,215 @@ describe('CodingProcessService', () => {
           id: 'derived-target',
           value: '-98',
           status: 'CODING_INCOMPLETE'
+        })
+      ]));
+    });
+
+    it('preserves a complete manual v2 tuple when recalculation has a derive error', async () => {
+      const sourceResponse = createMockResponse(1, 1, 'source', 'source-value');
+      sourceResponse.status_v2 = 4;
+      const derivedResponse = createMockResponse(2, 1, '_01', '1');
+      derivedResponse.is_autocoder_generated = true;
+      derivedResponse.status_v1 = 8;
+      derivedResponse.status_v2 = 5;
+      derivedResponse.code_v2 = 4;
+      derivedResponse.score_v2 = 0;
+
+      configureDerivedSecondRun(sourceResponse, derivedResponse);
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      const codedResponses =
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1];
+      expect(codedResponses).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 2,
+          code_v3: 4,
+          status_v3: 'CODING_COMPLETE',
+          score_v3: 0
+        })
+      ]));
+      const derivedUpdate = codedResponses.find(response => response.id === 2);
+      expect(derivedUpdate).not.toHaveProperty('value');
+      expect(derivedUpdate.autocoderInvalidatedVersion).toBeNull();
+      expect(result.statusCounts).toEqual({
+        CODING_COMPLETE: 1,
+        DERIVE_ERROR: 1
+      });
+      expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledTimes(2);
+    });
+
+    it('restores an invalidated v2 tuple when recalculation still has a derive error', async () => {
+      const sourceResponse = createMockResponse(1, 1, 'source', 'source-value');
+      sourceResponse.status_v2 = 4;
+      const derivedResponse = createMockResponse(2, 1, '_01', '1');
+      derivedResponse.is_autocoder_generated = true;
+      derivedResponse.status_v1 = 8;
+      derivedResponse.status_v2 = 5;
+      derivedResponse.code_v2 = 4;
+      derivedResponse.score_v2 = 0;
+      derivedResponse.autocoder_invalidated_version = 'v2';
+      derivedResponse.status_v3 = 4;
+      derivedResponse.code_v3 = null;
+      derivedResponse.score_v3 = null;
+
+      configureDerivedSecondRun(sourceResponse, derivedResponse);
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      const codedResponses =
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1];
+      expect(codedResponses).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 2,
+          code_v3: 4,
+          status_v3: 'CODING_COMPLETE',
+          score_v3: 0,
+          autocoderInvalidatedVersion: null
+        })
+      ]));
+      expect(result.statusCounts).toEqual({
+        CODING_COMPLETE: 1,
+        DERIVE_ERROR: 1
+      });
+      expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledTimes(2);
+    });
+
+    it('restores an invalidated v2 tuple when recalculation is still incomplete', async () => {
+      const sourceResponse = createMockResponse(1, 1, 'source', 'source-value');
+      sourceResponse.status_v2 = 5;
+      sourceResponse.code_v2 = -98;
+      sourceResponse.score_v2 = 0;
+      const derivedResponse = createMockResponse(2, 1, '_01', '1');
+      derivedResponse.is_autocoder_generated = true;
+      derivedResponse.status_v1 = 8;
+      derivedResponse.status_v2 = 5;
+      derivedResponse.code_v2 = 4;
+      derivedResponse.score_v2 = 0;
+      derivedResponse.autocoder_invalidated_version = 'v2';
+      derivedResponse.status_v3 = 8;
+      derivedResponse.code_v3 = null;
+      derivedResponse.score_v3 = null;
+
+      configureDerivedSecondRun(sourceResponse, derivedResponse);
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      const codedResponses =
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1];
+      expect(codedResponses).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 2,
+          code_v3: 4,
+          status_v3: 'CODING_COMPLETE',
+          score_v3: 0,
+          autocoderInvalidatedVersion: null
+        })
+      ]));
+      expect(result.statusCounts).toEqual({ CODING_COMPLETE: 2 });
+      expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not replace a preserved value during another authoritative recalculation', async () => {
+      const incompleteSource = createMockResponse(
+        1,
+        1,
+        'incomplete-source',
+        'source-value'
+      );
+      incompleteSource.status_v2 = 5;
+      incompleteSource.code_v2 = -98;
+      incompleteSource.score_v2 = 0;
+      const preservedResponse = createMockResponse(2, 1, 'A', '1');
+      preservedResponse.is_autocoder_generated = true;
+      preservedResponse.status_v1 = 8;
+      preservedResponse.status_v2 = 5;
+      preservedResponse.code_v2 = 4;
+      preservedResponse.score_v2 = 0;
+
+      const changedSource = createMockResponse(
+        3,
+        1,
+        'changed-source',
+        'source-value'
+      );
+      changedSource.status_v2 = 5;
+      changedSource.code_v2 = 2;
+      changedSource.score_v2 = 1;
+      const changedResponse = createMockResponse(4, 1, 'B', '1');
+      changedResponse.is_autocoder_generated = true;
+      changedResponse.status_v1 = 8;
+      changedResponse.status_v2 = 5;
+      changedResponse.code_v2 = 4;
+      changedResponse.score_v2 = 0;
+
+      configureDerivedSecondRun(
+        incompleteSource,
+        preservedResponse,
+        [changedSource, changedResponse],
+        [
+          { id: 'incomplete-source', sourceType: 'BASE' },
+          {
+            id: 'derived-a',
+            alias: 'A',
+            sourceType: 'CONCAT_CODE',
+            deriveSources: ['incomplete-source'],
+            codeModel: 'MANUAL_AND_RULES',
+            codes: [{
+              id: 4,
+              score: 0,
+              ruleSets: [{ rules: [{ method: 'MATCH', parameters: ['1'] }] }]
+            }]
+          },
+          { id: 'changed-source', sourceType: 'BASE' },
+          {
+            id: 'derived-b',
+            alias: 'B',
+            sourceType: 'CONCAT_CODE',
+            deriveSources: ['changed-source'],
+            codeModel: 'MANUAL_AND_RULES',
+            codes: [{
+              id: 6,
+              score: 1,
+              ruleSets: [{ rules: [{ method: 'MATCH', parameters: ['2'] }] }]
+            }]
+          }
+        ]
+      );
+
+      await service.processTestPersonsBatch(workspaceId, personIds, 2);
+
+      const codedResponses =
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1];
+      const preservedUpdate = codedResponses.find(response => response.id === 2);
+      expect(preservedUpdate).toEqual(expect.objectContaining({
+        code_v3: 4,
+        status_v3: 'CODING_COMPLETE',
+        score_v3: 0,
+        autocoderInvalidatedVersion: null
+      }));
+      expect(preservedUpdate).not.toHaveProperty('value');
+      expect(preservedUpdate).not.toHaveProperty('status');
+      expect(codedResponses).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 4,
+          value: '2',
+          autocoderInvalidatedVersion: 'v2',
+          code_v3: 6,
+          status_v3: 'CODING_COMPLETE',
+          score_v3: 1
         })
       ]));
     });
@@ -2699,6 +2915,110 @@ describe('CodingProcessService', () => {
       expect(Autocoder.CodingSchemeFactory.code).not.toHaveBeenCalled();
     });
 
+    it('rewrites solver alias references to the canonical technical namespace', () => {
+      const createNamespace = (
+        service as unknown as {
+          createAutocoderNamespace: (
+            variableCodings: VariableCodingData[]
+          ) => { variableCodings: VariableCodingData[] };
+        }
+      ).createAutocoderNamespace.bind(service);
+      const namespace = createNamespace([
+        {
+          id: 'text-field_1',
+          alias: '01a',
+          sourceType: 'BASE'
+        },
+        {
+          id: 'derived_1',
+          alias: '01',
+          sourceType: 'SOLVER',
+          deriveSources: ['text-field_1'],
+          sourceParameters: {
+            processing: [],
+            solverExpression: solverSum('01a: INC: 0', '01a[0]')
+          }
+        }
+      ]);
+
+      expect(namespace.variableCodings).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 'derived_1',
+          alias: 'derived_1',
+          sourceParameters: expect.objectContaining({
+            solverExpression: solverSum(
+              'text-field_1: INC: 0',
+              'text-field_1[0]'
+            )
+          })
+        })
+      ]));
+    });
+
+    it('codes solver expressions after canonical namespace routing', () => {
+      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
+        '@iqb/responses'
+      );
+      (Autocoder.CodingSchemeFactory.code as jest.Mock)
+        .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.code);
+      const codeResponses = (
+        service as unknown as {
+          codeAutocoderResponses: (
+            responses: Array<Record<string, unknown>>,
+            variableCodings: VariableCodingData[]
+          ) => Array<Record<string, unknown>>;
+        }
+      ).codeAutocoderResponses.bind(service);
+      const variableCodings: VariableCodingData[] = [
+        {
+          id: 'text-field_1',
+          alias: '01a',
+          sourceType: 'BASE'
+        },
+        {
+          id: 'derived_1',
+          alias: '01',
+          sourceType: 'SOLVER',
+          deriveSources: ['text-field_1'],
+          sourceParameters: {
+            processing: [],
+            solverExpression:
+              `${solverReference('01a')} == 9000 ? 1 : 0`
+          },
+          codes: [
+            {
+              id: 1,
+              score: 1,
+              ruleSets: [
+                {
+                  rules: [{ method: 'NUMERIC_MATCH', parameters: ['1'] }]
+                }
+              ]
+            }
+          ]
+        }
+      ];
+
+      expect(codeResponses([
+        {
+          id: '01a',
+          value: '9000',
+          status: 'INTENDED_INCOMPLETE',
+          code: 0,
+          score: 0
+        },
+        { id: '01', value: '', status: 'UNSET' }
+      ], variableCodings)).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: '01',
+          value: 1,
+          status: 'CODING_COMPLETE',
+          code: 1,
+          score: 1
+        })
+      ]));
+    });
+
     it.each([
       [
         'a BASE_NO_VALUE variable with coding rules',
@@ -2938,6 +3258,64 @@ describe('CodingProcessService', () => {
         expect(Autocoder.CodingSchemeFactory.code).not.toHaveBeenCalled();
       }
     );
+
+    it('accepts a lone ambiguous generated UNSET placeholder', () => {
+      const codeResponses = (
+        service as unknown as {
+          codeAutocoderResponses: (
+            responses: Array<{
+              id: string;
+              value: string;
+              status: 'UNSET';
+              subform?: string | null;
+              code?: number | null;
+              score?: number | null;
+            }>,
+            variableCodings: Array<{
+              id: string;
+              alias: string;
+              sourceType: string;
+            }>,
+            inputOrigins: Array<{
+              responseId: number;
+              storedVariableId: string;
+              isAutocoderGenerated: boolean;
+            }>
+          ) => unknown;
+        }
+      ).codeAutocoderResponses.bind(service);
+      (Autocoder.CodingSchemeFactory.code as jest.Mock).mockReturnValueOnce([]);
+
+      expect(() => codeResponses([
+        {
+          id: '06',
+          value: '',
+          status: 'UNSET',
+          subform: null,
+          code: null,
+          score: null
+        }
+      ], [
+        {
+          id: 'radio-group-images_1',
+          alias: '06',
+          sourceType: 'BASE'
+        },
+        { id: '06', alias: '07', sourceType: 'BASE' },
+        { id: '07', alias: '08', sourceType: 'BASE' }
+      ], [{
+        responseId: 6235425,
+        storedVariableId: '06',
+        isAutocoderGenerated: true
+      }])).not.toThrow();
+      expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledWith(
+        [expect.objectContaining({
+          id: 'radio-group-images_1',
+          subform: undefined
+        })],
+        expect.any(Array)
+      );
+    });
 
     it('keeps a real response status instead of an alias-chain placeholder', () => {
       const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
