@@ -55,12 +55,14 @@ type CandidateVariableCountRow = {
   unitid: string | number;
   variableid: string;
   response_count: string | number;
+  is_autocoder_generated: boolean;
 };
 
 type CandidateVariableCount = {
   unitid: number;
   variableid: string;
   responseCount: number;
+  isAutocoderGenerated: boolean;
 };
 
 type UnitFileDiagnostics = {
@@ -384,6 +386,7 @@ export class CodingReadinessService {
       .select('response.unitid', 'unitid')
       .addSelect('response.variableid', 'variableid')
       .addSelect('COUNT(response.id)', 'response_count')
+      .addSelect('response.is_autocoder_generated', 'is_autocoder_generated')
       .andWhere(
         new Brackets(qb => {
           qb.where('response.status IN (:...statuses)', {
@@ -393,28 +396,44 @@ export class CodingReadinessService {
           });
         })
       );
-    this.applyCodingCandidateFilter(query, 'response');
+    this.applyCodingCandidateFilter(query, 'response', autoCoderRun);
 
     this.applyAutocoderGeneratedFilter(query, autoCoderRun);
     const rows = await query
       .groupBy('response.unitid')
       .addGroupBy('response.variableid')
+      .addGroupBy('response.is_autocoder_generated')
       .getRawMany<CandidateVariableCountRow>();
 
     return rows
       .map(row => ({
         unitid: Number(row.unitid),
         variableid: row.variableid,
-        responseCount: Number(row.response_count || 0)
+        responseCount: Number(row.response_count || 0),
+        isAutocoderGenerated: row.is_autocoder_generated === true
       }))
       .filter(row => Number.isInteger(row.unitid) && row.responseCount > 0);
   }
 
   private applyCodingCandidateFilter(
     query: SelectQueryBuilder<ResponseEntity>,
-    alias: string
+    alias: string,
+    autoCoderRun: 1 | 2
   ): void {
-    query.andWhere(getCodingVariableIdCandidateSql(alias));
+    const variableCandidateCondition = getCodingVariableIdCandidateSql(alias);
+    if (autoCoderRun === 1) {
+      query.andWhere(variableCandidateCondition);
+      return;
+    }
+
+    query.andWhere(
+      new Brackets(qb => {
+        qb.where(variableCandidateCondition).orWhere(
+          `${alias}.is_autocoder_generated = :generatedCodingCandidate`,
+          { generatedCodingCandidate: true }
+        );
+      })
+    );
   }
 
   private async createScopedResponseQuery(
@@ -625,7 +644,10 @@ export class CodingReadinessService {
     }>();
 
     candidateCounts.forEach(item => {
-      if (!isCodingVariableIdCandidate(item.variableid)) {
+      if (
+        !isCodingVariableIdCandidate(item.variableid) &&
+        !item.isAutocoderGenerated
+      ) {
         return;
       }
 
@@ -677,7 +699,10 @@ export class CodingReadinessService {
     }>();
 
     responses.forEach(response => {
-      if (!isCodingVariableIdCandidate(response.variableid)) {
+      if (
+        !isCodingVariableIdCandidate(response.variableid) &&
+        response.is_autocoder_generated !== true
+      ) {
         return;
       }
 
