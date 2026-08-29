@@ -119,7 +119,11 @@ type CompleteDerivedTuple = {
 
 type CompleteDerivedTupleResolution =
   { action: 'NOT_APPLICABLE' } |
-  { action: 'PRESERVE'; tuple: CompleteDerivedTuple } |
+  {
+    action: 'PRESERVE';
+    tuple: CompleteDerivedTuple;
+    reason: CompleteDerivedTuplePreservationReason;
+  } |
   {
     action: 'RECALCULATE_INVALIDATED';
     recalculatedResult: AutocoderResponse;
@@ -130,6 +134,10 @@ type CompleteDerivedTupleResolution =
     recalculatedResult: AutocoderResponse;
   };
 
+type CompleteDerivedTuplePreservationReason =
+  'UNCHANGED' |
+  'V2_RECALCULATION_NOT_COMPLETE';
+
 type CompleteDerivedRecalculation = {
   targetResults: Map<string, AutocoderResponse>;
   authoritativeResults: AutocoderResponse[] | null;
@@ -138,6 +146,7 @@ type CompleteDerivedRecalculation = {
 
 const CODING_COMPLETE_STATUS = statusStringToNumber('CODING_COMPLETE');
 const CODING_INCOMPLETE_STATUS = statusStringToNumber('CODING_INCOMPLETE');
+const DERIVE_ERROR_STATUS = statusStringToNumber('DERIVE_ERROR');
 const INVALID_STATUS = statusStringToNumber('INVALID');
 const UNSET_STATUS = statusStringToNumber('UNSET') as number;
 const COMPARABLE_RECALCULATED_STATUSES = new Set([
@@ -145,6 +154,10 @@ const COMPARABLE_RECALCULATED_STATUSES = new Set([
   'NO_CODING',
   'CODING_INCOMPLETE',
   'CODING_COMPLETE'
+]);
+const NON_AUTHORITATIVE_V2_RECALCULATION_STATUSES = new Set([
+  'DERIVE_ERROR',
+  'CODING_INCOMPLETE'
 ]);
 const AUTOCODER_LOCK_TIMEOUT = '30s';
 
@@ -1486,17 +1499,25 @@ export class CodingProcessService {
             completeTupleResolution.action === 'PRESERVE' &&
             existingResponse &&
             (
+              completeTupleResolution.reason ===
+                'V2_RECALCULATION_NOT_COMPLETE' ||
               codedStatus !== 'CODING_COMPLETE' ||
               persistedCode !== (codedResult.code ?? null) ||
               persistedScore !== (codedResult.score ?? null)
             )
           ) {
+            const preservationReason =
+              completeTupleResolution.reason ===
+                'V2_RECALCULATION_NOT_COMPLETE' ?
+                'because its independent recalculation did not produce a ' +
+                  'complete result' :
+                'because its independently recalculated derived value is ' +
+                  'unchanged';
             this.logger.warn(
               `Preserving complete ${completeTupleResolution.tuple.version.toUpperCase()} ` +
               'tuple for response ' +
               `${existingResponse.id}, variable ` +
-              `"${existingResponse.variableid}", because its independently ` +
-              'recalculated derived value is unchanged.'
+              `"${existingResponse.variableid}", ${preservationReason}.`
             );
           } else if (
             completeTupleResolution.action === 'DERIVED_VALUE_CHANGED' &&
@@ -1515,6 +1536,7 @@ export class CodingProcessService {
             id: existingResponse ? existingResponse.id : -1
           };
           const hasAuthoritativeDerivedValueChange =
+            completeTupleResolution.action !== 'PRESERVE' &&
             completeDerivedRecalculation.authoritativeResults !== null &&
             existingResponse?.is_autocoder_generated === true &&
             this.normalizeAutocoderValueForComparison(codedResult.value) !==
@@ -2175,11 +2197,14 @@ export class CodingProcessService {
       };
     }
 
-    const hasUnchangedDerivedValue =
-      this.hasUnchangedDerivedValue(existingResponse, recalculatedResult);
+    const preservationReason = this.getCompleteDerivedTuplePreservationReason(
+      tuple,
+      existingResponse,
+      recalculatedResult
+    );
 
-    return hasUnchangedDerivedValue ?
-      { action: 'PRESERVE', tuple } :
+    return preservationReason ?
+      { action: 'PRESERVE', tuple, reason: preservationReason } :
       { action: 'DERIVED_VALUE_CHANGED', tuple, recalculatedResult };
   }
 
@@ -2191,8 +2216,17 @@ export class CodingProcessService {
     }
 
     const hasV2Tuple = response.code_v2 !== null || response.score_v2 !== null;
+    const canRecoverFromNonAuthoritativeV3Result =
+      response.autocoder_invalidated_version === 'v2' &&
+      (
+        response.status_v3 === DERIVE_ERROR_STATUS ||
+        response.status_v3 === CODING_INCOMPLETE_STATUS
+      );
     if (
-      response.autocoder_invalidated_version !== 'v2' &&
+      (
+        response.autocoder_invalidated_version !== 'v2' ||
+        canRecoverFromNonAuthoritativeV3Result
+      ) &&
       response.status_v2 === CODING_COMPLETE_STATUS &&
       hasV2Tuple
     ) {
@@ -2428,7 +2462,11 @@ export class CodingProcessService {
         }
 
         const shouldRestoreTuple = target.tuple &&
-          this.hasUnchangedDerivedValue(target.response, recalculatedResult);
+          this.getCompleteDerivedTuplePreservationReason(
+            target.tuple,
+            target.response,
+            recalculatedResult
+          ) !== null;
         if (!shouldRestoreTuple) {
           requiresAuthoritativeRecalculation = true;
         }
@@ -2494,6 +2532,25 @@ export class CodingProcessService {
     return COMPARABLE_RECALCULATED_STATUSES.has(recalculatedResult.status) &&
       this.normalizeAutocoderValueForComparison(recalculatedResult.value) ===
         this.normalizeAutocoderValueForComparison(response.value);
+  }
+
+  private getCompleteDerivedTuplePreservationReason(
+    tuple: CompleteDerivedTuple,
+    response: ResponseEntity,
+    recalculatedResult: AutocoderResponse
+  ): CompleteDerivedTuplePreservationReason | null {
+    if (
+      tuple.version === 'v2' &&
+      NON_AUTHORITATIVE_V2_RECALCULATION_STATUSES.has(
+        recalculatedResult.status
+      )
+    ) {
+      return 'V2_RECALCULATION_NOT_COMPLETE';
+    }
+
+    return this.hasUnchangedDerivedValue(response, recalculatedResult) ?
+      'UNCHANGED' :
+      null;
   }
 
   private assertUniqueAutocoderPersistenceTargets(
