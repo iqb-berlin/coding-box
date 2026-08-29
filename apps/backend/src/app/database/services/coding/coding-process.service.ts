@@ -1790,6 +1790,16 @@ export class CodingProcessService {
     return {
       variableCodings: variableCodings.map(coding => ({
         ...coding,
+        sourceParameters: coding.sourceType === 'SOLVER' &&
+          coding.sourceParameters?.solverExpression ?
+          {
+            ...coding.sourceParameters,
+            solverExpression: this.rewriteSolverExpressionAliases(
+              coding.sourceParameters.solverExpression,
+              inputTechnicalIdByAlias
+            )
+          } :
+          coding.sourceParameters,
         // The response library otherwise merges the technical-ID and alias
         // namespaces. Internally use technical IDs only and map results back
         // to their public aliases after coding.
@@ -1800,6 +1810,37 @@ export class CodingProcessService {
       componentById: this.createAutocoderNamespaceComponents(variableCodings),
       outputShadows
     };
+  }
+
+  private rewriteSolverExpressionAliases(
+    solverExpression: string,
+    inputTechnicalIdByAlias: Map<string, string>
+  ): string {
+    return solverExpression.replace(/\$\{([^{}]*)}/g, (token, content) => {
+      const policySeparator = content.indexOf(':');
+      const sourceReference = policySeparator >= 0 ?
+        content.slice(0, policySeparator) :
+        content;
+      const policies = policySeparator >= 0 ?
+        content.slice(policySeparator) :
+        '';
+      const fragmentStart = sourceReference.lastIndexOf('[');
+      const alias = (
+        fragmentStart >= 0 ?
+          sourceReference.slice(0, fragmentStart) :
+          sourceReference
+      ).trim();
+      const fragment = fragmentStart >= 0 ?
+        sourceReference.slice(fragmentStart).trim() :
+        '';
+      const technicalId = inputTechnicalIdByAlias.get(
+        this.normalizeVariableId(alias)
+      );
+
+      return technicalId ?
+        `\${${technicalId}${fragment}${policies}}` :
+        token;
+    });
   }
 
   private createAutocoderNamespaceComponents(
