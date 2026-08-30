@@ -1,4 +1,5 @@
 import { PsychometricMetadataResolver } from './psychometric-metadata-resolver.service';
+import { getPsychometricLogicalKey } from './psychometric-key.util';
 
 describe('PsychometricMetadataResolver', () => {
   const createResolver = (
@@ -271,6 +272,50 @@ describe('PsychometricMetadataResolver', () => {
       })
     ]);
     expect(mapping.issues).toEqual([]);
+  });
+
+  it('keeps VOCS aliases authoritative over colliding internal ids', async () => {
+    const resolver = createResolver(
+      {
+        items: [
+          {
+            id: 'ITEM_04',
+            variableId: '04'
+          },
+          {
+            id: 'ITEM_07',
+            variableId: '07'
+          }
+        ]
+      },
+      [
+        {
+          id: '07',
+          alias: '04',
+          type: 'string',
+          hasCodingScheme: true
+        },
+        {
+          id: '11',
+          alias: '07',
+          type: 'string',
+          hasCodingScheme: true
+        }
+      ]
+    );
+
+    const mapping = await resolver.buildItemMapping(7);
+
+    expect(mapping.issues).toEqual([]);
+    expect(mapping.byLogicalKey.get(getPsychometricLogicalKey('UNIT_A', '04'))).toEqual(
+      expect.objectContaining({ variableId: '04', sourceVariableId: '07' })
+    );
+    expect(mapping.byLogicalKey.get(getPsychometricLogicalKey('UNIT_A', '07'))).toEqual(
+      expect.objectContaining({ variableId: '07', sourceVariableId: '11' })
+    );
+    expect(mapping.byLogicalKey.get(getPsychometricLogicalKey('UNIT_A', '11'))).toEqual(
+      expect.objectContaining({ variableId: '07', sourceVariableId: '11' })
+    );
   });
 
   it('does not match VOMD variableId to an internal VOCS id', async () => {

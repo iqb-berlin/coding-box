@@ -158,6 +158,17 @@ export class PsychometricMetadataResolver {
           return [getPsychometricLogicalKey(unit.unitName, variableId)];
         })
       );
+      const resolvedAliasKeys = new Set(
+        resolvedItems.flatMap(({ resolution }) => {
+          if (resolution.issue || !resolution.variable) {
+            return [];
+          }
+          const variableAlias = String(
+            resolution.variable.alias || resolution.variable.id
+          ).trim();
+          return [getPsychometricLogicalKey(unit.unitName, variableAlias)];
+        })
+      );
 
       resolvedItems
         .forEach(({
@@ -259,11 +270,18 @@ export class PsychometricMetadataResolver {
           items.push(mappedItem);
           mappingSourceByKey.set(key, mappingSource);
 
-          [variableId, sourceVariableId].forEach(responseVariableId => {
+          [variableId, sourceVariableId].forEach((responseVariableId, index) => {
             const logicalKey = getPsychometricLogicalKey(
               unit.unitName,
               responseVariableId
             );
+            const isDistinctSourceId =
+              index === 1 &&
+              normalizePsychometricVariableKey(sourceVariableId) !==
+              normalizePsychometricVariableKey(variableId);
+            if (isDistinctSourceId && resolvedAliasKeys.has(logicalKey)) {
+              return;
+            }
             const existing = byLogicalKey.get(logicalKey);
             if (existing && existing !== mappedItem) {
               const message =
