@@ -2050,10 +2050,14 @@ export class CodingProcessService {
       canonicalResponses,
       namespace.variableCodings
     );
+    const missingAwareResults = this.deferAllMissingSumScoreResults(
+      canonicalResults,
+      namespace.variableCodings
+    );
     const derivedResultKeys = new Set<string>();
 
     namespace.outputShadows.forEach(pair => {
-      canonicalResults
+      missingAwareResults
         .filter(result => (
           this.normalizeVariableId(result.id) ===
             this.normalizeVariableId(pair.derivedTechnicalId)
@@ -2066,7 +2070,7 @@ export class CodingProcessService {
         });
     });
 
-    return canonicalResults
+    return missingAwareResults
       .filter(result => !namespace.outputShadows.some(pair => (
         this.normalizeVariableId(result.id) ===
           this.normalizeVariableId(pair.baseTechnicalId) &&
@@ -2085,6 +2089,64 @@ export class CodingProcessService {
         ) || result.id,
         subform: result.subform || undefined
       }));
+  }
+
+  private deferAllMissingSumScoreResults(
+    results: AutocoderResponse[],
+    variableCodings: VariableCodingData[]
+  ): AutocoderResponse[] {
+    const sumScoreCodings = variableCodings.filter(coding => (
+      coding.sourceType === 'SUM_SCORE' &&
+      (coding.deriveSources?.length || 0) > 0
+    ));
+    if (sumScoreCodings.length === 0) {
+      return results;
+    }
+
+    const resultByKey = new Map(results.map(result => [
+      this.autocoderResultKey(result.id, String(result.subform || '')),
+      result
+    ]));
+    const allMissingTargetKeys = new Set<string>();
+
+    results.forEach(result => {
+      const resultId = this.normalizeVariableId(result.id);
+      const coding = sumScoreCodings.find(candidate => (
+        this.normalizeVariableId(candidate.id) === resultId
+      ));
+      if (!coding) {
+        return;
+      }
+
+      const subform = String(result.subform || '');
+      const sourceResults = (coding.deriveSources || []).map(sourceId => (
+        resultByKey.get(this.autocoderResultKey(sourceId, subform))
+      ));
+      const allSourcesArePersistedMissing = sourceResults.every(source => (
+        source?.status === 'CODING_COMPLETE' &&
+        typeof source.code === 'number' &&
+        source.code < 0
+      ));
+      if (allSourcesArePersistedMissing) {
+        allMissingTargetKeys.add(this.autocoderResultKey(result.id, subform));
+      }
+    });
+
+    // REQ-741 requires Autocoder results to stay independent of the selected
+    // missing profile. Keep the derived target unresolved so the export layer
+    // can aggregate the concrete missing category from its source responses.
+    return results.map(result => (
+      allMissingTargetKeys.has(this.autocoderResultKey(
+        result.id,
+        String(result.subform || '')
+      )) ? {
+          ...result,
+          value: null,
+          status: 'DERIVE_PENDING',
+          code: undefined,
+          score: undefined
+        } : result
+    ));
   }
 
   private findExistingResponseForAutocoderResult(
