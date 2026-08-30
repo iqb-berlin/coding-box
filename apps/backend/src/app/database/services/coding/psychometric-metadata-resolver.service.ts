@@ -452,7 +452,7 @@ export class PsychometricMetadataResolver {
       issueCode?: PsychometricMappingIssueCode;
       fallbackNote?: string;
     } {
-    const variableCandidates = this.findVariableCandidates(
+    const variableCandidates = this.findVariableCandidatesByAlias(
       unit.variables,
       vomdVariableId
     );
@@ -470,7 +470,7 @@ export class PsychometricMetadataResolver {
       normalizePsychometricVariableKey(itemId) !==
       normalizePsychometricVariableKey(vomdVariableId);
     const fallbackCandidates = canTryItemId ?
-      this.findVariableCandidates(unit.variables, itemId) :
+      this.findVariableCandidatesByAlias(unit.variables, itemId) :
       [];
     if (fallbackCandidates.length === 1) {
       const reason = vomdVariableId ?
@@ -514,12 +514,12 @@ export class PsychometricMetadataResolver {
         return 'Im betroffenen VOMD-Item eine eindeutige Item-ID ergänzen.';
       case 'missing-variable-id':
       case 'variable-not-found':
-        return 'variableId im VOMD-Item mit ID oder Alias der Unit-/VOCS-' +
+        return 'variableId im VOMD-Item mit dem Alias der Unit-/VOCS-' +
           'Variable abgleichen und korrigieren.';
       case 'ambiguous-variable':
       case 'ambiguous-item-fallback':
       case 'ambiguous-variable-mapping':
-        return 'Doppelte Variablen-IDs oder -Aliasse bereinigen und im ' +
+        return 'Doppelte Variablen-Aliasse bereinigen und im ' +
           'VOMD-Item eine eindeutige variableId setzen.';
       case 'duplicate-vomd-item':
         return 'Veraltete oder doppelte VOMD-Items entfernen und die ' +
@@ -529,7 +529,7 @@ export class PsychometricMetadataResolver {
     }
   }
 
-  private findVariableCandidates(
+  private findVariableCandidatesByAlias(
     variables: PsychometricMappedItem['variable'][],
     identifier: string
   ): PsychometricMappedItem['variable'][] {
@@ -537,10 +537,9 @@ export class PsychometricMetadataResolver {
     if (!normalizedIdentifier) {
       return [];
     }
-    return variables.filter(variable => [variable.alias, variable.id]
-      .map(value => normalizePsychometricVariableKey(value))
-      .includes(normalizedIdentifier)
-    );
+    return variables.filter(variable => (
+      normalizePsychometricVariableKey(variable.alias) === normalizedIdentifier
+    ));
   }
 
   private async loadVomdDocuments(
