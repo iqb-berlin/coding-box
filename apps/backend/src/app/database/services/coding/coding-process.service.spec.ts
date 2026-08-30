@@ -3020,6 +3020,91 @@ describe('CodingProcessService', () => {
     });
 
     it.each([
+      {
+        caseName: 'defers two persisted missing sources',
+        sourceTuples: [[-98, 0], [-98, 0]],
+        expected: {
+          value: null,
+          status: 'DERIVE_PENDING',
+          code: undefined,
+          score: undefined
+        }
+      },
+      {
+        caseName: 'codes two regular zero-score sources with the residual',
+        sourceTuples: [[0, 0], [0, 0]],
+        expected: {
+          value: 0,
+          status: 'CODING_COMPLETE',
+          code: 0,
+          score: 0
+        }
+      },
+      {
+        caseName: 'keeps a mixed valid and missing source numeric',
+        sourceTuples: [[1, 1], [-98, 0]],
+        expected: {
+          value: 1,
+          status: 'CODING_COMPLETE',
+          code: 0,
+          score: 0
+        }
+      }
+    ])('$caseName for SUM_SCORE', ({ sourceTuples, expected }) => {
+      const actualAutocoder = jest.requireActual<typeof import('@iqb/responses')>(
+        '@iqb/responses'
+      );
+      (Autocoder.CodingSchemeFactory.code as jest.Mock)
+        .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.code);
+      const codeResponses = (
+        service as unknown as {
+          codeAutocoderResponses: (
+            responses: Array<Record<string, unknown>>,
+            variableCodings: VariableCodingData[]
+          ) => Array<Record<string, unknown>>;
+        }
+      ).codeAutocoderResponses.bind(service);
+      const variableCodings: VariableCodingData[] = [
+        { id: '11a', sourceType: 'BASE' },
+        { id: '11b', sourceType: 'BASE' },
+        {
+          id: '11',
+          sourceType: 'SUM_SCORE',
+          deriveSources: ['11a', '11b'],
+          codes: [
+            {
+              id: 1,
+              type: 'FULL_CREDIT',
+              score: 1,
+              ruleSets: [{
+                rules: [{ method: 'NUMERIC_MATCH', parameters: ['2'] }]
+              }]
+            },
+            {
+              id: 0,
+              type: 'RESIDUAL_AUTO',
+              score: 0
+            }
+          ]
+        }
+      ];
+      const sourceResponses = sourceTuples.map(([code, score], index) => ({
+        id: index === 0 ? '11a' : '11b',
+        value: 'manual response',
+        status: 'CODING_COMPLETE',
+        code,
+        score
+      }));
+
+      const target = codeResponses([
+        ...sourceResponses,
+        { id: '11', value: null, status: 'DERIVE_PENDING' }
+      ], variableCodings).find(result => result.id === '11');
+
+      expect(target).toEqual(expect.objectContaining(expected));
+    });
+
+    it.each([
       [
         'a BASE_NO_VALUE variable with coding rules',
         [
