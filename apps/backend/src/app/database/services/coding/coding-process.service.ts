@@ -157,7 +157,8 @@ const COMPARABLE_RECALCULATED_STATUSES = new Set([
 ]);
 const NON_AUTHORITATIVE_V2_RECALCULATION_STATUSES = new Set([
   'DERIVE_ERROR',
-  'CODING_INCOMPLETE'
+  'CODING_INCOMPLETE',
+  'INVALID'
 ]);
 const AUTOCODER_LOCK_TIMEOUT = '30s';
 
@@ -2323,7 +2324,8 @@ export class CodingProcessService {
       response.autocoder_invalidated_version === 'v2' &&
       (
         response.status_v3 === DERIVE_ERROR_STATUS ||
-        response.status_v3 === CODING_INCOMPLETE_STATUS
+        response.status_v3 === CODING_INCOMPLETE_STATUS ||
+        response.status_v3 === INVALID_STATUS
       );
     if (
       (

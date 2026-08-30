@@ -1863,6 +1863,54 @@ describe('CodingProcessService', () => {
       expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledTimes(2);
     });
 
+    it('restores an invalidated v2 tuple when recalculation is invalid', async () => {
+      const sourceResponse = createMockResponse(1, 1, 'source', '');
+      sourceResponse.status_v1 = 7;
+      sourceResponse.code_v1 = null;
+      sourceResponse.score_v1 = null;
+      const derivedResponse = createMockResponse(2, 1, '_01', '');
+      derivedResponse.is_autocoder_generated = true;
+      derivedResponse.status_v1 = 7;
+      derivedResponse.status_v2 = 5;
+      derivedResponse.code_v2 = 4;
+      derivedResponse.score_v2 = 0;
+      derivedResponse.autocoder_invalidated_version = 'v2';
+      derivedResponse.status_v3 = 7;
+      derivedResponse.code_v3 = null;
+      derivedResponse.score_v3 = null;
+
+      configureDerivedSecondRun(sourceResponse, derivedResponse);
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      const codedResponses =
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1];
+      expect(codedResponses).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 1,
+          code_v3: null,
+          status_v3: 'INVALID',
+          score_v3: null
+        }),
+        expect.objectContaining({
+          id: 2,
+          code_v3: 4,
+          status_v3: 'CODING_COMPLETE',
+          score_v3: 0,
+          autocoderInvalidatedVersion: null
+        })
+      ]));
+      expect(result.statusCounts).toEqual({
+        INVALID: 1,
+        CODING_COMPLETE: 1
+      });
+      expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalledTimes(2);
+    });
+
     it('does not replace a preserved value during another authoritative recalculation', async () => {
       const incompleteSource = createMockResponse(
         1,
