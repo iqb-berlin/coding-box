@@ -235,6 +235,72 @@ describe('PsychometricMetadataResolver', () => {
     });
   });
 
+  it('matches VOMD variableId to the VOCS alias when an internal id collides', async () => {
+    const resolver = createResolver(
+      {
+        items: [
+          {
+            id: 'ITEM_07',
+            variableId: '04'
+          }
+        ]
+      },
+      [
+        {
+          id: '04',
+          alias: '02',
+          type: 'string',
+          hasCodingScheme: true
+        },
+        {
+          id: '07',
+          alias: '04',
+          type: 'string',
+          hasCodingScheme: true
+        }
+      ]
+    );
+
+    const mapping = await resolver.buildItemMapping(7);
+
+    expect(mapping.items).toEqual([
+      expect.objectContaining({
+        itemId: 'ITEM_07',
+        variableId: '04',
+        sourceVariableId: '07'
+      })
+    ]);
+    expect(mapping.issues).toEqual([]);
+  });
+
+  it('does not match VOMD variableId to an internal VOCS id', async () => {
+    const resolver = createResolver(
+      {
+        items: [
+          {
+            id: 'ITEM_04',
+            variableId: '04'
+          }
+        ]
+      },
+      [
+        {
+          id: '04',
+          alias: '02',
+          type: 'string',
+          hasCodingScheme: true
+        }
+      ]
+    );
+
+    const mapping = await resolver.buildItemMapping(7);
+
+    expect(mapping.items).toEqual([]);
+    expect(mapping.issues).toEqual([
+      'UNIT_A/ITEM_04: Variable 04 nicht gefunden'
+    ]);
+  });
+
   it('requires explicit VOMD item IDs only for strict item mappings', async () => {
     const resolver = createResolver(
       {
