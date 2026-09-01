@@ -157,7 +157,8 @@ const COMPARABLE_RECALCULATED_STATUSES = new Set([
 ]);
 const NON_AUTHORITATIVE_V2_RECALCULATION_STATUSES = new Set([
   'DERIVE_ERROR',
-  'CODING_INCOMPLETE'
+  'CODING_INCOMPLETE',
+  'INVALID'
 ]);
 const AUTOCODER_LOCK_TIMEOUT = '30s';
 
@@ -1358,8 +1359,12 @@ export class CodingProcessService {
           if (autoCoderRun === 2) {
             if (response.autocoder_invalidated_version) {
               inputStatus = response.status_v3 ?? UNSET_STATUS;
-              inputCode = response.code_v3 ?? undefined;
-              inputScore = response.score_v3 ?? undefined;
+              inputCode = this.normalizeAutocoderNumericInput(
+                response.code_v3
+              );
+              inputScore = this.normalizeAutocoderNumericInput(
+                response.score_v3
+              );
             } else {
               const isOpenV2Placeholder =
                 response.status_v2 === CODING_INCOMPLETE_STATUS &&
@@ -1381,12 +1386,20 @@ export class CodingProcessService {
               if (hasV2Result) {
                 inputStatus =
                   response.status_v2 ?? response.status_v1 ?? response.status;
-                inputCode = response.code_v2 ?? undefined;
-                inputScore = response.score_v2 ?? undefined;
+                inputCode = this.normalizeAutocoderNumericInput(
+                  response.code_v2
+                );
+                inputScore = this.normalizeAutocoderNumericInput(
+                  response.score_v2
+                );
               } else {
                 inputStatus = response.status_v1 ?? response.status;
-                inputCode = response.code_v1 ?? undefined;
-                inputScore = response.score_v1 ?? undefined;
+                inputCode = this.normalizeAutocoderNumericInput(
+                  response.code_v1
+                );
+                inputScore = this.normalizeAutocoderNumericInput(
+                  response.score_v1
+                );
               }
             }
 
@@ -1596,7 +1609,10 @@ export class CodingProcessService {
                 codedResponse,
                 completeTupleResolution.tuple
               );
-            } else if (completeTupleResolution.action === 'PRESERVE') {
+            } else if (
+              completeTupleResolution.action === 'PRESERVE' ||
+              completeTupleResolution.action === 'RECALCULATE_INVALIDATED'
+            ) {
               codedResponse.autocoderInvalidatedVersion = null;
             }
           }
@@ -2050,10 +2066,14 @@ export class CodingProcessService {
       canonicalResponses,
       namespace.variableCodings
     );
+    const missingAwareResults = this.deferAllMissingSumScoreResults(
+      canonicalResults,
+      namespace.variableCodings
+    );
     const derivedResultKeys = new Set<string>();
 
     namespace.outputShadows.forEach(pair => {
-      canonicalResults
+      missingAwareResults
         .filter(result => (
           this.normalizeVariableId(result.id) ===
             this.normalizeVariableId(pair.derivedTechnicalId)
@@ -2066,7 +2086,7 @@ export class CodingProcessService {
         });
     });
 
-    return canonicalResults
+    return missingAwareResults
       .filter(result => !namespace.outputShadows.some(pair => (
         this.normalizeVariableId(result.id) ===
           this.normalizeVariableId(pair.baseTechnicalId) &&
@@ -2085,6 +2105,64 @@ export class CodingProcessService {
         ) || result.id,
         subform: result.subform || undefined
       }));
+  }
+
+  private deferAllMissingSumScoreResults(
+    results: AutocoderResponse[],
+    variableCodings: VariableCodingData[]
+  ): AutocoderResponse[] {
+    const sumScoreCodings = variableCodings.filter(coding => (
+      coding.sourceType === 'SUM_SCORE' &&
+      (coding.deriveSources?.length || 0) > 0
+    ));
+    if (sumScoreCodings.length === 0) {
+      return results;
+    }
+
+    const resultByKey = new Map(results.map(result => [
+      this.autocoderResultKey(result.id, String(result.subform || '')),
+      result
+    ]));
+    const allMissingTargetKeys = new Set<string>();
+
+    results.forEach(result => {
+      const resultId = this.normalizeVariableId(result.id);
+      const coding = sumScoreCodings.find(candidate => (
+        this.normalizeVariableId(candidate.id) === resultId
+      ));
+      if (!coding) {
+        return;
+      }
+
+      const subform = String(result.subform || '');
+      const sourceResults = (coding.deriveSources || []).map(sourceId => (
+        resultByKey.get(this.autocoderResultKey(sourceId, subform))
+      ));
+      const allSourcesArePersistedMissing = sourceResults.every(source => (
+        source?.status === 'CODING_COMPLETE' &&
+        typeof source.code === 'number' &&
+        source.code < 0
+      ));
+      if (allSourcesArePersistedMissing) {
+        allMissingTargetKeys.add(this.autocoderResultKey(result.id, subform));
+      }
+    });
+
+    // REQ-741 requires Autocoder results to stay independent of the selected
+    // missing profile. Keep the derived target unresolved so the export layer
+    // can aggregate the concrete missing category from its source responses.
+    return results.map(result => (
+      allMissingTargetKeys.has(this.autocoderResultKey(
+        result.id,
+        String(result.subform || '')
+      )) ? {
+          ...result,
+          value: null,
+          status: 'DERIVE_PENDING',
+          code: undefined,
+          score: undefined
+        } : result
+    ));
   }
 
   private findExistingResponseForAutocoderResult(
@@ -2261,7 +2339,8 @@ export class CodingProcessService {
       response.autocoder_invalidated_version === 'v2' &&
       (
         response.status_v3 === DERIVE_ERROR_STATUS ||
-        response.status_v3 === CODING_INCOMPLETE_STATUS
+        response.status_v3 === CODING_INCOMPLETE_STATUS ||
+        response.status_v3 === INVALID_STATUS
       );
     if (
       (
@@ -2678,6 +2757,21 @@ export class CodingProcessService {
 
   private normalizeVariableId(variableId: unknown): string {
     return String(variableId ?? '').toUpperCase();
+  }
+
+  private normalizeAutocoderNumericInput(value: unknown): number | undefined {
+    if (value === null || value === undefined) {
+      return undefined;
+    }
+
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+      throw new Error(
+        `Autocoder input contains a non-numeric code or score: ${String(value)}`
+      );
+    }
+
+    return numericValue;
   }
 
   private async getCodingSchemeFiles(
