@@ -1359,8 +1359,12 @@ export class CodingProcessService {
           if (autoCoderRun === 2) {
             if (response.autocoder_invalidated_version) {
               inputStatus = response.status_v3 ?? UNSET_STATUS;
-              inputCode = response.code_v3 ?? undefined;
-              inputScore = response.score_v3 ?? undefined;
+              inputCode = this.normalizeAutocoderNumericInput(
+                response.code_v3
+              );
+              inputScore = this.normalizeAutocoderNumericInput(
+                response.score_v3
+              );
             } else {
               const isOpenV2Placeholder =
                 response.status_v2 === CODING_INCOMPLETE_STATUS &&
@@ -1382,12 +1386,20 @@ export class CodingProcessService {
               if (hasV2Result) {
                 inputStatus =
                   response.status_v2 ?? response.status_v1 ?? response.status;
-                inputCode = response.code_v2 ?? undefined;
-                inputScore = response.score_v2 ?? undefined;
+                inputCode = this.normalizeAutocoderNumericInput(
+                  response.code_v2
+                );
+                inputScore = this.normalizeAutocoderNumericInput(
+                  response.score_v2
+                );
               } else {
                 inputStatus = response.status_v1 ?? response.status;
-                inputCode = response.code_v1 ?? undefined;
-                inputScore = response.score_v1 ?? undefined;
+                inputCode = this.normalizeAutocoderNumericInput(
+                  response.code_v1
+                );
+                inputScore = this.normalizeAutocoderNumericInput(
+                  response.score_v1
+                );
               }
             }
 
@@ -1597,7 +1609,10 @@ export class CodingProcessService {
                 codedResponse,
                 completeTupleResolution.tuple
               );
-            } else if (completeTupleResolution.action === 'PRESERVE') {
+            } else if (
+              completeTupleResolution.action === 'PRESERVE' ||
+              completeTupleResolution.action === 'RECALCULATE_INVALIDATED'
+            ) {
               codedResponse.autocoderInvalidatedVersion = null;
             }
           }
@@ -2742,6 +2757,21 @@ export class CodingProcessService {
 
   private normalizeVariableId(variableId: unknown): string {
     return String(variableId ?? '').toUpperCase();
+  }
+
+  private normalizeAutocoderNumericInput(value: unknown): number | undefined {
+    if (value === null || value === undefined) {
+      return undefined;
+    }
+
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+      throw new Error(
+        `Autocoder input contains a non-numeric code or score: ${String(value)}`
+      );
+    }
+
+    return numericValue;
   }
 
   private async getCodingSchemeFiles(

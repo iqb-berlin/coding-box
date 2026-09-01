@@ -1078,6 +1078,89 @@ describe('CodingProcessService', () => {
       expect(result.statusCounts).toEqual({ CODING_COMPLETE: 2 });
     });
 
+    it('normalizes persisted string tuples before SUM_SCORE recalculation', async () => {
+      const sourceIds = [
+        'text-field-simple_1773134458511_1',
+        'text-field-simple_1773134990957_1',
+        'text-field-simple_1773134950754_1'
+      ];
+      const sourceResponses = sourceIds.map((sourceId, index) => {
+        const response = createMockResponse(
+          index + 1,
+          1,
+          `01${String.fromCharCode(97 + index)}`,
+          ['4', '2', '4'][index]
+        );
+        response.status_v1 = 5;
+        response.code_v1 = '1' as unknown as number;
+        response.score_v1 = '1' as unknown as number;
+        return response;
+      });
+      const derivedResponse = createMockResponse(4, 1, '01', '0111');
+      derivedResponse.is_autocoder_generated = true;
+      derivedResponse.status_v1 = 5;
+      derivedResponse.code_v1 = '1' as unknown as number;
+      derivedResponse.score_v1 = '1' as unknown as number;
+      derivedResponse.status_v3 = 5;
+      derivedResponse.code_v3 = '0' as unknown as number;
+      derivedResponse.score_v3 = '0' as unknown as number;
+      derivedResponse.autocoder_invalidated_version = 'v1';
+
+      configureDerivedSecondRun(
+        sourceResponses[0],
+        derivedResponse,
+        sourceResponses.slice(1),
+        [
+          ...sourceIds.map((id, index) => ({
+            id,
+            alias: `01${String.fromCharCode(97 + index)}`,
+            sourceType: 'BASE'
+          })),
+          {
+            id: 'd_1762782901519',
+            alias: '01',
+            sourceType: 'SUM_SCORE',
+            deriveSources: sourceIds,
+            codes: [
+              {
+                id: 1,
+                score: 1,
+                ruleSets: [{
+                  rules: [{ method: 'NUMERIC_MATCH', parameters: ['3'] }]
+                }]
+              },
+              { id: 0, type: 'RESIDUAL_AUTO', score: 0 }
+            ]
+          }
+        ]
+      );
+
+      const result = await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2
+      );
+
+      expect(
+        (Autocoder.CodingSchemeFactory.code as jest.Mock).mock.calls[0][0]
+      ).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: sourceIds[0], code: 1, score: 1 })
+      ]));
+      expect(
+        mockResponseManagementService.updateResponsesInDatabase.mock.calls[0][1]
+      ).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 4,
+          value: '3',
+          autocoderInvalidatedVersion: null,
+          code_v3: 1,
+          status_v3: 'CODING_COMPLETE',
+          score_v3: 1
+        })
+      ]));
+      expect(result.statusCounts).toEqual({ CODING_COMPLETE: 4 });
+    });
+
     it('does not reinterpret an imported INVALID base response in run 2', async () => {
       const invalidBaseResponse = createMockResponse(1, 1, 'source', '');
       invalidBaseResponse.status_v1 = 7;
