@@ -9,6 +9,7 @@ import { MatSort } from '@angular/material/sort';
 import { UntypedFormGroup } from '@angular/forms';
 import { TranslateService } from '@ngx-translate/core';
 import { SelectionModel } from '@angular/cdk/collections';
+import { switchMap } from 'rxjs';
 import { UsersSelectionComponent } from '../users-selection/users-selection.component';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
@@ -17,6 +18,7 @@ import { WorkspaceBackendService } from '../../../workspace/services/workspace-b
 import { AppService } from '../../../core/services/app.service';
 import { CreateUserDto } from '../../../../../../../api-dto/user/create-user-dto';
 import { UsersMenuComponent } from '../users-menu/users-menu.component';
+import { refreshAuthDataAfterMutation } from '../../../core/utils/auth-data-refresh';
 
 @Component({
   selector: 'coding-box-users',
@@ -165,22 +167,29 @@ export class UsersComponent implements OnInit {
   }
 
   setUserWorkspaceAccessRight(workspaces: number[]): void {
-    this.userBackendService.setUserWorkspaceAccessRight(this.selectedUsers[0], workspaces).subscribe(
-      respOk => {
-        if (respOk) {
-          this.snackBar.open(
-            this.translateService.instant('admin.workspace-access-right-set'),
-            '',
-            { duration: 1000 });
-        } else {
-          this.snackBar.open(
-            this.translateService.instant('admin.workspace-access-right-not-set'),
-            this.translateService.instant('error'),
-            { duration: 3000 });
+    this.userBackendService.setUserWorkspaceAccessRight(this.selectedUsers[0], workspaces)
+      .pipe(switchMap(respOk => refreshAuthDataAfterMutation(this.appService, respOk)))
+      .subscribe(
+        result => {
+          if (result.mutationSucceeded && result.authDataRefreshed) {
+            this.snackBar.open(
+              this.translateService.instant('admin.workspace-access-right-set'),
+              '',
+              { duration: 1000 });
+          } else if (result.mutationSucceeded) {
+            this.snackBar.open(
+              this.translateService.instant('admin.change-saved-auth-data-refresh-failed'),
+              this.translateService.instant('error'),
+              { duration: 5000 });
+          } else {
+            this.snackBar.open(
+              this.translateService.instant('admin.workspace-access-right-not-set'),
+              this.translateService.instant('error'),
+              { duration: 3000 });
+          }
+          this.appService.dataLoading = false;
         }
-        this.appService.dataLoading = false;
-      }
-    );
+      );
   }
 
   createWorkspaceList(): void {

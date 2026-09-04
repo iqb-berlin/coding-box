@@ -461,6 +461,7 @@
     "edit-workspace-settings": "Arbeitsbereichs Einstellungen",
     "workspace-deleted": "Arbeitsbereich gelöscht",
     "workspace-access-right-set": "Zugriffsrechte für Arbeitsbereich gesetzt",
+    "change-saved-auth-data-refresh-failed": "Änderung gespeichert, aber die Arbeitsbereichsübersicht konnte nicht aktualisiert werden. Beim nächsten Aufruf wird es erneut versucht.",
     "deleting-workspace-starting": "Löschen von Arbeitsbereich wird gestartet...",
     "deleting-workspace-files": "Dateien werden gelöscht...",
     "deleting-workspace-persons": "Personendaten werden gelöscht...",
