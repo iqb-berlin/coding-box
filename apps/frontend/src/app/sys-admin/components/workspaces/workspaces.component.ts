@@ -5,7 +5,7 @@ import { MatSort } from '@angular/material/sort';
 import { FormsModule, UntypedFormGroup } from '@angular/forms';
 import { SelectionModel } from '@angular/cdk/collections';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { switchMap } from 'rxjs';
+import { map } from 'rxjs';
 import { WorkspacesMenuComponent } from '../workspaces-menu/workspaces-menu.component';
 import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
@@ -14,7 +14,8 @@ import { WorkspaceBackendService } from '../../../workspace/services/workspace-b
 import { CreateWorkspaceDto } from '../../../../../../../api-dto/workspaces/create-workspace-dto';
 import {
   MutationAuthDataRefreshResult,
-  refreshAuthDataAfterMutation
+  hasCurrentAuthDataAfterMutation,
+  runMutationAndRefreshAuthData
 } from '../../../core/utils/auth-data-refresh';
 
 type WorkspaceData = {
@@ -45,11 +46,12 @@ export class WorkspacesComponent {
   @ViewChild(MatSort) sort = new MatSort();
 
   addWorkspace(result: UntypedFormGroup): void {
-    this.workspaceBackendService.addWorkspace(<CreateWorkspaceDto>{
-      name: (<UntypedFormGroup>result).get('name')?.value,
-      settings: {}
-    }).pipe(
-      switchMap(workspaceId => refreshAuthDataAfterMutation(this.appService, workspaceId !== null))
+    runMutationAndRefreshAuthData(
+      this.appService,
+      this.workspaceBackendService.addWorkspace(<CreateWorkspaceDto>{
+        name: (<UntypedFormGroup>result).get('name')?.value,
+        settings: {}
+      }).pipe(map(workspaceId => workspaceId !== null))
     ).subscribe(
       mutationResult => {
         if (mutationResult.mutationSucceeded) {
@@ -66,11 +68,13 @@ export class WorkspacesComponent {
   }
 
   editWorkspace(value: { selection: number[], formData: UntypedFormGroup }): void {
-    this.workspaceBackendService.changeWorkspace({
-      id: value.selection[0],
-      name: value.formData.get('name')?.value
-    })
-      .pipe(switchMap(respOk => refreshAuthDataAfterMutation(this.appService, respOk)))
+    runMutationAndRefreshAuthData(
+      this.appService,
+      this.workspaceBackendService.changeWorkspace({
+        id: value.selection[0],
+        name: value.formData.get('name')?.value
+      })
+    )
       .subscribe(
         result => {
           if (result.mutationSucceeded) {
@@ -107,8 +111,10 @@ export class WorkspacesComponent {
       }
     }, 1000);
 
-    this.workspaceBackendService.deleteWorkspace(workspace_ids)
-      .pipe(switchMap(respOk => refreshAuthDataAfterMutation(this.appService, respOk)))
+    runMutationAndRefreshAuthData(
+      this.appService,
+      this.workspaceBackendService.deleteWorkspace(workspace_ids)
+    )
       .subscribe(
         result => {
           clearInterval(interval);
@@ -139,8 +145,10 @@ export class WorkspacesComponent {
   }
 
   setWorkspaceUsersAccessRight(users: number[]): void {
-    this.workspaceBackendService.setWorkspaceUsersAccessRight(this.selectedWorkspaces[0], users)
-      .pipe(switchMap(respOk => refreshAuthDataAfterMutation(this.appService, respOk)))
+    runMutationAndRefreshAuthData(
+      this.appService,
+      this.workspaceBackendService.setWorkspaceUsersAccessRight(this.selectedWorkspaces[0], users)
+    )
       .subscribe(
         result => {
           if (result.mutationSucceeded) {
@@ -160,7 +168,7 @@ export class WorkspacesComponent {
     successTranslationKey: string,
     result: MutationAuthDataRefreshResult
   ): void {
-    if (result.authDataRefreshed) {
+    if (hasCurrentAuthDataAfterMutation(result)) {
       this.snackBar.open(
         this.translateService.instant(successTranslationKey),
         '',
@@ -169,10 +177,12 @@ export class WorkspacesComponent {
       return;
     }
 
-    this.snackBar.open(
-      this.translateService.instant('admin.change-saved-auth-data-refresh-failed'),
-      this.translateService.instant('error'),
-      { duration: 5000 }
-    );
+    if (result.authDataRefreshOutcome === 'failed') {
+      this.snackBar.open(
+        this.translateService.instant('admin.change-saved-auth-data-refresh-failed'),
+        this.translateService.instant('error'),
+        { duration: 5000 }
+      );
+    }
   }
 }

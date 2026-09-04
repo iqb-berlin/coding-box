@@ -34,7 +34,7 @@ describe('WsAccessRightsComponent', () => {
 
     mockAppService = {
       selectedWorkspaceId: 1,
-      refreshAuthData: jest.fn().mockReturnValue(of(true))
+      refreshAuthData: jest.fn().mockReturnValue(of('updated'))
     };
 
     mockSnackBar = {
@@ -173,7 +173,7 @@ describe('WsAccessRightsComponent', () => {
   it('should clear persisted changes and report a failed auth data refresh separately', () => {
     const user = component.workspaceUsers.entries[0];
     component.changeAccessLevel(true, user, 3);
-    (mockAppService.refreshAuthData as jest.Mock).mockReturnValueOnce(of(false));
+    (mockAppService.refreshAuthData as jest.Mock).mockReturnValueOnce(of('failed'));
 
     component.save();
 
@@ -183,5 +183,16 @@ describe('WsAccessRightsComponent', () => {
       'error',
       { duration: 5000 }
     );
+  });
+
+  it('should clear persisted changes without an obsolete message after the auth context changed', () => {
+    const user = component.workspaceUsers.entries[0];
+    component.changeAccessLevel(true, user, 3);
+    (mockAppService.refreshAuthData as jest.Mock).mockReturnValueOnce(of('invalidated'));
+
+    component.save();
+
+    expect(component.workspaceUsers.hasChanged).toBe(false);
+    expect(mockSnackBar.open).not.toHaveBeenCalled();
   });
 });
