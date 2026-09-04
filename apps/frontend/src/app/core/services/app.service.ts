@@ -2,12 +2,14 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
   BehaviorSubject,
+  defer,
   Observable,
   Subject,
   catchError,
   map,
   of,
   retry,
+  shareReplay,
   throwError,
   timer
 } from 'rxjs';
@@ -37,6 +39,12 @@ export type AuthBootstrapStatus =
   | 'ready'
   | 'session-expired'
   | 'auth-data-failed';
+
+export type AuthDataRefreshOutcome =
+  'updated'
+  | 'superseded'
+  | 'failed'
+  | 'invalidated';
 
 const AUTH_BOOTSTRAP_RETRY_DELAYS_MS = [500, 1000, 2000];
 const RETRYABLE_AUTH_BOOTSTRAP_ERROR_STATUSES = new Set([0, 408, 429, 500, 502, 503, 504]);
@@ -78,6 +86,9 @@ export class AppService {
   readonly selectedWorkspaceId$ = this.selectedWorkspaceIdSubject.asObservable();
   private explicitLogoutInProgress = false;
   private authBootstrapStatusSubject = new BehaviorSubject<AuthBootstrapStatus>('checking');
+  private authDataSessionGeneration = 0;
+  private authDataRefreshRequestId = 0;
+  private latestAppliedAuthDataRefreshRequestId = 0;
 
   constructor() {
     this.loadLogoSettings();
@@ -131,6 +142,7 @@ export class AppService {
   }
 
   loadAuthenticatedUser(identity: string): Observable<boolean> {
+    this.invalidatePendingAuthDataRefreshes();
     this.setAuthBootstrapStatus('backend-login-running');
     this.keycloakIdentity = identity;
     this.sessionRecoveryService.setOwnerId(identity);
@@ -160,6 +172,7 @@ export class AppService {
   }
 
   retryAuthDataLoad(): Observable<boolean> {
+    this.invalidatePendingAuthDataRefreshes();
     const identity = this.loggedUser?.sub || this.keycloakIdentity || '';
     if (!identity) {
       this.markAuthDataFailed();
@@ -182,21 +195,41 @@ export class AppService {
       );
   }
 
-  refreshAuthData(): void {
-    if (this.authBootstrapStatus !== 'ready') {
-      return;
-    }
+  refreshAuthData(): Observable<AuthDataRefreshOutcome> {
+    return defer(() => {
+      if (this.authBootstrapStatus !== 'ready') {
+        return of<AuthDataRefreshOutcome>('invalidated');
+      }
 
-    if (this.loggedUser?.sub) {
-      this.getAuthDataWithRetry(this.loggedUser.sub).subscribe({
-        next: authData => {
-          this.updateAuthData(authData);
-        },
-        error: () => {
-          this.markAuthDataFailed();
-        }
-      });
-    }
+      const identity = this.loggedUser?.sub || this.keycloakIdentity;
+      if (!identity) {
+        return of<AuthDataRefreshOutcome>('invalidated');
+      }
+
+      this.authDataRefreshRequestId += 1;
+      const requestId = this.authDataRefreshRequestId;
+      const sessionGeneration = this.authDataSessionGeneration;
+      return this.getAuthDataWithRetry(identity)
+        .pipe(
+          map((authData): AuthDataRefreshOutcome => {
+            const currentIdentity = this.loggedUser?.sub || this.keycloakIdentity;
+            if (sessionGeneration !== this.authDataSessionGeneration ||
+              identity !== currentIdentity) {
+              return 'invalidated';
+            }
+            if (requestId < this.latestAppliedAuthDataRefreshRequestId) {
+              return 'superseded';
+            }
+            this.latestAppliedAuthDataRefreshRequestId = requestId;
+            this.updateAuthData(authData);
+            return 'updated';
+          }),
+          catchError(() => of<AuthDataRefreshOutcome>('failed'))
+        );
+    }).pipe(
+      // Auth data is global state, so an in-flight refresh must outlive a view subscription.
+      shareReplay({ bufferSize: 1, refCount: false })
+    );
   }
 
   private getAuthDataWithRetry(id: string): Observable<AuthDataDto> {
@@ -377,6 +410,7 @@ export class AppService {
     clearReturnUrl?: boolean;
     clearRecoveryDrafts?: boolean;
   } = {}): void {
+    this.invalidatePendingAuthDataRefreshes();
     localStorage.removeItem('id_token');
     this.keycloakIdentity = undefined;
     this.userProfile = {};
@@ -468,6 +502,10 @@ export class AppService {
 
   private createAuthDataUrl(identity: string): string {
     return `${this.serverUrl}auth-data?identity=${encodeURIComponent(identity)}`;
+  }
+
+  private invalidatePendingAuthDataRefreshes(): void {
+    this.authDataSessionGeneration += 1;
   }
 
   private createTokenScopeParams(scopes: WorkspaceTokenScope[]): HttpParams {
