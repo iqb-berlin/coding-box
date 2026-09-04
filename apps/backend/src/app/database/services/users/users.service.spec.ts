@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import WorkspaceUser from '../../entities/workspace_user.entity';
 import { UsersService } from './users.service';
 
@@ -15,6 +15,7 @@ const createRepo = () => {
     findOne: jest.fn(),
     create: jest.fn(value => ({ id: 77, ...value })),
     save: jest.fn(value => Promise.resolve(Array.isArray(value) ? value : { id: 77, ...value })),
+    exists: jest.fn().mockResolvedValue(true),
     upsert: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
@@ -345,6 +346,44 @@ describe('UsersService', () => {
     await expect(service.removeIds([2, 3], 1)).rejects.toBeInstanceOf(ForbiddenException);
     usersRepository.count.mockResolvedValueOnce(5);
     await expect(service.removeIds([2], 1)).resolves.toBeUndefined();
+  });
+
+  it('reports success when removing all workspace assignments', async () => {
+    workspaceUserRepository.find.mockResolvedValueOnce([{
+      userId: 1,
+      workspaceId: 2,
+      accessLevel: 1,
+      canCode: true
+    }]);
+    mockLockedWorkspaceUsers(workspaceUserRepository, [
+      {
+        userId: 1,
+        workspaceId: 2,
+        accessLevel: 1,
+        canCode: true
+      },
+      {
+        userId: 9,
+        workspaceId: 2,
+        accessLevel: 3,
+        canCode: false
+      }
+    ]);
+
+    await expect(service.assignUserWorkspaces(1, [])).resolves.toBe(true);
+    expect(workspaceUserRepository.delete).toHaveBeenCalledWith({
+      userId: 1,
+      workspaceId: expect.any(Object)
+    });
+    expect(workspaceUserRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects empty workspace assignments for a missing user', async () => {
+    usersRepository.exists.mockResolvedValueOnce(false);
+
+    await expect(service.assignUserWorkspaces(99, [])).rejects.toBeInstanceOf(NotFoundException);
+    expect(workspaceUserRepository.delete).not.toHaveBeenCalled();
+    expect(workspaceUserRepository.save).not.toHaveBeenCalled();
   });
 
   it('rejects user deletions that remove the final workspace study manager', async () => {
