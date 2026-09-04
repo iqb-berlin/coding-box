@@ -1,5 +1,5 @@
 import {
-  Injectable, Logger, BadRequestException, ForbiddenException
+  Injectable, Logger, BadRequestException, ForbiddenException, NotFoundException
 } from '@nestjs/common';
 import { In, MoreThan, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -272,9 +272,13 @@ export class UsersService {
   async assignUserWorkspaces(userId: number, workspaceIds: number[]): Promise<boolean> {
     this.logger.log(`Setting workspaces for user with ID: ${userId}`);
     try {
-      const savedEntries = await this.workspaceUserRepository.manager.transaction(async manager => {
+      await this.workspaceUserRepository.manager.transaction(async manager => {
         const workspaceUsersRepository = manager.getRepository(WorkspaceUser);
         await lockUserRows(manager, [userId]);
+        const userExists = await manager.getRepository(User).exists({ where: { id: userId } });
+        if (!userExists) {
+          throw new NotFoundException(`User with id: ${userId} not found.`);
+        }
         const existingEntries = await workspaceUsersRepository.find({ where: { userId } });
         const affectedWorkspaceIds = Array.from(new Set([
           ...workspaceIds,
@@ -330,10 +334,9 @@ export class UsersService {
       });
 
       this.logger.log(`Workspaces successfully set for user with ID: ${userId}`);
-      // Return true if at least one entry was saved
-      return savedEntries.length > 0;
+      return true;
     } catch (error) {
-      if (error instanceof BadRequestException) {
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
         throw error;
       }
       this.logger.error(
