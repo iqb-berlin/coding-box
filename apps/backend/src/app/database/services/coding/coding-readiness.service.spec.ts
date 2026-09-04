@@ -34,6 +34,7 @@ type ReadinessFixture = {
   unitFiles: FileUpload[];
   codingSchemeFiles?: FileUpload[];
   unitVariableMap: Map<string, Set<string>>;
+  derivedVariablesBySource?: Map<string, Set<string>>;
 };
 
 type ReadinessQueryMocks = {
@@ -153,7 +154,8 @@ const createService = (
       .mockResolvedValueOnce(fixture.codingSchemeFiles || [])
   };
   const workspaceFilesService = {
-    getUnitVariableMap: jest.fn().mockResolvedValue(fixture.unitVariableMap)
+    getUnitVariableMap: jest.fn().mockResolvedValue(fixture.unitVariableMap),
+    getDerivedVariablesBySourceMap: jest.fn().mockResolvedValue(fixture.derivedVariablesBySource || new Map())
   };
   const workspaceExclusionService = {
     resolveExclusionsForQueries: jest.fn().mockResolvedValue({
@@ -194,6 +196,25 @@ const createService = (
 };
 
 describe('CodingReadinessService', () => {
+  it('allows required no-value sources and imported derived aliases but not unrelated helpers', async () => {
+    const units = [createUnit(1, 'UNIT_OK')];
+    const service = createService({
+      units,
+      rawResponsesTotal: 3,
+      candidateRows: [],
+      unitFiles: [createFile('UNIT_OK', '<Unit><codingSchemeRef>SCHEME_OK</codingSchemeRef></Unit>')],
+      codingSchemeFiles: [createFile('SCHEME_OK', createCodingScheme('03a'))],
+      unitVariableMap: new Map([['UNIT_OK', new Set(['03a', '_03'])]]),
+      derivedVariablesBySource: new Map([
+        ['UNIT_OK\u001f_03_reached', new Set(['_03'])],
+        ['UNIT_OK\u001f03a', new Set(['_03'])]
+      ])
+    });
+    const rows = [createResponse(1, 1, '_03_reached', null),
+      createResponse(2, 1, '_03'), createResponse(3, 1, 'image_1')];
+    expect((await service.filterResponsesCodeable(1, rows, units)).map(row => row.id)).toEqual([1, 2]);
+  });
+
   it('uses array parameters for large scoped unit filters', async () => {
     const queryMocks: Partial<ReadinessQueryMocks> = {};
     const service = createService({

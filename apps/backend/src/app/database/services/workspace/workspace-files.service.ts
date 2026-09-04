@@ -3733,13 +3733,18 @@ ${bookletRefs}
    * derived variable aliases that use this source variable in the same unit.
    */
   async getDerivedVariablesBySourceMap(
-    workspaceId: number
+    workspaceId: number,
+    manager?: EntityManager
   ): Promise<Map<string, Set<string>>> {
     const cacheKey = this.getCacheKey(workspaceId, 'derived_variables_by_source');
     const cached =
       await this.cacheService.get<Record<string, string[]>>(cacheKey);
     if (!cached) {
-      await this.refreshUnitVariableCache(workspaceId);
+      if (manager) {
+        await this.refreshUnitVariableCacheInternal(workspaceId, manager);
+      } else {
+        await this.refreshUnitVariableCache(workspaceId);
+      }
       return this.fromRedisMap(
         await this.cacheService.get<Record<string, string[]>>(cacheKey)
       );
