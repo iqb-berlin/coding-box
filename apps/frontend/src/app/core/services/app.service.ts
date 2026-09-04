@@ -2,12 +2,14 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
   BehaviorSubject,
+  defer,
   Observable,
   Subject,
   catchError,
   map,
   of,
   retry,
+  shareReplay,
   throwError,
   timer
 } from 'rxjs';
@@ -78,6 +80,9 @@ export class AppService {
   readonly selectedWorkspaceId$ = this.selectedWorkspaceIdSubject.asObservable();
   private explicitLogoutInProgress = false;
   private authBootstrapStatusSubject = new BehaviorSubject<AuthBootstrapStatus>('checking');
+  private authDataSessionGeneration = 0;
+  private authDataRefreshRequestId = 0;
+  private latestAppliedAuthDataRefreshRequestId = 0;
 
   constructor() {
     this.loadLogoSettings();
@@ -131,6 +136,7 @@ export class AppService {
   }
 
   loadAuthenticatedUser(identity: string): Observable<boolean> {
+    this.invalidatePendingAuthDataRefreshes();
     this.setAuthBootstrapStatus('backend-login-running');
     this.keycloakIdentity = identity;
     this.sessionRecoveryService.setOwnerId(identity);
@@ -160,6 +166,7 @@ export class AppService {
   }
 
   retryAuthDataLoad(): Observable<boolean> {
+    this.invalidatePendingAuthDataRefreshes();
     const identity = this.loggedUser?.sub || this.keycloakIdentity || '';
     if (!identity) {
       this.markAuthDataFailed();
@@ -182,21 +189,38 @@ export class AppService {
       );
   }
 
-  refreshAuthData(): void {
-    if (this.authBootstrapStatus !== 'ready') {
-      return;
-    }
+  refreshAuthData(): Observable<boolean> {
+    return defer(() => {
+      if (this.authBootstrapStatus !== 'ready') {
+        return of(false);
+      }
 
-    if (this.loggedUser?.sub) {
-      this.getAuthDataWithRetry(this.loggedUser.sub).subscribe({
-        next: authData => {
-          this.updateAuthData(authData);
-        },
-        error: () => {
-          this.markAuthDataFailed();
-        }
-      });
-    }
+      const identity = this.loggedUser?.sub || this.keycloakIdentity;
+      if (!identity) {
+        return of(false);
+      }
+
+      this.authDataRefreshRequestId += 1;
+      const requestId = this.authDataRefreshRequestId;
+      const sessionGeneration = this.authDataSessionGeneration;
+      return this.getAuthDataWithRetry(identity)
+        .pipe(
+          map(authData => {
+            const currentIdentity = this.loggedUser?.sub || this.keycloakIdentity;
+            if (sessionGeneration !== this.authDataSessionGeneration ||
+              identity !== currentIdentity) {
+              return false;
+            }
+            if (requestId < this.latestAppliedAuthDataRefreshRequestId) {
+              return true;
+            }
+            this.latestAppliedAuthDataRefreshRequestId = requestId;
+            this.updateAuthData(authData);
+            return true;
+          }),
+          catchError(() => of(false))
+        );
+    }).pipe(shareReplay({ bufferSize: 1, refCount: false }));
   }
 
   private getAuthDataWithRetry(id: string): Observable<AuthDataDto> {
@@ -377,6 +401,7 @@ export class AppService {
     clearReturnUrl?: boolean;
     clearRecoveryDrafts?: boolean;
   } = {}): void {
+    this.invalidatePendingAuthDataRefreshes();
     localStorage.removeItem('id_token');
     this.keycloakIdentity = undefined;
     this.userProfile = {};
@@ -468,6 +493,10 @@ export class AppService {
 
   private createAuthDataUrl(identity: string): string {
     return `${this.serverUrl}auth-data?identity=${encodeURIComponent(identity)}`;
+  }
+
+  private invalidatePendingAuthDataRefreshes(): void {
+    this.authDataSessionGeneration += 1;
   }
 
   private createTokenScopeParams(scopes: WorkspaceTokenScope[]): HttpParams {

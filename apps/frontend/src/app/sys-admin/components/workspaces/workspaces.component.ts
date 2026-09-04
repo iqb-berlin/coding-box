@@ -5,12 +5,17 @@ import { MatSort } from '@angular/material/sort';
 import { FormsModule, UntypedFormGroup } from '@angular/forms';
 import { SelectionModel } from '@angular/cdk/collections';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { switchMap } from 'rxjs';
 import { WorkspacesMenuComponent } from '../workspaces-menu/workspaces-menu.component';
 import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
 import { CreateWorkspaceDto } from '../../../../../../../api-dto/workspaces/create-workspace-dto';
+import {
+  MutationAuthDataRefreshResult,
+  refreshAuthDataAfterMutation
+} from '../../../core/utils/auth-data-refresh';
 
 type WorkspaceData = {
   id: number;
@@ -43,13 +48,12 @@ export class WorkspacesComponent {
     this.workspaceBackendService.addWorkspace(<CreateWorkspaceDto>{
       name: (<UntypedFormGroup>result).get('name')?.value,
       settings: {}
-    }).subscribe(
-      respOk => {
-        if (respOk) {
-          this.snackBar.open(
-            this.translateService.instant('admin.workspace-created'),
-            '',
-            { duration: 1000 });
+    }).pipe(
+      switchMap(workspaceId => refreshAuthDataAfterMutation(this.appService, workspaceId !== null))
+    ).subscribe(
+      mutationResult => {
+        if (mutationResult.mutationSucceeded) {
+          this.showMutationSuccess('admin.workspace-created', mutationResult);
           this.workspacesChanged = true;
         } else {
           this.snackBar.open(
@@ -66,13 +70,11 @@ export class WorkspacesComponent {
       id: value.selection[0],
       name: value.formData.get('name')?.value
     })
+      .pipe(switchMap(respOk => refreshAuthDataAfterMutation(this.appService, respOk)))
       .subscribe(
-        respOk => {
-          if (respOk) {
-            this.snackBar.open(
-              this.translateService.instant('admin.workspace-edited'),
-              '',
-              { duration: 1000 });
+        result => {
+          if (result.mutationSucceeded) {
+            this.showMutationSuccess('admin.workspace-edited', result);
             this.workspacesChanged = true;
           } else {
             this.snackBar.open(
@@ -105,28 +107,27 @@ export class WorkspacesComponent {
       }
     }, 1000);
 
-    this.workspaceBackendService.deleteWorkspace(workspace_ids).subscribe(
-      respOk => {
-        clearInterval(interval);
-        if (respOk) {
-          this.deleteStatus = this.translateService.instant('admin.deleting-workspace-success');
-          setTimeout(() => {
+    this.workspaceBackendService.deleteWorkspace(workspace_ids)
+      .pipe(switchMap(respOk => refreshAuthDataAfterMutation(this.appService, respOk)))
+      .subscribe(
+        result => {
+          clearInterval(interval);
+          if (result.mutationSucceeded) {
+            this.deleteStatus = this.translateService.instant('admin.deleting-workspace-success');
+            setTimeout(() => {
+              this.showMutationSuccess('admin.workspace-deleted', result);
+              this.workspacesChanged = true;
+              this.isDeleting = false;
+            }, 1000);
+          } else {
             this.snackBar.open(
-              this.translateService.instant('admin.workspace-deleted'),
-              '',
+              this.translateService.instant('admin.workspace-not-deleted'),
+              this.translateService.instant('error'),
               { duration: 1000 });
-            this.workspacesChanged = true;
             this.isDeleting = false;
-          }, 1000);
-        } else {
-          this.snackBar.open(
-            this.translateService.instant('admin.workspace-not-deleted'),
-            this.translateService.instant('error'),
-            { duration: 1000 });
-          this.isDeleting = false;
+          }
         }
-      }
-    );
+      );
   }
 
   workspacesUpdated(): void {
@@ -138,21 +139,40 @@ export class WorkspacesComponent {
   }
 
   setWorkspaceUsersAccessRight(users: number[]): void {
-    this.workspaceBackendService.setWorkspaceUsersAccessRight(this.selectedWorkspaces[0], users).subscribe(
-      respOk => {
-        if (respOk) {
-          this.snackBar.open(
-            this.translateService.instant('admin.workspace-access-right-set'),
-            '',
-            { duration: 1000 });
-        } else {
-          this.snackBar.open(
-            this.translateService.instant('admin.workspace-access-right-not-set'),
-            this.translateService.instant('error'),
-            { duration: 3000 });
+    this.workspaceBackendService.setWorkspaceUsersAccessRight(this.selectedWorkspaces[0], users)
+      .pipe(switchMap(respOk => refreshAuthDataAfterMutation(this.appService, respOk)))
+      .subscribe(
+        result => {
+          if (result.mutationSucceeded) {
+            this.showMutationSuccess('admin.workspace-access-right-set', result);
+          } else {
+            this.snackBar.open(
+              this.translateService.instant('admin.workspace-access-right-not-set'),
+              this.translateService.instant('error'),
+              { duration: 3000 });
+          }
+          this.appService.dataLoading = false;
         }
-        this.appService.dataLoading = false;
-      }
+      );
+  }
+
+  private showMutationSuccess(
+    successTranslationKey: string,
+    result: MutationAuthDataRefreshResult
+  ): void {
+    if (result.authDataRefreshed) {
+      this.snackBar.open(
+        this.translateService.instant(successTranslationKey),
+        '',
+        { duration: 1000 }
+      );
+      return;
+    }
+
+    this.snackBar.open(
+      this.translateService.instant('admin.change-saved-auth-data-refresh-failed'),
+      this.translateService.instant('error'),
+      { duration: 5000 }
     );
   }
 }

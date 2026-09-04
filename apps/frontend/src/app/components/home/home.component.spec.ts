@@ -84,6 +84,7 @@ describe('HomeComponent', () => {
     mockActivatedRoute.queryParams = queryParamsSubject.asObservable();
     mockAppService.authBootstrapStatus$ = authStatusSubject.asObservable();
     mockAppService.authData$ = authDataSubject.asObservable();
+    mockAppService.refreshAuthData.mockReturnValue(of(true));
     mockAuthService.isLoggedIn.mockReturnValue(true);
 
     await TestBed.configureTestingModule({
@@ -248,6 +249,74 @@ describe('HomeComponent', () => {
 
     authStatusSubject.next('ready');
     expect(mockAppService.refreshAuthData).toHaveBeenCalledTimes(1);
+  });
+
+  it('should refresh existing auth data when returning to home', () => {
+    authDataSubject = new BehaviorSubject<AuthDataDto>({
+      ...defaultAuthData,
+      userId: 7,
+      isAdmin: true,
+      workspaces: [{ id: 11, name: 'Old' } as WorkspaceFullDto]
+    });
+    mockAppService.authData$ = authDataSubject.asObservable();
+    mockAppService.refreshAuthData.mockImplementation(() => {
+      authDataSubject.next({
+        ...defaultAuthData,
+        userId: 7,
+        isAdmin: true,
+        workspaces: [{ id: 12, name: 'Current' } as WorkspaceFullDto]
+      });
+      return of(true);
+    });
+
+    createComponent();
+
+    expect(mockAppService.refreshAuthData).toHaveBeenCalledTimes(1);
+    expect(component.workspaces).toEqual([{ id: 12, name: 'Current' }]);
+  });
+
+  it('should retry a failed background refresh on the next home visit', () => {
+    mockAppService.refreshAuthData.mockReturnValueOnce(of(false));
+
+    createComponent();
+    fixture.destroy();
+    createComponent();
+
+    expect(mockAppService.refreshAuthData).toHaveBeenCalledTimes(2);
+  });
+
+  it('should use existing auth data for pure coder routing when background refresh fails', async () => {
+    mockAppService.refreshAuthData.mockReturnValueOnce(of(false));
+    getUsers.mockReturnValue(of([{ id: 7, accessLevel: 1, canCode: true }]));
+    authDataSubject.next({
+      ...defaultAuthData,
+      userId: 7,
+      workspaces: [{ id: 11 } as WorkspaceFullDto]
+    });
+
+    createComponent();
+    await fixture.whenStable();
+
+    expect(getUsers).toHaveBeenCalledWith(11);
+    expect(routerNavigate).toHaveBeenCalledWith(['/coding']);
+  });
+
+  it('should cancel the background refresh when leaving home', () => {
+    const refreshResult = new Subject<boolean>();
+    mockAppService.refreshAuthData.mockReturnValueOnce(refreshResult);
+    getUsers.mockReturnValue(of([{ id: 7, accessLevel: 1, canCode: true }]));
+    authDataSubject.next({
+      ...defaultAuthData,
+      userId: 7,
+      workspaces: [{ id: 11 } as WorkspaceFullDto]
+    });
+
+    createComponent();
+    fixture.destroy();
+    refreshResult.next(true);
+
+    expect(getUsers).not.toHaveBeenCalled();
+    expect(routerNavigate).not.toHaveBeenCalledWith(['/coding']);
   });
 
   it('should not route to coding when canCode is explicitly false for a level 1 user', async () => {
