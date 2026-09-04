@@ -219,6 +219,21 @@ export class ResponseManagementService {
                   is_autocoder_generated: response.isAutocoderGenerated === true
                 };
 
+                if (
+                  response.isAutocoderGenerated &&
+                  autocoderCleanup?.autoCoderRun === 2
+                ) {
+                  // Database defaults must not make a v3-only generated result
+                  // look as though it was coded in run 1.
+                  updateData.status_v1 = null;
+                  updateData.code_v1 = null;
+                  updateData.score_v1 = null;
+                  updateData.status_v2 = null;
+                  updateData.code_v2 = null;
+                  updateData.score_v2 = null;
+                  Object.assign(newEntity, updateData);
+                }
+
                 if (response.code_v1 !== undefined) newEntity.code_v1 = response.code_v1;
                 if (response.status_v1 !== undefined) newEntity.status_v1 = statusStringToNumber(response.status_v1);
                 if (response.score_v1 !== undefined) newEntity.score_v1 = response.score_v1;
