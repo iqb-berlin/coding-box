@@ -6,12 +6,14 @@ import { MatButton } from '@angular/material/button';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatIcon } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { switchMap } from 'rxjs';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceUserToCheckCollection } from '../../models/workspace-users-to-check-collection.class';
 import { WorkspaceUserChecked } from '../../models/workspace-user-checked.class';
-import { refreshAuthDataAfterMutation } from '../../../core/utils/auth-data-refresh';
+import {
+  hasCurrentAuthDataAfterMutation,
+  runMutationAndRefreshAuthData
+} from '../../../core/utils/auth-data-refresh';
 
 @Component({
   selector: 'coding-box-ws-access-rights',
@@ -41,24 +43,26 @@ export class WsAccessRightsComponent {
   }
 
   save(): void {
-    this.userBackendService.saveUsers(this.appService.selectedWorkspaceId, this.workspaceUsers.getChecks())
-      .pipe(
-        switchMap(respOk => refreshAuthDataAfterMutation(this.appService, respOk))
-      )
+    runMutationAndRefreshAuthData(
+      this.appService,
+      this.userBackendService.saveUsers(this.appService.selectedWorkspaceId, this.workspaceUsers.getChecks())
+    )
       .subscribe(result => {
-        if (result.mutationSucceeded && result.authDataRefreshed) {
+        if (hasCurrentAuthDataAfterMutation(result)) {
           this.snackBar.open(
             this.translateService.instant('admin.workspace-access-right-set'),
             '',
             { duration: 3000 }
           );
           this.workspaceUsers.setHasChangedFalse();
-        } else if (result.mutationSucceeded) {
+        } else if (result.mutationSucceeded && result.authDataRefreshOutcome === 'failed') {
           this.snackBar.open(
             this.translateService.instant('admin.change-saved-auth-data-refresh-failed'),
             this.translateService.instant('error'),
             { duration: 5000 }
           );
+          this.workspaceUsers.setHasChangedFalse();
+        } else if (result.mutationSucceeded) {
           this.workspaceUsers.setHasChangedFalse();
         } else {
           this.snackBar.open(

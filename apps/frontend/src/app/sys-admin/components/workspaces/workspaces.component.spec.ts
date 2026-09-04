@@ -42,7 +42,7 @@ describe('WorkspaceGroupsComponent', () => {
     };
     appService = {
       dataLoading: false,
-      refreshAuthData: jest.fn().mockReturnValue(of(true))
+      refreshAuthData: jest.fn().mockReturnValue(of('updated'))
     };
     snackBar = { open: jest.fn() };
 
@@ -124,7 +124,7 @@ describe('WorkspaceGroupsComponent', () => {
   });
 
   it('should keep a successful mutation while reporting a failed auth data refresh', () => {
-    appService.refreshAuthData.mockReturnValueOnce(of(false));
+    appService.refreshAuthData.mockReturnValueOnce(of('failed'));
     const form = new UntypedFormGroup({ name: new UntypedFormControl('New') });
 
     component.addWorkspace(form);
@@ -135,5 +135,15 @@ describe('WorkspaceGroupsComponent', () => {
       'error',
       { duration: 5000 }
     );
+  });
+
+  it('should not show an obsolete message after the auth context changed', () => {
+    appService.refreshAuthData.mockReturnValueOnce(of('invalidated'));
+    const form = new UntypedFormGroup({ name: new UntypedFormControl('New') });
+
+    component.addWorkspace(form);
+
+    expect(component.workspacesChanged).toBe(true);
+    expect(snackBar.open).not.toHaveBeenCalled();
   });
 });

@@ -9,7 +9,9 @@ import {
 import { HomeComponent } from './home.component';
 import { AuthService } from '../../core/services/auth.service';
 import { environment } from '../../../environments/environment';
-import { AppService, AuthBootstrapStatus } from '../../core/services/app.service';
+import {
+  AppService, AuthBootstrapStatus, AuthDataRefreshOutcome
+} from '../../core/services/app.service';
 import { SERVER_URL } from '../../injection-tokens';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
 import { UserService } from '../../shared/services/user/user.service';
@@ -84,7 +86,7 @@ describe('HomeComponent', () => {
     mockActivatedRoute.queryParams = queryParamsSubject.asObservable();
     mockAppService.authBootstrapStatus$ = authStatusSubject.asObservable();
     mockAppService.authData$ = authDataSubject.asObservable();
-    mockAppService.refreshAuthData.mockReturnValue(of(true));
+    mockAppService.refreshAuthData.mockReturnValue(of('updated'));
     mockAuthService.isLoggedIn.mockReturnValue(true);
 
     await TestBed.configureTestingModule({
@@ -266,7 +268,7 @@ describe('HomeComponent', () => {
         isAdmin: true,
         workspaces: [{ id: 12, name: 'Current' } as WorkspaceFullDto]
       });
-      return of(true);
+      return of('updated');
     });
 
     createComponent();
@@ -276,7 +278,7 @@ describe('HomeComponent', () => {
   });
 
   it('should retry a failed background refresh on the next home visit', () => {
-    mockAppService.refreshAuthData.mockReturnValueOnce(of(false));
+    mockAppService.refreshAuthData.mockReturnValueOnce(of('failed'));
 
     createComponent();
     fixture.destroy();
@@ -286,7 +288,7 @@ describe('HomeComponent', () => {
   });
 
   it('should use existing auth data for pure coder routing when background refresh fails', async () => {
-    mockAppService.refreshAuthData.mockReturnValueOnce(of(false));
+    mockAppService.refreshAuthData.mockReturnValueOnce(of('failed'));
     getUsers.mockReturnValue(of([{ id: 7, accessLevel: 1, canCode: true }]));
     authDataSubject.next({
       ...defaultAuthData,
@@ -302,7 +304,7 @@ describe('HomeComponent', () => {
   });
 
   it('should cancel the background refresh when leaving home', () => {
-    const refreshResult = new Subject<boolean>();
+    const refreshResult = new Subject<AuthDataRefreshOutcome>();
     mockAppService.refreshAuthData.mockReturnValueOnce(refreshResult);
     getUsers.mockReturnValue(of([{ id: 7, accessLevel: 1, canCode: true }]));
     authDataSubject.next({
@@ -313,7 +315,7 @@ describe('HomeComponent', () => {
 
     createComponent();
     fixture.destroy();
-    refreshResult.next(true);
+    refreshResult.next('updated');
 
     expect(getUsers).not.toHaveBeenCalled();
     expect(routerNavigate).not.toHaveBeenCalledWith(['/coding']);

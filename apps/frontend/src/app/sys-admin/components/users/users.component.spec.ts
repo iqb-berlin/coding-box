@@ -25,7 +25,7 @@ describe('UsersComponent', () => {
     appService = {
       dataLoading: false,
       authData$: of(AppService.defaultAuthData),
-      refreshAuthData: jest.fn().mockReturnValue(of(true))
+      refreshAuthData: jest.fn().mockReturnValue(of('updated'))
     };
     snackBar = { open: jest.fn() };
 
@@ -72,7 +72,7 @@ describe('UsersComponent', () => {
   });
 
   it('should report a saved mutation separately from a failed auth data refresh', () => {
-    appService.refreshAuthData.mockReturnValueOnce(of(false));
+    appService.refreshAuthData.mockReturnValueOnce(of('failed'));
 
     component.setUserWorkspaceAccessRight([2]);
 
@@ -81,5 +81,13 @@ describe('UsersComponent', () => {
       'error',
       { duration: 5000 }
     );
+  });
+
+  it('should not show an obsolete message after the auth context changed', () => {
+    appService.refreshAuthData.mockReturnValueOnce(of('invalidated'));
+
+    component.setUserWorkspaceAccessRight([2]);
+
+    expect(snackBar.open).not.toHaveBeenCalled();
   });
 });
