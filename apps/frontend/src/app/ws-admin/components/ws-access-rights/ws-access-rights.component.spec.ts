@@ -33,7 +33,8 @@ describe('WsAccessRightsComponent', () => {
     };
 
     mockAppService = {
-      selectedWorkspaceId: 1
+      selectedWorkspaceId: 1,
+      refreshAuthData: jest.fn().mockReturnValue(of(true))
     };
 
     mockSnackBar = {
@@ -129,7 +130,12 @@ describe('WsAccessRightsComponent', () => {
     component.save();
 
     expect(mockUserBackendService.saveUsers).toHaveBeenCalled();
-    expect(mockSnackBar.open).toHaveBeenCalledWith('Zugriffsrechte erfolgreich gespeichert', 'Schließen', expect.any(Object));
+    expect(mockAppService.refreshAuthData).toHaveBeenCalled();
+    expect(mockSnackBar.open).toHaveBeenCalledWith(
+      'admin.workspace-access-right-set',
+      '',
+      expect.any(Object)
+    );
     expect(component.workspaceUsers.hasChanged).toBe(false);
   });
 
@@ -146,5 +152,36 @@ describe('WsAccessRightsComponent', () => {
         canCode: false
       }
     ]));
+  });
+
+  it('should keep changes pending when saving access rights fails', () => {
+    const user = component.workspaceUsers.entries[0];
+    component.changeAccessLevel(true, user, 3);
+    (mockUserBackendService.saveUsers as jest.Mock).mockReturnValueOnce(of(false));
+
+    component.save();
+
+    expect(mockAppService.refreshAuthData).not.toHaveBeenCalled();
+    expect(component.workspaceUsers.hasChanged).toBe(true);
+    expect(mockSnackBar.open).toHaveBeenCalledWith(
+      'admin.workspace-access-right-not-set',
+      'error',
+      expect.any(Object)
+    );
+  });
+
+  it('should clear persisted changes and report a failed auth data refresh separately', () => {
+    const user = component.workspaceUsers.entries[0];
+    component.changeAccessLevel(true, user, 3);
+    (mockAppService.refreshAuthData as jest.Mock).mockReturnValueOnce(of(false));
+
+    component.save();
+
+    expect(component.workspaceUsers.hasChanged).toBe(false);
+    expect(mockSnackBar.open).toHaveBeenCalledWith(
+      'admin.change-saved-auth-data-refresh-failed',
+      'error',
+      { duration: 5000 }
+    );
   });
 });
