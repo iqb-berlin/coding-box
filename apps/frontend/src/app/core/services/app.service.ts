@@ -40,6 +40,12 @@ export type AuthBootstrapStatus =
   | 'session-expired'
   | 'auth-data-failed';
 
+export type AuthDataRefreshOutcome =
+  'updated'
+  | 'superseded'
+  | 'failed'
+  | 'invalidated';
+
 const AUTH_BOOTSTRAP_RETRY_DELAYS_MS = [500, 1000, 2000];
 const RETRYABLE_AUTH_BOOTSTRAP_ERROR_STATUSES = new Set([0, 408, 429, 500, 502, 503, 504]);
 
@@ -189,15 +195,15 @@ export class AppService {
       );
   }
 
-  refreshAuthData(): Observable<boolean> {
+  refreshAuthData(): Observable<AuthDataRefreshOutcome> {
     return defer(() => {
       if (this.authBootstrapStatus !== 'ready') {
-        return of(false);
+        return of<AuthDataRefreshOutcome>('invalidated');
       }
 
       const identity = this.loggedUser?.sub || this.keycloakIdentity;
       if (!identity) {
-        return of(false);
+        return of<AuthDataRefreshOutcome>('invalidated');
       }
 
       this.authDataRefreshRequestId += 1;
@@ -205,22 +211,25 @@ export class AppService {
       const sessionGeneration = this.authDataSessionGeneration;
       return this.getAuthDataWithRetry(identity)
         .pipe(
-          map(authData => {
+          map((authData): AuthDataRefreshOutcome => {
             const currentIdentity = this.loggedUser?.sub || this.keycloakIdentity;
             if (sessionGeneration !== this.authDataSessionGeneration ||
               identity !== currentIdentity) {
-              return false;
+              return 'invalidated';
             }
             if (requestId < this.latestAppliedAuthDataRefreshRequestId) {
-              return true;
+              return 'superseded';
             }
             this.latestAppliedAuthDataRefreshRequestId = requestId;
             this.updateAuthData(authData);
-            return true;
+            return 'updated';
           }),
-          catchError(() => of(false))
+          catchError(() => of<AuthDataRefreshOutcome>('failed'))
         );
-    }).pipe(shareReplay({ bufferSize: 1, refCount: false }));
+    }).pipe(
+      // Auth data is global state, so an in-flight refresh must outlive a view subscription.
+      shareReplay({ bufferSize: 1, refCount: false })
+    );
   }
 
   private getAuthDataWithRetry(id: string): Observable<AuthDataDto> {
