@@ -26,6 +26,7 @@ import {
   isCodingResponseCandidateByPattern
 } from './coding-response-candidate.util';
 import type { CodingItemVersionRow } from './coding-item-builder.service';
+import { getBaseCodingSourceKeys, getCodingDependencyVariables, mergeCodingVariableMaps } from './coding-dependency-variables.util';
 
 type RawNumericValue = number | string | null;
 
@@ -288,18 +289,50 @@ export class CodingResponseFilterService {
     applyResolvedExclusionsToQuery(queryBuilder, { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits });
 
     if (options.validCodingVariablesOnly) {
-      const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+      const unitVariables = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+      const derivedVariablesBySource = version ?
+        await this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId) :
+        new Map<string, Set<string>>();
+      const unitVariableMap = version ? mergeCodingVariableMaps(
+        unitVariables,
+        getCodingDependencyVariables(derivedVariablesBySource)
+      ) : unitVariables;
       const validVariablePairKeys = Array.from(unitVariableMap.entries()).flatMap(([unitName, variableIds]) => (
-        Array.from(variableIds).map(variableId => this.toVariablePairKey(unitName, variableId))
+        Array.from(variableIds).map(variableId => this.toVariablePairKey(unitName.toUpperCase(), variableId))
       ));
 
       if (validVariablePairKeys.length === 0) {
         queryBuilder.andWhere('1 = 0');
       } else {
         queryBuilder.andWhere(
-          'CONCAT(unit.name, CHR(31), response.variableid) IN (:...validVariablePairKeys)',
+          'CONCAT(UPPER(unit.name), CHR(31), response.variableid) IN (:...validVariablePairKeys)',
           { validVariablePairKeys }
         );
+      }
+      const baseSourceKeys = getBaseCodingSourceKeys(derivedVariablesBySource);
+      if (baseSourceKeys.length > 0) {
+        // Mirror the calculation's placeholder exclusion, including placeholders
+        // whose v3 UNSET status was cleared by the regular run-2 cleanup.
+        queryBuilder.andWhere(`NOT (
+          response.is_autocoder_generated IS TRUE
+          AND COALESCE(response.subform, '') = ''
+          AND response.autocoder_invalidated_version IS NULL
+          AND (response.value IS NULL OR response.value !~ '[^[:space:]]')
+          AND response.status_v1 IS NOT DISTINCT FROM 0
+          AND COALESCE(response.status_v2, 0) = 0
+          AND COALESCE(response.status_v3, 0) = 0
+          AND response.code_v1 IS NULL AND response.score_v1 IS NULL
+          AND response.code_v2 IS NULL AND response.score_v2 IS NULL
+          AND response.code_v3 IS NULL AND response.score_v3 IS NULL
+          AND CONCAT(UPPER(unit.name), CHR(31), UPPER(response.variableid)) IN (:...baseSourceKeys)
+          AND EXISTS (
+            SELECT 1 FROM response imported_source
+            WHERE imported_source.unitid = response.unitid
+              AND UPPER(imported_source.variableid) = UPPER(response.variableid)
+              AND imported_source.is_autocoder_generated IS NOT TRUE
+              AND imported_source.status IN (1, 2, 3)
+          )
+        )`, { baseSourceKeys });
       }
     }
 
