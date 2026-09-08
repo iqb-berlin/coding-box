@@ -76,18 +76,20 @@ export class CodingAnalysisProcessor {
           this.logger.log(
             `Skipping stale response analysis cache write for workspace ${workspaceId} (job ${job.id})`
           );
-          return analysis;
+          return { cacheKey, superseded: true };
         }
       }
 
-      await this.cacheService.set(
+      const stored = await this.cacheService.set(
         cacheKey,
         analysis,
         CODING_ANALYSIS_CACHE_TTL_SECONDS
       );
 
+      if (!stored) throw new Error('Analysis result could not be saved');
+
       this.logger.log(`Response analysis for workspace ${workspaceId} completed and cached.`);
-      return analysis;
+      return { cacheKey };
     } catch (error) {
       this.logger.error(`Response analysis failed: ${error.message}`, error.stack);
       throw error;

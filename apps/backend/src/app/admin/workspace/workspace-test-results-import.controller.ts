@@ -46,6 +46,7 @@ import {
 import { CacheService } from '../../cache/cache.service';
 import { UploadSessionStore } from '../../cache/upload-session.store';
 import { JobQueueService } from '../../job-queue/job-queue.service';
+import { JobResultStore } from '../../job-queue/job-result.store';
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
 const UPLOAD_SESSION_TTL = 3600; // 1 hour
@@ -74,7 +75,8 @@ export class WorkspaceTestResultsImportController {
     private uploadResults: UploadResultsService,
     private cacheService: CacheService,
     private jobQueueService: JobQueueService,
-    private uploadSessions: UploadSessionStore
+    private uploadSessions: UploadSessionStore,
+    private jobResults: JobResultStore
   ) {}
 
   private async invalidateFlatResponseFilterOptionsCache(
@@ -347,7 +349,7 @@ export class WorkspaceTestResultsImportController {
 
     const state = await job.getState();
     const progress = await job.progress();
-    const result = job.returnvalue;
+    const result = await this.jobResults.read(job.returnvalue);
     const error = job.failedReason;
 
     return {

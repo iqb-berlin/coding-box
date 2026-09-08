@@ -3,6 +3,7 @@ import { BullModule } from '@nestjs/bull';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JobQueueService } from './job-queue.service';
+import { JobResultStore, JOB_RESULT_MAX_AGE_SECONDS } from './job-result.store';
 import { ValidationTask } from '../database/entities/validation-task.entity';
 
 @Module({
@@ -32,7 +33,11 @@ import { ValidationTask } from '../database/entities/validation-task.entity';
       name: 'flat-response-filter-options'
     }),
     BullModule.registerQueue({
-      name: 'test-results-upload'
+      name: 'test-results-upload',
+      defaultJobOptions: {
+        removeOnComplete: { age: JOB_RESULT_MAX_AGE_SECONDS, count: 100 },
+        removeOnFail: { age: 30 * 86400, count: 100 }
+      }
     }),
     BullModule.registerQueue({
       name: 'codebook-generation'
@@ -44,7 +49,11 @@ import { ValidationTask } from '../database/entities/validation-task.entity';
       name: 'validation-task'
     }),
     BullModule.registerQueue({
-      name: 'response-analysis'
+      name: 'response-analysis',
+      defaultJobOptions: {
+        removeOnComplete: { age: JOB_RESULT_MAX_AGE_SECONDS, count: 100 },
+        removeOnFail: { age: 30 * 86400, count: 100 }
+      }
     }),
     BullModule.registerQueue({
       name: 'variable-analysis'
@@ -56,7 +65,7 @@ import { ValidationTask } from '../database/entities/validation-task.entity';
       name: 'database-export'
     })
   ],
-  providers: [JobQueueService],
-  exports: [BullModule, JobQueueService]
+  providers: [JobQueueService, JobResultStore],
+  exports: [BullModule, JobQueueService, JobResultStore]
 })
 export class JobQueueClientModule { }

@@ -73,9 +73,9 @@ describe('CodingAnalysisProcessor', () => {
       get: jest.fn().mockResolvedValue('newer-run'),
       set: jest.fn().mockResolvedValue(true)
     };
-    const { processor, analysis } = createProcessor(cacheService);
+    const { processor } = createProcessor(cacheService);
 
-    await expect(processor.handleResponseAnalysis(createJob('old-run'))).resolves.toBe(analysis);
+    await expect(processor.handleResponseAnalysis(createJob('old-run'))).resolves.toEqual({ cacheKey: 'response-analysis:7__t2', superseded: true });
 
     expect(cacheService.get).toHaveBeenCalledWith('response-analysis:7__t2:run');
     expect(cacheService.set).not.toHaveBeenCalled();
@@ -88,7 +88,7 @@ describe('CodingAnalysisProcessor', () => {
     };
     const { processor, analysis } = createProcessor(cacheService);
 
-    await expect(processor.handleResponseAnalysis(createJob('current-run'))).resolves.toBe(analysis);
+    await expect(processor.handleResponseAnalysis(createJob('current-run'))).resolves.toEqual({ cacheKey: 'response-analysis:7__t2' });
 
     expect(cacheService.set).toHaveBeenCalledWith(
       'response-analysis:7__t2',
