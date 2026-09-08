@@ -1,4 +1,7 @@
 services:
+  redis:
+    restart: always
+
   db:
     image: ${REGISTRY_PATH}iqbberlin/coding-box-db:${TAG}
     restart: always
