@@ -1,5 +1,10 @@
 import { ConflictException } from '@nestjs/common';
 import { JobQueueService } from './job-queue.service';
+import { getQueueJobsInBatches } from './queue-job-snapshot';
+
+jest.mock('./queue-job-snapshot', () => ({
+  getQueueJobsInBatches: jest.fn(async function* mockedBatches(queue) { yield await queue.getJobs(); })
+}));
 
 const createJob = (
   data: Record<string, unknown> | null = { workspaceId: 1, taskId: 7 },
@@ -33,6 +38,17 @@ describe('JobQueueService', () => {
   let queues: ReturnType<typeof createQueue>[];
   let validationTaskRepository: { find: jest.Mock };
   let service: JobQueueService;
+
+  it('reads subsequent process pages without dropping jobs after the first page', async () => {
+    const firstPage = Array.from({ length: 50 }, (_, index) => ({ ...createJob(), id: `page-1-${index}` }));
+    (getQueueJobsInBatches as jest.Mock).mockImplementationOnce(async function* mockedPages() {
+      yield firstPage;
+      yield [{ ...createJob(), id: 'page-2' }];
+    });
+    const jobs = await service.getAllWorkspaceJobs(1);
+    expect(jobs).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'page-2' })]));
+    expect(getQueueJobsInBatches).toHaveBeenCalledWith(queues[0]);
+  });
 
   beforeEach(() => {
     queues = Array.from({ length: 12 }, () => createQueue());

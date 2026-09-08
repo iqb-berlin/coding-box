@@ -7,6 +7,7 @@ import { InjectQueue } from '@nestjs/bull';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Queue, JobOptions, Job } from 'bull';
+import { getQueueJobsInBatches } from './queue-job-snapshot';
 import { FileIo } from '../admin/workspace/file-io.interface';
 import { ValidationTask } from '../database/entities/validation-task.entity';
 import { ProcessDto } from '../../../../../api-dto/workspaces/process-dto';
@@ -445,74 +446,81 @@ export class JobQueueService {
 
     for (const [queueName, queue] of queues.entries()) {
       processPromises.push(
-        queue.getJobs(['active', 'waiting', 'delayed', 'completed', 'failed', 'paused']).then(async jobs => {
-          const existingJobs = jobs.filter(Boolean);
-          let matchedJobs = existingJobs;
-          let validationTaskMap = new Map<number, ProcessOverviewValidationTask>();
-          if (queueName === 'validation-task') {
-            const taskIds = existingJobs.map(j => j.data?.taskId as number).filter(Boolean);
-            if (taskIds.length === 0) return [];
-            const tasks = (await this.validationTaskRepository.find({
-              where: { id: In(taskIds) },
-              select: [
-                'id',
-                'workspace_id',
-                'validation_type',
-                'status',
-                'progress',
-                'progress_message',
-                'error'
-              ]
-            })) as ProcessOverviewValidationTask[];
-            validationTaskMap = new Map(tasks.map(t => [Number(t.id), t]));
-            matchedJobs = existingJobs.filter(j => Number(validationTaskMap.get(Number(j.data?.taskId))?.workspace_id) === Number(workspaceId)
-            );
-          } else {
-            matchedJobs = existingJobs.filter(j => this.jobMatchesWorkspace(j, workspaceId));
-          }
-
-          const mappedPromises = matchedJobs.map(async job => {
-            const bullState = await job.getState();
-            const validationTask = queueName === 'validation-task' ?
-              validationTaskMap.get(Number(job.data?.taskId)) :
-              undefined;
-            const status = this.getProcessOverviewStatus(
-              queueName,
-              bullState,
-              job.data,
-              validationTask
-            );
-            let progress: unknown = typeof validationTask?.progress === 'number' ?
-              validationTask.progress :
-              job.progress();
-
-            // For completed jobs, ensure progress shows as 100% if it's numeric/empty
-            if (status === 'completed') {
-              if (typeof progress !== 'object' || progress === null) {
-                progress = 100;
+        (async () => {
+          const pages: ProcessDto[] = [];
+          for await (const jobs of getQueueJobsInBatches(queue)) {
+            const page = await (async () => {
+              const existingJobs = jobs.filter(Boolean);
+              let matchedJobs = existingJobs;
+              let validationTaskMap = new Map<number, ProcessOverviewValidationTask>();
+              if (queueName === 'validation-task') {
+                const taskIds = existingJobs.map(j => j.data?.taskId as number).filter(Boolean);
+                if (taskIds.length === 0) return [];
+                const tasks = (await this.validationTaskRepository.find({
+                  where: { id: In(taskIds) },
+                  select: [
+                    'id',
+                    'workspace_id',
+                    'validation_type',
+                    'status',
+                    'progress',
+                    'progress_message',
+                    'error'
+                  ]
+                })) as ProcessOverviewValidationTask[];
+                validationTaskMap = new Map(tasks.map(t => [Number(t.id), t]));
+                matchedJobs = existingJobs.filter(j => Number(validationTaskMap.get(Number(j.data?.taskId))?.workspace_id) === Number(workspaceId)
+                );
+              } else {
+                matchedJobs = existingJobs.filter(j => this.jobMatchesWorkspace(j, workspaceId));
               }
-            } else if (progress === undefined || progress === null) {
-              progress = 0;
-            }
 
-            return {
-              id: job.id,
-              queueName: queueName,
-              status: status,
-              progress: progress,
-              data: this.sanitizeJobData({
-                ...job.data,
-                validationType: validationTask?.validation_type,
-                progressMessage: validationTask?.progress_message
-              }),
-              failedReason: this.getProcessFailedReason(status, job, validationTask),
-              timestamp: job.timestamp,
-              processedOn: job.processedOn,
-              finishedOn: job.finishedOn
-            } as ProcessDto;
-          });
-          return Promise.all(mappedPromises);
-        })
+              const mappedPromises = matchedJobs.map(async job => {
+                const bullState = await job.getState();
+                const validationTask = queueName === 'validation-task' ?
+                  validationTaskMap.get(Number(job.data?.taskId)) :
+                  undefined;
+                const status = this.getProcessOverviewStatus(
+                  queueName,
+                  bullState,
+                  job.data,
+                  validationTask
+                );
+                let progress: unknown = typeof validationTask?.progress === 'number' ?
+                  validationTask.progress :
+                  job.progress();
+
+                // For completed jobs, ensure progress shows as 100% if it's numeric/empty
+                if (status === 'completed') {
+                  if (typeof progress !== 'object' || progress === null) {
+                    progress = 100;
+                  }
+                } else if (progress === undefined || progress === null) {
+                  progress = 0;
+                }
+
+                return {
+                  id: job.id,
+                  queueName: queueName,
+                  status: status,
+                  progress: progress,
+                  data: this.sanitizeJobData({
+                    ...job.data,
+                    validationType: validationTask?.validation_type,
+                    progressMessage: validationTask?.progress_message
+                  }),
+                  failedReason: this.getProcessFailedReason(status, job, validationTask),
+                  timestamp: job.timestamp,
+                  processedOn: job.processedOn,
+                  finishedOn: job.finishedOn
+                } as ProcessDto;
+              });
+              return Promise.all(mappedPromises);
+            })();
+            pages.push(...page);
+          }
+          return pages;
+        })()
       );
     }
 
