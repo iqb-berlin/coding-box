@@ -1,4 +1,6 @@
-import { Controller, Get, Logger } from '@nestjs/common';
+import {
+  Controller, Get, Logger, ServiceUnavailableException
+} from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { JobQueueService, RedisConnectionStatus } from '../job-queue/job-queue.service';
 
@@ -42,6 +44,27 @@ export class HealthController {
       uptime: process.uptime(),
       timestamp: new Date().toISOString()
     };
+  }
+
+  @Get('ready')
+  async checkReadiness(): Promise<ApplicationHealthStatus> {
+    let timeout: ReturnType<typeof setTimeout>;
+    try {
+      const redis = await Promise.race([
+        this.jobQueueService.checkRedisConnection(),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error('Redis readiness timed out')), 1500);
+        })
+      ]);
+      if (!redis.connected || redis.details?.queueStatus?.isReady === false) {
+        throw new Error('Redis is unavailable');
+      }
+      return this.checkApplication();
+    } catch {
+      throw new ServiceUnavailableException('Redis is unavailable');
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   /**

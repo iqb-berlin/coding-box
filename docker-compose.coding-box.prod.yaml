@@ -1,6 +1,18 @@
 services:
   redis:
     restart: always
+    command:
+      - redis-server
+      - --maxmemory
+      - ${REDIS_MAXMEMORY:-0}
+      - --maxmemory-policy
+      - noeviction
+      # Enable only after the live AOF migration described in docs/redis-operations.md.
+      - --appendonly
+      - ${REDIS_APPENDONLY:-no}
+      - --appendfsync
+      - everysec
+    mem_limit: ${REDIS_MEMORY_LIMIT:-0}
 
   db:
     image: ${REGISTRY_PATH}iqbberlin/coding-box-db:${TAG}
