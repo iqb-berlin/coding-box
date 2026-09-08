@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { of } from 'rxjs';
 import { KeycloakTokenParsed } from 'keycloak-js';
-import { AppService } from './app.service';
+import { AppService, AuthDataRefreshOutcome } from './app.service';
 import { LogoService } from './logo.service';
 import { SERVER_URL } from '../../injection-tokens';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
@@ -218,35 +218,171 @@ describe('AppService', () => {
       service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
       service.setAuthBootstrapStatus('ready');
       const mockAuthData = { userId: 1 } as unknown as AuthDataDto;
+      let refreshResult: AuthDataRefreshOutcome | undefined;
 
-      service.refreshAuthData();
+      service.refreshAuthData().subscribe(result => {
+        refreshResult = result;
+      });
 
       const req = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user1`);
       expect(req.request.method).toBe('GET');
       expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
       req.flush(mockAuthData);
+
+      expect(refreshResult).toBe('updated');
+      expect(service.authData).toEqual(mockAuthData);
     });
 
-    it('should mark auth data as failed without a global HTTP error when refresh cannot find the user', () => {
+    it('should preserve ready auth state when a background refresh fails', () => {
       service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
       service.setAuthBootstrapStatus('ready');
 
-      service.refreshAuthData();
+      let refreshResult: AuthDataRefreshOutcome | undefined;
+      service.refreshAuthData().subscribe(result => {
+        refreshResult = result;
+      });
 
       const req = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user1`);
       expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
       req.flush('Not found', { status: 404, statusText: 'Not Found' });
 
-      expect(service.authBootstrapStatus).toBe('auth-data-failed');
+      expect(refreshResult).toBe('failed');
+      expect(service.authBootstrapStatus).toBe('ready');
     });
 
     it('should not refresh data while backend login is still running', () => {
       service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
       service.setAuthBootstrapStatus('backend-login-running');
 
-      service.refreshAuthData();
+      let refreshResult: AuthDataRefreshOutcome | undefined;
+      service.refreshAuthData().subscribe(result => {
+        refreshResult = result;
+      });
 
       httpMock.expectNone(`${mockServerUrl}auth-data?identity=user1`);
+      expect(refreshResult).toBe('invalidated');
+    });
+
+    it('should refresh with the stored Keycloak identity when parsed token data is unavailable', () => {
+      service.keycloakIdentity = 'user1';
+      service.setAuthBootstrapStatus('ready');
+
+      service.refreshAuthData().subscribe(result => {
+        expect(result).toBe('updated');
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user1`);
+      req.flush({ userId: 1 } as AuthDataDto);
+    });
+
+    it('should not overwrite newer auth data and should report effective refresh success', () => {
+      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      service.setAuthBootstrapStatus('ready');
+      let firstResult: AuthDataRefreshOutcome | undefined;
+      let secondResult: AuthDataRefreshOutcome | undefined;
+
+      service.refreshAuthData().subscribe(result => {
+        firstResult = result;
+      });
+      service.refreshAuthData().subscribe(result => {
+        secondResult = result;
+      });
+
+      const requests = httpMock.match(`${mockServerUrl}auth-data?identity=user1`);
+      expect(requests).toHaveLength(2);
+      requests[1].flush({ userId: 1, userName: 'Current' } as AuthDataDto);
+      requests[0].flush({ userId: 1, userName: 'Stale' } as AuthDataDto);
+
+      expect(secondResult).toBe('updated');
+      expect(firstResult).toBe('superseded');
+      expect(service.authData.userName).toBe('Current');
+    });
+
+    it('should apply an older successful refresh if a newer refresh fails', () => {
+      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      service.setAuthBootstrapStatus('ready');
+      let firstResult: AuthDataRefreshOutcome | undefined;
+      let secondResult: AuthDataRefreshOutcome | undefined;
+
+      service.refreshAuthData().subscribe(result => {
+        firstResult = result;
+      });
+      service.refreshAuthData().subscribe(result => {
+        secondResult = result;
+      });
+
+      const requests = httpMock.match(`${mockServerUrl}auth-data?identity=user1`);
+      expect(requests).toHaveLength(2);
+      requests[1].flush('Not found', { status: 404, statusText: 'Not Found' });
+      requests[0].flush({ userId: 1, userName: 'Current' } as AuthDataDto);
+
+      expect(secondResult).toBe('failed');
+      expect(firstResult).toBe('updated');
+      expect(service.authData.userName).toBe('Current');
+    });
+
+    it('should finish the newest refresh after its subscriber unsubscribes', () => {
+      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      service.setAuthBootstrapStatus('ready');
+      let firstResult: AuthDataRefreshOutcome | undefined;
+
+      service.refreshAuthData().subscribe(result => {
+        firstResult = result;
+      });
+      const secondSubscription = service.refreshAuthData().subscribe();
+
+      const requests = httpMock.match(`${mockServerUrl}auth-data?identity=user1`);
+      expect(requests).toHaveLength(2);
+      secondSubscription.unsubscribe();
+      expect(requests[1].cancelled).toBe(false);
+      requests[0].flush({ userId: 1, userName: 'Stale' } as AuthDataDto);
+      requests[1].flush({ userId: 1, userName: 'Current' } as AuthDataDto);
+
+      expect(firstResult).toBe('updated');
+      expect(service.authData.userName).toBe('Current');
+    });
+
+    it('should not restore auth data from a refresh after auth state was cleared', () => {
+      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      service.keycloakIdentity = 'user1';
+      service.setAuthBootstrapStatus('ready');
+      let refreshResult: AuthDataRefreshOutcome | undefined;
+
+      service.refreshAuthData().subscribe(result => {
+        refreshResult = result;
+      });
+      const request = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user1`);
+
+      service.clearAuthState();
+      request.flush({ userId: 1, userName: 'Former user' } as AuthDataDto);
+
+      expect(refreshResult).toBe('invalidated');
+      expect(service.authData).toEqual(AppService.defaultAuthData);
+    });
+
+    it('should not overwrite a newly authenticated user with an earlier refresh response', () => {
+      service.loggedUser = { sub: 'user1' } as KeycloakTokenParsed;
+      service.keycloakIdentity = 'user1';
+      service.setAuthBootstrapStatus('ready');
+      let refreshResult: AuthDataRefreshOutcome | undefined;
+      let loginResult: boolean | undefined;
+
+      service.refreshAuthData().subscribe(result => {
+        refreshResult = result;
+      });
+      const oldRefreshRequest = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user1`);
+
+      service.loggedUser = { sub: 'user2' } as KeycloakTokenParsed;
+      service.loadAuthenticatedUser('user2').subscribe(result => {
+        loginResult = result;
+      });
+      const newLoginRequest = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user2`);
+      newLoginRequest.flush({ userId: 2, userName: 'Current user' } as AuthDataDto);
+      oldRefreshRequest.flush({ userId: 1, userName: 'Former user' } as AuthDataDto);
+
+      expect(loginResult).toBe(true);
+      expect(refreshResult).toBe('invalidated');
+      expect(service.authData.userName).toBe('Current user');
     });
   });
 
