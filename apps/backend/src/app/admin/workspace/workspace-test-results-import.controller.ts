@@ -44,6 +44,7 @@ import {
   ChunkedUploadCompleteRequestDto
 } from '../../../../../../api-dto/files/chunked-upload.dto';
 import { CacheService } from '../../cache/cache.service';
+import { UploadSessionStore } from '../../cache/upload-session.store';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -72,7 +73,8 @@ export class WorkspaceTestResultsImportController {
   constructor(
     private uploadResults: UploadResultsService,
     private cacheService: CacheService,
-    private jobQueueService: JobQueueService
+    private jobQueueService: JobQueueService,
+    private uploadSessions: UploadSessionStore
   ) {}
 
   private async invalidateFlatResponseFilterOptionsCache(
@@ -404,11 +406,12 @@ export class WorkspaceTestResultsImportController {
       tempDir
     };
 
-    await this.cacheService.set(
-      this.uploadSessionKey(uploadId),
-      session,
-      UPLOAD_SESSION_TTL
-    );
+    try {
+      await this.uploadSessions.set(this.uploadSessionKey(uploadId), session, UPLOAD_SESSION_TTL);
+    } catch (error) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+      throw error;
+    }
 
     this.logger.log(
       `Chunked upload initialized: ${uploadId}, file=${body.fileName}, size=${body.fileSize}, chunks=${totalChunks}`
@@ -436,7 +439,7 @@ export class WorkspaceTestResultsImportController {
       @Param('chunkIndex', ParseIntPipe) chunkIndex: number,
       @Req() req: Request
   ): Promise<ChunkedUploadChunkResponseDto> {
-    const session = await this.cacheService.get<ChunkedUploadSession>(
+    const session = await this.uploadSessions.get<ChunkedUploadSession>(
       this.uploadSessionKey(uploadId)
     );
     if (!session) {
@@ -468,22 +471,17 @@ export class WorkspaceTestResultsImportController {
       req.on('error', reject);
     });
 
-    if (!session.receivedChunks.includes(chunkIndex)) {
-      session.receivedChunks.push(chunkIndex);
-    }
-    await this.cacheService.set(
-      this.uploadSessionKey(uploadId),
-      session,
-      UPLOAD_SESSION_TTL
+    const chunksReceived = await this.uploadSessions.recordChunk(
+      this.uploadSessionKey(uploadId), chunkIndex, UPLOAD_SESSION_TTL
     );
 
     this.logger.log(
-      `Chunk ${chunkIndex}/${session.totalChunks - 1} received for upload ${uploadId} (${session.receivedChunks.length}/${session.totalChunks})`
+      `Chunk ${chunkIndex}/${session.totalChunks - 1} received for upload ${uploadId} (${chunksReceived}/${session.totalChunks})`
     );
 
     return {
       received: true,
-      chunksReceived: session.receivedChunks.length,
+      chunksReceived,
       totalChunks: session.totalChunks
     };
   }
@@ -505,7 +503,7 @@ export class WorkspaceTestResultsImportController {
       @Param('uploadId') uploadId: string,
       @Body() body: ChunkedUploadCompleteRequestDto
   ): Promise<TestResultsUploadJobDto[]> {
-    const session = await this.cacheService.get<ChunkedUploadSession>(
+    const session = await this.uploadSessions.get<ChunkedUploadSession>(
       this.uploadSessionKey(uploadId)
     );
     if (!session) {
