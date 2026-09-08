@@ -312,13 +312,14 @@ export class WorkspaceTestResultsAnalysisController {
       isEmpty(sessionScreens) &&
       isEmpty(sessionIds);
 
+    let cacheKey: string | undefined;
     if (isNoFilterRequest) {
       const versionKey =
         this.cacheService.generateFlatResponseFilterOptionsVersionKey(
           workspace_id
         );
-      const version = await this.cacheService.getNumber(versionKey, 1);
-      const cacheKey =
+      const version = await this.cacheService.getNumber(versionKey, 0);
+      cacheKey =
         this.cacheService.generateFlatResponseFilterOptionsCacheKey(
           workspace_id,
           version,
@@ -360,19 +361,10 @@ export class WorkspaceTestResultsAnalysisController {
         }
       );
 
-    if (isNoFilterRequest) {
-      const versionKey =
-        this.cacheService.generateFlatResponseFilterOptionsVersionKey(
-          workspace_id
-        );
-      const version = await this.cacheService.getNumber(versionKey, 1);
-      const cacheKey =
-        this.cacheService.generateFlatResponseFilterOptionsCacheKey(
-          workspace_id,
-          version,
-          threshold
-        );
-      await this.cacheService.set(cacheKey, result, 0);
+    // Keep the generation captured BEFORE the query. Concurrent mutations must
+    // never promote this result into the new generation.
+    if (cacheKey) {
+      await this.cacheService.set(cacheKey, result, 300);
     }
 
     return result;

@@ -267,7 +267,8 @@ export class WorkspaceCoreService {
       ]).map(cacheKey => this.cacheService.delete(cacheKey)),
       ...getCodingIncompleteVariablesCacheKeys(workspaceId)
         .map(cacheKey => this.cacheService.delete(cacheKey)),
-      this.cacheService.delete(`flat_response_filter_options:version:${workspaceId}`),
+      this.cacheService.incr(`flat_response_filter_options:version:${workspaceId}`),
+      this.cacheService.incr(`responses_version:${workspaceId}`),
       this.cacheService.deleteByPattern(`response-analysis:${workspaceId}_*`),
       this.cacheService.deleteByPattern(`responses:${workspaceId}:*`),
       this.cacheService.deleteByPattern(`flat_response_filter_options:${workspaceId}:*`)

@@ -2,7 +2,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CacheService } from './cache.service';
+import { CacheService, REPLAY_RESPONSE_CACHE_TTL_SECONDS } from './cache.service';
 import Persons from '../database/entities/persons.entity';
 import { Unit } from '../database/entities/unit.entity';
 import { WorkspaceTestResultsService } from '../database/services/test-results';
@@ -22,7 +22,7 @@ interface ResponseCacheWarmupItem {
 @Injectable()
 export class ResponseCacheSchedulerService {
   private readonly logger = new Logger(ResponseCacheSchedulerService.name);
-  private readonly responseCacheVersionSuffix = ':v6';
+  private readonly responseCacheVersionSuffix = ':v7';
   private cacheAllResponsesInFlight: Promise<void> | null = null;
 
   constructor(
@@ -95,6 +95,8 @@ export class ResponseCacheSchedulerService {
       const personsWithUnits = await this.getPersonsWithUnits(workspaceId);
       this.logger.log(`Found ${personsWithUnits.length} persons in workspace ${workspaceId}`);
 
+      const responseVersion = await this.cacheService.getNumber(`responses_version:${workspaceId}`, 0);
+
       // Prepare all cache items to check
       const cacheCheckItemsByKey =
         new Map<string, ResponseCacheWarmupItem>();
@@ -106,7 +108,7 @@ export class ResponseCacheSchedulerService {
 
           for (const connector of connectors) {
             for (const unitId of unitIds) {
-              const cacheKey = `${this.cacheService.generateUnitResponseCacheKey(workspaceId, connector, unitId)}${this.responseCacheVersionSuffix}`;
+              const cacheKey = `${this.cacheService.generateUnitResponseCacheKey(workspaceId, connector, unitId)}${this.responseCacheVersionSuffix}:g${responseVersion}`;
 
               cacheCheckItemsByKey.set(cacheKey, {
                 workspaceId,
@@ -128,8 +130,8 @@ export class ResponseCacheSchedulerService {
         const batch = cacheCheckItems.slice(i, i + batchSize);
         const cacheKeys = batch.map(item => item.cacheKey);
 
-        // Check multiple cache keys at once if Redis supports it
-        const existsResults = await Promise.all(cacheKeys.map(key => this.cacheService.exists(key)));
+        // Refresh before expiry so warmed responses survive the next daily interval.
+        const existsResults = await Promise.all(cacheKeys.map(key => this.cacheService.hasRemainingTtl(key, REPLAY_RESPONSE_CACHE_TTL_SECONDS / 2)));
 
         for (let j = 0; j < batch.length; j++) {
           if (!existsResults[j]) {
@@ -200,14 +202,15 @@ export class ResponseCacheSchedulerService {
     unitId: string,
     skipExistingCheck = false
   ): Promise<void> {
+    const responseVersion = await this.cacheService.getNumber(`responses_version:${workspaceId}`, 0);
     const cacheKey = `${this.cacheService.generateUnitResponseCacheKey(
       workspaceId,
       connector,
       unitId
-    )}${this.responseCacheVersionSuffix}`;
+    )}${this.responseCacheVersionSuffix}:g${responseVersion}`;
 
     if (!skipExistingCheck) {
-      const exists = await this.cacheService.exists(cacheKey);
+      const exists = await this.cacheService.hasRemainingTtl(cacheKey, REPLAY_RESPONSE_CACHE_TTL_SECONDS / 2);
       if (exists) {
         this.logger.debug(`Response already in cache: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
         return;
@@ -216,8 +219,8 @@ export class ResponseCacheSchedulerService {
 
     // Fetch and cache the response
     try {
-      const response = await this.workspaceTestResultsService.findUnitResponse(workspaceId, connector, unitId);
-      await this.cacheService.set(cacheKey, response);
+      // The reader owns the generation and cache write; do not duplicate it here.
+      await this.workspaceTestResultsService.findUnitResponse(workspaceId, connector, unitId, true);
       this.logger.debug(`Cached response: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
     } catch (error) {
       this.logger.error(`Error fetching response for caching: ${error.message}`, error.stack);

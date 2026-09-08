@@ -95,6 +95,7 @@ describe('WorkspaceTestResultsService', () => {
   let codingValidationService: CodingValidationService;
   let codingStatisticsService: CodingStatisticsService;
   let cacheService: {
+    getNumber: jest.Mock;
     generateUnitResponseCacheKey: jest.Mock;
     get: jest.Mock;
     set: jest.Mock;
@@ -147,6 +148,7 @@ describe('WorkspaceTestResultsService', () => {
     } as unknown as JournalService;
 
     cacheService = {
+      getNumber: jest.fn().mockResolvedValue(0),
       generateUnitResponseCacheKey: jest.fn((workspaceId: number, connector: string, unitId: string) => `${workspaceId}:${connector}:${unitId}`),
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue(undefined),
@@ -2335,6 +2337,26 @@ describe('WorkspaceTestResultsService', () => {
     });
   });
 
+  it('invalidates replay and advances rather than resets filter generations after mutations', async () => {
+    await service.invalidateWorkspaceStatsCache(1);
+    expect(cacheService.incr).toHaveBeenCalledWith('responses_version:1');
+    expect(cacheService.incr).toHaveBeenCalledWith('flat_response_filter_options:version:1');
+    expect(cacheService.delete).not.toHaveBeenCalledWith('flat_response_filter_options:version:1');
+  });
+
+  it('does not serve a previous replay generation after an import invalidates it', async () => {
+    const previous = { responses: [{ id: 'old', content: 'old answer' }] };
+    cacheService.getNumber.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
+    cacheService.get.mockImplementation(async (key: string) => (key.endsWith(':v7:g0') ? previous : null));
+    (workspaceExclusionService.resolveExclusionsForQueries as jest.Mock).mockResolvedValue({
+      globalIgnoredUnits: [], ignoredBooklets: ['BOOKLET-A'], testletIgnoredUnits: []
+    });
+    await expect(service.findUnitResponse(1, 'a@b@BOOKLET-A', 'U')).resolves.toEqual(previous);
+    await service.invalidateWorkspaceStatsCache(1);
+    await expect(service.findUnitResponse(1, 'a@b@BOOKLET-A', 'U')).resolves.toEqual({ responses: [] });
+    expect(cacheService.get).toHaveBeenLastCalledWith('1:a@b@BOOKLET-A:U:v7:g1');
+  });
+
   describe('findUnitResponse', () => {
     const expectReplayError = async (
       promise: Promise<unknown>,
@@ -2394,6 +2416,20 @@ describe('WorkspaceTestResultsService', () => {
       );
       expect(unitQb.limit).toHaveBeenCalledWith(1);
       expect(unitRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
+      expect(cacheService.set).toHaveBeenCalledWith(expect.stringContaining(':v7:g'), expect.any(Object), 48 * 3600);
+    });
+
+    it('refreshes a soon-expiring replay from the database instead of renewing old cached content', async () => {
+      cacheService.get.mockResolvedValue({ responses: [{ id: 'old', content: 'old data' }] });
+      const unitQb = mockQueryBuilder();
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      unitQb.getRawOne.mockResolvedValue({ unitId: 77 });
+      const responseQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseQb);
+      responseQb.getRawMany.mockResolvedValue([]);
+      await expect(service.findUnitResponse(1, 'login@code@booklet', 'unit', true)).resolves.toEqual({ responses: [] });
+      expect(unitRepository.createQueryBuilder).toHaveBeenCalled();
+      expect(cacheService.set).toHaveBeenCalledWith(expect.stringContaining(':v7:g'), { responses: [] }, 48 * 3600);
     });
 
     it('should keep an empty replay code segment when looking up a unit', async () => {

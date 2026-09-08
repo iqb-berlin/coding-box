@@ -5,10 +5,11 @@ jest.mock('libxmljs2', () => ({}));
 describe('ResponseCacheSchedulerService', () => {
   const createService = () => {
     const cacheService = {
+      getNumber: jest.fn().mockResolvedValue(0),
       generateUnitResponseCacheKey: jest.fn((workspaceId: number, connector: string, unitId: string) => (
         `responses:${workspaceId}:${connector}:${unitId}`
       )),
-      exists: jest.fn().mockResolvedValue(false),
+      hasRemainingTtl: jest.fn().mockResolvedValue(false),
       set: jest.fn().mockResolvedValue(true)
     };
     const workspaceTestResultsService = {
@@ -91,7 +92,16 @@ describe('ResponseCacheSchedulerService', () => {
       'login-a@code-a@BOOKLET-A',
       'UNIT-ALIAS'
     );
-    expect(cacheService.exists).toHaveBeenCalledTimes(4);
+    expect(cacheService.hasRemainingTtl).toHaveBeenCalledTimes(4);
     expect(workspaceTestResultsService.findUnitResponse).toHaveBeenCalledTimes(4);
+    expect(workspaceTestResultsService.findUnitResponse).toHaveBeenCalledWith(47, expect.any(String), expect.any(String), true);
+  });
+  it('keeps sufficiently fresh replay entries without querying responses again', async () => {
+    const { service, cacheService, workspaceTestResultsService } = createService();
+    cacheService.hasRemainingTtl.mockResolvedValue(true);
+    await (service as unknown as { processWorkspace: (id: number) => Promise<void> }).processWorkspace(47);
+    expect(cacheService.hasRemainingTtl).toHaveBeenCalledTimes(4);
+    expect(cacheService.hasRemainingTtl).toHaveBeenCalledWith(expect.stringContaining(':v7:g0'), 24 * 3600);
+    expect(workspaceTestResultsService.findUnitResponse).not.toHaveBeenCalled();
   });
 });

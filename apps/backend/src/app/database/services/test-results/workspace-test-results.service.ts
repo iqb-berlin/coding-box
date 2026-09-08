@@ -42,7 +42,7 @@ import { UnitLastState } from '../../entities/unitLastState.entity';
 import { UnitTagService } from '../workspace/unit-tag.service';
 import { JournalService, Chunk, TcMergeResponse } from '../shared';
 import type { RecordAuditJournalEventInput } from '../shared/journal.service';
-import { CacheService } from '../../../cache/cache.service';
+import { CacheService, REPLAY_RESPONSE_CACHE_TTL_SECONDS } from '../../../cache/cache.service';
 // eslint-disable-next-line import/no-cycle
 import { CodingListService } from '../coding/coding-list.service';
 // eslint-disable-next-line import/no-cycle
@@ -1837,7 +1837,8 @@ export class WorkspaceTestResultsService {
     const results = await Promise.all([
       this.cacheService.delete(`${OVERVIEW_STATS_CACHE_PREFIX}${workspaceId}`),
       this.cacheService.deleteByPattern(`${FLAT_FREQUENCIES_CACHE_PREFIX}${workspaceId}-*`),
-      this.cacheService.delete(`flat_response_filter_options:version:${workspaceId}`),
+      this.cacheService.incr(`flat_response_filter_options:version:${workspaceId}`),
+      this.cacheService.incr(`responses_version:${workspaceId}`),
       this.cacheService.deleteByPattern(`flat_response_filter_options:${workspaceId}:*`),
       this.cacheService.incr(getCodingReadinessCacheVersionKey(workspaceId)),
       this.cacheService.deleteByPattern(getCodingReadinessCachePattern(workspaceId))
@@ -4421,19 +4422,21 @@ export class WorkspaceTestResultsService {
   async findUnitResponse(
     workspaceId: number,
     connector: string,
-    unitId: string
+    unitId: string,
+    refreshCache = false
   ): Promise<{
       responses: {
         id: string;
         content: string;
       }[];
     }> {
+    const responseVersion = await this.cacheService.getNumber(`responses_version:${workspaceId}`, 0);
     const cacheKey = `${this.cacheService.generateUnitResponseCacheKey(
       workspaceId,
       connector,
       unitId
-    )}:v6`;
-    const cachedResponse = await this.cacheService.get<{
+    )}:v7:g${responseVersion}`;
+    const cachedResponse = refreshCache ? null : await this.cacheService.get<{
       responses: {
         id: string;
         content: string;
@@ -4622,7 +4625,8 @@ export class WorkspaceTestResultsService {
       responses: responsesArray
     };
 
-    await this.cacheService.set(cacheKey, result);
+    // Keep nightly preloaded replay data available through the next warmup.
+    await this.cacheService.set(cacheKey, result, REPLAY_RESPONSE_CACHE_TTL_SECONDS);
     this.logger.log(
       `Cached replay responses: workspace=${workspaceId}, unitId=${unitId}`
     );

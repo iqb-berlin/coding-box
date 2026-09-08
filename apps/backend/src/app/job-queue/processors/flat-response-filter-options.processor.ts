@@ -37,7 +37,7 @@ export class FlatResponseFilterOptionsProcessor {
       this.cacheService.generateFlatResponseFilterOptionsVersionKey(
         workspaceId
       );
-    const cacheVersion = await this.cacheService.getNumber(versionKey, 1);
+    const cacheVersion = await this.cacheService.getNumber(versionKey, 0);
     const cacheKey =
       this.cacheService.generateFlatResponseFilterOptionsCacheKey(
         workspaceId,
@@ -53,7 +53,7 @@ export class FlatResponseFilterOptionsProcessor {
         }
       );
 
-    await this.cacheService.set(cacheKey, result, 0);
+    await this.cacheService.set(cacheKey, result, 300);
 
     await job.progress(100);
     this.logger.log(

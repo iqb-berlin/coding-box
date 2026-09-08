@@ -4,6 +4,7 @@ import Redis from 'ioredis';
 import { ValidationResultDto } from '../../../../../api-dto/coding/validation-result.dto';
 
 export const VALIDATION_CACHE_KEY_PREFIX = 'validation:v2';
+export const REPLAY_RESPONSE_CACHE_TTL_SECONDS = 48 * 3600;
 
 @Injectable()
 export class CacheService {
@@ -131,6 +132,16 @@ export class CacheService {
         `Error checking if key exists in cache: ${error.message}`,
         error.stack
       );
+      return false;
+    }
+  }
+
+  /** Check remaining lifetime without fetching a potentially large replay payload. */
+  async hasRemainingTtl(key: string, minimumTtl: number): Promise<boolean> {
+    try {
+      return await this.redis.ttl(key) > minimumTtl;
+    } catch (error) {
+      this.logger.error(`Error checking cache expiry: ${error.message}`, error.stack);
       return false;
     }
   }

@@ -16,6 +16,7 @@ describe('CacheService', () => {
       set: jest.fn(),
       del: jest.fn(),
       exists: jest.fn(),
+      ttl: jest.fn(),
       incr: jest.fn(),
       scan: jest.fn()
     };
@@ -41,6 +42,17 @@ describe('CacheService', () => {
 
     await expect(service.incr('count')).resolves.toBe(3);
     await expect(service.incr('count')).resolves.toBe(0);
+  });
+
+  it('requires sufficient remaining TTL and refreshes expiring, persistent or missing entries', async () => {
+    redis.ttl.mockResolvedValueOnce(172800).mockResolvedValueOnce(86400).mockResolvedValueOnce(-1).mockResolvedValueOnce(-2)
+      .mockRejectedValueOnce(new Error('offline'));
+    await expect(service.hasRemainingTtl('fresh', 86400)).resolves.toBe(true);
+    await expect(service.hasRemainingTtl('expiring', 86400)).resolves.toBe(false);
+    await expect(service.hasRemainingTtl('persistent', 86400)).resolves.toBe(false);
+    await expect(service.hasRemainingTtl('missing', 86400)).resolves.toBe(false);
+    await expect(service.hasRemainingTtl('offline', 86400)).resolves.toBe(false);
+    expect(redis.set).not.toHaveBeenCalled();
   });
 
   it('generates stable cache keys', () => {

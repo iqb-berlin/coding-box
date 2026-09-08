@@ -115,3 +115,36 @@ describe('WorkspaceTestResultsAnalysisController', () => {
     );
   });
 });
+
+describe('filter options cache generations', () => {
+  it('keeps an in-flight result out of the next generation and expires old entries', async () => {
+    let generation = 0;
+    let finish: () => void;
+    const started = new Promise<void>(resolve => {
+      finish = resolve;
+    });
+    let finishQuery: (value: unknown) => void;
+    const database = {
+      findFlatResponseFilterOptions: jest.fn(() => {
+        finish();
+        return new Promise(resolve => { finishQuery = resolve; });
+      })
+    };
+    const cache = {
+      generateFlatResponseFilterOptionsVersionKey: () => 'version',
+      generateFlatResponseFilterOptionsCacheKey: (_workspace: number, version: number) => `options:v${version}`,
+      getNumber: jest.fn(async () => generation),
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue(true)
+    };
+    const subject = new WorkspaceTestResultsAnalysisController(database as never, cache as never, {} as never);
+    const pending = subject.findFlatResponseFilterOptions(1);
+    await started;
+    generation = 1;
+    finishQuery({ units: ['before mutation'] });
+    await pending;
+    expect(cache.set).toHaveBeenCalledWith('options:v0', { units: ['before mutation'] }, 300);
+    expect(cache.set).not.toHaveBeenCalledWith('options:v1', expect.anything(), expect.anything());
+    expect(cache.getNumber).toHaveBeenCalledWith('version', 0);
+  });
+});
