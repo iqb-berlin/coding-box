@@ -166,6 +166,213 @@ describe('UnitPlayerComponent', () => {
     expect(otherResponse.value).toEqual(['kept']);
   });
 
+  it('should reuse prepared assets for response changes and release them on destroy', () => {
+    const createObjectURL = jest.fn().mockReturnValue('blob:unit-image');
+    const revokeObjectURL = jest.fn();
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: createObjectURL,
+      configurable: true
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: revokeObjectURL,
+      configurable: true
+    });
+    const postMessage = jest.fn();
+    component.postMessageTarget = { postMessage } as unknown as Window;
+    const definition = JSON.stringify({
+      image: 'data:image/png;base64,aGVsbG8='
+    });
+
+    const firstResponses = {
+      responses: [{ id: 'answer', content: 'first answer' }]
+    };
+    const secondResponses = {
+      responses: [{ id: 'answer', content: 'second answer' }]
+    };
+    component.ngOnChanges({
+      unitDef: new SimpleChange(undefined, definition, true),
+      unitResponses: new SimpleChange(undefined, firstResponses, true)
+    });
+    component.ngOnChanges({
+      unitResponses: new SimpleChange(firstResponses, secondResponses, false)
+    });
+
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(postMessage.mock.calls[0][0].unitDefinition).toContain('blob:unit-image');
+    expect(postMessage.mock.calls[1][0].unitDefinition).toBe(
+      postMessage.mock.calls[0][0].unitDefinition
+    );
+    expect(postMessage.mock.calls[0][0].unitState.dataParts.answer).toBe('"first answer"');
+    expect(postMessage.mock.calls[1][0].unitState.dataParts.answer).toBe('"second answer"');
+
+    fixture.destroy();
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:unit-image');
+  });
+
+  it('should retry once with the original definition after a player asset error', () => {
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: jest.fn().mockReturnValue('blob:unit-image'),
+      configurable: true
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: jest.fn(),
+      configurable: true
+    });
+    const postMessage = jest.fn();
+    component.postMessageTarget = { postMessage } as unknown as Window;
+    const definition = JSON.stringify({
+      image: 'data:image/png;base64,aGVsbG8='
+    });
+    component.ngOnChanges({
+      unitDef: new SimpleChange(undefined, definition, true)
+    });
+    const appService = TestBed.inject(AppService);
+    const source = component.hostingIframe.nativeElement.contentWindow;
+
+    appService.postMessage$.next(new MessageEvent('message', {
+      data: {
+        type: 'vopRuntimeErrorNotification',
+        code: 'image-not-loading'
+      },
+      source
+    }));
+    appService.postMessage$.next(new MessageEvent('message', {
+      data: {
+        type: 'vopRuntimeErrorNotification',
+        code: 'image-not-loading'
+      },
+      source
+    }));
+
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(postMessage.mock.calls[0][0].unitDefinition).toContain('blob:unit-image');
+    expect(postMessage.mock.calls[1][0].unitDefinition).toBe(definition);
+  });
+
+  it('should retry with the original definition after an iframe blob asset fails', () => {
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: jest.fn().mockReturnValue('blob:unit-image'),
+      configurable: true
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: jest.fn(),
+      configurable: true
+    });
+    const postMessage = jest.fn();
+    component.postMessageTarget = { postMessage } as unknown as Window;
+    const definition = JSON.stringify({
+      image: 'data:image/png;base64,aGVsbG8='
+    });
+    component.ngOnChanges({
+      unitDef: new SimpleChange(undefined, definition, true)
+    });
+    const iframe = component.hostingIframe.nativeElement as HTMLIFrameElement;
+    iframe.dispatchEvent(new Event('load'));
+    const failedImage = iframe.contentDocument?.createElement('img');
+
+    expect(failedImage).toBeTruthy();
+    failedImage!.src = 'blob:unit-image';
+    iframe.contentDocument?.body.appendChild(failedImage!);
+    failedImage!.dispatchEvent(new Event('error'));
+
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(postMessage.mock.calls[1][0].unitDefinition).toBe(definition);
+  });
+
+  it('should ignore a delayed iframe error from a previously released blob asset', () => {
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: jest.fn()
+        .mockReturnValueOnce('blob:first-unit-image')
+        .mockReturnValueOnce('blob:second-unit-image'),
+      configurable: true
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: jest.fn(),
+      configurable: true
+    });
+    const postMessage = jest.fn();
+    component.postMessageTarget = { postMessage } as unknown as Window;
+    component.ngOnChanges({
+      unitDef: new SimpleChange(undefined, JSON.stringify({
+        image: 'data:image/png;base64,aGVsbG8='
+      }), true)
+    });
+    component.ngOnChanges({
+      unitDef: new SimpleChange(JSON.stringify({
+        image: 'data:image/png;base64,aGVsbG8='
+      }), JSON.stringify({
+        image: 'data:image/png;base64,d29ybGQ='
+      }), false)
+    });
+    const iframe = component.hostingIframe.nativeElement as HTMLIFrameElement;
+    iframe.dispatchEvent(new Event('load'));
+    const staleImage = iframe.contentDocument?.createElement('img');
+
+    expect(staleImage).toBeTruthy();
+    staleImage!.src = 'blob:first-unit-image';
+    iframe.contentDocument?.body.appendChild(staleImage!);
+    staleImage!.dispatchEvent(new Event('error'));
+
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(postMessage.mock.calls[1][0].unitDefinition).toContain('blob:second-unit-image');
+  });
+
+  it('should retry with the original definition when the prepared unit does not start', () => {
+    jest.useFakeTimers();
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: jest.fn().mockReturnValue('blob:unit-image'),
+      configurable: true
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: jest.fn(),
+      configurable: true
+    });
+    const postMessage = jest.fn();
+    component.postMessageTarget = { postMessage } as unknown as Window;
+    const definition = JSON.stringify({
+      image: 'data:image/png;base64,aGVsbG8='
+    });
+
+    component.ngOnChanges({
+      unitDef: new SimpleChange(undefined, definition, true)
+    });
+    jest.advanceTimersByTime(10_000);
+
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(postMessage.mock.calls[1][0].unitDefinition).toBe(definition);
+  });
+
+  it('should keep the prepared definition after the player confirms startup', () => {
+    jest.useFakeTimers();
+    Object.defineProperty(URL, 'createObjectURL', {
+      value: jest.fn().mockReturnValue('blob:unit-image'),
+      configurable: true
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      value: jest.fn(),
+      configurable: true
+    });
+    const postMessage = jest.fn();
+    component.postMessageTarget = { postMessage } as unknown as Window;
+    component.ngOnChanges({
+      unitDef: new SimpleChange(undefined, JSON.stringify({
+        image: 'data:image/png;base64,aGVsbG8='
+      }), true)
+    });
+    const appService = TestBed.inject(AppService);
+    const source = component.hostingIframe.nativeElement.contentWindow;
+
+    appService.postMessage$.next(new MessageEvent('message', {
+      data: { type: 'vopStateChangedNotification' },
+      source
+    }));
+    jest.advanceTimersByTime(10_000);
+
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    expect(postMessage.mock.calls[0][0].unitDefinition).toContain('blob:unit-image');
+  });
+
   it('should not emit a page error when requested page 0 is valid and current', () => {
     const emitSpy = jest.spyOn(component.invalidPage, 'emit');
 

@@ -18,8 +18,20 @@ import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto
 import { SpinnerComponent } from '../spinner/spinner.component';
 import { PageData } from '../../models/page-data.model';
 import { normalizeMathTextReplayDataParts } from '../../utils/replay-data-parts-normalization';
+import {
+  PreparedReplayUnitDefinition,
+  prepareEmbeddedReplayAssets,
+  releaseEmbeddedReplayAssets
+} from '../../utils/embedded-replay-assets';
 
 export type Progress = 'none' | 'some' | 'complete';
+
+const UNIT_START_FALLBACK_TIMEOUT_MS = 10_000;
+const ASSET_RUNTIME_ERROR_CODES = new Set([
+  'audio-timeout',
+  'image-not-loading',
+  'media-duration-error'
+]);
 
 @Component({
   selector: 'coding-box-unit-player',
@@ -53,8 +65,10 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   private ngUnsubscribe = new Subject<void>();
   private validPagesSubscription: Subscription | null = null;
   private iframeLoadSubscription: Subscription | null = null;
+  private iframeAssetErrorSubscription: Subscription | null = null;
   private keyDownSubscription: Subscription | null = null;
   private iframeHeightTimeout: ReturnType<typeof setTimeout> | null = null;
+  private unitStartFallbackTimeout: ReturnType<typeof setTimeout> | null = null;
   playerApiVersion = 3;
   private sessionId = '';
   pageList: PageData[] = [];
@@ -66,6 +80,11 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   dataParts!: { [key: string]: string };
   isLoaded: Subject<boolean> = new Subject<boolean>();
   private currentPageId = '';
+  private preparedUnitDefinition: PreparedReplayUnitDefinition | undefined;
+  private originalUnitDefinition = '';
+  private useOriginalUnitDefinition = false;
+  private originalUnitDefinitionFallbackAttempted = false;
+  private preparedAssetsConfirmed = false;
 
   ngOnChanges(changes: SimpleChanges): void {
     const unitDef = 'unitDef';
@@ -79,6 +98,8 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
 
     if (unitDefChange?.previousValue && !unitDefChange.currentValue) {
       this.currentPageId = '';
+      this.resetUnitDefinitionFallback();
+      this.releasePreparedUnitDefinition();
       this.resetIframeContent();
       return;
     }
@@ -116,6 +137,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       .pipe(takeUntil(this.ngUnsubscribe))
       .subscribe(() => {
         this.forwardKeyEvents();
+        this.subscribeForIframeAssetErrors();
 
         if (this.iframeHeightTimeout !== null) {
           clearTimeout(this.iframeHeightTimeout);
@@ -124,6 +146,28 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
           this.iframeHeightTimeout = null;
           this.calculateIFrameHeight();
         }, 500);
+      });
+  }
+
+  private subscribeForIframeAssetErrors(): void {
+    this.iframeAssetErrorSubscription?.unsubscribe();
+    this.iframeAssetErrorSubscription = null;
+
+    const iframeDocument = this.iFrameElement?.contentDocument;
+    if (!iframeDocument) {
+      return;
+    }
+
+    this.iframeAssetErrorSubscription = fromEvent<Event>(iframeDocument, 'error', { capture: true })
+      .pipe(takeUntil(this.ngUnsubscribe))
+      .subscribe(event => {
+        const target = event.target as { currentSrc?: unknown; src?: unknown } | null;
+        const currentSrc = typeof target?.currentSrc === 'string' ? target.currentSrc : '';
+        const src = typeof target?.src === 'string' ? target.src : '';
+        const failedAssetUrl = currentSrc || src;
+        if (this.preparedUnitDefinition?.objectUrls.includes(failedAssetUrl)) {
+          this.retryWithOriginalUnitDefinition();
+        }
       });
   }
 
@@ -139,7 +183,10 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     unitResponsesChange?: SimpleChange
   ): void {
     try {
-      this.unitDef = JSON.parse(newUnitDef);
+      const preparedUnitDefinition = prepareEmbeddedReplayAssets(newUnitDef);
+      this.releasePreparedUnitDefinition();
+      this.preparedUnitDefinition = preparedUnitDefinition;
+      this.resetUnitDefinitionFallback(newUnitDef);
 
       if (unitResponsesChange?.currentValue) {
         this.handleResponsesChange(unitResponsesChange.currentValue);
@@ -172,7 +219,10 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
           return acc;
         }, {}
       );
-      this.dataParts = normalizeMathTextReplayDataParts(dataParts, this.unitDef);
+      this.dataParts = normalizeMathTextReplayDataParts(
+        dataParts,
+        this.preparedUnitDefinition?.definition
+      );
     }
   }
 
@@ -332,6 +382,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
             }
 
             case 'vo.FromPlayer.StartedNotification':
+              this.confirmUnitDefinitionStarted();
               this.setPageList(this.getValidPagesAsIds(msgData.validPages), msgData.currentPage);
               this.setPresentationStatus(msgData.presentationComplete);
               this.setResponsesStatus(msgData.responsesGiven);
@@ -339,6 +390,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
               break;
 
             case 'vopStateChangedNotification':
+              this.confirmUnitDefinitionStarted();
               if (msgData.playerState) {
                 const pages = msgData.playerState.validPages;
                 const current = msgData.playerState.currentPage?.toString() || '';
@@ -356,6 +408,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
               break;
 
             case 'vo.FromPlayer.ChangedDataTransfer':
+              this.confirmUnitDefinitionStarted();
               this.setPageList(this.getValidPagesAsIds(msgData.validPages), msgData.currentPage);
               this.setPresentationStatus(msgData.presentationComplete);
               this.setResponsesStatus(msgData.responsesGiven);
@@ -402,6 +455,12 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
               this.setFocusStatus(msgData.hasFocus);
               break;
 
+            case 'vopRuntimeErrorNotification':
+              if (ASSET_RUNTIME_ERROR_CODES.has(msgData.code)) {
+                this.retryWithOriginalUnitDefinition();
+              }
+              break;
+
             default:
               break;
           }
@@ -426,7 +485,12 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       return;
     }
 
-    const unitDefStringified = JSON.stringify(this.unitDef);
+    const unitDefStringified = this.useOriginalUnitDefinition ?
+      this.originalUnitDefinition :
+      this.preparedUnitDefinition?.serializedDefinition;
+    if (!unitDefStringified) {
+      return;
+    }
     const postMessageData: { sessionId: string; unitDefinition: string; type?: string; unitState?: object; playerConfig?: object } = {
       sessionId: this.sessionId,
       unitDefinition: unitDefStringified
@@ -436,7 +500,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       postMessageData.type = 'vo.ToPlayer.DataTransfer';
     } else {
       const dataParts = this.dataParts ?
-        normalizeMathTextReplayDataParts(this.dataParts, this.unitDef) :
+        normalizeMathTextReplayDataParts(this.dataParts, this.preparedUnitDefinition?.definition) :
         this.dataParts;
       this.isLoaded.next(true);
       Object.assign(postMessageData, {
@@ -457,6 +521,62 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     }
 
     this.postMessageTarget.postMessage(postMessageData, '*');
+    this.scheduleUnitDefinitionFallback();
+  }
+
+  private scheduleUnitDefinitionFallback(): void {
+    this.clearUnitDefinitionFallbackTimeout();
+    if (
+      this.useOriginalUnitDefinition ||
+      this.originalUnitDefinitionFallbackAttempted ||
+      this.preparedAssetsConfirmed ||
+      !this.preparedUnitDefinition?.objectUrls.length
+    ) {
+      return;
+    }
+
+    this.unitStartFallbackTimeout = setTimeout(() => {
+      this.unitStartFallbackTimeout = null;
+      this.retryWithOriginalUnitDefinition();
+    }, UNIT_START_FALLBACK_TIMEOUT_MS);
+  }
+
+  private retryWithOriginalUnitDefinition(): void {
+    if (
+      this.useOriginalUnitDefinition ||
+      this.originalUnitDefinitionFallbackAttempted ||
+      !this.originalUnitDefinition ||
+      !this.preparedUnitDefinition?.objectUrls.length
+    ) {
+      return;
+    }
+
+    this.originalUnitDefinitionFallbackAttempted = true;
+    this.useOriginalUnitDefinition = true;
+    this.clearUnitDefinitionFallbackTimeout();
+    this.postUnitDef();
+  }
+
+  private confirmUnitDefinitionStarted(): void {
+    this.clearUnitDefinitionFallbackTimeout();
+    if (!this.useOriginalUnitDefinition) {
+      this.preparedAssetsConfirmed = true;
+    }
+  }
+
+  private clearUnitDefinitionFallbackTimeout(): void {
+    if (this.unitStartFallbackTimeout !== null) {
+      clearTimeout(this.unitStartFallbackTimeout);
+      this.unitStartFallbackTimeout = null;
+    }
+  }
+
+  private resetUnitDefinitionFallback(originalUnitDefinition = ''): void {
+    this.clearUnitDefinitionFallbackTimeout();
+    this.originalUnitDefinition = originalUnitDefinition;
+    this.useOriginalUnitDefinition = false;
+    this.originalUnitDefinitionFallbackAttempted = false;
+    this.preparedAssetsConfirmed = false;
   }
 
   // ++++++++++++ page nav ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -662,8 +782,12 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   }
 
   ngOnDestroy(): void {
+    this.resetUnitDefinitionFallback();
+    this.releasePreparedUnitDefinition();
     this.iframeLoadSubscription?.unsubscribe();
     this.iframeLoadSubscription = null;
+    this.iframeAssetErrorSubscription?.unsubscribe();
+    this.iframeAssetErrorSubscription = null;
     this.keyDownSubscription?.unsubscribe();
     this.keyDownSubscription = null;
     if (this.iframeHeightTimeout !== null) {
@@ -678,5 +802,10 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       this.validPagesSubscription.unsubscribe();
       this.validPagesSubscription = null;
     }
+  }
+
+  private releasePreparedUnitDefinition(): void {
+    releaseEmbeddedReplayAssets(this.preparedUnitDefinition);
+    this.preparedUnitDefinition = undefined;
   }
 }
