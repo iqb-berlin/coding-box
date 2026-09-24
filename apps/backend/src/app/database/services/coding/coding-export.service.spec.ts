@@ -1153,7 +1153,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       true
     );
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const worksheet = workbook.getWorksheet('Coding Results');
 
     expect(worksheet?.getRow(1).getCell(4).value).toBe('UNIT_VAR');
@@ -1253,7 +1253,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
 
     const buffer = await service.exportCodingResultsAggregated(7);
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const worksheet = workbook.getWorksheet('Coding Results')!;
 
     expect(worksheet.getRow(1).getCell(4).value).toBe('UNIT_CURRENT');
@@ -1395,7 +1395,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       true
     );
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const worksheet = workbook.getWorksheet('Coding Results')!;
     const headers = worksheet.getRow(1).values as unknown[];
 
@@ -1501,7 +1501,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       'new-row-per-variable'
     );
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const worksheet = workbook.getWorksheet('Coding Results')!;
     const headers = worksheet.getRow(1).values as unknown[];
 
@@ -1627,7 +1627,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       true
     );
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const worksheet = workbook.getWorksheet('Coding Results')!;
     const headerValues = worksheet.getRow(1).values as unknown[];
     const codeColumn = headerValues.findIndex(value => value === 'Coder A Code');
@@ -1739,7 +1739,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       [5]
     );
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const worksheet = workbook.getWorksheet('Coding Results')!;
     const headerValues = worksheet.getRow(1).values as unknown[];
     const managerCodeColumn = headerValues.findIndex(value => value === 'manager1 Code');
@@ -2309,7 +2309,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       true
     );
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const worksheet = workbook.getWorksheet('Coding Results');
 
     expect(statusStringToNumber('DERIVE_ERROR')).not.toBeNull();
@@ -2427,7 +2427,7 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       [21]
     );
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const worksheet = workbook.getWorksheet('Coding Results');
 
     expect(codingListService.getCodingListVariables).toHaveBeenCalledWith(7);
