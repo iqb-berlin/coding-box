@@ -222,7 +222,7 @@ describe('ExportValidationResultsService', () => {
         'validation:v2:1:abc123'
       );
       const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(result);
+      await workbook.xlsx.load(result as unknown as Parameters<typeof workbook.xlsx.load>[0]);
       const worksheet = workbook.getWorksheet('Validation Results');
 
       expect(responseRepository.createQueryBuilder).toHaveBeenCalled();
