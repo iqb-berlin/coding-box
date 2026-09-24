@@ -146,16 +146,44 @@ describe('WorkspaceBackendService', () => {
   });
 
   describe('addWorkspace', () => {
-    it('should populate headers and body', () => {
+    it('should return the created workspace id', () => {
       const mockDto = { name: 'New' };
       service.addWorkspace(mockDto as CreateWorkspaceDto).subscribe(res => {
-        expect(res).toBe(true);
+        expect(res).toBe(17);
       });
 
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace`);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(mockDto);
-      req.flush(true);
+      req.flush(17);
+    });
+
+    it('should return null when workspace creation fails', () => {
+      service.addWorkspace({ name: 'New' } as CreateWorkspaceDto).subscribe(res => {
+        expect(res).toBeNull();
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace`);
+      req.flush('failed', { status: 500, statusText: 'Server Error' });
+    });
+  });
+
+  describe('workspace mutations', () => {
+    it.each([
+      { method: 'deleteWorkspace', httpMethod: 'DELETE' },
+      { method: 'changeWorkspace', httpMethod: 'PATCH' }
+    ] as const)('should return false when $method fails', ({ method, httpMethod }) => {
+      const request$ = method === 'deleteWorkspace' ?
+        service.deleteWorkspace([3]) :
+        service.changeWorkspace({ id: 3, name: 'Renamed' });
+
+      request$.subscribe(res => {
+        expect(res).toBe(false);
+      });
+
+      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace`);
+      expect(req.request.method).toBe(httpMethod);
+      req.flush('failed', { status: 500, statusText: 'Server Error' });
     });
   });
 });
