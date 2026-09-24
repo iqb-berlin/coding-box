@@ -13,7 +13,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { FormsModule } from '@angular/forms';
-import { CommonModule } from '@angular/common';
+
 import {
   catchError, forkJoin, map, Observable, of
 } from 'rxjs';
@@ -70,8 +70,7 @@ type OptionLoadResult<T> = { ok: true; value: T } | { ok: false };
     MatIconModule,
     MatInputModule,
     MatDialogModule,
-    FormsModule,
-    CommonModule
+    FormsModule
   ]
 })
 export class ExportComponent {
