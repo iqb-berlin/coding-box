@@ -33,6 +33,7 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { CodingReadinessService } from './coding-readiness.service';
+import { omitShadowedGeneratedSourcePlaceholders } from './autocoder-source-placeholder.util';
 import {
   AutocoderOutputShadow,
   createAutocoderOutputShadows
@@ -1317,14 +1318,17 @@ export class CodingProcessService {
       const unitBatch = units.slice(i, i + batchSize);
 
       for (const unit of unitBatch) {
-        const responses = unitToResponsesMap.get(unit.id) || [];
-        if (responses.length === 0) continue;
-
-        statistics.totalResponses += responses.length;
+        const unitResponses = unitToResponsesMap.get(unit.id) || [];
+        if (unitResponses.length === 0) continue;
         const codingSchemeRef = unitToCodingSchemeRefMap.get(unit.id);
         const scheme = codingSchemeRef ?
           fileIdToCodingSchemeMap.get(codingSchemeRef) || emptyScheme :
           emptyScheme;
+        const responses = omitShadowedGeneratedSourcePlaceholders(
+          unitResponses,
+          scheme.variableCodings || []
+        );
+        statistics.totalResponses += responses.length;
 
         if (codingSchemeRef) {
           const unitFileId = this.getUnitFileId(unit);

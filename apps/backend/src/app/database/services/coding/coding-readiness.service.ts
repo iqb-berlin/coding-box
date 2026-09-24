@@ -26,6 +26,8 @@ import {
   isCodingVariableIdCandidate
 } from './coding-response-candidate.util';
 import { CacheService } from '../../../cache/cache.service';
+import { getCodingDependencyVariables, mergeCodingVariableMaps } from './coding-dependency-variables.util';
+import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
 import {
   getCodingReadinessCacheKey,
   getCodingReadinessCachePattern,
@@ -396,7 +398,13 @@ export class CodingReadinessService {
           });
         })
       );
-    this.applyCodingCandidateFilter(query, 'response', autoCoderRun);
+    const dependencies = getCodingDependencyVariables(
+      await this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId)
+    );
+    const dependencyKeys = Array.from(dependencies.entries()).flatMap(([unitName, variables]) => (
+      Array.from(variables).map(variable => getManualCodingScopeKey(unitName, variable))
+    ));
+    this.applyCodingCandidateFilter(query, 'response', autoCoderRun, dependencyKeys);
 
     this.applyAutocoderGeneratedFilter(query, autoCoderRun);
     const rows = await query
@@ -418,20 +426,25 @@ export class CodingReadinessService {
   private applyCodingCandidateFilter(
     query: SelectQueryBuilder<ResponseEntity>,
     alias: string,
-    autoCoderRun: 1 | 2
+    autoCoderRun: 1 | 2,
+    dependencyKeys: string[]
   ): void {
     const variableCandidateCondition = getCodingVariableIdCandidateSql(alias);
-    if (autoCoderRun === 1) {
+    if (autoCoderRun === 1 && dependencyKeys.length === 0) {
       query.andWhere(variableCandidateCondition);
       return;
     }
-
     query.andWhere(
       new Brackets(qb => {
-        qb.where(variableCandidateCondition).orWhere(
-          `${alias}.is_autocoder_generated = :generatedCodingCandidate`,
-          { generatedCodingCandidate: true }
-        );
+        qb.where(variableCandidateCondition);
+        if (autoCoderRun === 2) {
+          qb.orWhere(`${alias}.is_autocoder_generated = :generatedCodingCandidate`,
+            { generatedCodingCandidate: true });
+        }
+        if (dependencyKeys.length > 0) {
+          qb.orWhere(`CONCAT(UPPER(unit.name), CHR(31), ${alias}.variableid) IN (:...codingDependencyKeys)`,
+            { codingDependencyKeys: dependencyKeys });
+        }
       })
     );
   }
@@ -633,7 +646,7 @@ export class CodingReadinessService {
     candidateCounts: CandidateVariableCount[],
     units: Unit[]
   ): Promise<VariableCountDiagnostics> {
-    const unitVariables = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+    const { unitVariables, dependencies } = await this.getVariableFilterMaps(workspaceId);
     const validVariableSets = this.buildValidVariableSets(unitVariables);
     const unitIdToNameMap = this.buildUnitIdToNameMap(units);
     const validCandidateCounts: CandidateVariableCount[] = [];
@@ -644,14 +657,15 @@ export class CodingReadinessService {
     }>();
 
     candidateCounts.forEach(item => {
+      const unitName = unitIdToNameMap.get(item.unitid) || '';
       if (
         !isCodingVariableIdCandidate(item.variableid) &&
-        !item.isAutocoderGenerated
+        !item.isAutocoderGenerated &&
+        !dependencies.get(unitName.toUpperCase())?.has(item.variableid)
       ) {
         return;
       }
 
-      const unitName = unitIdToNameMap.get(item.unitid) || '';
       const validVars = validVariableSets.get(unitName.toUpperCase());
       if (validVars?.has(item.variableid)) {
         validCandidateCounts.push(item);
@@ -685,7 +699,7 @@ export class CodingReadinessService {
     units: Unit[],
     manager?: EntityManager
   ): Promise<VariableFilterDiagnostics> {
-    const unitVariables = await this.workspaceFilesService.getUnitVariableMap(
+    const { unitVariables, dependencies } = await this.getVariableFilterMaps(
       workspaceId,
       manager
     );
@@ -699,14 +713,15 @@ export class CodingReadinessService {
     }>();
 
     responses.forEach(response => {
+      const unitName = unitIdToNameMap.get(response.unitid) || '';
       if (
         !isCodingVariableIdCandidate(response.variableid) &&
-        response.is_autocoder_generated !== true
+        response.is_autocoder_generated !== true &&
+        !dependencies.get(unitName.toUpperCase())?.has(response.variableid)
       ) {
         return;
       }
 
-      const unitName = unitIdToNameMap.get(response.unitid) || '';
       const validVars = validVariableSets.get(unitName.toUpperCase());
       if (validVars?.has(response.variableid)) {
         validResponses.push(response);
@@ -730,6 +745,17 @@ export class CodingReadinessService {
       validVariablePairs: this.countValidVariablePairs(unitVariables),
       invalidVariableSamples: this.buildInvalidVariableSamples(invalidByUnit)
     };
+  }
+
+  private async getVariableFilterMaps(workspaceId: number, manager?: EntityManager): Promise<{
+    unitVariables: Map<string, Set<string>>;
+    dependencies: Map<string, Set<string>>;
+  }> {
+    const unitVariables = await this.workspaceFilesService.getUnitVariableMap(workspaceId, manager);
+    const dependencies = getCodingDependencyVariables(
+      await this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId, manager)
+    );
+    return { unitVariables: mergeCodingVariableMaps(unitVariables, dependencies), dependencies };
   }
 
   private buildValidVariableSets(

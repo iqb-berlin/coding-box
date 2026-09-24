@@ -36,6 +36,9 @@ function createService() {
     })
   } as unknown as jest.Mocked<WorkspaceExclusionService>;
   const workspaceFilesService = {
+    getDerivedVariablesBySourceMap: jest.fn().mockResolvedValue(new Map([
+      ['Unit1\u001f_03_reached', new Set(['_03'])]
+    ])),
     getUnitVariableMap: jest.fn().mockResolvedValue(new Map([
       ['Unit1', new Set(['var1'])]
     ]))
@@ -235,12 +238,26 @@ describe('CodingResponseFilterService', () => {
     });
 
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
-      'CONCAT(unit.name, CHR(31), response.variableid) IN (:...validVariablePairKeys)',
-      { validVariablePairKeys: ['Unit1\u001Fvar1'] }
+      'CONCAT(UPPER(unit.name), CHR(31), response.variableid) IN (:...validVariablePairKeys)',
+      { validVariablePairKeys: ['UNIT1\u001Fvar1', 'UNIT1\u001F_03_reached', 'UNIT1\u001F_03'] }
     );
     expect(
       queryBuilder.andWhere.mock.calls.some(([condition]) => String(condition).includes('OR response.is_autocoder_generated'))
     ).toBe(false);
+  });
+
+  it('excludes empty generated source duplicates only from versioned exports', async () => {
+    const { service, queryBuilder } = createService();
+    await service.countResponses(1, { version: 'v3', validCodingVariablesOnly: true });
+    const call = queryBuilder.andWhere.mock.calls.find(([condition]) => String(condition).includes('FROM response imported_source'));
+    expect(call?.[1]).toEqual({ baseSourceKeys: ['UNIT1\u001F_03_REACHED'] });
+    expect(call?.[0]).toContain('response.status_v1 IS NOT DISTINCT FROM 0');
+    expect(call?.[0]).toContain('response.code_v2 IS NULL');
+    expect(call?.[0]).toContain('imported_source.unitid = response.unitid');
+    expect(call?.[0]).toContain('imported_source.is_autocoder_generated IS NOT TRUE');
+    queryBuilder.andWhere.mockClear();
+    await service.countResponses(1, { validCodingVariablesOnly: true });
+    expect(queryBuilder.andWhere.mock.calls.some(([condition]) => String(condition).includes('FROM response imported_source'))).toBe(false);
   });
 
   it('keeps DERIVE_ERROR out of default manual coding candidate filters', async () => {
