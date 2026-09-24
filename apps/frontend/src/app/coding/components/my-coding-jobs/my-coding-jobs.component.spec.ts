@@ -3,7 +3,9 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, Subject, throwError } from 'rxjs';
+import {
+  BehaviorSubject, Observable, of, Subject, throwError
+} from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { CodingJob } from '../../models/coding-job.model';
@@ -98,6 +100,7 @@ describe('MyCodingJobsComponent', () => {
   });
 
   it('renders completed coding jobs with start and submit-for-review actions', () => {
+    fixture.detectChanges();
     component.isAuthorized = true;
     component.isLoading = false;
     component.dataSource.data = [completedJob];
@@ -124,6 +127,7 @@ describe('MyCodingJobsComponent', () => {
         ...completedJob,
         status
       };
+      fixture.detectChanges();
       component.isAuthorized = true;
       component.isLoading = false;
       component.dataSource.data = [job];
@@ -422,6 +426,7 @@ describe('MyCodingJobsComponent', () => {
       })
     );
     component.isAuthorized = true;
+    fixture.detectChanges();
 
     component.loadMyCodingJobs([
       { id: 1, name: 'Workspace 1' },
@@ -496,6 +501,47 @@ describe('MyCodingJobsComponent', () => {
     expect(component.dataSource.data).toEqual([]);
     expect(component.jobsTotal).toBe(0);
     expect(codingJobBackendService.getCodingJobs).not.toHaveBeenCalled();
+  });
+
+  it('clears stale jobs when auth data loses the last workspace', () => {
+    const codingJobBackendService = TestBed.inject(
+      CodingJobBackendService
+    ) as unknown as {
+      getCodingJobs: jest.Mock;
+    };
+    codingJobBackendService.getCodingJobs.mockReturnValueOnce(
+      of({
+        data: [completedJob],
+        total: 1,
+        page: 1,
+        limit: 100
+      })
+    );
+    const authDataSubject = new BehaviorSubject({
+      userId: 7,
+      workspaces: [{ id: 1, name: 'Workspace 1' }]
+    });
+    const appService = TestBed.inject(AppService) as unknown as {
+      authData$: Observable<{
+        userId: number;
+        workspaces: { id: number; name: string }[];
+      }>;
+    };
+    appService.authData$ = authDataSubject.asObservable();
+    fixture.detectChanges();
+
+    expect(component.dataSource.data).toEqual([completedJob]);
+
+    authDataSubject.next({
+      userId: 7,
+      workspaces: []
+    });
+
+    expect(component.currentWorkspaces).toEqual([]);
+    expect(component.dataSource.data).toEqual([]);
+    expect(component.originalData).toEqual([]);
+    expect(component.selectedWorkspaceIds).toEqual([]);
+    expect(component.jobsTotal).toBe(0);
   });
 
   it('ignores stale coding job loads after a newer workspace request starts', () => {

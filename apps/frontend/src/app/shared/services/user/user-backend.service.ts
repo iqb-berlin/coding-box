@@ -25,11 +25,12 @@ export class UserBackendService {
       .get<UserInListDto[]>(`${this.serverUrl}admin/users/access/${workspaceId}`, {});
   }
 
-  saveUsers(workspaceId: number, users: UserWorkspaceAccessDto[]): Observable<UserWorkspaceAccessDto[]> {
+  saveUsers(workspaceId: number, users: UserWorkspaceAccessDto[]): Observable<boolean> {
     return this.http
-      .patch<UserWorkspaceAccessDto[]>(`${this.serverUrl}admin/users/access/${workspaceId}`,
+      .patch<boolean>(`${this.serverUrl}admin/users/access/${workspaceId}`,
       users,
-      {});
+      {})
+      .pipe(catchError(() => of(false)));
   }
 
   getUsersFull(): Observable<UserFullDto[]> {
@@ -98,7 +99,8 @@ export class UserBackendService {
     return this.http.post<boolean>(
       `${this.serverUrl}admin/users/${userId}/workspaces/`,
       workspaceIds,
-      {});
+      {})
+      .pipe(catchError(() => of(false)));
   }
 
   authenticate(username: string, password: string, server: string, url: string): Observable<ServerResponse> {

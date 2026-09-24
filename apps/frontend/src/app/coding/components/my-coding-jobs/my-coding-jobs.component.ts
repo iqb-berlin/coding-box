@@ -184,10 +184,9 @@ implements OnInit, OnDestroy, OnChanges {
     this.appService.authData$.subscribe(authData => {
       this.currentUserId = authData.userId;
       this.isAuthorized = true;
-      if (authData.workspaces && authData.workspaces.length > 0) {
-        this.authWorkspaces = authData.workspaces;
-        this.loadMyCodingJobs(authData.workspaces);
-      }
+      const workspaces = authData.workspaces || [];
+      this.authWorkspaces = workspaces;
+      this.loadMyCodingJobs(workspaces);
     });
     window.addEventListener('focus', this.handleWindowFocus);
   }

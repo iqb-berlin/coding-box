@@ -89,11 +89,11 @@ export class WorkspaceService {
       );
   }
 
-  addWorkspace(workspaceData: CreateWorkspaceDto): Observable<boolean> {
+  addWorkspace(workspaceData: CreateWorkspaceDto): Observable<number | null> {
     return this.http
-      .post<boolean>(`${this.serverUrl}admin/workspace`, workspaceData, { headers: this.authHeader })
+      .post<number>(`${this.serverUrl}admin/workspace`, workspaceData, { headers: this.authHeader })
       .pipe(
-        catchError(() => of(false))
+        catchError(() => of(null))
       );
   }
 
@@ -105,8 +105,8 @@ export class WorkspaceService {
         params
       })
       .pipe(
-        catchError(() => of(false)),
-        map(() => true)
+        map(() => true),
+        catchError(() => of(false))
       );
   }
 
@@ -114,8 +114,8 @@ export class WorkspaceService {
     return this.http
       .patch<boolean>(`${this.serverUrl}admin/workspace`, workspaceData, { headers: this.authHeader })
       .pipe(
-        catchError(() => of(false)),
-        map(() => true)
+        map(() => true),
+        catchError(() => of(false))
       );
   }
 
@@ -123,7 +123,8 @@ export class WorkspaceService {
     return this.http.post<boolean>(
       `${this.serverUrl}admin/workspace/${workspaceId}/users/`,
       userIds,
-      { headers: this.authHeader });
+      { headers: this.authHeader })
+      .pipe(catchError(() => of(false)));
   }
 
   /**
