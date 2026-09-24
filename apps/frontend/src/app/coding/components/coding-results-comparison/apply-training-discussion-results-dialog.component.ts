@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, Inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
@@ -30,7 +29,6 @@ export interface ApplyTrainingDiscussionResultsDialogResult {
   selector: 'coding-box-apply-training-discussion-results-dialog',
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     MatDialogModule,
     MatButtonModule,
@@ -75,36 +73,44 @@ export interface ApplyTrainingDiscussionResultsDialogResult {
         </div>
       </div>
 
-      <div class="warning-box" *ngIf="!data.preview.canApply">
-        <mat-icon>block</mat-icon>
-        <span>
-          Die Schulung enthält veraltete Quellfälle. Bitte die betroffenen Trainingsjobs prüfen, bevor Ergebnisse angewendet werden.
-        </span>
-      </div>
-
-      <section *ngIf="data.preview.existingFinalResultsCount > 0">
-        <h3>Bestehende finale Ergebnisse</h3>
-        <mat-radio-group [(ngModel)]="existingResultStrategy">
-          <mat-radio-button value="skip">Bestehende v2-Ergebnisse überspringen</mat-radio-button>
-          <mat-radio-button value="overwrite">Bestehende v2-Ergebnisse überschreiben</mat-radio-button>
-        </mat-radio-group>
-      </section>
-
-      <section *ngIf="data.preview.productiveJobConflictCount > 0">
-        <h3>Betroffene Kodierjobs</h3>
-        <mat-radio-group [(ngModel)]="jobConflictStrategy">
-          <mat-radio-button value="skip">Fälle in Kodierjobs überspringen</mat-radio-button>
-          <mat-radio-button value="removeFromJobs">
-            Aus unberührten Kodierjobs entfernen
-          </mat-radio-button>
-        </mat-radio-group>
-        <div class="warning-box" *ngIf="data.preview.blockingProductiveJobUnitCount > 0">
-          <mat-icon>warning</mat-icon>
+      @if (!data.preview.canApply) {
+        <div class="warning-box">
+          <mat-icon>block</mat-icon>
           <span>
-            {{ data.preview.blockingProductiveJobUnitCount }} betroffene Jobfälle enthalten bereits Kodierarbeit und werden nicht automatisch entfernt.
+            Die Schulung enthält veraltete Quellfälle. Bitte die betroffenen Trainingsjobs prüfen, bevor Ergebnisse angewendet werden.
           </span>
         </div>
-      </section>
+      }
+
+      @if (data.preview.existingFinalResultsCount > 0) {
+        <section>
+          <h3>Bestehende finale Ergebnisse</h3>
+          <mat-radio-group [(ngModel)]="existingResultStrategy">
+            <mat-radio-button value="skip">Bestehende v2-Ergebnisse überspringen</mat-radio-button>
+            <mat-radio-button value="overwrite">Bestehende v2-Ergebnisse überschreiben</mat-radio-button>
+          </mat-radio-group>
+        </section>
+      }
+
+      @if (data.preview.productiveJobConflictCount > 0) {
+        <section>
+          <h3>Betroffene Kodierjobs</h3>
+          <mat-radio-group [(ngModel)]="jobConflictStrategy">
+            <mat-radio-button value="skip">Fälle in Kodierjobs überspringen</mat-radio-button>
+            <mat-radio-button value="removeFromJobs">
+              Aus unberührten Kodierjobs entfernen
+            </mat-radio-button>
+          </mat-radio-group>
+          @if (data.preview.blockingProductiveJobUnitCount > 0) {
+            <div class="warning-box">
+              <mat-icon>warning</mat-icon>
+              <span>
+                {{ data.preview.blockingProductiveJobUnitCount }} betroffene Jobfälle enthalten bereits Kodierarbeit und werden nicht automatisch entfernt.
+              </span>
+            </div>
+          }
+        </section>
+      }
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
@@ -114,11 +120,11 @@ export interface ApplyTrainingDiscussionResultsDialogResult {
         color="primary"
         [disabled]="!data.preview.canApply || data.preview.applicableResultsCount === 0"
         (click)="confirm()"
-      >
+        >
         Anwenden
       </button>
     </mat-dialog-actions>
-  `,
+    `,
   styles: [`
     h2 {
       display: flex;

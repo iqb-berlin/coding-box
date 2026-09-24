@@ -1,7 +1,7 @@
 import {
   Component, inject, OnDestroy, OnInit
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -30,7 +30,6 @@ import { ItemMatrixDiagnosticsDialogComponent } from './item-matrix-diagnostics-
   selector: 'coding-box-export-toast',
   standalone: true,
   imports: [
-    CommonModule,
     MatCardModule,
     MatButtonModule,
     MatIconModule,

@@ -4,7 +4,7 @@ import {
 import {
   MAT_DIALOG_DATA, MatDialogModule, MatDialogRef
 } from '@angular/material/dialog';
-import { CommonModule } from '@angular/common';
+
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
@@ -61,7 +61,6 @@ export interface ImportComparisonData {
   selector: 'app-import-comparison-dialog',
   standalone: true,
   imports: [
-    CommonModule,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
@@ -89,187 +88,184 @@ export interface ImportComparisonData {
             <mat-icon class="matched-icon">{{data.isPreview ? 'preview' : 'check_circle'}}</mat-icon>
             <span>{{data.updatedRows}} Zeilen werden {{data.isPreview ? 'aktualisiert (Vorschau)' : 'aktualisiert'}}</span>
           </div>
-          <div *ngIf="data.isPreview" class="preview-notice">
-            <mat-icon class="warning-icon">info</mat-icon>
-            <span>Dies ist eine Vorschau. Die Änderungen wurden noch nicht angewendet.</span>
-          </div>
-          <div *ngIf="applyProgress >= 0" class="apply-progress">
-            <p>Import läuft... {{applyProgress}}%</p>
-            <mat-progress-bar mode="determinate" [value]="applyProgress"></mat-progress-bar>
-          </div>
+          @if (data.isPreview) {
+            <div class="preview-notice">
+              <mat-icon class="warning-icon">info</mat-icon>
+              <span>Dies ist eine Vorschau. Die Änderungen wurden noch nicht angewendet.</span>
+            </div>
+          }
+          @if (applyProgress >= 0) {
+            <div class="apply-progress">
+              <p>Import läuft... {{applyProgress}}%</p>
+              <mat-progress-bar mode="determinate" [value]="applyProgress"></mat-progress-bar>
+            </div>
+          }
         </div>
 
-        <div class="table-container" *ngIf="data.affectedRows.length > 0">
-          <mat-form-field appearance="outline" class="page-size-field">
-            <mat-label>Einträge pro Seite</mat-label>
-            <mat-select [(value)]="pageSize" (selectionChange)="onPageSizeChange()">
-              <mat-option value="50">50</mat-option>
-              <mat-option value="100">100</mat-option>
-              <mat-option value="200">200</mat-option>
-              <mat-option value="500">500</mat-option>
-            </mat-select>
-          </mat-form-field>
-
-          <table mat-table [dataSource]="dataSource" class="comparison-table">
-            <!-- Unit Alias Column -->
-            <ng-container matColumnDef="unitAlias">
-              <th mat-header-cell *matHeaderCellDef>Unit-Alias</th>
-              <td mat-cell *matCellDef="let row">{{row.unitAlias}}</td>
-            </ng-container>
-
-            <!-- Variable ID Column -->
-            <ng-container matColumnDef="variableId">
-              <th mat-header-cell *matHeaderCellDef>Variablen-ID</th>
-              <td mat-cell *matCellDef="let row">{{row.variableId}}</td>
-            </ng-container>
-
-            <!-- Person Login Column -->
-            <ng-container matColumnDef="personLogin">
-              <th mat-header-cell *matHeaderCellDef>Person-Login</th>
-              <td mat-cell *matCellDef="let row">{{row.personLogin || '-'}}</td>
-            </ng-container>
-
-            <!-- Person Code Column -->
-            <ng-container matColumnDef="personCode">
-              <th mat-header-cell *matHeaderCellDef>Person-Code</th>
-              <td mat-cell *matCellDef="let row">{{row.personCode || '-'}}</td>
-            </ng-container>
-
-            <!-- Person Group Column -->
-            <ng-container matColumnDef="personGroup">
-              <th mat-header-cell *matHeaderCellDef>Person-Gruppe</th>
-              <td mat-cell *matCellDef="let row">{{row.personGroup || '-'}}</td>
-            </ng-container>
-
-            <!-- Booklet Name Column -->
-            <ng-container matColumnDef="bookletName">
-              <th mat-header-cell *matHeaderCellDef>Booklet-Name</th>
-              <td mat-cell *matCellDef="let row">{{row.bookletName || '-'}}</td>
-            </ng-container>
-
-            <!-- Import Action Column -->
-            <ng-container matColumnDef="importAction">
-              <th mat-header-cell *matHeaderCellDef>Import</th>
-              <td mat-cell *matCellDef="let row">
-                <span class="action-chip"
-                      [class.action-update]="row.importAction === 'update' || !row.importAction"
-                      [class.action-skip]="row.importAction === 'skip'"
-                      [class.action-unchanged]="row.importAction === 'unchanged'">
-                  {{getActionLabel(row)}}
-                </span>
-                <span *ngIf="row.actionReason" class="action-reason">
-                  {{row.actionReason}}
-                </span>
-              </td>
-            </ng-container>
-
-            <!-- Original Status Column -->
-            <ng-container matColumnDef="originalStatus">
-              <th mat-header-cell *matHeaderCellDef>Original Status</th>
-              <td mat-cell *matCellDef="let row">{{row.originalCodedStatus}}</td>
-            </ng-container>
-
-            <!-- Original Code Column -->
-            <ng-container matColumnDef="originalCode">
-              <th mat-header-cell *matHeaderCellDef>Original Code</th>
-              <td mat-cell *matCellDef="let row">{{row.originalCode ?? '-'}}</td>
-            </ng-container>
-
-            <!-- Original Score Column -->
-            <ng-container matColumnDef="originalScore">
-              <th mat-header-cell *matHeaderCellDef>Original Score</th>
-              <td mat-cell *matCellDef="let row">{{row.originalScore ?? '-'}}</td>
-            </ng-container>
-
-            <!-- Updated Status Column -->
-            <ng-container matColumnDef="updatedStatus">
-              <th mat-header-cell *matHeaderCellDef>Aktualisierter Status</th>
-              <td mat-cell *matCellDef="let row"
+        @if (data.affectedRows.length > 0) {
+          <div class="table-container">
+            <mat-form-field appearance="outline" class="page-size-field">
+              <mat-label>Einträge pro Seite</mat-label>
+              <mat-select [(value)]="pageSize" (selectionChange)="onPageSizeChange()">
+                <mat-option value="50">50</mat-option>
+                <mat-option value="100">100</mat-option>
+                <mat-option value="200">200</mat-option>
+                <mat-option value="500">500</mat-option>
+              </mat-select>
+            </mat-form-field>
+            <table mat-table [dataSource]="dataSource" class="comparison-table">
+              <!-- Unit Alias Column -->
+              <ng-container matColumnDef="unitAlias">
+                <th mat-header-cell *matHeaderCellDef>Unit-Alias</th>
+                <td mat-cell *matCellDef="let row">{{row.unitAlias}}</td>
+              </ng-container>
+              <!-- Variable ID Column -->
+              <ng-container matColumnDef="variableId">
+                <th mat-header-cell *matHeaderCellDef>Variablen-ID</th>
+                <td mat-cell *matCellDef="let row">{{row.variableId}}</td>
+              </ng-container>
+              <!-- Person Login Column -->
+              <ng-container matColumnDef="personLogin">
+                <th mat-header-cell *matHeaderCellDef>Person-Login</th>
+                <td mat-cell *matCellDef="let row">{{row.personLogin || '-'}}</td>
+              </ng-container>
+              <!-- Person Code Column -->
+              <ng-container matColumnDef="personCode">
+                <th mat-header-cell *matHeaderCellDef>Person-Code</th>
+                <td mat-cell *matCellDef="let row">{{row.personCode || '-'}}</td>
+              </ng-container>
+              <!-- Person Group Column -->
+              <ng-container matColumnDef="personGroup">
+                <th mat-header-cell *matHeaderCellDef>Person-Gruppe</th>
+                <td mat-cell *matCellDef="let row">{{row.personGroup || '-'}}</td>
+              </ng-container>
+              <!-- Booklet Name Column -->
+              <ng-container matColumnDef="bookletName">
+                <th mat-header-cell *matHeaderCellDef>Booklet-Name</th>
+                <td mat-cell *matCellDef="let row">{{row.bookletName || '-'}}</td>
+              </ng-container>
+              <!-- Import Action Column -->
+              <ng-container matColumnDef="importAction">
+                <th mat-header-cell *matHeaderCellDef>Import</th>
+                <td mat-cell *matCellDef="let row">
+                  <span class="action-chip"
+                    [class.action-update]="row.importAction === 'update' || !row.importAction"
+                    [class.action-skip]="row.importAction === 'skip'"
+                    [class.action-unchanged]="row.importAction === 'unchanged'">
+                    {{getActionLabel(row)}}
+                  </span>
+                  @if (row.actionReason) {
+                    <span class="action-reason">
+                      {{row.actionReason}}
+                    </span>
+                  }
+                </td>
+              </ng-container>
+              <!-- Original Status Column -->
+              <ng-container matColumnDef="originalStatus">
+                <th mat-header-cell *matHeaderCellDef>Original Status</th>
+                <td mat-cell *matCellDef="let row">{{row.originalCodedStatus}}</td>
+              </ng-container>
+              <!-- Original Code Column -->
+              <ng-container matColumnDef="originalCode">
+                <th mat-header-cell *matHeaderCellDef>Original Code</th>
+                <td mat-cell *matCellDef="let row">{{row.originalCode ?? '-'}}</td>
+              </ng-container>
+              <!-- Original Score Column -->
+              <ng-container matColumnDef="originalScore">
+                <th mat-header-cell *matHeaderCellDef>Original Score</th>
+                <td mat-cell *matCellDef="let row">{{row.originalScore ?? '-'}}</td>
+              </ng-container>
+              <!-- Updated Status Column -->
+              <ng-container matColumnDef="updatedStatus">
+                <th mat-header-cell *matHeaderCellDef>Aktualisierter Status</th>
+                <td mat-cell *matCellDef="let row"
                   [class.updated-value]="row.updatedCodedStatus !== row.originalCodedStatus"
                   [class.matched-row]="row.importAction !== 'skip'">
-                {{row.updatedCodedStatus || '-'}}
-              </td>
-            </ng-container>
-
-            <!-- Updated Code Column -->
-            <ng-container matColumnDef="updatedCode">
-              <th mat-header-cell *matHeaderCellDef>Aktualisierter Code</th>
-              <td mat-cell *matCellDef="let row"
+                  {{row.updatedCodedStatus || '-'}}
+                </td>
+              </ng-container>
+              <!-- Updated Code Column -->
+              <ng-container matColumnDef="updatedCode">
+                <th mat-header-cell *matHeaderCellDef>Aktualisierter Code</th>
+                <td mat-cell *matCellDef="let row"
                   [class.updated-value]="row.updatedCode !== row.originalCode"
                   [class.matched-row]="row.importAction !== 'skip'">
-                {{row.updatedCode ?? '-'}}
-              </td>
-            </ng-container>
-
-            <!-- Updated Score Column -->
-            <ng-container matColumnDef="updatedScore">
-              <th mat-header-cell *matHeaderCellDef>Aktualisierter Score</th>
-              <td mat-cell *matCellDef="let row"
+                  {{row.updatedCode ?? '-'}}
+                </td>
+              </ng-container>
+              <!-- Updated Score Column -->
+              <ng-container matColumnDef="updatedScore">
+                <th mat-header-cell *matHeaderCellDef>Aktualisierter Score</th>
+                <td mat-cell *matCellDef="let row"
                   [class.updated-value]="row.updatedScore !== row.originalScore"
                   [class.matched-row]="row.importAction !== 'skip'">
-                {{row.updatedScore ?? '-'}}
-              </td>
-            </ng-container>
-
-            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-            <tr mat-row *matRowDef="let row; columns: displayedColumns;"
+                  {{row.updatedScore ?? '-'}}
+                </td>
+              </ng-container>
+              <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+              <tr mat-row *matRowDef="let row; columns: displayedColumns;"
                 [class.matched-row]="row.importAction !== 'skip'"
                 [class.skipped-row]="row.importAction === 'skip'"
-                [class.unchanged-row]="row.importAction === 'unchanged'"></tr>
-          </table>
+              [class.unchanged-row]="row.importAction === 'unchanged'"></tr>
+            </table>
+            <mat-paginator
+              [length]="data.affectedRows.length"
+              [pageSize]="pageSize"
+              [pageSizeOptions]="[50, 100, 200, 500]"
+              (page)="onPageChange($event)"
+              showFirstLastButtons>
+            </mat-paginator>
+          </div>
+        }
 
-          <mat-paginator
-            [length]="data.affectedRows.length"
-            [pageSize]="pageSize"
-            [pageSizeOptions]="[50, 100, 200, 500]"
-            (page)="onPageChange($event)"
-            showFirstLastButtons>
-          </mat-paginator>
-        </div>
-
-        <div class="error-section" *ngIf="data.errors.length > 0">
-          <h3>Fehler und Warnungen</h3>
-          <mat-list>
-            <mat-list-item *ngFor="let error of data.errors">
-              <mat-icon matListItemIcon class="error-icon">error</mat-icon>
-              <div matListItemTitle>{{error}}</div>
-            </mat-list-item>
-          </mat-list>
-        </div>
+        @if (data.errors.length > 0) {
+          <div class="error-section">
+            <h3>Fehler und Warnungen</h3>
+            <mat-list>
+              @for (error of data.errors; track error) {
+                <mat-list-item>
+                  <mat-icon matListItemIcon class="error-icon">error</mat-icon>
+                  <div matListItemTitle>{{error}}</div>
+                </mat-list-item>
+              }
+            </mat-list>
+          </div>
+        }
       </mat-dialog-content>
 
       <mat-dialog-actions align="end">
         <button mat-button (click)="downloadComparisonTable()"
-                [disabled]="isLoading || !data.affectedRows.length"
-                matTooltip="Als Excel herunterladen">
+          [disabled]="isLoading || !data.affectedRows.length"
+          matTooltip="Als Excel herunterladen">
           <mat-icon>download</mat-icon>
           Herunterladen
         </button>
 
         <!-- Preview mode buttons -->
-        <ng-container *ngIf="data.isPreview">
+        @if (data.isPreview) {
           <button mat-button (click)="closeDialog()" matTooltip="Vorschau abbrechen">
             <mat-icon>cancel</mat-icon>
             Abbrechen
           </button>
           <button mat-raised-button color="primary" (click)="applyImport()"
-                  [disabled]="isLoading || data.updatedRows === 0"
-                  matTooltip="Änderungen anwenden">
+            [disabled]="isLoading || data.updatedRows === 0"
+            matTooltip="Änderungen anwenden">
             <mat-icon>check_circle</mat-icon>
             Änderungen anwenden
           </button>
-        </ng-container>
+        }
 
         <!-- Normal mode button -->
-        <ng-container *ngIf="!data.isPreview">
+        @if (!data.isPreview) {
           <button mat-button (click)="closeDialog()" matTooltip="Dialog schließen">
             <mat-icon>close</mat-icon>
             Schließen
           </button>
-        </ng-container>
+        }
       </mat-dialog-actions>
     </div>
-  `,
+    `,
   styles: [`
     .import-comparison-dialog {
       min-width: 90vw;

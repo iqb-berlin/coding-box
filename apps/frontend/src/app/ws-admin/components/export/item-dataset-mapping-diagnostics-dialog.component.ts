@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, Inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -61,7 +60,6 @@ const DIAGNOSTIC_CODE_TRANSLATION_KEYS: Record<string, string> = {
   selector: 'coding-box-item-dataset-mapping-diagnostics-dialog',
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     MatButtonModule,
     MatDialogModule,

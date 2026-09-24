@@ -5,7 +5,7 @@ import {
   Input,
   inject
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import {
   concatMap,
   finalize,
@@ -105,7 +105,6 @@ import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
   templateUrl: './coding-management.component.html',
   standalone: true,
   imports: [
-    CommonModule,
     MatSnackBarModule,
     MatIcon,
     MatAnchor,

@@ -2,7 +2,7 @@ import { Component, Inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA, MatDialogRef, MatDialogTitle, MatDialogContent, MatDialogActions
 } from '@angular/material/dialog';
-import { CommonModule } from '@angular/common';
+
 import { MatButton } from '@angular/material/button';
 import { MatDivider } from '@angular/material/divider';
 import { XmlViewerComponent } from '../../components/xml-viewer/xml-viewer.component';
@@ -19,7 +19,6 @@ export interface DialogData {
   selector: 'coding-box-content-dialog',
   standalone: true,
   imports: [
-    CommonModule,
     MatDialogTitle,
     MatDialogContent,
     MatDialogActions,

@@ -2,7 +2,7 @@ import {
   Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, SecurityContext, SimpleChanges,
   ViewChild
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { MatListModule } from '@angular/material/list';
 import { MatButtonModule } from '@angular/material/button';
@@ -63,7 +63,7 @@ interface IndexedReplayUnit {
 @Component({
   selector: 'app-code-selector',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatListModule, MatButtonModule, MatDividerModule, MatFormFieldModule, MatInputModule, MatIconModule, MatTooltipModule, MatProgressBarModule, TranslateModule],
+  imports: [FormsModule, MatListModule, MatButtonModule, MatDividerModule, MatFormFieldModule, MatInputModule, MatIconModule, MatTooltipModule, MatProgressBarModule, TranslateModule],
   templateUrl: './code-selector.component.html',
   styleUrls: ['./code-selector.component.css']
 })

@@ -8,7 +8,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDividerModule } from '@angular/material/divider';
 import { FormsModule } from '@angular/forms';
-import { CommonModule, DatePipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import * as ExcelJS from 'exceljs';
 import { Subject } from 'rxjs';
@@ -38,7 +38,6 @@ export type ExportFormat = 'json' | 'csv' | 'excel';
     MatProgressBarModule,
     MatIconModule,
     MatDividerModule,
-    CommonModule,
     TranslateModule,
     MatButtonToggleGroup,
     MatButtonToggle

@@ -8,18 +8,22 @@
   <mat-form-field appearance="outline">
     <mat-label>Von Kodierer</mat-label>
     <mat-select [(value)]="sourceCoderId">
-      <mat-option *ngFor="let coder of coders" [value]="coder.id">
-        {{ coder.displayName || coder.name }}
-      </mat-option>
+      @for (coder of coders; track coder) {
+        <mat-option [value]="coder.id">
+          {{ coder.displayName || coder.name }}
+        </mat-option>
+      }
     </mat-select>
   </mat-form-field>
 
   <mat-form-field appearance="outline">
     <mat-label>Zu Kodierer</mat-label>
     <mat-select [(value)]="targetCoderId">
-      <mat-option *ngFor="let coder of coders" [value]="coder.id">
-        {{ coder.displayName || coder.name }}
-      </mat-option>
+      @for (coder of coders; track coder) {
+        <mat-option [value]="coder.id">
+          {{ coder.displayName || coder.name }}
+        </mat-option>
+      }
     </mat-select>
   </mat-form-field>
 </mat-dialog-content>

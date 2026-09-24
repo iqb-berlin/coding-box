@@ -1,107 +1,124 @@
-<div class="export-toast-container" *ngIf="hasJobs">
-  <mat-card class="export-toast-card">
-    <div class="toast-header" (click)="toggleCollapse()">
-      <div class="header-left">
-        <mat-icon>download</mat-icon>
-        <span class="title">{{ 'export-toast.title' | translate }}</span>
-        <span class="badge" *ngIf="activeJobCount > 0">{{ activeJobCount }}</span>
-      </div>
-      <button
-        mat-icon-button
-        class="collapse-btn"
-        [attr.aria-label]="(isCollapsed ? 'export-toast.expand' : 'export-toast.collapse') | translate">
-        <mat-icon>{{ isCollapsed ? 'expand_less' : 'expand_more' }}</mat-icon>
-      </button>
-    </div>
-
-    <div class="toast-content" *ngIf="!isCollapsed">
-      <div class="job-list">
-        <div *ngFor="let job of jobs" class="job-item" [class]="getStatusClass(job.status)">
-          <div class="job-info">
-            <mat-icon [class]="getStatusClass(job.status)" class="status-icon">
-              {{ getStatusIcon(job.status) }}
-            </mat-icon>
-            <span class="job-type">{{ getExportTypeLabel(job) }}</span>
-          </div>
-
-          <div class="job-progress" *ngIf="job.status === 'waiting' || job.status === 'active' || job.status === 'downloading'">
-            <div class="progress-bar-row">
-              <mat-progress-bar
-                [mode]="getProgressMode(job)"
-                [value]="job.progress">
-              </mat-progress-bar>
-              <span class="progress-text" *ngIf="getProgressMode(job) === 'determinate'">{{ job.progress }}%</span>
-            </div>
-            <span class="progress-message">{{ getProgressDescription(job) }}</span>
-          </div>
-
-          <div class="job-error" *ngIf="job.status === 'failed' && job.error">
-            <div class="error-title">{{ getErrorTitle(job) }}</div>
-            <div class="error-text">{{ getErrorMessage(job) }}</div>
-            <details *ngIf="hasTechnicalDetails(job)" class="error-details">
-              <summary>{{ 'export-toast.error-details' | translate }}</summary>
-              <code>{{ job.error }}</code>
-            </details>
-            <div
-              class="item-matrix-error-actions"
-              *ngIf="isItemMatrixResolutionError(job)"
-            >
-              <button
-                mat-stroked-button
-                data-cy="item-matrix-show-diagnostics"
-                [disabled]="!canShowItemMatrixDiagnostics(job)"
-                (click)="openItemMatrixDiagnostics(job)"
-              >
-                <mat-icon>troubleshoot</mat-icon>
-                {{ 'export-toast.item-matrix-actions.show-diagnostics' | translate }}
-              </button>
-              <button
-                mat-stroked-button
-                color="warn"
-                data-cy="item-matrix-download-incomplete"
-                [disabled]="!canDownloadIncompleteItemMatrix(job)"
-                (click)="confirmIncompleteItemMatrixDownload(job)"
-              >
-                <mat-icon>warning</mat-icon>
-                {{ 'export-toast.item-matrix-actions.download-incomplete' | translate }}
-              </button>
-            </div>
-          </div>
-
-          <div class="job-actions">
-            <button
-              mat-icon-button
-              *ngIf="job.status === 'waiting' || job.status === 'active' || job.status === 'downloading'"
-              (click)="cancelJob(job)"
-              matTooltip="{{ 'export-toast.cancel' | translate }}"
-              [attr.aria-label]="'export-toast.cancel' | translate">
-              <mat-icon>cancel</mat-icon>
-            </button>
-            <button
-              mat-icon-button
-              *ngIf="job.status === 'completed'"
-              (click)="downloadFile(job)"
-              matTooltip="{{ 'export-toast.download' | translate }}"
-              [attr.aria-label]="'export-toast.download' | translate">
-              <mat-icon>file_download</mat-icon>
-            </button>
-            <button
-              mat-icon-button
-              *ngIf="job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled'"
-              (click)="removeJob(job)"
-              matTooltip="{{ 'export-toast.remove' | translate }}"
-              [attr.aria-label]="'export-toast.remove' | translate">
-              <mat-icon>close</mat-icon>
-            </button>
-          </div>
+@if (hasJobs) {
+  <div class="export-toast-container">
+    <mat-card class="export-toast-card">
+      <div class="toast-header" (click)="toggleCollapse()">
+        <div class="header-left">
+          <mat-icon>download</mat-icon>
+          <span class="title">{{ 'export-toast.title' | translate }}</span>
+          @if (activeJobCount > 0) {
+            <span class="badge">{{ activeJobCount }}</span>
+          }
         </div>
-      </div>
-
-      <div class="toast-footer" *ngIf="completedJobCount > 0 || failedJobCount > 0">
-        <button mat-button (click)="clearCompleted()">
-          {{ 'export-toast.clear-all' | translate }}
+        <button
+          mat-icon-button
+          class="collapse-btn"
+          [attr.aria-label]="(isCollapsed ? 'export-toast.expand' : 'export-toast.collapse') | translate">
+          <mat-icon>{{ isCollapsed ? 'expand_less' : 'expand_more' }}</mat-icon>
         </button>
       </div>
-    </div>
-  </mat-card>
-</div>
+      @if (!isCollapsed) {
+        <div class="toast-content">
+          <div class="job-list">
+            @for (job of jobs; track job) {
+              <div class="job-item" [class]="getStatusClass(job.status)">
+                <div class="job-info">
+                  <mat-icon [class]="getStatusClass(job.status)" class="status-icon">
+                    {{ getStatusIcon(job.status) }}
+                  </mat-icon>
+                  <span class="job-type">{{ getExportTypeLabel(job) }}</span>
+                </div>
+                @if (job.status === 'waiting' || job.status === 'active' || job.status === 'downloading') {
+                  <div class="job-progress">
+                    <div class="progress-bar-row">
+                      <mat-progress-bar
+                        [mode]="getProgressMode(job)"
+                        [value]="job.progress">
+                      </mat-progress-bar>
+                      @if (getProgressMode(job) === 'determinate') {
+                        <span class="progress-text">{{ job.progress }}%</span>
+                      }
+                    </div>
+                    <span class="progress-message">{{ getProgressDescription(job) }}</span>
+                  </div>
+                }
+                @if (job.status === 'failed' && job.error) {
+                  <div class="job-error">
+                    <div class="error-title">{{ getErrorTitle(job) }}</div>
+                    <div class="error-text">{{ getErrorMessage(job) }}</div>
+                    @if (hasTechnicalDetails(job)) {
+                      <details class="error-details">
+                        <summary>{{ 'export-toast.error-details' | translate }}</summary>
+                        <code>{{ job.error }}</code>
+                      </details>
+                    }
+                    @if (isItemMatrixResolutionError(job)) {
+                      <div
+                        class="item-matrix-error-actions"
+                        >
+                        <button
+                          mat-stroked-button
+                          data-cy="item-matrix-show-diagnostics"
+                          [disabled]="!canShowItemMatrixDiagnostics(job)"
+                          (click)="openItemMatrixDiagnostics(job)"
+                          >
+                          <mat-icon>troubleshoot</mat-icon>
+                          {{ 'export-toast.item-matrix-actions.show-diagnostics' | translate }}
+                        </button>
+                        <button
+                          mat-stroked-button
+                          color="warn"
+                          data-cy="item-matrix-download-incomplete"
+                          [disabled]="!canDownloadIncompleteItemMatrix(job)"
+                          (click)="confirmIncompleteItemMatrixDownload(job)"
+                          >
+                          <mat-icon>warning</mat-icon>
+                          {{ 'export-toast.item-matrix-actions.download-incomplete' | translate }}
+                        </button>
+                      </div>
+                    }
+                  </div>
+                }
+                <div class="job-actions">
+                  @if (job.status === 'waiting' || job.status === 'active' || job.status === 'downloading') {
+                    <button
+                      mat-icon-button
+                      (click)="cancelJob(job)"
+                      matTooltip="{{ 'export-toast.cancel' | translate }}"
+                      [attr.aria-label]="'export-toast.cancel' | translate">
+                      <mat-icon>cancel</mat-icon>
+                    </button>
+                  }
+                  @if (job.status === 'completed') {
+                    <button
+                      mat-icon-button
+                      (click)="downloadFile(job)"
+                      matTooltip="{{ 'export-toast.download' | translate }}"
+                      [attr.aria-label]="'export-toast.download' | translate">
+                      <mat-icon>file_download</mat-icon>
+                    </button>
+                  }
+                  @if (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
+                    <button
+                      mat-icon-button
+                      (click)="removeJob(job)"
+                      matTooltip="{{ 'export-toast.remove' | translate }}"
+                      [attr.aria-label]="'export-toast.remove' | translate">
+                      <mat-icon>close</mat-icon>
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+          @if (completedJobCount > 0 || failedJobCount > 0) {
+            <div class="toast-footer">
+              <button mat-button (click)="clearCompleted()">
+                {{ 'export-toast.clear-all' | translate }}
+              </button>
+            </div>
+          }
+        </div>
+      }
+    </mat-card>
+  </div>
+}

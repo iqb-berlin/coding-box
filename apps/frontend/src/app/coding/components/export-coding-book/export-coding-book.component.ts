@@ -1,7 +1,7 @@
 import {
   Component, OnInit, OnDestroy
 } from '@angular/core';
-import { CommonModule, DatePipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -60,7 +60,6 @@ interface CodebookUnitOption {
   styleUrls: ['./export-coding-book.component.scss'],
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     MatDialogModule,
     MatCheckboxModule,
