@@ -152,6 +152,11 @@
       "cache": false,
       "options": {
         "command": "node scripts/e2e/replay/run-replay-e2e.mjs"
+      },
+      "configurations": {
+        "zoneless": {
+          "command": "node scripts/e2e/replay/run-replay-e2e.mjs --zoneless"
+        }
       }
     },
     "e2e-replay-existing": {
