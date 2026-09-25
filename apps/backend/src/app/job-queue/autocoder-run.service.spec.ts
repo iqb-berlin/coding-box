@@ -113,10 +113,10 @@ describe('AutocoderRunService', () => {
     ).toEqual(createPlan(1));
     expect(
       codingProcessService.prepareAutocoderBatch.mock.calls[0][8]
-    ).toBe(250_000);
+    ).toBe(1_000_000);
     expect(
       codingProcessService.prepareAutocoderBatch.mock.calls[1][8]
-    ).toBe(249_999);
+    ).toBe(999_999);
     expect(
       codingProcessService.prepareAutocoderBatch.mock.calls[0][9]
     ).toBe(preflightManager);
@@ -155,17 +155,37 @@ describe('AutocoderRunService', () => {
   it('rejects a preflight that exceeds the in-memory plan limit', async () => {
     const { service, codingProcessService, queryRunner } = createServices();
     const oversizedPlan = createPlan(1);
-    oversizedPlan.codedResponses = new Array(250_001) as { id: number }[];
+    oversizedPlan.codedResponses = new Array(1_000_001) as { id: number }[];
     codingProcessService.prepareAutocoderBatch.mockResolvedValueOnce(
       oversizedPlan
     );
 
     await expect(service.run(createJob())).rejects.toThrow(
-      'exceeding the safe in-memory limit of 250000'
+      'exceeding the safe in-memory limit of 1000000'
     );
     expect(codingProcessService.persistAutocoderBatchPlan).not.toHaveBeenCalled();
     expect(queryRunner.rollbackTransaction).not.toHaveBeenCalled();
     expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
+  });
+
+  it('allows a full-scope preflight above the former 250000 response limit', async () => {
+    const { service, codingProcessService, queryRunner } = createServices();
+    const firstPlan = createPlan(1);
+    firstPlan.codedResponses = new Array(200_000) as { id: number }[];
+    const secondPlan = createPlan(2);
+    secondPlan.codedResponses = new Array(150_000) as { id: number }[];
+    codingProcessService.prepareAutocoderBatch
+      .mockResolvedValueOnce(firstPlan)
+      .mockResolvedValueOnce(secondPlan);
+
+    await expect(service.run(createJob())).resolves.toEqual({
+      totalResponses: 10,
+      statusCounts: { CODED: 10 }
+    });
+    expect(
+      codingProcessService.prepareAutocoderBatch.mock.calls[1][8]
+    ).toBe(800_000);
+    expect(queryRunner.commitTransaction).toHaveBeenCalledTimes(1);
   });
 
   it('retries cache finalization without retrying committed writes', async () => {

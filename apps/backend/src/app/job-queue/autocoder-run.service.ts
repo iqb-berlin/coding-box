@@ -13,7 +13,10 @@ import { TestPersonCodingJobData } from './job-queue.service';
 const BATCH_SIZE = 50;
 const FINALIZATION_ATTEMPTS = 3;
 const FINALIZATION_RETRY_DELAY_MS = 250;
-const MAX_PLANNED_RESPONSES = 250_000;
+// Keep whole-job preflight bounded while allowing large, regular workspaces to
+// complete atomically. Current pilot workspaces can legitimately produce well
+// above 250,000 plans in a single full-scope run.
+const MAX_PLANNED_RESPONSES = 1_000_000;
 
 @Injectable()
 export class AutocoderRunService {
