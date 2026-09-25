@@ -1,5 +1,7 @@
 import { SimpleChange } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import {
+  ComponentFixture, fakeAsync, TestBed, tick
+} from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { CodingScheme } from '../../../models/coding-interfaces';
@@ -147,6 +149,128 @@ describe('CodeSelectorComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('reuses derived code lists and only updates the affected list when comment permissions change', () => {
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.detectChanges();
+    const regularCodes = component.regularCodes();
+    const issueCodes = component.codingIssueOptionCodes();
+
+    fixture.detectChanges();
+
+    expect(component.regularCodes()).toBe(regularCodes);
+    expect(component.codingIssueOptionCodes()).toBe(issueCodes);
+    fixture.componentRef.setInput('allowComments', false);
+    fixture.detectChanges();
+    expect(component.regularCodes()).toBe(regularCodes);
+    expect(component.codingIssueOptionCodes().map(item => item.id)).toEqual([-3, -4]);
+    expect(fixture.nativeElement.querySelector('textarea')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-code-id="-2"]')).toBeNull();
+
+    fixture.componentRef.setInput('allowComments', true);
+    fixture.detectChanges();
+    expect(component.regularCodes()).toBe(regularCodes);
+    expect(component.codingIssueOptionCodes().map(item => item.id)).toEqual([-1, -3, -4, -2]);
+    expect(fixture.nativeElement.querySelector('textarea')).not.toBeNull();
+  });
+
+  it('immediately renders the saved code as legacy when a replacement scheme removes it', () => {
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.componentRef.setInput('preSelectedCodeId', 1);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-code-id="1"]').classList.contains('selected')).toBe(true);
+    const replacement: CodingScheme = {
+      ...mixedCodingScheme,
+      variableCodings: mixedCodingScheme.variableCodings.map(variable => ({
+        ...variable, codes: []
+      }))
+    };
+
+    fixture.componentRef.setInput('codingScheme', replacement);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.legacy-code-row .code-id')?.textContent.trim()).toBe('1');
+    expect(fixture.nativeElement.querySelector('[data-code-id="1"]')).toBeNull();
+  });
+
+  it('keeps a user selection after the initial render has settled', fakeAsync(() => {
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.detectChanges();
+    const issueRow = fixture.nativeElement.querySelector('[data-code-id="-3"]') as HTMLElement;
+
+    issueRow.click();
+    tick();
+    fixture.detectChanges();
+
+    expect(component.selectedCodingIssueOption).toBe(-3);
+    expect(issueRow.classList.contains('selected')).toBe(true);
+  }));
+
+  it('closes navigation panels only for clicks outside the component', () => {
+    component.isVariablePanelOpen = true;
+    fixture.nativeElement.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(component.isVariablePanelOpen).toBe(true);
+
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(component.isVariablePanelOpen).toBe(false);
+    component.isBundleVariablePanelOpen = true;
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(component.isBundleVariablePanelOpen).toBe(false);
+  });
+
+  it('handles window shortcuts and removes the listener when destroyed', () => {
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.detectChanges();
+    const selected = jest.fn();
+    component.codeSelected.subscribe(selected);
+    jest.spyOn(component, 'scrollToCode').mockImplementation(() => {});
+    const keyboardHandler = jest.spyOn(component, 'handleKeyboardEvent');
+    const event = new KeyboardEvent('keydown', { code: 'NumpadMultiply', cancelable: true });
+
+    window.dispatchEvent(event);
+
+    expect(component.selectedCodingIssueOption).toBe(-3);
+    expect(selected).toHaveBeenCalledWith(expect.objectContaining({ variableId: 'VAR1' }));
+    expect(event.defaultPrevented).toBe(true);
+    keyboardHandler.mockClear();
+    fixture.destroy();
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'NumpadMultiply' }));
+    expect(keyboardHandler).not.toHaveBeenCalled();
+  });
+
+  it('preserves code rows when reloading the scheme and updates their instructions', () => {
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    component.isSupportSectionExpanded = true;
+    fixture.detectChanges();
+    const rows = Array.from(fixture.nativeElement.querySelectorAll('.code-row[data-code-id]')) as HTMLElement[];
+    expect(rows.length).toBeGreaterThan(1);
+
+    const updatedScheme: CodingScheme = {
+      ...mixedCodingScheme,
+      variableCodings: mixedCodingScheme.variableCodings.map(variable => ({
+        ...variable,
+        codes: variable.codes.map(code => (code.id === 1 ? {
+          ...code, manualInstruction: '<p>Updated instruction</p>'
+        } : code))
+      }))
+    };
+    fixture.componentRef.setInput('codingScheme', updatedScheme);
+    fixture.detectChanges();
+
+    rows.forEach(row => {
+      expect(fixture.nativeElement.querySelector(
+        `.code-row[data-code-id="${row.dataset.codeId}"]`
+      )).toBe(row);
+    });
+    expect(fixture.nativeElement.querySelector('.code-row[data-code-id="1"]').textContent)
+      .toContain('Updated instruction');
+  });
+
   it('filters regular codes without manual instructions from manual selection', () => {
     component.codingScheme = mixedCodingScheme;
     component.variableId = 'VAR1';
@@ -156,8 +280,8 @@ describe('CodeSelectorComponent', () => {
       variableId: new SimpleChange(null, 'VAR1', false)
     });
 
-    expect(component.regularCodes.map(code => code.id)).toEqual([1]);
-    expect(component.codingIssueOptionCodes).toHaveLength(4);
+    expect(component.regularCodes().map(code => code.id)).toEqual([1]);
+    expect(component.codingIssueOptionCodes()).toHaveLength(4);
   });
 
   it('keeps available coding issue options and general instructions visible without regular manual codes', () => {
@@ -171,8 +295,8 @@ describe('CodeSelectorComponent', () => {
     });
     fixture.detectChanges();
 
-    expect(component.regularCodes).toEqual([]);
-    expect(component.codingIssueOptionCodes.map(code => code.id)).toEqual([-1, -3, -4, -2]);
+    expect(component.regularCodes()).toEqual([]);
+    expect(component.codingIssueOptionCodes().map(code => code.id)).toEqual([-1, -3, -4, -2]);
     expect(fixture.nativeElement.querySelector('.general-instruction-row').textContent).toContain(
       'Only general instruction'
     );
@@ -192,7 +316,7 @@ describe('CodeSelectorComponent', () => {
   it('hides comment-bound coding issue options when comments are disabled', () => {
     component.codingScheme = mixedCodingScheme;
     component.variableId = 'VAR1';
-    component.allowComments = false;
+    fixture.componentRef.setInput('allowComments', false);
     const emitSpy = jest.spyOn(component.codeSelected, 'emit');
 
     component.ngOnChanges({
@@ -201,7 +325,7 @@ describe('CodeSelectorComponent', () => {
     });
     fixture.detectChanges();
 
-    expect(component.codingIssueOptionCodes.map(code => code.id)).toEqual([-3, -4]);
+    expect(component.codingIssueOptionCodes().map(code => code.id)).toEqual([-3, -4]);
     expect(fixture.nativeElement.querySelectorAll('.uncertain-codes-section .code-row')).toHaveLength(2);
 
     component.onSelect(-1);
@@ -214,7 +338,7 @@ describe('CodeSelectorComponent', () => {
     jest.useFakeTimers();
     component.codingScheme = mixedCodingScheme;
     component.variableId = 'VAR1';
-    component.allowComments = false;
+    fixture.componentRef.setInput('allowComments', false);
     component.preSelectedCodeId = -2;
     component.preSelectedCodingIssueOptionId = -2;
 
@@ -227,7 +351,7 @@ describe('CodeSelectorComponent', () => {
     jest.runOnlyPendingTimers();
     fixture.detectChanges();
 
-    expect(component.codingIssueOptionCodes.map(code => code.id)).toEqual([-3, -4]);
+    expect(component.codingIssueOptionCodes().map(code => code.id)).toEqual([-3, -4]);
     expect(component.selectedCode).toBeNull();
     expect(component.selectedCodingIssueOption).toBeNull();
     expect(component.legacySelectedCode).toBeNull();
@@ -251,7 +375,7 @@ describe('CodeSelectorComponent', () => {
 
     expect(component.selectedCodingIssueOption).toBe(-2);
 
-    component.allowComments = false;
+    fixture.componentRef.setInput('allowComments', false);
     component.ngOnChanges({
       allowComments: new SimpleChange(true, false, false)
     });
@@ -364,7 +488,7 @@ describe('CodeSelectorComponent', () => {
     });
     component.onSelect(4);
 
-    expect(component.regularCodes.map(code => code.id)).toEqual([4]);
+    expect(component.regularCodes().map(code => code.id)).toEqual([4]);
     expect(emitSpy).toHaveBeenCalledWith({
       variableId: '04',
       code: collisionCodingScheme.variableCodings[1].codes[0],
@@ -415,13 +539,13 @@ describe('CodeSelectorComponent', () => {
     expect(issueBadge.textContent).toContain('2');
     expect(issueRows).toHaveLength(2);
     expect(component.getCodingIssueOptionRowTooltip(
-      component.codingIssueOptionCodes.find(item => item.id === -3)!
+      component.codingIssueOptionCodes().find(item => item.id === -3)!
     )).toContain('Coder F, Coder G');
     expect(component.getCodingIssueOptionRowTooltip(
-      component.codingIssueOptionCodes.find(item => item.id === -2)!
+      component.codingIssueOptionCodes().find(item => item.id === -2)!
     )).toContain('Coder D, Coder E');
 
-    component.onSelect(1);
+    (codeRow as HTMLElement).click();
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('.code-row.selected.has-review-code-selection')).toBeTruthy();
@@ -439,7 +563,7 @@ describe('CodeSelectorComponent', () => {
     });
     fixture.detectChanges();
 
-    expect(component.regularCodes.map(code => code.id)).toEqual([1]);
+    expect(component.regularCodes().map(code => code.id)).toEqual([1]);
     expect(component.selectedCode).toBeNull();
     expect(component.legacySelectedCode?.id).toBe(2);
     expect(fixture.nativeElement.querySelector('.legacy-code-row')).toBeTruthy();
@@ -463,7 +587,7 @@ describe('CodeSelectorComponent', () => {
     fixture.detectChanges();
     component.nextUnit();
 
-    expect(component.regularCodes.map(code => code.id)).toEqual([1]);
+    expect(component.regularCodes().map(code => code.id)).toEqual([1]);
     expect(component.selectedCode).toBeNull();
     expect(component.legacySelectedCode).toEqual({
       id: 99,
@@ -761,7 +885,7 @@ describe('CodeSelectorComponent', () => {
   it('keeps general codes and notes expanded by default and lets users collapse them', () => {
     component.codingScheme = mixedCodingScheme;
     component.variableId = 'VAR1';
-    component.allowComments = true;
+    fixture.componentRef.setInput('allowComments', true);
 
     component.ngOnChanges({
       codingScheme: new SimpleChange(null, mixedCodingScheme, false),
@@ -810,7 +934,7 @@ describe('CodeSelectorComponent', () => {
     jest.useFakeTimers();
     component.codingScheme = mixedCodingScheme;
     component.variableId = 'VAR1';
-    component.allowComments = true;
+    fixture.componentRef.setInput('allowComments', true);
 
     component.ngOnChanges({
       codingScheme: new SimpleChange(null, mixedCodingScheme, false),
@@ -838,6 +962,8 @@ describe('CodeSelectorComponent', () => {
     querySelectorSpy.mockRestore();
     jest.useRealTimers();
   });
+
+
 
   it('disables and ignores pause while read-only', () => {
     const pauseSpy = jest.spyOn(component.pauseCodingJob, 'emit');
@@ -1098,7 +1224,7 @@ describe('CodeSelectorComponent', () => {
     expect(trigger.textContent).toContain('Bundle A');
     expect(fixture.nativeElement.querySelectorAll('.bundle-variable-chip')).toHaveLength(2);
 
-    component.toggleVariablePanel();
+    trigger.click();
     fixture.detectChanges();
 
     const panelItems = fixture.nativeElement.querySelectorAll('.variable-panel-item') as NodeListOf<HTMLElement>;
@@ -1205,7 +1331,7 @@ describe('CodeSelectorComponent', () => {
     expect(trigger.textContent).toContain('UNIT_1 / VAR1');
     expect(fixture.nativeElement.querySelectorAll('.bundle-variable-chip')).toHaveLength(0);
 
-    component.toggleBundleVariablePanel();
+    trigger.click();
     fixture.detectChanges();
 
     const panelItems = fixture.nativeElement.querySelectorAll(
