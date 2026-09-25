@@ -1,6 +1,6 @@
 import {
-  ChangeDetectionStrategy, ChangeDetectorRef, Component, computed, ElementRef, inject,
-  input, Input, OnChanges, output, SecurityContext, signal, SimpleChanges, ViewChild
+  afterNextRender, ChangeDetectionStrategy, ChangeDetectorRef, Component, computed, ElementRef, inject, Injector,
+  input, Input, OnChanges, output, SecurityContext, signal, SimpleChanges, viewChild
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -73,6 +73,7 @@ interface IndexedReplayUnit {
   }
 })
 export class CodeSelectorComponent implements OnChanges {
+  private readonly injector = inject(Injector);
   private readonly changeDetectorRef = inject(ChangeDetectorRef);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly translateService = inject(TranslateService);
@@ -113,9 +114,9 @@ export class CodeSelectorComponent implements OnChanges {
   readonly openCodingJobs = output<void>();
   readonly pauseCodingJob = output<void>();
   readonly unitChanged = output<UnitsReplayUnit>();
-  @ViewChild('variablePanel') variablePanel?: ElementRef<HTMLElement>;
-  @ViewChild('bundleVariablePanel') bundleVariablePanel?: ElementRef<HTMLElement>;
-  @ViewChild('notesTextarea') notesTextarea?: ElementRef<HTMLTextAreaElement>;
+  private readonly variablePanel = viewChild<ElementRef<HTMLElement>>('variablePanel');
+  private readonly bundleVariablePanel = viewChild<ElementRef<HTMLElement>>('bundleVariablePanel');
+  private readonly notesTextarea = viewChild<ElementRef<HTMLTextAreaElement>>('notesTextarea');
 
   private readonly selectableItems = signal<SelectableItem[]>([]);
   readonly regularCodes = computed(() => (
@@ -505,7 +506,11 @@ export class CodeSelectorComponent implements OnChanges {
     if (showValidationMessage) {
       this.newCodeCommentValidationError = true;
       this.isSupportSectionExpanded = true;
-      setTimeout(() => this.notesTextarea?.nativeElement.focus(), 0);
+      afterNextRender({
+        write: () => {
+          if (this.newCodeCommentValidationError) this.notesTextarea()?.nativeElement.focus();
+        }
+      }, { injector: this.injector });
     }
     return false;
   }
@@ -656,10 +661,12 @@ export class CodeSelectorComponent implements OnChanges {
       this.isSupportSectionExpanded = true;
     }
 
-    setTimeout(() => {
-      const target = this.elementRef.nativeElement.querySelector<HTMLElement>(`[data-code-id="${codeId}"]`);
-      target?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    }, 0);
+    afterNextRender({
+      write: () => {
+        const target = this.elementRef.nativeElement.querySelector<HTMLElement>(`[data-code-id="${codeId}"]`);
+        target?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      }
+    }, { injector: this.injector });
   }
 
   private isSupportCode(codeId: number): boolean {
@@ -684,7 +691,9 @@ export class CodeSelectorComponent implements OnChanges {
       this.isBundleVariablePanelOpen = false;
     }
     if (this.isVariablePanelOpen) {
-      setTimeout(() => this.focusCurrentVariableInPanel(this.variablePanel?.nativeElement), 0);
+      afterNextRender({
+        write: () => this.focusCurrentVariableInPanel(this.variablePanel()?.nativeElement)
+      }, { injector: this.injector });
     }
   }
 
@@ -693,7 +702,9 @@ export class CodeSelectorComponent implements OnChanges {
     this.isBundleVariablePanelOpen = !this.isBundleVariablePanelOpen;
     if (this.isBundleVariablePanelOpen) {
       this.isVariablePanelOpen = false;
-      setTimeout(() => this.focusCurrentVariableInPanel(this.bundleVariablePanel?.nativeElement), 0);
+      afterNextRender({
+        write: () => this.focusCurrentVariableInPanel(this.bundleVariablePanel()?.nativeElement)
+      }, { injector: this.injector });
     }
   }
 

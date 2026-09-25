@@ -134,6 +134,20 @@ describe('CodeSelectorComponent', () => {
     ]
   };
 
+  const originalScrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
+
+  beforeAll(() => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: jest.fn() });
+  });
+
+  afterAll(() => {
+    if (originalScrollIntoView) {
+      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalScrollIntoView);
+    } else {
+      Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+    }
+  });
+
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [FormsModule, TranslateModule.forRoot(), CodeSelectorComponent]
@@ -784,7 +798,6 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('blocks nextUnit and focuses notes when new-code-needed has no comment', () => {
-    jest.useFakeTimers();
     component.codingScheme = mixedCodingScheme;
     component.variableId = 'VAR1';
     component.unitsData = {
@@ -797,14 +810,12 @@ describe('CodeSelectorComponent', () => {
       codingScheme: new SimpleChange(null, mixedCodingScheme, false),
       variableId: new SimpleChange(null, 'VAR1', false)
     });
-    jest.runOnlyPendingTimers();
     component.onSelect(-2);
     fixture.detectChanges();
 
     const notesTextarea = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
     const focusSpy = jest.spyOn(notesTextarea, 'focus').mockImplementation(() => { });
     component.nextUnit();
-    jest.runAllTimers();
     fixture.detectChanges();
 
     expect(emitSpy).not.toHaveBeenCalled();
@@ -820,7 +831,6 @@ describe('CodeSelectorComponent', () => {
 
     expect(component.newCodeCommentValidationError).toBe(false);
     expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
-    jest.useRealTimers();
   });
 
   it('previousUnit should navigate to immediate previous case for interleaved variables', () => {
@@ -835,28 +845,20 @@ describe('CodeSelectorComponent', () => {
     expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
   });
 
-  it('toggleVariablePanel should focus active variable item when opened', () => {
-    jest.useFakeTimers();
-    const panel = document.createElement('div');
-    panel.className = 'variable-panel';
-    const activeItem = document.createElement('div');
-    activeItem.className = 'variable-panel-item active';
-    activeItem.setAttribute('tabindex', '-1');
-    panel.appendChild(activeItem);
+  it('focuses the active variable after rendering the opened panel', async () => {
+    fixture.componentRef.setInput('showProgress', true);
+    fixture.componentRef.setInput('unitsData', interleavedUnitsData);
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
 
-    const scrollSpy = jest.fn();
-    // jsdom does not implement scrollIntoView in all environments.
-    (activeItem as unknown as { scrollIntoView: () => void }).scrollIntoView = scrollSpy;
-    const focusSpy = jest.spyOn(activeItem, 'focus').mockImplementation(() => { });
-    (component as unknown as { variablePanel: { nativeElement: HTMLElement } }).variablePanel = { nativeElement: panel };
+    const trigger = fixture.nativeElement.querySelector('.variable-trigger-btn') as HTMLButtonElement;
+    expect(fixture.nativeElement.querySelector('.variable-panel')).toBeNull();
+    trigger.click();
+    await fixture.whenStable();
 
-    component.toggleVariablePanel();
-    jest.runAllTimers();
-
-    expect(component.isVariablePanelOpen).toBe(true);
-    expect(scrollSpy).toHaveBeenCalled();
-    expect(focusSpy).toHaveBeenCalled();
-    jest.useRealTimers();
+    const activeItem = fixture.nativeElement.querySelector('.variable-panel-item.active') as HTMLElement;
+    expect(activeItem).toBeTruthy();
+    expect(document.activeElement).toBe(activeItem);
   });
 
   it('hides the pause button for completed job reviews', () => {
@@ -905,65 +907,64 @@ describe('CodeSelectorComponent', () => {
     expect(fixture.nativeElement.querySelector('.notes-field')).toBeNull();
   });
 
-  it('expands the support section before focusing missing new-code notes', () => {
-    jest.useFakeTimers();
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
+  it('expands the support section before focusing missing new-code notes', async () => {
     component.isSupportSectionExpanded = false;
-
-    component.ngOnChanges({
-      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
-      variableId: new SimpleChange(null, 'VAR1', false)
-    });
     component.selectedCodingIssueOption = -2;
-    fixture.detectChanges();
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('textarea')).toBeNull();
 
     expect(component.canLeaveCurrentUnit()).toBe(false);
-    fixture.detectChanges();
-    const notesTextarea = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
-    const focusSpy = jest.spyOn(notesTextarea, 'focus').mockImplementation(() => { });
-    jest.runAllTimers();
+    await fixture.whenStable();
 
-    expect(component.isSupportSectionExpanded).toBe(true);
+    const notesTextarea = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
     expect(notesTextarea).toBeTruthy();
-    expect(focusSpy).toHaveBeenCalled();
-    jest.useRealTimers();
+    expect(document.activeElement).toBe(notesTextarea);
   });
 
-  it('opens collapsed general codes and scrolls to a selected support code', () => {
-    jest.useFakeTimers();
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
-    fixture.componentRef.setInput('allowComments', true);
-
-    component.ngOnChanges({
-      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
-      variableId: new SimpleChange(null, 'VAR1', false)
-    });
+  it('opens collapsed general codes before scrolling to the rendered support code', async () => {
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
     component.isSupportSectionExpanded = false;
-    fixture.detectChanges();
-
-    const scrollSpy = jest.fn();
-    const originalQuerySelector = fixture.nativeElement.querySelector.bind(fixture.nativeElement);
-    const querySelectorSpy = jest.spyOn(fixture.nativeElement, 'querySelector');
-    querySelectorSpy.mockImplementation((...args: unknown[]) => {
-      const selector = args[0] as string;
-      if (selector === '[data-code-id="-2"]') {
-        return { scrollIntoView: scrollSpy } as unknown as Element;
-      }
-      return originalQuerySelector(selector);
-    });
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('[data-code-id="-2"]')).toBeNull();
+    const scrollSpy = jest.spyOn(HTMLElement.prototype, 'scrollIntoView');
+    scrollSpy.mockClear();
 
     component.scrollToCode(-2);
-    jest.runAllTimers();
+    expect(scrollSpy).not.toHaveBeenCalled();
+    await fixture.whenStable();
 
-    expect(component.isSupportSectionExpanded).toBe(true);
+    const supportCode = fixture.nativeElement.querySelector('[data-code-id="-2"]') as HTMLElement;
+    expect(supportCode).toBeTruthy();
     expect(scrollSpy).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
-    querySelectorSpy.mockRestore();
-    jest.useRealTimers();
+    expect(scrollSpy.mock.contexts).toContain(supportCode);
   });
 
+  it('cancels pending scrolling when the component is destroyed', async () => {
+    const querySpy = jest.spyOn(fixture.nativeElement, 'querySelector');
+    component.scrollToCode(-2);
+    fixture.destroy();
+    await fixture.whenStable();
+    TestBed.tick();
 
+    expect(querySpy).not.toHaveBeenCalledWith('[data-code-id="-2"]');
+  });
+
+  it('does not focus notes if validation is resolved before rendering', async () => {
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    const notes = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
+    const focusSpy = jest.spyOn(notes, 'focus');
+    component.selectedCodingIssueOption = -2;
+    expect(component.canLeaveCurrentUnit()).toBe(false);
+    component.coderNotes = 'New code proposal';
+    component.onNotesChanged();
+    await fixture.whenStable();
+
+    expect(focusSpy).not.toHaveBeenCalled();
+  });
 
   it('disables and ignores pause while read-only', () => {
     const pauseSpy = jest.spyOn(component.pauseCodingJob, 'emit');
@@ -1338,6 +1339,7 @@ describe('CodeSelectorComponent', () => {
       '.bundle-variable-dropdown-wrapper .variable-panel-item'
     ) as NodeListOf<HTMLElement>;
     expect(panelItems).toHaveLength(9);
+    expect(document.activeElement).toBe(panelItems[0]);
     expect(panelItems[8].textContent).toContain('UNIT_1 / VAR9');
 
     const emitSpy = jest.spyOn(component.unitChanged, 'emit');
