@@ -37,6 +37,14 @@ recovery resets, comment validation and delayed profile/role changes.
   The zoneless browser suite checks the response upload from the import dialog
   through chunk transfer, job completion, result dialog and refreshed overview
   with stubbed server responses.
+- System administration: notify Angular when the user list, user workspace list,
+  system-notification list, or workspace mutation state changes after a server
+  response. Refresh the workspace list only after a real mutation so a pending
+  refresh does not reset a user's checkbox selection. Keep asynchronous
+  workspace-access preselection in sync with its dialog. The isolated Keycloak
+  suite covers workspace creation/deletion, user and workspace lists, access
+  preselection, and notification creation/deletion with confirmation dialogs
+  against the real backend.
 
 ## Release gates still required
 
@@ -47,11 +55,12 @@ recovery in both builds. Before changing the production entry point:
 
 1. Repeat authentication against the intended deployed Keycloak test realm and
    its actual client settings.
-2. Complete zoneless browser checks for the remaining views, especially
-   test-result upload against the real backend, workspace/system administration,
-   manual coding, and their dialogs and background jobs. The replay player,
-   test-file upload, stubbed test-result upload flow and item-dataset export
-   have dedicated coverage now.
+2. Complete zoneless browser checks for the remaining views and state changes,
+   especially manual coding beyond its initial view, workspace/system settings,
+   and background jobs. The replay player, test-file upload, real test-result
+   upload, item-dataset export, workspace creation/deletion, user/workspace
+   lists, access-rights preselection and system-notification dialog have
+   dedicated coverage now.
 3. Audit visible timer and subscription updates across those views. Signals,
    AsyncPipe, bound events or `markForCheck()` must notify Angular for every
    visible asynchronous update.
@@ -81,6 +90,14 @@ invalidates the real Keycloak session, signs in again and checks draft persisten
 and cleanup, then pauses, resumes, finishes the job and signs out. The zoneless
 variant also asserts that `window.Zone` is absent.
 
+Additional cases log in again, upload a response CSV through the real chunked
+upload API, wait for its background job result, and check the result dialog.
+They also open system administration, create and delete a workspace, verify
+the user and workspace lists, verify the current user's preselected workspace
+access, create and delete a system notification through its confirmation dialog,
+and open the manual coding view. The generated realm and disposable database
+keep these mutations isolated.
+
 The JavaScript adapter is updated from 23 to 26.2.4. Keycloak 25+ only puts the
 nonce in the ID token; the old adapter also expected it in access and refresh
 tokens. Nonce validation remains enabled, and PKCE S256 is explicit. See the
@@ -107,4 +124,5 @@ Reference: [Angular 21 zoneless guide](https://github.com/angular/angular/blob/v
 - Isolated real Keycloak coding/session suite: passed with ZoneJS and zoneless.
   It covers login, persisted code and notes after reload, a failed note save,
   server-side session invalidation, draft recovery and cleanup, pause/resume,
-  completion and logout.
+  completion and logout. The expanded three-case suite also passed in both
+  modes with real response upload, system administration and manual coding entry.
