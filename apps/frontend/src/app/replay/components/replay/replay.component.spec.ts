@@ -504,7 +504,7 @@ describe('ReplayComponent', () => {
 
   it('should handle invalid testPerson in setTestPerson', () => {
     // Testperson, die absichtlich ungültig ist
-    expect(() => component.setTestPerson('')).toThrowError('TestPersonError');
+    expect(() => component.setTestPerson('')).toThrow('TestPersonError');
   });
 
   it('should set test person correctly when valid', () => {

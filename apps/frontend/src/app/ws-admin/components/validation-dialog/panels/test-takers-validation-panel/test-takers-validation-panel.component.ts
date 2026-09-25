@@ -7,7 +7,7 @@ import {
   OnDestroy,
   ViewChild
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -38,7 +38,6 @@ import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
   selector: 'coding-box-test-takers-validation-panel',
   standalone: true,
   imports: [
-    CommonModule,
     MatExpansionModule,
     MatButtonModule,
     MatProgressSpinnerModule,

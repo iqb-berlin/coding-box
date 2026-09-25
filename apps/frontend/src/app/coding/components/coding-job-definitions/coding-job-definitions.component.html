@@ -1,290 +1,316 @@
 <div class="job-definitions-container">
-  <div class="header-actions" *ngIf="!selectionMode">
-    <div class="definitions-heading">
-      <h3>{{ 'coding-job-definitions.title' | translate }}</h3>
-      <button
-        mat-icon-button
-        type="button"
-        class="info-button"
-        (click)="showInfo = !showInfo"
-        [matTooltip]="'coding-job-definitions.info-tooltip' | translate"
-        [attr.aria-label]="'coding-job-definitions.info-tooltip' | translate">
-        <mat-icon>info</mat-icon>
-      </button>
+  @if (!selectionMode) {
+    <div class="header-actions">
+      <div class="definitions-heading">
+        <h3>{{ 'coding-job-definitions.title' | translate }}</h3>
+        <button
+          mat-icon-button
+          type="button"
+          class="info-button"
+          (click)="showInfo = !showInfo"
+          [matTooltip]="'coding-job-definitions.info-tooltip' | translate"
+          [attr.aria-label]="'coding-job-definitions.info-tooltip' | translate">
+          <mat-icon>info</mat-icon>
+        </button>
+      </div>
+      @if (jobDefinitions.length > 0) {
+        <button
+          mat-raised-button
+          color="primary"
+          type="button"
+          (click)="createDefinition()">
+          <mat-icon>add</mat-icon>
+          {{ 'coding-job-definitions.create-new' | translate }}
+        </button>
+      }
     </div>
-    <button
-      *ngIf="jobDefinitions.length > 0"
-      mat-raised-button
-      color="primary"
-      type="button"
-      (click)="createDefinition()">
-      <mat-icon>add</mat-icon>
-      {{ 'coding-job-definitions.create-new' | translate }}
-    </button>
-  </div>
+  }
 
-  <div *ngIf="showInfo" class="info-alert">
-    <mat-icon>description</mat-icon>
-    <div>
-      <strong>{{ 'coding-job-definitions.info-title' | translate }}</strong>
-      <span>{{ 'coding-job-definitions.info-desc' | translate }}</span>
+  @if (showInfo) {
+    <div class="info-alert">
+      <mat-icon>description</mat-icon>
+      <div>
+        <strong>{{ 'coding-job-definitions.info-title' | translate }}</strong>
+        <span>{{ 'coding-job-definitions.info-desc' | translate }}</span>
+      </div>
     </div>
-  </div>
+  }
 
 
-  <div *ngIf="isLoading && jobDefinitions.length === 0" class="loading-container">
-    <mat-spinner diameter="30"></mat-spinner>
-    <span>{{ 'coding-job-definitions.loading' | translate }}</span>
-  </div>
-
-  <div *ngIf="isBulkCreating" class="bulk-creation-loading-container">
-    <mat-spinner diameter="30"></mat-spinner>
-    <span>{{ 'coding-job-definitions.bulk-creation-in-progress' | translate }}</span>
-  </div>
-
-  <div
-    *ngIf="jobDefinitions.length > 0"
-    class="definition-summary"
-    aria-label="Status der Jobdefinitionen">
-    <div class="summary-item">
-      <span>{{ 'coding-job-definitions.summary.total' | translate }}</span>
-      <strong>{{ jobDefinitions.length }}</strong>
+  @if (isLoading && jobDefinitions.length === 0) {
+    <div class="loading-container">
+      <mat-spinner diameter="30"></mat-spinner>
+      <span>{{ 'coding-job-definitions.loading' | translate }}</span>
     </div>
-    <div class="summary-item">
-      <span>{{ 'coding-job-definitions.summary.draft' | translate }}</span>
-      <strong>{{ getDefinitionCountByStatus('draft') }}</strong>
+  }
+
+  @if (isBulkCreating) {
+    <div class="bulk-creation-loading-container">
+      <mat-spinner diameter="30"></mat-spinner>
+      <span>{{ 'coding-job-definitions.bulk-creation-in-progress' | translate }}</span>
     </div>
-    <div class="summary-item">
-      <span>{{ 'coding-job-definitions.summary.pending' | translate }}</span>
-      <strong>{{ getDefinitionCountByStatus('pending_review') }}</strong>
+  }
+
+  @if (jobDefinitions.length > 0) {
+    <div
+      class="definition-summary"
+      aria-label="Status der Jobdefinitionen">
+      <div class="summary-item">
+        <span>{{ 'coding-job-definitions.summary.total' | translate }}</span>
+        <strong>{{ jobDefinitions.length }}</strong>
+      </div>
+      <div class="summary-item">
+        <span>{{ 'coding-job-definitions.summary.draft' | translate }}</span>
+        <strong>{{ getDefinitionCountByStatus('draft') }}</strong>
+      </div>
+      <div class="summary-item">
+        <span>{{ 'coding-job-definitions.summary.pending' | translate }}</span>
+        <strong>{{ getDefinitionCountByStatus('pending_review') }}</strong>
+      </div>
+      <div class="summary-item ready">
+        <span>{{ 'coding-job-definitions.summary.ready' | translate }}</span>
+        <strong>{{ getDefinitionsReadyForJobsCount() }}</strong>
+      </div>
     </div>
-    <div class="summary-item ready">
-      <span>{{ 'coding-job-definitions.summary.ready' | translate }}</span>
-      <strong>{{ getDefinitionsReadyForJobsCount() }}</strong>
-    </div>
-  </div>
+  }
 
-  <div
-    *ngIf="jobDefinitions.length > 0"
-    class="job-definitions-table-wrapper"
-    [attr.aria-busy]="isLoading">
-    <table mat-table [dataSource]="jobDefinitions" class="job-definitions-table">
-      <!-- Actions Column -->
-      <ng-container matColumnDef="actions">
-        <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.actions' | translate }}</th>
-        <td mat-cell *matCellDef="let definition" class="actions-cell">
-          <div class="action-buttons" *ngIf="!selectionMode">
-            <button
-              mat-stroked-button
-              color="primary"
-              type="button"
-              class="primary-row-action"
-              *ngIf="canCreateCodingJobs(definition)"
-              (click)="createCodingJobFromDefinition(definition)"
-              [matTooltip]="getCreateCodingJobsTooltip(definition)"
-              [attr.aria-label]="getActionAriaLabel('create-coding-jobs', definition)">
-              <mat-icon>play_arrow</mat-icon>
-              <span>{{ 'coding-job-definitions.actions.create-coding-jobs-short' | translate }}</span>
-            </button>
-            <button
-              mat-stroked-button
-              type="button"
-              class="primary-row-action"
-              *ngIf="definition.status === 'approved' && !canCreateCodingJobs(definition)"
-              disabled
-              [matTooltip]="getCreateCodingJobsTooltip(definition)"
-              [attr.aria-label]="getActionAriaLabel('jobs-already-created', definition)">
-              <mat-icon>task_alt</mat-icon>
-              <span>{{ getCreateCodingJobsActionLabel(definition) }}</span>
-            </button>
-            <button
-              mat-stroked-button
-              type="button"
-              color="primary"
-              class="primary-row-action"
-              *ngIf="definition.status === 'draft'"
-              (click)="submitForReview(definition)"
-              [matTooltip]="'coding-job-definitions.actions.submit-for-review' | translate"
-              [attr.aria-label]="getActionAriaLabel('submit-for-review', definition)">
-              <mat-icon>send</mat-icon>
-              <span>{{ 'coding-job-definitions.actions.submit-for-review-short' | translate }}</span>
-            </button>
-            <button
-              mat-stroked-button
-              type="button"
-              color="primary"
-              class="primary-row-action"
-              *ngIf="definition.status === 'pending_review'"
-              (click)="approveDefinition(definition)"
-              [matTooltip]="'coding-job-definitions.actions.approve' | translate"
-              [attr.aria-label]="getActionAriaLabel('approve', definition)">
-              <mat-icon>check_circle</mat-icon>
-              <span>{{ 'coding-job-definitions.actions.approve-short' | translate }}</span>
-            </button>
-            <button
-              mat-icon-button
-              type="button"
-              class="more-actions-button"
-              [matMenuTriggerFor]="definitionActionsMenu"
-              [matTooltip]="'coding-job-definitions.actions.more' | translate"
-              [attr.aria-label]="getActionAriaLabel('more', definition)">
-              <mat-icon>more_vert</mat-icon>
-            </button>
-            <mat-menu #definitionActionsMenu="matMenu">
-              <button
-                mat-menu-item
-                type="button"
-                (click)="editDefinition(definition)"
-                [matTooltip]="getEditDefinitionTooltip(definition)"
-                [attr.aria-label]="getActionAriaLabel('edit', definition)">
-                <mat-icon>{{ getEditDefinitionIcon(definition) }}</mat-icon>
-                <span>{{ getEditDefinitionLabel(definition) }}</span>
-              </button>
-              <button
-                mat-menu-item
-                type="button"
-                *ngIf="definition.status === 'pending_review'"
-                (click)="rejectDefinition(definition)"
-                [attr.aria-label]="getActionAriaLabel('reject', definition)">
-                <mat-icon>cancel</mat-icon>
-                <span>{{ 'coding-job-definitions.actions.reject' | translate }}</span>
-              </button>
-              <button
-                mat-menu-item
-                type="button"
-                *ngIf="canViewDistributionSummary(definition)"
-                (click)="viewDistributionSummary(definition)"
-                [attr.aria-label]="getActionAriaLabel('distribution-summary', definition)">
-                <mat-icon>table_chart</mat-icon>
-                <span>{{ 'coding-job-definitions.actions.distribution-summary' | translate }}</span>
-              </button>
-              <button
-                mat-menu-item
-                type="button"
-                *ngIf="canExportDistributionCsv(definition)"
-                [disabled]="isExportingDistribution(definition)"
-                (click)="exportDistributionCsv(definition)"
-                [attr.aria-label]="getActionAriaLabel('distribution-export', definition)">
-                <mat-icon>download</mat-icon>
-                <span>{{ 'coding-job-definitions.actions.distribution-export' | translate }}</span>
-              </button>
-              <button
-                mat-menu-item
-                type="button"
-                *ngIf="canRefreshDefinition(definition)"
-                [disabled]="isRefreshingDefinition(definition)"
-                (click)="refreshDefinition(definition)"
-                [matTooltip]="'coding-job-definitions.actions.refresh-tooltip' | translate"
-                [attr.aria-label]="getActionAriaLabel('refresh', definition)">
-                <mat-icon>sync</mat-icon>
-                <span>{{ 'coding-job-definitions.actions.refresh' | translate }}</span>
-              </button>
-              <mat-divider class="menu-section-divider"></mat-divider>
-              <button
-                mat-menu-item
-                type="button"
-                class="danger-menu-item"
-                (click)="deleteDefinition(definition)"
-                [matTooltip]="getDeleteDefinitionTooltip(definition)"
-                [attr.aria-label]="getActionAriaLabel('delete', definition)">
-                <mat-icon>delete</mat-icon>
-                <span>{{ 'coding-job-definitions.actions.delete' | translate }}</span>
-              </button>
-            </mat-menu>
-          </div>
-          <div class="action-buttons" *ngIf="selectionMode">
-            <button mat-button color="primary" type="button" (click)="selectDefinition(definition)">
-              <mat-icon>download</mat-icon> Importieren
-            </button>
-          </div>
-        </td>
-      </ng-container>
-
-      <!-- Name and Description Column -->
-      <ng-container matColumnDef="identity">
-        <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.name' | translate }}</th>
-        <td mat-cell *matCellDef="let definition" class="identity-cell">
-          <strong class="definition-name">{{ getDefinitionDisplayLabel(definition) }}</strong>
-          <span *ngIf="definition.description" class="definition-description" [matTooltip]="definition.description">
-            {{ definition.description }}
-          </span>
-        </td>
-      </ng-container>
-
-      <!-- Status Column -->
-      <ng-container matColumnDef="status">
-        <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.status' | translate }}</th>
-        <td mat-cell *matCellDef="let definition">
-          <div class="status-cell-content">
-            <span class="status-badge" [ngClass]="definition.status">
-              {{ getStatusLabel(definition.status) }}
-            </span>
-            <span class="status-hint">{{ getDefinitionStatusHint(definition) }}</span>
-            <span class="definition-workflow-hint">{{ getDefinitionWorkflowLabel(definition) }}</span>
-          </div>
-        </td>
-      </ng-container>
-
-      <!-- Variables Column -->
-      <ng-container matColumnDef="variables">
-        <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.variables' | translate }}</th>
-        <td mat-cell *matCellDef="let definition" class="variables-cell">
-          <ng-container *ngIf="getVariableItems(definition).length > 0; else noVariablesAssigned">
-            <div class="variables-count">{{ getVariableItems(definition).length }} Variablen</div>
-            <div class="variable-chip-list" [class.expanded]="isVariableListExpanded(definition)">
-              <span class="variable-chip" *ngFor="let variableName of getVisibleVariableItems(definition)">
-                {{ variableName }}
+  @if (jobDefinitions.length > 0) {
+    <div
+      class="job-definitions-table-wrapper"
+      [attr.aria-busy]="isLoading">
+      <table mat-table [dataSource]="jobDefinitions" class="job-definitions-table">
+        <!-- Actions Column -->
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.actions' | translate }}</th>
+          <td mat-cell *matCellDef="let definition" class="actions-cell">
+            @if (!selectionMode) {
+              <div class="action-buttons">
+                @if (canCreateCodingJobs(definition)) {
+                  <button
+                    mat-stroked-button
+                    color="primary"
+                    type="button"
+                    class="primary-row-action"
+                    (click)="createCodingJobFromDefinition(definition)"
+                    [matTooltip]="getCreateCodingJobsTooltip(definition)"
+                    [attr.aria-label]="getActionAriaLabel('create-coding-jobs', definition)">
+                    <mat-icon>play_arrow</mat-icon>
+                    <span>{{ 'coding-job-definitions.actions.create-coding-jobs-short' | translate }}</span>
+                  </button>
+                }
+                @if (definition.status === 'approved' && !canCreateCodingJobs(definition)) {
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    class="primary-row-action"
+                    disabled
+                    [matTooltip]="getCreateCodingJobsTooltip(definition)"
+                    [attr.aria-label]="getActionAriaLabel('jobs-already-created', definition)">
+                    <mat-icon>task_alt</mat-icon>
+                    <span>{{ getCreateCodingJobsActionLabel(definition) }}</span>
+                  </button>
+                }
+                @if (definition.status === 'draft') {
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    color="primary"
+                    class="primary-row-action"
+                    (click)="submitForReview(definition)"
+                    [matTooltip]="'coding-job-definitions.actions.submit-for-review' | translate"
+                    [attr.aria-label]="getActionAriaLabel('submit-for-review', definition)">
+                    <mat-icon>send</mat-icon>
+                    <span>{{ 'coding-job-definitions.actions.submit-for-review-short' | translate }}</span>
+                  </button>
+                }
+                @if (definition.status === 'pending_review') {
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    color="primary"
+                    class="primary-row-action"
+                    (click)="approveDefinition(definition)"
+                    [matTooltip]="'coding-job-definitions.actions.approve' | translate"
+                    [attr.aria-label]="getActionAriaLabel('approve', definition)">
+                    <mat-icon>check_circle</mat-icon>
+                    <span>{{ 'coding-job-definitions.actions.approve-short' | translate }}</span>
+                  </button>
+                }
+                <button
+                  mat-icon-button
+                  type="button"
+                  class="more-actions-button"
+                  [matMenuTriggerFor]="definitionActionsMenu"
+                  [matTooltip]="'coding-job-definitions.actions.more' | translate"
+                  [attr.aria-label]="getActionAriaLabel('more', definition)">
+                  <mat-icon>more_vert</mat-icon>
+                </button>
+                <mat-menu #definitionActionsMenu="matMenu">
+                  <button
+                    mat-menu-item
+                    type="button"
+                    (click)="editDefinition(definition)"
+                    [matTooltip]="getEditDefinitionTooltip(definition)"
+                    [attr.aria-label]="getActionAriaLabel('edit', definition)">
+                    <mat-icon>{{ getEditDefinitionIcon(definition) }}</mat-icon>
+                    <span>{{ getEditDefinitionLabel(definition) }}</span>
+                  </button>
+                  @if (definition.status === 'pending_review') {
+                    <button
+                      mat-menu-item
+                      type="button"
+                      (click)="rejectDefinition(definition)"
+                      [attr.aria-label]="getActionAriaLabel('reject', definition)">
+                      <mat-icon>cancel</mat-icon>
+                      <span>{{ 'coding-job-definitions.actions.reject' | translate }}</span>
+                    </button>
+                  }
+                  @if (canViewDistributionSummary(definition)) {
+                    <button
+                      mat-menu-item
+                      type="button"
+                      (click)="viewDistributionSummary(definition)"
+                      [attr.aria-label]="getActionAriaLabel('distribution-summary', definition)">
+                      <mat-icon>table_chart</mat-icon>
+                      <span>{{ 'coding-job-definitions.actions.distribution-summary' | translate }}</span>
+                    </button>
+                  }
+                  @if (canExportDistributionCsv(definition)) {
+                    <button
+                      mat-menu-item
+                      type="button"
+                      [disabled]="isExportingDistribution(definition)"
+                      (click)="exportDistributionCsv(definition)"
+                      [attr.aria-label]="getActionAriaLabel('distribution-export', definition)">
+                      <mat-icon>download</mat-icon>
+                      <span>{{ 'coding-job-definitions.actions.distribution-export' | translate }}</span>
+                    </button>
+                  }
+                  @if (canRefreshDefinition(definition)) {
+                    <button
+                      mat-menu-item
+                      type="button"
+                      [disabled]="isRefreshingDefinition(definition)"
+                      (click)="refreshDefinition(definition)"
+                      [matTooltip]="'coding-job-definitions.actions.refresh-tooltip' | translate"
+                      [attr.aria-label]="getActionAriaLabel('refresh', definition)">
+                      <mat-icon>sync</mat-icon>
+                      <span>{{ 'coding-job-definitions.actions.refresh' | translate }}</span>
+                    </button>
+                  }
+                  <mat-divider class="menu-section-divider"></mat-divider>
+                  <button
+                    mat-menu-item
+                    type="button"
+                    class="danger-menu-item"
+                    (click)="deleteDefinition(definition)"
+                    [matTooltip]="getDeleteDefinitionTooltip(definition)"
+                    [attr.aria-label]="getActionAriaLabel('delete', definition)">
+                    <mat-icon>delete</mat-icon>
+                    <span>{{ 'coding-job-definitions.actions.delete' | translate }}</span>
+                  </button>
+                </mat-menu>
+              </div>
+            }
+            @if (selectionMode) {
+              <div class="action-buttons">
+                <button mat-button color="primary" type="button" (click)="selectDefinition(definition)">
+                  <mat-icon>download</mat-icon> Importieren
+                </button>
+              </div>
+            }
+          </td>
+        </ng-container>
+        <!-- Name and Description Column -->
+        <ng-container matColumnDef="identity">
+          <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.name' | translate }}</th>
+          <td mat-cell *matCellDef="let definition" class="identity-cell">
+            <strong class="definition-name">{{ getDefinitionDisplayLabel(definition) }}</strong>
+            @if (definition.description) {
+              <span class="definition-description" [matTooltip]="definition.description">
+                {{ definition.description }}
               </span>
+            }
+          </td>
+        </ng-container>
+        <!-- Status Column -->
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.status' | translate }}</th>
+          <td mat-cell *matCellDef="let definition">
+            <div class="status-cell-content">
+              <span class="status-badge" [ngClass]="definition.status">
+                {{ getStatusLabel(definition.status) }}
+              </span>
+              <span class="status-hint">{{ getDefinitionStatusHint(definition) }}</span>
+              <span class="definition-workflow-hint">{{ getDefinitionWorkflowLabel(definition) }}</span>
             </div>
-            <button
-              *ngIf="hasHiddenVariables(definition)"
-              mat-stroked-button
-              color="primary"
-              type="button"
-              class="toggle-variables-button"
-              (click)="toggleVariableList(definition, $event)">
-              {{ isVariableListExpanded(definition)
-              ? 'Weniger anzeigen'
-              : '+' + getHiddenVariableCount(definition) + ' weitere anzeigen' }}
-            </button>
-          </ng-container>
-          <ng-template #noVariablesAssigned>-</ng-template>
-        </td>
-      </ng-container>
+          </td>
+        </ng-container>
+        <!-- Variables Column -->
+        <ng-container matColumnDef="variables">
+          <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.variables' | translate }}</th>
+          <td mat-cell *matCellDef="let definition" class="variables-cell">
+            @if (getVariableItems(definition).length > 0) {
+              <div class="variables-count">{{ getVariableItems(definition).length }} Variablen</div>
+              <div class="variable-chip-list" [class.expanded]="isVariableListExpanded(definition)">
+                @for (variableName of getVisibleVariableItems(definition); track variableName) {
+                  <span class="variable-chip">
+                    {{ variableName }}
+                  </span>
+                }
+              </div>
+              @if (hasHiddenVariables(definition)) {
+                <button
+                  mat-stroked-button
+                  color="primary"
+                  type="button"
+                  class="toggle-variables-button"
+                  (click)="toggleVariableList(definition, $event)">
+                  {{ isVariableListExpanded(definition)
+                  ? 'Weniger anzeigen'
+                  : '+' + getHiddenVariableCount(definition) + ' weitere anzeigen' }}
+                </button>
+              }
+            } @else {
+              -
+            }
+          </td>
+        </ng-container>
+        <!-- Coders Count Column -->
+        <ng-container matColumnDef="codersCount">
+          <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.coders' | translate }}</th>
+          <td mat-cell *matCellDef="let definition">
+            {{ getCoderNames(definition) }}
+          </td>
+        </ng-container>
+        <!-- Bundles Count Column -->
+        <ng-container matColumnDef="bundlesCount">
+          <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.bundles' | translate }}</th>
+          <td mat-cell *matCellDef="let definition">
+            {{ getBundleNames(definition) }}
+          </td>
+        </ng-container>
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+      </table>
+    </div>
+  }
 
-      <!-- Coders Count Column -->
-      <ng-container matColumnDef="codersCount">
-        <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.coders' | translate }}</th>
-        <td mat-cell *matCellDef="let definition">
-          {{ getCoderNames(definition) }}
-        </td>
-      </ng-container>
-
-      <!-- Bundles Count Column -->
-      <ng-container matColumnDef="bundlesCount">
-        <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.bundles' | translate }}</th>
-        <td mat-cell *matCellDef="let definition">
-          {{ getBundleNames(definition) }}
-        </td>
-      </ng-container>
-
-      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-    </table>
-  </div>
-
-  <div *ngIf="!isLoading && jobDefinitions.length === 0" class="empty-state">
-    <mat-icon class="empty-state-icon">assignment_add</mat-icon>
-    <h4>{{ 'coding-job-definitions.empty.title' | translate }}</h4>
-    <p>{{ 'coding-job-definitions.empty.description' | translate }}</p>
-    <button
-      *ngIf="!selectionMode"
-      mat-raised-button
-      color="primary"
-      type="button"
-      (click)="createDefinition()">
-      <mat-icon>add</mat-icon>
-      {{ 'coding-job-definitions.create-new' | translate }}
-    </button>
-  </div>
+  @if (!isLoading && jobDefinitions.length === 0) {
+    <div class="empty-state">
+      <mat-icon class="empty-state-icon">assignment_add</mat-icon>
+      <h4>{{ 'coding-job-definitions.empty.title' | translate }}</h4>
+      <p>{{ 'coding-job-definitions.empty.description' | translate }}</p>
+      @if (!selectionMode) {
+        <button
+          mat-raised-button
+          color="primary"
+          type="button"
+          (click)="createDefinition()">
+          <mat-icon>add</mat-icon>
+          {{ 'coding-job-definitions.create-new' | translate }}
+        </button>
+      }
+    </div>
+  }
 </div>

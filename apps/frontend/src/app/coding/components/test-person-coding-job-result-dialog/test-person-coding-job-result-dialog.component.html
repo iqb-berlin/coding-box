@@ -9,33 +9,45 @@
       {{ data.job.jobId }}
     </div>
 
-    <div *ngIf="data.job.groupNames">
-      <strong>{{ 'test-person-coding.jobs.table.groups' | translate }}:</strong>
-      {{ data.job.groupNames }}
-    </div>
+    @if (data.job.groupNames) {
+      <div>
+        <strong>{{ 'test-person-coding.jobs.table.groups' | translate }}:</strong>
+        {{ data.job.groupNames }}
+      </div>
+    }
 
-    <div *ngIf="data.formattedDuration">
-      <strong>{{ 'test-person-coding.jobs.table.duration' | translate }}:</strong>
-      {{ data.formattedDuration }}
-    </div>
+    @if (data.formattedDuration) {
+      <div>
+        <strong>{{ 'test-person-coding.jobs.table.duration' | translate }}:</strong>
+        {{ data.formattedDuration }}
+      </div>
+    }
 
-    <div *ngIf="data.autoCoderRun">
-      <strong>{{ 'test-person-coding.job-result-dialog.autocoder-run' | translate }}:</strong>
-      {{ data.autoCoderRun }}
-    </div>
+    @if (data.autoCoderRun) {
+      <div>
+        <strong>{{ 'test-person-coding.job-result-dialog.autocoder-run' | translate }}:</strong>
+        {{ data.autoCoderRun }}
+      </div>
+    }
 
-    <div *ngIf="data.job.result">
-      <strong>{{ 'test-person-coding.job-result-dialog.total-responses' | translate }}:</strong>
-      {{ effectiveTotal }}
-    </div>
+    @if (data.job.result) {
+      <div>
+        <strong>{{ 'test-person-coding.job-result-dialog.total-responses' | translate }}:</strong>
+        {{ effectiveTotal }}
+      </div>
+    }
   </div>
 
-  <section *ngIf="warnings.length > 0" class="warnings" role="status">
-    <h3>{{ 'test-person-coding.job-result-dialog.warnings-header' | translate }}</h3>
-    <ul>
-      <li *ngFor="let warning of warnings">{{ warning }}</li>
-    </ul>
-  </section>
+  @if (warnings.length > 0) {
+    <section class="warnings" role="status">
+      <h3>{{ 'test-person-coding.job-result-dialog.warnings-header' | translate }}</h3>
+      <ul>
+        @for (warning of warnings; track warning) {
+          <li>{{ warning }}</li>
+        }
+      </ul>
+    </section>
+  }
 
   <h3>{{ 'test-person-coding.job-result-dialog.status-header' | translate }}</h3>
 

@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, Inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -46,7 +45,6 @@ export type TestResultsFlatTableSettingsDialogResult = {
   selector: 'coding-box-test-results-flat-table-settings-dialog',
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     MatDialogModule,
     MatButtonModule,

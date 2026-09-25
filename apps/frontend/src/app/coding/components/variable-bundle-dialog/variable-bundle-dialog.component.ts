@@ -1,7 +1,7 @@
 import {
   Component, Inject, OnInit, OnDestroy, inject, ViewChild, ElementRef
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import {
   FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators
 } from '@angular/forms';
@@ -43,7 +43,6 @@ export interface VariableBundleGroupDialogData {
   styleUrls: ['./variable-bundle-dialog.component.scss'],
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     ReactiveFormsModule,
     MatDialogModule,

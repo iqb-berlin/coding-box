@@ -1087,7 +1087,7 @@ describe('CodingListStreamService', () => {
       expect(entries).toContain('geogebra/login__code__Booklet__Unit_1__Geo_Var__response-1.ggb');
 
       const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(zip.readFile('coding-results-v1.xlsx')!);
+      await workbook.xlsx.load(zip.readFile('coding-results-v1.xlsx')! as unknown as Parameters<typeof workbook.xlsx.load>[0]);
       const worksheet = workbook.getWorksheet('Coding Results')!;
       expect(worksheet.getCell('J2').value).toEqual(expect.objectContaining({
         text: 'login__code__Booklet__Unit_1__Geo_Var__response-1.ggb',

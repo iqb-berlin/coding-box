@@ -930,7 +930,7 @@ describe('WorkspaceCodingStatisticsController', () => {
       'xlsx-auth-token'
     );
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(response.send.mock.calls[0][0] as Buffer);
+    await workbook.xlsx.load(response.send.mock.calls[0][0] as unknown as Parameters<typeof workbook.xlsx.load>[0]);
 
     const summarySheet = workbook.getWorksheet('Übereinstimmung_gesamt');
     const pairwiseSheet = workbook.getWorksheet('Übereinstimmung_paarweise');
@@ -1114,7 +1114,7 @@ describe('WorkspaceCodingStatisticsController', () => {
     );
 
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(response.send.mock.calls[0][0] as Buffer);
+    await workbook.xlsx.load(response.send.mock.calls[0][0] as unknown as Parameters<typeof workbook.xlsx.load>[0]);
 
     const codingResultsSheet = workbook.getWorksheet('Kodierergebnisse');
 
@@ -1224,7 +1224,7 @@ describe('WorkspaceCodingStatisticsController', () => {
     );
 
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(response.send.mock.calls[0][0] as Buffer);
+    await workbook.xlsx.load(response.send.mock.calls[0][0] as unknown as Parameters<typeof workbook.xlsx.load>[0]);
 
     const codingResultsSheet = workbook.getWorksheet('Kodierergebnisse');
 

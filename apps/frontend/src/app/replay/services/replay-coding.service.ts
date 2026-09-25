@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
@@ -46,6 +46,9 @@ export class ReplayCodingService {
   private snackBar = inject(MatSnackBar);
   private authToken?: string;
   private readonly newCodeNeededOptionId = -2;
+  // Track in-place collection changes without copying large coding jobs on every save.
+  private readonly codingStateVersion = signal(0);
+  private readonly saveError = signal(false);
 
   codingScheme: CodingScheme | null = null;
   currentVariableId: string = '';
@@ -63,7 +66,15 @@ export class ReplayCodingService {
   isCompletedJobReview: boolean = false;
   isReviewMode: boolean = false;
   isCodingIssueReviewMode: boolean = false;
-  hasSaveError: boolean = false;
+
+  get hasSaveError(): boolean {
+    return this.saveError();
+  }
+
+  set hasSaveError(value: boolean) {
+    this.saveError.set(value);
+  }
+
   lastSaveError: string | null = null;
   private failedSaveKeys = new Set<string>();
   private rowMutationChains = new Map<string, Promise<void>>();
@@ -116,6 +127,7 @@ export class ReplayCodingService {
     this.codingJobCommentRevision = 0;
     this.savedCodingJobCommentRevision = 0;
     this.recoveredCodingJobCommentChanged = false;
+    this.codingStateVersion.update(version => version + 1);
   }
 
   setAuthToken(authToken?: string): void {
@@ -165,6 +177,7 @@ export class ReplayCodingService {
     this.latestRequestedSelectionByKey = new Map(snapshot.pendingSelections || []);
     this.openUnitKeys = new Set(snapshot.openUnitKeys || []);
     this.notes = new Map(snapshot.notes || []);
+    this.codingStateVersion.update(version => version + 1);
     this.codingJobComment = snapshot.codingJobComment ?? this.codingJobComment;
     this.recoveredCodingJobCommentChanged = snapshot.codingJobCommentChanged === true ||
       (
@@ -346,6 +359,7 @@ export class ReplayCodingService {
     this.openUnitKeys.clear();
     this.notes.clear();
     this.latestRequestedSelectionByKey.clear();
+    this.codingStateVersion.update(version => version + 1);
   }
 
   private applySavedProgress(savedProgress: Record<string, SavedCode>): void {
@@ -365,12 +379,14 @@ export class ReplayCodingService {
         this.openUnitKeys.delete(compositeKey);
       }
     });
+    this.codingStateVersion.update(version => version + 1);
   }
 
   private applySavedNotes(savedNotes: Record<string, string>): void {
     Object.keys(savedNotes).forEach(key => {
       this.notes.set(key, savedNotes[key]);
     });
+    this.codingStateVersion.update(version => version + 1);
   }
 
   findCodeById(codeId: number): Code | null {
@@ -536,6 +552,7 @@ export class ReplayCodingService {
       }
       if (this.shouldApplySelectionMutation(compositeKey, revision, contextSnapshot)) {
         this.selectedCodes.delete(compositeKey);
+        this.codingStateVersion.update(version => version + 1);
         this.openUnitKeys.delete(compositeKey);
       }
       return null;
@@ -574,6 +591,7 @@ export class ReplayCodingService {
         return null;
       }
       this.selectedCodes.set(compositeKey, normalizedCode);
+      this.codingStateVersion.update(version => version + 1);
       this.openUnitKeys.delete(compositeKey);
     } else if (event.codingIssueOption) {
       // Handle coding issue option-only case (legacy support)
@@ -602,6 +620,7 @@ export class ReplayCodingService {
         return null;
       }
       this.selectedCodes.set(compositeKey, normalizedCode);
+      this.codingStateVersion.update(version => version + 1);
       this.openUnitKeys.delete(compositeKey);
     }
 
@@ -711,6 +730,7 @@ export class ReplayCodingService {
     } else {
       this.notes.delete(compositeKey);
     }
+    this.codingStateVersion.update(version => version + 1);
   }
 
   async saveNotes(
@@ -930,6 +950,7 @@ export class ReplayCodingService {
   }
 
   isUnitSavePending(unit: UnitsReplayUnit): boolean {
+    this.codingStateVersion();
     if (!unit.variableId) return false;
 
     const compositeKey = this.generateCompositeKey(
@@ -942,6 +963,7 @@ export class ReplayCodingService {
   }
 
   private isUnitCodedByCompositeKey(compositeKey: string): boolean {
+    this.codingStateVersion();
     return this.isCompletedSelection(compositeKey, this.selectedCodes.get(compositeKey));
   }
 
@@ -1010,6 +1032,7 @@ export class ReplayCodingService {
     this.openUnitKeys.delete(compositeKey);
     if (selectedCodeToSave !== null) {
       this.selectedCodes.set(compositeKey, selectedCodeToSave);
+      this.codingStateVersion.update(version => version + 1);
       this.latestRequestedSelectionByKey.set(compositeKey, selectedCodeToSave);
     }
     await this.saveCodingProgress(
@@ -1067,9 +1090,11 @@ export class ReplayCodingService {
       this.pendingRowMutations.delete(next);
       if (this.rowMutationChains.get(key) === tracked) {
         this.rowMutationChains.delete(key);
+        this.codingStateVersion.update(version => version + 1);
       }
     });
     this.rowMutationChains.set(key, tracked);
+    this.codingStateVersion.update(version => version + 1);
     return next;
   }
 

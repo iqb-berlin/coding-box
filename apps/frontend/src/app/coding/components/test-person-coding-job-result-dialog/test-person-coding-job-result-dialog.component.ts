@@ -1,5 +1,5 @@
 import { Component, Inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTableModule } from '@angular/material/table';
@@ -15,7 +15,7 @@ interface DialogData {
 @Component({
   selector: 'coding-box-test-person-coding-job-result-dialog',
   standalone: true,
-  imports: [CommonModule, MatDialogModule, MatButtonModule, MatTableModule, TranslateModule],
+  imports: [MatDialogModule, MatButtonModule, MatTableModule, TranslateModule],
   templateUrl: './test-person-coding-job-result-dialog.component.html',
   styleUrls: ['./test-person-coding-job-result-dialog.component.scss']
 })

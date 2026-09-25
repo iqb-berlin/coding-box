@@ -608,7 +608,7 @@ describe('CodingResultsExportService', () => {
       true
     );
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const worksheet = workbook.worksheets[0];
     const cellValues = worksheet.getSheetValues().flat().map(value => String(value ?? ''));
 
@@ -656,7 +656,7 @@ describe('CodingResultsExportService', () => {
       true
     );
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const worksheet = workbook.worksheets[0];
 
     expect(worksheet.getRow(1).getCell(4).value).toBe('UNIT1_VAR1');
@@ -700,7 +700,7 @@ describe('CodingResultsExportService', () => {
       true
     );
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const worksheet = workbook.worksheets[0];
 
     expect(worksheet.getRow(1).getCell(4).value).toBe('UNIT1_VAR1');
@@ -754,7 +754,7 @@ describe('CodingResultsExportService', () => {
       'new-row-per-variable'
     );
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const worksheet = workbook.worksheets[0];
     const headers = worksheet.getRow(1).values as unknown[];
 
@@ -809,7 +809,7 @@ describe('CodingResultsExportService', () => {
 
     const buffer = await service.exportCodingResultsAggregated(1);
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const worksheet = workbook.worksheets[0];
 
     expect(worksheet.getRow(1).getCell(4).value).toBe('UNIT1_CURRENT');
@@ -848,7 +848,7 @@ describe('CodingResultsExportService', () => {
       true
     );
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
+    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const worksheetNames = workbook.worksheets.map(worksheet => worksheet.name);
 
     expect(worksheetNames.some(name => name.includes('DERIVE_VAR'))).toBe(true);
