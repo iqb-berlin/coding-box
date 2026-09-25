@@ -46,6 +46,8 @@ import {
   lockWorkspaceFilesMutation,
   unlockWorkspaceFilesMutation
 } from '../shared/workspace-files-lock.util';
+import { RuntimeConfigService } from '../../../config/runtime-config.service';
+import { applyAutocoderSchemaValidationMode } from './autocoder-schema-validation.util';
 
 type UnitCodingJobMetadata = {
   source?: 'manual-selection' | 'coding-freshness';
@@ -117,7 +119,11 @@ type CompleteDerivedTuple = {
 
 type CompleteDerivedTupleResolution =
   { action: 'NOT_APPLICABLE' } |
-  { action: 'PRESERVE'; tuple: CompleteDerivedTuple } |
+  {
+    action: 'PRESERVE';
+    tuple: CompleteDerivedTuple;
+    reason: CompleteDerivedTuplePreservationReason;
+  } |
   {
     action: 'RECALCULATE_INVALIDATED';
     recalculatedResult: AutocoderResponse;
@@ -128,6 +134,10 @@ type CompleteDerivedTupleResolution =
     recalculatedResult: AutocoderResponse;
   };
 
+type CompleteDerivedTuplePreservationReason =
+  'UNCHANGED' |
+  'V2_RECALCULATION_NOT_COMPLETE';
+
 type CompleteDerivedRecalculation = {
   targetResults: Map<string, AutocoderResponse>;
   authoritativeResults: AutocoderResponse[] | null;
@@ -136,6 +146,7 @@ type CompleteDerivedRecalculation = {
 
 const CODING_COMPLETE_STATUS = statusStringToNumber('CODING_COMPLETE');
 const CODING_INCOMPLETE_STATUS = statusStringToNumber('CODING_INCOMPLETE');
+const DERIVE_ERROR_STATUS = statusStringToNumber('DERIVE_ERROR');
 const INVALID_STATUS = statusStringToNumber('INVALID');
 const UNSET_STATUS = statusStringToNumber('UNSET') as number;
 const COMPARABLE_RECALCULATED_STATUSES = new Set([
@@ -143,6 +154,10 @@ const COMPARABLE_RECALCULATED_STATUSES = new Set([
   'NO_CODING',
   'CODING_INCOMPLETE',
   'CODING_COMPLETE'
+]);
+const NON_AUTHORITATIVE_V2_RECALCULATION_STATUSES = new Set([
+  'DERIVE_ERROR',
+  'CODING_INCOMPLETE'
 ]);
 const AUTOCODER_LOCK_TIMEOUT = '30s';
 
@@ -166,7 +181,8 @@ export class CodingProcessService {
     private workspaceCoreService: WorkspaceCoreService,
     private workspaceExclusionService: WorkspaceExclusionService,
     private codingReadinessService: CodingReadinessService,
-    private workspaceFilesService: WorkspaceFilesService
+    private workspaceFilesService: WorkspaceFilesService,
+    private runtimeConfigService: RuntimeConfigService
   ) { }
 
   private codingSchemeCache: Map<
@@ -1483,17 +1499,25 @@ export class CodingProcessService {
             completeTupleResolution.action === 'PRESERVE' &&
             existingResponse &&
             (
+              completeTupleResolution.reason ===
+                'V2_RECALCULATION_NOT_COMPLETE' ||
               codedStatus !== 'CODING_COMPLETE' ||
               persistedCode !== (codedResult.code ?? null) ||
               persistedScore !== (codedResult.score ?? null)
             )
           ) {
+            const preservationReason =
+              completeTupleResolution.reason ===
+                'V2_RECALCULATION_NOT_COMPLETE' ?
+                'because its independent recalculation did not produce a ' +
+                  'complete result' :
+                'because its independently recalculated derived value is ' +
+                  'unchanged';
             this.logger.warn(
               `Preserving complete ${completeTupleResolution.tuple.version.toUpperCase()} ` +
               'tuple for response ' +
               `${existingResponse.id}, variable ` +
-              `"${existingResponse.variableid}", because its independently ` +
-              'recalculated derived value is unchanged.'
+              `"${existingResponse.variableid}", ${preservationReason}.`
             );
           } else if (
             completeTupleResolution.action === 'DERIVED_VALUE_CHANGED' &&
@@ -1512,6 +1536,7 @@ export class CodingProcessService {
             id: existingResponse ? existingResponse.id : -1
           };
           const hasAuthoritativeDerivedValueChange =
+            completeTupleResolution.action !== 'PRESERVE' &&
             completeDerivedRecalculation.authoritativeResults !== null &&
             existingResponse?.is_autocoder_generated === true &&
             this.normalizeAutocoderValueForComparison(codedResult.value) !==
@@ -1647,10 +1672,38 @@ export class CodingProcessService {
       );
     }
 
-    const breakingProblems = Autocoder.CodingSchemeFactory.validate(
+    const validation = applyAutocoderSchemaValidationMode(
+      Autocoder.CodingSchemeFactory.validate(
+        baseVariables,
+        namespace.variableCodings
+      ),
+      this.runtimeConfigService.autocoderSchemaValidationMode,
       baseVariables,
       namespace.variableCodings
-    ).filter(problem => problem.breaking);
+    );
+
+    if (validation.toleratedProblems.length > 0) {
+      const problemCounts = validation.toleratedProblems.reduce(
+        (counts, problem) => {
+          counts.set(problem.type, (counts.get(problem.type) || 0) + 1);
+          return counts;
+        },
+        new Map<string, number>()
+      );
+      const problemSummary = [...problemCounts.entries()]
+        .map(([type, count]) => `${type}=${count}`)
+        .join(', ');
+      this.logger.warn(
+        [
+          'Autocoder schema compatibility mode tolerated',
+          `${validation.toleratedProblems.length} legacy source problem(s)`,
+          `for coding scheme "${codingSchemeRef}" and unit`,
+          `"${unit.name}" (${unit.id}): ${problemSummary}`
+        ].join(' ')
+      );
+    }
+
+    const breakingProblems = validation.blockingProblems;
 
     if (breakingProblems.length > 0) {
       const details = breakingProblems.map(problem => {
@@ -1737,6 +1790,16 @@ export class CodingProcessService {
     return {
       variableCodings: variableCodings.map(coding => ({
         ...coding,
+        sourceParameters: coding.sourceType === 'SOLVER' &&
+          coding.sourceParameters?.solverExpression ?
+          {
+            ...coding.sourceParameters,
+            solverExpression: this.rewriteSolverExpressionAliases(
+              coding.sourceParameters.solverExpression,
+              inputTechnicalIdByAlias
+            )
+          } :
+          coding.sourceParameters,
         // The response library otherwise merges the technical-ID and alias
         // namespaces. Internally use technical IDs only and map results back
         // to their public aliases after coding.
@@ -1747,6 +1810,37 @@ export class CodingProcessService {
       componentById: this.createAutocoderNamespaceComponents(variableCodings),
       outputShadows
     };
+  }
+
+  private rewriteSolverExpressionAliases(
+    solverExpression: string,
+    inputTechnicalIdByAlias: Map<string, string>
+  ): string {
+    return solverExpression.replace(/\$\{([^{}]*)}/g, (token, content) => {
+      const policySeparator = content.indexOf(':');
+      const sourceReference = policySeparator >= 0 ?
+        content.slice(0, policySeparator) :
+        content;
+      const policies = policySeparator >= 0 ?
+        content.slice(policySeparator) :
+        '';
+      const fragmentStart = sourceReference.lastIndexOf('[');
+      const alias = (
+        fragmentStart >= 0 ?
+          sourceReference.slice(0, fragmentStart) :
+          sourceReference
+      ).trim();
+      const fragment = fragmentStart >= 0 ?
+        sourceReference.slice(fragmentStart).trim() :
+        '';
+      const technicalId = inputTechnicalIdByAlias.get(
+        this.normalizeVariableId(alias)
+      );
+
+      return technicalId ?
+        `\${${technicalId}${fragment}${policies}}` :
+        token;
+    });
   }
 
   private createAutocoderNamespaceComponents(
@@ -1873,9 +1967,20 @@ export class CodingProcessService {
         mappedTechnicalId !== undefined &&
         this.normalizeVariableId(mappedTechnicalId) !== normalizedInputId &&
         namespace.outputAliasByTechnicalId.has(normalizedInputId);
+      const isEmptyGeneratedPlaceholder =
+        inputOrigins?.[index]?.isAutocoderGenerated === true &&
+        response.status === 'UNSET' &&
+        (
+          response.value === '' ||
+          response.value === null ||
+          response.value === undefined
+        ) &&
+        (response.code === null || response.code === undefined) &&
+        (response.score === null || response.score === undefined);
 
       if (
         isAmbiguousGeneratedInput &&
+        !isEmptyGeneratedPlaceholder &&
         !baseNoValueShadowDerivedIds.has(normalizedInputId)
       ) {
         const subform = String(response.subform || '');
@@ -2133,11 +2238,14 @@ export class CodingProcessService {
       };
     }
 
-    const hasUnchangedDerivedValue =
-      this.hasUnchangedDerivedValue(existingResponse, recalculatedResult);
+    const preservationReason = this.getCompleteDerivedTuplePreservationReason(
+      tuple,
+      existingResponse,
+      recalculatedResult
+    );
 
-    return hasUnchangedDerivedValue ?
-      { action: 'PRESERVE', tuple } :
+    return preservationReason ?
+      { action: 'PRESERVE', tuple, reason: preservationReason } :
       { action: 'DERIVED_VALUE_CHANGED', tuple, recalculatedResult };
   }
 
@@ -2149,8 +2257,17 @@ export class CodingProcessService {
     }
 
     const hasV2Tuple = response.code_v2 !== null || response.score_v2 !== null;
+    const canRecoverFromNonAuthoritativeV3Result =
+      response.autocoder_invalidated_version === 'v2' &&
+      (
+        response.status_v3 === DERIVE_ERROR_STATUS ||
+        response.status_v3 === CODING_INCOMPLETE_STATUS
+      );
     if (
-      response.autocoder_invalidated_version !== 'v2' &&
+      (
+        response.autocoder_invalidated_version !== 'v2' ||
+        canRecoverFromNonAuthoritativeV3Result
+      ) &&
       response.status_v2 === CODING_COMPLETE_STATUS &&
       hasV2Tuple
     ) {
@@ -2386,7 +2503,11 @@ export class CodingProcessService {
         }
 
         const shouldRestoreTuple = target.tuple &&
-          this.hasUnchangedDerivedValue(target.response, recalculatedResult);
+          this.getCompleteDerivedTuplePreservationReason(
+            target.tuple,
+            target.response,
+            recalculatedResult
+          ) !== null;
         if (!shouldRestoreTuple) {
           requiresAuthoritativeRecalculation = true;
         }
@@ -2452,6 +2573,25 @@ export class CodingProcessService {
     return COMPARABLE_RECALCULATED_STATUSES.has(recalculatedResult.status) &&
       this.normalizeAutocoderValueForComparison(recalculatedResult.value) ===
         this.normalizeAutocoderValueForComparison(response.value);
+  }
+
+  private getCompleteDerivedTuplePreservationReason(
+    tuple: CompleteDerivedTuple,
+    response: ResponseEntity,
+    recalculatedResult: AutocoderResponse
+  ): CompleteDerivedTuplePreservationReason | null {
+    if (
+      tuple.version === 'v2' &&
+      NON_AUTHORITATIVE_V2_RECALCULATION_STATUSES.has(
+        recalculatedResult.status
+      )
+    ) {
+      return 'V2_RECALCULATION_NOT_COMPLETE';
+    }
+
+    return this.hasUnchangedDerivedValue(response, recalculatedResult) ?
+      'UNCHANGED' :
+      null;
   }
 
   private assertUniqueAutocoderPersistenceTargets(
