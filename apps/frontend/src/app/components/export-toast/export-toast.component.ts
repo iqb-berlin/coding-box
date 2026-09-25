@@ -1,5 +1,5 @@
 import {
-  Component, inject, OnDestroy, OnInit
+  ChangeDetectorRef, Component, inject, OnDestroy, OnInit
 } from '@angular/core';
 
 import { MatCardModule } from '@angular/material/card';
@@ -47,6 +47,7 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   private translateService = inject(TranslateService);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
+  private changeDetectorRef = inject(ChangeDetectorRef);
   private destroy$ = new Subject<void>();
   private readonly exportTypeLabelKeys: Record<string, string> = {
     aggregated: 'export-toast.types.aggregated',
@@ -68,6 +69,7 @@ export class ExportToastComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(jobs => {
         this.jobs = jobs;
+        this.changeDetectorRef.markForCheck();
       });
   }
 
