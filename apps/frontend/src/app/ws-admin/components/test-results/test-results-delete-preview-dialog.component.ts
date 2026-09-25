@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, Inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxChange, MatCheckboxModule } from '@angular/material/checkbox';
@@ -20,7 +19,6 @@ interface DeleteMetric {
   selector: 'coding-box-test-results-delete-preview-dialog',
   standalone: true,
   imports: [
-    CommonModule,
     MatButtonModule,
     MatCheckboxModule,
     MatDialogModule,

@@ -6,7 +6,7 @@ import {
   OnInit,
   OnDestroy
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -43,7 +43,6 @@ interface GroupResponsesValidationResult {
   selector: 'coding-box-group-responses-validation-panel',
   standalone: true,
   imports: [
-    CommonModule,
     MatExpansionModule,
     MatButtonModule,
     MatProgressSpinnerModule,

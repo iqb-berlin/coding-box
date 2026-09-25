@@ -324,7 +324,7 @@ describe('CodingItemMatrixExportService', () => {
       configuration
     );
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(excel);
+    await workbook.xlsx.load(excel as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const excelRow = workbook.getWorksheet('Itemdatensatz')!.getRow(2);
 
     expect(codeCsv).toContain(

@@ -6,248 +6,312 @@
 </h2>
 
 <mat-dialog-content>
-  <div *ngIf="isLoading" class="loading-container">
-    <mat-spinner diameter="40"></mat-spinner>
-    <p>Aufgaben-Informationen werden geladen...</p>
-  </div>
+  @if (isLoading) {
+    <div class="loading-container">
+      <mat-spinner diameter="40"></mat-spinner>
+      <p>Aufgaben-Informationen werden geladen...</p>
+    </div>
+  }
 
-  <div *ngIf="errorMessage" class="error-container">
-    <mat-icon color="warn">error</mat-icon>
-    <p>{{ errorMessage }}</p>
-  </div>
+  @if (errorMessage) {
+    <div class="error-container">
+      <mat-icon color="warn">error</mat-icon>
+      <p>{{ errorMessage }}</p>
+    </div>
+  }
 
-  <div *ngIf="!isLoading && !errorMessage && data.unitInfo" class="info-container">
-    <mat-tab-group>
-      <!-- Raw XML Tab (first) -->
-      <mat-tab label="Roh-XML">
-        <div class="tab-content xml-tab-content">
-          <div class="info-section xml-section">
-            <coding-box-xml-viewer [xml]="data.unitInfo.rawXml"></coding-box-xml-viewer>
-          </div>
-        </div>
-      </mat-tab>
-
-      <!-- Metadata Tab -->
-      <mat-tab label="Metadaten">
-        <div class="tab-content">
-          <div class="info-section">
-            <h3>Grundinformationen</h3>
-            <div class="info-row">
-              <span class="info-label">ID:</span>
-              <span class="info-value">{{ data.unitInfo.metadata.id }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Bezeichnung:</span>
-              <span class="info-value">{{ data.unitInfo.metadata.label }}</span>
-            </div>
-            <div *ngIf="data.unitInfo.metadata.description" class="info-row">
-              <span class="info-label">Description:</span>
-              <span class="info-value">{{ data.unitInfo.metadata.description }}</span>
-            </div>
-            <div *ngIf="data.unitInfo.metadata.transcript" class="info-row">
-              <span class="info-label">Transcript:</span>
-              <span class="info-value">{{ data.unitInfo.metadata.transcript }}</span>
-            </div>
-            <div *ngIf="data.unitInfo.metadata.reference" class="info-row">
-              <span class="info-label">Reference:</span>
-              <span class="info-value">{{ data.unitInfo.metadata.reference }}</span>
-            </div>
-            <div *ngIf="data.unitInfo.metadata.lastChange" class="info-row">
-              <span class="info-label">Last Change:</span>
-              <span class="info-value">{{ data.unitInfo.metadata.lastChange | date:'medium' }}</span>
+  @if (!isLoading && !errorMessage && data.unitInfo) {
+    <div class="info-container">
+      <mat-tab-group>
+        <!-- Raw XML Tab (first) -->
+        <mat-tab label="Roh-XML">
+          <div class="tab-content xml-tab-content">
+            <div class="info-section xml-section">
+              <coding-box-xml-viewer [xml]="data.unitInfo.rawXml"></coding-box-xml-viewer>
             </div>
           </div>
-        </div>
-      </mat-tab>
-
-      <!-- Definition Tab -->
-      <mat-tab label="Definition">
-        <div class="tab-content">
-          <div class="info-section">
-            <h3>Definitionsinformationen</h3>
-            <div class="info-row">
-              <span class="info-label">Type:</span>
-              <span class="info-value">{{ data.unitInfo.definition.type }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Player:</span>
-              <span class="info-value">{{ data.unitInfo.definition.player }}</span>
-            </div>
-            <div *ngIf="data.unitInfo.definition.editor" class="info-row">
-              <span class="info-label">Editor:</span>
-              <span class="info-value">{{ data.unitInfo.definition.editor }}</span>
-            </div>
-            <div *ngIf="data.unitInfo.definition.lastChange" class="info-row">
-              <span class="info-label">Last Change:</span>
-              <span class="info-value">{{ data.unitInfo.definition.lastChange | date:'medium' }}</span>
-            </div>
-            <div *ngIf="data.unitInfo.definition.content" class="info-row content-row">
-              <span class="info-label">Content:</span>
-              <pre class="info-value content-value">{{ data.unitInfo.definition.content }}</pre>
-            </div>
-          </div>
-        </div>
-      </mat-tab>
-
-      <!-- Variables Tab -->
-      <mat-tab label="Variablen" *ngIf="data.unitInfo.baseVariables?.length || data.unitInfo.derivedVariables?.length">
-        <div class="tab-content">
-          <!-- Base Variables -->
-          <div *ngIf="data.unitInfo.baseVariables?.length" class="info-section">
-            <h3>Basisvariablen</h3>
-            <div *ngFor="let variable of data.unitInfo.baseVariables; let isLast = last" class="variable-item">
+        </mat-tab>
+        <!-- Metadata Tab -->
+        <mat-tab label="Metadaten">
+          <div class="tab-content">
+            <div class="info-section">
+              <h3>Grundinformationen</h3>
               <div class="info-row">
                 <span class="info-label">ID:</span>
-                <span class="info-value">{{ variable.id }}</span>
-              </div>
-              <div *ngIf="variable.alias" class="info-row">
-                <span class="info-label">Alias:</span>
-                <span class="info-value">{{ variable.alias }}</span>
+                <span class="info-value">{{ data.unitInfo.metadata.id }}</span>
               </div>
               <div class="info-row">
+                <span class="info-label">Bezeichnung:</span>
+                <span class="info-value">{{ data.unitInfo.metadata.label }}</span>
+              </div>
+              @if (data.unitInfo.metadata.description) {
+                <div class="info-row">
+                  <span class="info-label">Description:</span>
+                  <span class="info-value">{{ data.unitInfo.metadata.description }}</span>
+                </div>
+              }
+              @if (data.unitInfo.metadata.transcript) {
+                <div class="info-row">
+                  <span class="info-label">Transcript:</span>
+                  <span class="info-value">{{ data.unitInfo.metadata.transcript }}</span>
+                </div>
+              }
+              @if (data.unitInfo.metadata.reference) {
+                <div class="info-row">
+                  <span class="info-label">Reference:</span>
+                  <span class="info-value">{{ data.unitInfo.metadata.reference }}</span>
+                </div>
+              }
+              @if (data.unitInfo.metadata.lastChange) {
+                <div class="info-row">
+                  <span class="info-label">Last Change:</span>
+                  <span class="info-value">{{ data.unitInfo.metadata.lastChange | date:'medium' }}</span>
+                </div>
+              }
+            </div>
+          </div>
+        </mat-tab>
+        <!-- Definition Tab -->
+        <mat-tab label="Definition">
+          <div class="tab-content">
+            <div class="info-section">
+              <h3>Definitionsinformationen</h3>
+              <div class="info-row">
                 <span class="info-label">Type:</span>
-                <span class="info-value">{{ variable.type }}</span>
+                <span class="info-value">{{ data.unitInfo.definition.type }}</span>
               </div>
-              <div *ngIf="variable.format" class="info-row">
-                <span class="info-label">Format:</span>
-                <span class="info-value">{{ variable.format }}</span>
+              <div class="info-row">
+                <span class="info-label">Player:</span>
+                <span class="info-value">{{ data.unitInfo.definition.player }}</span>
               </div>
-              <div *ngIf="variable.multiple !== undefined" class="info-row">
-                <span class="info-label">Multiple:</span>
-                <span class="info-value">{{ variable.multiple ? 'Ja' : 'Nein' }}</span>
-              </div>
-              <div *ngIf="variable.nullable !== undefined" class="info-row">
-                <span class="info-label">Nullable:</span>
-                <span class="info-value">{{ variable.nullable ? 'Ja' : 'Nein' }}</span>
-              </div>
-              <div *ngIf="variable.page" class="info-row">
-                <span class="info-label">Page:</span>
-                <span class="info-value">{{ variable.page }}</span>
-              </div>
-
-              <!-- Variable Values -->
-              <div *ngIf="variable.values?.length" class="variable-values">
-                <h4>Werte</h4>
-                <div *ngFor="let value of variable.values" class="value-item">
-                  <div class="info-row">
-                    <span class="info-label">Label:</span>
-                    <span class="info-value">{{ value.label }}</span>
+              @if (data.unitInfo.definition.editor) {
+                <div class="info-row">
+                  <span class="info-label">Editor:</span>
+                  <span class="info-value">{{ data.unitInfo.definition.editor }}</span>
+                </div>
+              }
+              @if (data.unitInfo.definition.lastChange) {
+                <div class="info-row">
+                  <span class="info-label">Last Change:</span>
+                  <span class="info-value">{{ data.unitInfo.definition.lastChange | date:'medium' }}</span>
+                </div>
+              }
+              @if (data.unitInfo.definition.content) {
+                <div class="info-row content-row">
+                  <span class="info-label">Content:</span>
+                  <pre class="info-value content-value">{{ data.unitInfo.definition.content }}</pre>
+                </div>
+              }
+            </div>
+          </div>
+        </mat-tab>
+        <!-- Variables Tab -->
+        @if (data.unitInfo.baseVariables?.length || data.unitInfo.derivedVariables?.length) {
+          <mat-tab label="Variablen">
+            <div class="tab-content">
+              <!-- Base Variables -->
+              @if (data.unitInfo.baseVariables?.length) {
+                <div class="info-section">
+                  <h3>Basisvariablen</h3>
+                  @for (variable of data.unitInfo.baseVariables; track variable; let isLast = $last) {
+                    <div class="variable-item">
+                      <div class="info-row">
+                        <span class="info-label">ID:</span>
+                        <span class="info-value">{{ variable.id }}</span>
+                      </div>
+                      @if (variable.alias) {
+                        <div class="info-row">
+                          <span class="info-label">Alias:</span>
+                          <span class="info-value">{{ variable.alias }}</span>
+                        </div>
+                      }
+                      <div class="info-row">
+                        <span class="info-label">Type:</span>
+                        <span class="info-value">{{ variable.type }}</span>
+                      </div>
+                      @if (variable.format) {
+                        <div class="info-row">
+                          <span class="info-label">Format:</span>
+                          <span class="info-value">{{ variable.format }}</span>
+                        </div>
+                      }
+                      @if (variable.multiple !== undefined) {
+                        <div class="info-row">
+                          <span class="info-label">Multiple:</span>
+                          <span class="info-value">{{ variable.multiple ? 'Ja' : 'Nein' }}</span>
+                        </div>
+                      }
+                      @if (variable.nullable !== undefined) {
+                        <div class="info-row">
+                          <span class="info-label">Nullable:</span>
+                          <span class="info-value">{{ variable.nullable ? 'Ja' : 'Nein' }}</span>
+                        </div>
+                      }
+                      @if (variable.page) {
+                        <div class="info-row">
+                          <span class="info-label">Page:</span>
+                          <span class="info-value">{{ variable.page }}</span>
+                        </div>
+                      }
+                      <!-- Variable Values -->
+                      @if (variable.values?.length) {
+                        <div class="variable-values">
+                          <h4>Werte</h4>
+                          @for (value of variable.values; track value) {
+                            <div class="value-item">
+                              <div class="info-row">
+                                <span class="info-label">Label:</span>
+                                <span class="info-value">{{ value.label }}</span>
+                              </div>
+                              <div class="info-row">
+                                <span class="info-label">Value:</span>
+                                <span class="info-value">{{ value.value }}</span>
+                              </div>
+                            </div>
+                          }
+                        </div>
+                      }
+                      @if (!isLast) {
+                        <mat-divider></mat-divider>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+              <!-- Derived Variables -->
+              @if (data.unitInfo.derivedVariables?.length) {
+                <div class="info-section">
+                  <h3>Abgeleitete Variablen</h3>
+                  @for (variable of data.unitInfo.derivedVariables; track variable; let isLast = $last) {
+                    <div class="variable-item">
+                      <div class="info-row">
+                        <span class="info-label">ID:</span>
+                        <span class="info-value">{{ variable.id }}</span>
+                      </div>
+                      @if (variable.alias) {
+                        <div class="info-row">
+                          <span class="info-label">Alias:</span>
+                          <span class="info-value">{{ variable.alias }}</span>
+                        </div>
+                      }
+                      <div class="info-row">
+                        <span class="info-label">Type:</span>
+                        <span class="info-value">{{ variable.type }}</span>
+                      </div>
+                      @if (variable.format) {
+                        <div class="info-row">
+                          <span class="info-label">Format:</span>
+                          <span class="info-value">{{ variable.format }}</span>
+                        </div>
+                      }
+                      @if (variable.multiple !== undefined) {
+                        <div class="info-row">
+                          <span class="info-label">Multiple:</span>
+                          <span class="info-value">{{ variable.multiple ? 'Ja' : 'Nein' }}</span>
+                        </div>
+                      }
+                      @if (variable.nullable !== undefined) {
+                        <div class="info-row">
+                          <span class="info-label">Nullable:</span>
+                          <span class="info-value">{{ variable.nullable ? 'Ja' : 'Nein' }}</span>
+                        </div>
+                      }
+                      @if (variable.page) {
+                        <div class="info-row">
+                          <span class="info-label">Page:</span>
+                          <span class="info-value">{{ variable.page }}</span>
+                        </div>
+                      }
+                      <!-- Variable Values -->
+                      @if (variable.values?.length) {
+                        <div class="variable-values">
+                          <h4>Werte</h4>
+                          @for (value of variable.values; track value) {
+                            <div class="value-item">
+                              <div class="info-row">
+                                <span class="info-label">Label:</span>
+                                <span class="info-value">{{ value.label }}</span>
+                              </div>
+                              <div class="info-row">
+                                <span class="info-label">Value:</span>
+                                <span class="info-value">{{ value.value }}</span>
+                              </div>
+                            </div>
+                          }
+                        </div>
+                      }
+                      @if (!isLast) {
+                        <mat-divider></mat-divider>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          </mat-tab>
+        }
+        <!-- Dependencies Tab -->
+        @if (data.unitInfo.dependencies?.length) {
+          <mat-tab label="Abhängigkeiten">
+            <div class="tab-content">
+              <div class="info-section">
+                <h3>Abhängigkeiten</h3>
+                @for (dependency of data.unitInfo.dependencies; track dependency; let isLast = $last) {
+                  <div class="dependency-item">
+                    <div class="info-row">
+                      <span class="info-label">Type:</span>
+                      <span class="info-value">{{ dependency.type }}</span>
+                    </div>
+                    <div class="info-row">
+                      <span class="info-label">For:</span>
+                      <span class="info-value">{{ dependency.for }}</span>
+                    </div>
+                    <div class="info-row">
+                      <span class="info-label">Content:</span>
+                      <span class="info-value">{{ dependency.content }}</span>
+                    </div>
+                    @if (!isLast) {
+                      <mat-divider></mat-divider>
+                    }
                   </div>
+                }
+              </div>
+            </div>
+          </mat-tab>
+        }
+        <!-- Coding Scheme Tab -->
+        @if (data.unitInfo.codingSchemeRef) {
+          <mat-tab label="Kodierungsschema">
+            <div class="tab-content">
+              <div class="info-section">
+                <h3>Kodierungsschema-Referenz</h3>
+                <div class="info-row">
+                  <span class="info-label">Schemer:</span>
+                  <span class="info-value">{{ data.unitInfo.codingSchemeRef.schemer }}</span>
+                </div>
+                @if (data.unitInfo.codingSchemeRef.schemeType) {
                   <div class="info-row">
-                    <span class="info-label">Value:</span>
-                    <span class="info-value">{{ value.value }}</span>
+                    <span class="info-label">Scheme Type:</span>
+                    <span class="info-value">{{ data.unitInfo.codingSchemeRef.schemeType }}</span>
                   </div>
+                }
+                @if (data.unitInfo.codingSchemeRef.lastChange) {
+                  <div class="info-row">
+                    <span class="info-label">Last Change:</span>
+                    <span class="info-value">{{ data.unitInfo.codingSchemeRef.lastChange | date:'medium' }}</span>
+                  </div>
+                }
+                <div class="info-row">
+                  <span class="info-label">Content:</span>
+                  <span class="info-value">{{ data.unitInfo.codingSchemeRef.content }}</span>
                 </div>
               </div>
-
-              <mat-divider *ngIf="!isLast"></mat-divider>
             </div>
-          </div>
-
-          <!-- Derived Variables -->
-          <div *ngIf="data.unitInfo.derivedVariables?.length" class="info-section">
-            <h3>Abgeleitete Variablen</h3>
-            <div *ngFor="let variable of data.unitInfo.derivedVariables; let isLast = last" class="variable-item">
-              <div class="info-row">
-                <span class="info-label">ID:</span>
-                <span class="info-value">{{ variable.id }}</span>
-              </div>
-              <div *ngIf="variable.alias" class="info-row">
-                <span class="info-label">Alias:</span>
-                <span class="info-value">{{ variable.alias }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">Type:</span>
-                <span class="info-value">{{ variable.type }}</span>
-              </div>
-              <div *ngIf="variable.format" class="info-row">
-                <span class="info-label">Format:</span>
-                <span class="info-value">{{ variable.format }}</span>
-              </div>
-              <div *ngIf="variable.multiple !== undefined" class="info-row">
-                <span class="info-label">Multiple:</span>
-                <span class="info-value">{{ variable.multiple ? 'Ja' : 'Nein' }}</span>
-              </div>
-              <div *ngIf="variable.nullable !== undefined" class="info-row">
-                <span class="info-label">Nullable:</span>
-                <span class="info-value">{{ variable.nullable ? 'Ja' : 'Nein' }}</span>
-              </div>
-              <div *ngIf="variable.page" class="info-row">
-                <span class="info-label">Page:</span>
-                <span class="info-value">{{ variable.page }}</span>
-              </div>
-
-              <!-- Variable Values -->
-              <div *ngIf="variable.values?.length" class="variable-values">
-                <h4>Werte</h4>
-                <div *ngFor="let value of variable.values" class="value-item">
-                  <div class="info-row">
-                    <span class="info-label">Label:</span>
-                    <span class="info-value">{{ value.label }}</span>
-                  </div>
-                  <div class="info-row">
-                    <span class="info-label">Value:</span>
-                    <span class="info-value">{{ value.value }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <mat-divider *ngIf="!isLast"></mat-divider>
-            </div>
-          </div>
-        </div>
-      </mat-tab>
-
-      <!-- Dependencies Tab -->
-      <mat-tab label="Abhängigkeiten" *ngIf="data.unitInfo.dependencies?.length">
-        <div class="tab-content">
-          <div class="info-section">
-            <h3>Abhängigkeiten</h3>
-            <div *ngFor="let dependency of data.unitInfo.dependencies; let isLast = last" class="dependency-item">
-              <div class="info-row">
-                <span class="info-label">Type:</span>
-                <span class="info-value">{{ dependency.type }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">For:</span>
-                <span class="info-value">{{ dependency.for }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">Content:</span>
-                <span class="info-value">{{ dependency.content }}</span>
-              </div>
-              <mat-divider *ngIf="!isLast"></mat-divider>
-            </div>
-          </div>
-        </div>
-      </mat-tab>
-
-      <!-- Coding Scheme Tab -->
-      <mat-tab label="Kodierungsschema" *ngIf="data.unitInfo.codingSchemeRef">
-        <div class="tab-content">
-          <div class="info-section">
-            <h3>Kodierungsschema-Referenz</h3>
-            <div class="info-row">
-              <span class="info-label">Schemer:</span>
-              <span class="info-value">{{ data.unitInfo.codingSchemeRef.schemer }}</span>
-            </div>
-            <div *ngIf="data.unitInfo.codingSchemeRef.schemeType" class="info-row">
-              <span class="info-label">Scheme Type:</span>
-              <span class="info-value">{{ data.unitInfo.codingSchemeRef.schemeType }}</span>
-            </div>
-            <div *ngIf="data.unitInfo.codingSchemeRef.lastChange" class="info-row">
-              <span class="info-label">Last Change:</span>
-              <span class="info-value">{{ data.unitInfo.codingSchemeRef.lastChange | date:'medium' }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Content:</span>
-              <span class="info-value">{{ data.unitInfo.codingSchemeRef.content }}</span>
-            </div>
-          </div>
-        </div>
-      </mat-tab>
-    </mat-tab-group>
-  </div>
+          </mat-tab>
+        }
+      </mat-tab-group>
+    </div>
+  }
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">

@@ -23,80 +23,87 @@
     </div>
     <hr>
 
-    <div class="fx-row-space-between-center fx-gap-10 pagination-controls" *ngIf="validationResults.totalPages > 1">
-      <div class="fx-row-center-center fx-gap-10">
-        <button mat-button [disabled]="!hasPreviousPage" (click)="previousPage()">
-          <mat-icon>chevron_left</mat-icon>
-          {{ 'coding-validation-results.previous-page' | translate }}
-        </button>
-        <span class="pagination-info">
-          Seite {{currentPage}} von {{totalPages}}
-        </span>
-        <button mat-button [disabled]="!hasNextPage" (click)="nextPage()">
-          {{ 'coding-validation-results.next-page' | translate }}
-          <mat-icon>chevron_right</mat-icon>
-        </button>
-      </div>
+      @if (validationResults.totalPages > 1) {
+        <div class="fx-row-space-between-center fx-gap-10 pagination-controls">
+          <div class="fx-row-center-center fx-gap-10">
+            <button mat-button [disabled]="!hasPreviousPage" (click)="previousPage()">
+              <mat-icon>chevron_left</mat-icon>
+              {{ 'coding-validation-results.previous-page' | translate }}
+            </button>
+            <span class="pagination-info">
+              Seite {{currentPage}} von {{totalPages}}
+            </span>
+            <button mat-button [disabled]="!hasNextPage" (click)="nextPage()">
+              {{ 'coding-validation-results.next-page' | translate }}
+              <mat-icon>chevron_right</mat-icon>
+            </button>
+          </div>
+          <div class="fx-row-center-center fx-gap-10">
+            <label for="pageSize">{{ 'coding-validation-results.page-size' | translate }}:</label>
+            <select id="pageSize" [value]="pageSize" (change)="changePageSize(+$any($event.target).value)">
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+            </select>
+          </div>
+        </div>
+      }
 
-      <div class="fx-row-center-center fx-gap-10">
-        <label for="pageSize">{{ 'coding-validation-results.page-size' | translate }}:</label>
-        <select id="pageSize" [value]="pageSize" (change)="changePageSize(+$any($event.target).value)">
-          <option value="25">25</option>
-          <option value="50">50</option>
-          <option value="100">100</option>
-          <option value="200">200</option>
-        </select>
-      </div>
+      @if (validationResults.results.length > 0) {
+        <div class="validation-content">
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th>{{ 'coding-validation-results.table.headers.unit-key' | translate }}</th>
+                <th>{{ 'coding-validation-results.table.headers.login-name' | translate }}</th>
+                <th>{{ 'coding-validation-results.table.headers.login-group' | translate }}</th>
+                <th>{{ 'coding-validation-results.table.headers.login-code' | translate }}</th>
+                <th>{{ 'coding-validation-results.table.headers.booklet-id' | translate }}</th>
+                <th>{{ 'coding-validation-results.table.headers.variable-id' | translate }}</th>
+                <th>{{ 'coding-validation-results.table.headers.status' | translate }}</th>
+                <th>{{ 'coding-validation-results.table.headers.issues' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (result of validationResults.results; track result) {
+                <tr [class.missing]="result.status === 'MISSING'">
+                  <td>{{result.combination.unit_key}}</td>
+                  <td>{{result.combination.login_name}}</td>
+                  <td>{{result.combination.person_group || ''}}</td>
+                  <td>{{result.combination.login_code}}</td>
+                  <td>{{result.combination.booklet_id}}</td>
+                  <td>{{result.combination.variable_id}}</td>
+                  <td>
+                    <mat-chip [ngClass]="result.status === 'MISSING' ? 'status-missing' : 'status-present'">
+                      <mat-icon>{{ result.status === 'MISSING' ? 'error_outline' : 'check_circle' }}</mat-icon>
+                      {{ 'coding-validation-results.table.status.' + (result.status === 'MISSING' ? 'missing' : 'present') | translate }}
+                    </mat-chip>
+                  </td>
+                  <td>{{result.issues?.join(' | ') || ''}}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      <!-- Bottom pagination controls -->
+      @if (validationResults.totalPages > 1) {
+        <div class="fx-row-center-center fx-gap-10 pagination-controls">
+          <button mat-button [disabled]="!hasPreviousPage" (click)="previousPage()">
+            <mat-icon>chevron_left</mat-icon>
+            {{ 'coding-validation-results.previous-page' | translate }}
+          </button>
+          <span class="pagination-info">
+            Seite {{currentPage}} von {{totalPages}}
+          </span>
+          <button mat-button [disabled]="!hasNextPage" (click)="nextPage()">
+            {{ 'coding-validation-results.next-page' | translate }}
+            <mat-icon>chevron_right</mat-icon>
+          </button>
+        </div>
+      }
     </div>
 
-    <div class="validation-content" *ngIf="validationResults.results.length > 0">
-      <table class="results-table">
-        <thead>
-          <tr>
-            <th>{{ 'coding-validation-results.table.headers.unit-key' | translate }}</th>
-            <th>{{ 'coding-validation-results.table.headers.login-name' | translate }}</th>
-            <th>{{ 'coding-validation-results.table.headers.login-group' | translate }}</th>
-            <th>{{ 'coding-validation-results.table.headers.login-code' | translate }}</th>
-            <th>{{ 'coding-validation-results.table.headers.booklet-id' | translate }}</th>
-            <th>{{ 'coding-validation-results.table.headers.variable-id' | translate }}</th>
-            <th>{{ 'coding-validation-results.table.headers.status' | translate }}</th>
-            <th>{{ 'coding-validation-results.table.headers.issues' | translate }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let result of validationResults.results" [class.missing]="result.status === 'MISSING'">
-            <td>{{result.combination.unit_key}}</td>
-            <td>{{result.combination.login_name}}</td>
-            <td>{{result.combination.person_group || ''}}</td>
-            <td>{{result.combination.login_code}}</td>
-            <td>{{result.combination.booklet_id}}</td>
-            <td>{{result.combination.variable_id}}</td>
-            <td>
-              <mat-chip [ngClass]="result.status === 'MISSING' ? 'status-missing' : 'status-present'">
-                <mat-icon>{{ result.status === 'MISSING' ? 'error_outline' : 'check_circle' }}</mat-icon>
-                {{ 'coding-validation-results.table.status.' + (result.status === 'MISSING' ? 'missing' : 'present') | translate }}
-              </mat-chip>
-            </td>
-            <td>{{result.issues?.join(' | ') || ''}}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Bottom pagination controls -->
-    <div class="fx-row-center-center fx-gap-10 pagination-controls" *ngIf="validationResults.totalPages > 1">
-      <button mat-button [disabled]="!hasPreviousPage" (click)="previousPage()">
-        <mat-icon>chevron_left</mat-icon>
-        {{ 'coding-validation-results.previous-page' | translate }}
-      </button>
-      <span class="pagination-info">
-        Seite {{currentPage}} von {{totalPages}}
-      </span>
-      <button mat-button [disabled]="!hasNextPage" (click)="nextPage()">
-        {{ 'coding-validation-results.next-page' | translate }}
-        <mat-icon>chevron_right</mat-icon>
-      </button>
-    </div>
   </div>
-
-</div>

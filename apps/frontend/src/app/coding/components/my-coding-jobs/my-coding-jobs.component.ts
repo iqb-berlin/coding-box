@@ -44,7 +44,7 @@ import { SelectionModel } from '@angular/cdk/collections';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatIconButton } from '@angular/material/button';
-import { DatePipe, NgClass, NgFor } from '@angular/common';
+import { DatePipe, NgClass } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import {
   debounceTime, distinctUntilChanged, forkJoin, Subject, Subscription
@@ -71,7 +71,6 @@ import {
     FormsModule,
     DatePipe,
     NgClass,
-    NgFor,
     MatIcon,
     MatHeaderCell,
     MatCell,

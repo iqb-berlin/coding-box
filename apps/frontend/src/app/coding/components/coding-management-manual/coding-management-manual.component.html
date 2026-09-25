@@ -3,57 +3,62 @@
     class="manual-coding-tabs"
     [selectedIndex]="selectedManualTabIndex"
     (selectedIndexChange)="onManualTabChanged($event)"
-  >
-    <mat-tab
-      *ngFor="let tab of visibleManualCodingTabs"
-      [label]="getManualTabLabel(tab)"
-    ></mat-tab>
+    >
+    @for (tab of visibleManualCodingTabs; track tab) {
+      <mat-tab
+        [label]="getManualTabLabel(tab)"
+      ></mat-tab>
+    }
   </mat-tab-group>
 
-  <div
-    *ngIf="
-      validationProgress &&
-      (validationProgress.status === 'loading' ||
-        validationProgress.status === 'processing')
-    "
-    class="fx-column-start-start fx-gap-10 validation-progress"
-  >
-    <div class="statistics-card manual-planning-card">
-      <h2 class="section-title">Validierung läuft</h2>
-      <p class="section-description">
-        {{ validationProgress.message }}
-      </p>
-      <hr />
-      <div class="progress-container">
-        <mat-progress-bar
-          mode="determinate"
-          [value]="validationProgress.progress"
-        ></mat-progress-bar>
-        <p class="progress-text">{{ validationProgress.progress }}%</p>
+  @if (
+    validationProgress &&
+    (validationProgress.status === 'loading' ||
+    validationProgress.status === 'processing')
+    ) {
+    <div
+      class="fx-column-start-start fx-gap-10 validation-progress"
+      >
+      <div class="statistics-card manual-planning-card">
+        <h2 class="section-title">Validierung läuft</h2>
+        <p class="section-description">
+          {{ validationProgress.message }}
+        </p>
+        <hr />
+        <div class="progress-container">
+          <mat-progress-bar
+            mode="determinate"
+            [value]="validationProgress.progress"
+          ></mat-progress-bar>
+          <p class="progress-text">{{ validationProgress.progress }}%</p>
+        </div>
+        <p class="progress-note">
+          Sie können andere Aufgaben erledigen, während die Validierung im
+          Hintergrund läuft.
+        </p>
       </div>
-      <p class="progress-note">
-        Sie können andere Aufgaben erledigen, während die Validierung im
-        Hintergrund läuft.
-      </p>
     </div>
-  </div>
+  }
 
-  <div
-    *ngIf="validationProgress && validationProgress.status === 'error'"
-    class="fx-column-start-start fx-gap-10 validation-error"
-  >
-    <div class="statistics-card error-card">
-      <h2 class="section-title">Fehler bei der Validierung</h2>
-      <p class="section-description">
-        {{ validationProgress.message }}
-      </p>
-      <p *ngIf="validationProgress.error" class="error-details">
-        {{ validationProgress.error }}
-      </p>
-      <hr />
-      <div class="error-actions"></div>
+  @if (validationProgress && validationProgress.status === 'error') {
+    <div
+      class="fx-column-start-start fx-gap-10 validation-error"
+      >
+      <div class="statistics-card error-card">
+        <h2 class="section-title">Fehler bei der Validierung</h2>
+        <p class="section-description">
+          {{ validationProgress.message }}
+        </p>
+        @if (validationProgress.error) {
+          <p class="error-details">
+            {{ validationProgress.error }}
+          </p>
+        }
+        <hr />
+        <div class="error-actions"></div>
+      </div>
     </div>
-  </div>
+  }
 
   <div class="fx-row-space-between-stretch">
     <div class="statistics-card">
@@ -77,25 +82,26 @@
             [attr.aria-label]="
               'coding-management-manual.import.tooltip' | translate
             "
-          >
+            >
             <mat-icon>upload</mat-icon>
             {{ 'coding-management-manual.import.button' | translate }}
           </button>
-          <button
-            *ngIf="shouldShowManualRefreshButton()"
-            mat-stroked-button
-            color="primary"
-            type="button"
-            (click)="refreshManualCodingPlanning()"
-            [disabled]="isAnyPlanningDataLoading()"
+          @if (shouldShowManualRefreshButton()) {
+            <button
+              mat-stroked-button
+              color="primary"
+              type="button"
+              (click)="refreshManualCodingPlanning()"
+              [disabled]="isAnyPlanningDataLoading()"
             [attr.aria-label]="
               'coding-management-manual.buttons.refresh-manual-coding-aria'
                 | translate
             "
-          >
-            <mat-icon>refresh</mat-icon>
-            {{ 'coding-management-manual.buttons.refresh' | translate }}
-          </button>
+              >
+              <mat-icon>refresh</mat-icon>
+              {{ 'coding-management-manual.buttons.refresh' | translate }}
+            </button>
+          }
         </div>
       </div>
       <hr />
@@ -105,257 +111,262 @@
         <div class="planning-status-copy">
           <strong>{{ getPlanningStatusTitle() }}</strong>
           <span>{{ getPlanningStatusDescription() }}</span>
-          <div
-            *ngIf="hasManualCodeAvailabilityWarnings"
-            class="manual-code-availability-list"
-          >
-            <span
-              *ngFor="let warning of getVisibleManualCodeAvailabilityWarnings()"
-              class="manual-code-availability-chip"
-            >
-              {{ warning.unitName }} / {{ warning.variableId }}
-            </span>
-            <button
-              *ngIf="hasHiddenManualCodeAvailabilityWarnings"
-              mat-button
-              type="button"
-              class="manual-code-availability-toggle"
-              [attr.aria-expanded]="showAllManualCodeAvailabilityWarnings"
-              (click)="toggleManualCodeAvailabilityWarnings()"
-            >
-              <mat-icon>{{
-                showAllManualCodeAvailabilityWarnings
-                  ? 'expand_less'
-                  : 'expand_more'
-              }}</mat-icon>
-              {{
-                showAllManualCodeAvailabilityWarnings
+          @if (hasManualCodeAvailabilityWarnings) {
+            <div
+              class="manual-code-availability-list"
+              >
+              @for (warning of getVisibleManualCodeAvailabilityWarnings(); track warning) {
+                <span
+                  class="manual-code-availability-chip"
+                  >
+                  {{ warning.unitName }} / {{ warning.variableId }}
+                </span>
+              }
+              @if (hasHiddenManualCodeAvailabilityWarnings) {
+                <button
+                  mat-button
+                  type="button"
+                  class="manual-code-availability-toggle"
+                  [attr.aria-expanded]="showAllManualCodeAvailabilityWarnings"
+                  (click)="toggleManualCodeAvailabilityWarnings()"
+                  >
+                  <mat-icon>{{
+                    showAllManualCodeAvailabilityWarnings
+                    ? 'expand_less'
+                    : 'expand_more'
+                  }}</mat-icon>
+                  {{
+                  showAllManualCodeAvailabilityWarnings
                   ? ('coding-management-manual.buttons.show-fewer-manual-code-warnings'
-                    | translate)
+                  | translate)
                   : ('coding-management-manual.buttons.show-more-manual-code-warnings'
-                    | translate: {
-                      count: hiddenManualCodeAvailabilityWarningCount
-                    })
-              }}
-            </button>
+                  | translate: {
+                  count: hiddenManualCodeAvailabilityWarningCount
+                  })
+                  }}
+                </button>
+              }
+            </div>
+          }
+        </div>
+      </div>
+
+      @if (hasCodingFreshnessWarnings) {
+        <div class="manual-freshness-banner">
+          <mat-icon>warning</mat-icon>
+          <div class="manual-freshness-copy">
+            <strong>{{ manualCodingFreshnessPanelTitle }}</strong>
+            <span>{{ manualCodingFreshnessSummaryText }}</span>
+            <span class="manual-freshness-help">{{
+              manualCodingFreshnessExplanationText
+            }}</span>
+            <div class="manual-freshness-chip-row">
+              @for (item of codingFreshnessWarnings; track item) {
+                <span
+                  class="manual-freshness-chip"
+                  >
+                  {{ getManualFreshnessChipLabel(item) }}
+                </span>
+              }
+            </div>
           </div>
         </div>
-      </div>
+      }
 
-      <div *ngIf="hasCodingFreshnessWarnings" class="manual-freshness-banner">
-        <mat-icon>warning</mat-icon>
-        <div class="manual-freshness-copy">
-          <strong>{{ manualCodingFreshnessPanelTitle }}</strong>
-          <span>{{ manualCodingFreshnessSummaryText }}</span>
-          <span class="manual-freshness-help">{{
-            manualCodingFreshnessExplanationText
-          }}</span>
-          <div class="manual-freshness-chip-row">
-            <span
-              *ngFor="let item of codingFreshnessWarnings"
-              class="manual-freshness-chip"
-            >
-              {{ getManualFreshnessChipLabel(item) }}
-            </span>
-          </div>
-        </div>
-      </div>
+      @if (shouldShowPlanningOverview()) {
+        <div
+          class="planning-overview-grid"
+          aria-label="Übersicht zur manuellen Kodierungsplanung"
+          >
+          <div class="overview-metric">
+            <span class="metric-label">Offene Arbeitsfälle</span>
+            <span class="metric-value">{{ getOpenCodingCases() }}</span>
+            <span class="metric-hint"
+              >effektive Kodierfälle nach Aggregation</span
+              >
+              @if (getManualCaseScopeSummaryText()) {
+                <span
+                  class="metric-explainer"
+                  >
+                  {{ getManualCaseScopeSummaryText() }}
+                </span>
+              }
+            </div>
+            <div class="overview-metric">
+              <span class="metric-label">Für neue Jobs verfügbar</span>
+              <span class="metric-value">{{ getAvailableCasesForNewJobs() }}</span>
+              <span class="metric-hint">
+                @if (
+                  getUnavailableCasesForNewJobs() > 0) {
+                  {{ getUnavailableCasesForNewJobs() }} Arbeitsfälle reserviert oder
+                  verteilt
+                } @else {
+                  aus aktueller Variablenauswahl
+                }
+              </span>
+            </div>
+            <div class="overview-metric">
+              <span class="metric-label">Variablenabdeckung</span>
+              <span class="metric-value"
+                >{{ getVariableCoveragePercentage() | number: '1.0-0' }}%</span
+                >
+                <span class="metric-hint"
+                  >{{ variableCoverageOverview?.missingVariables || 0 }} fehlend</span
+                  >
+                </div>
+                <div class="overview-metric">
+                  <span class="metric-label">In Jobs verteilt</span>
+                  <span class="metric-value">{{
+                    caseCoverageOverview?.effectiveCasesInJobs || 0
+                  }}</span>
+                  <span class="metric-hint"
+                    >{{
+                    caseCoverageOverview?.effectiveUnassignedCases || 0
+                    }}
+                    Arbeitsfälle nicht zugewiesen</span
+                    >
+                  </div>
+                  <div class="overview-metric">
+                    <span class="metric-label">Ergebnisse angewendet</span>
+                    <span class="metric-value"
+                      >{{ getAppliedResultsPercentage() | number: '1.0-0' }}%</span
+                      >
+                      <span class="metric-hint"
+                        >{{ appliedResultsOverview?.remainingResponses || 0 }} Arbeitsfälle
+                        verbleibend</span
+                        >
+                      </div>
+                    </div>
+                  }
 
-      <div
-        *ngIf="shouldShowPlanningOverview()"
-        class="planning-overview-grid"
-        aria-label="Übersicht zur manuellen Kodierungsplanung"
-      >
-        <div class="overview-metric">
-          <span class="metric-label">Offene Arbeitsfälle</span>
-          <span class="metric-value">{{ getOpenCodingCases() }}</span>
-          <span class="metric-hint"
-            >effektive Kodierfälle nach Aggregation</span
-          >
-          <span
-            *ngIf="getManualCaseScopeSummaryText()"
-            class="metric-explainer"
-          >
-            {{ getManualCaseScopeSummaryText() }}
-          </span>
-        </div>
-        <div class="overview-metric">
-          <span class="metric-label">Für neue Jobs verfügbar</span>
-          <span class="metric-value">{{ getAvailableCasesForNewJobs() }}</span>
-          <span class="metric-hint">
-            <ng-container
-              *ngIf="
-                getUnavailableCasesForNewJobs() > 0;
-                else allCasesAvailable
-              "
-            >
-              {{ getUnavailableCasesForNewJobs() }} Arbeitsfälle reserviert oder
-              verteilt
-            </ng-container>
-            <ng-template #allCasesAvailable
-              >aus aktueller Variablenauswahl</ng-template
-            >
-          </span>
-        </div>
-        <div class="overview-metric">
-          <span class="metric-label">Variablenabdeckung</span>
-          <span class="metric-value"
-            >{{ getVariableCoveragePercentage() | number: '1.0-0' }}%</span
-          >
-          <span class="metric-hint"
-            >{{ variableCoverageOverview?.missingVariables || 0 }} fehlend</span
-          >
-        </div>
-        <div class="overview-metric">
-          <span class="metric-label">In Jobs verteilt</span>
-          <span class="metric-value">{{
-            caseCoverageOverview?.effectiveCasesInJobs || 0
-          }}</span>
-          <span class="metric-hint"
-            >{{
-              caseCoverageOverview?.effectiveUnassignedCases || 0
-            }}
-            Arbeitsfälle nicht zugewiesen</span
-          >
-        </div>
-        <div class="overview-metric">
-          <span class="metric-label">Ergebnisse angewendet</span>
-          <span class="metric-value"
-            >{{ getAppliedResultsPercentage() | number: '1.0-0' }}%</span
-          >
-          <span class="metric-hint"
-            >{{ appliedResultsOverview?.remainingResponses || 0 }} Arbeitsfälle
-            verbleibend</span
-          >
-        </div>
-      </div>
+                  @if (isManualTab('planning')) {
+                    <div
+                      class="planning-next-step"
+                      [ngClass]="getPlanningStatusClass()"
+                      >
+                      <mat-icon>{{ getPlanningNextStepIcon() }}</mat-icon>
+                      <div class="next-step-copy">
+                        <strong>{{ getPlanningNextStepTitle() }}</strong>
+                        <span>{{ getPlanningNextStepDescription() }}</span>
+                      </div>
+                      <button
+                        mat-stroked-button
+                        color="primary"
+                        type="button"
+                        (click)="performPlanningNextStep()"
+                        >
+                        {{ getPlanningNextStepActionLabel() }}
+                      </button>
+                    </div>
+                  }
 
-      <div
-        *ngIf="isManualTab('planning')"
-        class="planning-next-step"
-        [ngClass]="getPlanningStatusClass()"
-      >
-        <mat-icon>{{ getPlanningNextStepIcon() }}</mat-icon>
-        <div class="next-step-copy">
-          <strong>{{ getPlanningNextStepTitle() }}</strong>
-          <span>{{ getPlanningNextStepDescription() }}</span>
-        </div>
-        <button
-          mat-stroked-button
-          color="primary"
-          type="button"
-          (click)="performPlanningNextStep()"
-        >
-          {{ getPlanningNextStepActionLabel() }}
-        </button>
-      </div>
-
-      <!-- Aggregation Configuration and Actions -->
-      <div
-        *ngIf="isManualTab('preparation')"
-        id="manual-preparation"
-        class="manual-coding-sections-container"
-      >
-        <div class="aggregation-config">
-          <h3
-            class="subsection-title"
+                  <!-- Aggregation Configuration and Actions -->
+                  @if (isManualTab('preparation')) {
+                    <div
+                      id="manual-preparation"
+                      class="manual-coding-sections-container"
+                      >
+                      <div class="aggregation-config">
+                        <h3
+                          class="subsection-title"
             [matTooltip]="
               responseAnalysis?.isCalculating
                 ? 'Analyse läuft'
                 : ''
             "
-          >
-            <mat-icon>settings</mat-icon>
-            {{
-              'coding-management-manual.duplicate-aggregation.config-title'
-                | translate
-            }}
-            <mat-icon
-              *ngIf="responseAnalysis?.isCalculating"
-              class="aggregation-lock-icon"
-              matTooltip="Analyse läuft"
-              >lock</mat-icon
-            >
-          </h3>
-          <p class="subsection-description">
-            {{
-              'coding-management-manual.duplicate-aggregation.config-description'
-                | translate
-            }}
-          </p>
-          <div class="analysis-summary">
-            <div class="analysis-card">
-              <div class="analysis-details">
-                <div class="config-grid">
-                  <div class="settings-control threshold-control">
-                    <mat-form-field
-                      appearance="outline"
-                      class="density-compact"
-                    >
-                      <mat-label>{{
-                        'coding-management-manual.duplicate-aggregation.threshold-label'
-                          | translate
-                      }}</mat-label>
-                      <input
-                        matInput
-                        type="number"
-                        [(ngModel)]="duplicateAggregationThreshold"
-                        (ngModelChange)="onThresholdChanged($event)"
-                        min="2"
-                        max="100"
-                        step="1"
-                        [disabled]="!!responseAnalysis?.isCalculating"
-                      />
-                    </mat-form-field>
-                    <div class="threshold-help">
-                      <small>
-                        Niedriger = weniger Kodierfälle, mehr automatische
-                        Übertragung. Höher = mehr Einzelfälle.
-                      </small>
-                      <small>
-                        Änderungen gelten für neue Analysen und neu erstellte
-                        Kodierjobs. Bestehende Kodierjobs behalten ihre beim
-                        Erstellen gespeicherten Aggregationseinstellungen.
-                      </small>
-                    </div>
-
-                    <div
-                      class="saving-indicator"
-                      *ngIf="isApplyingDuplicateAggregation"
-                    >
-                      <mat-spinner diameter="20"></mat-spinner>
-                      <span>Speichern...</span>
-                    </div>
-                  </div>
-                  <div class="matching-section">
-                    <div class="settings-label">
-                      <mat-icon class="label-icon">compare_arrows</mat-icon>
-                      {{
-                        'coding-management-manual.response-matching.title'
-                          | translate
-                      }}
-                      <span
-                        *ngIf="isLoadingMatchingMode || isSavingMatchingMode"
-                        class="loading-indicator"
-                      >
-                        <mat-spinner diameter="14"></mat-spinner>
-                      </span>
-                    </div>
-
-                    <div class="settings-control matching-control">
-                      <div class="aggregation-mode-control">
-                        <span
-                          class="mode-option"
-                          [class.active]="!isDuplicateAggregationActive"
-                        >
+                          >
+                          <mat-icon>settings</mat-icon>
                           {{
-                            'coding-management-manual.response-matching.no-aggregation-mode'
-                              | translate
+                          'coding-management-manual.duplicate-aggregation.config-title'
+                          | translate
                           }}
-                        </span>
-                        <mat-slide-toggle
-                          [checked]="isDuplicateAggregationActive"
-                          (change)="onAggregationModeChanged($event.checked)"
+                          @if (responseAnalysis?.isCalculating) {
+                            <mat-icon
+                              class="aggregation-lock-icon"
+                              matTooltip="Analyse läuft"
+                              >lock</mat-icon
+                              >
+                            }
+                          </h3>
+                          <p class="subsection-description">
+                            {{
+                            'coding-management-manual.duplicate-aggregation.config-description'
+                            | translate
+                            }}
+                          </p>
+                          <div class="analysis-summary">
+                            <div class="analysis-card">
+                              <div class="analysis-details">
+                                <div class="config-grid">
+                                  <div class="settings-control threshold-control">
+                                    <mat-form-field
+                                      appearance="outline"
+                                      class="density-compact"
+                                      >
+                                      <mat-label>{{
+                                        'coding-management-manual.duplicate-aggregation.threshold-label'
+                                        | translate
+                                      }}</mat-label>
+                                      <input
+                                        matInput
+                                        type="number"
+                                        [(ngModel)]="duplicateAggregationThreshold"
+                                        (ngModelChange)="onThresholdChanged($event)"
+                                        min="2"
+                                        max="100"
+                                        step="1"
+                                        [disabled]="!!responseAnalysis?.isCalculating"
+                                        />
+                                    </mat-form-field>
+                                    <div class="threshold-help">
+                                      <small>
+                                        Niedriger = weniger Kodierfälle, mehr automatische
+                                        Übertragung. Höher = mehr Einzelfälle.
+                                      </small>
+                                      <small>
+                                        Änderungen gelten für neue Analysen und neu erstellte
+                                        Kodierjobs. Bestehende Kodierjobs behalten ihre beim
+                                        Erstellen gespeicherten Aggregationseinstellungen.
+                                      </small>
+                                    </div>
+                                    @if (isApplyingDuplicateAggregation) {
+                                      <div
+                                        class="saving-indicator"
+                                        >
+                                        <mat-spinner diameter="20"></mat-spinner>
+                                        <span>Speichern...</span>
+                                      </div>
+                                    }
+                                  </div>
+                                  <div class="matching-section">
+                                    <div class="settings-label">
+                                      <mat-icon class="label-icon">compare_arrows</mat-icon>
+                                      {{
+                                      'coding-management-manual.response-matching.title'
+                                      | translate
+                                      }}
+                                      @if (isLoadingMatchingMode || isSavingMatchingMode) {
+                                        <span
+                                          class="loading-indicator"
+                                          >
+                                          <mat-spinner diameter="14"></mat-spinner>
+                                        </span>
+                                      }
+                                    </div>
+                                    <div class="settings-control matching-control">
+                                      <div class="aggregation-mode-control">
+                                        <span
+                                          class="mode-option"
+                                          [class.active]="!isDuplicateAggregationActive"
+                                          >
+                                          {{
+                                          'coding-management-manual.response-matching.no-aggregation-mode'
+                                          | translate
+                                          }}
+                                        </span>
+                                        <mat-slide-toggle
+                                          [checked]="isDuplicateAggregationActive"
+                                          (change)="onAggregationModeChanged($event.checked)"
                           [disabled]="
                             isLoadingMatchingMode ||
                             isSavingMatchingMode ||
@@ -363,17 +374,16 @@
                             isLoadingResponseAnalysis ||
                             responseAnalysis?.isCalculating
                           "
-                          color="primary"
-                        >
-                          {{
-                            'coding-management-manual.response-matching.aggregate-responses'
-                              | translate
-                          }}
-                        </mat-slide-toggle>
-                      </div>
-
-                      <div class="checkbox-group">
-                        <mat-checkbox
+                                          color="primary"
+                                          >
+                                          {{
+                                          'coding-management-manual.response-matching.aggregate-responses'
+                                          | translate
+                                          }}
+                                        </mat-slide-toggle>
+                                      </div>
+                                      <div class="checkbox-group">
+                                        <mat-checkbox
                           [checked]="
                             hasMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)
                           "
@@ -385,15 +395,14 @@
                             isSavingMatchingMode ||
                             isApplyingDuplicateAggregation
                           "
-                          color="primary"
-                        >
-                          {{
-                            'coding-management-manual.response-matching.ignore-case'
-                              | translate
-                          }}
-                        </mat-checkbox>
-
-                        <mat-checkbox
+                                          color="primary"
+                                          >
+                                          {{
+                                          'coding-management-manual.response-matching.ignore-case'
+                                          | translate
+                                          }}
+                                        </mat-checkbox>
+                                        <mat-checkbox
                           [checked]="
                             hasMatchingFlag(
                               ResponseMatchingFlag.IGNORE_WHITESPACE
@@ -409,45 +418,46 @@
                             isSavingMatchingMode ||
                             isApplyingDuplicateAggregation
                           "
-                          color="primary"
-                        >
-                          {{
-                            'coding-management-manual.response-matching.ignore-whitespace'
-                              | translate
-                          }}
-                        </mat-checkbox>
-                      </div>
-
-                      <div class="matching-actions">
-                        <span
-                          class="matching-state"
-                          *ngIf="hasPendingAggregationOptionsWithoutAggregation()"
-                        >
-                          <mat-icon>pending_actions</mat-icon>
-                          {{
-                            'coding-management-manual.response-matching.options-pending'
-                              | translate
-                          }}
-                        </span>
-                        <span
-                          class="matching-state warning"
-                          *ngIf="hasUnsavedResponseMatchingChanges()"
-                        >
-                          <mat-icon>edit</mat-icon>
-                          {{
-                            'coding-management-manual.response-matching.pending-changes'
-                              | translate
-                          }}
-                        </span>
-                        <button
-                          *ngIf="
-                            isDuplicateAggregationActive &&
-                            hasUnsavedResponseMatchingChanges()
-                          "
-                          mat-stroked-button
-                          color="primary"
-                          type="button"
-                          (click)="restartAnalysis()"
+                                          color="primary"
+                                          >
+                                          {{
+                                          'coding-management-manual.response-matching.ignore-whitespace'
+                                          | translate
+                                          }}
+                                        </mat-checkbox>
+                                      </div>
+                                      <div class="matching-actions">
+                                        @if (hasPendingAggregationOptionsWithoutAggregation()) {
+                                          <span
+                                            class="matching-state"
+                                            >
+                                            <mat-icon>pending_actions</mat-icon>
+                                            {{
+                                            'coding-management-manual.response-matching.options-pending'
+                                            | translate
+                                            }}
+                                          </span>
+                                        }
+                                        @if (hasUnsavedResponseMatchingChanges()) {
+                                          <span
+                                            class="matching-state warning"
+                                            >
+                                            <mat-icon>edit</mat-icon>
+                                            {{
+                                            'coding-management-manual.response-matching.pending-changes'
+                                            | translate
+                                            }}
+                                          </span>
+                                        }
+                                        @if (
+                                          isDuplicateAggregationActive &&
+                                          hasUnsavedResponseMatchingChanges()
+                                          ) {
+                                          <button
+                                            mat-stroked-button
+                                            color="primary"
+                                            type="button"
+                                            (click)="restartAnalysis()"
                           [disabled]="
                             isLoadingMatchingMode ||
                             isSavingMatchingMode ||
@@ -455,527 +465,547 @@
                             isLoadingResponseAnalysis ||
                             responseAnalysis?.isCalculating
                           "
-                        >
-                          <mat-icon>autorenew</mat-icon>
-                          {{
-                            'coding-management-manual.response-matching.apply-options'
-                              | translate
-                          }}
-                        </button>
+                                            >
+                                            <mat-icon>autorenew</mat-icon>
+                                            {{
+                                            'coding-management-manual.response-matching.apply-options'
+                                            | translate
+                                            }}
+                                          </button>
+                                        }
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            @if (responseAnalysis?.aggregationSummary; as aggregation) {
+                              <div
+                                class="aggregation-impact"
+                                >
+                                <mat-icon>insights</mat-icon>
+                                <div>
+                                  <strong>
+                                    {{
+                                    aggregation.aggregationActive
+                                    ? 'Aggregation aktiv'
+                                    : 'Aggregation nicht aktiv'
+                                    }}
+                                  </strong>
+                                  <span>
+                                    {{
+                                    'coding-management-manual.coding-progress.analysis-aggregation-note'
+                                    | translate
+                                    : {
+                                    rawCases: aggregation.rawCases,
+                                    effectiveCases: aggregation.effectiveCases
+                                  }
+                                  }}
+                                  @if (aggregation.collapsedCases > 0) {
+                                    {{
+                                    'coding-management-manual.coding-progress.analysis-aggregation-savings'
+                                    | translate
+                                    : {
+                                    collapsedCases: aggregation.collapsedCases
+                                  }
+                                  }}
+                                }
+                              </span>
+                            </div>
+                          </div>
+                        }
+                        @if (
+                          isResponseAnalysisOutdated() ||
+                          hasResponseAnalysisRestScopeDifference()
+                          ) {
+                          <div
+                            class="analysis-stale-note"
+                            >
+                            @if (responseAnalysis?.aggregationSummary; as aggregation) {
+                              <mat-icon>warning</mat-icon>
+                              @if (isResponseAnalysisOutdated()) {
+                                <span>
+                                  {{
+                                  'coding-management-manual.response-analysis.outdated-note'
+                                  | translate
+                                  : {
+                                  analysisRawCases: aggregation.rawCases,
+                                  referenceRawCases:
+                                  getResponseAnalysisReferenceRawCases()
+                                }
+                                }}
+                              </span>
+                            } @else {
+                              <span>
+                                {{
+                                'coding-management-manual.response-analysis.rest-scope-note'
+                                | translate
+                                : {
+                                analysisRawCases: aggregation.rawCases,
+                                currentRawManualResponses:
+                                getCurrentRawManualResponses()
+                              }
+                              }}
+                            </span>
+                          }
+                        }
                       </div>
-                    </div>
+                    }
                   </div>
                 </div>
-              </div>
-            </div>
-
-            <div
-              class="aggregation-impact"
-              *ngIf="responseAnalysis?.aggregationSummary as aggregation"
-            >
-              <mat-icon>insights</mat-icon>
-              <div>
-                <strong>
-                  {{
-                    aggregation.aggregationActive
-                      ? 'Aggregation aktiv'
-                      : 'Aggregation nicht aktiv'
-                  }}
-                </strong>
-                <span>
-                  {{
-                    'coding-management-manual.coding-progress.analysis-aggregation-note'
-                      | translate
-                        : {
-                            rawCases: aggregation.rawCases,
-                            effectiveCases: aggregation.effectiveCases
-                          }
-                  }}
-                  <ng-container *ngIf="aggregation.collapsedCases > 0">
-                    {{
-                      'coding-management-manual.coding-progress.analysis-aggregation-savings'
-                        | translate
-                          : {
-                              collapsedCases: aggregation.collapsedCases
-                            }
-                    }}
-                  </ng-container>
-                </span>
-              </div>
-            </div>
-
-            <div
-              class="analysis-stale-note"
-              *ngIf="
-                isResponseAnalysisOutdated() ||
-                hasResponseAnalysisRestScopeDifference()
-              "
-            >
-              <ng-container
-                *ngIf="responseAnalysis?.aggregationSummary as aggregation"
-              >
-                <mat-icon>warning</mat-icon>
-                <span *ngIf="isResponseAnalysisOutdated(); else restScopeDifference">
-                  {{
-                    'coding-management-manual.response-analysis.outdated-note'
-                      | translate
-                        : {
-                            analysisRawCases: aggregation.rawCases,
-                            referenceRawCases:
-                              getResponseAnalysisReferenceRawCases()
-                          }
-                  }}
-                </span>
-                <ng-template #restScopeDifference>
-                  <span>
-                    {{
-                      'coding-management-manual.response-analysis.rest-scope-note'
-                        | translate
-                          : {
-                              analysisRawCases: aggregation.rawCases,
-                              currentRawManualResponses:
-                                getCurrentRawManualResponses()
-                            }
-                    }}
-                  </span>
-                </ng-template>
-              </ng-container>
-            </div>
-          </div>
-        </div>
-
-        <!-- Response Analysis Section -->
-        <div
-          class="response-analysis-section statistics-section"
-          [class.blurred-content]="isLoadingResponseAnalysis"
-        >
-          <h3 class="subsection-title">
-            <mat-icon>analytics</mat-icon>
-            {{ 'coding-management-manual.response-analysis.title' | translate }}
-
-            <button
-              mat-icon-button
-              (click)="restartAnalysis()"
-              matTooltip="Antwortanalyse neu berechnen"
+                <!-- Response Analysis Section -->
+                <div
+                  class="response-analysis-section statistics-section"
+                  [class.blurred-content]="isLoadingResponseAnalysis"
+                  >
+                  <h3 class="subsection-title">
+                    <mat-icon>analytics</mat-icon>
+                    {{ 'coding-management-manual.response-analysis.title' | translate }}
+                    <button
+                      mat-icon-button
+                      (click)="restartAnalysis()"
+                      matTooltip="Antwortanalyse neu berechnen"
               [disabled]="
                 isLoadingResponseAnalysis || responseAnalysis?.isCalculating
               "
-            >
-              <mat-icon>autorenew</mat-icon>
-            </button>
-            <span
-              *ngIf="
-                isLoadingResponseAnalysis || responseAnalysis?.isCalculating
-              "
-              class="loading-indicator"
-            >
-              <mat-spinner diameter="16"></mat-spinner>
-              <span
-                *ngIf="responseAnalysis?.isCalculating"
-                class="analysis-progress-text"
-              >
-                Berechnung läuft...
-                <span *ngIf="responseAnalysis?.progress != null"
-                  >({{ responseAnalysis?.progress }}%)</span
-                >
-              </span>
-            </span>
-          </h3>
-          <p class="subsection-description">
-            {{
-              'coding-management-manual.response-analysis.description'
-                | translate
-            }}
-          </p>
-
-          <div *ngIf="responseAnalysis" class="analysis-summary">
-            <!-- Empty Responses Summary -->
-            <div
-              *ngIf="!responseAnalysis.isCalculating"
-              class="analysis-card"
-              [class.has-issues]="hasUncodedEmptyResponses()"
-            >
-              <button
-                type="button"
-                class="analysis-header"
-                (click)="toggleEmptyResponsesDetails()"
-                [attr.aria-expanded]="showEmptyResponsesDetails"
-                aria-controls="empty-responses-details"
-              >
-                <div class="analysis-icon-title">
-                  <mat-icon
-                    [class.warning-icon]="hasUncodedEmptyResponses()"
+                      >
+                      <mat-icon>autorenew</mat-icon>
+                    </button>
+                    @if (
+                      isLoadingResponseAnalysis || responseAnalysis?.isCalculating
+                      ) {
+                      <span
+                        class="loading-indicator"
+                        >
+                        <mat-spinner diameter="16"></mat-spinner>
+                        @if (responseAnalysis?.isCalculating) {
+                          <span
+                            class="analysis-progress-text"
+                            >
+                            Berechnung läuft...
+                            @if (responseAnalysis?.progress != null) {
+                              <span
+                                >({{ responseAnalysis?.progress }}%)</span
+                                >
+                              }
+                            </span>
+                          }
+                        </span>
+                      }
+                    </h3>
+                    <p class="subsection-description">
+                      {{
+                      'coding-management-manual.response-analysis.description'
+                      | translate
+                      }}
+                    </p>
+                    @if (responseAnalysis) {
+                      <div class="analysis-summary">
+                        <!-- Empty Responses Summary -->
+                        @if (!responseAnalysis.isCalculating) {
+                          <div
+                            class="analysis-card"
+                            [class.has-issues]="hasUncodedEmptyResponses()"
+                            >
+                            <button
+                              type="button"
+                              class="analysis-header"
+                              (click)="toggleEmptyResponsesDetails()"
+                              [attr.aria-expanded]="showEmptyResponsesDetails"
+                              aria-controls="empty-responses-details"
+                              >
+                              <div class="analysis-icon-title">
+                                <mat-icon
+                                  [class.warning-icon]="hasUncodedEmptyResponses()"
                     [class.success-icon]="
                       !hasUncodedEmptyResponses() &&
                       responseAnalysis.emptyResponses.total > 0
                     "
-                  >
-                    {{
-                      hasUncodedEmptyResponses() ? 'warning' : 'check_circle'
-                    }}
-                  </mat-icon>
-                  <div class="analysis-title-content">
-                    <span class="analysis-title">{{
-                      'coding-management-manual.response-analysis.empty-responses'
-                        | translate
-                    }}</span>
-                    <span
-                      class="analysis-count"
-                      [class.warning-count]="hasUncodedEmptyResponses()"
+                                  >
+                                  {{
+                                  hasUncodedEmptyResponses() ? 'warning' : 'check_circle'
+                                  }}
+                                </mat-icon>
+                                <div class="analysis-title-content">
+                                  <span class="analysis-title">{{
+                                    'coding-management-manual.response-analysis.empty-responses'
+                                    | translate
+                                  }}</span>
+                                  <span
+                                    class="analysis-count"
+                                    [class.warning-count]="hasUncodedEmptyResponses()"
                       [class.success-count]="
                         !hasUncodedEmptyResponses() &&
                         responseAnalysis.emptyResponses.total > 0
                       "
-                    >
-                      {{ responseAnalysis.emptyResponses.total }}
-                      <span
-                        *ngIf="responseAnalysis.emptyResponses.total > 0"
-                        class="count-detail"
-                      >
-                        ({{ getUncodedCount() }}
-                        {{
-                          'coding-management-manual.response-analysis.open'
-                            | translate
-                        }})
-                      </span>
-                    </span>
-                  </div>
-                </div>
-                <mat-icon class="expand-icon">{{
-                  showEmptyResponsesDetails ? 'expand_less' : 'expand_more'
-                }}</mat-icon>
-              </button>
-              <div
-                *ngIf="
-                  showEmptyResponsesDetails &&
-                  responseAnalysis.emptyResponses.total > 0
-                "
-                class="analysis-details"
-                id="empty-responses-details"
-              >
-                <div class="table-responsive">
-                  <table class="analysis-table">
-                    <thead>
-                      <tr>
-                        <th>
-                          {{
-                            'coding-management-manual.response-analysis.table.unit'
-                              | translate
-                          }}
-                        </th>
-                        <th>
-                          {{
-                            'coding-management-manual.response-analysis.table.variable'
-                              | translate
-                          }}
-                        </th>
-                        <th>
-                          {{
-                            'coding-management-manual.response-analysis.table.person'
-                              | translate
-                          }}
-                        </th>
-                        <th>
-                          {{
-                            'coding-management-manual.response-analysis.table.group'
-                              | translate
-                          }}
-                        </th>
-                        <th>
-                          {{
-                            'coding-management-manual.response-analysis.table.booklet'
-                              | translate
-                          }}
-                        </th>
-                        <th>
-                          {{
-                            'coding-management-manual.response-analysis.table.value'
-                              | translate
-                          }}
-                        </th>
-                        <th>
-                          {{
-                            'coding-management-manual.response-analysis.table.status'
-                              | translate
-                          }}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr
-                        *ngFor="
-                          let item of responseAnalysis.emptyResponses.items
-                        "
-                        [class.coded-row]="item.isCoded"
-                      >
-                        <td>{{ item.unitAlias || item.unitName }}</td>
-                        <td>{{ item.variableId }}</td>
-                        <td>
-                          {{ item.personLogin
-                          }}{{
-                            item.personCode ? ' (' + item.personCode + ')' : ''
-                          }}
-                        </td>
-                        <td>{{ item.personGroup }}</td>
-                        <td>{{ item.bookletName }}</td>
-                        <td class="value-cell">{{ item.value || '(leer)' }}</td>
-                        <td class="status-cell">
-                          <span *ngIf="item.isCoded" class="coded-badge">
-                            Kodiert (Code: {{ item.assignedCode }})
-                          </span>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                <mat-paginator
-                  [length]="responseAnalysis.emptyResponses.total"
-                  [pageSize]="emptyPageSize"
-                  [pageSizeOptions]="[5, 10, 25, 50, 100]"
-                  [pageIndex]="emptyPageIndex"
-                  (page)="onEmptyPageChange($event)"
-                  aria-label="Seite der leeren Antworten auswählen"
-                >
-                </mat-paginator>
-                <div class="analysis-actions">
-                  <button
-                    mat-stroked-button
-                    color="primary"
-                    (click)="onApplyEmptyResponseCoding()"
+                                    >
+                                    {{ responseAnalysis.emptyResponses.total }}
+                                    @if (responseAnalysis.emptyResponses.total > 0) {
+                                      <span
+                                        class="count-detail"
+                                        >
+                                        ({{ getUncodedCount() }}
+                                        {{
+                                        'coding-management-manual.response-analysis.open'
+                                        | translate
+                                        }})
+                                      </span>
+                                    }
+                                  </span>
+                                </div>
+                              </div>
+                              <mat-icon class="expand-icon">{{
+                                showEmptyResponsesDetails ? 'expand_less' : 'expand_more'
+                              }}</mat-icon>
+                            </button>
+                            @if (
+                              showEmptyResponsesDetails &&
+                              responseAnalysis.emptyResponses.total > 0
+                              ) {
+                              <div
+                                class="analysis-details"
+                                id="empty-responses-details"
+                                >
+                                <div class="table-responsive">
+                                  <table class="analysis-table">
+                                    <thead>
+                                      <tr>
+                                        <th>
+                                          {{
+                                          'coding-management-manual.response-analysis.table.unit'
+                                          | translate
+                                          }}
+                                        </th>
+                                        <th>
+                                          {{
+                                          'coding-management-manual.response-analysis.table.variable'
+                                          | translate
+                                          }}
+                                        </th>
+                                        <th>
+                                          {{
+                                          'coding-management-manual.response-analysis.table.person'
+                                          | translate
+                                          }}
+                                        </th>
+                                        <th>
+                                          {{
+                                          'coding-management-manual.response-analysis.table.group'
+                                          | translate
+                                          }}
+                                        </th>
+                                        <th>
+                                          {{
+                                          'coding-management-manual.response-analysis.table.booklet'
+                                          | translate
+                                          }}
+                                        </th>
+                                        <th>
+                                          {{
+                                          'coding-management-manual.response-analysis.table.value'
+                                          | translate
+                                          }}
+                                        </th>
+                                        <th>
+                                          {{
+                                          'coding-management-manual.response-analysis.table.status'
+                                          | translate
+                                          }}
+                                        </th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      @for (
+                                        item of responseAnalysis.emptyResponses.items
+                                        ; track
+                                        item) {
+                                        <tr
+                                          [class.coded-row]="item.isCoded"
+                                          >
+                                          <td>{{ item.unitAlias || item.unitName }}</td>
+                                          <td>{{ item.variableId }}</td>
+                                          <td>
+                                            {{ item.personLogin
+                                            }}{{
+                                            item.personCode ? ' (' + item.personCode + ')' : ''
+                                            }}
+                                          </td>
+                                          <td>{{ item.personGroup }}</td>
+                                          <td>{{ item.bookletName }}</td>
+                                          <td class="value-cell">{{ item.value || '(leer)' }}</td>
+                                          <td class="status-cell">
+                                            @if (item.isCoded) {
+                                              <span class="coded-badge">
+                                                Kodiert (Code: {{ item.assignedCode }})
+                                              </span>
+                                            }
+                                          </td>
+                                        </tr>
+                                      }
+                                    </tbody>
+                                  </table>
+                                </div>
+                                <mat-paginator
+                                  [length]="responseAnalysis.emptyResponses.total"
+                                  [pageSize]="emptyPageSize"
+                                  [pageSizeOptions]="[5, 10, 25, 50, 100]"
+                                  [pageIndex]="emptyPageIndex"
+                                  (page)="onEmptyPageChange($event)"
+                                  aria-label="Seite der leeren Antworten auswählen"
+                                  >
+                                </mat-paginator>
+                                <div class="analysis-actions">
+                                  <button
+                                    mat-stroked-button
+                                    color="primary"
+                                    (click)="onApplyEmptyResponseCoding()"
                     [disabled]="
                       isApplyingEmptyCoding ||
                       responseAnalysis.isCalculating ||
                       !hasUncodedEmptyResponses() ||
                       !emptyResponseMissing
                     "
-                    [matTooltip]="getApplyEmptyResponseCodingTooltip()"
-                  >
-                    <mat-icon *ngIf="!isApplyingEmptyCoding">flash_on</mat-icon>
-                    <mat-spinner
-                      *ngIf="isApplyingEmptyCoding"
-                      diameter="20"
-                    ></mat-spinner>
-                    {{
-                      'coding-management-manual.response-analysis.apply-empty-coding-button'
-                        | translate
-                    }}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Duplicate Values Summary -->
-            <div
-              *ngIf="!responseAnalysis.isCalculating"
-              class="analysis-card"
-              [class.has-issues]="hasDuplicateFindingsWithoutAggregation"
-            >
-              <button
-                type="button"
-                class="analysis-header"
-                (click)="toggleDuplicateValuesDetails()"
-                [attr.aria-expanded]="showDuplicateValuesDetails"
-                aria-controls="duplicate-values-details"
-              >
-                <div class="analysis-icon-title">
-                  <mat-icon
+                                    [matTooltip]="getApplyEmptyResponseCodingTooltip()"
+                                    >
+                                    @if (!isApplyingEmptyCoding) {
+                                      <mat-icon>flash_on</mat-icon>
+                                    }
+                                    @if (isApplyingEmptyCoding) {
+                                      <mat-spinner
+                                        diameter="20"
+                                      ></mat-spinner>
+                                    }
+                                    {{
+                                    'coding-management-manual.response-analysis.apply-empty-coding-button'
+                                    | translate
+                                    }}
+                                  </button>
+                                </div>
+                              </div>
+                            }
+                          </div>
+                        }
+                        <!-- Duplicate Values Summary -->
+                        @if (!responseAnalysis.isCalculating) {
+                          <div
+                            class="analysis-card"
+                            [class.has-issues]="hasDuplicateFindingsWithoutAggregation"
+                            >
+                            <button
+                              type="button"
+                              class="analysis-header"
+                              (click)="toggleDuplicateValuesDetails()"
+                              [attr.aria-expanded]="showDuplicateValuesDetails"
+                              aria-controls="duplicate-values-details"
+                              >
+                              <div class="analysis-icon-title">
+                                <mat-icon
                     [class.warning-icon]="
                       hasDuplicateFindingsWithoutAggregation
                     "
-                  >
-                    {{
-                      responseAnalysis.duplicateValues.total > 0
-                        ? 'content_copy'
-                        : 'check_circle'
-                    }}
-                  </mat-icon>
-                  <div class="analysis-title-content">
-                    <span class="analysis-title">
-                      {{
-                        'coding-management-manual.response-analysis.duplicate-values'
-                          | translate
-                      }}
-                      <span
-                        *ngIf="
-                          responseAnalysis.duplicateValues.isAggregationApplied
-                        "
-                        class="aggregation-applied-badge"
-                      >
-                        <mat-icon>layers</mat-icon>
-                        {{
-                          'coding-management-manual.duplicate-aggregation.is-applied'
-                            | translate
-                        }}
-                      </span>
-                    </span>
-                    <span
-                      class="analysis-count"
+                                  >
+                                  {{
+                                  responseAnalysis.duplicateValues.total > 0
+                                  ? 'content_copy'
+                                  : 'check_circle'
+                                  }}
+                                </mat-icon>
+                                <div class="analysis-title-content">
+                                  <span class="analysis-title">
+                                    {{
+                                    'coding-management-manual.response-analysis.duplicate-values'
+                                    | translate
+                                    }}
+                                    @if (
+                                      responseAnalysis.duplicateValues.isAggregationApplied
+                                      ) {
+                                      <span
+                                        class="aggregation-applied-badge"
+                                        >
+                                        <mat-icon>layers</mat-icon>
+                                        {{
+                                        'coding-management-manual.duplicate-aggregation.is-applied'
+                                        | translate
+                                        }}
+                                      </span>
+                                    }
+                                  </span>
+                                  <span
+                                    class="analysis-count"
                       [class.warning-count]="
                         hasDuplicateFindingsWithoutAggregation
                       "
-                    >
-                      {{ responseAnalysis.duplicateValues.total }}
-                      {{
-                        'coding-management-manual.response-analysis.groups'
-                          | translate
-                      }}
-                      ({{ responseAnalysis.duplicateValues.totalResponses }}
-                      {{
-                        'coding-management-manual.response-analysis.responses'
-                          | translate
-                      }})
-                      <span *ngIf="responseAnalysisAggregationSavings > 0">
-                        - {{ responseAnalysisAggregationSavings }} Einsparung in
-                        dieser Analyse
-                      </span>
-                    </span>
-                    <span
-                      *ngIf="hasDuplicateFindingsWithoutAggregation"
-                      class="analysis-note aggregation-disabled-note"
-                    >
-                      <mat-icon>info</mat-icon>
-                      {{
-                        'coding-management-manual.response-analysis.duplicates-detected-no-aggregation'
-                          | translate
-                      }}
-                    </span>
-                  </div>
-                </div>
-                <mat-icon class="expand-icon">{{
-                  showDuplicateValuesDetails ? 'expand_less' : 'expand_more'
-                }}</mat-icon>
-              </button>
+                                    >
+                                    {{ responseAnalysis.duplicateValues.total }}
+                                    {{
+                                    'coding-management-manual.response-analysis.groups'
+                                    | translate
+                                    }}
+                                    ({{ responseAnalysis.duplicateValues.totalResponses }}
+                                    {{
+                                    'coding-management-manual.response-analysis.responses'
+                                    | translate
+                                    }})
+                                    @if (responseAnalysisAggregationSavings > 0) {
+                                      <span>
+                                        - {{ responseAnalysisAggregationSavings }} Einsparung in
+                                        dieser Analyse
+                                      </span>
+                                    }
+                                  </span>
+                                  @if (hasDuplicateFindingsWithoutAggregation) {
+                                    <span
+                                      class="analysis-note aggregation-disabled-note"
+                                      >
+                                      <mat-icon>info</mat-icon>
+                                      {{
+                                      'coding-management-manual.response-analysis.duplicates-detected-no-aggregation'
+                                      | translate
+                                      }}
+                                    </span>
+                                  }
+                                </div>
+                              </div>
+                              <mat-icon class="expand-icon">{{
+                                showDuplicateValuesDetails ? 'expand_less' : 'expand_more'
+                              }}</mat-icon>
+                            </button>
+                            @if (
+                              showDuplicateValuesDetails &&
+                              responseAnalysis.duplicateValues.total > 0
+                              ) {
+                              <div
+                                class="analysis-details"
+                                id="duplicate-values-details"
+                                >
+                                @for (group of responseAnalysis.duplicateValues.groups; track group) {
+                                  <div
+                                    class="duplicate-group"
+                                    >
+                                    <div class="duplicate-group-header">
+                                      <strong>{{ group.unitAlias || group.unitName }}</strong> /
+                                      {{ group.variableId }}
+                                      <span class="duplicate-value"
+                                        >"{{ group.normalizedValue | slice: 0 : 50
+                                        }}{{
+                                        group.normalizedValue.length > 50 ? '...' : ''
+                                        }}"</span
+                                        >
+                                        <span class="occurrence-count"
+                                          >({{ group.occurrences.length }}x)</span
+                                          >
+                                        </div>
+                                        <ul class="occurrence-list">
+                                          @for (occ of group.occurrences | slice: 0 : 5; track occ) {
+                                            <li>
+                                              {{ occ.personLogin
+                                              }}{{
+                                              occ.personCode ? ' (' + occ.personCode + ')' : ''
+                                              }}
+                                              - {{ occ.bookletName }}
+                                            </li>
+                                          }
+                                          @if (group.occurrences.length > 5) {
+                                            <li
+                                              class="more-occurrences"
+                                              >
+                                              +{{ group.occurrences.length - 5 }}
+                                              {{
+                                              'coding-management-manual.response-analysis.more'
+                                              | translate
+                                              }}
+                                            </li>
+                                          }
+                                        </ul>
+                                      </div>
+                                    }
+                                    <mat-paginator
+                                      [length]="responseAnalysis.duplicateValues.total"
+                                      [pageSize]="duplicatePageSize"
+                                      [pageSizeOptions]="[5, 10, 20, 50, 100]"
+                                      [pageIndex]="duplicatePageIndex"
+                                      (page)="onDuplicatePageChange($event)"
+                                      aria-label="Seite der Duplikatgruppen auswählen"
+                                      >
+                                    </mat-paginator>
+                                  </div>
+                                }
+                              </div>
+                            }
+                            <p class="analysis-timestamp">
+                              <mat-icon>schedule</mat-icon>
+                              {{
+                              'coding-management-manual.response-analysis.last-updated'
+                              | translate
+                              }}: {{ responseAnalysis.analysisTimestamp | date: 'medium' }}
+                            </p>
+                          </div>
+                        }
+                        @if (responseAnalysisError && !isLoadingResponseAnalysis) {
+                          <div
+                            class="no-analysis-data error-state"
+                            >
+                            <mat-icon>error</mat-icon>
+                            <span>{{ responseAnalysisError }}</span>
+                            <button mat-stroked-button color="warn" (click)="restartAnalysis()">
+                              <mat-icon>autorenew</mat-icon>
+                              Erneut versuchen
+                            </button>
+                          </div>
+                        }
+                        @if (
+                          !responseAnalysis &&
+                          !responseAnalysisError &&
+                          !isLoadingResponseAnalysis
+                          ) {
+                          <div
+                            class="no-analysis-data"
+                            >
+                            <mat-icon>info</mat-icon>
+                            <span>{{
+                              'coding-management-manual.response-analysis.no-data' | translate
+                            }}</span>
+                            <button
+                              mat-stroked-button
+                              color="primary"
+                              (click)="restartAnalysis()"
+                              >
+                              <mat-icon>autorenew</mat-icon>
+                              Analyse starten
+                            </button>
+                          </div>
+                        }
+                        <!-- Loading Overlay for Response Analysis -->
+                        @if (isLoadingResponseAnalysis) {
+                          <div class="loading-overlay">
+                            <div class="loading-content">
+                              <mat-spinner diameter="40"></mat-spinner>
+                              <div class="loading-text">
+                                {{
+                                'coding-management-manual.loading.response-analysis'
+                                | translate
+                                }}
+                              </div>
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
 
-              <div
-                *ngIf="
-                  showDuplicateValuesDetails &&
-                  responseAnalysis.duplicateValues.total > 0
-                "
-                class="analysis-details"
-                id="duplicate-values-details"
-              >
-                <div
-                  *ngFor="let group of responseAnalysis.duplicateValues.groups"
-                  class="duplicate-group"
-                >
-                  <div class="duplicate-group-header">
-                    <strong>{{ group.unitAlias || group.unitName }}</strong> /
-                    {{ group.variableId }}
-                    <span class="duplicate-value"
-                      >"{{ group.normalizedValue | slice: 0 : 50
-                      }}{{
-                        group.normalizedValue.length > 50 ? '...' : ''
-                      }}"</span
-                    >
-                    <span class="occurrence-count"
-                      >({{ group.occurrences.length }}x)</span
-                    >
-                  </div>
-                  <ul class="occurrence-list">
-                    <li *ngFor="let occ of group.occurrences | slice: 0 : 5">
-                      {{ occ.personLogin
-                      }}{{
-                        occ.personCode ? ' (' + occ.personCode + ')' : ''
-                      }}
-                      - {{ occ.bookletName }}
-                    </li>
-                    <li
-                      *ngIf="group.occurrences.length > 5"
-                      class="more-occurrences"
-                    >
-                      +{{ group.occurrences.length - 5 }}
-                      {{
-                        'coding-management-manual.response-analysis.more'
-                          | translate
-                      }}
-                    </li>
-                  </ul>
-                </div>
-
-                <mat-paginator
-                  [length]="responseAnalysis.duplicateValues.total"
-                  [pageSize]="duplicatePageSize"
-                  [pageSizeOptions]="[5, 10, 20, 50, 100]"
-                  [pageIndex]="duplicatePageIndex"
-                  (page)="onDuplicatePageChange($event)"
-                  aria-label="Seite der Duplikatgruppen auswählen"
-                >
-                </mat-paginator>
-              </div>
-            </div>
-
-            <p class="analysis-timestamp">
-              <mat-icon>schedule</mat-icon>
-              {{
-                'coding-management-manual.response-analysis.last-updated'
-                  | translate
-              }}: {{ responseAnalysis.analysisTimestamp | date: 'medium' }}
-            </p>
-          </div>
-
-          <div
-            *ngIf="responseAnalysisError && !isLoadingResponseAnalysis"
-            class="no-analysis-data error-state"
-          >
-            <mat-icon>error</mat-icon>
-            <span>{{ responseAnalysisError }}</span>
-            <button mat-stroked-button color="warn" (click)="restartAnalysis()">
-              <mat-icon>autorenew</mat-icon>
-              Erneut versuchen
-            </button>
-          </div>
-
-          <div
-            *ngIf="
-              !responseAnalysis &&
-              !responseAnalysisError &&
-              !isLoadingResponseAnalysis
-            "
-            class="no-analysis-data"
-          >
-            <mat-icon>info</mat-icon>
-            <span>{{
-              'coding-management-manual.response-analysis.no-data' | translate
-            }}</span>
-            <button
-              mat-stroked-button
-              color="primary"
-              (click)="restartAnalysis()"
-            >
-              <mat-icon>autorenew</mat-icon>
-              Analyse starten
-            </button>
-          </div>
-
-          <!-- Loading Overlay for Response Analysis -->
-          <div *ngIf="isLoadingResponseAnalysis" class="loading-overlay">
-            <div class="loading-content">
-              <mat-spinner diameter="40"></mat-spinner>
-              <div class="loading-text">
-                {{
-                  'coding-management-manual.loading.response-analysis'
-                    | translate
-                }}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="statistics-content">
-        <!-- Coding Progress Overview -->
-        <div
-          *ngIf="isManualTab('execution') && codingProgressOverview"
-          class="coding-progress-section statistics-section"
-          [class.blurred-content]="isLoadingCodingProgress"
-        >
-          <div class="statistics-card">
-            <h2 class="section-title section-title-with-action">
-              Kodierungsfortschritt
-              <button
-                mat-icon-button
-                (click)="showProgressInfo = !showProgressInfo"
+                  <div class="statistics-content">
+                    <!-- Coding Progress Overview -->
+                    @if (isManualTab('execution') && codingProgressOverview) {
+                      <div
+                        class="coding-progress-section statistics-section"
+                        [class.blurred-content]="isLoadingCodingProgress"
+                        >
+                        <div class="statistics-card">
+                          <h2 class="section-title section-title-with-action">
+                            Kodierungsfortschritt
+                            <button
+                              mat-icon-button
+                              (click)="showProgressInfo = !showProgressInfo"
                 [matTooltip]="
                   'coding-management-manual.coding-progress.info-tooltip'
                     | translate
@@ -984,223 +1014,234 @@
                   'coding-management-manual.coding-progress.info-tooltip'
                     | translate
                 "
-                class="section-info-button"
-              >
-                <mat-icon class="section-info-icon">info</mat-icon>
-              </button>
-            </h2>
-
-            <div *ngIf="showProgressInfo" class="info-alert progress-info">
-              <mat-icon class="info-alert-icon">school</mat-icon>
-              <div class="info-alert-content">
-                <strong>{{
-                  'coding-management-manual.coding-progress.info-total-title'
-                    | translate
-                }}</strong>
-                <span class="info-alert-text-spaced">{{
-                  'coding-management-manual.coding-progress.info-total-desc'
-                    | translate
-                }}</span>
-                <strong>{{
-                  'coding-management-manual.coding-progress.info-completed-title'
-                    | translate
-                }}</strong>
-                <span class="info-alert-text-spaced">{{
-                  'coding-management-manual.coding-progress.info-completed-desc'
-                    | translate
-                }}</span>
-                <strong>{{
-                  'coding-management-manual.coding-progress.info-aggregation-title'
-                    | translate
-                }}</strong>
-                <span>{{
-                  'coding-management-manual.coding-progress.info-aggregation-desc'
-                    | translate
-                }}</span>
-              </div>
-            </div>
-
-            <div class="coverage-stats">
-              <button
-                type="button"
-                class="stat-item stat-item-button"
-                (click)="showTotalDetails = !showTotalDetails"
-                [attr.aria-expanded]="showTotalDetails"
-                aria-controls="total-details"
-                matTooltip="Klicken, um die Zusammensetzung anzuzeigen"
-              >
-                <span class="stat-label"
-                  >Effektive Kodierfälle gesamt:
-                  <mat-icon class="stat-label-inline-icon">{{
-                    showTotalDetails ? 'expand_less' : 'expand_more'
-                  }}</mat-icon></span
-                >
-                <span class="stat-value stat-value-link">{{
-                  codingProgressOverview.totalCasesToCode
-                }}</span>
-              </button>
-              <div class="stat-item">
-                <span class="stat-label">Abgeschlossene Fälle:</span>
-                <span class="stat-value covered">{{
-                  codingProgressOverview.completedCases
-                }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Offene Arbeitsfälle:</span>
-                <span class="stat-value missing">{{
-                  codingProgressOverview.totalCasesToCode -
-                    codingProgressOverview.completedCases
-                }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Fertigstellungsrate:</span>
-                <span class="stat-value percentage"
-                  >{{
-                    codingProgressOverview.completionPercentage
-                      | number: '1.1-1'
-                  }}%</span
-                >
-              </div>
-            </div>
-
-            <div
-              *ngIf="showTotalDetails"
-              id="total-details"
-              class="total-details-container"
-            >
-              <h4 class="details-title">Zusammensetzung nach Variablen</h4>
-              <table class="details-table">
-                <thead>
-                  <tr>
-                    <th>Unit</th>
-                    <th>Variable</th>
-                    <th class="numeric-cell">Anzahl Fälle</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let variable of codingIncompleteVariables">
-                    <td>{{ variable.unitName }}</td>
-                    <td>{{ variable.variableId }}</td>
-                    <td class="numeric-cell strong-cell">
-                      {{ getVariableEffectiveCaseCount(variable) }}
-                    </td>
-                  </tr>
-                  <tr *ngIf="codingIncompleteVariables.length === 0">
-                    <td colspan="3" class="empty-details-cell">
-                      Keine offenen Variablen gefunden.
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div
-              *ngIf="
-                manualCodingScopeSummary &&
-                manualCodingScopeSummary.coveredSourceResponseCount > 0
-              "
-              class="manual-scope-note"
-            >
-              <mat-icon>info_outline</mat-icon>
-              <span>
-                {{
-                  'coding-management-manual.manual-scope-note'
-                    | translate
-                      : {
-                          statusResponseCount:
-                            manualCodingScopeSummary.manualResponseCount +
-                            manualCodingScopeSummary.coveredSourceResponseCount,
-                          responseCount:
-                            manualCodingScopeSummary.coveredSourceResponseCount,
-                          variableCount:
-                            manualCodingScopeSummary.coveredSourceVariableCount
+                              class="section-info-button"
+                              >
+                              <mat-icon class="section-info-icon">info</mat-icon>
+                            </button>
+                          </h2>
+                          @if (showProgressInfo) {
+                            <div class="info-alert progress-info">
+                              <mat-icon class="info-alert-icon">school</mat-icon>
+                              <div class="info-alert-content">
+                                <strong>{{
+                                  'coding-management-manual.coding-progress.info-total-title'
+                                  | translate
+                                }}</strong>
+                                <span class="info-alert-text-spaced">{{
+                                  'coding-management-manual.coding-progress.info-total-desc'
+                                  | translate
+                                }}</span>
+                                <strong>{{
+                                  'coding-management-manual.coding-progress.info-completed-title'
+                                  | translate
+                                }}</strong>
+                                <span class="info-alert-text-spaced">{{
+                                  'coding-management-manual.coding-progress.info-completed-desc'
+                                  | translate
+                                }}</span>
+                                <strong>{{
+                                  'coding-management-manual.coding-progress.info-aggregation-title'
+                                  | translate
+                                }}</strong>
+                                <span>{{
+                                  'coding-management-manual.coding-progress.info-aggregation-desc'
+                                  | translate
+                                }}</span>
+                              </div>
+                            </div>
+                          }
+                          <div class="coverage-stats">
+                            <button
+                              type="button"
+                              class="stat-item stat-item-button"
+                              (click)="showTotalDetails = !showTotalDetails"
+                              [attr.aria-expanded]="showTotalDetails"
+                              aria-controls="total-details"
+                              matTooltip="Klicken, um die Zusammensetzung anzuzeigen"
+                              >
+                              <span class="stat-label"
+                                >Effektive Kodierfälle gesamt:
+                                <mat-icon class="stat-label-inline-icon">{{
+                                  showTotalDetails ? 'expand_less' : 'expand_more'
+                                }}</mat-icon></span
+                                >
+                                <span class="stat-value stat-value-link">{{
+                                  codingProgressOverview.totalCasesToCode
+                                }}</span>
+                              </button>
+                              <div class="stat-item">
+                                <span class="stat-label">Abgeschlossene Fälle:</span>
+                                <span class="stat-value covered">{{
+                                  codingProgressOverview.completedCases
+                                }}</span>
+                              </div>
+                              <div class="stat-item">
+                                <span class="stat-label">Offene Arbeitsfälle:</span>
+                                <span class="stat-value missing">{{
+                                  codingProgressOverview.totalCasesToCode -
+                                  codingProgressOverview.completedCases
+                                }}</span>
+                              </div>
+                              <div class="stat-item">
+                                <span class="stat-label">Fertigstellungsrate:</span>
+                                <span class="stat-value percentage"
+                                  >{{
+                                  codingProgressOverview.completionPercentage
+                                  | number: '1.1-1'
+                                  }}%</span
+                                  >
+                                </div>
+                              </div>
+                              @if (showTotalDetails) {
+                                <div
+                                  id="total-details"
+                                  class="total-details-container"
+                                  >
+                                  <h4 class="details-title">Zusammensetzung nach Variablen</h4>
+                                  <table class="details-table">
+                                    <thead>
+                                      <tr>
+                                        <th>Unit</th>
+                                        <th>Variable</th>
+                                        <th class="numeric-cell">Anzahl Fälle</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      @for (variable of codingIncompleteVariables; track variable) {
+                                        <tr>
+                                          <td>{{ variable.unitName }}</td>
+                                          <td>{{ variable.variableId }}</td>
+                                          <td class="numeric-cell strong-cell">
+                                            {{ getVariableEffectiveCaseCount(variable) }}
+                                          </td>
+                                        </tr>
+                                      }
+                                      @if (codingIncompleteVariables.length === 0) {
+                                        <tr>
+                                          <td colspan="3" class="empty-details-cell">
+                                            Keine offenen Variablen gefunden.
+                                          </td>
+                                        </tr>
+                                      }
+                                    </tbody>
+                                  </table>
+                                </div>
+                              }
+                              @if (
+                                manualCodingScopeSummary &&
+                                manualCodingScopeSummary.coveredSourceResponseCount > 0
+                                ) {
+                                <div
+                                  class="manual-scope-note"
+                                  >
+                                  <mat-icon>info_outline</mat-icon>
+                                  <span>
+                                    {{
+                                    'coding-management-manual.manual-scope-note'
+                                    | translate
+                                    : {
+                                    statusResponseCount:
+                                    manualCodingScopeSummary.manualResponseCount +
+                                    manualCodingScopeSummary.coveredSourceResponseCount,
+                                    responseCount:
+                                    manualCodingScopeSummary.coveredSourceResponseCount,
+                                    variableCount:
+                                    manualCodingScopeSummary.coveredSourceVariableCount
+                                  }
+                                  }}
+                                </span>
+                              </div>
+                            }
+                            @if (codingProgressOverview.aggregationActive) {
+                              <div
+                                class="aggregation-note"
+                                >
+                                <mat-icon>filter_alt</mat-icon>
+                                <span>
+                                  {{
+                                  'coding-management-manual.coding-progress.aggregation-note'
+                                  | translate
+                                  : {
+                                  rawCases: codingProgressOverview.rawTotalCasesToCode,
+                                  effectiveCases:
+                                  codingProgressOverview.totalCasesToCode,
+                                  threshold:
+                                  codingProgressOverview.aggregationThreshold,
+                                  collapsedCases:
+                                  codingProgressOverview.aggregatedDuplicateCases
+                                }
+                                }}
+                              </span>
+                            </div>
+                          }
+                          <div class="coverage-bar coverage-bar-spaced">
+                            <div
+                              class="coverage-fill"
+                              [style.width.%]="codingProgressOverview.completionPercentage"
+                            ></div>
+                          </div>
+                        </div>
+                        @if (isLoadingCodingProgress) {
+                          <div class="loading-overlay">
+                            <div class="loading-content">
+                              <mat-spinner diameter="40"></mat-spinner>
+                              <div class="loading-text">
+                                {{
+                                'coding-management-manual.loading.coding-progress' | translate
+                                }}
+                              </div>
+                            </div>
+                          </div>
                         }
-                }}
-              </span>
-            </div>
+                      </div>
+                    }
 
-            <div
-              *ngIf="codingProgressOverview.aggregationActive"
-              class="aggregation-note"
-            >
-              <mat-icon>filter_alt</mat-icon>
-              <span>
-                {{
-                  'coding-management-manual.coding-progress.aggregation-note'
-                    | translate
-                      : {
-                          rawCases: codingProgressOverview.rawTotalCasesToCode,
-                          effectiveCases:
-                            codingProgressOverview.totalCasesToCode,
-                          threshold:
-                            codingProgressOverview.aggregationThreshold,
-                          collapsedCases:
-                            codingProgressOverview.aggregatedDuplicateCases
-                        }
-                }}
-              </span>
-            </div>
-
-            <div class="coverage-bar coverage-bar-spaced">
-              <div
-                class="coverage-fill"
-                [style.width.%]="codingProgressOverview.completionPercentage"
-              ></div>
-            </div>
-          </div>
-          <div *ngIf="isLoadingCodingProgress" class="loading-overlay">
-            <div class="loading-content">
-              <mat-spinner diameter="40"></mat-spinner>
-              <div class="loading-text">
-                {{
-                  'coding-management-manual.loading.coding-progress' | translate
-                }}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div
-          *ngIf="shouldRenderManualTab('planning')"
-          [hidden]="!isManualTab('planning')"
-          id="manual-planning"
-          class="job-definitions-container"
-        >
-          <div *ngIf="shouldShowManualRefreshButton()" class="manual-tab-actions">
-            <button
-              mat-stroked-button
-              color="primary"
-              (click)="refreshManualCodingPlanning()"
-              [disabled]="isAnyPlanningDataLoading()"
+                    @if (shouldRenderManualTab('planning')) {
+                      <div
+                        [hidden]="!isManualTab('planning')"
+                        id="manual-planning"
+                        class="job-definitions-container"
+                        >
+                        @if (shouldShowManualRefreshButton()) {
+                          <div class="manual-tab-actions">
+                            <button
+                              mat-stroked-button
+                              color="primary"
+                              (click)="refreshManualCodingPlanning()"
+                              [disabled]="isAnyPlanningDataLoading()"
               [attr.aria-label]="
                 'coding-management-manual.buttons.refresh-planning-aria'
                   | translate
               "
-            >
-              <mat-icon>refresh</mat-icon>
-              {{ 'coding-management-manual.buttons.refresh' | translate }}
-            </button>
-          </div>
-          <coding-box-coding-job-definitions
-            *ngIf="shouldRenderManualTabData('planning')"
-            (bulkCreationCompleted)="reloadCodingJobsList('productive')"
-            (jobDefinitionChanged)="onJobDefinitionChanged('productive')"
-          ></coding-box-coding-job-definitions>
-        </div>
+                              >
+                              <mat-icon>refresh</mat-icon>
+                              {{ 'coding-management-manual.buttons.refresh' | translate }}
+                            </button>
+                          </div>
+                        }
+                        @if (shouldRenderManualTabData('planning')) {
+                          <coding-box-coding-job-definitions
+                            (bulkCreationCompleted)="reloadCodingJobsList('productive')"
+                            (jobDefinitionChanged)="onJobDefinitionChanged('productive')"
+                          ></coding-box-coding-job-definitions>
+                        }
+                      </div>
+                    }
 
-        <!-- Variable Coverage Statistics -->
-        <div id="manual-variable-coverage" *ngIf="isManualTab('planning')">
-          <div
-            *ngIf="variableCoverageOverview"
-            class="variable-coverage-section statistics-section"
-            [class.blurred-content]="isLoadingVariableCoverage"
-          >
-            <div class="statistics-card">
-            <h2 class="section-title section-title-with-action">
-              Variablenabdeckung
-              <button
-                mat-icon-button
-                (click)="showVariableCoverageInfo = !showVariableCoverageInfo"
+                    <!-- Variable Coverage Statistics -->
+                    @if (isManualTab('planning')) {
+                      <div id="manual-variable-coverage">
+                        @if (variableCoverageOverview) {
+                          <div
+                            class="variable-coverage-section statistics-section"
+                            [class.blurred-content]="isLoadingVariableCoverage"
+                            >
+                            <div class="statistics-card">
+                              <h2 class="section-title section-title-with-action">
+                                Variablenabdeckung
+                                <button
+                                  mat-icon-button
+                                  (click)="showVariableCoverageInfo = !showVariableCoverageInfo"
                 [matTooltip]="
                   'coding-management-manual.variable-coverage.info-tooltip'
                     | translate
@@ -1209,14 +1250,14 @@
                   'coding-management-manual.variable-coverage.info-tooltip'
                     | translate
                 "
-                class="section-info-button"
-              >
-                <mat-icon class="section-info-icon">info</mat-icon>
-              </button>
-              <button
-                *ngIf="shouldShowManualRefreshButton()"
-                mat-icon-button
-                (click)="refreshAllStatistics()"
+                                  class="section-info-button"
+                                  >
+                                  <mat-icon class="section-info-icon">info</mat-icon>
+                                </button>
+                                @if (shouldShowManualRefreshButton()) {
+                                  <button
+                                    mat-icon-button
+                                    (click)="refreshAllStatistics()"
                 [matTooltip]="
                   'coding-management-manual.buttons.refresh-statistics-aria'
                     | translate
@@ -1225,335 +1266,344 @@
                   'coding-management-manual.buttons.refresh-statistics-aria'
                     | translate
                 "
-              >
-                <mat-icon>refresh</mat-icon>
-              </button>
-              <span
-                *ngIf="variableCoverageOverview.conflictedVariables > 0"
-                class="conflict-badge"
-                matTooltip="Es gibt Konflikte bei der Variablenzuordnung"
-              >
-                <mat-icon>warning</mat-icon>
-                {{ variableCoverageOverview.conflictedVariables }} Konflikte
-              </span>
-            </h2>
+                                    >
+                                    <mat-icon>refresh</mat-icon>
+                                  </button>
+                                }
+                                @if (variableCoverageOverview.conflictedVariables > 0) {
+                                  <span
+                                    class="conflict-badge"
+                                    matTooltip="Es gibt Konflikte bei der Variablenzuordnung"
+                                    >
+                                    <mat-icon>warning</mat-icon>
+                                    {{ variableCoverageOverview.conflictedVariables }} Konflikte
+                                  </span>
+                                }
+                              </h2>
+                              @if (showVariableCoverageInfo) {
+                                <div
+                                  class="info-alert variable-coverage-info"
+                                  >
+                                  <mat-icon class="info-alert-icon">help_outline</mat-icon>
+                                  <div class="info-alert-content">
+                                    <strong>{{
+                                      'coding-management-manual.variable-coverage.info-total-title'
+                                      | translate
+                                    }}</strong>
+                                    <span class="info-alert-text-spaced">{{
+                                      'coding-management-manual.variable-coverage.info-total-desc'
+                                      | translate
+                                    }}</span>
+                                    <strong>{{
+                                      'coding-management-manual.variable-coverage.info-covered-title'
+                                      | translate
+                                    }}</strong>
+                                    <span class="info-alert-text-spaced">{{
+                                      'coding-management-manual.variable-coverage.info-covered-desc'
+                                      | translate
+                                    }}</span>
+                                    <strong>{{
+                                      'coding-management-manual.variable-coverage.info-completeness-title'
+                                      | translate
+                                    }}</strong>
+                                    <span>{{
+                                      'coding-management-manual.variable-coverage.info-completeness-desc'
+                                      | translate
+                                    }}</span>
+                                  </div>
+                                </div>
+                              }
+                              <!-- Overall Coverage Stats -->
+                              <div class="coverage-stats">
+                                <div class="stat-item">
+                                  <span class="stat-label">Gesamt Variablen:</span>
+                                  <span class="stat-value">{{
+                                    variableCoverageOverview.totalVariables
+                                  }}</span>
+                                </div>
+                                <div class="stat-item">
+                                  <span class="stat-label">Abgedeckte Variablen:</span>
+                                  <span class="stat-value covered">{{
+                                    variableCoverageOverview.coveredVariables
+                                  }}</span>
+                                </div>
+                                <div class="stat-item">
+                                  <span class="stat-label">Fehlende Variablen:</span>
+                                  <span class="stat-value missing">{{
+                                    variableCoverageOverview.missingVariables
+                                  }}</span>
+                                </div>
+                                <div class="stat-item">
+                                  <span class="stat-label">Vollständig abgedeckt:</span>
+                                  <span class="stat-value covered">{{
+                                    variableCoverageOverview.fullyAbgedeckteVariablen
+                                  }}</span>
+                                </div>
+                                <div class="stat-item">
+                                  <span class="stat-label">Partiell abgedeckt:</span>
+                                  <span class="stat-value partial">{{
+                                    variableCoverageOverview.partiallyAbgedeckteVariablen
+                                  }}</span>
+                                </div>
+                                <div class="stat-item">
+                                  <span class="stat-label">Abdeckungsrate:</span>
+                                  <span class="stat-value percentage"
+                                    >{{
+                                    variableCoverageOverview.coveragePercentage
+                                    | number: '1.1-1'
+                                    }}%</span
+                                    >
+                                  </div>
+                                </div>
+                                <!-- Status Breakdown -->
+                                <div class="status-breakdown">
+                                  <h3 class="breakdown-title">Abdeckung nach Status</h3>
+                                  <div class="status-stats">
+                                    <div class="status-item draft">
+                                      <mat-icon class="status-icon">edit</mat-icon>
+                                      <div class="status-content">
+                                        <span class="status-label">Entwurf:</span>
+                                        <span class="status-value">{{
+                                          variableCoverageOverview.coveredByDraft
+                                        }}</span>
+                                      </div>
+                                    </div>
+                                    <div class="status-item pending">
+                                      <mat-icon class="status-icon">schedule</mat-icon>
+                                      <div class="status-content">
+                                        <span class="status-label">Warten auf Genehmigung:</span>
+                                        <span class="status-value">{{
+                                          variableCoverageOverview.coveredByPendingReview
+                                        }}</span>
+                                      </div>
+                                    </div>
+                                    <div class="status-item approved">
+                                      <mat-icon class="status-icon">check_circle</mat-icon>
+                                      <div class="status-content">
+                                        <span class="status-label">Genehmigt:</span>
+                                        <span class="status-value">{{
+                                          variableCoverageOverview.coveredByApproved
+                                        }}</span>
+                                      </div>
+                                    </div>
+                                    @if (variableCoverageOverview.conflictedVariables > 0) {
+                                      <div
+                                        class="status-item conflict"
+                                        >
+                                        <mat-icon class="status-icon">error</mat-icon>
+                                        <div class="status-content">
+                                          <span class="status-label">Konflikte:</span>
+                                          <span class="status-value">{{
+                                            variableCoverageOverview.conflictedVariables
+                                          }}</span>
+                                        </div>
+                                      </div>
+                                    }
+                                  </div>
+                                </div>
+                                <!-- Conflicts Details -->
+                                @if (
+                                  variableCoverageOverview.coverageByStatus.conflicted.length > 0
+                                  ) {
+                                  <div
+                                    class="conflicts-section"
+                                    >
+                                    <h3 class="conflicts-title">
+                                      <mat-icon>warning</mat-icon>
+                                      Variablenkonflikte
+                                    </h3>
+                                    <div class="conflicts-list">
+                                      @for (
+                                        conflict of variableCoverageOverview.coverageByStatus
+                                        .conflicted
+                                        ; track
+                                        conflict) {
+                                        <div
+                                          class="conflict-item"
+                                          >
+                                          <div class="conflict-variable">
+                                            <mat-icon>code</mat-icon>
+                                            <span>{{ conflict.variableKey }}</span>
+                                          </div>
+                                          <div class="conflict-definitions">
+                                            <span class="conflict-label">Zugeordnet zu:</span>
+                                            @for (
+                                              def of conflict.conflictingDefinitions; track
+                                              def; let last = $last) {
+                                              <span
+                                                class="conflict-definition"
+                                                >
+                                                {{ getJobDefinitionIdentityLabel(def) }} ({{
+                                                getStatusLabel(def.status)
+                                                }}){{ !last ? ', ' : '' }}
+                                              </span>
+                                            }
+                                          </div>
+                                        </div>
+                                      }
+                                    </div>
+                                  </div>
+                                }
+                                <div class="coverage-bar">
+                                  <div
+                                    class="coverage-fill"
+                                    [style.width.%]="variableCoverageOverview.coveragePercentage"
+                                  ></div>
+                                </div>
+                              </div>
+                              @if (isLoadingVariableCoverage) {
+                                <div class="loading-overlay">
+                                  <div class="loading-content">
+                                    <mat-spinner diameter="40"></mat-spinner>
+                                    <div class="loading-text">
+                                      {{
+                                      'coding-management-manual.loading.variable-coverage'
+                                      | translate
+                                      }}
+                                    </div>
+                                  </div>
+                                </div>
+                              }
+                            </div>
+                          }
+                        </div>
+                      }
 
-            <div
-              *ngIf="showVariableCoverageInfo"
-              class="info-alert variable-coverage-info"
-            >
-              <mat-icon class="info-alert-icon">help_outline</mat-icon>
-              <div class="info-alert-content">
-                <strong>{{
-                  'coding-management-manual.variable-coverage.info-total-title'
-                    | translate
-                }}</strong>
-                <span class="info-alert-text-spaced">{{
-                  'coding-management-manual.variable-coverage.info-total-desc'
-                    | translate
-                }}</span>
-                <strong>{{
-                  'coding-management-manual.variable-coverage.info-covered-title'
-                    | translate
-                }}</strong>
-                <span class="info-alert-text-spaced">{{
-                  'coding-management-manual.variable-coverage.info-covered-desc'
-                    | translate
-                }}</span>
-                <strong>{{
-                  'coding-management-manual.variable-coverage.info-completeness-title'
-                    | translate
-                }}</strong>
-                <span>{{
-                  'coding-management-manual.variable-coverage.info-completeness-desc'
-                    | translate
-                }}</span>
-              </div>
-            </div>
-
-            <!-- Overall Coverage Stats -->
-            <div class="coverage-stats">
-              <div class="stat-item">
-                <span class="stat-label">Gesamt Variablen:</span>
-                <span class="stat-value">{{
-                  variableCoverageOverview.totalVariables
-                }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Abgedeckte Variablen:</span>
-                <span class="stat-value covered">{{
-                  variableCoverageOverview.coveredVariables
-                }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Fehlende Variablen:</span>
-                <span class="stat-value missing">{{
-                  variableCoverageOverview.missingVariables
-                }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Vollständig abgedeckt:</span>
-                <span class="stat-value covered">{{
-                  variableCoverageOverview.fullyAbgedeckteVariablen
-                }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Partiell abgedeckt:</span>
-                <span class="stat-value partial">{{
-                  variableCoverageOverview.partiallyAbgedeckteVariablen
-                }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Abdeckungsrate:</span>
-                <span class="stat-value percentage"
-                  >{{
-                    variableCoverageOverview.coveragePercentage
-                      | number: '1.1-1'
-                  }}%</span
-                >
-              </div>
-            </div>
-
-            <!-- Status Breakdown -->
-            <div class="status-breakdown">
-              <h3 class="breakdown-title">Abdeckung nach Status</h3>
-              <div class="status-stats">
-                <div class="status-item draft">
-                  <mat-icon class="status-icon">edit</mat-icon>
-                  <div class="status-content">
-                    <span class="status-label">Entwurf:</span>
-                    <span class="status-value">{{
-                      variableCoverageOverview.coveredByDraft
-                    }}</span>
-                  </div>
-                </div>
-                <div class="status-item pending">
-                  <mat-icon class="status-icon">schedule</mat-icon>
-                  <div class="status-content">
-                    <span class="status-label">Warten auf Genehmigung:</span>
-                    <span class="status-value">{{
-                      variableCoverageOverview.coveredByPendingReview
-                    }}</span>
-                  </div>
-                </div>
-                <div class="status-item approved">
-                  <mat-icon class="status-icon">check_circle</mat-icon>
-                  <div class="status-content">
-                    <span class="status-label">Genehmigt:</span>
-                    <span class="status-value">{{
-                      variableCoverageOverview.coveredByApproved
-                    }}</span>
-                  </div>
-                </div>
-                <div
-                  class="status-item conflict"
-                  *ngIf="variableCoverageOverview.conflictedVariables > 0"
-                >
-                  <mat-icon class="status-icon">error</mat-icon>
-                  <div class="status-content">
-                    <span class="status-label">Konflikte:</span>
-                    <span class="status-value">{{
-                      variableCoverageOverview.conflictedVariables
-                    }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Conflicts Details -->
-            <div
-              class="conflicts-section"
-              *ngIf="
-                variableCoverageOverview.coverageByStatus.conflicted.length > 0
-              "
-            >
-              <h3 class="conflicts-title">
-                <mat-icon>warning</mat-icon>
-                Variablenkonflikte
-              </h3>
-              <div class="conflicts-list">
-                <div
-                  *ngFor="
-                    let conflict of variableCoverageOverview.coverageByStatus
-                      .conflicted
-                  "
-                  class="conflict-item"
-                >
-                  <div class="conflict-variable">
-                    <mat-icon>code</mat-icon>
-                    <span>{{ conflict.variableKey }}</span>
-                  </div>
-                  <div class="conflict-definitions">
-                    <span class="conflict-label">Zugeordnet zu:</span>
-                    <span
-                      *ngFor="
-                        let def of conflict.conflictingDefinitions;
-                        let last = last
-                      "
-                      class="conflict-definition"
-                    >
-                      {{ getJobDefinitionIdentityLabel(def) }} ({{
-                        getStatusLabel(def.status)
-                      }}){{ !last ? ', ' : '' }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="coverage-bar">
-              <div
-                class="coverage-fill"
-                [style.width.%]="variableCoverageOverview.coveragePercentage"
-              ></div>
-            </div>
-          </div>
-          <div *ngIf="isLoadingVariableCoverage" class="loading-overlay">
-            <div class="loading-content">
-              <mat-spinner diameter="40"></mat-spinner>
-              <div class="loading-text">
-                {{
-                  'coding-management-manual.loading.variable-coverage'
-                    | translate
-                }}
-              </div>
-            </div>
-          </div>
-          </div>
-        </div>
-
-        <div
-          *ngIf="shouldRenderManualTab('execution')"
-          [hidden]="!isManualTab('execution')"
-          id="manual-execution"
-          class="coding-jobs-container manual-section-block"
-        >
-          <h3 class="manual-section-title">
-            Kodierjobs
-            <button
-              mat-icon-button
-              (click)="showCodingJobsInfo = !showCodingJobsInfo"
+                      @if (shouldRenderManualTab('execution')) {
+                        <div
+                          [hidden]="!isManualTab('execution')"
+                          id="manual-execution"
+                          class="coding-jobs-container manual-section-block"
+                          >
+                          <h3 class="manual-section-title">
+                            Kodierjobs
+                            <button
+                              mat-icon-button
+                              (click)="showCodingJobsInfo = !showCodingJobsInfo"
               [matTooltip]="
                 'coding-management-manual.coding-jobs.info-tooltip' | translate
               "
               [attr.aria-label]="
                 'coding-management-manual.coding-jobs.info-tooltip' | translate
               "
-              class="section-info-button"
-            >
-              <mat-icon class="section-info-icon">info</mat-icon>
-            </button>
-          </h3>
-
-          <div *ngIf="showCodingJobsInfo" class="info-alert coding-jobs-info">
-            <mat-icon class="info-alert-icon">assignment</mat-icon>
-            <div class="info-alert-content">
-              <strong>{{
-                'coding-management-manual.coding-jobs.info-title' | translate
-              }}</strong>
-              <span>{{
-                'coding-management-manual.coding-jobs.info-desc' | translate
-              }}</span>
-            </div>
-          </div>
-
-          <div class="manual-tab-actions">
-            <button
-              mat-stroked-button
-              color="primary"
-              type="button"
-              [disabled]="isStartingManualExport || isLoadingCodersForExport"
-              (click)="openExecutionExport()"
-            >
-              <mat-icon>download</mat-icon>
-              Export
-            </button>
-            <button
-              *ngIf="canManageManualCodingJobs"
-              mat-stroked-button
-              color="primary"
-              type="button"
-              (click)="openExecutionTransferCases()"
-            >
-              <mat-icon>swap_horiz</mat-icon>
-              Fälle übertragen
-            </button>
-            <button
-              mat-stroked-button
-              color="primary"
-              type="button"
-              (click)="openExecutionReliability()"
-            >
-              <mat-icon>analytics</mat-icon>
-              Interrater-Reliabilität
-            </button>
-            <button
-              mat-stroked-button
-              color="primary"
-              type="button"
-              (click)="openExecutionDoubleCodedReview()"
-            >
-              <mat-icon>compare</mat-icon>
-              Doppelkodierungsreview
-            </button>
-            <button
-              *ngIf="shouldShowManualRefreshButton()"
-              mat-stroked-button
-              color="primary"
-              type="button"
-              (click)="refreshManualCodingPlanning()"
+                              class="section-info-button"
+                              >
+                              <mat-icon class="section-info-icon">info</mat-icon>
+                            </button>
+                          </h3>
+                          @if (showCodingJobsInfo) {
+                            <div class="info-alert coding-jobs-info">
+                              <mat-icon class="info-alert-icon">assignment</mat-icon>
+                              <div class="info-alert-content">
+                                <strong>{{
+                                  'coding-management-manual.coding-jobs.info-title' | translate
+                                }}</strong>
+                                <span>{{
+                                  'coding-management-manual.coding-jobs.info-desc' | translate
+                                }}</span>
+                              </div>
+                            </div>
+                          }
+                          <div class="manual-tab-actions">
+                            <button
+                              mat-stroked-button
+                              color="primary"
+                              type="button"
+                              [disabled]="isStartingManualExport || isLoadingCodersForExport"
+                              (click)="openExecutionExport()"
+                              >
+                              <mat-icon>download</mat-icon>
+                              Export
+                            </button>
+                            @if (canManageManualCodingJobs) {
+                              <button
+                                mat-stroked-button
+                                color="primary"
+                                type="button"
+                                (click)="openExecutionTransferCases()"
+                                >
+                                <mat-icon>swap_horiz</mat-icon>
+                                Fälle übertragen
+                              </button>
+                            }
+                            <button
+                              mat-stroked-button
+                              color="primary"
+                              type="button"
+                              (click)="openExecutionReliability()"
+                              >
+                              <mat-icon>analytics</mat-icon>
+                              Interrater-Reliabilität
+                            </button>
+                            <button
+                              mat-stroked-button
+                              color="primary"
+                              type="button"
+                              (click)="openExecutionDoubleCodedReview()"
+                              >
+                              <mat-icon>compare</mat-icon>
+                              Doppelkodierungsreview
+                            </button>
+                            @if (shouldShowManualRefreshButton()) {
+                              <button
+                                mat-stroked-button
+                                color="primary"
+                                type="button"
+                                (click)="refreshManualCodingPlanning()"
               [attr.aria-label]="
                 'coding-management-manual.buttons.refresh-execution-aria'
                   | translate
               "
-            >
-              <mat-icon>refresh</mat-icon>
-              {{ 'coding-management-manual.buttons.refresh' | translate }}
-            </button>
-          </div>
+                                >
+                                <mat-icon>refresh</mat-icon>
+                                {{ 'coding-management-manual.buttons.refresh' | translate }}
+                              </button>
+                            }
+                          </div>
+                          @if (shouldShowManualTabLoadHint('execution')) {
+                            <div
+                              class="info-alert manual-refresh-hint"
+                              >
+                              <mat-icon class="info-alert-icon">refresh</mat-icon>
+                              <div class="info-alert-content">
+                                <strong>{{
+                                  'coding-management-manual.manual-load-hint.title' | translate
+                                }}</strong>
+                                <span>{{
+                                  'coding-management-manual.manual-load-hint.execution'
+                                  | translate
+                                }}</span>
+                              </div>
+                            </div>
+                          }
+                          @if (shouldRenderManualTabData('execution')) {
+                            <coding-box-coding-jobs
+                              #productiveCodingJobs
+                              [jobScope]="'productive'"
+                              [showTrainingFilter]="false"
+                              [showComparisonActions]="false"
+                              [showTransferAction]="false"
+                              [showApplyActions]="false"
+                              [showRefreshAction]="shouldShowManualRefreshButton()"
+                              [autoReloadOnFocus]="false"
+                              (jobsChanged)="onJobDefinitionChanged('productive')"
+                            ></coding-box-coding-jobs>
+                          }
+                        </div>
+                      }
 
-          <div
-            *ngIf="shouldShowManualTabLoadHint('execution')"
-            class="info-alert manual-refresh-hint"
-          >
-            <mat-icon class="info-alert-icon">refresh</mat-icon>
-            <div class="info-alert-content">
-              <strong>{{
-                'coding-management-manual.manual-load-hint.title' | translate
-              }}</strong>
-              <span>{{
-                'coding-management-manual.manual-load-hint.execution'
-                  | translate
-              }}</span>
-            </div>
-          </div>
-
-          <coding-box-coding-jobs
-            *ngIf="shouldRenderManualTabData('execution')"
-            #productiveCodingJobs
-            [jobScope]="'productive'"
-            [showTrainingFilter]="false"
-            [showComparisonActions]="false"
-            [showTransferAction]="false"
-            [showApplyActions]="false"
-            [showRefreshAction]="shouldShowManualRefreshButton()"
-            [autoReloadOnFocus]="false"
-            (jobsChanged)="onJobDefinitionChanged('productive')"
-          ></coding-box-coding-jobs>
-        </div>
-
-        <!-- Case Coverage Statistics -->
-        <div
-          *ngIf="isManualTab('execution') && caseCoverageOverview"
-          class="case-coverage-section statistics-section"
-          [class.blurred-content]="isLoadingCaseCoverage"
-        >
-          <div class="statistics-card">
-            <h2 class="section-title section-title-with-action">
-              Fälle in Kodierjobs
-              <button
-                mat-icon-button
-                (click)="showCaseCoverageInfo = !showCaseCoverageInfo"
+                      <!-- Case Coverage Statistics -->
+                      @if (isManualTab('execution') && caseCoverageOverview) {
+                        <div
+                          class="case-coverage-section statistics-section"
+                          [class.blurred-content]="isLoadingCaseCoverage"
+                          >
+                          <div class="statistics-card">
+                            <h2 class="section-title section-title-with-action">
+                              Fälle in Kodierjobs
+                              <button
+                                mat-icon-button
+                                (click)="showCaseCoverageInfo = !showCaseCoverageInfo"
                 [matTooltip]="
                   'coding-management-manual.case-coverage.info-tooltip'
                     | translate
@@ -1562,122 +1612,128 @@
                   'coding-management-manual.case-coverage.info-tooltip'
                     | translate
                 "
-                class="section-info-button"
-              >
-                <mat-icon class="section-info-icon">info</mat-icon>
-              </button>
-            </h2>
+                                class="section-info-button"
+                                >
+                                <mat-icon class="section-info-icon">info</mat-icon>
+                              </button>
+                            </h2>
+                            @if (showCaseCoverageInfo) {
+                              <div
+                                class="info-alert case-coverage-info"
+                                >
+                                <mat-icon class="info-alert-icon">info_outline</mat-icon>
+                                <div class="info-alert-content">
+                                  <strong>{{
+                                    'coding-management-manual.case-coverage.info-total-title'
+                                    | translate
+                                  }}</strong>
+                                  <span class="info-alert-text-spaced">{{
+                                    'coding-management-manual.case-coverage.info-total-desc'
+                                    | translate
+                                  }}</span>
+                                  <strong>{{
+                                    'coding-management-manual.case-coverage.info-assigned-title'
+                                    | translate
+                                  }}</strong>
+                                  <span>{{
+                                    'coding-management-manual.case-coverage.info-assigned-desc'
+                                    | translate
+                                  }}</span>
+                                </div>
+                              </div>
+                            }
+                            <div class="coverage-stats">
+                              <div class="stat-item">
+                                <span class="stat-label">Effektive Kodierfälle gesamt:</span>
+                                <span class="stat-value">{{
+                                  caseCoverageOverview.effectiveTotalCasesToCode
+                                }}</span>
+                              </div>
+                              <div class="stat-item">
+                                <span class="stat-label">Arbeitsfälle in Jobs:</span>
+                                <span class="stat-value covered">{{
+                                  caseCoverageOverview.effectiveCasesInJobs
+                                }}</span>
+                              </div>
+                              <div class="stat-item">
+                                <span class="stat-label">Doppelt kodierte Fälle:</span>
+                                <span class="stat-value">{{
+                                  caseCoverageOverview.doubleCodedCases
+                                }}</span>
+                              </div>
+                              <div class="stat-item">
+                                <span class="stat-label">Einfach kodierte Fälle:</span>
+                                <span class="stat-value">{{ effectiveSingleCodedCases }}</span>
+                              </div>
+                              <div class="stat-item">
+                                <span class="stat-label">Nicht zugewiesene Arbeitsfälle:</span>
+                                <span class="stat-value missing">{{
+                                  caseCoverageOverview.effectiveUnassignedCases
+                                }}</span>
+                              </div>
+                              <div class="stat-item">
+                                <span class="stat-label">Abdeckungsrate:</span>
+                                <span class="stat-value percentage"
+                                  >{{
+                                  caseCoverageOverview.coveragePercentage | number: '1.1-1'
+                                  }}%</span
+                                  >
+                                </div>
+                              </div>
+                              @if (caseCoverageOverview.aggregationActive) {
+                                <div
+                                  class="aggregation-note"
+                                  >
+                                  <mat-icon>filter_alt</mat-icon>
+                                  <span>
+                                    {{
+                                    'coding-management-manual.coding-progress.aggregation-note'
+                                    | translate
+                                    : {
+                                    rawCases: caseCoverageOverview.totalCasesToCode,
+                                    effectiveCases:
+                                    caseCoverageOverview.effectiveTotalCasesToCode,
+                                    threshold: caseCoverageOverview.aggregationThreshold,
+                                    collapsedCases:
+                                    caseCoverageOverview.aggregatedDuplicateCases
+                                  }
+                                  }}
+                                </span>
+                              </div>
+                            }
+                            <div class="coverage-bar">
+                              <div
+                                class="coverage-fill"
+                                [style.width.%]="caseCoverageOverview.coveragePercentage"
+                              ></div>
+                            </div>
+                          </div>
+                          @if (isLoadingCaseCoverage) {
+                            <div class="loading-overlay">
+                              <div class="loading-content">
+                                <mat-spinner diameter="40"></mat-spinner>
+                                <div class="loading-text">
+                                  {{
+                                  'coding-management-manual.loading.case-coverage' | translate
+                                  }}
+                                </div>
+                              </div>
+                            </div>
+                          }
+                        </div>
+                      }
 
-            <div
-              *ngIf="showCaseCoverageInfo"
-              class="info-alert case-coverage-info"
-            >
-              <mat-icon class="info-alert-icon">info_outline</mat-icon>
-              <div class="info-alert-content">
-                <strong>{{
-                  'coding-management-manual.case-coverage.info-total-title'
-                    | translate
-                }}</strong>
-                <span class="info-alert-text-spaced">{{
-                  'coding-management-manual.case-coverage.info-total-desc'
-                    | translate
-                }}</span>
-                <strong>{{
-                  'coding-management-manual.case-coverage.info-assigned-title'
-                    | translate
-                }}</strong>
-                <span>{{
-                  'coding-management-manual.case-coverage.info-assigned-desc'
-                    | translate
-                }}</span>
-              </div>
-            </div>
-            <div class="coverage-stats">
-              <div class="stat-item">
-                <span class="stat-label">Effektive Kodierfälle gesamt:</span>
-                <span class="stat-value">{{
-                  caseCoverageOverview.effectiveTotalCasesToCode
-                }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Arbeitsfälle in Jobs:</span>
-                <span class="stat-value covered">{{
-                  caseCoverageOverview.effectiveCasesInJobs
-                }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Doppelt kodierte Fälle:</span>
-                <span class="stat-value">{{
-                  caseCoverageOverview.doubleCodedCases
-                }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Einfach kodierte Fälle:</span>
-                <span class="stat-value">{{ effectiveSingleCodedCases }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Nicht zugewiesene Arbeitsfälle:</span>
-                <span class="stat-value missing">{{
-                  caseCoverageOverview.effectiveUnassignedCases
-                }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Abdeckungsrate:</span>
-                <span class="stat-value percentage"
-                  >{{
-                    caseCoverageOverview.coveragePercentage | number: '1.1-1'
-                  }}%</span
-                >
-              </div>
-            </div>
-            <div
-              *ngIf="caseCoverageOverview.aggregationActive"
-              class="aggregation-note"
-            >
-              <mat-icon>filter_alt</mat-icon>
-              <span>
-                {{
-                  'coding-management-manual.coding-progress.aggregation-note'
-                    | translate
-                      : {
-                          rawCases: caseCoverageOverview.totalCasesToCode,
-                          effectiveCases:
-                            caseCoverageOverview.effectiveTotalCasesToCode,
-                          threshold: caseCoverageOverview.aggregationThreshold,
-                          collapsedCases:
-                            caseCoverageOverview.aggregatedDuplicateCases
-                        }
-                }}
-              </span>
-            </div>
-            <div class="coverage-bar">
-              <div
-                class="coverage-fill"
-                [style.width.%]="caseCoverageOverview.coveragePercentage"
-              ></div>
-            </div>
-          </div>
-          <div *ngIf="isLoadingCaseCoverage" class="loading-overlay">
-            <div class="loading-content">
-              <mat-spinner diameter="40"></mat-spinner>
-              <div class="loading-text">
-                {{
-                  'coding-management-manual.loading.case-coverage' | translate
-                }}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Applied Results Section -->
-        <div *ngIf="isManualTab('completion')" id="manual-completion">
-          <div *ngIf="appliedResultsOverview" class="applied-results-section">
-            <div class="statistics-card">
-              <h2 class="section-title section-title-with-action">
-                {{ 'applied-results-overview.title' | translate }}
-                <button
-                  mat-icon-button
-                  (click)="showAppliedResultsInfo = !showAppliedResultsInfo"
+                      <!-- Applied Results Section -->
+                      @if (isManualTab('completion')) {
+                        <div id="manual-completion">
+                          @if (appliedResultsOverview) {
+                            <div class="applied-results-section">
+                              <div class="statistics-card">
+                                <h2 class="section-title section-title-with-action">
+                                  {{ 'applied-results-overview.title' | translate }}
+                                  <button
+                                    mat-icon-button
+                                    (click)="showAppliedResultsInfo = !showAppliedResultsInfo"
                   [matTooltip]="
                     'coding-management-manual.applied-results.info-tooltip'
                       | translate
@@ -1686,272 +1742,291 @@
                     'coding-management-manual.applied-results.info-tooltip'
                       | translate
                   "
-                  class="section-info-button"
-                >
-                  <mat-icon class="section-info-icon">info</mat-icon>
-                </button>
-              </h2>
-
-              <div
-                *ngIf="showAppliedResultsInfo"
-                class="info-alert applied-results-info"
-              >
-                <mat-icon class="info-alert-icon">auto_awesome</mat-icon>
-                <div class="info-alert-content">
-                  <strong>{{
-                    'coding-management-manual.applied-results.info-total-title'
-                      | translate
-                  }}</strong>
-                  <span class="info-alert-text-spaced">{{
-                    'coding-management-manual.applied-results.info-total-desc'
-                      | translate
-                  }}</span>
-                  <strong>{{
-                    'coding-management-manual.applied-results.info-applied-title'
-                      | translate
-                  }}</strong>
-                  <span>{{
-                    'coding-management-manual.applied-results.info-applied-desc'
-                      | translate
-                  }}</span>
-                </div>
-              </div>
-              <div class="coverage-stats">
-                <div class="stat-item">
-                  <span class="stat-label">{{
-                    'applied-results-overview.coding-incomplete' | translate
-                  }}</span>
-                  <span class="stat-value">{{ effectiveCodingCases }}</span>
-                </div>
-                <div class="stat-item" *ngIf="aggregationSavings > 0">
-                  <span class="stat-label stat-label-success">
-                    <mat-icon class="stat-label-inline-icon">layers</mat-icon>
-                    {{
-                      'applied-results-overview.aggregation-savings' | translate
-                    }}
-                  </span>
-                  <span class="stat-value stat-value-success">{{
-                    aggregationSavings
-                  }}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">{{
-                    'applied-results-overview.applied-results' | translate
-                  }}</span>
-                  <span class="stat-value covered">{{
-                    appliedResultsOverview.appliedResponses
-                  }}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">{{
-                    'applied-results-overview.remaining' | translate
-                  }}</span>
-                  <span class="stat-value missing">{{
-                    appliedResultsOverview.remainingResponses
-                  }}</span>
-                </div>
-                <div class="stat-item" *ngIf="hasDeriveErrorManualCases">
-                  <span class="stat-label">{{
-                    'applied-results-overview.derive-error-additional'
-                      | translate
-                  }}</span>
-                  <span class="stat-value">
-                    {{
-                      'applied-results-overview.derive-error-progress'
-                        | translate
-                          : {
-                              applied: deriveErrorAppliedCases,
-                              total: deriveErrorManualCases,
-                              remaining: deriveErrorRemainingCases
-                            }
-                    }}
-                  </span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">{{
-                    'applied-results-overview.completion-progress' | translate
-                  }}</span>
-                  <span class="stat-value percentage"
-                    >{{
-                      appliedResultsOverview.completionPercentage
-                        | number: '1.1-1'
-                    }}%</span
-                  >
-                </div>
-              </div>
-              <div
-                *ngIf="appliedResultsOverview.aggregationActive"
-                class="aggregation-note"
-              >
-                <mat-icon>filter_alt</mat-icon>
-                <span>
-                  {{
-                    'coding-management-manual.coding-progress.aggregation-note'
-                      | translate
-                        : {
-                            rawCases:
-                              appliedResultsOverview.rawTotalIncompleteResponses,
-                            effectiveCases:
-                              appliedResultsOverview.totalIncompleteResponses,
-                            threshold:
-                              appliedResultsOverview.aggregationThreshold,
-                            collapsedCases:
-                              appliedResultsOverview.aggregatedDuplicateCases
-                          }
-                  }}
-                </span>
-              </div>
-              <div class="coverage-bar">
-                <div
-                  class="coverage-fill"
-                  [style.width.%]="appliedResultsOverview.completionPercentage"
-                ></div>
-              </div>
-
-              <div
-                class="completion-action-panel"
-                [class.is-complete]="isCompletionComplete()"
-                [class.has-ready-jobs]="hasCompletedJobsReadyForApply()"
-              >
-                <div class="completion-action-copy">
-                  <mat-icon>{{ getCompletionActionIcon() }}</mat-icon>
-                  <div>
-                    <strong>{{ getCompletionActionTitle() }}</strong>
-                    <span>{{ getCompletionActionDescription() }}</span>
-                  </div>
-                </div>
-                <div class="completion-action-buttons">
-                  <button
-                    *ngIf="
-                      !hasCompletedJobsReadyForApply() &&
-                      !isCompletionComplete()
-                    "
-                    mat-stroked-button
-                    color="primary"
-                    type="button"
-                    (click)="goToManualTab('execution', 'manual-execution')"
-                  >
-                    <mat-icon>assignment</mat-icon>
-                    Zu den Kodierjobs
-                  </button>
-                  <button
-                    *ngIf="canShowCompletedJobApplyActions()"
-                    mat-raised-button
-                    color="accent"
-                    type="button"
-                    (click)="applyAllCompletedJobResults()"
+                                    class="section-info-button"
+                                    >
+                                    <mat-icon class="section-info-icon">info</mat-icon>
+                                  </button>
+                                </h2>
+                                @if (showAppliedResultsInfo) {
+                                  <div
+                                    class="info-alert applied-results-info"
+                                    >
+                                    <mat-icon class="info-alert-icon">auto_awesome</mat-icon>
+                                    <div class="info-alert-content">
+                                      <strong>{{
+                                        'coding-management-manual.applied-results.info-total-title'
+                                        | translate
+                                      }}</strong>
+                                      <span class="info-alert-text-spaced">{{
+                                        'coding-management-manual.applied-results.info-total-desc'
+                                        | translate
+                                      }}</span>
+                                      <strong>{{
+                                        'coding-management-manual.applied-results.info-applied-title'
+                                        | translate
+                                      }}</strong>
+                                      <span>{{
+                                        'coding-management-manual.applied-results.info-applied-desc'
+                                        | translate
+                                      }}</span>
+                                    </div>
+                                  </div>
+                                }
+                                <div class="coverage-stats">
+                                  <div class="stat-item">
+                                    <span class="stat-label">{{
+                                      'applied-results-overview.coding-incomplete' | translate
+                                    }}</span>
+                                    <span class="stat-value">{{ effectiveCodingCases }}</span>
+                                  </div>
+                                  @if (aggregationSavings > 0) {
+                                    <div class="stat-item">
+                                      <span class="stat-label stat-label-success">
+                                        <mat-icon class="stat-label-inline-icon">layers</mat-icon>
+                                        {{
+                                        'applied-results-overview.aggregation-savings' | translate
+                                        }}
+                                      </span>
+                                      <span class="stat-value stat-value-success">{{
+                                        aggregationSavings
+                                      }}</span>
+                                    </div>
+                                  }
+                                  <div class="stat-item">
+                                    <span class="stat-label">{{
+                                      'applied-results-overview.applied-results' | translate
+                                    }}</span>
+                                    <span class="stat-value covered">{{
+                                      appliedResultsOverview.appliedResponses
+                                    }}</span>
+                                  </div>
+                                  <div class="stat-item">
+                                    <span class="stat-label">{{
+                                      'applied-results-overview.remaining' | translate
+                                    }}</span>
+                                    <span class="stat-value missing">{{
+                                      appliedResultsOverview.remainingResponses
+                                    }}</span>
+                                  </div>
+                                  @if (hasDeriveErrorManualCases) {
+                                    <div class="stat-item">
+                                      <span class="stat-label">{{
+                                        'applied-results-overview.derive-error-additional'
+                                        | translate
+                                      }}</span>
+                                      <span class="stat-value">
+                                        {{
+                                        'applied-results-overview.derive-error-progress'
+                                        | translate
+                                        : {
+                                        applied: deriveErrorAppliedCases,
+                                        total: deriveErrorManualCases,
+                                        remaining: deriveErrorRemainingCases
+                                      }
+                                      }}
+                                    </span>
+                                  </div>
+                                }
+                                <div class="stat-item">
+                                  <span class="stat-label">{{
+                                    'applied-results-overview.completion-progress' | translate
+                                  }}</span>
+                                  <span class="stat-value percentage"
+                                    >{{
+                                    appliedResultsOverview.completionPercentage
+                                    | number: '1.1-1'
+                                    }}%</span
+                                    >
+                                  </div>
+                                </div>
+                                @if (appliedResultsOverview.aggregationActive) {
+                                  <div
+                                    class="aggregation-note"
+                                    >
+                                    <mat-icon>filter_alt</mat-icon>
+                                    <span>
+                                      {{
+                                      'coding-management-manual.coding-progress.aggregation-note'
+                                      | translate
+                                      : {
+                                      rawCases:
+                                      appliedResultsOverview.rawTotalIncompleteResponses,
+                                      effectiveCases:
+                                      appliedResultsOverview.totalIncompleteResponses,
+                                      threshold:
+                                      appliedResultsOverview.aggregationThreshold,
+                                      collapsedCases:
+                                      appliedResultsOverview.aggregatedDuplicateCases
+                                    }
+                                    }}
+                                  </span>
+                                </div>
+                              }
+                              <div class="coverage-bar">
+                                <div
+                                  class="coverage-fill"
+                                  [style.width.%]="appliedResultsOverview.completionPercentage"
+                                ></div>
+                              </div>
+                              <div
+                                class="completion-action-panel"
+                                [class.is-complete]="isCompletionComplete()"
+                                [class.has-ready-jobs]="hasCompletedJobsReadyForApply()"
+                                >
+                                <div class="completion-action-copy">
+                                  <mat-icon>{{ getCompletionActionIcon() }}</mat-icon>
+                                  <div>
+                                    <strong>{{ getCompletionActionTitle() }}</strong>
+                                    <span>{{ getCompletionActionDescription() }}</span>
+                                  </div>
+                                </div>
+                                <div class="completion-action-buttons">
+                                  @if (
+                                    !hasCompletedJobsReadyForApply() &&
+                                    !isCompletionComplete()
+                                    ) {
+                                    <button
+                                      mat-stroked-button
+                                      color="primary"
+                                      type="button"
+                                      (click)="goToManualTab('execution', 'manual-execution')"
+                                      >
+                                      <mat-icon>assignment</mat-icon>
+                                      Zu den Kodierjobs
+                                    </button>
+                                  }
+                                  @if (canShowCompletedJobApplyActions()) {
+                                    <button
+                                      mat-raised-button
+                                      color="accent"
+                                      type="button"
+                                      (click)="applyAllCompletedJobResults()"
                     [disabled]="
                       !canApplyCompletedJobResults() ||
                       isApplyingCodingResults ||
                       isLoadingCompletedJobsReadyForApply
                     "
-                  >
-                    <mat-icon *ngIf="!isApplyingCodingResults"
-                      >done_all</mat-icon
-                    >
-                    <mat-spinner
-                      *ngIf="isApplyingCodingResults"
-                      diameter="18"
-                    ></mat-spinner>
-                    Alle Ergebnisse anwenden
-                  </button>
-                </div>
-              </div>
-
-              <div
-                *ngIf="hasCompletedJobsReadyForApply()"
-                class="completed-jobs-apply-list"
-              >
-                <div
-                  *ngFor="let job of completedJobsReadyForApply"
-                  class="completed-job-apply-row"
-                >
-                  <div class="completed-job-copy">
-                    <strong>{{ job.name }}</strong>
-                    <span>{{ getCodingJobResultSummary(job) }}</span>
-                    <span
-                      *ngIf="job.hasIssues"
-                      class="completed-job-review-note"
-                    >
-                      Offene Hinweise bleiben zur manuellen Prüfung bestehen.
-                    </span>
-                  </div>
-                  <button
-                    *ngIf="canApplyCompletedJobResults()"
-                    mat-stroked-button
-                    color="primary"
-                    type="button"
-                    (click)="applyCompletedJobResults(job)"
+                                      >
+                                      @if (!isApplyingCodingResults) {
+                                        <mat-icon
+                                          >done_all</mat-icon
+                                          >
+                                        }
+                                        @if (isApplyingCodingResults) {
+                                          <mat-spinner
+                                            diameter="18"
+                                          ></mat-spinner>
+                                        }
+                                        Alle Ergebnisse anwenden
+                                      </button>
+                                    }
+                                  </div>
+                                </div>
+                                @if (hasCompletedJobsReadyForApply()) {
+                                  <div
+                                    class="completed-jobs-apply-list"
+                                    >
+                                    @for (job of completedJobsReadyForApply; track job) {
+                                      <div
+                                        class="completed-job-apply-row"
+                                        >
+                                        <div class="completed-job-copy">
+                                          <strong>{{ job.name }}</strong>
+                                          <span>{{ getCodingJobResultSummary(job) }}</span>
+                                          @if (job.hasIssues) {
+                                            <span
+                                              class="completed-job-review-note"
+                                              >
+                                              Offene Hinweise bleiben zur manuellen Prüfung bestehen.
+                                            </span>
+                                          }
+                                        </div>
+                                        @if (canApplyCompletedJobResults()) {
+                                          <button
+                                            mat-stroked-button
+                                            color="primary"
+                                            type="button"
+                                            (click)="applyCompletedJobResults(job)"
                     [disabled]="
                       isApplyingCodingResults || isApplyingJobResults(job.id)
                     "
-                  >
-                    <mat-icon *ngIf="!isApplyingJobResults(job.id)"
-                      >input</mat-icon
-                    >
-                    <mat-spinner
-                      *ngIf="isApplyingJobResults(job.id)"
-                      diameter="18"
-                    ></mat-spinner>
-                    Ergebnisse anwenden
-                  </button>
-                  <span
-                    *ngIf="!canApplyCompletedJobResults()"
-                    class="completed-job-readonly-note"
-                  >
-                    <mat-icon>lock</mat-icon>
-                    {{
-                      'coding-management-manual.completed-jobs.readonly-note'
-                        | translate
-                    }}
-                  </span>
-                </div>
-              </div>
+                                            >
+                                            @if (!isApplyingJobResults(job.id)) {
+                                              <mat-icon
+                                                >input</mat-icon
+                                                >
+                                              }
+                                              @if (isApplyingJobResults(job.id)) {
+                                                <mat-spinner
+                                                  diameter="18"
+                                                ></mat-spinner>
+                                              }
+                                              Ergebnisse anwenden
+                                            </button>
+                                          }
+                                          @if (!canApplyCompletedJobResults()) {
+                                            <span
+                                              class="completed-job-readonly-note"
+                                              >
+                                              <mat-icon>lock</mat-icon>
+                                              {{
+                                              'coding-management-manual.completed-jobs.readonly-note'
+                                              | translate
+                                              }}
+                                            </span>
+                                          }
+                                        </div>
+                                      }
+                                    </div>
+                                  }
+                                  @if (
+                                    hasCompletedJobsBlockedForReview() &&
+                                    !hasCompletedJobsReadyForApply()
+                                    ) {
+                                    <div
+                                      class="completed-jobs-apply-list review-required-list"
+                                      >
+                                      @for (job of completedJobsBlockedForReview; track job) {
+                                        <div
+                                          class="completed-job-apply-row"
+                                          >
+                                          <div class="completed-job-copy">
+                                            <strong>{{ job.name }}</strong>
+                                            <span
+                                              >Review erforderlich: unsichere Code-Vergabe oder neuer
+                                              Code nötig.</span
+                                              >
+                                            </div>
+                                            <button
+                                              mat-stroked-button
+                                              color="primary"
+                                              type="button"
+                                              (click)="goToManualTab('execution', 'manual-execution')"
+                                              >
+                                              <mat-icon>visibility</mat-icon>
+                                              Zu den Kodierjobs
+                                            </button>
+                                          </div>
+                                        }
+                                      </div>
+                                    }
+                                  </div>
+                                </div>
+                              }
+                            </div>
+                          }
 
-              <div
-                *ngIf="
-                  hasCompletedJobsBlockedForReview() &&
-                  !hasCompletedJobsReadyForApply()
-                "
-                class="completed-jobs-apply-list review-required-list"
-              >
-                <div
-                  *ngFor="let job of completedJobsBlockedForReview"
-                  class="completed-job-apply-row"
-                >
-                  <div class="completed-job-copy">
-                    <strong>{{ job.name }}</strong>
-                    <span
-                      >Review erforderlich: unsichere Code-Vergabe oder neuer
-                      Code nötig.</span
-                    >
-                  </div>
-                  <button
-                    mat-stroked-button
-                    color="primary"
-                    type="button"
-                    (click)="goToManualTab('execution', 'manual-execution')"
-                  >
-                    <mat-icon>visibility</mat-icon>
-                    Zu den Kodierjobs
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div
-          *ngIf="shouldRenderManualTab('training')"
-          [hidden]="!isManualTab('training')"
-          id="manual-support"
-          class="coder-training-list-container manual-section-block"
-        >
-          <h3 class="manual-section-title">
-            Kodierer-Schulungen
-            <button
-              mat-icon-button
-              (click)="showCoderTrainingsInfo = !showCoderTrainingsInfo"
+                          @if (shouldRenderManualTab('training')) {
+                            <div
+                              [hidden]="!isManualTab('training')"
+                              id="manual-support"
+                              class="coder-training-list-container manual-section-block"
+                              >
+                              <h3 class="manual-section-title">
+                                Kodierer-Schulungen
+                                <button
+                                  mat-icon-button
+                                  (click)="showCoderTrainingsInfo = !showCoderTrainingsInfo"
               [matTooltip]="
                 'coding-management-manual.coder-trainings.info-tooltip'
                   | translate
@@ -1960,137 +2035,142 @@
                 'coding-management-manual.coder-trainings.info-tooltip'
                   | translate
               "
-              class="section-info-button"
-            >
-              <mat-icon class="section-info-icon">info</mat-icon>
-            </button>
-          </h3>
-
-          <div
-            *ngIf="showCoderTrainingsInfo"
-            class="info-alert coder-trainings-info"
-          >
-            <mat-icon class="info-alert-icon">school</mat-icon>
-            <div class="info-alert-content">
-              <strong>{{
-                'coding-management-manual.coder-trainings.info-title'
-                  | translate
-              }}</strong>
-              <span>{{
-                'coding-management-manual.coder-trainings.info-desc' | translate
-              }}</span>
-            </div>
-          </div>
-          <div class="manual-tab-actions">
-            <button
-              mat-raised-button
-              color="primary"
-              type="button"
-              (click)="openCoderTraining()"
-            >
-              <mat-icon>add</mat-icon>
-              Kodierschulung erstellen
-            </button>
-            <button
-              mat-stroked-button
-              color="primary"
-              type="button"
-              [disabled]="isStartingManualExport || isLoadingCodersForExport"
-              (click)="openTrainingExport()"
-            >
-              <mat-icon>download</mat-icon>
-              Export
-            </button>
-            <button
-              mat-stroked-button
-              color="primary"
-              type="button"
-              (click)="openTrainingReliability()"
-            >
-              <mat-icon>analytics</mat-icon>
-              Interrater-Reliabilität
-            </button>
-            <button
-              mat-stroked-button
-              color="primary"
-              type="button"
-              (click)="openTrainingDiscussion()"
-            >
-              <mat-icon>forum</mat-icon>
-              Diskussion
-            </button>
-            <button
-              mat-stroked-button
-              color="primary"
-              type="button"
-              (click)="openTrainingComparison()"
-            >
-              <mat-icon>compare_arrows</mat-icon>
-              Schulungen vergleichen
-            </button>
-            <button
-              *ngIf="shouldShowManualRefreshButton()"
-              mat-stroked-button
-              color="primary"
-              type="button"
-              (click)="refreshManualCodingPlanning()"
+                                  class="section-info-button"
+                                  >
+                                  <mat-icon class="section-info-icon">info</mat-icon>
+                                </button>
+                              </h3>
+                              @if (showCoderTrainingsInfo) {
+                                <div
+                                  class="info-alert coder-trainings-info"
+                                  >
+                                  <mat-icon class="info-alert-icon">school</mat-icon>
+                                  <div class="info-alert-content">
+                                    <strong>{{
+                                      'coding-management-manual.coder-trainings.info-title'
+                                      | translate
+                                    }}</strong>
+                                    <span>{{
+                                      'coding-management-manual.coder-trainings.info-desc' | translate
+                                    }}</span>
+                                  </div>
+                                </div>
+                              }
+                              <div class="manual-tab-actions">
+                                <button
+                                  mat-raised-button
+                                  color="primary"
+                                  type="button"
+                                  (click)="openCoderTraining()"
+                                  >
+                                  <mat-icon>add</mat-icon>
+                                  Kodierschulung erstellen
+                                </button>
+                                <button
+                                  mat-stroked-button
+                                  color="primary"
+                                  type="button"
+                                  [disabled]="isStartingManualExport || isLoadingCodersForExport"
+                                  (click)="openTrainingExport()"
+                                  >
+                                  <mat-icon>download</mat-icon>
+                                  Export
+                                </button>
+                                <button
+                                  mat-stroked-button
+                                  color="primary"
+                                  type="button"
+                                  (click)="openTrainingReliability()"
+                                  >
+                                  <mat-icon>analytics</mat-icon>
+                                  Interrater-Reliabilität
+                                </button>
+                                <button
+                                  mat-stroked-button
+                                  color="primary"
+                                  type="button"
+                                  (click)="openTrainingDiscussion()"
+                                  >
+                                  <mat-icon>forum</mat-icon>
+                                  Diskussion
+                                </button>
+                                <button
+                                  mat-stroked-button
+                                  color="primary"
+                                  type="button"
+                                  (click)="openTrainingComparison()"
+                                  >
+                                  <mat-icon>compare_arrows</mat-icon>
+                                  Schulungen vergleichen
+                                </button>
+                                @if (shouldShowManualRefreshButton()) {
+                                  <button
+                                    mat-stroked-button
+                                    color="primary"
+                                    type="button"
+                                    (click)="refreshManualCodingPlanning()"
               [attr.aria-label]="
                 'coding-management-manual.buttons.refresh-training-aria'
                   | translate
               "
-            >
-              <mat-icon>refresh</mat-icon>
-              {{ 'coding-management-manual.buttons.refresh' | translate }}
-            </button>
-          </div>
-          <div
-            *ngIf="shouldShowManualTabLoadHint('training')"
-            class="info-alert manual-refresh-hint"
-          >
-            <mat-icon class="info-alert-icon">refresh</mat-icon>
-            <div class="info-alert-content">
-              <strong>{{
-                'coding-management-manual.manual-load-hint.title' | translate
-              }}</strong>
-              <span>{{
-                'coding-management-manual.manual-load-hint.training'
-                  | translate
-              }}</span>
-            </div>
-          </div>
-          <coding-box-coder-trainings-list
-            *ngIf="shouldRenderManualTabData('training')"
-            [showCreateButton]="false"
-            [workspaceId]="workspaceId"
-            (onCreateTraining)="openCoderTraining()"
-            (onEditTraining)="openTrainingEdit($event)"
-          >
-          </coding-box-coder-trainings-list>
-          <div class="coding-jobs-container manual-section-block">
-            <h3 class="manual-section-title">Kodierjobs</h3>
-            <coding-box-coding-jobs
-              *ngIf="shouldRenderManualTabData('training')"
-              #trainingCodingJobs
-              [jobScope]="'training'"
-              [showTrainingFilter]="true"
-              [showComparisonActions]="false"
-              [showTransferAction]="false"
-              [showApplyActions]="false"
-              [showRefreshAction]="shouldShowManualRefreshButton()"
-              [autoReloadOnFocus]="false"
-              (jobsChanged)="onJobDefinitionChanged('training')"
-            ></coding-box-coding-jobs>
-          </div>
-        </div>
-        <div
-          *ngIf="isManualTab('preparation')"
-          class="variable-bundle-container manual-section-block"
-        >
-          <h3 class="manual-section-title">
-            Variablenbündel
-            <button
-              mat-icon-button
-              (click)="showVariableBundlesInfo = !showVariableBundlesInfo"
+                                    >
+                                    <mat-icon>refresh</mat-icon>
+                                    {{ 'coding-management-manual.buttons.refresh' | translate }}
+                                  </button>
+                                }
+                              </div>
+                              @if (shouldShowManualTabLoadHint('training')) {
+                                <div
+                                  class="info-alert manual-refresh-hint"
+                                  >
+                                  <mat-icon class="info-alert-icon">refresh</mat-icon>
+                                  <div class="info-alert-content">
+                                    <strong>{{
+                                      'coding-management-manual.manual-load-hint.title' | translate
+                                    }}</strong>
+                                    <span>{{
+                                      'coding-management-manual.manual-load-hint.training'
+                                      | translate
+                                    }}</span>
+                                  </div>
+                                </div>
+                              }
+                              @if (shouldRenderManualTabData('training')) {
+                                <coding-box-coder-trainings-list
+                                  [showCreateButton]="false"
+                                  [workspaceId]="workspaceId"
+                                  (onCreateTraining)="openCoderTraining()"
+                                  (onEditTraining)="openTrainingEdit($event)"
+                                  >
+                                </coding-box-coder-trainings-list>
+                              }
+                              <div class="coding-jobs-container manual-section-block">
+                                <h3 class="manual-section-title">Kodierjobs</h3>
+                                @if (shouldRenderManualTabData('training')) {
+                                  <coding-box-coding-jobs
+                                    #trainingCodingJobs
+                                    [jobScope]="'training'"
+                                    [showTrainingFilter]="true"
+                                    [showComparisonActions]="false"
+                                    [showTransferAction]="false"
+                                    [showApplyActions]="false"
+                                    [showRefreshAction]="shouldShowManualRefreshButton()"
+                                    [autoReloadOnFocus]="false"
+                                    (jobsChanged)="onJobDefinitionChanged('training')"
+                                  ></coding-box-coding-jobs>
+                                }
+                              </div>
+                            </div>
+                          }
+                          @if (isManualTab('preparation')) {
+                            <div
+                              class="variable-bundle-container manual-section-block"
+                              >
+                              <h3 class="manual-section-title">
+                                Variablenbündel
+                                <button
+                                  mat-icon-button
+                                  (click)="showVariableBundlesInfo = !showVariableBundlesInfo"
               [matTooltip]="
                 'coding-management-manual.variable-bundles.info-tooltip'
                   | translate
@@ -2099,70 +2179,73 @@
                 'coding-management-manual.variable-bundles.info-tooltip'
                   | translate
               "
-              class="section-info-button"
-            >
-              <mat-icon class="section-info-icon">info</mat-icon>
-            </button>
-          </h3>
+                                  class="section-info-button"
+                                  >
+                                  <mat-icon class="section-info-icon">info</mat-icon>
+                                </button>
+                              </h3>
+                              @if (showVariableBundlesInfo) {
+                                <div
+                                  class="info-alert variable-bundles-info"
+                                  >
+                                  <mat-icon class="info-alert-icon">layers</mat-icon>
+                                  <div class="info-alert-content">
+                                    <strong>{{
+                                      'coding-management-manual.variable-bundles.info-title'
+                                      | translate
+                                    }}</strong>
+                                    <span>{{
+                                      'coding-management-manual.variable-bundles.info-desc'
+                                      | translate
+                                    }}</span>
+                                  </div>
+                                </div>
+                              }
+                              @if (shouldShowManualTabLoadHint('preparation')) {
+                                <div
+                                  class="info-alert manual-refresh-hint"
+                                  >
+                                  <mat-icon class="info-alert-icon">refresh</mat-icon>
+                                  <div class="info-alert-content">
+                                    <strong>{{
+                                      'coding-management-manual.manual-load-hint.title' | translate
+                                    }}</strong>
+                                    <span>{{
+                                      'coding-management-manual.manual-load-hint.preparation'
+                                      | translate
+                                    }}</span>
+                                  </div>
+                                </div>
+                              }
+                              @if (shouldRenderManualTabData('preparation')) {
+                                <coding-box-variable-bundle-manager
+                                ></coding-box-variable-bundle-manager>
+                              }
+                            </div>
+                          }
+                        </div>
+                      </div>
 
-          <div
-            *ngIf="showVariableBundlesInfo"
-            class="info-alert variable-bundles-info"
-          >
-            <mat-icon class="info-alert-icon">layers</mat-icon>
-            <div class="info-alert-content">
-              <strong>{{
-                'coding-management-manual.variable-bundles.info-title'
-                  | translate
-              }}</strong>
-              <span>{{
-                'coding-management-manual.variable-bundles.info-desc'
-                  | translate
-              }}</span>
-            </div>
-          </div>
+                      <input
+                        #externalCodingFileInput
+                        type="file"
+                        class="external-coding-file-input"
+                        accept=".csv, .xlsx, .xls"
+                        (change)="onExternalCodingFileSelected($event)"
+                        />
 
-          <div
-            *ngIf="shouldShowManualTabLoadHint('preparation')"
-            class="info-alert manual-refresh-hint"
-          >
-            <mat-icon class="info-alert-icon">refresh</mat-icon>
-            <div class="info-alert-content">
-              <strong>{{
-                'coding-management-manual.manual-load-hint.title' | translate
-              }}</strong>
-              <span>{{
-                'coding-management-manual.manual-load-hint.preparation'
-                  | translate
-              }}</span>
-            </div>
-          </div>
-
-          <coding-box-variable-bundle-manager
-            *ngIf="shouldRenderManualTabData('preparation')"
-          ></coding-box-variable-bundle-manager>
-        </div>
-      </div>
-    </div>
-
-    <input
-      #externalCodingFileInput
-      type="file"
-      class="external-coding-file-input"
-      accept=".csv, .xlsx, .xls"
-      (change)="onExternalCodingFileSelected($event)"
-    />
-
-    <!-- Coder Training Component -->
-    <div *ngIf="showCoderTraining" class="coder-training-overlay">
-      <div class="coder-training-modal">
-        <coding-box-coder-training
-          [editTraining]="editTraining"
-          (close)="closeCoderTraining()"
-          (startTraining)="onTrainingStart($event)"
-        >
-        </coding-box-coder-training>
-      </div>
-    </div>
-  </div>
-</div>
+                      <!-- Coder Training Component -->
+                      @if (showCoderTraining) {
+                        <div class="coder-training-overlay">
+                          <div class="coder-training-modal">
+                            <coding-box-coder-training
+                              [editTraining]="editTraining"
+                              (close)="closeCoderTraining()"
+                              (startTraining)="onTrainingStart($event)"
+                              >
+                            </coding-box-coder-training>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  </div>
