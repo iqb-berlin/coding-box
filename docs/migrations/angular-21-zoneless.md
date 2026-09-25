@@ -34,8 +34,9 @@ recovery resets, comment validation and delayed profile/role changes.
 - Test files: notify Angular after the file list refreshes. The zoneless browser
   suite uploads a file, checks the result dialog and sees the refreshed row.
 - Test results: notify Angular when the overview, list or upload progress changes.
-  The zoneless browser suite loads the overview and opens the response-upload
-  options from the import dialog.
+  The zoneless browser suite checks the response upload from the import dialog
+  through chunk transfer, job completion, result dialog and refreshed overview
+  with stubbed server responses.
 
 ## Release gates still required
 
@@ -47,10 +48,10 @@ recovery in both builds. Before changing the production entry point:
 1. Repeat authentication against the intended deployed Keycloak test realm and
    its actual client settings.
 2. Complete zoneless browser checks for the remaining views, especially
-   the full test-result upload and progress flow, workspace/system
-   administration, manual coding, and their dialogs and background jobs. The
-   replay player, test-file upload, test-result overview/import options and
-   item-dataset export have dedicated coverage now.
+   test-result upload against the real backend, workspace/system administration,
+   manual coding, and their dialogs and background jobs. The replay player,
+   test-file upload, stubbed test-result upload flow and item-dataset export
+   have dedicated coverage now.
 3. Audit visible timer and subscription updates across those views. Signals,
    AsyncPipe, bound events or `markForCheck()` must notify Angular for every
    visible asynchronous update.
@@ -97,8 +98,8 @@ Reference: [Angular 21 zoneless guide](https://github.com/angular/angular/blob/v
 - Regular browser suite: 7 tests passed. The default Cypress configuration now
   excludes the two live specs, which require their own backend harness.
 - Zoneless browser suite: 10 tests passed, including absence of `window.Zone`,
-  item-dataset export dialogs, a test-file upload and the test-result import
-  entry point. The response-upload options were also checked in a focused run.
+  item-dataset export dialogs, a test-file upload and the stubbed test-result
+  response-upload flow through job completion and refreshed overview.
 - Isolated live suite: replay and item-matrix export both passed against the
   real backend, PostgreSQL, Redis and embedded Aspect player. The zoneless
   variant also passed after fixing the stale player on a failed navigation.
