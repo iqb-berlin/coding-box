@@ -53,8 +53,10 @@ compatible. The isolated suite below covers login/logout, a complete coding job,
 delayed notes, a simulated save failure, real session invalidation and draft
 recovery in both builds. Before changing the production entry point:
 
-1. Repeat authentication against the intended deployed Keycloak test realm and
-   its actual client settings.
+1. The real `coding-box` Keycloak realm and client accepted a manual PKCE login
+   to a local zoneless frontend, and its token worked with an isolated local
+   backend. Repeat the login on the intended deployed test instance and confirm
+   its redirect and origin settings before production rollout.
 2. Complete zoneless browser checks for the remaining views and state changes,
    especially deeper manual coding actions, workspace/system settings, and
    background jobs. The replay player, test-file upload, real test-result
@@ -104,13 +106,20 @@ tokens. Nonce validation remains enabled, and PKCE S256 is explicit. See the
 [Keycloak migration guide](https://www.keycloak.org/docs/latest/upgrading/#using-older-javascript-adapter).
 The adapter requires a secure browser context (HTTPS, or localhost for these
 tests). This isolated realm does not verify the deployed realm's settings.
+Manual login against the deployed `coding-box` realm with the local zoneless
+frontend additionally confirmed token acceptance by an isolated backend. Its
+empty database exposed a home-screen loading state that stayed visible after
+the successful response. The home view now marks asynchronous authentication
+state updates for checking; a zoneless regression test covers the empty state.
+The manual check confirmed the empty-workspace screen after that fix. It did
+not exercise a deployed Kodierbox test instance or populated workspaces.
 
 Reference: [Angular 21 zoneless guide](https://github.com/angular/angular/blob/v21.2.0/adev/src/content/guide/zoneless.md).
 
 ## Verification on 2026-09-25
 
 - Frontend lint: passed.
-- Frontend tests: 206 suites, 2,098 tests passed.
+- Frontend tests: 206 suites, 2,099 tests passed.
 - Production build and opt-in zoneless build: passed.
 - Regular browser suite: 7 tests passed. The default Cypress configuration now
   excludes the two live specs, which require their own backend harness.
