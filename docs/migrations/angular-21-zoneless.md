@@ -8,6 +8,7 @@ The migration configuration is opt-in and is not a production release switch.
 - `npx nx serve frontend --configuration=zoneless`
 - `npx nx build frontend --configuration=zoneless`
 - `env -u ELECTRON_RUN_AS_NODE npx nx e2e frontend --configuration=zoneless`
+- `env -u ELECTRON_RUN_AS_NODE npx nx run frontend:e2e-replay-live --configuration=zoneless`
 
 The candidate uses `main.zoneless.ts`, omits the ZoneJS polyfill and writes builds
 to `dist/apps/frontend-zoneless`. The dedicated Cypress configuration keeps the
@@ -26,22 +27,33 @@ recovery resets, comment validation and delayed profile/role changes.
   and lifecycle-bound authentication subscriptions.
 - Home and application shell: lifecycle-bound subscriptions. Home also cancels
   pending workspace-access requests, preventing navigation after destruction.
+- Replay: notify Angular when a new response arrives or a failed navigation
+  clears the embedded player. The live replay test caught the stale player.
+- Export status: notify Angular when background job updates arrive. The zoneless
+  browser suite covers the success toast and the incomplete-export dialog.
+- Test files: notify Angular after the file list refreshes. The zoneless browser
+  suite uploads a file, checks the result dialog and sees the refreshed row.
+- Test results: notify Angular when the overview, list or upload progress changes.
+  The zoneless browser suite loads the overview and opens the response-upload
+  options from the import dialog.
 
 ## Release gates still required
 
 A successful smoke test is not evidence that all application views are zoneless
-compatible. Before changing the production entry point:
-
-The isolated suite below covers login/logout, a complete coding job, delayed
-notes, a simulated save failure, real session invalidation and draft recovery in
-both builds. Before changing the production entry point:
+compatible. The isolated suite below covers login/logout, a complete coding job,
+delayed notes, a simulated save failure, real session invalidation and draft
+recovery in both builds. Before changing the production entry point:
 
 1. Repeat authentication against the intended deployed Keycloak test realm and
    its actual client settings.
-2. Validate embedded-player messages, route changes, dialogs, uploads, exports,
-   timers and asynchronous subscriptions for missing change notifications.
-3. Run these remaining flows in the zoneless build. Signals, AsyncPipe, bound events or
-   `markForCheck()` must notify Angular for every visible asynchronous update.
+2. Complete zoneless browser checks for the remaining views, especially
+   the full test-result upload and progress flow, workspace/system
+   administration, manual coding, and their dialogs and background jobs. The
+   replay player, test-file upload, test-result overview/import options and
+   item-dataset export have dedicated coverage now.
+3. Audit visible timer and subscription updates across those views. Signals,
+   AsyncPipe, bound events or `markForCheck()` must notify Angular for every
+   visible asynchronous update.
 4. Only then switch the default entry point, remove the ZoneJS polyfill and audit
    test/component-test dependencies before removing the package.
 
@@ -84,10 +96,13 @@ Reference: [Angular 21 zoneless guide](https://github.com/angular/angular/blob/v
 - Production build and opt-in zoneless build: passed.
 - Regular browser suite: 7 tests passed. The default Cypress configuration now
   excludes the two live specs, which require their own backend harness.
-- Zoneless browser suite: 4 tests passed, including absence of `window.Zone`.
+- Zoneless browser suite: 10 tests passed, including absence of `window.Zone`,
+  item-dataset export dialogs, a test-file upload and the test-result import
+  entry point. The response-upload options were also checked in a focused run.
 - Isolated live suite: replay and item-matrix export both passed against the
-  real backend, PostgreSQL, Redis and embedded Aspect player. The temporary
-  containers were removed by the harness.
+  real backend, PostgreSQL, Redis and embedded Aspect player. The zoneless
+  variant also passed after fixing the stale player on a failed navigation.
+  The temporary containers were removed by the harness.
 - Isolated real Keycloak coding/session suite: passed with ZoneJS and zoneless.
   It covers login, persisted code and notes after reload, a failed note save,
   server-side session invalidation, draft recovery and cleanup, pause/resume,
