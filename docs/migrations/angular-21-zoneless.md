@@ -54,9 +54,10 @@ delayed notes, a simulated save failure, real session invalidation and draft
 recovery in both builds. Before changing the production entry point:
 
 1. The real `coding-box` Keycloak realm and client accepted a manual PKCE login
-   to a local zoneless frontend, and its token worked with an isolated local
-   backend. Repeat the login on the intended deployed test instance and confirm
-   its redirect and origin settings before production rollout.
+   to a local zoneless frontend. The same frontend also loaded real workspaces
+   through the deployed `kodierbox-test.iqb.hu-berlin.de` backend. Deploy the
+   PR's zoneless frontend to the intended test instance and confirm its redirect
+   and origin settings before production rollout.
 2. Complete zoneless browser checks for the remaining views and state changes,
    especially deeper manual coding actions, workspace/system settings, and
    background jobs. The replay player, test-file upload, real test-result
@@ -112,7 +113,11 @@ empty database exposed a home-screen loading state that stayed visible after
 the successful response. The home view now marks asynchronous authentication
 state updates for checking; a zoneless regression test covers the empty state.
 The manual check confirmed the empty-workspace screen after that fix. It did
-not exercise a deployed Kodierbox test instance or populated workspaces.
+not exercise a deployed zoneless build or populated workspaces. A subsequent
+manual check connected the local zoneless frontend through a temporary local
+proxy to `https://kodierbox-test.iqb.hu-berlin.de/api/`. Login and the display
+of existing workspaces succeeded. The deployed test frontend itself still
+includes ZoneJS, so this does not replace a zoneless test deployment.
 
 Reference: [Angular 21 zoneless guide](https://github.com/angular/angular/blob/v21.2.0/adev/src/content/guide/zoneless.md).
 
