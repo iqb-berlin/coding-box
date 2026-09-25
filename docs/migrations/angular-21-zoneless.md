@@ -56,11 +56,11 @@ recovery in both builds. Before changing the production entry point:
 1. Repeat authentication against the intended deployed Keycloak test realm and
    its actual client settings.
 2. Complete zoneless browser checks for the remaining views and state changes,
-   especially manual coding beyond its initial view, workspace/system settings,
-   and background jobs. The replay player, test-file upload, real test-result
+   especially deeper manual coding actions, workspace/system settings, and
+   background jobs. The replay player, test-file upload, real test-result
    upload, item-dataset export, workspace creation/deletion, user/workspace
-   lists, access-rights preselection and system-notification dialog have
-   dedicated coverage now.
+   lists, access-rights preselection, manual execution job list and
+   system-notification dialog have dedicated coverage now.
 3. Audit visible timer and subscription updates across those views. Signals,
    AsyncPipe, bound events or `markForCheck()` must notify Angular for every
    visible asynchronous update.
@@ -95,8 +95,8 @@ upload API, wait for its background job result, and check the result dialog.
 They also open system administration, create and delete a workspace, verify
 the user and workspace lists, verify the current user's preselected workspace
 access, create and delete a system notification through its confirmation dialog,
-and open the manual coding view. The generated realm and disposable database
-keep these mutations isolated.
+and verify the completed job in the manual execution tab. The generated realm
+and disposable database keep these mutations isolated.
 
 The JavaScript adapter is updated from 23 to 26.2.4. Keycloak 25+ only puts the
 nonce in the ID token; the old adapter also expected it in access and refresh

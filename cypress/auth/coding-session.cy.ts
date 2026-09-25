@@ -363,5 +363,9 @@ describe('real Keycloak coding session', () => {
       .should('contain.text', 'Manuelle Kodierung');
     cy.get('coding-box-coding-management-manual .planning-status-banner')
       .should('be.visible');
+    cy.get('coding-box-coding-management-manual .manual-coding-tabs')
+      .contains('Durchführung').click();
+    cy.get('coding-box-coding-jobs', { timeout: 30_000 })
+      .should('contain.text', 'Live authentication coding job');
   });
 });
