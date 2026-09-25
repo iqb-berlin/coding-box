@@ -169,7 +169,7 @@
   }
 
   <div class="codes-section">
-    @if (hasVariableManualInstruction || regularCodes.length || legacySelectedCode) {
+    @if (hasVariableManualInstruction || regularCodes().length || legacySelectedCode) {
       <div class="code-list scrollable-codes">
         @if (hasVariableManualInstruction) {
           <div class="code-row general-instruction-row">
@@ -194,7 +194,7 @@
             <div class="legacy-code-note">{{ legacyCodeNoteTranslationKey | translate }}</div>
           </div>
         }
-        @for (item of regularCodes; track item) {
+        @for (item of regularCodes(); track item.id) {
           <div class="code-row" [class.selected]="item.id === selectedCode"
             [class.has-review-code-selection]="hasReviewCodeSelection(item.id)"
             [class.with-score]="showScore && item.score !== undefined"
@@ -229,7 +229,7 @@
       </div>
     }
 
-    @if (!regularCodes.length && !legacySelectedCode) {
+    @if (!regularCodes().length && !legacySelectedCode) {
       <div>
         <div class="hint">{{ 'code-selector.no-codes-found' | translate }} {{ variableId }}.</div>
       </div>
@@ -249,7 +249,7 @@
 
     @if (isSupportSectionExpanded) {
       <div class="uncertain-codes-section">
-        @for (item of codingIssueOptionCodes; track item) {
+        @for (item of codingIssueOptionCodes(); track item.id) {
           <div class="code-row" [class.selected]="item.id === selectedCodingIssueOption"
             [class.has-review-code-selection]="hasReviewCodeSelection(item.id)"
             [class.read-only]="isCodingIssueOptionDisabled(item)"
@@ -279,7 +279,7 @@
         <button mat-button class="deselect-button" [disabled]="isReadOnly" (click)="deselectAll()">Auswahl entfernen</button>
       </div>
 
-      @if (allowComments) {
+      @if (allowComments()) {
         <mat-form-field appearance="outline" class="notes-field">
           <textarea #notesTextarea matInput [(ngModel)]="coderNotes" (input)="onNotesChanged()" (blur)="onNotesCommitted()"
             [disabled]="isReadOnly" [attr.aria-invalid]="newCodeCommentValidationError ? 'true' : null"
