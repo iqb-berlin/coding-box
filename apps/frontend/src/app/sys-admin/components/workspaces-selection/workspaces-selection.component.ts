@@ -12,7 +12,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  Component, OnInit, SimpleChanges, ViewChild, inject,
+  ChangeDetectorRef, Component, OnInit, SimpleChanges, ViewChild, inject,
   DestroyRef, input,
   output
 } from '@angular/core';
@@ -40,6 +40,7 @@ import { WorkspaceBackendService } from '../../../workspace/services/workspace-b
 export class WorkspacesSelectionComponent implements OnInit {
   private workspaceBackendService = inject(WorkspaceBackendService);
   private destroyRef = inject(DestroyRef);
+  private changeDetectorRef = inject(ChangeDetectorRef);
 
   objectsDatasource = new MatTableDataSource<WorkspaceInListDto>();
   displayedColumns = ['selectCheckbox', 'name'];
@@ -55,8 +56,12 @@ export class WorkspacesSelectionComponent implements OnInit {
   readonly workspacesChanged = input.required<boolean>();
 
   ngOnChanges(changes: SimpleChanges) {
-    if (changes) {
+    if (changes.workspacesChanged?.currentValue === true &&
+      !changes.workspacesChanged.firstChange) {
       this.updateWorkspaceList();
+    } else if (changes.selectedWorkspacesIds &&
+      !changes.selectedWorkspacesIds.firstChange) {
+      this.applySelectedWorkspaceIds();
     }
   }
 
@@ -71,14 +76,18 @@ export class WorkspacesSelectionComponent implements OnInit {
       .subscribe(workspaces => {
         this.workspacesUpdated.emit(this.workspacesChanged());
         this.setObjectsDatasource(workspaces.data);
-        this.tableSelectionCheckboxes.clear();
         this.tableSelectionRow.clear();
-        if (this.selectedWorkspacesIds()?.length > 0) {
-          this.tableSelectionCheckboxes.select(...workspaces.data
-            .filter(workspace => this.selectedWorkspacesIds().includes(workspace.id)));
-          this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
-        }
+        this.applySelectedWorkspaceIds();
+        this.changeDetectorRef.markForCheck();
       });
+  }
+
+  private applySelectedWorkspaceIds(): void {
+    this.tableSelectionCheckboxes.clear();
+    this.tableSelectionCheckboxes.select(...this.objectsDatasource.data
+      .filter(workspace => this.selectedWorkspacesIds().includes(workspace.id)));
+    this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
+    this.changeDetectorRef.markForCheck();
   }
 
   private setObjectsDatasource(groups: WorkspaceInListDto[]): void {
@@ -95,6 +104,7 @@ export class WorkspacesSelectionComponent implements OnInit {
   selectCheckbox(row: WorkspaceInListDto): void {
     this.tableSelectionCheckboxes.toggle(row);
     this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
+    this.changeDetectorRef.markForCheck();
   }
 
   private isAllSelected(): boolean {
@@ -108,6 +118,7 @@ export class WorkspacesSelectionComponent implements OnInit {
       this.tableSelectionCheckboxes.clear() :
       this.objectsDatasource.data.forEach(row => this.tableSelectionCheckboxes.select(row));
     this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
+    this.changeDetectorRef.markForCheck();
   }
 
   toggleRowSelection(row: WorkspaceInListDto): void {
