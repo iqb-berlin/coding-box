@@ -1229,7 +1229,7 @@ export class ExternalCodingImportService {
   private async parseExcelFile(fileData: string): Promise<ExternalCodingRow[]> {
     const buffer = Buffer.from(fileData, 'base64');
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer as Buffer);
+    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
 
     const worksheet = workbook.getWorksheet(1);
     if (!worksheet) {

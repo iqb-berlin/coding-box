@@ -1,5 +1,7 @@
 import { SimpleChange } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import {
+  ComponentFixture, fakeAsync, TestBed, tick
+} from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { CodingScheme } from '../../../models/coding-interfaces';
@@ -132,6 +134,20 @@ describe('CodeSelectorComponent', () => {
     ]
   };
 
+  const originalScrollIntoView = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
+
+  beforeAll(() => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: jest.fn() });
+  });
+
+  afterAll(() => {
+    if (originalScrollIntoView) {
+      Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalScrollIntoView);
+    } else {
+      Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+    }
+  });
+
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [FormsModule, TranslateModule.forRoot(), CodeSelectorComponent]
@@ -147,6 +163,128 @@ describe('CodeSelectorComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('reuses derived code lists and only updates the affected list when comment permissions change', () => {
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.detectChanges();
+    const regularCodes = component.regularCodes();
+    const issueCodes = component.codingIssueOptionCodes();
+
+    fixture.detectChanges();
+
+    expect(component.regularCodes()).toBe(regularCodes);
+    expect(component.codingIssueOptionCodes()).toBe(issueCodes);
+    fixture.componentRef.setInput('allowComments', false);
+    fixture.detectChanges();
+    expect(component.regularCodes()).toBe(regularCodes);
+    expect(component.codingIssueOptionCodes().map(item => item.id)).toEqual([-3, -4]);
+    expect(fixture.nativeElement.querySelector('textarea')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-code-id="-2"]')).toBeNull();
+
+    fixture.componentRef.setInput('allowComments', true);
+    fixture.detectChanges();
+    expect(component.regularCodes()).toBe(regularCodes);
+    expect(component.codingIssueOptionCodes().map(item => item.id)).toEqual([-1, -3, -4, -2]);
+    expect(fixture.nativeElement.querySelector('textarea')).not.toBeNull();
+  });
+
+  it('immediately renders the saved code as legacy when a replacement scheme removes it', () => {
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.componentRef.setInput('preSelectedCodeId', 1);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-code-id="1"]').classList.contains('selected')).toBe(true);
+    const replacement: CodingScheme = {
+      ...mixedCodingScheme,
+      variableCodings: mixedCodingScheme.variableCodings.map(variable => ({
+        ...variable, codes: []
+      }))
+    };
+
+    fixture.componentRef.setInput('codingScheme', replacement);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.legacy-code-row .code-id')?.textContent.trim()).toBe('1');
+    expect(fixture.nativeElement.querySelector('[data-code-id="1"]')).toBeNull();
+  });
+
+  it('keeps a user selection after the initial render has settled', fakeAsync(() => {
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.detectChanges();
+    const issueRow = fixture.nativeElement.querySelector('[data-code-id="-3"]') as HTMLElement;
+
+    issueRow.click();
+    tick();
+    fixture.detectChanges();
+
+    expect(component.selectedCodingIssueOption).toBe(-3);
+    expect(issueRow.classList.contains('selected')).toBe(true);
+  }));
+
+  it('closes navigation panels only for clicks outside the component', () => {
+    component.isVariablePanelOpen = true;
+    fixture.nativeElement.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(component.isVariablePanelOpen).toBe(true);
+
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(component.isVariablePanelOpen).toBe(false);
+    component.isBundleVariablePanelOpen = true;
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(component.isBundleVariablePanelOpen).toBe(false);
+  });
+
+  it('handles window shortcuts and removes the listener when destroyed', () => {
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.detectChanges();
+    const selected = jest.fn();
+    component.codeSelected.subscribe(selected);
+    jest.spyOn(component, 'scrollToCode').mockImplementation(() => {});
+    const keyboardHandler = jest.spyOn(component, 'handleKeyboardEvent');
+    const event = new KeyboardEvent('keydown', { code: 'NumpadMultiply', cancelable: true });
+
+    window.dispatchEvent(event);
+
+    expect(component.selectedCodingIssueOption).toBe(-3);
+    expect(selected).toHaveBeenCalledWith(expect.objectContaining({ variableId: 'VAR1' }));
+    expect(event.defaultPrevented).toBe(true);
+    keyboardHandler.mockClear();
+    fixture.destroy();
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'NumpadMultiply' }));
+    expect(keyboardHandler).not.toHaveBeenCalled();
+  });
+
+  it('preserves code rows when reloading the scheme and updates their instructions', () => {
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    component.isSupportSectionExpanded = true;
+    fixture.detectChanges();
+    const rows = Array.from(fixture.nativeElement.querySelectorAll('.code-row[data-code-id]')) as HTMLElement[];
+    expect(rows.length).toBeGreaterThan(1);
+
+    const updatedScheme: CodingScheme = {
+      ...mixedCodingScheme,
+      variableCodings: mixedCodingScheme.variableCodings.map(variable => ({
+        ...variable,
+        codes: variable.codes.map(code => (code.id === 1 ? {
+          ...code, manualInstruction: '<p>Updated instruction</p>'
+        } : code))
+      }))
+    };
+    fixture.componentRef.setInput('codingScheme', updatedScheme);
+    fixture.detectChanges();
+
+    rows.forEach(row => {
+      expect(fixture.nativeElement.querySelector(
+        `.code-row[data-code-id="${row.dataset.codeId}"]`
+      )).toBe(row);
+    });
+    expect(fixture.nativeElement.querySelector('.code-row[data-code-id="1"]').textContent)
+      .toContain('Updated instruction');
+  });
+
   it('filters regular codes without manual instructions from manual selection', () => {
     component.codingScheme = mixedCodingScheme;
     component.variableId = 'VAR1';
@@ -156,8 +294,8 @@ describe('CodeSelectorComponent', () => {
       variableId: new SimpleChange(null, 'VAR1', false)
     });
 
-    expect(component.regularCodes.map(code => code.id)).toEqual([1]);
-    expect(component.codingIssueOptionCodes).toHaveLength(4);
+    expect(component.regularCodes().map(code => code.id)).toEqual([1]);
+    expect(component.codingIssueOptionCodes()).toHaveLength(4);
   });
 
   it('keeps available coding issue options and general instructions visible without regular manual codes', () => {
@@ -171,8 +309,8 @@ describe('CodeSelectorComponent', () => {
     });
     fixture.detectChanges();
 
-    expect(component.regularCodes).toEqual([]);
-    expect(component.codingIssueOptionCodes.map(code => code.id)).toEqual([-1, -3, -4, -2]);
+    expect(component.regularCodes()).toEqual([]);
+    expect(component.codingIssueOptionCodes().map(code => code.id)).toEqual([-1, -3, -4, -2]);
     expect(fixture.nativeElement.querySelector('.general-instruction-row').textContent).toContain(
       'Only general instruction'
     );
@@ -192,7 +330,7 @@ describe('CodeSelectorComponent', () => {
   it('hides comment-bound coding issue options when comments are disabled', () => {
     component.codingScheme = mixedCodingScheme;
     component.variableId = 'VAR1';
-    component.allowComments = false;
+    fixture.componentRef.setInput('allowComments', false);
     const emitSpy = jest.spyOn(component.codeSelected, 'emit');
 
     component.ngOnChanges({
@@ -201,7 +339,7 @@ describe('CodeSelectorComponent', () => {
     });
     fixture.detectChanges();
 
-    expect(component.codingIssueOptionCodes.map(code => code.id)).toEqual([-3, -4]);
+    expect(component.codingIssueOptionCodes().map(code => code.id)).toEqual([-3, -4]);
     expect(fixture.nativeElement.querySelectorAll('.uncertain-codes-section .code-row')).toHaveLength(2);
 
     component.onSelect(-1);
@@ -214,7 +352,7 @@ describe('CodeSelectorComponent', () => {
     jest.useFakeTimers();
     component.codingScheme = mixedCodingScheme;
     component.variableId = 'VAR1';
-    component.allowComments = false;
+    fixture.componentRef.setInput('allowComments', false);
     component.preSelectedCodeId = -2;
     component.preSelectedCodingIssueOptionId = -2;
 
@@ -227,7 +365,7 @@ describe('CodeSelectorComponent', () => {
     jest.runOnlyPendingTimers();
     fixture.detectChanges();
 
-    expect(component.codingIssueOptionCodes.map(code => code.id)).toEqual([-3, -4]);
+    expect(component.codingIssueOptionCodes().map(code => code.id)).toEqual([-3, -4]);
     expect(component.selectedCode).toBeNull();
     expect(component.selectedCodingIssueOption).toBeNull();
     expect(component.legacySelectedCode).toBeNull();
@@ -251,7 +389,7 @@ describe('CodeSelectorComponent', () => {
 
     expect(component.selectedCodingIssueOption).toBe(-2);
 
-    component.allowComments = false;
+    fixture.componentRef.setInput('allowComments', false);
     component.ngOnChanges({
       allowComments: new SimpleChange(true, false, false)
     });
@@ -364,7 +502,7 @@ describe('CodeSelectorComponent', () => {
     });
     component.onSelect(4);
 
-    expect(component.regularCodes.map(code => code.id)).toEqual([4]);
+    expect(component.regularCodes().map(code => code.id)).toEqual([4]);
     expect(emitSpy).toHaveBeenCalledWith({
       variableId: '04',
       code: collisionCodingScheme.variableCodings[1].codes[0],
@@ -415,13 +553,13 @@ describe('CodeSelectorComponent', () => {
     expect(issueBadge.textContent).toContain('2');
     expect(issueRows).toHaveLength(2);
     expect(component.getCodingIssueOptionRowTooltip(
-      component.codingIssueOptionCodes.find(item => item.id === -3)!
+      component.codingIssueOptionCodes().find(item => item.id === -3)!
     )).toContain('Coder F, Coder G');
     expect(component.getCodingIssueOptionRowTooltip(
-      component.codingIssueOptionCodes.find(item => item.id === -2)!
+      component.codingIssueOptionCodes().find(item => item.id === -2)!
     )).toContain('Coder D, Coder E');
 
-    component.onSelect(1);
+    (codeRow as HTMLElement).click();
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('.code-row.selected.has-review-code-selection')).toBeTruthy();
@@ -439,7 +577,7 @@ describe('CodeSelectorComponent', () => {
     });
     fixture.detectChanges();
 
-    expect(component.regularCodes.map(code => code.id)).toEqual([1]);
+    expect(component.regularCodes().map(code => code.id)).toEqual([1]);
     expect(component.selectedCode).toBeNull();
     expect(component.legacySelectedCode?.id).toBe(2);
     expect(fixture.nativeElement.querySelector('.legacy-code-row')).toBeTruthy();
@@ -463,7 +601,7 @@ describe('CodeSelectorComponent', () => {
     fixture.detectChanges();
     component.nextUnit();
 
-    expect(component.regularCodes.map(code => code.id)).toEqual([1]);
+    expect(component.regularCodes().map(code => code.id)).toEqual([1]);
     expect(component.selectedCode).toBeNull();
     expect(component.legacySelectedCode).toEqual({
       id: 99,
@@ -660,7 +798,6 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('blocks nextUnit and focuses notes when new-code-needed has no comment', () => {
-    jest.useFakeTimers();
     component.codingScheme = mixedCodingScheme;
     component.variableId = 'VAR1';
     component.unitsData = {
@@ -673,14 +810,12 @@ describe('CodeSelectorComponent', () => {
       codingScheme: new SimpleChange(null, mixedCodingScheme, false),
       variableId: new SimpleChange(null, 'VAR1', false)
     });
-    jest.runOnlyPendingTimers();
     component.onSelect(-2);
     fixture.detectChanges();
 
     const notesTextarea = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
     const focusSpy = jest.spyOn(notesTextarea, 'focus').mockImplementation(() => { });
     component.nextUnit();
-    jest.runAllTimers();
     fixture.detectChanges();
 
     expect(emitSpy).not.toHaveBeenCalled();
@@ -696,7 +831,6 @@ describe('CodeSelectorComponent', () => {
 
     expect(component.newCodeCommentValidationError).toBe(false);
     expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
-    jest.useRealTimers();
   });
 
   it('previousUnit should navigate to immediate previous case for interleaved variables', () => {
@@ -711,28 +845,20 @@ describe('CodeSelectorComponent', () => {
     expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
   });
 
-  it('toggleVariablePanel should focus active variable item when opened', () => {
-    jest.useFakeTimers();
-    const panel = document.createElement('div');
-    panel.className = 'variable-panel';
-    const activeItem = document.createElement('div');
-    activeItem.className = 'variable-panel-item active';
-    activeItem.setAttribute('tabindex', '-1');
-    panel.appendChild(activeItem);
+  it('focuses the active variable after rendering the opened panel', async () => {
+    fixture.componentRef.setInput('showProgress', true);
+    fixture.componentRef.setInput('unitsData', interleavedUnitsData);
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
 
-    const scrollSpy = jest.fn();
-    // jsdom does not implement scrollIntoView in all environments.
-    (activeItem as unknown as { scrollIntoView: () => void }).scrollIntoView = scrollSpy;
-    const focusSpy = jest.spyOn(activeItem, 'focus').mockImplementation(() => { });
-    (component as unknown as { variablePanel: { nativeElement: HTMLElement } }).variablePanel = { nativeElement: panel };
+    const trigger = fixture.nativeElement.querySelector('.variable-trigger-btn') as HTMLButtonElement;
+    expect(fixture.nativeElement.querySelector('.variable-panel')).toBeNull();
+    trigger.click();
+    await fixture.whenStable();
 
-    component.toggleVariablePanel();
-    jest.runAllTimers();
-
-    expect(component.isVariablePanelOpen).toBe(true);
-    expect(scrollSpy).toHaveBeenCalled();
-    expect(focusSpy).toHaveBeenCalled();
-    jest.useRealTimers();
+    const activeItem = fixture.nativeElement.querySelector('.variable-panel-item.active') as HTMLElement;
+    expect(activeItem).toBeTruthy();
+    expect(document.activeElement).toBe(activeItem);
   });
 
   it('hides the pause button for completed job reviews', () => {
@@ -761,7 +887,7 @@ describe('CodeSelectorComponent', () => {
   it('keeps general codes and notes expanded by default and lets users collapse them', () => {
     component.codingScheme = mixedCodingScheme;
     component.variableId = 'VAR1';
-    component.allowComments = true;
+    fixture.componentRef.setInput('allowComments', true);
 
     component.ngOnChanges({
       codingScheme: new SimpleChange(null, mixedCodingScheme, false),
@@ -781,62 +907,63 @@ describe('CodeSelectorComponent', () => {
     expect(fixture.nativeElement.querySelector('.notes-field')).toBeNull();
   });
 
-  it('expands the support section before focusing missing new-code notes', () => {
-    jest.useFakeTimers();
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
+  it('expands the support section before focusing missing new-code notes', async () => {
     component.isSupportSectionExpanded = false;
-
-    component.ngOnChanges({
-      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
-      variableId: new SimpleChange(null, 'VAR1', false)
-    });
     component.selectedCodingIssueOption = -2;
-    fixture.detectChanges();
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('textarea')).toBeNull();
 
     expect(component.canLeaveCurrentUnit()).toBe(false);
-    fixture.detectChanges();
-    const notesTextarea = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
-    const focusSpy = jest.spyOn(notesTextarea, 'focus').mockImplementation(() => { });
-    jest.runAllTimers();
+    await fixture.whenStable();
 
-    expect(component.isSupportSectionExpanded).toBe(true);
+    const notesTextarea = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
     expect(notesTextarea).toBeTruthy();
-    expect(focusSpy).toHaveBeenCalled();
-    jest.useRealTimers();
+    expect(document.activeElement).toBe(notesTextarea);
   });
 
-  it('opens collapsed general codes and scrolls to a selected support code', () => {
-    jest.useFakeTimers();
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
-    component.allowComments = true;
-
-    component.ngOnChanges({
-      codingScheme: new SimpleChange(null, mixedCodingScheme, false),
-      variableId: new SimpleChange(null, 'VAR1', false)
-    });
+  it('opens collapsed general codes before scrolling to the rendered support code', async () => {
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
     component.isSupportSectionExpanded = false;
-    fixture.detectChanges();
-
-    const scrollSpy = jest.fn();
-    const originalQuerySelector = fixture.nativeElement.querySelector.bind(fixture.nativeElement);
-    const querySelectorSpy = jest.spyOn(fixture.nativeElement, 'querySelector');
-    querySelectorSpy.mockImplementation((...args: unknown[]) => {
-      const selector = args[0] as string;
-      if (selector === '[data-code-id="-2"]') {
-        return { scrollIntoView: scrollSpy } as unknown as Element;
-      }
-      return originalQuerySelector(selector);
-    });
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('[data-code-id="-2"]')).toBeNull();
+    const scrollSpy = jest.spyOn(HTMLElement.prototype, 'scrollIntoView');
+    scrollSpy.mockClear();
 
     component.scrollToCode(-2);
-    jest.runAllTimers();
+    expect(scrollSpy).not.toHaveBeenCalled();
+    await fixture.whenStable();
 
-    expect(component.isSupportSectionExpanded).toBe(true);
+    const supportCode = fixture.nativeElement.querySelector('[data-code-id="-2"]') as HTMLElement;
+    expect(supportCode).toBeTruthy();
     expect(scrollSpy).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
-    querySelectorSpy.mockRestore();
-    jest.useRealTimers();
+    expect(scrollSpy.mock.contexts).toContain(supportCode);
+  });
+
+  it('cancels pending scrolling when the component is destroyed', async () => {
+    const querySpy = jest.spyOn(fixture.nativeElement, 'querySelector');
+    component.scrollToCode(-2);
+    fixture.destroy();
+    await fixture.whenStable();
+    TestBed.tick();
+
+    expect(querySpy).not.toHaveBeenCalledWith('[data-code-id="-2"]');
+  });
+
+  it('does not focus notes if validation is resolved before rendering', async () => {
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    const notes = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
+    const focusSpy = jest.spyOn(notes, 'focus');
+    component.selectedCodingIssueOption = -2;
+    expect(component.canLeaveCurrentUnit()).toBe(false);
+    component.coderNotes = 'New code proposal';
+    component.onNotesChanged();
+    await fixture.whenStable();
+
+    expect(focusSpy).not.toHaveBeenCalled();
   });
 
   it('disables and ignores pause while read-only', () => {
@@ -1098,7 +1225,7 @@ describe('CodeSelectorComponent', () => {
     expect(trigger.textContent).toContain('Bundle A');
     expect(fixture.nativeElement.querySelectorAll('.bundle-variable-chip')).toHaveLength(2);
 
-    component.toggleVariablePanel();
+    trigger.click();
     fixture.detectChanges();
 
     const panelItems = fixture.nativeElement.querySelectorAll('.variable-panel-item') as NodeListOf<HTMLElement>;
@@ -1205,13 +1332,14 @@ describe('CodeSelectorComponent', () => {
     expect(trigger.textContent).toContain('UNIT_1 / VAR1');
     expect(fixture.nativeElement.querySelectorAll('.bundle-variable-chip')).toHaveLength(0);
 
-    component.toggleBundleVariablePanel();
+    trigger.click();
     fixture.detectChanges();
 
     const panelItems = fixture.nativeElement.querySelectorAll(
       '.bundle-variable-dropdown-wrapper .variable-panel-item'
     ) as NodeListOf<HTMLElement>;
     expect(panelItems).toHaveLength(9);
+    expect(document.activeElement).toBe(panelItems[0]);
     expect(panelItems[8].textContent).toContain('UNIT_1 / VAR9');
 
     const emitSpy = jest.spyOn(component.unitChanged, 'emit');

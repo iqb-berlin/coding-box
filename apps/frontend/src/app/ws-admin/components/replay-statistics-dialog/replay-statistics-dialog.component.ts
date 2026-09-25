@@ -7,7 +7,7 @@ import {
   ViewChild,
   inject
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { MatDialogModule, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -29,7 +29,6 @@ interface ReplayFrequencyData {
   selector: 'coding-box-replay-statistics-dialog',
   standalone: true,
   imports: [
-    CommonModule,
     MatDialogModule,
     MatButtonModule,
     MatCardModule,
@@ -41,339 +40,349 @@ interface ReplayFrequencyData {
   template: `
     <h2 mat-dialog-title>{{ 'workspace.replay-statistics' | translate }}</h2>
     <mat-dialog-content class="dialog-content" #dialogContent>
-      <div *ngIf="loading" class="loading-container">
-        <mat-spinner diameter="50"></mat-spinner>
-        <p>{{ 'workspace.loading-statistics' | translate }}</p>
-      </div>
-
-      <div *ngIf="!loading" class="dialog-body">
-        <div class="stats-container source-summary">
-          <mat-card>
-            <mat-card-content>
-              <div class="source-summary-grid">
-                <div class="source-summary-item">
-                  <span class="stat-label">{{ 'workspace.total-replays' | translate }}</span>
-                  <span class="stat-value">{{ sourceSummary.total }}</span>
-                </div>
-                <div class="source-summary-item">
-                  <span class="stat-label">{{ 'workspace.internal-replays' | translate }}</span>
-                  <span class="stat-value">{{ sourceSummary.internal }}</span>
-                </div>
-                <div class="source-summary-item">
-                  <span class="stat-label">{{ 'workspace.external-token-replays' | translate }}</span>
-                  <span class="stat-value">{{ sourceSummary.external }}</span>
-                </div>
-              </div>
-            </mat-card-content>
-          </mat-card>
+      @if (loading) {
+        <div class="loading-container">
+          <mat-spinner diameter="50"></mat-spinner>
+          <p>{{ 'workspace.loading-statistics' | translate }}</p>
         </div>
+      }
 
-        <mat-tab-group
-          class="tabs"
-          dynamicHeight="false"
-          (selectedIndexChange)="selectedTabIndex = $event"
-        >
-          <!-- Frequency Tab -->
-          <mat-tab label="{{ 'workspace.replay-frequency' | translate }}">
-            <div class="chart-container">
-              <h3>{{ 'workspace.replay-frequency-by-unit' | translate }}</h3>
-              <ngx-charts-bar-vertical
-                *ngIf="selectedTabIndex === 0"
-                [results]="frequencyData"
-                [xAxis]="true"
-                [yAxis]="true"
-                [showXAxisLabel]="true"
-                [showYAxisLabel]="true"
-                [xAxisLabel]="'workspace.unit' | translate"
-                [yAxisLabel]="'workspace.replay-count' | translate"
-                [scheme]="colorScheme"
-                [showDataLabel]="false"
-                [rotateXAxisTicks]="true"
-                [xAxisTickFormatting]="formatXAxisTick"
-                [view]="wideView"
-              ></ngx-charts-bar-vertical>
-            </div>
-          </mat-tab>
-
-          <!-- Duration Tab -->
-          <mat-tab label="{{ 'workspace.replay-duration' | translate }}">
-            <div class="chart-container">
-              <div class="stats-container">
-                <mat-card>
-                  <mat-card-content>
-                    <div class="stat-item">
-                      <span class="stat-label"
-                        >{{ 'workspace.min-duration' | translate }}:</span
-                      >
-                      <span class="stat-value">{{
-                        formatMilliseconds(durationStats.min)
-                      }}</span>
-                    </div>
-                    <div class="stat-item">
-                      <span class="stat-label"
-                        >{{ 'workspace.max-duration' | translate }}:</span
-                      >
-                      <span class="stat-value">{{
-                        formatMilliseconds(durationStats.max)
-                      }}</span>
-                    </div>
-                    <div class="stat-item">
-                      <span class="stat-label"
-                        >{{ 'workspace.avg-duration' | translate }}:</span
-                      >
-                      <span class="stat-value">{{
-                        formatMilliseconds(durationStats.average)
-                      }}</span>
-                    </div>
-                  </mat-card-content>
-                </mat-card>
-              </div>
-
-              <div class="charts-row">
-                <div class="chart-column">
-                  <h3>
-                    {{ 'workspace.replay-duration-distribution' | translate }}
-                  </h3>
-                  <ngx-charts-bar-vertical
-                    *ngIf="selectedTabIndex === 1"
-                    [results]="durationDistributionData"
-                    [xAxis]="true"
-                    [yAxis]="true"
-                    [showXAxisLabel]="true"
-                    [showYAxisLabel]="true"
-                    [xAxisLabel]="'workspace.duration-milliseconds' | translate"
-                    [yAxisLabel]="'workspace.replay-count' | translate"
-                    [scheme]="colorScheme"
-                    [showDataLabel]="false"
-                    [view]="halfView"
-                  ></ngx-charts-bar-vertical>
+      @if (!loading) {
+        <div class="dialog-body">
+          <div class="stats-container source-summary">
+            <mat-card>
+              <mat-card-content>
+                <div class="source-summary-grid">
+                  <div class="source-summary-item">
+                    <span class="stat-label">{{ 'workspace.total-replays' | translate }}</span>
+                    <span class="stat-value">{{ sourceSummary.total }}</span>
+                  </div>
+                  <div class="source-summary-item">
+                    <span class="stat-label">{{ 'workspace.internal-replays' | translate }}</span>
+                    <span class="stat-value">{{ sourceSummary.internal }}</span>
+                  </div>
+                  <div class="source-summary-item">
+                    <span class="stat-label">{{ 'workspace.external-token-replays' | translate }}</span>
+                    <span class="stat-value">{{ sourceSummary.external }}</span>
+                  </div>
                 </div>
-
-                <div class="chart-column">
-                  <h3>{{ 'workspace.avg-duration-by-unit' | translate }}</h3>
+              </mat-card-content>
+            </mat-card>
+          </div>
+          <mat-tab-group
+            class="tabs"
+            dynamicHeight="false"
+            (selectedIndexChange)="selectedTabIndex = $event"
+            >
+            <!-- Frequency Tab -->
+            <mat-tab label="{{ 'workspace.replay-frequency' | translate }}">
+              <div class="chart-container">
+                <h3>{{ 'workspace.replay-frequency-by-unit' | translate }}</h3>
+                @if (selectedTabIndex === 0) {
                   <ngx-charts-bar-vertical
-                    *ngIf="selectedTabIndex === 1"
-                    [results]="unitDurationData"
+                    [results]="frequencyData"
                     [xAxis]="true"
                     [yAxis]="true"
                     [showXAxisLabel]="true"
                     [showYAxisLabel]="true"
                     [xAxisLabel]="'workspace.unit' | translate"
-                    [yAxisLabel]="
-                      'workspace.avg-duration-milliseconds' | translate
-                    "
+                    [yAxisLabel]="'workspace.replay-count' | translate"
                     [scheme]="colorScheme"
                     [showDataLabel]="false"
                     [rotateXAxisTicks]="true"
                     [xAxisTickFormatting]="formatXAxisTick"
-                    [view]="halfView"
+                    [view]="wideView"
                   ></ngx-charts-bar-vertical>
-                </div>
+                }
               </div>
-            </div>
-          </mat-tab>
-
-          <!-- Day Distribution Tab -->
-          <mat-tab
-            label="{{ 'workspace.replay-distribution-by-day' | translate }}"
-          >
-            <div class="chart-container">
-              <h3>{{ 'workspace.replay-distribution-by-day' | translate }}</h3>
-              <ngx-charts-bar-vertical
-                *ngIf="selectedTabIndex === 2"
-                [results]="dayDistributionData"
-                [xAxis]="true"
-                [yAxis]="true"
-                [showXAxisLabel]="true"
-                [showYAxisLabel]="true"
-                [xAxisLabel]="'workspace.date' | translate"
-                [yAxisLabel]="'workspace.replay-count' | translate"
-                [scheme]="colorScheme"
-                [showDataLabel]="false"
-                [view]="wideView"
-              ></ngx-charts-bar-vertical>
-            </div>
-          </mat-tab>
-
-          <!-- Hour Distribution Tab -->
-          <mat-tab
-            label="{{ 'workspace.replay-distribution-by-hour' | translate }}"
-          >
-            <div class="chart-container">
-              <h3>{{ 'workspace.replay-distribution-by-hour' | translate }}</h3>
-              <ngx-charts-bar-vertical
-                *ngIf="selectedTabIndex === 3"
-                [results]="hourDistributionData"
-                [xAxis]="true"
-                [yAxis]="true"
-                [showXAxisLabel]="true"
-                [showYAxisLabel]="true"
-                [xAxisLabel]="'workspace.hour' | translate"
-                [yAxisLabel]="'workspace.replay-count' | translate"
-                [scheme]="colorScheme"
-                [showDataLabel]="false"
-                [view]="wideView"
-              ></ngx-charts-bar-vertical>
-            </div>
-          </mat-tab>
-
-          <!-- Error Statistics Tab -->
-          <mat-tab label="{{ 'workspace.replay-errors' | translate }}">
-            <div class="chart-container">
-              <div class="stats-container">
-                <mat-card>
-                  <mat-card-content>
-                    <div class="stat-item">
-                      <span class="stat-label"
-                        >{{ 'workspace.success-rate' | translate }}:</span
-                      >
-                      <span class="stat-value"
-                        >{{ errorStats.successRate.toFixed(2) }}%</span
-                      >
+            </mat-tab>
+            <!-- Duration Tab -->
+            <mat-tab label="{{ 'workspace.replay-duration' | translate }}">
+              <div class="chart-container">
+                <div class="stats-container">
+                  <mat-card>
+                    <mat-card-content>
+                      <div class="stat-item">
+                        <span class="stat-label"
+                          >{{ 'workspace.min-duration' | translate }}:</span
+                          >
+                          <span class="stat-value">{{
+                            formatMilliseconds(durationStats.min)
+                          }}</span>
+                        </div>
+                        <div class="stat-item">
+                          <span class="stat-label"
+                            >{{ 'workspace.max-duration' | translate }}:</span
+                            >
+                            <span class="stat-value">{{
+                              formatMilliseconds(durationStats.max)
+                            }}</span>
+                          </div>
+                          <div class="stat-item">
+                            <span class="stat-label"
+                              >{{ 'workspace.avg-duration' | translate }}:</span
+                              >
+                              <span class="stat-value">{{
+                                formatMilliseconds(durationStats.average)
+                              }}</span>
+                            </div>
+                          </mat-card-content>
+                        </mat-card>
+                      </div>
+                      <div class="charts-row">
+                        <div class="chart-column">
+                          <h3>
+                            {{ 'workspace.replay-duration-distribution' | translate }}
+                          </h3>
+                          @if (selectedTabIndex === 1) {
+                            <ngx-charts-bar-vertical
+                              [results]="durationDistributionData"
+                              [xAxis]="true"
+                              [yAxis]="true"
+                              [showXAxisLabel]="true"
+                              [showYAxisLabel]="true"
+                              [xAxisLabel]="'workspace.duration-milliseconds' | translate"
+                              [yAxisLabel]="'workspace.replay-count' | translate"
+                              [scheme]="colorScheme"
+                              [showDataLabel]="false"
+                              [view]="halfView"
+                            ></ngx-charts-bar-vertical>
+                          }
+                        </div>
+                        <div class="chart-column">
+                          <h3>{{ 'workspace.avg-duration-by-unit' | translate }}</h3>
+                          @if (selectedTabIndex === 1) {
+                            <ngx-charts-bar-vertical
+                              [results]="unitDurationData"
+                              [xAxis]="true"
+                              [yAxis]="true"
+                              [showXAxisLabel]="true"
+                              [showYAxisLabel]="true"
+                              [xAxisLabel]="'workspace.unit' | translate"
+                    [yAxisLabel]="
+                      'workspace.avg-duration-milliseconds' | translate
+                    "
+                              [scheme]="colorScheme"
+                              [showDataLabel]="false"
+                              [rotateXAxisTicks]="true"
+                              [xAxisTickFormatting]="formatXAxisTick"
+                              [view]="halfView"
+                            ></ngx-charts-bar-vertical>
+                          }
+                        </div>
+                      </div>
                     </div>
-                    <div class="stat-item">
-                      <span class="stat-label"
-                        >{{ 'workspace.total-replays' | translate }}:</span
-                      >
-                      <span class="stat-value">{{
-                        errorStats.totalReplays
-                      }}</span>
-                    </div>
-                    <div class="stat-item">
-                      <span class="stat-label"
-                        >{{ 'workspace.successful-replays' | translate }}:</span
-                      >
-                      <span class="stat-value">{{
-                        errorStats.successfulReplays
-                      }}</span>
-                    </div>
-                    <div class="stat-item">
-                      <span class="stat-label"
-                        >{{ 'workspace.failed-replays' | translate }}:</span
-                      >
-                      <span class="stat-value">{{
-                        errorStats.failedReplays
-                      }}</span>
-                    </div>
-                  </mat-card-content>
-                </mat-card>
-              </div>
-
-              <div *ngIf="errorStats.commonErrors.length > 0">
-                <h3>{{ 'workspace.common-errors' | translate }}</h3>
-                <mat-card>
-                  <mat-card-content>
-                    <div
-                      *ngFor="let error of errorStats.commonErrors"
-                      class="error-item"
+                  </mat-tab>
+                  <!-- Day Distribution Tab -->
+                  <mat-tab
+                    label="{{ 'workspace.replay-distribution-by-day' | translate }}"
                     >
-                      <div class="error-count">{{ error.count }}</div>
-                      <div class="error-message">{{ error.message }}</div>
+                    <div class="chart-container">
+                      <h3>{{ 'workspace.replay-distribution-by-day' | translate }}</h3>
+                      @if (selectedTabIndex === 2) {
+                        <ngx-charts-bar-vertical
+                          [results]="dayDistributionData"
+                          [xAxis]="true"
+                          [yAxis]="true"
+                          [showXAxisLabel]="true"
+                          [showYAxisLabel]="true"
+                          [xAxisLabel]="'workspace.date' | translate"
+                          [yAxisLabel]="'workspace.replay-count' | translate"
+                          [scheme]="colorScheme"
+                          [showDataLabel]="false"
+                          [view]="wideView"
+                        ></ngx-charts-bar-vertical>
+                      }
                     </div>
-                  </mat-card-content>
-                </mat-card>
-              </div>
-
-              <div
-                *ngIf="
-                  errorStats.commonErrors.length === 0 &&
-                  errorStats.failedReplays > 0
-                "
-              >
-                <p>{{ 'workspace.no-error-messages' | translate }}</p>
-              </div>
-            </div>
-          </mat-tab>
-
-          <!-- Failure Distribution by Unit Tab -->
-          <mat-tab
-            label="{{ 'workspace.failure-distribution-by-unit' | translate }}"
-          >
-            <div class="chart-container">
-              <h3>
-                {{ 'workspace.failure-distribution-by-unit' | translate }}
-              </h3>
-              <div *ngIf="failureByUnitData.length === 0">
-                <p>{{ 'workspace.no-failures' | translate }}</p>
-              </div>
-              <ngx-charts-bar-vertical
-                *ngIf="failureByUnitData.length > 0 && selectedTabIndex === 5"
-                [results]="failureByUnitData"
-                [xAxis]="true"
-                [yAxis]="true"
-                [showXAxisLabel]="true"
-                [showYAxisLabel]="true"
-                [xAxisLabel]="'workspace.unit' | translate"
-                [yAxisLabel]="'workspace.failure-count' | translate"
-                [scheme]="colorScheme"
-                [showDataLabel]="false"
-                [rotateXAxisTicks]="true"
-                [xAxisTickFormatting]="formatXAxisTick"
-                [view]="wideView"
-              ></ngx-charts-bar-vertical>
-            </div>
-          </mat-tab>
-
-          <!-- Failure Distribution by Day Tab -->
-          <mat-tab
-            label="{{ 'workspace.failure-distribution-by-day' | translate }}"
-          >
-            <div class="chart-container">
-              <h3>{{ 'workspace.failure-distribution-by-day' | translate }}</h3>
-              <div *ngIf="failureByDayData.length === 0">
-                <p>{{ 'workspace.no-failures' | translate }}</p>
-              </div>
-              <ngx-charts-bar-vertical
-                *ngIf="failureByDayData.length > 0 && selectedTabIndex === 6"
-                [results]="failureByDayData"
-                [xAxis]="true"
-                [yAxis]="true"
-                [showXAxisLabel]="true"
-                [showYAxisLabel]="true"
-                [xAxisLabel]="'workspace.date' | translate"
-                [yAxisLabel]="'workspace.failure-count' | translate"
-                [scheme]="colorScheme"
-                [showDataLabel]="false"
-                [view]="wideView"
-              ></ngx-charts-bar-vertical>
-            </div>
-          </mat-tab>
-
-          <!-- Failure Distribution by Hour Tab -->
-          <mat-tab
-            label="{{ 'workspace.failure-distribution-by-hour' | translate }}"
-          >
-            <div class="chart-container">
-              <h3>
-                {{ 'workspace.failure-distribution-by-hour' | translate }}
-              </h3>
-              <div *ngIf="failureByHourData.length === 0">
-                <p>{{ 'workspace.no-failures' | translate }}</p>
-              </div>
-              <ngx-charts-bar-vertical
-                *ngIf="failureByHourData.length > 0 && selectedTabIndex === 7"
-                [results]="failureByHourData"
-                [xAxis]="true"
-                [yAxis]="true"
-                [showXAxisLabel]="true"
-                [showYAxisLabel]="true"
-                [xAxisLabel]="'workspace.hour' | translate"
-                [yAxisLabel]="'workspace.failure-count' | translate"
-                [scheme]="colorScheme"
-                [showDataLabel]="false"
-                [view]="wideView"
-              ></ngx-charts-bar-vertical>
-            </div>
-          </mat-tab>
-        </mat-tab-group>
-      </div>
-    </mat-dialog-content>
-    <mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close>
-        {{ 'workspace.close' | translate }}
-      </button>
-    </mat-dialog-actions>
-  `,
+                  </mat-tab>
+                  <!-- Hour Distribution Tab -->
+                  <mat-tab
+                    label="{{ 'workspace.replay-distribution-by-hour' | translate }}"
+                    >
+                    <div class="chart-container">
+                      <h3>{{ 'workspace.replay-distribution-by-hour' | translate }}</h3>
+                      @if (selectedTabIndex === 3) {
+                        <ngx-charts-bar-vertical
+                          [results]="hourDistributionData"
+                          [xAxis]="true"
+                          [yAxis]="true"
+                          [showXAxisLabel]="true"
+                          [showYAxisLabel]="true"
+                          [xAxisLabel]="'workspace.hour' | translate"
+                          [yAxisLabel]="'workspace.replay-count' | translate"
+                          [scheme]="colorScheme"
+                          [showDataLabel]="false"
+                          [view]="wideView"
+                        ></ngx-charts-bar-vertical>
+                      }
+                    </div>
+                  </mat-tab>
+                  <!-- Error Statistics Tab -->
+                  <mat-tab label="{{ 'workspace.replay-errors' | translate }}">
+                    <div class="chart-container">
+                      <div class="stats-container">
+                        <mat-card>
+                          <mat-card-content>
+                            <div class="stat-item">
+                              <span class="stat-label"
+                                >{{ 'workspace.success-rate' | translate }}:</span
+                                >
+                                <span class="stat-value"
+                                  >{{ errorStats.successRate.toFixed(2) }}%</span
+                                  >
+                                </div>
+                                <div class="stat-item">
+                                  <span class="stat-label"
+                                    >{{ 'workspace.total-replays' | translate }}:</span
+                                    >
+                                    <span class="stat-value">{{
+                                      errorStats.totalReplays
+                                    }}</span>
+                                  </div>
+                                  <div class="stat-item">
+                                    <span class="stat-label"
+                                      >{{ 'workspace.successful-replays' | translate }}:</span
+                                      >
+                                      <span class="stat-value">{{
+                                        errorStats.successfulReplays
+                                      }}</span>
+                                    </div>
+                                    <div class="stat-item">
+                                      <span class="stat-label"
+                                        >{{ 'workspace.failed-replays' | translate }}:</span
+                                        >
+                                        <span class="stat-value">{{
+                                          errorStats.failedReplays
+                                        }}</span>
+                                      </div>
+                                    </mat-card-content>
+                                  </mat-card>
+                                </div>
+                                @if (errorStats.commonErrors.length > 0) {
+                                  <div>
+                                    <h3>{{ 'workspace.common-errors' | translate }}</h3>
+                                    <mat-card>
+                                      <mat-card-content>
+                                        @for (error of errorStats.commonErrors; track error) {
+                                          <div
+                                            class="error-item"
+                                            >
+                                            <div class="error-count">{{ error.count }}</div>
+                                            <div class="error-message">{{ error.message }}</div>
+                                          </div>
+                                        }
+                                      </mat-card-content>
+                                    </mat-card>
+                                  </div>
+                                }
+                                @if (
+                                  errorStats.commonErrors.length === 0 &&
+                                  errorStats.failedReplays > 0
+                                  ) {
+                                  <div
+                                    >
+                                    <p>{{ 'workspace.no-error-messages' | translate }}</p>
+                                  </div>
+                                }
+                              </div>
+                            </mat-tab>
+                            <!-- Failure Distribution by Unit Tab -->
+                            <mat-tab
+                              label="{{ 'workspace.failure-distribution-by-unit' | translate }}"
+                              >
+                              <div class="chart-container">
+                                <h3>
+                                  {{ 'workspace.failure-distribution-by-unit' | translate }}
+                                </h3>
+                                @if (failureByUnitData.length === 0) {
+                                  <div>
+                                    <p>{{ 'workspace.no-failures' | translate }}</p>
+                                  </div>
+                                }
+                                @if (failureByUnitData.length > 0 && selectedTabIndex === 5) {
+                                  <ngx-charts-bar-vertical
+                                    [results]="failureByUnitData"
+                                    [xAxis]="true"
+                                    [yAxis]="true"
+                                    [showXAxisLabel]="true"
+                                    [showYAxisLabel]="true"
+                                    [xAxisLabel]="'workspace.unit' | translate"
+                                    [yAxisLabel]="'workspace.failure-count' | translate"
+                                    [scheme]="colorScheme"
+                                    [showDataLabel]="false"
+                                    [rotateXAxisTicks]="true"
+                                    [xAxisTickFormatting]="formatXAxisTick"
+                                    [view]="wideView"
+                                  ></ngx-charts-bar-vertical>
+                                }
+                              </div>
+                            </mat-tab>
+                            <!-- Failure Distribution by Day Tab -->
+                            <mat-tab
+                              label="{{ 'workspace.failure-distribution-by-day' | translate }}"
+                              >
+                              <div class="chart-container">
+                                <h3>{{ 'workspace.failure-distribution-by-day' | translate }}</h3>
+                                @if (failureByDayData.length === 0) {
+                                  <div>
+                                    <p>{{ 'workspace.no-failures' | translate }}</p>
+                                  </div>
+                                }
+                                @if (failureByDayData.length > 0 && selectedTabIndex === 6) {
+                                  <ngx-charts-bar-vertical
+                                    [results]="failureByDayData"
+                                    [xAxis]="true"
+                                    [yAxis]="true"
+                                    [showXAxisLabel]="true"
+                                    [showYAxisLabel]="true"
+                                    [xAxisLabel]="'workspace.date' | translate"
+                                    [yAxisLabel]="'workspace.failure-count' | translate"
+                                    [scheme]="colorScheme"
+                                    [showDataLabel]="false"
+                                    [view]="wideView"
+                                  ></ngx-charts-bar-vertical>
+                                }
+                              </div>
+                            </mat-tab>
+                            <!-- Failure Distribution by Hour Tab -->
+                            <mat-tab
+                              label="{{ 'workspace.failure-distribution-by-hour' | translate }}"
+                              >
+                              <div class="chart-container">
+                                <h3>
+                                  {{ 'workspace.failure-distribution-by-hour' | translate }}
+                                </h3>
+                                @if (failureByHourData.length === 0) {
+                                  <div>
+                                    <p>{{ 'workspace.no-failures' | translate }}</p>
+                                  </div>
+                                }
+                                @if (failureByHourData.length > 0 && selectedTabIndex === 7) {
+                                  <ngx-charts-bar-vertical
+                                    [results]="failureByHourData"
+                                    [xAxis]="true"
+                                    [yAxis]="true"
+                                    [showXAxisLabel]="true"
+                                    [showYAxisLabel]="true"
+                                    [xAxisLabel]="'workspace.hour' | translate"
+                                    [yAxisLabel]="'workspace.failure-count' | translate"
+                                    [scheme]="colorScheme"
+                                    [showDataLabel]="false"
+                                    [view]="wideView"
+                                  ></ngx-charts-bar-vertical>
+                                }
+                              </div>
+                            </mat-tab>
+                          </mat-tab-group>
+                        </div>
+                      }
+                    </mat-dialog-content>
+                    <mat-dialog-actions align="end">
+                      <button mat-button mat-dialog-close>
+                        {{ 'workspace.close' | translate }}
+                      </button>
+                    </mat-dialog-actions>
+    `,
   styles: [
     `
       .dialog-content {

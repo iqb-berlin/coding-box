@@ -6,8 +6,10 @@
   "prefix": "coding-box",
   "targets": {
     "build": {
-      "executor": "@angular-devkit/build-angular:browser",
-      "outputs": ["{options.outputPath}"],
+      "executor": "@angular/build:application",
+      "outputs": [
+        "{options.outputPath.base}"
+      ],
       "options": {
         "allowedCommonJsDependencies": [
           "xml2js",
@@ -20,18 +22,25 @@
           "@iqb/metadata",
           "@iqb/metadata-components"
         ],
-        "outputPath": "dist/apps/frontend",
+        "outputPath": {
+          "base": "dist/apps/frontend",
+          "browser": ""
+        },
         "index": "apps/frontend/src/index.html",
-        "main": "apps/frontend/src/main.ts",
-        "polyfills": "apps/frontend/src/polyfills.ts",
+        "polyfills": [
+          "apps/frontend/src/polyfills.ts"
+        ],
         "tsConfig": "apps/frontend/tsconfig.app.json",
         "inlineStyleLanguage": "scss",
-        "assets": ["apps/frontend/src/assets"],
+        "assets": [
+          "apps/frontend/src/assets"
+        ],
         "styles": [
           "./node_modules/@angular/material/prebuilt-themes/purple-green.css",
           "apps/frontend/src/styles.scss"
         ],
-        "scripts": []
+        "scripts": [],
+        "browser": "apps/frontend/src/main.ts"
       },
       "configurations": {
         "production": {
@@ -56,9 +65,7 @@
           "outputHashing": "all"
         },
         "development": {
-          "buildOptimizer": false,
           "optimization": false,
-          "vendorChunk": true,
           "extractLicenses": false,
           "sourceMap": true,
           "namedChunks": true
@@ -99,7 +106,9 @@
     },
     "test": {
       "executor": "@nx/jest:jest",
-      "outputs": ["{workspaceRoot}/coverage/apps/frontend"],
+      "outputs": [
+        "{workspaceRoot}/coverage/apps/frontend"
+      ],
       "options": {
         "jestConfig": "apps/frontend/jest.config.ts",
         "passWithNoTests": true

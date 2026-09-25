@@ -3,943 +3,966 @@
     <div class="dialog-header">
       <h2>{{
         (comparisonMode === 'within-training'
-          ? 'coding.trainings.compare.dialog-title-within'
-          : 'coding.trainings.compare.dialog-title-between') | translate
+        ? 'coding.trainings.compare.dialog-title-within'
+        : 'coding.trainings.compare.dialog-title-between') | translate
       }}</h2>
       <span
         >{{
-          (comparisonMode === 'within-training'
-            ? 'coding.trainings.compare.dialog-subtitle-within'
-            : 'coding.trainings.compare.dialog-subtitle-between') | translate
+        (comparisonMode === 'within-training'
+        ? 'coding.trainings.compare.dialog-subtitle-within'
+        : 'coding.trainings.compare.dialog-subtitle-between') | translate
         }}</span
-      >
-    </div>
-
-    <div class="mode-selection">
-      <mat-radio-group [(ngModel)]="comparisonMode" (change)="onModeChange()">
-        <mat-radio-button value="between-trainings"
-          >Zwischen Schulungen vergleichen</mat-radio-button
         >
-        <mat-radio-button value="within-training"
-          >Innerhalb einer Schulung vergleichen</mat-radio-button
-        >
-      </mat-radio-group>
-    </div>
-  </div>
-
-  <div mat-dialog-content class="comparison-container">
-    <div
-      class="training-selection"
-      *ngIf="comparisonMode === 'between-trainings'"
-    >
-      <h3>Schulungen auswählen</h3>
-      <div class="training-options">
-        <mat-form-field>
-          <mat-label>Suche</mat-label>
-          <mat-icon matPrefix>search</mat-icon>
-          <input
-            matInput
-            (keyup)="applyTrainingFilter($event)"
-            placeholder="Schulungen filtern..."
-          />
-        </mat-form-field>
       </div>
-      <mat-checkbox
-        class="training-checkbox"
-        *ngFor="let training of filteredTrainings"
-        [checked]="selectedTrainings.isSelected(training.id)"
+
+      <div class="mode-selection">
+        <mat-radio-group [(ngModel)]="comparisonMode" (change)="onModeChange()">
+          <mat-radio-button value="between-trainings"
+            >Zwischen Schulungen vergleichen</mat-radio-button
+            >
+            <mat-radio-button value="within-training"
+              >Innerhalb einer Schulung vergleichen</mat-radio-button
+              >
+            </mat-radio-group>
+          </div>
+        </div>
+
+        <div mat-dialog-content class="comparison-container">
+          @if (comparisonMode === 'between-trainings') {
+            <div
+              class="training-selection"
+              >
+              <h3>Schulungen auswählen</h3>
+              <div class="training-options">
+                <mat-form-field>
+                  <mat-label>Suche</mat-label>
+                  <mat-icon matPrefix>search</mat-icon>
+                  <input
+                    matInput
+                    (keyup)="applyTrainingFilter($event)"
+                    placeholder="Schulungen filtern..."
+                    />
+                </mat-form-field>
+              </div>
+              @for (training of filteredTrainings; track training) {
+                <mat-checkbox
+                  class="training-checkbox"
+                  [checked]="selectedTrainings.isSelected(training.id)"
         (change)="
           selectedTrainings.toggle(training.id); onTrainingSelectionChange()
         "
-      >
-        <span class="training-option-title">{{ getTrainingOptionTitle(training) }}</span>
-        <span class="training-option-meta">{{ getTrainingOptionMeta(training) }}</span>
-      </mat-checkbox>
+                  >
+                  <span class="training-option-title">{{ getTrainingOptionTitle(training) }}</span>
+                  <span class="training-option-meta">{{ getTrainingOptionMeta(training) }}</span>
+                </mat-checkbox>
+              }
+              @if (availableCodersFromTrainings.length > 0) {
+                <div
+                  class="coder-selection"
+                  >
+                  <mat-form-field class="full-width-select">
+                    <mat-label>Kodierer filtern</mat-label>
+                    <mat-select
+                      [formControl]="codersFromTrainingsFormControl"
+                      multiple
+                      (selectionChange)="onCodersFromTrainingsSelectionChange()"
+                      >
+                      <mat-select-trigger>
+                        {{ codersFromTrainingsFormControl.value?.length || 0 }} Kodierer
+                        ausgewählt
+                        @if (
+                          (codersFromTrainingsFormControl.value?.length || 0) ===
+                          availableCodersFromTrainings.length
+                          ) {
+                          <span
+                            class="all-selected-hint"
+                            >(Alle)</span
+                            >
+                          }
+                        </mat-select-trigger>
+                        @for (coder of availableCodersFromTrainings; track coder) {
+                          <mat-option
+                            [value]="coder.trainingId + '_' + coder.coderId"
+                            >
+                            {{ getTrainingCoderOptionLabel(coder) }}
+                          </mat-option>
+                        }
+                      </mat-select>
+                    </mat-form-field>
+                  </div>
+                }
+              </div>
+            }
 
-      <div
-        class="coder-selection"
-        *ngIf="availableCodersFromTrainings.length > 0"
-      >
-        <mat-form-field class="full-width-select">
-          <mat-label>Kodierer filtern</mat-label>
-          <mat-select
-            [formControl]="codersFromTrainingsFormControl"
-            multiple
-            (selectionChange)="onCodersFromTrainingsSelectionChange()"
-          >
-            <mat-select-trigger>
-              {{ codersFromTrainingsFormControl.value?.length || 0 }} Kodierer
-              ausgewählt
-              <span
-                *ngIf="
-                  (codersFromTrainingsFormControl.value?.length || 0) ===
-                  availableCodersFromTrainings.length
-                "
-                class="all-selected-hint"
-                >(Alle)</span
-              >
-            </mat-select-trigger>
-            <mat-option
-              *ngFor="let coder of availableCodersFromTrainings"
-              [value]="coder.trainingId + '_' + coder.coderId"
-            >
-              {{ getTrainingCoderOptionLabel(coder) }}
-            </mat-option>
-          </mat-select>
-        </mat-form-field>
-      </div>
-    </div>
+            @if (comparisonMode === 'within-training') {
+              <div
+                class="training-selection"
+                >
+                <h3>Schulung auswählen</h3>
+                <mat-form-field class="full-width-select">
+                  <mat-label>Schulung</mat-label>
+                  <mat-select
+                    [(ngModel)]="selectedTrainingForWithin"
+                    (selectionChange)="onTrainingForWithinChange()"
+                    >
+                    <mat-select-trigger>
+                      @if (getSelectedWithinTraining(); as training) {
+                        <span class="selected-training-trigger">
+                          <span class="selected-training-title">{{ getTrainingOptionTitle(training) }}</span>
+                          <span class="selected-training-meta">{{ getTrainingOptionMeta(training) }}</span>
+                        </span>
+                      }
+                    </mat-select-trigger>
+                    @for (training of availableTrainings; track training) {
+                      <mat-option
+                        [value]="training.id"
+                        >
+                        <div class="training-option">
+                          <span class="training-option-title">{{ getTrainingOptionTitle(training) }}</span>
+                          <span class="training-option-meta">{{ getTrainingOptionMeta(training) }}</span>
+                        </div>
+                      </mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+                @if (availableCoders.length > 0) {
+                  <div class="coder-selection">
+                    <mat-form-field class="full-width-select">
+                      <mat-label>Kodierer vergleichen</mat-label>
+                      <mat-select
+                        [formControl]="codersFormControl"
+                        multiple
+                        (selectionChange)="onCoderSelectionChange()"
+                        >
+                        <mat-select-trigger>
+                          {{ codersFormControl.value?.length || 0 }} Kodierer ausgewählt
+                          @if (
+                            (codersFormControl.value?.length || 0) ===
+                            availableCoders.length
+                            ) {
+                            <span
+                              class="all-selected-hint"
+                              >(Alle)</span
+                              >
+                            }
+                          </mat-select-trigger>
+                          @for (coder of availableCoders; track coder) {
+                            <mat-option
+                              [value]="coder.jobId"
+                              >{{ coder.coderName }}</mat-option
+                              >
+                            }
+                          </mat-select>
+                        </mat-form-field>
+                      </div>
+                    }
+                    @if (selectedTrainingForWithin) {
+                      <div class="training-apply-actions">
+                        <button
+                          mat-stroked-button
+                          type="button"
+                          color="primary"
+                          [disabled]="isLoading || isApplyingDiscussionResults"
+                          (click)="openApplyTrainingDiscussionResults('auto_agreement')"
+                          >
+                          <mat-icon>verified</mat-icon>
+                          Schulungsergebnisse ohne Abweichungen anwenden
+                        </button>
+                        <button
+                          mat-raised-button
+                          type="button"
+                          color="primary"
+                          [disabled]="isLoading || isApplyingDiscussionResults"
+                          (click)="openApplyTrainingDiscussionResults('manual')"
+                          >
+                          <mat-icon>rule</mat-icon>
+                          Diskussionsergebnisse anwenden
+                        </button>
+                        @if (isApplyingDiscussionResults) {
+                          <mat-progress-spinner
+                            mode="indeterminate"
+                            diameter="24"
+                          ></mat-progress-spinner>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
 
-    <div
-      class="training-selection"
-      *ngIf="comparisonMode === 'within-training'"
-    >
-      <h3>Schulung auswählen</h3>
-      <mat-form-field class="full-width-select">
-        <mat-label>Schulung</mat-label>
-        <mat-select
-          [(ngModel)]="selectedTrainingForWithin"
-          (selectionChange)="onTrainingForWithinChange()"
-        >
-          <mat-select-trigger>
-            <ng-container *ngIf="getSelectedWithinTraining() as training">
-              <span class="selected-training-trigger">
-                <span class="selected-training-title">{{ getTrainingOptionTitle(training) }}</span>
-                <span class="selected-training-meta">{{ getTrainingOptionMeta(training) }}</span>
-              </span>
-            </ng-container>
-          </mat-select-trigger>
-          <mat-option
-            *ngFor="let training of availableTrainings"
-            [value]="training.id"
-          >
-            <div class="training-option">
-              <span class="training-option-title">{{ getTrainingOptionTitle(training) }}</span>
-              <span class="training-option-meta">{{ getTrainingOptionMeta(training) }}</span>
-            </div>
-          </mat-option>
-        </mat-select>
-      </mat-form-field>
+                @if (
+                  isLoading &&
+                  !hasComparisonRows() &&
+                  !hasNoSelectedCodersState() &&
+                  !hasFilterEmptyState()
+                  ) {
+                  <div
+                    class="loading-container"
+                    >
+                    <mat-progress-spinner
+                      mode="indeterminate"
+                      diameter="50"
+                    ></mat-progress-spinner>
+                    <p>Lade Vergleichsdaten...</p>
+                  </div>
+                }
 
-      <div class="coder-selection" *ngIf="availableCoders.length > 0">
-        <mat-form-field class="full-width-select">
-          <mat-label>Kodierer vergleichen</mat-label>
-          <mat-select
-            [formControl]="codersFormControl"
-            multiple
-            (selectionChange)="onCoderSelectionChange()"
-          >
-            <mat-select-trigger>
-              {{ codersFormControl.value?.length || 0 }} Kodierer ausgewählt
-              <span
-                *ngIf="
-                  (codersFormControl.value?.length || 0) ===
-                  availableCoders.length
-                "
-                class="all-selected-hint"
-                >(Alle)</span
-              >
-            </mat-select-trigger>
-            <mat-option
-              *ngFor="let coder of availableCoders"
-              [value]="coder.jobId"
-              >{{ coder.coderName }}</mat-option
-            >
-          </mat-select>
-        </mat-form-field>
-      </div>
-
-      <div class="training-apply-actions" *ngIf="selectedTrainingForWithin">
-        <button
-          mat-stroked-button
-          type="button"
-          color="primary"
-          [disabled]="isLoading || isApplyingDiscussionResults"
-          (click)="openApplyTrainingDiscussionResults('auto_agreement')"
-        >
-          <mat-icon>verified</mat-icon>
-          Schulungsergebnisse ohne Abweichungen anwenden
-        </button>
-        <button
-          mat-raised-button
-          type="button"
-          color="primary"
-          [disabled]="isLoading || isApplyingDiscussionResults"
-          (click)="openApplyTrainingDiscussionResults('manual')"
-        >
-          <mat-icon>rule</mat-icon>
-          Diskussionsergebnisse anwenden
-        </button>
-        <mat-progress-spinner
-          *ngIf="isApplyingDiscussionResults"
-          mode="indeterminate"
-          diameter="24"
-        ></mat-progress-spinner>
-      </div>
-    </div>
-
-    <div
-      class="loading-container"
-      *ngIf="
-        isLoading &&
-        !hasComparisonRows() &&
-        !hasNoSelectedCodersState() &&
-        !hasFilterEmptyState()
-      "
-    >
-      <mat-progress-spinner
-        mode="indeterminate"
-        diameter="50"
-      ></mat-progress-spinner>
-      <p>Lade Vergleichsdaten...</p>
-    </div>
-
-    <div
-      class="comparison-table"
-      *ngIf="
-        (((comparisonMode === 'between-trainings' &&
-          selectedTrainings.selected.length >= 2) ||
-          (comparisonMode === 'within-training' &&
-            selectedTrainingForWithin)) &&
-          (totalItems > 0 || hasNoSelectedCodersState() || hasFilterEmptyState()))
-      "
-    >
-      <div class="comparison-warning-list" *ngIf="getComparisonWarnings().length > 0">
-        <div
-          class="comparison-warning"
-          *ngFor="let warning of getComparisonWarnings()"
-          [class.comparison-warning-warn]="warning.severity === 'warn'"
-        >
-          <mat-icon>{{ warning.icon }}</mat-icon>
-          <span>{{ warning.text }}</span>
-        </div>
-      </div>
-
-      <div
-        class="statistics-section"
-        *ngIf="
-          !hasNoSelectedCodersState() &&
-          !hasFilterEmptyState() &&
-          (totalComparisons > 0 ||
-            incompleteComparisons > 0 ||
-            notComparableComparisons > 0)
-        "
-      >
-        <h4>{{
-          (comparisonMode === 'within-training'
-            ? 'coding.trainings.compare.statistics-title-within'
-            : 'coding.trainings.compare.statistics-title-between') | translate
-        }}</h4>
-        <div class="evaluation-metrics">
-          <div class="evaluation-metric">
-            <span class="metric-label">{{ 'coding.trainings.compare.metric-visible-cases' | translate }}</span>
-            <strong>{{ getFilteredRowsCount() }}</strong>
-            <small>{{ 'coding.trainings.compare.metric-completion-rate' | translate:{rate: getVisibleCompletionRate()} }}</small>
-          </div>
-          <div class="evaluation-metric">
-            <span class="metric-label">{{ 'coding.trainings.compare.metric-comparable' | translate }}</span>
-            <strong>{{ totalComparisons }}</strong>
-            <small>{{ 'coding.trainings.compare.metric-incomplete' | translate:{count: incompleteComparisons} }}</small>
-          </div>
-          <div class="evaluation-metric">
-            <span class="metric-label">{{ 'coding.trainings.compare.metric-agreement-rate' | translate }}</span>
-            <strong>{{ totalComparisons > 0 ? matchingPercentage + '%' : '-' }}</strong>
-            <small>{{ 'coding.trainings.compare.metric-agreements' | translate:{count: matchingComparisons} }}</small>
-          </div>
-          <div class="evaluation-metric">
-            <span class="metric-label">{{ 'coding.trainings.compare.metric-deviations' | translate }}</span>
-            <strong>{{ getDeviationComparisons() }}</strong>
-            <small>{{ 'coding.trainings.compare.metric-not-comparable' | translate:{count: notComparableComparisons} }}</small>
-          </div>
-          <div
-            class="evaluation-metric"
-            *ngIf="
-              comparisonMode === 'within-training' &&
-              kappaStatistics?.workspaceSummary?.averageKappa !== null &&
-              kappaStatistics?.workspaceSummary?.averageKappa !== undefined
-            "
-          >
-            <span class="metric-label">{{
-              (useCodeLevel
-                ? 'coding.trainings.compare.metric-code-kappa'
-                : 'coding.trainings.compare.metric-score-kappa') | translate
-            }}</span>
-            <strong>{{
-              kappaStatistics!.workspaceSummary.averageKappa!
-                | number: '1.3-3'
-            }}</strong>
-            <small>{{
-              (useWeightedMean
-                ? 'coding.trainings.compare.metric-weighted'
-                : 'coding.trainings.compare.metric-unweighted') | translate
-            }}</small>
-          </div>
-          <div
-            class="evaluation-metric"
-            *ngIf="
-              comparisonMode === 'within-training' &&
-              kappaStatistics?.workspaceSummary?.meanAgreement !== null &&
-              kappaStatistics?.workspaceSummary?.meanAgreement !== undefined
-            "
-          >
-            <span class="metric-label">{{ 'coding.trainings.compare.metric-mean-agreement' | translate }}</span>
-            <strong>{{
-              kappaStatistics!.workspaceSummary.meanAgreement!
-                | percent: '1.1-1'
-            }}</strong>
-            <small>{{
-              (useWeightedMean
-                ? 'coding.trainings.compare.metric-weighted'
-                : 'coding.trainings.compare.metric-unweighted') | translate
-            }}</small>
-          </div>
-        </div>
-      </div>
-
-      <!-- Interrater reliability section (within-training mode only) -->
-      <div
-        class="kappa-section"
-        *ngIf="
-          comparisonMode === 'within-training' && selectedTrainingForWithin
-        "
-      >
-        <div class="kappa-header" (click)="toggleKappaStatistics()">
-          <h4>
-            <mat-icon>{{
-              showKappaStatistics ? 'expand_less' : 'expand_more'
-            }}</mat-icon>
-            Interrater-Reliabilität
-          </h4>
-          <button mat-icon-button class="toggle-button">
-            <mat-icon>{{
-              showKappaStatistics ? 'expand_less' : 'expand_more'
-            }}</mat-icon>
-          </button>
-        </div>
-
-        <div class="kappa-content" *ngIf="showKappaStatistics">
-          <div class="loading-container" *ngIf="!kappaStatistics">
-            <mat-progress-spinner
-              mode="indeterminate"
-              diameter="30"
-            ></mat-progress-spinner>
-            <p>Berechne Interrater-Reliabilität...</p>
-          </div>
-
-          <div *ngIf="kappaStatistics" class="kappa-statistics">
-            <!-- Weighted Mean Toggle -->
-            <div class="weighting-toggle-container">
-              <mat-slide-toggle
-                [(ngModel)]="useWeightedMean"
-                (change)="toggleWeightingMethod()"
-                color="primary"
-                [disabled]="isLoadingKappa"
-              >
-                Gewichteter Mittelwert (R eatPrep::meanKappa)
-              </mat-slide-toggle>
-              <mat-icon
-                class="info-icon"
-                matTooltip="Der gewichtete Mittelwert gewichtet jeden Kappa-Wert nach der Anzahl gültiger Paare, entsprechend der R-Implementierung: weighted.mean(dfr$kappa, dfr$N)"
-                matTooltipPosition="right"
-              >
-                info
-              </mat-icon>
-              <mat-progress-spinner
-                *ngIf="isLoadingKappa"
-                mode="indeterminate"
-                diameter="20"
-                class="inline-spinner"
-              ></mat-progress-spinner>
-            </div>
-
-            <!-- Calculation Level Toggle -->
-            <div class="level-toggle-container">
-              <mat-slide-toggle
-                [(ngModel)]="useCodeLevel"
-                (change)="toggleCalculationLevel()"
-                color="primary"
-                [disabled]="isLoadingKappa"
-              >
-                Kappa auf Ebene der Codes
-              </mat-slide-toggle>
-              <mat-icon
-                class="info-icon"
-                matTooltip="Code-Ebene: Unterscheidet zwischen allen Codes (inkl. Missing-Codes 6,8,9). Score-Ebene: Basiert auf Scores, wobei verschiedene Codes auf denselben Score abgebildet werden können."
-                matTooltipPosition="right"
-              >
-                info
-              </mat-icon>
-              <span class="level-indicator">
-                ({{ useCodeLevel ? 'Code-Ebene' : 'Score-Ebene' }})
-              </span>
-              <mat-progress-spinner
-                *ngIf="isLoadingKappa"
-                mode="indeterminate"
-                diameter="20"
-                class="inline-spinner"
-              ></mat-progress-spinner>
-            </div>
-
-            <div class="kappa-export-actions">
-              <button
-                mat-stroked-button
-                color="primary"
-                type="button"
-                (click)="exportTrainingReliability()"
-                [disabled]="isLoadingKappa || isExportingReliability || !kappaStatistics.variables.length"
-              >
-                <mat-icon>{{ isExportingReliability ? 'hourglass_empty' : 'download' }}</mat-icon>
-                {{ 'coding.trainings.compare.reliability-export-csv' | translate }}
-              </button>
-            </div>
-
-            <div
-              class="fleiss-minimum-hint"
-              *ngIf="(codersFormControl.value?.length || 0) < 3"
-            >
-              <mat-icon>info</mat-icon>
-              <span>{{ 'coding.trainings.compare.fleiss-minimum-raters' | translate }}</span>
-            </div>
-
-            <!-- Summary Statistics -->
-            <div class="summary-stats">
-              <div class="stat-card">
-                <span class="stat-label">{{ 'coding.trainings.compare.metric-mean-cohen-kappa' | translate }}</span>
-                <span
-                  class="stat-value kappa-value"
+                @if (
+                  (((comparisonMode === 'between-trainings' &&
+                  selectedTrainings.selected.length >= 2) ||
+                  (comparisonMode === 'within-training' &&
+                  selectedTrainingForWithin)) &&
+                  (totalItems > 0 || hasNoSelectedCodersState() || hasFilterEmptyState()))
+                  ) {
+                  <div
+                    class="comparison-table"
+                    >
+                    @if (getComparisonWarnings().length > 0) {
+                      <div class="comparison-warning-list">
+                        @for (warning of getComparisonWarnings(); track warning.text) {
+                          <div
+                            class="comparison-warning"
+                            [class.comparison-warning-warn]="warning.severity === 'warn'"
+                            >
+                            <mat-icon>{{ warning.icon }}</mat-icon>
+                            <span>{{ warning.text }}</span>
+                          </div>
+                        }
+                      </div>
+                    }
+                    @if (
+                      !hasNoSelectedCodersState() &&
+                      !hasFilterEmptyState() &&
+                      (totalComparisons > 0 ||
+                      incompleteComparisons > 0 ||
+                      notComparableComparisons > 0)
+                      ) {
+                      <div
+                        class="statistics-section"
+                        >
+                        <h4>{{
+                          (comparisonMode === 'within-training'
+                          ? 'coding.trainings.compare.statistics-title-within'
+                          : 'coding.trainings.compare.statistics-title-between') | translate
+                        }}</h4>
+                        <div class="evaluation-metrics">
+                          <div class="evaluation-metric">
+                            <span class="metric-label">{{ 'coding.trainings.compare.metric-visible-cases' | translate }}</span>
+                            <strong>{{ getFilteredRowsCount() }}</strong>
+                            <small>{{ 'coding.trainings.compare.metric-completion-rate' | translate:{rate: getVisibleCompletionRate()} }}</small>
+                          </div>
+                          <div class="evaluation-metric">
+                            <span class="metric-label">{{ 'coding.trainings.compare.metric-comparable' | translate }}</span>
+                            <strong>{{ totalComparisons }}</strong>
+                            <small>{{ 'coding.trainings.compare.metric-incomplete' | translate:{count: incompleteComparisons} }}</small>
+                          </div>
+                          <div class="evaluation-metric">
+                            <span class="metric-label">{{ 'coding.trainings.compare.metric-agreement-rate' | translate }}</span>
+                            <strong>{{ totalComparisons > 0 ? matchingPercentage + '%' : '-' }}</strong>
+                            <small>{{ 'coding.trainings.compare.metric-agreements' | translate:{count: matchingComparisons} }}</small>
+                          </div>
+                          <div class="evaluation-metric">
+                            <span class="metric-label">{{ 'coding.trainings.compare.metric-deviations' | translate }}</span>
+                            <strong>{{ getDeviationComparisons() }}</strong>
+                            <small>{{ 'coding.trainings.compare.metric-not-comparable' | translate:{count: notComparableComparisons} }}</small>
+                          </div>
+                          @if (
+                            comparisonMode === 'within-training' &&
+                            kappaStatistics?.workspaceSummary?.averageKappa !== null &&
+                            kappaStatistics?.workspaceSummary?.averageKappa !== undefined
+                            ) {
+                            <div
+                              class="evaluation-metric"
+                              >
+                              <span class="metric-label">{{
+                                (useCodeLevel
+                                ? 'coding.trainings.compare.metric-code-kappa'
+                                : 'coding.trainings.compare.metric-score-kappa') | translate
+                              }}</span>
+                              <strong>{{
+                                kappaStatistics!.workspaceSummary.averageKappa!
+                                | number: '1.3-3'
+                              }}</strong>
+                              <small>{{
+                                (useWeightedMean
+                                ? 'coding.trainings.compare.metric-weighted'
+                                : 'coding.trainings.compare.metric-unweighted') | translate
+                              }}</small>
+                            </div>
+                          }
+                          @if (
+                            comparisonMode === 'within-training' &&
+                            kappaStatistics?.workspaceSummary?.meanAgreement !== null &&
+                            kappaStatistics?.workspaceSummary?.meanAgreement !== undefined
+                            ) {
+                            <div
+                              class="evaluation-metric"
+                              >
+                              <span class="metric-label">{{ 'coding.trainings.compare.metric-mean-agreement' | translate }}</span>
+                              <strong>{{
+                                kappaStatistics!.workspaceSummary.meanAgreement!
+                                | percent: '1.1-1'
+                              }}</strong>
+                              <small>{{
+                                (useWeightedMean
+                                ? 'coding.trainings.compare.metric-weighted'
+                                : 'coding.trainings.compare.metric-unweighted') | translate
+                              }}</small>
+                            </div>
+                          }
+                        </div>
+                      </div>
+                    }
+                    <!-- Interrater reliability section (within-training mode only) -->
+                    @if (
+                      comparisonMode === 'within-training' && selectedTrainingForWithin
+                      ) {
+                      <div
+                        class="kappa-section"
+                        >
+                        <div class="kappa-header" (click)="toggleKappaStatistics()">
+                          <h4>
+                            <mat-icon>{{
+                              showKappaStatistics ? 'expand_less' : 'expand_more'
+                            }}</mat-icon>
+                            Interrater-Reliabilität
+                          </h4>
+                          <button mat-icon-button class="toggle-button">
+                            <mat-icon>{{
+                              showKappaStatistics ? 'expand_less' : 'expand_more'
+                            }}</mat-icon>
+                          </button>
+                        </div>
+                        @if (showKappaStatistics) {
+                          <div class="kappa-content">
+                            @if (!kappaStatistics) {
+                              <div class="loading-container">
+                                <mat-progress-spinner
+                                  mode="indeterminate"
+                                  diameter="30"
+                                ></mat-progress-spinner>
+                                <p>Berechne Interrater-Reliabilität...</p>
+                              </div>
+                            }
+                            @if (kappaStatistics) {
+                              <div class="kappa-statistics">
+                                <!-- Weighted Mean Toggle -->
+                                <div class="weighting-toggle-container">
+                                  <mat-slide-toggle
+                                    [(ngModel)]="useWeightedMean"
+                                    (change)="toggleWeightingMethod()"
+                                    color="primary"
+                                    [disabled]="isLoadingKappa"
+                                    >
+                                    Gewichteter Mittelwert (R eatPrep::meanKappa)
+                                  </mat-slide-toggle>
+                                  <mat-icon
+                                    class="info-icon"
+                                    matTooltip="Der gewichtete Mittelwert gewichtet jeden Kappa-Wert nach der Anzahl gültiger Paare, entsprechend der R-Implementierung: weighted.mean(dfr$kappa, dfr$N)"
+                                    matTooltipPosition="right"
+                                    >
+                                    info
+                                  </mat-icon>
+                                  @if (isLoadingKappa) {
+                                    <mat-progress-spinner
+                                      mode="indeterminate"
+                                      diameter="20"
+                                      class="inline-spinner"
+                                    ></mat-progress-spinner>
+                                  }
+                                </div>
+                                <!-- Calculation Level Toggle -->
+                                <div class="level-toggle-container">
+                                  <mat-slide-toggle
+                                    [(ngModel)]="useCodeLevel"
+                                    (change)="toggleCalculationLevel()"
+                                    color="primary"
+                                    [disabled]="isLoadingKappa"
+                                    >
+                                    Kappa auf Ebene der Codes
+                                  </mat-slide-toggle>
+                                  <mat-icon
+                                    class="info-icon"
+                                    matTooltip="Code-Ebene: Unterscheidet zwischen allen Codes (inkl. Missing-Codes 6,8,9). Score-Ebene: Basiert auf Scores, wobei verschiedene Codes auf denselben Score abgebildet werden können."
+                                    matTooltipPosition="right"
+                                    >
+                                    info
+                                  </mat-icon>
+                                  <span class="level-indicator">
+                                    ({{ useCodeLevel ? 'Code-Ebene' : 'Score-Ebene' }})
+                                  </span>
+                                  @if (isLoadingKappa) {
+                                    <mat-progress-spinner
+                                      mode="indeterminate"
+                                      diameter="20"
+                                      class="inline-spinner"
+                                    ></mat-progress-spinner>
+                                  }
+                                </div>
+                                <div class="kappa-export-actions">
+                                  <button
+                                    mat-stroked-button
+                                    color="primary"
+                                    type="button"
+                                    (click)="exportTrainingReliability()"
+                                    [disabled]="isLoadingKappa || isExportingReliability || !kappaStatistics.variables.length"
+                                    >
+                                    <mat-icon>{{ isExportingReliability ? 'hourglass_empty' : 'download' }}</mat-icon>
+                                    {{ 'coding.trainings.compare.reliability-export-csv' | translate }}
+                                  </button>
+                                </div>
+                                @if ((codersFormControl.value?.length || 0) < 3) {
+                                  <div
+                                    class="fleiss-minimum-hint"
+                                    >
+                                    <mat-icon>info</mat-icon>
+                                    <span>{{ 'coding.trainings.compare.fleiss-minimum-raters' | translate }}</span>
+                                  </div>
+                                }
+                                <!-- Summary Statistics -->
+                                <div class="summary-stats">
+                                  <div class="stat-card">
+                                    <span class="stat-label">{{ 'coding.trainings.compare.metric-mean-cohen-kappa' | translate }}</span>
+                                    <span
+                                      class="stat-value kappa-value"
                   [class]="
                     'stat-value kappa-value ' +
                     getKappaCellClass(
                       kappaStatistics.workspaceSummary.averageKappa
                     )
                   "
-                >
-                  {{
-                    kappaStatistics.workspaceSummary.averageKappa !== null
-                      ? (kappaStatistics.workspaceSummary.averageKappa
-                        | number: '1.3-3')
-                      : 'N/A'
-                  }}
-                </span>
-                <span class="stat-sublabel">{{
-                  kappaStatistics.workspaceSummary.weightingMethod ===
-                  'weighted'
-                    ? 'Gewichtet'
-                    : 'Ungewichtet'
-                }}</span>
-              </div>
-              <div class="stat-card">
-                <span class="stat-label">{{ 'coding.trainings.compare.metric-mean-brennan-prediger-kappa' | translate }}</span>
-                <span
+                                      >
+                                      {{
+                                      kappaStatistics.workspaceSummary.averageKappa !== null
+                                      ? (kappaStatistics.workspaceSummary.averageKappa
+                                      | number: '1.3-3')
+                                      : 'N/A'
+                                      }}
+                                    </span>
+                                    <span class="stat-sublabel">{{
+                                      kappaStatistics.workspaceSummary.weightingMethod ===
+                                      'weighted'
+                                      ? 'Gewichtet'
+                                      : 'Ungewichtet'
+                                    }}</span>
+                                  </div>
+                                  <div class="stat-card">
+                                    <span class="stat-label">{{ 'coding.trainings.compare.metric-mean-brennan-prediger-kappa' | translate }}</span>
+                                    <span
                   [class]="
                     'stat-value kappa-value ' +
                     getKappaCellClass(
                       kappaStatistics.workspaceSummary.averageBrennanPredigerKappa ?? null
                     )
                   "
-                >
-                  {{
-                    kappaStatistics.workspaceSummary.averageBrennanPredigerKappa !== null &&
-                    kappaStatistics.workspaceSummary.averageBrennanPredigerKappa !== undefined
-                      ? (kappaStatistics.workspaceSummary.averageBrennanPredigerKappa
-                        | number: '1.3-3')
-                      : 'N/A'
-                  }}
-                </span>
-                <span class="stat-sublabel">{{
-                  kappaStatistics.workspaceSummary.weightingMethod === 'weighted'
-                    ? 'Gewichtet'
-                    : 'Ungewichtet'
-                }}</span>
-              </div>
-              <div class="stat-card">
-                <span class="stat-label">Kodierer-Paare</span>
-                <span class="stat-value">{{
-                  kappaStatistics.workspaceSummary.totalCoderPairs
-                }}</span>
-              </div>
-              <div class="stat-card">
-                <span class="stat-label">Doppelt kodierte Antworten</span>
-                <span class="stat-value">{{
-                  kappaStatistics.workspaceSummary.totalDoubleCodedResponses
-                }}</span>
-              </div>
-              <div class="stat-card">
-                <span class="stat-label">Kodierer</span>
-                <span class="stat-value">{{
-                  kappaStatistics.workspaceSummary.codersIncluded
-                }}</span>
-              </div>
-            </div>
-
-            <div class="kappa-empty-state" *ngIf="hasKappaNoDoubleCodingState()">
-              <mat-icon>info</mat-icon>
-              <span>
-                Für die aktuelle Auswahl gibt es noch keine doppelt kodierten Antworten.
-                Kappa und mittlere Übereinstimmung werden berechnet, sobald mindestens
-                zwei ausgewählte Kodierer denselben Fall kodiert haben.
-              </span>
-            </div>
-
-            <!-- Detailed Coder Pair Statistics -->
-            <div
-              class="coder-pairs-details"
-              *ngIf="
-                kappaStatistics.variables.length > 0 &&
-                !hasKappaNoDoubleCodingState()
-              "
-            >
-              <h5>Details nach Kodierer-Paaren</h5>
-              <div class="kappa-table-container">
-                <table class="kappa-details-table">
-                  <thead>
-                    <tr>
-                      <th>Variable</th>
-                      <th>Kodierer-Paar</th>
-                      <th>Cohen's Kappa</th>
-                      <th>{{ 'coding.trainings.compare.metric-brennan-prediger-kappa' | translate }}</th>
-                      <th>Übereinstimmung</th>
-                      <th>Gültige Paare</th>
-                      <th>{{ 'coding.trainings.compare.cohen-interpretation' | translate }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <ng-container
-                      *ngFor="let variable of kappaStatistics.variables"
-                    >
-                      <tr *ngFor="let pair of variable.coderPairs">
-                        <td>{{ getVariableLabel(variable) }}</td>
-                        <td>{{ pair.coder1Name }} ↔ {{ pair.coder2Name }}</td>
-                        <td>
-                          <span
+                                      >
+                                      {{
+                                      kappaStatistics.workspaceSummary.averageBrennanPredigerKappa !== null &&
+                                      kappaStatistics.workspaceSummary.averageBrennanPredigerKappa !== undefined
+                                      ? (kappaStatistics.workspaceSummary.averageBrennanPredigerKappa
+                                      | number: '1.3-3')
+                                      : 'N/A'
+                                      }}
+                                    </span>
+                                    <span class="stat-sublabel">{{
+                                      kappaStatistics.workspaceSummary.weightingMethod === 'weighted'
+                                      ? 'Gewichtet'
+                                      : 'Ungewichtet'
+                                    }}</span>
+                                  </div>
+                                  <div class="stat-card">
+                                    <span class="stat-label">Kodierer-Paare</span>
+                                    <span class="stat-value">{{
+                                      kappaStatistics.workspaceSummary.totalCoderPairs
+                                    }}</span>
+                                  </div>
+                                  <div class="stat-card">
+                                    <span class="stat-label">Doppelt kodierte Antworten</span>
+                                    <span class="stat-value">{{
+                                      kappaStatistics.workspaceSummary.totalDoubleCodedResponses
+                                    }}</span>
+                                  </div>
+                                  <div class="stat-card">
+                                    <span class="stat-label">Kodierer</span>
+                                    <span class="stat-value">{{
+                                      kappaStatistics.workspaceSummary.codersIncluded
+                                    }}</span>
+                                  </div>
+                                </div>
+                                @if (hasKappaNoDoubleCodingState()) {
+                                  <div class="kappa-empty-state">
+                                    <mat-icon>info</mat-icon>
+                                    <span>
+                                      Für die aktuelle Auswahl gibt es noch keine doppelt kodierten Antworten.
+                                      Kappa und mittlere Übereinstimmung werden berechnet, sobald mindestens
+                                      zwei ausgewählte Kodierer denselben Fall kodiert haben.
+                                    </span>
+                                  </div>
+                                }
+                                <!-- Detailed Coder Pair Statistics -->
+                                @if (
+                                  kappaStatistics.variables.length > 0 &&
+                                  !hasKappaNoDoubleCodingState()
+                                  ) {
+                                  <div
+                                    class="coder-pairs-details"
+                                    >
+                                    <h5>Details nach Kodierer-Paaren</h5>
+                                    <div class="kappa-table-container">
+                                      <table class="kappa-details-table">
+                                        <thead>
+                                          <tr>
+                                            <th>Variable</th>
+                                            <th>Kodierer-Paar</th>
+                                            <th>Cohen's Kappa</th>
+                                            <th>{{ 'coding.trainings.compare.metric-brennan-prediger-kappa' | translate }}</th>
+                                            <th>Übereinstimmung</th>
+                                            <th>Gültige Paare</th>
+                                            <th>{{ 'coding.trainings.compare.cohen-interpretation' | translate }}</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          @for (variable of kappaStatistics.variables; track variable) {
+                                            @for (pair of variable.coderPairs; track pair) {
+                                              <tr>
+                                                <td>{{ getVariableLabel(variable) }}</td>
+                                                <td>{{ pair.coder1Name }} ↔ {{ pair.coder2Name }}</td>
+                                                <td>
+                                                  <span
                             [class]="
                               'kappa-cell ' + getKappaCellClass(pair.kappa)
                             "
-                          >
-                            {{
-                              pair.kappa !== null
-                                ? (pair.kappa | number: '1.3-3')
-                                : 'N/A'
-                            }}
-                          </span>
-                        </td>
-                        <td>
-                          <span
+                                                    >
+                                                    {{
+                                                    pair.kappa !== null
+                                                    ? (pair.kappa | number: '1.3-3')
+                                                    : 'N/A'
+                                                    }}
+                                                  </span>
+                                                </td>
+                                                <td>
+                                                  <span
                             [class]="
                               'kappa-cell ' +
                               getKappaCellClass(pair.brennanPredigerKappa ?? null)
                             "
-                          >
-                            {{
-                              pair.brennanPredigerKappa !== null &&
-                              pair.brennanPredigerKappa !== undefined
-                                ? (pair.brennanPredigerKappa | number: '1.3-3')
-                                : 'N/A'
-                            }}
-                          </span>
-                        </td>
-                        <td>{{ pair.agreement * 100 | number: '1.1-1' }}%</td>
-                        <td>{{ pair.validPairs }} / {{ pair.totalItems }}</td>
-                        <td>
-                          <span class="interpretation-badge">{{
-                            pair.interpretation | translate
-                          }}</span>
-                        </td>
-                      </tr>
-                      <tr
-                        class="variable-summary-row"
-                        *ngIf="getVariableSummary(variable) as summary"
-                      >
-                        <td colspan="7">
-                          <div class="variable-summary-box">
-                            <span class="variable-summary-label">
-                              Mittelwert {{ getVariableLabel(variable) }}
-                            </span>
-                            <span>
-                              Cohen's Kappa
-                              <strong
+                                                    >
+                                                    {{
+                                                    pair.brennanPredigerKappa !== null &&
+                                                    pair.brennanPredigerKappa !== undefined
+                                                    ? (pair.brennanPredigerKappa | number: '1.3-3')
+                                                    : 'N/A'
+                                                    }}
+                                                  </span>
+                                                </td>
+                                                <td>{{ pair.agreement * 100 | number: '1.1-1' }}%</td>
+                                                <td>{{ pair.validPairs }} / {{ pair.totalItems }}</td>
+                                                <td>
+                                                  <span class="interpretation-badge">{{
+                                                    pair.interpretation | translate
+                                                  }}</span>
+                                                </td>
+                                              </tr>
+                                            }
+                                            @if (getVariableSummary(variable); as summary) {
+                                              <tr
+                                                class="variable-summary-row"
+                                                >
+                                                <td colspan="7">
+                                                  <div class="variable-summary-box">
+                                                    <span class="variable-summary-label">
+                                                      Mittelwert {{ getVariableLabel(variable) }}
+                                                    </span>
+                                                    <span>
+                                                      Cohen's Kappa
+                                                      <strong
                                 [class]="
                                   'kappa-cell ' +
                                   getKappaCellClass(summary.meanKappa)
                                 "
-                              >
-                                {{
-                                  summary.meanKappa !== null
-                                    ? (summary.meanKappa | number: '1.3-3')
-                                    : 'N/A'
-                                }}
-                              </strong>
-                            </span>
-                            <span>
-                              {{ 'coding.trainings.compare.metric-brennan-prediger-kappa' | translate }}
-                              <strong
+                                                        >
+                                                        {{
+                                                        summary.meanKappa !== null
+                                                        ? (summary.meanKappa | number: '1.3-3')
+                                                        : 'N/A'
+                                                        }}
+                                                      </strong>
+                                                    </span>
+                                                    <span>
+                                                      {{ 'coding.trainings.compare.metric-brennan-prediger-kappa' | translate }}
+                                                      <strong
                                 [class]="
                                   'kappa-cell ' +
                                   getKappaCellClass(summary.meanBrennanPredigerKappa)
                                 "
-                              >
-                                {{
-                                  summary.meanBrennanPredigerKappa !== null
-                                    ? (summary.meanBrennanPredigerKappa | number: '1.3-3')
-                                    : 'N/A'
-                                }}
-                              </strong>
-                            </span>
-                            <span>
-                              {{ 'coding.trainings.compare.metric-fleiss-kappa' | translate }}
-                              <strong
+                                                        >
+                                                        {{
+                                                        summary.meanBrennanPredigerKappa !== null
+                                                        ? (summary.meanBrennanPredigerKappa | number: '1.3-3')
+                                                        : 'N/A'
+                                                        }}
+                                                      </strong>
+                                                    </span>
+                                                    <span>
+                                                      {{ 'coding.trainings.compare.metric-fleiss-kappa' | translate }}
+                                                      <strong
                                 [class]="
                                   'kappa-cell ' + getKappaCellClass(summary.fleissKappa)
                                 "
-                              >
-                                {{
-                                  summary.fleissKappa !== null
-                                    ? (summary.fleissKappa | number: '1.3-3')
-                                    : 'N/A'
-                                }}
-                              </strong>
-                              ({{ 'coding.trainings.compare.complete-of-possible-cases' | translate:{complete: summary.fleissCaseCount, possible: summary.fleissPossibleCaseCount} }})
-                            </span>
-                            <span>
-                              Übereinstimmung
-                              <strong>
-                                {{
-                                  summary.meanAgreement !== null
-                                    ? (summary.meanAgreement
-                                      | percent: '1.1-1')
-                                    : 'N/A'
-                                }}
-                              </strong>
-                            </span>
-                            <span>Fälle {{ summary.caseCount }}</span>
-                            <span>Gültige Paarwerte {{ summary.validPairCount }}</span>
-                          </div>
-                        </td>
-                      </tr>
-                    </ng-container>
-                  </tbody>
-                </table>
-              </div>
-
-              <div
-                class="variable-mean-table"
-                *ngIf="variableKappaSummaries.length > 0"
-              >
-                <h5>Mittelwerte je Variable</h5>
-                <div class="kappa-table-container">
-                  <table class="kappa-details-table">
-                    <thead>
-                      <tr>
-                        <th>Variable</th>
-                        <th>Mittleres Cohen's Kappa</th>
-                        <th>{{ 'coding.trainings.compare.metric-mean-brennan-prediger-kappa' | translate }}</th>
-                        <th>{{ 'coding.trainings.compare.metric-fleiss-kappa' | translate }}</th>
-                        <th>Mittlere Übereinstimmung</th>
-                        <th>Fallzahl</th>
-                        <th>Gültige Paarwerte</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr *ngFor="let summary of variableKappaSummaries">
-                        <td>
-                          {{ summary.unitName }} - {{ summary.variableId }}
-                        </td>
-                        <td>
-                          <span
+                                                        >
+                                                        {{
+                                                        summary.fleissKappa !== null
+                                                        ? (summary.fleissKappa | number: '1.3-3')
+                                                        : 'N/A'
+                                                        }}
+                                                      </strong>
+                                                      ({{ 'coding.trainings.compare.complete-of-possible-cases' | translate:{complete: summary.fleissCaseCount, possible: summary.fleissPossibleCaseCount} }})
+                                                    </span>
+                                                    <span>
+                                                      Übereinstimmung
+                                                      <strong>
+                                                        {{
+                                                        summary.meanAgreement !== null
+                                                        ? (summary.meanAgreement
+                                                        | percent: '1.1-1')
+                                                        : 'N/A'
+                                                        }}
+                                                      </strong>
+                                                    </span>
+                                                    <span>Fälle {{ summary.caseCount }}</span>
+                                                    <span>Gültige Paarwerte {{ summary.validPairCount }}</span>
+                                                  </div>
+                                                </td>
+                                              </tr>
+                                            }
+                                          }
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                    @if (variableKappaSummaries.length > 0) {
+                                      <div
+                                        class="variable-mean-table"
+                                        >
+                                        <h5>Mittelwerte je Variable</h5>
+                                        <div class="kappa-table-container">
+                                          <table class="kappa-details-table">
+                                            <thead>
+                                              <tr>
+                                                <th>Variable</th>
+                                                <th>Mittleres Cohen's Kappa</th>
+                                                <th>{{ 'coding.trainings.compare.metric-mean-brennan-prediger-kappa' | translate }}</th>
+                                                <th>{{ 'coding.trainings.compare.metric-fleiss-kappa' | translate }}</th>
+                                                <th>Mittlere Übereinstimmung</th>
+                                                <th>Fallzahl</th>
+                                                <th>Gültige Paarwerte</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                          @for (summary of variableKappaSummaries; track summary.key) {
+                                                <tr>
+                                                  <td>
+                                                    {{ summary.unitName }} - {{ summary.variableId }}
+                                                  </td>
+                                                  <td>
+                                                    <span
                             [class]="
                               'kappa-cell ' +
                               getKappaCellClass(summary.meanKappa)
                             "
-                          >
-                            {{
-                              summary.meanKappa !== null
-                                ? (summary.meanKappa | number: '1.3-3')
-                                : 'N/A'
-                            }}
-                          </span>
-                        </td>
-                        <td>
-                          <span
+                                                      >
+                                                      {{
+                                                      summary.meanKappa !== null
+                                                      ? (summary.meanKappa | number: '1.3-3')
+                                                      : 'N/A'
+                                                      }}
+                                                    </span>
+                                                  </td>
+                                                  <td>
+                                                    <span
                             [class]="
                               'kappa-cell ' +
                               getKappaCellClass(summary.meanBrennanPredigerKappa)
                             "
-                          >
-                            {{
-                              summary.meanBrennanPredigerKappa !== null
-                                ? (summary.meanBrennanPredigerKappa | number: '1.3-3')
-                                : 'N/A'
-                            }}
-                          </span>
-                        </td>
-                        <td>
-                          <span
+                                                      >
+                                                      {{
+                                                      summary.meanBrennanPredigerKappa !== null
+                                                      ? (summary.meanBrennanPredigerKappa | number: '1.3-3')
+                                                      : 'N/A'
+                                                      }}
+                                                    </span>
+                                                  </td>
+                                                  <td>
+                                                    <span
                             [class]="
                               'kappa-cell ' + getKappaCellClass(summary.fleissKappa)
                             "
+                                                      >
+                                                      {{
+                                                      summary.fleissKappa !== null
+                                                      ? (summary.fleissKappa | number: '1.3-3')
+                                                      : 'N/A'
+                                                      }}
+                                                    </span>
+                                                    <small>
+                                                      ({{ summary.fleissCaseCount }} / {{ summary.fleissPossibleCaseCount }})
+                                                    </small>
+                                                  </td>
+                                                  <td>
+                                                    {{
+                                                    summary.meanAgreement !== null
+                                                    ? (summary.meanAgreement | percent: '1.1-1')
+                                                    : 'N/A'
+                                                    }}
+                                                  </td>
+                                                  <td>{{ summary.caseCount }}</td>
+                                                  <td>{{ summary.validPairCount }}</td>
+                                                </tr>
+                                              }
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      </div>
+                                    }
+                                  </div>
+                                }
+                              </div>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
+                    <div class="table-filters">
+                      <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('unitName')">
+                        <mat-label>Aufgabe</mat-label>
+                        <input
+                          matInput
+                          [(ngModel)]="tableFilters.unitName"
+                          (ngModelChange)="onTextTableFilterChange()"
+                          />
+                        @if (isTableRegexFilterInvalid('unitName')) {
+                          <mat-hint class="regex-filter-error">
+                            {{ 'search-filter.invalid-regex' | translate }}
+                          </mat-hint>
+                        }
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('variableId')">
+                        <mat-label>Variable</mat-label>
+                        <input
+                          matInput
+                          [(ngModel)]="tableFilters.variableId"
+                          (ngModelChange)="onTextTableFilterChange()"
+                          />
+                        @if (isTableRegexFilterInvalid('variableId')) {
+                          <mat-hint class="regex-filter-error">
+                            {{ 'search-filter.invalid-regex' | translate }}
+                          </mat-hint>
+                        }
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('personLogin')">
+                        <mat-label>Person Login</mat-label>
+                        <input
+                          matInput
+                          [(ngModel)]="tableFilters.personLogin"
+                          (ngModelChange)="onTextTableFilterChange()"
+                          />
+                        @if (isTableRegexFilterInvalid('personLogin')) {
+                          <mat-hint class="regex-filter-error">
+                            {{ 'search-filter.invalid-regex' | translate }}
+                          </mat-hint>
+                        }
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('personGroup')">
+                        <mat-label>Person Gruppe</mat-label>
+                        <input
+                          matInput
+                          [(ngModel)]="tableFilters.personGroup"
+                          (ngModelChange)="onTextTableFilterChange()"
+                          />
+                        @if (isTableRegexFilterInvalid('personGroup')) {
+                          <mat-hint class="regex-filter-error">
+                            {{ 'search-filter.invalid-regex' | translate }}
+                          </mat-hint>
+                        }
+                      </mat-form-field>
+                      <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('bookletName')">
+                        <mat-label>Testheft-Name</mat-label>
+                        <input
+                          matInput
+                          [(ngModel)]="tableFilters.bookletName"
+                          (ngModelChange)="onTextTableFilterChange()"
+                          />
+                        @if (isTableRegexFilterInvalid('bookletName')) {
+                          <mat-hint class="regex-filter-error">
+                            {{ 'search-filter.invalid-regex' | translate }}
+                          </mat-hint>
+                        }
+                      </mat-form-field>
+                      <mat-form-field appearance="outline">
+                        <mat-label>Übereinstimmung</mat-label>
+                        <mat-select
+                          [(ngModel)]="tableFilters.match"
+                          (selectionChange)="applyTableFilters()"
                           >
-                            {{
-                              summary.fleissKappa !== null
-                                ? (summary.fleissKappa | number: '1.3-3')
-                                : 'N/A'
-                            }}
-                          </span>
-                          <small>
-                            ({{ summary.fleissCaseCount }} / {{ summary.fleissPossibleCaseCount }})
-                          </small>
-                        </td>
-                        <td>
-                          {{
-                            summary.meanAgreement !== null
-                              ? (summary.meanAgreement | percent: '1.1-1')
-                              : 'N/A'
-                          }}
-                        </td>
-                        <td>{{ summary.caseCount }}</td>
-                        <td>{{ summary.validPairCount }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="table-filters">
-        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('unitName')">
-          <mat-label>Aufgabe</mat-label>
-          <input
-            matInput
-            [(ngModel)]="tableFilters.unitName"
-            (ngModelChange)="onTextTableFilterChange()"
-          />
-          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('unitName')">
-            {{ 'search-filter.invalid-regex' | translate }}
-          </mat-hint>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('variableId')">
-          <mat-label>Variable</mat-label>
-          <input
-            matInput
-            [(ngModel)]="tableFilters.variableId"
-            (ngModelChange)="onTextTableFilterChange()"
-          />
-          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('variableId')">
-            {{ 'search-filter.invalid-regex' | translate }}
-          </mat-hint>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('personLogin')">
-          <mat-label>Person Login</mat-label>
-          <input
-            matInput
-            [(ngModel)]="tableFilters.personLogin"
-            (ngModelChange)="onTextTableFilterChange()"
-          />
-          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('personLogin')">
-            {{ 'search-filter.invalid-regex' | translate }}
-          </mat-hint>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('personGroup')">
-          <mat-label>Person Gruppe</mat-label>
-          <input
-            matInput
-            [(ngModel)]="tableFilters.personGroup"
-            (ngModelChange)="onTextTableFilterChange()"
-          />
-          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('personGroup')">
-            {{ 'search-filter.invalid-regex' | translate }}
-          </mat-hint>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline" [class.regex-filter-invalid]="isTableRegexFilterInvalid('bookletName')">
-          <mat-label>Testheft-Name</mat-label>
-          <input
-            matInput
-            [(ngModel)]="tableFilters.bookletName"
-            (ngModelChange)="onTextTableFilterChange()"
-          />
-          <mat-hint class="regex-filter-error" *ngIf="isTableRegexFilterInvalid('bookletName')">
-            {{ 'search-filter.invalid-regex' | translate }}
-          </mat-hint>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>Übereinstimmung</mat-label>
-          <mat-select
-            [(ngModel)]="tableFilters.match"
-            (selectionChange)="applyTableFilters()"
-          >
-            <mat-option value="all">Alle</mat-option>
-            <mat-option value="match">Nur Übereinstimmung</mat-option>
-            <mat-option value="differ">Nur Abweichung</mat-option>
-          </mat-select>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>Notizen</mat-label>
-          <mat-select
-            [(ngModel)]="tableFilters.notesMode"
-            (selectionChange)="applyTableFilters()"
-          >
-            <mat-option value="all">Alle</mat-option>
-            <mat-option value="none">Keine</mat-option>
-            <mat-option value="with-notes">Mit Notiz</mat-option>
-          </mat-select>
-        </mat-form-field>
-
-        <button mat-stroked-button type="button" (click)="resetTableFilters()">
-          Filter zurücksetzen
-        </button>
-      </div>
-
-      <div class="comparison-refresh-indicator" *ngIf="isLoading && (hasComparisonRows() || hasFilterEmptyState())">
-        <mat-progress-spinner
-          mode="indeterminate"
-          diameter="20"
-        ></mat-progress-spinner>
-        <span>Aktualisiere Vergleichsdaten...</span>
-      </div>
-
-      <div class="comparison-empty-state" *ngIf="hasNoSelectedCodersState()">
-        <mat-icon>person_off</mat-icon>
-        <h4>Keine Kodierer ausgewählt</h4>
-        <p>
-          Wählen Sie mindestens zwei Kodierer aus, damit die Vergleichstabelle
-          und die Kennzahlen berechnet werden können.
-        </p>
-      </div>
-
-      <div class="comparison-empty-state" *ngIf="hasFilterEmptyState()">
-        <mat-icon>filter_alt_off</mat-icon>
-        <h4>Keine Treffer für die aktuellen Filter</h4>
-        <p>
-          Passen Sie die Filter an oder setzen Sie sie zurück, um die Fälle
-          wieder einzublenden.
-        </p>
-      </div>
-
-      <div
-        class="table-container"
-        *ngIf="!hasNoSelectedCodersState() && !hasFilterEmptyState()"
-      >
-        <table
-          mat-table
-          [dataSource]="dataSource"
-          matSort
-          [matSortActive]="sortBy"
-          [matSortDirection]="sortDirection"
-          (matSortChange)="onComparisonSortChange($event)"
-          class="mat-elevation-z2"
-        >
-          <!-- Index/Case Number Column -->
-          <ng-container matColumnDef="index">
-            <th mat-header-cell *matHeaderCellDef>#</th>
-            <td mat-cell *matCellDef="let row; let i = index">
-              {{ pageIndex * pageSize + i + 1 }}
-            </td>
-          </ng-container>
-
-          <!-- Unit & Variable Column -->
-          <ng-container matColumnDef="unitVariable">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header="unitName">
-              Aufgabe/Variable
-            </th>
-            <td mat-cell *matCellDef="let comparison">
-              <div class="unit-variable-cell">
-                <div class="unit-name">{{ comparison.unitName }}</div>
-                <div class="variable-id">{{ comparison.variableId }}</div>
-              </div>
-            </td>
-          </ng-container>
-
-          <!-- Person Info Column -->
-          <ng-container matColumnDef="personInfo">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header="personLogin">
-              Personeninformationen
-            </th>
-            <td mat-cell *matCellDef="let comparison">
-              <div class="person-info-cell">
-                <div class="person-login">{{ comparison.personLogin || '-' }}</div>
-                <div class="person-code">{{ comparison.personCode || '-' }}</div>
-                <div class="person-group">{{ comparison.personGroup || '-' }}</div>
-                <div class="booklet-name">{{ comparison.bookletName || '-' }}</div>
-              </div>
-            </td>
-          </ng-container>
-
-          <!-- Replay Column -->
-          <ng-container matColumnDef="replay">
-            <th mat-header-cell *matHeaderCellDef>Replay</th>
-            <td mat-cell *matCellDef="let comparison">
-              <button
-                mat-icon-button
-                type="button"
-                color="primary"
-                (click)="openReplay(comparison)"
-                matTooltip="Replay inkl. Kodieranweisungen öffnen"
-              >
-                <mat-icon>play_circle</mat-icon>
-              </button>
-            </td>
-          </ng-container>
-
-          <!-- Given Answer Column -->
-          <ng-container matColumnDef="givenAnswer">
-            <th mat-header-cell *matHeaderCellDef>Gegebene Antwort</th>
-            <td mat-cell *matCellDef="let comparison">
-              <div class="given-answer-cell">
-                <div class="answer-text" [matTooltip]="comparison.givenAnswer || 'N/A'">
-                  {{ comparison.givenAnswer || 'N/A' }}
-                </div>
-              </div>
-            </td>
-          </ng-container>
-
-          <!-- Match Column -->
-          <ng-container matColumnDef="match">
-            <th mat-header-cell *matHeaderCellDef>Übereinstimmung</th>
-            <td
-              mat-cell
-              *matCellDef="let comparison"
-              [ngClass]="'match-status-' + getComparisonStatus(comparison)"
-              [matTooltip]="getComparisonStatusTooltip(comparison)"
-            >
-              <mat-icon>{{ getComparisonStatusIcon(comparison) }}</mat-icon>
-            </td>
-          </ng-container>
-
-          <ng-container matColumnDef="modalValue">
-            <th mat-header-cell *matHeaderCellDef>{{ 'coding.trainings.compare.modal-value' | translate }}</th>
-            <td mat-cell *matCellDef="let comparison">
-              <ng-container *ngIf="comparison.modalValueDisplay || emptyModalValueDisplay as modalValueDisplay">
-                <div class="modal-value-cell" [matTooltip]="modalValueDisplay.tooltip">
-                  <strong>{{ modalValueDisplay.valueText }}</strong>
-                  <span>{{ 'coding.trainings.compare.modal-deviations' | translate:{count: modalValueDisplay.deviationText} }}</span>
-                </div>
-              </ng-container>
-            </td>
-          </ng-container>
-
-          <ng-container matColumnDef="discussion">
-            <th mat-header-cell *matHeaderCellDef>
-              <div class="discussion-header">
-                <span class="discussion-header-title">Diskussionsergebnis</span>
-                <span class="discussion-header-manager" *ngIf="discussionManagerLabel">
-                  Manager: {{ discussionManagerLabel }}
-                </span>
-              </div>
-            </th>
-            <td mat-cell *matCellDef="let comparison">
-              <div class="discussion-cell">
-                <mat-form-field appearance="outline" class="discussion-input">
-                  <mat-label>Code</mat-label>
-                  <input
-                    matInput
+                          <mat-option value="all">Alle</mat-option>
+                          <mat-option value="match">Nur Übereinstimmung</mat-option>
+                          <mat-option value="differ">Nur Abweichung</mat-option>
+                        </mat-select>
+                      </mat-form-field>
+                      <mat-form-field appearance="outline">
+                        <mat-label>Notizen</mat-label>
+                        <mat-select
+                          [(ngModel)]="tableFilters.notesMode"
+                          (selectionChange)="applyTableFilters()"
+                          >
+                          <mat-option value="all">Alle</mat-option>
+                          <mat-option value="none">Keine</mat-option>
+                          <mat-option value="with-notes">Mit Notiz</mat-option>
+                        </mat-select>
+                      </mat-form-field>
+                      <button mat-stroked-button type="button" (click)="resetTableFilters()">
+                        Filter zurücksetzen
+                      </button>
+                    </div>
+                    @if (isLoading && (hasComparisonRows() || hasFilterEmptyState())) {
+                      <div class="comparison-refresh-indicator">
+                        <mat-progress-spinner
+                          mode="indeterminate"
+                          diameter="20"
+                        ></mat-progress-spinner>
+                        <span>Aktualisiere Vergleichsdaten...</span>
+                      </div>
+                    }
+                    @if (hasNoSelectedCodersState()) {
+                      <div class="comparison-empty-state">
+                        <mat-icon>person_off</mat-icon>
+                        <h4>Keine Kodierer ausgewählt</h4>
+                        <p>
+                          Wählen Sie mindestens zwei Kodierer aus, damit die Vergleichstabelle
+                          und die Kennzahlen berechnet werden können.
+                        </p>
+                      </div>
+                    }
+                    @if (hasFilterEmptyState()) {
+                      <div class="comparison-empty-state">
+                        <mat-icon>filter_alt_off</mat-icon>
+                        <h4>Keine Treffer für die aktuellen Filter</h4>
+                        <p>
+                          Passen Sie die Filter an oder setzen Sie sie zurück, um die Fälle
+                          wieder einzublenden.
+                        </p>
+                      </div>
+                    }
+                    @if (!hasNoSelectedCodersState() && !hasFilterEmptyState()) {
+                      <div
+                        class="table-container"
+                        >
+                        <table
+                          mat-table
+                          [dataSource]="dataSource"
+                          matSort
+                          [matSortActive]="sortBy"
+                          [matSortDirection]="sortDirection"
+                          (matSortChange)="onComparisonSortChange($event)"
+                          class="mat-elevation-z2"
+                          >
+                          <!-- Index/Case Number Column -->
+                          <ng-container matColumnDef="index">
+                            <th mat-header-cell *matHeaderCellDef>#</th>
+                            <td mat-cell *matCellDef="let row; let i = index">
+                              {{ pageIndex * pageSize + i + 1 }}
+                            </td>
+                          </ng-container>
+                          <!-- Unit & Variable Column -->
+                          <ng-container matColumnDef="unitVariable">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header="unitName">
+                              Aufgabe/Variable
+                            </th>
+                            <td mat-cell *matCellDef="let comparison">
+                              <div class="unit-variable-cell">
+                                <div class="unit-name">{{ comparison.unitName }}</div>
+                                <div class="variable-id">{{ comparison.variableId }}</div>
+                              </div>
+                            </td>
+                          </ng-container>
+                          <!-- Person Info Column -->
+                          <ng-container matColumnDef="personInfo">
+                            <th mat-header-cell *matHeaderCellDef mat-sort-header="personLogin">
+                              Personeninformationen
+                            </th>
+                            <td mat-cell *matCellDef="let comparison">
+                              <div class="person-info-cell">
+                                <div class="person-login">{{ comparison.personLogin || '-' }}</div>
+                                <div class="person-code">{{ comparison.personCode || '-' }}</div>
+                                <div class="person-group">{{ comparison.personGroup || '-' }}</div>
+                                <div class="booklet-name">{{ comparison.bookletName || '-' }}</div>
+                              </div>
+                            </td>
+                          </ng-container>
+                          <!-- Replay Column -->
+                          <ng-container matColumnDef="replay">
+                            <th mat-header-cell *matHeaderCellDef>Replay</th>
+                            <td mat-cell *matCellDef="let comparison">
+                              <button
+                                mat-icon-button
+                                type="button"
+                                color="primary"
+                                (click)="openReplay(comparison)"
+                                matTooltip="Replay inkl. Kodieranweisungen öffnen"
+                                >
+                                <mat-icon>play_circle</mat-icon>
+                              </button>
+                            </td>
+                          </ng-container>
+                          <!-- Given Answer Column -->
+                          <ng-container matColumnDef="givenAnswer">
+                            <th mat-header-cell *matHeaderCellDef>Gegebene Antwort</th>
+                            <td mat-cell *matCellDef="let comparison">
+                              <div class="given-answer-cell">
+                                <div class="answer-text" [matTooltip]="comparison.givenAnswer || 'N/A'">
+                                  {{ comparison.givenAnswer || 'N/A' }}
+                                </div>
+                              </div>
+                            </td>
+                          </ng-container>
+                          <!-- Match Column -->
+                          <ng-container matColumnDef="match">
+                            <th mat-header-cell *matHeaderCellDef>Übereinstimmung</th>
+                            <td
+                              mat-cell
+                              *matCellDef="let comparison"
+                              [ngClass]="'match-status-' + getComparisonStatus(comparison)"
+                              [matTooltip]="getComparisonStatusTooltip(comparison)"
+                              >
+                              <mat-icon>{{ getComparisonStatusIcon(comparison) }}</mat-icon>
+                            </td>
+                          </ng-container>
+                          <ng-container matColumnDef="modalValue">
+                            <th mat-header-cell *matHeaderCellDef>{{ 'coding.trainings.compare.modal-value' | translate }}</th>
+                            <td mat-cell *matCellDef="let comparison">
+                              @if (comparison.modalValueDisplay || emptyModalValueDisplay; as modalValueDisplay) {
+                                <div class="modal-value-cell" [matTooltip]="modalValueDisplay.tooltip">
+                                  <strong>{{ modalValueDisplay.valueText }}</strong>
+                                  <span>{{ 'coding.trainings.compare.modal-deviations' | translate:{count: modalValueDisplay.deviationText} }}</span>
+                                </div>
+                              }
+                            </td>
+                          </ng-container>
+                          <ng-container matColumnDef="discussion">
+                            <th mat-header-cell *matHeaderCellDef>
+                              <div class="discussion-header">
+                                <span class="discussion-header-title">Diskussionsergebnis</span>
+                                @if (discussionManagerLabel) {
+                                  <span class="discussion-header-manager">
+                                    Manager: {{ discussionManagerLabel }}
+                                  </span>
+                                }
+                              </div>
+                            </th>
+                            <td mat-cell *matCellDef="let comparison">
+                              <div class="discussion-cell">
+                                <mat-form-field appearance="outline" class="discussion-input">
+                                  <mat-label>Code</mat-label>
+                                  <input
+                                    matInput
                     [value]="
                       discussionCodeByResponseId[comparison.responseId] || ''
                     "
@@ -949,283 +972,285 @@
                         $any($event.target).value
                       )
                     "
-                    (blur)="onDiscussionCodeBlur(comparison)"
-                  />
-                </mat-form-field>
-                <span class="discussion-score"
-                  >Score:
-                  {{
-                    discussionScoreByResponseId[comparison.responseId] ?? '-'
-                  }}</span
-                >
-                <mat-form-field appearance="outline" class="discussion-notes">
-                  <mat-label>{{ 'double-coded-review.comment-label' | translate }}</mat-label>
-                  <textarea
-                    matInput
-                    rows="2"
-                    [placeholder]="'double-coded-review.comment-placeholder' | translate"
-                    [value]="discussionNotesByResponseId[comparison.responseId] || ''"
+                                    (blur)="onDiscussionCodeBlur(comparison)"
+                                    />
+                                </mat-form-field>
+                                <span class="discussion-score"
+                                  >Score:
+                                  {{
+                                  discussionScoreByResponseId[comparison.responseId] ?? '-'
+                                  }}</span
+                                  >
+                                  <mat-form-field appearance="outline" class="discussion-notes">
+                                    <mat-label>{{ 'double-coded-review.comment-label' | translate }}</mat-label>
+                                    <textarea
+                                      matInput
+                                      rows="2"
+                                      [placeholder]="'double-coded-review.comment-placeholder' | translate"
+                                      [value]="discussionNotesByResponseId[comparison.responseId] || ''"
                     (input)="
                       onDiscussionNotesInput(
                         comparison,
                         $any($event.target).value
                       )
                     "
-                    (blur)="onDiscussionNotesBlur(comparison)"
-                  ></textarea>
-                </mat-form-field>
-                <span
-                  class="discussion-saving"
-                  *ngIf="isSavingDiscussionByResponseId[comparison.responseId]"
-                  >Speichert ...</span
-                >
-                <span
-                  class="discussion-error"
-                  *ngIf="discussionErrorByResponseId[comparison.responseId]"
-                  >{{ discussionErrorByResponseId[comparison.responseId] }}</span
-                >
-                <span
-                  class="discussion-source discussion-source-auto"
-                  *ngIf="comparison.discussionSource === 'auto_agreement'"
-                  >Auto-Konsens</span
-                >
-                <span
-                  class="discussion-source discussion-source-manual"
-                  *ngIf="comparison.discussionSource === 'manual'"
-                  >Festgelegt</span
-                >
-              </div>
-            </td>
-          </ng-container>
+                                      (blur)="onDiscussionNotesBlur(comparison)"
+                                    ></textarea>
+                                  </mat-form-field>
+                                  @if (isSavingDiscussionByResponseId[comparison.responseId]) {
+                                    <span
+                                      class="discussion-saving"
+                                      >Speichert ...</span
+                                      >
+                                    }
+                                    @if (discussionErrorByResponseId[comparison.responseId]) {
+                                      <span
+                                        class="discussion-error"
+                                        >{{ discussionErrorByResponseId[comparison.responseId] }}</span
+                                        >
+                                      }
+                                      @if (comparison.discussionSource === 'auto_agreement') {
+                                        <span
+                                          class="discussion-source discussion-source-auto"
+                                          >Auto-Konsens</span
+                                          >
+                                        }
+                                        @if (comparison.discussionSource === 'manual') {
+                                          <span
+                                            class="discussion-source discussion-source-manual"
+                                            >Festgelegt</span
+                                            >
+                                          }
+                                        </div>
+                                      </td>
+                                    </ng-container>
+                                    <!-- Dynamic Columns -->
+                                    @for (col of dynamicCoderColumns; track col) {
+                                      <ng-container
+                                        [matColumnDef]="col"
+                                        >
+                                        <th mat-header-cell *matHeaderCellDef>
+                                          @if (comparisonMode === 'between-trainings') {
+                                            {{ getCoderFromTrainingColumnName(col.substring(6)) }}
+                                          }
+                                          @if (comparisonMode === 'within-training') {
+                                            {{ getCoderName(+col.substring(6)) }}
+                                          }
+                                        </th>
+                                        <td mat-cell *matCellDef="let element">
+                                          <div class="code-cell">
+                                            @if (comparisonMode === 'between-trainings') {
+                                              @if (
+                                                hasCoderFromTrainingDisplayData(
+                                                element,
+                                                col.substring(6)
+                                                )) {
+                                                @if (
+                                                  getCoderFromTraining(element, col.substring(6)); as coder
+                                                  ) {
+                                                  <div class="coder-result">
+                                                    <div class="code-line">
+                                                      <span class="code-label">Code:</span>
+                                                      <strong class="code-value">{{
+                                                        getDisplayCodeText(
+                                                        coder.code,
+                                                        coder.codingIssueOption
+                                                        )
+                                                      }}</strong>
+                                                      @if (hasCodingIssue(coder)) {
+                                                        <span
+                                                          class="coding-issue-badge"
+                                                          [ngClass]="getCodingIssueClass(coder)"
+                                                          [matTooltip]="getCodingIssueTooltip(coder)"
+                                                          >
+                                                          <mat-icon
+                                                            class="coding-issue-icon"
+                                                            [ngClass]="getCodingIssueClass(coder)"
+                                                            aria-hidden="true"
+                                                            >
+                                                            flag
+                                                          </mat-icon>
+                                                          {{ getCodingIssueShortLabel(coder.codingIssueOption) }}
+                                                        </span>
+                                                      }
+                                                      @if (hasCoderNote(coder)) {
+                                                        <mat-icon
+                                                          class="note-icon"
+                                                          [matTooltip]="getCoderNoteTooltip(coder)"
+                                                          aria-label="Kodierer-Notiz"
+                                                          >
+                                                          comment
+                                                        </mat-icon>
+                                                      }
+                                                    </div>
+                                                    @if (shouldShowScore(coder)) {
+                                                      <div class="score-line">
+                                                        Score: {{ coder.score ?? '-' }}
+                                                      </div>
+                                                    }
+                                                  </div>
+                                                }
+                                              } @else {
+                                                <span class="no-data">-</span>
+                                              }
+                                            }
+                                            @if (comparisonMode === 'within-training') {
+                                              @if (
+                                                hasCoderDisplayDataForWithin(element, +col.substring(6))) {
+                                                @if (
+                                                  getCoderForWithin(element, +col.substring(6)); as coder
+                                                  ) {
+                                                  <div class="coder-result">
+                                                    <div class="code-line">
+                                                      <span class="code-label">Code:</span>
+                                                      <strong class="code-value">{{
+                                                        getDisplayCodeText(
+                                                        coder.code,
+                                                        coder.codingIssueOption
+                                                        )
+                                                      }}</strong>
+                                                      @if (hasCodingIssue(coder)) {
+                                                        <span
+                                                          class="coding-issue-badge"
+                                                          [ngClass]="getCodingIssueClass(coder)"
+                                                          [matTooltip]="getCodingIssueTooltip(coder)"
+                                                          >
+                                                          <mat-icon
+                                                            class="coding-issue-icon"
+                                                            [ngClass]="getCodingIssueClass(coder)"
+                                                            aria-hidden="true"
+                                                            >
+                                                            flag
+                                                          </mat-icon>
+                                                          {{ getCodingIssueShortLabel(coder.codingIssueOption) }}
+                                                        </span>
+                                                      }
+                                                      @if (hasCoderNote(coder)) {
+                                                        <mat-icon
+                                                          class="note-icon"
+                                                          [matTooltip]="getCoderNoteTooltip(coder)"
+                                                          aria-label="Kodierer-Notiz"
+                                                          >
+                                                          comment
+                                                        </mat-icon>
+                                                      }
+                                                    </div>
+                                                    @if (shouldShowScore(coder)) {
+                                                      <div class="score-line">
+                                                        Score: {{ coder.score ?? '-' }}
+                                                      </div>
+                                                    }
+                                                  </div>
+                                                }
+                                              } @else {
+                                                <span class="no-data">-</span>
+                                              }
+                                            }
+                                          </div>
+                                        </td>
+                                      </ng-container>
+                                    }
+                                    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                                    <tr
+                                      mat-row
+                                      *matRowDef="let row; columns: displayedColumns"
+                                      [class.codes-match]="getComparisonStatus(row) === 'match'"
+                                      [class.codes-differ]="getComparisonStatus(row) === 'differ'"
+                                      [class.codes-incomplete]="getComparisonStatus(row) === 'incomplete'"
+                                      [class.codes-not-comparable]="getComparisonStatus(row) === 'not_comparable'"
+                                    ></tr>
+                                  </table>
+                                  <mat-paginator
+                                    [length]="totalItems"
+                                    [pageIndex]="pageIndex"
+                                    [pageSize]="pageSize"
+                                    [pageSizeOptions]="[50, 100, 200, 500]"
+                                    (page)="onComparisonPageChange($event)"
+                                    showFirstLastButtons
+                                  ></mat-paginator>
+                                </div>
+                              }
+                            </div>
+                          }
 
-          <!-- Dynamic Columns -->
-          <ng-container
-            *ngFor="let col of dynamicCoderColumns"
-            [matColumnDef]="col"
-          >
-            <th mat-header-cell *matHeaderCellDef>
-              <ng-container *ngIf="comparisonMode === 'between-trainings'">
-                {{ getCoderFromTrainingColumnName(col.substring(6)) }}
-              </ng-container>
-              <ng-container *ngIf="comparisonMode === 'within-training'">
-                {{ getCoderName(+col.substring(6)) }}
-              </ng-container>
-            </th>
-            <td mat-cell *matCellDef="let element">
-              <div class="code-cell">
-                <ng-container *ngIf="comparisonMode === 'between-trainings'">
-                  <ng-container
-                    *ngIf="
-                      hasCoderFromTrainingDisplayData(
-                        element,
-                        col.substring(6)
-                      );
-                      else noBetweenCoderData
-                    "
-                  >
-                    <ng-container
-                      *ngIf="
-                        getCoderFromTraining(element, col.substring(6)) as coder
-                      "
-                    >
-                      <div class="coder-result">
-                        <div class="code-line">
-                          <span class="code-label">Code:</span>
-                          <strong class="code-value">{{
-                            getDisplayCodeText(
-                              coder.code,
-                              coder.codingIssueOption
-                            )
-                          }}</strong>
-                          <span
-                            *ngIf="hasCodingIssue(coder)"
-                            class="coding-issue-badge"
-                            [ngClass]="getCodingIssueClass(coder)"
-                            [matTooltip]="getCodingIssueTooltip(coder)"
-                          >
-                            <mat-icon
-                              class="coding-issue-icon"
-                              [ngClass]="getCodingIssueClass(coder)"
-                              aria-hidden="true"
-                            >
-                              flag
-                            </mat-icon>
-                            {{ getCodingIssueShortLabel(coder.codingIssueOption) }}
-                          </span>
-                          <mat-icon
-                            *ngIf="hasCoderNote(coder)"
-                            class="note-icon"
-                            [matTooltip]="getCoderNoteTooltip(coder)"
-                            aria-label="Kodierer-Notiz"
-                          >
-                            comment
-                          </mat-icon>
+                          @if (
+                            !isLoading &&
+                            comparisonMode === 'between-trainings' &&
+                            comparisonData.length === 0 &&
+                            selectedTrainings.selected.length < 2
+                            ) {
+                            <div
+                              class="no-data"
+                              >
+                              <mat-icon>compare</mat-icon>
+                              <h4>Wählen Sie mindestens 2 Schulungen aus</h4>
+                              <p>
+                                Um Kodierergebnisse zu vergleichen, müssen mindestens 2 Schulungen
+                                ausgewählt werden.
+                              </p>
+                            </div>
+                          }
+
+                          @if (
+                            !isLoading &&
+                            comparisonMode === 'within-training' &&
+                            withinTrainingData.length === 0 &&
+                            !selectedTrainingForWithin
+                            ) {
+                            <div
+                              class="no-data"
+                              >
+                              <mat-icon>compare</mat-icon>
+                              <h4>Wählen Sie eine Schulung aus</h4>
+                              <p>
+                                Um Kodierergebnisse innerhalb einer Schulung zu vergleichen, müssen Sie
+                                eine Schulung auswählen.
+                              </p>
+                            </div>
+                          }
+
+                          @if (
+                            !isLoading &&
+                            comparisonMode === 'between-trainings' &&
+                            totalItems === 0 &&
+                            selectedTrainings.selected.length >= 2 &&
+                            !hasActiveFilters() &&
+                            !hasNoSelectedCodersState()
+                            ) {
+                            <div
+                              class="no-results"
+                              >
+                              <mat-icon>info</mat-icon>
+                              <h4>Keine gemeinsamen Daten gefunden</h4>
+                              <p>
+                                Die ausgewählten Schulungen haben keine gemeinsamen Einheiten/Variablen
+                                oder keine Kodierergebnisse.
+                              </p>
+                            </div>
+                          }
+
+                          @if (
+                            !isLoading &&
+                            comparisonMode === 'within-training' &&
+                            totalItems === 0 &&
+                            selectedTrainingForWithin &&
+                            !hasActiveFilters() &&
+                            !hasNoSelectedCodersState()
+                            ) {
+                            <div
+                              class="no-results"
+                              >
+                              <mat-icon>info</mat-icon>
+                              <h4>Keine Daten gefunden</h4>
+                              <p>
+                                Die ausgewählte Schulung hat keine Vergleichsfälle oder noch keine
+                                Kodierergebnisse.
+                              </p>
+                            </div>
+                          }
                         </div>
-                        <div class="score-line" *ngIf="shouldShowScore(coder)">
-                          Score: {{ coder.score ?? '-' }}
+
+                        <div mat-dialog-actions align="end">
+                          <button mat-button (click)="dialogRef.close()">Schließen</button>
                         </div>
                       </div>
-                    </ng-container>
-                  </ng-container>
-                  <ng-template #noBetweenCoderData
-                    ><span class="no-data">-</span></ng-template
-                  >
-                </ng-container>
-                <ng-container *ngIf="comparisonMode === 'within-training'">
-                  <ng-container
-                    *ngIf="
-                      hasCoderDisplayDataForWithin(element, +col.substring(6));
-                      else noWithinCoderData
-                    "
-                  >
-                    <ng-container
-                      *ngIf="
-                        getCoderForWithin(element, +col.substring(6)) as coder
-                      "
-                    >
-                      <div class="coder-result">
-                        <div class="code-line">
-                          <span class="code-label">Code:</span>
-                          <strong class="code-value">{{
-                            getDisplayCodeText(
-                              coder.code,
-                              coder.codingIssueOption
-                            )
-                          }}</strong>
-                          <span
-                            *ngIf="hasCodingIssue(coder)"
-                            class="coding-issue-badge"
-                            [ngClass]="getCodingIssueClass(coder)"
-                            [matTooltip]="getCodingIssueTooltip(coder)"
-                          >
-                            <mat-icon
-                              class="coding-issue-icon"
-                              [ngClass]="getCodingIssueClass(coder)"
-                              aria-hidden="true"
-                            >
-                              flag
-                            </mat-icon>
-                            {{ getCodingIssueShortLabel(coder.codingIssueOption) }}
-                          </span>
-                          <mat-icon
-                            *ngIf="hasCoderNote(coder)"
-                            class="note-icon"
-                            [matTooltip]="getCoderNoteTooltip(coder)"
-                            aria-label="Kodierer-Notiz"
-                          >
-                            comment
-                          </mat-icon>
-                        </div>
-                        <div class="score-line" *ngIf="shouldShowScore(coder)">
-                          Score: {{ coder.score ?? '-' }}
-                        </div>
-                      </div>
-                    </ng-container>
-                  </ng-container>
-                  <ng-template #noWithinCoderData
-                    ><span class="no-data">-</span></ng-template
-                  >
-                </ng-container>
-              </div>
-            </td>
-          </ng-container>
-
-          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-          <tr
-            mat-row
-            *matRowDef="let row; columns: displayedColumns"
-            [class.codes-match]="getComparisonStatus(row) === 'match'"
-            [class.codes-differ]="getComparisonStatus(row) === 'differ'"
-            [class.codes-incomplete]="getComparisonStatus(row) === 'incomplete'"
-            [class.codes-not-comparable]="getComparisonStatus(row) === 'not_comparable'"
-          ></tr>
-        </table>
-
-        <mat-paginator
-          [length]="totalItems"
-          [pageIndex]="pageIndex"
-          [pageSize]="pageSize"
-          [pageSizeOptions]="[50, 100, 200, 500]"
-          (page)="onComparisonPageChange($event)"
-          showFirstLastButtons
-        ></mat-paginator>
-      </div>
-    </div>
-
-    <div
-      class="no-data"
-      *ngIf="
-        !isLoading &&
-        comparisonMode === 'between-trainings' &&
-        comparisonData.length === 0 &&
-        selectedTrainings.selected.length < 2
-      "
-    >
-      <mat-icon>compare</mat-icon>
-      <h4>Wählen Sie mindestens 2 Schulungen aus</h4>
-      <p>
-        Um Kodierergebnisse zu vergleichen, müssen mindestens 2 Schulungen
-        ausgewählt werden.
-      </p>
-    </div>
-
-    <div
-      class="no-data"
-      *ngIf="
-        !isLoading &&
-        comparisonMode === 'within-training' &&
-        withinTrainingData.length === 0 &&
-        !selectedTrainingForWithin
-      "
-    >
-      <mat-icon>compare</mat-icon>
-      <h4>Wählen Sie eine Schulung aus</h4>
-      <p>
-        Um Kodierergebnisse innerhalb einer Schulung zu vergleichen, müssen Sie
-        eine Schulung auswählen.
-      </p>
-    </div>
-
-    <div
-      class="no-results"
-      *ngIf="
-        !isLoading &&
-        comparisonMode === 'between-trainings' &&
-        totalItems === 0 &&
-        selectedTrainings.selected.length >= 2 &&
-        !hasActiveFilters() &&
-        !hasNoSelectedCodersState()
-      "
-    >
-      <mat-icon>info</mat-icon>
-      <h4>Keine gemeinsamen Daten gefunden</h4>
-      <p>
-        Die ausgewählten Schulungen haben keine gemeinsamen Einheiten/Variablen
-        oder keine Kodierergebnisse.
-      </p>
-    </div>
-
-    <div
-      class="no-results"
-      *ngIf="
-        !isLoading &&
-        comparisonMode === 'within-training' &&
-        totalItems === 0 &&
-        selectedTrainingForWithin &&
-        !hasActiveFilters() &&
-        !hasNoSelectedCodersState()
-      "
-    >
-      <mat-icon>info</mat-icon>
-      <h4>Keine Daten gefunden</h4>
-      <p>
-        Die ausgewählte Schulung hat keine Vergleichsfälle oder noch keine
-        Kodierergebnisse.
-      </p>
-    </div>
-  </div>
-
-  <div mat-dialog-actions align="end">
-    <button mat-button (click)="dialogRef.close()">Schließen</button>
-  </div>
-</div>

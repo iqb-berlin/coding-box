@@ -59,7 +59,7 @@ describe('replay dom-utils', () => {
     const sectionFrame = iframe.contentDocument?.querySelector('#section-frame') as HTMLElement;
 
     expect(highlighted).toEqual([section]);
-    expect(sectionFrame.style.border).toBe('3px solid #4285f4');
+    expect(sectionFrame.style.border).toBe('3px solid rgb(66, 133, 244)');
   });
 
   it('highlights only the requested field in a multi-field cloze', () => {
@@ -83,7 +83,7 @@ describe('replay dom-utils', () => {
     expect(highlighted).toEqual([section]);
     expect(sectionFrame.style.border).toBe('');
     expect(fieldA.style.border).toBe('');
-    expect(fieldB.style.border).toBe('3px solid #4285f4');
+    expect(fieldB.style.border).toBe('3px solid rgb(66, 133, 244)');
   });
 
   it('falls back to section highlighting for a single-field cloze', () => {
@@ -103,7 +103,7 @@ describe('replay dom-utils', () => {
     const fieldA = iframe.contentDocument?.querySelector('#field-a') as HTMLElement;
 
     expect(highlighted).toEqual([section]);
-    expect(sectionFrame.style.border).toBe('3px solid #4285f4');
+    expect(sectionFrame.style.border).toBe('3px solid rgb(66, 133, 244)');
     expect(fieldA.style.border).toBe('');
   });
 
@@ -254,11 +254,11 @@ describe('replay dom-utils', () => {
     const sectionFrame = iframe.contentDocument?.querySelector('#section-frame') as HTMLElement;
 
     expect(markedSections).toHaveLength(1);
-    expect(sectionFrame.style.border).toBe('3px solid #4285f4');
+    expect(sectionFrame.style.border).toBe('3px solid rgb(66, 133, 244)');
     expect(sectionFrame.querySelector(bundleMarkerSelector)).not.toBeNull();
 
     highlightBundleVariableMarkers(iframe, []);
-    expect(sectionFrame.style.border).toBe('3px solid #4285f4');
+    expect(sectionFrame.style.border).toBe('3px solid rgb(66, 133, 244)');
     expect(sectionFrame.querySelector(bundleMarkerSelector)).toBeNull();
   });
 

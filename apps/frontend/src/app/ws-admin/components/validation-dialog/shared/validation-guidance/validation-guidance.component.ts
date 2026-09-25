@@ -1,5 +1,5 @@
 import { Component, Input } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { MatIconModule } from '@angular/material/icon';
 
 /**
@@ -8,23 +8,29 @@ import { MatIconModule } from '@angular/material/icon';
 @Component({
   selector: 'coding-box-validation-guidance',
   standalone: true,
-  imports: [CommonModule, MatIconModule],
+  imports: [MatIconModule],
   template: `
     <div class="validation-details">
-      <p class="validation-details-intro" *ngIf="description">{{ description }}</p>
+      @if (description) {
+        <p class="validation-details-intro">{{ description }}</p>
+      }
 
       <div class="validation-guidance">
-        <div class="info-banner" *ngIf="whyText">
-          <mat-icon>help</mat-icon>
-          <span><strong>Warum ist das wichtig?</strong> {{ whyText }}</span>
-        </div>
-        <div class="info-banner" *ngIf="fixHint">
-          <mat-icon>build</mat-icon>
-          <span><strong>So beheben Sie es:</strong> {{ fixHint }}</span>
-        </div>
+        @if (whyText) {
+          <div class="info-banner">
+            <mat-icon>help</mat-icon>
+            <span><strong>Warum ist das wichtig?</strong> {{ whyText }}</span>
+          </div>
+        }
+        @if (fixHint) {
+          <div class="info-banner">
+            <mat-icon>build</mat-icon>
+            <span><strong>So beheben Sie es:</strong> {{ fixHint }}</span>
+          </div>
+        }
       </div>
     </div>
-  `,
+    `,
   styles: [`
     .validation-details {
       display: flex;

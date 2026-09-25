@@ -8,7 +8,7 @@ import {
   MatDialogContent,
   MatDialogActions
 } from '@angular/material/dialog';
-import { CommonModule } from '@angular/common';
+
 import { MatButton } from '@angular/material/button';
 import { MatDivider } from '@angular/material/divider';
 import { MatLabel, MatFormFieldModule } from '@angular/material/form-field';
@@ -63,7 +63,6 @@ export interface MetadataDialogData {
   standalone: true,
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
   imports: [
-    CommonModule,
     MatDialogTitle,
     MatDialogContent,
     MatDialogActions,

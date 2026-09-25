@@ -5,16 +5,16 @@
     <div class="format-options">
       <mat-radio-group [(ngModel)]="selectedFormat">
         <div class="format-option">
-        <mat-radio-button value="json">{{ 'export-dialog.formats.json' | translate }}</mat-radio-button>
-        <span class="format-description">{{ 'export-dialog.formats.json-description' | translate }}</span>
+          <mat-radio-button value="json">{{ 'export-dialog.formats.json' | translate }}</mat-radio-button>
+          <span class="format-description">{{ 'export-dialog.formats.json-description' | translate }}</span>
         </div>
         <div class="format-option">
           <mat-radio-button value="csv">{{ 'export-dialog.formats.csv' | translate }}</mat-radio-button>
-        <span class="format-description">{{ 'export-dialog.formats.csv-description' | translate }}</span>
+          <span class="format-description">{{ 'export-dialog.formats.csv-description' | translate }}</span>
         </div>
         <div class="format-option">
           <mat-radio-button value="excel">{{ 'export-dialog.formats.excel' | translate }}</mat-radio-button>
-        <span class="format-description">{{ 'export-dialog.formats.excel-description' | translate }}</span>
+          <span class="format-description">{{ 'export-dialog.formats.excel-description' | translate }}</span>
         </div>
       </mat-radio-group>
     </div>
@@ -61,7 +61,9 @@
         <div class="validation-error-section">
           <h4>{{ 'export-dialog.validation.error-title' | translate }}</h4>
           <p>{{validationProgress.message}}</p>
-          <p *ngIf="validationProgress.error">{{validationProgress.error}}</p>
+          @if (validationProgress.error) {
+            <p>{{validationProgress.error}}</p>
+          }
           <button mat-button color="primary" (click)="validationFileInput.click()">
             <mat-icon>refresh</mat-icon>
             {{ 'export-dialog.validation.retry-button' | translate }}
