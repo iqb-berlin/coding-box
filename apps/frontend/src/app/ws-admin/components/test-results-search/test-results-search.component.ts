@@ -1,7 +1,7 @@
 import {
   Component, Inject, OnDestroy, OnInit
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import {
@@ -55,7 +55,6 @@ interface QuickSearchTypeOption {
   styleUrls: ['./test-results-search.component.scss'],
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     MatButtonModule,
     MatDialogModule,

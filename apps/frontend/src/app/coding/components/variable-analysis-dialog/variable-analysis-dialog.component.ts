@@ -4,7 +4,7 @@ import {
   OnInit,
   ViewChild
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -72,7 +72,6 @@ function createVariableAnalysisPaginatorIntl(): MatPaginatorIntl {
     { provide: MatPaginatorIntl, useFactory: createVariableAnalysisPaginatorIntl }
   ],
   imports: [
-    CommonModule,
     FormsModule,
     MatDialogModule,
     MatButtonModule,

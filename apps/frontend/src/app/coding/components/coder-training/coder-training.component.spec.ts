@@ -1,10 +1,13 @@
+import { ChangeDetectorRef } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { FormGroup } from '@angular/forms';
-import { of, throwError } from 'rxjs';
+import {
+  finalize, of, Subject, throwError
+} from 'rxjs';
 import { CoderTrainingComponent } from './coder-training.component';
 import { CoderService } from '../../services/coder.service';
 import { VariableBundleService } from '../../services/variable-bundle.service';
@@ -159,7 +162,26 @@ describe('CoderTrainingComponent', () => {
     TestBed.inject(SessionRecoveryService).clearAllDrafts();
   });
 
+  it('preserves validation rows while updating their status', () => {
+    fixture.detectChanges();
+    const rows = Array.from(fixture.nativeElement.querySelectorAll('.validation-item')) as HTMLElement[];
+    expect(rows).toHaveLength(5);
+    expect(rows[0].classList.contains('invalid')).toBe(true);
+
+    component.trainingForm.get('trainingLabel')?.setValue('Training');
+    fixture.componentRef.injector.get(ChangeDetectorRef).detectChanges();
+
+    const updatedRows = fixture.nativeElement.querySelectorAll('.validation-item');
+    rows.forEach((row, index) => expect(updatedRows[index]).toBe(row));
+    expect(rows[0].classList.contains('valid')).toBe(true);
+    expect(rows[0].classList.contains('invalid')).toBe(false);
+  });
+
   it('covers the common training selection workflow', () => {
+    const trainingStarted = jest.fn();
+    const closed = jest.fn();
+    component.startTraining.subscribe(trainingStarted);
+    component.close.subscribe(closed);
     component.ngOnInit();
     component.addVariable('VAR', 'UNIT', 3);
     component.onVariableChange('VAR2', 0);
@@ -189,6 +211,41 @@ describe('CoderTrainingComponent', () => {
     component.onStartTraining();
 
     expect(codingTrainingBackendService.createCoderTrainingJobs).toHaveBeenCalled();
+    expect(trainingStarted).toHaveBeenCalledWith(expect.objectContaining({
+      selectedCoders: component.coders
+    }));
+    expect(closed).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases pending training requests when the component is destroyed', () => {
+    const pendingResult = new Subject<{ success: boolean; message: string; jobsCreated: number }>();
+    const releaseRequest = jest.fn();
+    codingTrainingBackendService.createCoderTrainingJobs.mockReturnValue(
+      pendingResult.pipe(finalize(releaseRequest))
+    );
+    fixture.detectChanges();
+    component.selectAllCoders();
+    component.addVariable('VAR', 'UNIT', 2);
+    component.trainingForm.get('trainingLabel')?.setValue('Training');
+    component.onStartTraining();
+    expect(codingTrainingBackendService.createCoderTrainingJobs).toHaveBeenCalledTimes(1);
+    expect(releaseRequest).not.toHaveBeenCalled();
+
+    fixture.destroy();
+
+    expect(releaseRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the coder subscription when the component is destroyed', () => {
+    const pendingCoders = new Subject<never[]>();
+    const releaseRequest = jest.fn();
+    coderService.getCoders.mockReturnValue(pendingCoders.pipe(finalize(releaseRequest)));
+    fixture.detectChanges();
+    expect(releaseRequest).not.toHaveBeenCalled();
+
+    fixture.destroy();
+
+    expect(releaseRequest).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the bundle sample input mounted while updating its value', () => {
@@ -214,6 +271,26 @@ describe('CoderTrainingComponent', () => {
         .filter(control => control.get('bundleId')?.value === 5)
         .map(control => control.get('sampleCount')?.value)
     ).toEqual([3, 3]);
+  });
+
+  it('keeps a remaining variable input focused after removing another variable', () => {
+    component.addVariable('VAR', 'UNIT', 2);
+    component.addVariable('VAR2', 'UNIT2', 3);
+    fixture.detectChanges();
+    const sampleInput = fixture.nativeElement.querySelectorAll(
+      '.variable-item .sample-count-field input'
+    )[1] as HTMLInputElement;
+    sampleInput.focus();
+
+    component.removeVariable(0);
+    fixture.componentRef.injector.get(ChangeDetectorRef).detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.variable-item .sample-count-field input')).toBe(sampleInput);
+    expect(document.activeElement).toBe(sampleInput);
+    sampleInput.value = '4';
+    sampleInput.dispatchEvent(new Event('input'));
+    expect(component.variablesFormArray.at(0).get('sampleCount')?.value).toBe(4);
+    expect(component.variablesFormArray.at(0).get('variableId')?.value).toBe('VAR2');
   });
 
   it('renders coder selection as toggle cards without checkboxes', () => {
@@ -253,7 +330,7 @@ describe('CoderTrainingComponent', () => {
     component.removeBundle(5);
     component.onBundleRemoved(5);
     component.onClose();
-    component.ngOnDestroy();
+    fixture.destroy();
 
     expect(component.canStartTraining()).toBe(false);
   });
@@ -433,7 +510,7 @@ describe('CoderTrainingComponent', () => {
   });
 
   it('shows edit action labels and consistent summary counts', () => {
-    component.editTraining = { id: 1, label: 'Existing training' } as never;
+    fixture.componentRef.setInput('editTraining', { id: 1, label: 'Existing training' } as never);
     component.addVariable('VAR', 'UNIT', 2);
     component.onBundleSelectionChange([5]);
 
@@ -458,7 +535,7 @@ describe('CoderTrainingComponent', () => {
   it('populates saved edit settings even when no variables or bundles are available', () => {
     codingJobBackendService.getCodingIncompleteVariables.mockReturnValueOnce(of([]));
     variableBundleService.getBundles.mockReturnValueOnce(of({ bundles: [], total: 0 }));
-    component.editTraining = {
+    fixture.componentRef.setInput('editTraining', {
       id: 80,
       workspace_id: 1,
       label: 'Saved empty training',
@@ -473,7 +550,7 @@ describe('CoderTrainingComponent', () => {
       jobsCount: 1,
       created_at: new Date(),
       updated_at: new Date()
-    };
+    });
 
     component.ngOnInit();
 
@@ -488,7 +565,7 @@ describe('CoderTrainingComponent', () => {
 
   it('keeps saved manual variables when bundle loading fails while editing', () => {
     variableBundleService.getBundles.mockReturnValueOnce(throwError(() => new Error('bundle load failed')));
-    component.editTraining = {
+    fixture.componentRef.setInput('editTraining', {
       id: 81,
       workspace_id: 1,
       label: 'Manual variables only',
@@ -505,7 +582,7 @@ describe('CoderTrainingComponent', () => {
       jobsCount: 1,
       created_at: new Date(),
       updated_at: new Date()
-    };
+    });
 
     component.ngOnInit();
 
@@ -517,7 +594,7 @@ describe('CoderTrainingComponent', () => {
   });
 
   it('preserves saved bundle ordering when editing and updating a training', () => {
-    component.editTraining = {
+    fixture.componentRef.setInput('editTraining', {
       id: 77,
       workspace_id: 1,
       label: 'Existing training',
@@ -535,7 +612,7 @@ describe('CoderTrainingComponent', () => {
       jobsCount: 1,
       created_at: new Date(),
       updated_at: new Date()
-    } as never;
+    } as never);
 
     (component as unknown as { populateFormFromTraining: () => void }).populateFormFromTraining();
 
@@ -566,7 +643,7 @@ describe('CoderTrainingComponent', () => {
   });
 
   it('preserves saved case selection and reference options when editing a training', () => {
-    component.editTraining = {
+    fixture.componentRef.setInput('editTraining', {
       id: 78,
       workspace_id: 1,
       label: 'Reference training',
@@ -586,7 +663,7 @@ describe('CoderTrainingComponent', () => {
       jobsCount: 1,
       created_at: new Date(),
       updated_at: new Date()
-    } as never;
+    } as never);
 
     (component as unknown as { populateFormFromTraining: () => void }).populateFormFromTraining();
 
@@ -604,7 +681,7 @@ describe('CoderTrainingComponent', () => {
   });
 
   it('submits an empty reference list when references are cleared while editing', () => {
-    component.editTraining = {
+    fixture.componentRef.setInput('editTraining', {
       id: 79,
       workspace_id: 1,
       label: 'Clear references',
@@ -624,7 +701,7 @@ describe('CoderTrainingComponent', () => {
       jobsCount: 1,
       created_at: new Date(),
       updated_at: new Date()
-    } as never;
+    } as never);
 
     (component as unknown as { populateFormFromTraining: () => void }).populateFormFromTraining();
 
