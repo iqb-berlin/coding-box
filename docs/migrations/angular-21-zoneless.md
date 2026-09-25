@@ -32,34 +32,63 @@ recovery resets, comment validation and delayed profile/role changes.
 A successful smoke test is not evidence that all application views are zoneless
 compatible. Before changing the production entry point:
 
-1. Validate login and logout against the intended Keycloak test realm.
-2. Open a coding job, select codes and notes, verify persisted data after reload,
-   then complete/pause/resume the job. Check delayed saves and network failures.
-3. Expire the session during an unsaved change, reauthenticate, restore the draft,
-   and verify it is cleared only after persistence succeeds.
-4. Validate embedded-player messages, route changes, dialogs, uploads, exports,
+The isolated suite below covers login/logout, a complete coding job, delayed
+notes, a simulated save failure, real session invalidation and draft recovery in
+both builds. Before changing the production entry point:
+
+1. Repeat authentication against the intended deployed Keycloak test realm and
+   its actual client settings.
+2. Validate embedded-player messages, route changes, dialogs, uploads, exports,
    timers and asynchronous subscriptions for missing change notifications.
-5. Run the same flows in the zoneless build. Signals, AsyncPipe, bound events or
+3. Run these remaining flows in the zoneless build. Signals, AsyncPipe, bound events or
    `markForCheck()` must notify Angular for every visible asynchronous update.
-6. Only then switch the default entry point, remove the ZoneJS polyfill and audit
+4. Only then switch the default entry point, remove the ZoneJS polyfill and audit
    test/component-test dependencies before removing the package.
 
 The isolated `npx nx run frontend:e2e-replay-live` harness uses a real backend,
 database and embedded player, but uses replay tokens and deliberately does not
-provide a real Keycloak realm. It cannot replace gates 1–3.
+provide a real Keycloak realm. The authentication suite below covers those flows.
+
+## Isolated authentication and recovery test
+
+- `env -u ELECTRON_RUN_AS_NODE npx nx run frontend:e2e-auth-live`
+- `env -u ELECTRON_RUN_AS_NODE npx nx run frontend:e2e-auth-live --configuration=zoneless`
+
+These commands extend the disposable replay stack with Keycloak 26.4.0, a generated
+realm and random temporary passwords. They need Docker Compose and enough free
+space for the application image, database and Keycloak. No production account or
+external test realm is required. The runner removes its containers, volumes and
+realm file after the run. Diagnostic logs are written beneath
+`tmp/replay-e2e-artifacts` with replay tokens redacted.
+
+The browser signs in through Keycloak with PKCE, starts a two-response coding job
+against the real backend, selects a code and checks notes after reload. Only the
+notes endpoint is temporarily made to fail to create an unsaved draft. The test
+invalidates the real Keycloak session, signs in again and checks draft persistence
+and cleanup, then pauses, resumes, finishes the job and signs out. The zoneless
+variant also asserts that `window.Zone` is absent.
+
+The JavaScript adapter is updated from 23 to 26.2.4. Keycloak 25+ only puts the
+nonce in the ID token; the old adapter also expected it in access and refresh
+tokens. Nonce validation remains enabled, and PKCE S256 is explicit. See the
+[Keycloak migration guide](https://www.keycloak.org/docs/latest/upgrading/#using-older-javascript-adapter).
+The adapter requires a secure browser context (HTTPS, or localhost for these
+tests). This isolated realm does not verify the deployed realm's settings.
 
 Reference: [Angular 21 zoneless guide](https://github.com/angular/angular/blob/v21.2.0/adev/src/content/guide/zoneless.md).
 
 ## Verification on 2026-09-25
 
 - Frontend lint: passed.
-- Frontend tests: 206 suites, 2,097 tests passed.
+- Frontend tests: 206 suites, 2,098 tests passed.
 - Production build and opt-in zoneless build: passed.
-- Regular browser smoke suite: 3 tests passed.
+- Regular browser suite: 7 tests passed. The default Cypress configuration now
+  excludes the two live specs, which require their own backend harness.
 - Zoneless browser suite: 4 tests passed, including absence of `window.Zone`.
 - Isolated live suite: replay and item-matrix export both passed against the
   real backend, PostgreSQL, Redis and embedded Aspect player. The temporary
   containers were removed by the harness.
-- Real Keycloak login, session expiry and coding-draft recovery remain unverified:
-  no designated test realm/account was supplied. Existing unit tests cover the
-  corresponding recovery logic but are not a substitute for those live flows.
+- Isolated real Keycloak coding/session suite: passed with ZoneJS and zoneless.
+  It covers login, persisted code and notes after reload, a failed note save,
+  server-side session invalidation, draft recovery and cleanup, pause/resume,
+  completion and logout.

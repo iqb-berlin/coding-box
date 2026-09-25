@@ -160,6 +160,18 @@
       "options": {
         "command": "node scripts/e2e/replay/run-existing-replay-e2e.mjs"
       }
+    },
+    "e2e-auth-live": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/e2e/replay/run-replay-e2e.mjs --auth"
+      },
+      "configurations": {
+        "zoneless": {
+          "command": "node scripts/e2e/replay/run-replay-e2e.mjs --auth --zoneless"
+        }
+      }
     }
   }
 }

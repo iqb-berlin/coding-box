@@ -1,9 +1,10 @@
 import { randomBytes } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import { prepareAuthEnvironment } from './auth-environment.mjs';
 import {
   cleanupReplayWorkspaceFromState,
   redactReplayArtifactLog
@@ -18,7 +19,10 @@ const projectName = `coding-box-replay-${runId}`
 const runDir = path.join(repoDir, 'tmp', 'replay-e2e', runId);
 const artifactDir = path.join(repoDir, 'tmp', 'replay-e2e-artifacts', runId);
 const composeFile = path.join(scriptDir, 'docker-compose.replay.yml');
-const [apiPort, frontendPort] = await Promise.all([
+const authMode = process.argv.includes('--auth');
+const zoneless = process.argv.includes('--zoneless');
+const [apiPort, frontendPort, keycloakPort] = await Promise.all([
+  reservePort(),
   reservePort(),
   reservePort()
 ]);
@@ -28,8 +32,12 @@ const compose = await findComposeCommand();
 await mkdir(runDir, { recursive: true });
 await mkdir(artifactDir, { recursive: true });
 
+const composeFiles = ['--file', composeFile, ...(authMode ? ['--file', path.join(scriptDir, 'docker-compose.auth.yml')] : [])];
+const authEnvironment = authMode ? await prepareAuthEnvironment(runDir, keycloakPort, frontendPort) : {};
 const replayEnvironment = {
   ...process.env,
+  ...authEnvironment,
+  REPLAY_E2E_FRONTEND_CONFIGURATION: zoneless ? 'zoneless' : 'development',
   REPLAY_E2E_API_PORT: String(apiPort),
   REPLAY_E2E_API_URL: `http://127.0.0.1:${apiPort}`,
   REPLAY_E2E_BASE_URL: `http://127.0.0.1:${frontendPort}`,
@@ -58,8 +66,7 @@ try {
       ...compose.prefix,
       '--project-name',
       projectName,
-      '--file',
-      composeFile,
+      ...composeFiles,
       'up',
       '--detach',
       '--build',
@@ -67,6 +74,8 @@ try {
     ],
     replayEnvironment
   );
+
+  if (authMode) await waitForHttp(`${authEnvironment.REPLAY_E2E_OIDC_ISSUER}/.well-known/openid-configuration`, 180_000);
 
   await waitForHttp(
     `${replayEnvironment.REPLAY_E2E_API_URL}/api/health`,
@@ -80,7 +89,7 @@ try {
       'cypress',
       'run',
       '--config-file',
-      'cypress.replay.config.ts',
+      authMode ? 'cypress.auth.config.ts' : 'cypress.replay.config.ts',
       '--browser',
       'electron'
     ],
@@ -92,7 +101,7 @@ try {
   await captureLogs(
     compose,
     projectName,
-    composeFile,
+    composeFiles,
     replayEnvironment,
     artifactDir
   );
@@ -110,8 +119,7 @@ try {
       ...compose.prefix,
       '--project-name',
       projectName,
-      '--file',
-      composeFile,
+      ...composeFiles,
       'down',
       '--volumes',
       '--rmi',
@@ -126,6 +134,10 @@ try {
     process.stderr.write(`Replay stack cleanup failed: ${error.message}\n`);
     exitCode = 1;
   });
+
+  if (authMode) {
+    await rm(path.join(runDir, 'coding-e2e-realm.json'), { force: true });
+  }
 
   const leftovers = await inspectComposeLeftovers(projectName);
   if (leftovers) {
@@ -201,7 +213,7 @@ async function waitForHttp(url, timeoutMs) {
 async function captureLogs(
   composeCommand,
   project,
-  file,
+  files,
   environment,
   outputDir
 ) {
@@ -212,8 +224,7 @@ async function captureLogs(
         ...composeCommand.prefix,
         '--project-name',
         project,
-        '--file',
-        file,
+        ...files,
         'logs',
         '--no-color'
       ],
