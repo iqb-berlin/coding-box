@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -116,7 +117,8 @@ describe('HomeComponent', () => {
             events: of({})
           }
         },
-        provideHttpClient()
+        provideHttpClient(),
+        provideZonelessChangeDetection()
       ]
     }).compileComponents();
   });
@@ -131,6 +133,21 @@ describe('HomeComponent', () => {
     createComponent();
 
     expect(component).toBeTruthy();
+  });
+
+  it('shows the empty state when authentication completes outside a template event', async () => {
+    authStatusSubject = new BehaviorSubject<AuthBootstrapStatus>('backend-login-running');
+    mockAppService.authBootstrapStatus$ = authStatusSubject.asObservable();
+    createComponent();
+
+    expect(fixture.nativeElement.textContent).toContain('home.loading-user-workspaces');
+
+    authDataSubject.next({ ...defaultAuthData, userId: 1 });
+    authStatusSubject.next('ready');
+    await fixture.whenStable();
+
+    expect(fixture.nativeElement.textContent).toContain('home.no-user-workspaces');
+    expect(fixture.nativeElement.textContent).not.toContain('home.loading-user-workspaces');
   });
 
   it('should require reauthentication for expired-session query params when Keycloak is logged out', () => {
