@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -38,6 +38,7 @@ describe('CodeSelectorComponent reactive replay state', () => {
     await TestBed.configureTestingModule({
       imports: [ReplayHostComponent, TranslateModule.forRoot()],
       providers: [
+        provideZonelessChangeDetection(),
         { provide: CodingJobBackendService, useValue: { saveCodingProgress: jest.fn(() => response) } },
         { provide: MatSnackBar, useValue: { open: jest.fn() } }
       ]
