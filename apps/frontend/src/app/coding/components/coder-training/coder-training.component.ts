@@ -3,13 +3,14 @@ import {
   OnInit,
   OnDestroy,
   inject,
-  Output,
-  Input,
-  EventEmitter,
+  output,
+  input,
+  DestroyRef,
   ChangeDetectionStrategy,
   ChangeDetectorRef
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { AsyncPipe } from '@angular/common';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -33,7 +34,7 @@ import {
   FormControl
 } from '@angular/forms';
 import {
-  Subject, takeUntil, map, startWith, Observable, combineLatest, BehaviorSubject, tap, catchError, of
+  map, startWith, Observable, combineLatest, BehaviorSubject, tap, catchError, of
 } from 'rxjs';
 import { JobDefinitionSelectionDialogComponent } from './job-definition-selection-dialog.component';
 import { CoderService } from '../../services/coder.service';
@@ -102,6 +103,7 @@ export interface CoderTrainingRecoveryDraft {
 }
 
 interface ValidationItem {
+  id: 'label' | 'coders' | 'variables' | 'reference-mode' | 'case-counts';
   label: string;
   valid: boolean;
 }
@@ -116,7 +118,7 @@ interface BundleOrderingOverride {
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    CommonModule,
+    AsyncPipe,
     TranslateModule,
     MatButton,
     MatIcon,
@@ -140,22 +142,22 @@ interface BundleOrderingOverride {
   styleUrls: ['./coder-training.component.scss']
 })
 export class CoderTrainingComponent implements OnInit, OnDestroy {
-  @Output() close = new EventEmitter<void>();
-  @Output() startTraining = new EventEmitter<{ selectedCoders: Coder[], variableConfigs: VariableConfig[] }>();
-  @Input() editTraining: CoderTraining | null = null;
+  readonly close = output<void>();
+  readonly startTraining = output<{ selectedCoders: Coder[], variableConfigs: VariableConfig[] }>();
+  readonly editTraining = input<CoderTraining | null>(null);
 
-  private destroy$ = new Subject<void>();
-  private changeDetectorRef = inject(ChangeDetectorRef);
-  private snackBar = inject(MatSnackBar);
-  private dialog = inject(MatDialog);
-  private coderService = inject(CoderService);
-  private variableBundleService = inject(VariableBundleService);
-  private codingJobBackendService = inject(CodingJobBackendService);
-  private codingTrainingBackendService = inject(CodingTrainingBackendService);
-  private appService = inject(AppService);
-  private sessionRecoveryService = inject(SessionRecoveryService);
-  private fb = inject(FormBuilder);
-  private backendMessageTranslator = inject(BackendMessageTranslatorService);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+  private readonly snackBar = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
+  private readonly coderService = inject(CoderService);
+  private readonly variableBundleService = inject(VariableBundleService);
+  private readonly codingJobBackendService = inject(CodingJobBackendService);
+  private readonly codingTrainingBackendService = inject(CodingTrainingBackendService);
+  private readonly appService = inject(AppService);
+  private readonly sessionRecoveryService = inject(SessionRecoveryService);
+  private readonly fb = inject(FormBuilder);
+  private readonly backendMessageTranslator = inject(BackendMessageTranslatorService);
   private unregisterRecoveryProvider?: () => void;
   private hasRestoredRecoveryDraft = false;
 
@@ -168,7 +170,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   get isEditMode(): boolean {
-    return !!this.editTraining;
+    return !!this.editTraining();
   }
 
   coders: Coder[] = [];
@@ -222,7 +224,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   private setupManualSelectSync(): void {
     // 1. Sync FormArray -> FormControl (Initial & External Changes)
     this.variablesFormArray.valueChanges
-      .pipe(takeUntil(this.destroy$))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         if (this.isSyncing) return;
 
@@ -242,7 +244,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     // 2. Sync FormControl -> FormArray (User Selection via UI)
     this.manualVariablesSelectControl.valueChanges
-      .pipe(takeUntil(this.destroy$))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(selectedVarIds => {
         if (this.isSyncing) return;
 
@@ -286,7 +288,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   private setupDerivedVariableSync(): void {
     this.trainingForm.get('includeDerivedVariables')?.valueChanges
-      .pipe(takeUntil(this.destroy$))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(includeDerivedVariables => {
         this.syncDerivedVariableSelection(!!includeDerivedVariables);
       });
@@ -299,7 +301,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     referenceTrainingIdsControl?.valueChanges
       .pipe(
         startWith(referenceTrainingIdsControl.value),
-        takeUntil(this.destroy$)
+        takeUntilDestroyed(this.destroyRef)
       )
       .subscribe((referenceTrainingIds: number[]) => {
         const hasReferenceTrainings = (referenceTrainingIds || []).length > 0;
@@ -315,7 +317,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.registerRecoveryProvider();
     this.sessionRecoveryService.restore$
-      .pipe(takeUntil(this.destroy$))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => this.restoreTrainingRecoveryDraft());
 
     this.loadCoders();
@@ -337,13 +339,13 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         })
       )
     ]).pipe(
-      takeUntil(this.destroy$)
+      takeUntilDestroyed(this.destroyRef)
     ).subscribe(([variables, bundles]: [Variable[], VariableBundle[]]) => {
       this.availableVariables = variables;
       this.availableBundles = bundles;
 
       if (
-        this.editTraining &&
+        this.editTraining() &&
         this.availableVariablesLoaded &&
         this.availableBundlesLoaded &&
         !this.hasPopulatedTrainingSelections
@@ -364,45 +366,47 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   private populateTrainingSettingsFromTraining(): void {
-    if (!this.editTraining) return;
+    const editTraining = this.editTraining();
+    if (!editTraining) return;
     if (this.hasPopulatedTrainingSettings) return;
 
-    this.trainingForm.get('trainingLabel')?.setValue(this.editTraining.label);
-    if (this.editTraining.case_ordering_mode) {
-      this.trainingForm.get('caseOrderingMode')?.setValue(this.editTraining.case_ordering_mode);
+    this.trainingForm.get('trainingLabel')?.setValue(editTraining.label);
+    if (editTraining.case_ordering_mode) {
+      this.trainingForm.get('caseOrderingMode')?.setValue(editTraining.case_ordering_mode);
     }
-    if (this.editTraining.case_selection_mode) {
-      this.trainingForm.get('caseSelectionMode')?.setValue(this.editTraining.case_selection_mode);
+    if (editTraining.case_selection_mode) {
+      this.trainingForm.get('caseSelectionMode')?.setValue(editTraining.case_selection_mode);
     }
-    if (this.editTraining.reference_training_ids?.length) {
-      this.trainingForm.get('referenceTrainingIds')?.setValue([...this.editTraining.reference_training_ids]);
+    if (editTraining.reference_training_ids?.length) {
+      this.trainingForm.get('referenceTrainingIds')?.setValue([...editTraining.reference_training_ids]);
     }
-    if (this.editTraining.reference_mode) {
-      this.trainingForm.get('referenceMode')?.setValue(this.editTraining.reference_mode);
+    if (editTraining.reference_mode) {
+      this.trainingForm.get('referenceMode')?.setValue(editTraining.reference_mode);
     }
     this.trainingForm.get('showScore')?.setValue(
-      this.editTraining.show_score ?? false
+      editTraining.show_score ?? false
     );
     this.trainingForm.get('allowComments')?.setValue(
-      this.editTraining.allow_comments ?? true
+      editTraining.allow_comments ?? true
     );
     this.trainingForm.get('suppressGeneralInstructions')?.setValue(
-      this.editTraining.suppress_general_instructions ?? false
+      editTraining.suppress_general_instructions ?? false
     );
 
-    if (this.editTraining.assigned_coders) {
-      this.selectedCoders = new Set(this.editTraining.assigned_coders);
+    if (editTraining.assigned_coders) {
+      this.selectedCoders = new Set(editTraining.assigned_coders);
     }
 
     this.hasPopulatedTrainingSettings = true;
   }
 
   private populateTrainingSelectionsFromTraining(): void {
-    if (!this.editTraining) return;
+    const editTraining = this.editTraining();
+    if (!editTraining) return;
     if (this.hasPopulatedTrainingSelections) return;
 
-    if (this.editTraining.assigned_variables) {
-      this.editTraining.assigned_variables.forEach(v => {
+    if (editTraining.assigned_variables) {
+      editTraining.assigned_variables.forEach(v => {
         this.addVariable(
           v.variableId,
           v.unitName,
@@ -416,18 +420,18 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       });
     }
 
-    if (this.editTraining.assigned_variable_bundles) {
-      this.editTraining.assigned_variable_bundles.forEach(b => {
+    if (editTraining.assigned_variable_bundles) {
+      editTraining.assigned_variable_bundles.forEach(b => {
         const bundle = this.availableBundles.find(avail => avail.id === b.id);
         if (bundle) {
-          const firstVarInBundle = this.editTraining?.assigned_variables?.find(v => bundle.variables.some(bv => bv.variableId === v.variableId && bv.unitName === v.unitName)
+          const firstVarInBundle = editTraining?.assigned_variables?.find(v => bundle.variables.some(bv => bv.variableId === v.variableId && bv.unitName === v.unitName)
           );
           const sampleCountByKey = firstVarInBundle?.sampleCount;
           const sampleCount = b.sampleCount || sampleCountByKey || 10;
           const caseOrderingMode =
             b.caseOrderingMode ||
             (b as { case_ordering_mode?: 'continuous' | 'alternating' }).case_ordering_mode ||
-            this.editTraining?.case_ordering_mode ||
+            editTraining?.case_ordering_mode ||
             'continuous';
           this.addBundleVariables(b.id, sampleCount, caseOrderingMode, true);
           this.applyBundleVariableDeriveErrorOptions(b.id, b.variables || []);
@@ -446,8 +450,6 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.unregisterRecoveryProvider?.();
     this.unregisterRecoveryProvider = undefined;
-    this.destroy$.next();
-    this.destroy$.complete();
   }
 
   get variablesFormArray(): FormArray {
@@ -466,10 +468,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       return null;
     }
 
+    const editTraining = this.editTraining();
     return {
       workspaceId: this.appService.selectedWorkspaceId,
       mode: this.isEditMode ? 'edit' : 'create',
-      editTraining: this.editTraining ? { ...this.editTraining } : null,
+      editTraining: editTraining ? { ...editTraining } : null,
       formValue: this.getTrainingRecoveryFormValue(),
       selectedCoderIds: Array.from(this.selectedCoders),
       selectedBundleIds: Array.from(this.selectedBundleIds),
@@ -557,7 +560,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     }
 
     if (draft.mode === 'edit') {
-      return !!draft.editTraining?.id && draft.editTraining.id === this.editTraining?.id;
+      return !!draft.editTraining?.id && draft.editTraining.id === this.editTraining()?.id;
     }
 
     return true;
@@ -634,7 +637,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     }
 
     this.codingJobBackendService.getCodingIncompleteVariables(workspaceId, undefined, undefined, true)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: variables => {
           this.availableVariables = variables;
@@ -658,10 +661,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     if (!workspaceId) return;
 
     this.codingTrainingBackendService.getCoderTrainings(workspaceId)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: trainings => {
-          this.availableTrainings = (trainings || []).filter(t => !this.editTraining || t.id !== this.editTraining!.id);
+          const editTrainingId = this.editTraining()?.id;
+          this.availableTrainings = (trainings || []).filter(t => t.id !== editTrainingId);
           this.changeDetectorRef.markForCheck();
         },
         error: () => {
@@ -691,7 +695,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     return getDuplicateTrainingLabelMatches(
       this.availableTrainings,
       this.trainingForm.get('trainingLabel')?.value,
-      this.editTraining?.id
+      this.editTraining()?.id
     );
   }
 
@@ -990,7 +994,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   loadCoders(): void {
     this.coderService.getCoders()
-      .pipe(takeUntil(this.destroy$))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (coders: Coder[]) => {
           this.coders = coders;
@@ -1241,11 +1245,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   getValidationItems(): ValidationItem[] {
     return [
-      { label: 'Schulungs-Bezeichnung ausgefüllt', valid: this.hasTrainingLabel() },
-      { label: 'Mindestens ein Kodierer ausgewählt', valid: this.hasSelectedCoders() },
-      { label: 'Mindestens eine Variable ausgewählt', valid: this.hasVariableSelection() },
-      { label: 'Vergleichsmodus gewählt, wenn Vergleichsschulungen gesetzt sind', valid: this.hasValidReferenceMode() },
-      { label: 'Stichproben pro Variable liegen innerhalb verfügbarer Fälle', valid: this.hasValidCaseCounts() }
+      { id: 'label', label: 'Schulungs-Bezeichnung ausgefüllt', valid: this.hasTrainingLabel() },
+      { id: 'coders', label: 'Mindestens ein Kodierer ausgewählt', valid: this.hasSelectedCoders() },
+      { id: 'variables', label: 'Mindestens eine Variable ausgewählt', valid: this.hasVariableSelection() },
+      { id: 'reference-mode', label: 'Vergleichsmodus gewählt, wenn Vergleichsschulungen gesetzt sind', valid: this.hasValidReferenceMode() },
+      { id: 'case-counts', label: 'Stichproben pro Variable liegen innerhalb verfügbarer Fälle', valid: this.hasValidCaseCounts() }
     ];
   }
 
@@ -1641,7 +1645,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     const request$ = this.isEditMode ?
       this.codingTrainingBackendService.updateCoderTraining(
         workspaceId,
-        this.editTraining!.id,
+        this.editTraining()!.id,
         trainingLabel,
         selectedCoders,
         variableConfigs,
@@ -1673,7 +1677,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         this.trainingForm.get('suppressGeneralInstructions')?.value ?? false
       );
 
-    request$.subscribe({
+    request$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (result: { success: boolean; message: string; jobsCreated?: number; jobs?: unknown[] }) => {
         this.isLoading = false;
         this.changeDetectorRef.markForCheck();
@@ -1718,7 +1722,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       disableClose: false
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result && result.jobDefinition) {
         this.importJobDefinitionSelections(result.jobDefinition, result.defaultSampleCount);
       }

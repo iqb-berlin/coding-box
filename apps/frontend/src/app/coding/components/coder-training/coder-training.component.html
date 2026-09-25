@@ -101,7 +101,7 @@
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>{{ 'coding-job-definition-dialog.reference-trainings.select-placeholder' | translate }}</mat-label>
           <mat-select formControlName="referenceTrainingIds" multiple>
-            @for (t of availableTrainings; track t) {
+            @for (t of availableTrainings; track t.id) {
               <mat-option [value]="t.id">
                 <div class="training-option">
                   <span class="training-option-title">{{ getTrainingOptionTitle(t) }}</span>
@@ -246,7 +246,7 @@
                       (keydown)="$event.stopPropagation()">
                   </mat-form-field>
                 </div>
-                @for (bundle of filteredBundles$ | async; track bundle) {
+                @for (bundle of filteredBundles$ | async; track bundle.id) {
                   <mat-option [value]="bundle.id"
                     [matTooltip]="bundle.description || ''" matTooltipPosition="above">
                     {{bundle.name}}
@@ -322,7 +322,7 @@
                 @if (bundleGroup.variables.length && getBundleDeriveErrorControls(bundleGroup).length > 0) {
                   <div class="bundle-derive-error-options"
                     >
-                    @for (variableItem of getBundleDeriveErrorControls(bundleGroup); track variableItem) {
+                    @for (variableItem of getBundleDeriveErrorControls(bundleGroup); track variableItem.control) {
                       <mat-checkbox
                         [checked]="isDeriveErrorIncludedForControl(variableItem.control)"
                         (change)="setDeriveErrorIncludedForControl(variableItem.control, $event.checked)"
@@ -385,7 +385,7 @@
                     (keydown)="$event.stopPropagation()">
                 </mat-form-field>
               </div>
-              @for (variable of filteredVariables$ | async; track variable) {
+              @for (variable of filteredVariables$ | async; track variable.unitName + '::' + variable.variableId) {
                 <mat-option
                   [value]="variable.unitName + '::' + variable.variableId">
                   {{variable.unitName}} - {{variable.variableId}} ({{variable.responseCount}} Fälle)
@@ -432,7 +432,7 @@
           <div>
             <h4 class="variable-section-title">Hinzugefügte Variablen</h4>
             <div class="variable-list">
-              @for (item of groupedVariables.manual; track item) {
+              @for (item of groupedVariables.manual; track item.control) {
                 <div class="variable-item" [formGroup]="item.control"
                   [class.has-error]="isManualVariableInsufficient(item)">
                   <div class="variable-name-cell">
@@ -548,7 +548,7 @@
       }
       @if (!canStartTraining()) {
         <div class="validation-checklist">
-          @for (item of getValidationItems(); track item) {
+          @for (item of getValidationItems(); track item.id) {
             <div
               class="validation-item"
               [class.valid]="item.valid"
