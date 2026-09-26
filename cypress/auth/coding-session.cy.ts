@@ -92,6 +92,7 @@ describe('real Keycloak coding session', () => {
       'have.value',
       'Persisted live note'
     );
+
     cy.wait('@persistedNote').its('response.statusCode').should('eq', 201);
     cy.get('app-code-selector .next-button').should('not.be.disabled');
     cy.reload();
@@ -195,6 +196,19 @@ describe('real Keycloak coding session', () => {
       'Recovered live draft'
     );
 
+    cy.intercept('PUT', '**/coding-job/*', (request) => {
+      if (request.body.comment === 'Live job comment') request.alias = 'jobComment';
+    });
+    cy.get('app-code-selector .comment-button').click();
+    cy.get('coding-box-coding-job-comment-dialog textarea').type('Live job comment');
+    cy.get('coding-box-coding-job-comment-dialog').contains('button', 'Speichern').click();
+    cy.wait('@jobComment').its('response.statusCode').should('be.oneOf', [200, 201]);
+    cy.reload();
+    cy.get('app-code-selector .comment-button').click();
+    cy.get('coding-box-coding-job-comment-dialog textarea')
+      .should('have.value', 'Live job comment');
+    cy.get('coding-box-coding-job-comment-dialog').contains('button', 'Abbrechen').click();
+
     cy.intercept('POST', '**/coding-job/*/pause').as('pause');
     cy.intercept('POST', '**/coding-job/*/resume').as('resume');
     cy.get('app-code-selector .pause-button').click();
@@ -202,6 +216,11 @@ describe('real Keycloak coding session', () => {
     cy.get('.pause-overlay .resume-button').should('be.visible').click();
     cy.wait('@resume').its('response.statusCode').should('eq', 201);
     cy.get('.pause-overlay').should('not.exist');
+    cy.get('app-code-selector .next-button').click();
+    cy.get('app-code-selector .current-position').should('have.text', '2');
+    cy.get('app-code-selector .prev-button').click();
+    cy.get('app-code-selector .current-position').should('have.text', '1');
+    cy.get('app-code-selector [data-code-id="1"]').should('have.class', 'selected');
     cy.get('app-code-selector .next-button').click();
     cy.get('app-code-selector .current-position').should('have.text', '2');
     cy.get('app-code-selector [data-code-id="0"]').click();
@@ -389,13 +408,55 @@ describe('real Keycloak coding session', () => {
     cy.window().then((win) => {
       win.location.hash = `/workspace-admin/${setup.workspaceId}/coding/manual`;
     });
+    cy.intercept('GET', '**/api/wsg-admin/workspace/*/coding-job?*').as('codingJobs');
     cy.get('coding-box-coding-management-manual', { timeout: 30_000 })
       .should('contain.text', 'Manuelle Kodierung');
     cy.get('coding-box-coding-management-manual .planning-status-banner')
       .should('be.visible');
     cy.get('coding-box-coding-management-manual .manual-coding-tabs')
       .contains('Durchführung').click();
+    cy.wait('@codingJobs').then(({ response }) => {
+      expect(response?.statusCode).to.be.oneOf([200, 304]);
+      if (response?.statusCode === 200) {
+        expect(response.body?.data?.some((job: { name: string }) =>
+          job.name === 'Live authentication coding job')).to.equal(true);
+      }
+    });
     cy.get('coding-box-coding-jobs', { timeout: 30_000 })
       .should('contain.text', 'Live authentication coding job');
+    cy.contains('coding-box-coding-jobs mat-row', 'Live authentication coding job')
+      .find('button[aria-label^="Weitere Aktionen:"]').click();
+    cy.get('button[aria-label="Ergebnisse anzeigen: Live authentication coding job"]')
+      .click();
+    cy.get('coding-box-coding-job-result-dialog .result-summary', { timeout: 30_000 })
+      .should('contain.text', '2 von 2 Ergebnissen');
+    cy.get('coding-box-coding-job-result-dialog button[aria-label="Dialog schließen"]')
+      .click();
+
+    cy.intercept('GET', '**/api/admin/content-pool/settings').as('contentPoolSettings');
+    cy.window().then((win) => { win.location.hash = '/admin/settings'; });
+    cy.wait('@contentPoolSettings').its('response.statusCode')
+      .should('be.oneOf', [200, 304]);
+    cy.get('coding-box-sys-admin-settings .content-pool-settings-card')
+      .should('contain.text', 'Content-Pool Integration');
+    cy.get('coding-box-sys-admin-settings input[placeholder*="content-pool.example.org"]')
+      .clear().type('https://content-pool.test');
+    cy.intercept('PUT', '**/api/admin/content-pool/settings').as('saveContentPoolSettings');
+    cy.get('coding-box-sys-admin-settings .content-pool-settings-card')
+      .contains('button', 'Einstellungen speichern').click();
+    cy.wait('@saveContentPoolSettings').its('response.statusCode').should('eq', 200);
+    cy.reload();
+    cy.get('coding-box-sys-admin-settings input[placeholder*="content-pool.example.org"]')
+      .should('have.value', 'https://content-pool.test');
+
+    cy.intercept('GET', '**/api/admin/workspace/*/processes').as('processes');
+    cy.window().then((win) => {
+      win.location.hash = `/workspace-admin/${setup.workspaceId}/settings`;
+    });
+    cy.get('coding-box-ws-settings').contains('button', 'Prozesse anzeigen').click();
+    cy.wait('@processes').its('response.statusCode')
+      .should('be.oneOf', [200, 304]);
+    cy.get('coding-box-process-overview-dialog .loading-overlay').should('not.exist');
+    cy.get('coding-box-process-overview-dialog').should('contain.text', 'Zentrale Prozess-Übersicht');
   });
 });
