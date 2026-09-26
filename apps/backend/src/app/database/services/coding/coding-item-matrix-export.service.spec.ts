@@ -1068,7 +1068,7 @@ describe('CodingItemMatrixExportService', () => {
   );
 
   it.each(partialInvalidSourceTypes)(
-    'does not turn not-reached sources in %s responses into MIR',
+    'exports partial %s responses with not-reached sources as MIR',
     async sourceType => {
       const cell = await resolvePartialDerivedTarget(sourceType, [
         { code: 1, score: 1, status: 5 },
@@ -1077,17 +1077,16 @@ describe('CodingItemMatrixExportService', () => {
       ]);
 
       expect(cell).toMatchObject({
-        state: 'error',
-        code: null,
-        score: null,
-        unresolved: true,
-        failureReason: 'derived-result-missing'
+        state: 'mir',
+        code: -81,
+        score: 0,
+        unresolved: false
       });
     }
   );
 
   it.each(partialInvalidSourceTypes)(
-    'does not turn trailing omissions recoded to MNR in partial %s responses into MIR',
+    'exports trailing omissions recoded to MNR in partial %s responses as MIR',
     async sourceType => {
       const cell = await resolvePartialDerivedTarget(
         sourceType,
@@ -1103,11 +1102,80 @@ describe('CodingItemMatrixExportService', () => {
       );
 
       expect(cell).toMatchObject({
-        state: 'error',
-        code: null,
-        score: null,
-        unresolved: true,
-        failureReason: 'derived-result-missing'
+        state: 'mir',
+        code: -81,
+        score: 0,
+        unresolved: false
+      });
+    }
+  );
+
+  it.each(partialInvalidSourceTypes)(
+    'exports partial %s responses with an invalid source as MIR',
+    async sourceType => {
+      const cell = await resolvePartialDerivedTarget(sourceType, [
+        { code: 1, score: 1, status: 5 },
+        { code: null, score: null, status: 7 }
+      ]);
+
+      expect(cell).toMatchObject({
+        state: 'mir',
+        code: -81,
+        score: 0,
+        unresolved: false
+      });
+    }
+  );
+
+  it.each(partialInvalidSourceTypes)(
+    'exports partial %s responses without a stored target as MIR',
+    async sourceType => {
+      const service = createService();
+      const derived = column('01', 'TEST_CMC', '01', true, sourceType);
+      const sourceKeys = [
+        'TEST_CMC\u001F01a',
+        'TEST_CMC\u001F01b'
+      ];
+      const values = new Map<string, ItemDatasetResponseValue>([
+        [sourceKeys[0], { code: 1, score: 1, status: 5 }],
+        [sourceKeys[1], { code: null, score: null, status: 2 }]
+      ]);
+
+      const cells = await (
+        service as never as {
+          resolveRowCells: (
+            columnsValue: unknown[],
+            designValue: unknown,
+            responseValues: unknown,
+            profileValue: unknown,
+            derivedValue: unknown,
+            configValue: ItemMatrixExportConfiguration
+          ) => Promise<Array<{
+            state: string;
+            code: number | null;
+            score: number | null;
+            unresolved: boolean;
+          }>>;
+        }
+      ).resolveRowCells(
+        [derived],
+        {
+          units: new Map([[
+            'TEST_CMC',
+            { unitId: 'TEST_CMC', order: 0, testletKey: '0:CMC' }
+          ]])
+        },
+        values,
+        profile,
+        new Map([[derived.key, sourceKeys]]),
+        configuration
+      );
+
+      expect(cells[0]).toMatchObject({
+        state: 'mir',
+        code: -81,
+        score: 0,
+        unresolved: false
       });
     }
   );

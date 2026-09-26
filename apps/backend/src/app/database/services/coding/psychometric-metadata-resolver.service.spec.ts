@@ -1,4 +1,5 @@
 import { PsychometricMetadataResolver } from './psychometric-metadata-resolver.service';
+import { getPsychometricLogicalKey } from './psychometric-key.util';
 
 describe('PsychometricMetadataResolver', () => {
   const createResolver = (
@@ -233,6 +234,116 @@ describe('PsychometricMetadataResolver', () => {
       ],
       mappingFallbackPreview: []
     });
+  });
+
+  it('matches VOMD variableId to the VOCS alias when an internal id collides', async () => {
+    const resolver = createResolver(
+      {
+        items: [
+          {
+            id: 'ITEM_07',
+            variableId: '04'
+          }
+        ]
+      },
+      [
+        {
+          id: '04',
+          alias: '02',
+          type: 'string',
+          hasCodingScheme: true
+        },
+        {
+          id: '07',
+          alias: '04',
+          type: 'string',
+          hasCodingScheme: true
+        }
+      ]
+    );
+
+    const mapping = await resolver.buildItemMapping(7);
+
+    expect(mapping.items).toEqual([
+      expect.objectContaining({
+        itemId: 'ITEM_07',
+        variableId: '04',
+        sourceVariableId: '07'
+      })
+    ]);
+    expect(mapping.issues).toEqual([]);
+  });
+
+  it('keeps VOCS aliases authoritative over colliding internal ids', async () => {
+    const resolver = createResolver(
+      {
+        items: [
+          {
+            id: 'ITEM_04',
+            variableId: '04'
+          },
+          {
+            id: 'ITEM_07',
+            variableId: '07'
+          }
+        ]
+      },
+      [
+        {
+          id: '07',
+          alias: '04',
+          type: 'string',
+          hasCodingScheme: true
+        },
+        {
+          id: '11',
+          alias: '07',
+          type: 'string',
+          hasCodingScheme: true
+        }
+      ]
+    );
+
+    const mapping = await resolver.buildItemMapping(7);
+
+    expect(mapping.issues).toEqual([]);
+    expect(mapping.byLogicalKey.get(getPsychometricLogicalKey('UNIT_A', '04'))).toEqual(
+      expect.objectContaining({ variableId: '04', sourceVariableId: '07' })
+    );
+    expect(mapping.byLogicalKey.get(getPsychometricLogicalKey('UNIT_A', '07'))).toEqual(
+      expect.objectContaining({ variableId: '07', sourceVariableId: '11' })
+    );
+    expect(mapping.byLogicalKey.get(getPsychometricLogicalKey('UNIT_A', '11'))).toEqual(
+      expect.objectContaining({ variableId: '07', sourceVariableId: '11' })
+    );
+  });
+
+  it('does not match VOMD variableId to an internal VOCS id', async () => {
+    const resolver = createResolver(
+      {
+        items: [
+          {
+            id: 'ITEM_04',
+            variableId: '04'
+          }
+        ]
+      },
+      [
+        {
+          id: '04',
+          alias: '02',
+          type: 'string',
+          hasCodingScheme: true
+        }
+      ]
+    );
+
+    const mapping = await resolver.buildItemMapping(7);
+
+    expect(mapping.items).toEqual([]);
+    expect(mapping.issues).toEqual([
+      'UNIT_A/ITEM_04: Variable 04 nicht gefunden'
+    ]);
   });
 
   it('requires explicit VOMD item IDs only for strict item mappings', async () => {
