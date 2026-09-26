@@ -55,6 +55,7 @@ export const provideKeycloakAngular = () => provideKeycloak({
   },
   initOptions: {
     onLoad: 'check-sso',
+    pkceMethod: 'S256',
     checkLoginIframe: false
   },
   features: [

@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.app.json",
+  "files": [
+    "src/main.zoneless.ts"
+  ]
+}

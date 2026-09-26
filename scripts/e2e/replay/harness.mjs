@@ -35,6 +35,10 @@ export function createReplayHarness(environment = process.env) {
       }
 
       activeState = await setupReplayWorkspace(config);
+      if (environment.REPLAY_E2E_AUTH === 'true') {
+        const { setupCodingFixture } = await import('./auth-fixture.mjs');
+        Object.assign(activeState.browser, await setupCodingFixture(activeState, environment));
+      }
       return activeState.browser;
     },
 
@@ -490,7 +494,12 @@ async function pollExportJob(config, workspaceId, token, jobId) {
       `/admin/workspace/${workspaceId}/coding/export/job/${encodeURIComponent(jobId)}`,
       { token }
     );
-    if (lastStatus.status === 'failed' || lastStatus.status === 'completed') {
+    // The queue can expose the failed state before failedReason (and therefore
+    // the public diagnostic metadata) is visible through the status endpoint.
+    if (
+      lastStatus.status === 'completed' ||
+      (lastStatus.status === 'failed' && lastStatus.error)
+    ) {
       return lastStatus;
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
@@ -703,7 +712,7 @@ function createAdminToken(config) {
   const now = Math.floor(Date.now() / 1000);
   return signHs256(
     {
-      iss: ISSUER,
+      iss: config.issuer || ISSUER,
       sub: `replay-e2e-admin-${config.runId}`,
       aud: CLIENT_ID,
       azp: CLIENT_ID,
@@ -750,6 +759,7 @@ function readConfig(environment) {
   }
 
   return {
+    issuer: environment.REPLAY_E2E_OIDC_ISSUER,
     apiUrl: environment.REPLAY_E2E_API_URL,
     baseUrl: environment.REPLAY_E2E_BASE_URL,
     cacheDir: path.resolve(environment.REPLAY_E2E_CACHE_DIR),

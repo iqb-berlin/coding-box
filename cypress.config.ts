@@ -32,6 +32,8 @@ export default defineConfig({
   e2e: {
     baseUrl: 'http://localhost:4200',
     specPattern: 'cypress/e2e/**/*.cy.ts',
+    // Live suites need the disposable backend and tasks in cypress.replay.config.ts.
+    excludeSpecPattern: 'cypress/e2e/*-live.cy.ts',
     supportFile: 'cypress/support/e2e.ts'
   }
 });

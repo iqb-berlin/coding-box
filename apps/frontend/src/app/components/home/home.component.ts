@@ -1,13 +1,14 @@
 import {
-  Component, OnInit, OnDestroy, inject
+  ChangeDetectorRef, Component, OnInit, DestroyRef, inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import {
-  Subscription, catchError, forkJoin, of
+  catchError, forkJoin, of
 } from 'rxjs';
 import { ActivatedRoute, Params, Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -43,9 +44,11 @@ import {
   templateUrl: './home.component.html',
   styleUrls: ['./home.component.scss']
 })
-export class HomeComponent implements OnInit, OnDestroy {
+export class HomeComponent implements OnInit {
   readonly appService: AppService = inject(AppService);
-  private route = inject(ActivatedRoute);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+  private readonly route = inject(ActivatedRoute);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
   private userService = inject(UserService);
@@ -59,23 +62,20 @@ export class HomeComponent implements OnInit, OnDestroy {
   private authDataFailedQueryParamActive = false;
   private authDataFailedMessageShown = false;
 
-  private authSubscription?: Subscription;
-  private authBootstrapSubscription?: Subscription;
-  private authDataRefreshSubscription?: Subscription;
-  private queryParamsSubscription?: Subscription;
-
   ngOnInit(): void {
-    this.authSubscription = this.appService.authData$.subscribe((authData: AuthDataDto) => {
+    this.appService.authData$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((authData: AuthDataDto) => {
       if (authData) {
         this.authData = authData;
         this.workspaces = authData.workspaces;
         if (authData.userId > 0) {
           this.resolveAuthDataFailedQueryParam();
         }
+        this.changeDetectorRef.markForCheck();
       }
     });
 
-    this.authBootstrapSubscription = this.appService.authBootstrapStatus$
+    this.appService.authBootstrapStatus$
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(status => {
         this.authBootstrapStatus = status;
 
@@ -85,9 +85,10 @@ export class HomeComponent implements OnInit, OnDestroy {
         }
 
         this.resolveAuthDataFailedQueryParam();
+        this.changeDetectorRef.markForCheck();
       });
 
-    this.queryParamsSubscription = this.route.queryParams.subscribe(params => {
+    this.route.queryParams.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       if (params.error) {
         this.showErrorMessage(params.error);
       }
@@ -100,7 +101,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   private refreshHomeAuthData(): void {
-    this.authDataRefreshSubscription = this.appService.refreshAuthData().subscribe(() => {
+    this.appService.refreshAuthData().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
       if (!this.isPersonalCodingJobsRedirectChecked &&
         this.authData.userId > 0 &&
         !this.authData.isAdmin) {
@@ -119,7 +120,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     const workspaceIds = this.workspaces.map(workspace => workspace.id);
     const observables = workspaceIds.map(workspaceId => this.userService.getUsers(workspaceId));
 
-    forkJoin(observables).pipe(catchError(() => of(null))).subscribe(responses => {
+    forkJoin(observables).pipe(catchError(() => of(null)), takeUntilDestroyed(this.destroyRef)).subscribe(responses => {
       if (!responses) {
         return;
       }
@@ -232,13 +233,6 @@ export class HomeComponent implements OnInit, OnDestroy {
   private resetAuthDataFailedQueryParamState(): void {
     this.authDataFailedQueryParamActive = false;
     this.authDataFailedMessageShown = false;
-  }
-
-  ngOnDestroy(): void {
-    this.authSubscription?.unsubscribe();
-    this.authBootstrapSubscription?.unsubscribe();
-    this.authDataRefreshSubscription?.unsubscribe();
-    this.queryParamsSubscription?.unsubscribe();
   }
 
   protected readonly Number = Number;

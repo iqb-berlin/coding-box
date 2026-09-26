@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:14.23-alpine3.24@sha256:f1341c01408dc7278e9d365ed4f860cd3f87dd16b4464ac326fc0f422083a579
+    image: postgres:14.22-alpine3.22@sha256:7161c8e7347ed8b4cdefc26087702336da5f467137cc964e611c85d745df6112
     environment:
       POSTGRES_USER: replay_e2e
       POSTGRES_PASSWORD: replay_e2e
@@ -89,7 +89,7 @@ services:
     command:
       - sh
       - -c
-      - sed -i 's#http://localhost:3333#http://backend:3333#' apps/frontend/proxy.conf.json && npx nx serve frontend --host=0.0.0.0
+      - sed -i 's#http://localhost:3333#http://backend:3333#' apps/frontend/proxy.conf.json && npx nx serve frontend --host=0.0.0.0 --configuration=${REPLAY_E2E_FRONTEND_CONFIGURATION:-development}
     ports:
       - '127.0.0.1:${REPLAY_E2E_FRONTEND_PORT}:4200'
     healthcheck:

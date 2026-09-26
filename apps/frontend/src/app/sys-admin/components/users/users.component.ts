@@ -2,7 +2,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, OnInit, inject
+  ChangeDetectorRef, ViewChild, Component, OnInit, inject
 } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSort } from '@angular/material/sort';
@@ -34,6 +34,7 @@ export class UsersComponent implements OnInit {
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
+  private changeDetectorRef = inject(ChangeDetectorRef);
 
   selectedUsers: number[] = [];
   selectedRows: UserFullDto[] = [];
@@ -117,6 +118,7 @@ export class UsersComponent implements OnInit {
   userSelectionChanged(userData: UserFullDto[]): void {
     this.selectedUsers = userData.map(user => user.id);
     this.selectedRows = userData;
+    this.changeDetectorRef.markForCheck();
   }
 
   editUser(value: { selection: UserFullDto[], user: UntypedFormGroup }): void {

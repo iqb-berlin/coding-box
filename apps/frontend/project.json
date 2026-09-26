@@ -69,6 +69,19 @@
           "extractLicenses": false,
           "sourceMap": true,
           "namedChunks": true
+        },
+        "zoneless": {
+          "browser": "apps/frontend/src/main.zoneless.ts",
+          "polyfills": [],
+          "outputPath": {
+            "base": "dist/apps/frontend-zoneless",
+            "browser": ""
+          },
+          "optimization": false,
+          "extractLicenses": false,
+          "sourceMap": true,
+          "namedChunks": true,
+          "tsConfig": "apps/frontend/tsconfig.zoneless.json"
         }
       },
       "defaultConfiguration": "production"
@@ -81,6 +94,9 @@
         },
         "development": {
           "buildTarget": "frontend:build:development"
+        },
+        "zoneless": {
+          "buildTarget": "frontend:build:zoneless"
         }
       },
       "options": {
@@ -124,6 +140,10 @@
       "configurations": {
         "production": {
           "devServerTarget": "frontend:serve:production"
+        },
+        "zoneless": {
+          "devServerTarget": "frontend:serve:zoneless",
+          "cypressConfig": "cypress.zoneless.config.ts"
         }
       }
     },
@@ -132,6 +152,11 @@
       "cache": false,
       "options": {
         "command": "node scripts/e2e/replay/run-replay-e2e.mjs"
+      },
+      "configurations": {
+        "zoneless": {
+          "command": "node scripts/e2e/replay/run-replay-e2e.mjs --zoneless"
+        }
       }
     },
     "e2e-replay-existing": {
@@ -139,6 +164,18 @@
       "cache": false,
       "options": {
         "command": "node scripts/e2e/replay/run-existing-replay-e2e.mjs"
+      }
+    },
+    "e2e-auth-live": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/e2e/replay/run-replay-e2e.mjs --auth"
+      },
+      "configurations": {
+        "zoneless": {
+          "command": "node scripts/e2e/replay/run-replay-e2e.mjs --auth --zoneless"
+        }
       }
     }
   }

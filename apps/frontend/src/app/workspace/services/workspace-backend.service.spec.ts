@@ -53,6 +53,17 @@ describe('WorkspaceBackendService', () => {
     });
   });
 
+  it('propagates workspace list failures for access-rights selection', () => {
+    const error = jest.fn();
+    const next = jest.fn();
+    service.getAllWorkspacesListOrFail().subscribe({ next, error });
+    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace`);
+    expect(req.request.method).toBe('GET');
+    req.flush('Unavailable', { status: 503, statusText: 'Unavailable' });
+    expect(next).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(expect.objectContaining({ status: 503 }));
+  });
+
   describe('getWorkspaceUsers', () => {
     it('should fetch workspace users with pagination parameters', () => {
       const mockResponse = {

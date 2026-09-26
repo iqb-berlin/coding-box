@@ -11,12 +11,14 @@ describe('WorkspaceAccessRightsDialogComponent', () => {
   let component: WorkspaceAccessRightsDialogComponent;
   let fixture: ComponentFixture<WorkspaceAccessRightsDialogComponent>;
   let workspacesByUser$: Subject<number[]>;
+  let workspaceList$: Subject<unknown>;
   let userBackendService: {
     getWorkspacesByUserListOrFail: jest.Mock;
   };
 
   beforeEach(async () => {
     workspacesByUser$ = new Subject<number[]>();
+    workspaceList$ = new Subject<unknown>();
     userBackendService = {
       getWorkspacesByUserListOrFail: jest.fn().mockReturnValue(workspacesByUser$)
     };
@@ -35,7 +37,7 @@ describe('WorkspaceAccessRightsDialogComponent', () => {
       {
         provide: WorkspaceBackendService,
         useValue: {
-          getAllWorkspacesList: jest.fn().mockReturnValue(of({
+          getAllWorkspacesListOrFail: jest.fn().mockReturnValue(of({
             data: [
               { id: 2, name: 'Workspace 2' },
               { id: 3, name: 'Workspace 3' }
@@ -98,5 +100,35 @@ describe('WorkspaceAccessRightsDialogComponent', () => {
     expect(component.isLoadingUserWorkspaces).toBe(false);
     expect(component.userWorkspacesLoadingFailed).toBe(true);
     expect(saveButton.disabled).toBe(true);
+  });
+  it('preserves rights and blocks saving until the workspace list arrives', () => {
+    jest.spyOn(TestBed.inject(WorkspaceBackendService), 'getAllWorkspacesListOrFail')
+      .mockReturnValue(workspaceList$ as never);
+    fixture.detectChanges();
+    workspacesByUser$.next([2, 3]);
+    workspacesByUser$.complete();
+    fixture.detectChanges();
+    const saveButton = fixture.nativeElement.querySelector('mat-dialog-actions button');
+    expect(component.result).toEqual([2, 3]);
+    expect(saveButton.disabled).toBe(true);
+
+    workspaceList$.next({ data: [{ id: 2, name: 'Two' }, { id: 3, name: 'Three' }], total: 2 });
+    workspaceList$.complete();
+    fixture.detectChanges();
+    expect(component.result).toEqual([2, 3]);
+    expect(saveButton.disabled).toBe(false);
+  });
+
+  it('preserves rights and blocks saving when the workspace list fails', () => {
+    jest.spyOn(TestBed.inject(WorkspaceBackendService), 'getAllWorkspacesListOrFail')
+      .mockReturnValue(workspaceList$ as never);
+    fixture.detectChanges();
+    workspacesByUser$.next([2, 3]);
+    workspacesByUser$.complete();
+    fixture.detectChanges();
+    workspaceList$.error(new Error('list unavailable'));
+    fixture.detectChanges();
+    expect(component.result).toEqual([2, 3]);
+    expect(fixture.nativeElement.querySelector('mat-dialog-actions button').disabled).toBe(true);
   });
 });

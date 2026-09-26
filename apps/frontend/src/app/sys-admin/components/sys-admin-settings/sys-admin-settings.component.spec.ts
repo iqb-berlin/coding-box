@@ -1,6 +1,7 @@
 import {
   ComponentFixture, fakeAsync, TestBed, tick
 } from '@angular/core/testing';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClient } from '@angular/common/http';
 import {
@@ -9,7 +10,7 @@ import {
 } from '@angular/common/http/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations'; // Importieren
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { SysAdminSettingsComponent } from './sys-admin-settings.component';
 import { SERVER_URL } from '../../../injection-tokens';
 import { SystemSettingsService } from '../../../core/services/system-settings.service';
@@ -66,6 +67,7 @@ describe('SysAdminSettingsComponent', () => {
 
     await TestBed.configureTestingModule({
       providers: [
+        provideZonelessChangeDetection(),
         provideHttpClient(),
         provideHttpClientTesting(),
         {
@@ -111,6 +113,25 @@ describe('SysAdminSettingsComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('renders content-pool settings after a delayed response without another UI event', async () => {
+    const settings = new Subject<{
+      enabled: boolean;
+      baseUrl: string;
+      hasApplicationToken: boolean;
+    }>();
+    systemSettingsService.getContentPoolSettings.mockReturnValueOnce(settings.asObservable());
+    component.loadContentPoolSettings();
+    fixture.detectChanges();
+
+    settings.next({ enabled: true, baseUrl: 'https://content-pool.test', hasApplicationToken: false });
+    await fixture.whenStable();
+
+    const urlInput = fixture.nativeElement.querySelector(
+      '.content-pool-settings-card input[placeholder*="content-pool.example.org"]'
+    ) as HTMLInputElement;
+    expect(urlInput.value).toBe('https://content-pool.test');
   });
 
   describe('legal notice settings', () => {
@@ -261,6 +282,22 @@ describe('SysAdminSettingsComponent', () => {
       expect(component.databaseExportStatus).toBe('failed');
       expect(component.databaseExportError).toBe('Export failed');
       expect(snackBar.open).toHaveBeenCalledWith('Export failed', 'Schließen', { duration: 5000 });
+    }));
+
+    it('renders background export progress after polling without another UI event', fakeAsync(() => {
+      component.exportDatabase();
+      fixture.detectChanges();
+
+      httpMock.expectOne('http://test-url/admin/database/export/sqlite/job')
+        .flush({ jobId: 'job-1', message: 'started' });
+      tick(0);
+      httpMock.expectOne('http://test-url/admin/database/export/sqlite/job/job-1')
+        .flush({ status: 'running', progress: 42 });
+      tick(0);
+
+      expect(fixture.nativeElement.querySelector('.export-progress .progress-text').textContent)
+        .toContain('42%');
+      component.ngOnDestroy();
     }));
 
     it('starts export without a local token because auth is handled by the interceptor', () => {

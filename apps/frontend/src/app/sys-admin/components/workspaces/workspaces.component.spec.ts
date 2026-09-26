@@ -21,7 +21,7 @@ describe('WorkspaceGroupsComponent', () => {
   let component: WorkspacesComponent;
   let fixture: ComponentFixture<WorkspacesComponent>;
   let workspaceBackendService: {
-    getAllWorkspacesList: jest.Mock;
+    getAllWorkspacesListOrFail: jest.Mock;
     addWorkspace: jest.Mock;
     changeWorkspace: jest.Mock;
     deleteWorkspace: jest.Mock;
@@ -32,7 +32,7 @@ describe('WorkspaceGroupsComponent', () => {
 
   beforeEach(async () => {
     workspaceBackendService = {
-      getAllWorkspacesList: jest.fn().mockReturnValue(of({
+      getAllWorkspacesListOrFail: jest.fn().mockReturnValue(of({
         data: [], total: 0, page: 1, limit: 10
       })),
       addWorkspace: jest.fn().mockReturnValue(of(17)),
