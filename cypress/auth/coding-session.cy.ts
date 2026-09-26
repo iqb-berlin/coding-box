@@ -104,6 +104,28 @@ describe('real Keycloak coding session', () => {
       'Persisted live note'
     );
 
+    // Hold a real progress save while the coder adds a problem marker.
+    let releaseProgress: (() => void) | undefined;
+    let holdProgress = true;
+    cy.intercept('POST', '**/coding-job/*/progress', request => {
+      if (request.body.selectedCode?.codingIssueOption === -2) request.alias = 'newCodeNeeded';
+      if (!holdProgress) return;
+      holdProgress = false;
+      return new Promise<void>(resolve => {
+        releaseProgress = () => { request.continue(); resolve(); };
+      });
+    });
+    cy.get('app-code-selector [data-code-id="0"]').click();
+    cy.wrap(null).should(() => { expect(releaseProgress).to.be.a('function'); });
+    cy.get('app-code-selector [data-code-id="-2"]').click();
+    cy.then(() => releaseProgress!());
+    cy.wait('@newCodeNeeded').its('response.statusCode').should('eq', 201);
+    cy.reload();
+    cy.get('app-code-selector [data-code-id="-2"]').should('have.class', 'selected');
+    cy.get('app-code-selector .deselect-button').click();
+    cy.get('app-code-selector [data-code-id="1"]').click();
+    cy.get('app-code-selector .next-button').should('not.be.disabled');
+
     let failNotes = true;
     cy.intercept('POST', '**/coding-job/*/notes', (request) => {
       if (failNotes)
@@ -323,9 +345,17 @@ describe('real Keycloak coding session', () => {
       .should('contain.text', setup.username);
     cy.contains('coding-box-users-selection mat-row', setup.username)
       .find('mat-checkbox').click();
+    let releaseWorkspaceList: (() => void) | undefined;
+    cy.intercept('GET', '**/api/admin/workspace', request => new Promise<void>(resolve => {
+      releaseWorkspaceList = () => { request.continue(); resolve(); };
+    }));
     cy.get('coding-box-users-menu button').eq(2).click();
     cy.wait('@userWorkspaces').its('response.statusCode')
       .should('be.oneOf', [200, 304]);
+    cy.get('coding-box-workspace-access-rights-dialog mat-dialog-actions button').first()
+      .should('be.disabled');
+    cy.wrap(null).should(() => { expect(releaseWorkspaceList).to.be.a('function'); });
+    cy.then(() => releaseWorkspaceList!());
     cy.contains('coding-box-workspace-access-rights-dialog mat-row', 'replay-e2e-')
       .find('input[type="checkbox"]').should('be.checked');
     cy.get('coding-box-workspace-access-rights-dialog')
