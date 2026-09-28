@@ -173,7 +173,11 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     if (this.isExportBusy) return;
     this.unitList = [...config.selectedUnits];
     this.selectedMissingsProfile = config.missingsProfileId;
-    this.contentOptions = { ...this.contentOptions, ...config.contentOptions };
+    this.contentOptions = {
+      ...this.contentOptions,
+      ...config.contentOptions,
+      trainingRequirement: this.contentOptions.trainingRequirement
+    };
     this.exportCodingBook();
   }
 

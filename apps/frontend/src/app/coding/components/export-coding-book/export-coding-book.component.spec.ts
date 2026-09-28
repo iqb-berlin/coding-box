@@ -1,6 +1,8 @@
 import {
   ComponentFixture, TestBed, fakeAsync, tick
 } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { CodebookExportComponent } from '@iqb/ngx-coding-components/codebook-export';
 import { DatePipe } from '@angular/common';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import {
@@ -717,6 +719,22 @@ describe('ExportCodingBookComponent', () => {
     expect(exportService.startCodebookJob).toHaveBeenCalledWith(1, '1', expect.objectContaining({
       exportFormat: 'json', trainingRequirement: 'required', jobDefinitionId: 10, variableBundleIds: [5]
     }), [2]);
+  });
+
+  it.each(['required', 'not-required'] as const)('preserves %s from filter change through the rendered shared form to job start', trainingRequirement => {
+    fixture.detectChanges();
+    const shared = fixture.debugElement.query(By.directive(CodebookExportComponent)).componentInstance as CodebookExportComponent;
+    component.onTrainingRequirementChange(trainingRequirement);
+    fixture.detectChanges();
+    shared.toggleAll();
+    exportService.startCodebookJob.mockReturnValue(new Subject());
+    shared.exportCodingBook();
+    expect(exportService.startCodebookJob).toHaveBeenCalledWith(
+      1,
+      expect.any(String),
+      expect.objectContaining({ trainingRequirement }),
+      expect.arrayContaining([1])
+    );
   });
 
   it('does not overlap slow status requests and cancels them when the dialog closes', fakeAsync(() => {
