@@ -27,9 +27,11 @@ USER node
 WORKDIR /usr/src/coding-box-${PROJECT}
 RUN mkdir packages
 
-# Install dependencies
+# Install dependencies (use the reviewed shared-codebook release candidate).
+COPY --chown=node:node --from=base /usr/src/coding-box-base/vendor/iqb-ngx-coding-components-4.1.0.tgz ./vendor/iqb-ngx-coding-components-4.1.0.tgz
 COPY --chown=node:node --from=base /usr/src/coding-box-base/dist/apps/${PROJECT}/package.json .
 RUN --mount=type=cache,target=~/.npm \
+    npm pkg set dependencies.@iqb/ngx-coding-components=file:vendor/iqb-ngx-coding-components-4.1.0.tgz && \
     npm install --omit=dev --no-fund
 
 # Install PostgreSQL client (missing in dist/apps/backend/package.json - nx bug?)
