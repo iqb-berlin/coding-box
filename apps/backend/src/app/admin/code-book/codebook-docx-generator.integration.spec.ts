@@ -2,7 +2,7 @@ import AdmZip = require('adm-zip');
 import {
   CodeBookContentSetting,
   CodebookUnitDto
-} from './codebook.interfaces';
+} from '@iqb/ngx-coding-components/codebook-models';
 import { CodebookDocxGenerator } from './codebook-docx-generator.class';
 
 const defaultSettings: CodeBookContentSetting = {
