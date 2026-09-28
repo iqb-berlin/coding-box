@@ -1,28 +1,25 @@
 import {
   Component, OnInit, OnDestroy
 } from '@angular/core';
+import { CodebookExportComponent } from '@iqb/ngx-coding-components/codebook-export';
+import type { CodebookExportConfig, UnitSelectionItem } from '@iqb/ngx-coding-components/codebook-models';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatRadioModule } from '@angular/material/radio';
+import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
-import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatOptionModule } from '@angular/material/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatDividerModule } from '@angular/material/divider';
-import { MatTableDataSource, MatTableModule } from '@angular/material/table';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTableDataSource } from '@angular/material/table';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   Subject, Subscription, interval
 } from 'rxjs';
 import {
-  debounceTime, distinctUntilChanged, switchMap, takeUntil
+  debounceTime, distinctUntilChanged, exhaustMap, takeUntil
 } from 'rxjs/operators';
 import {
   CodeBookContentSetting,
@@ -60,20 +57,15 @@ interface CodebookUnitOption {
   styleUrls: ['./export-coding-book.component.scss'],
   standalone: true,
   imports: [
+    CodebookExportComponent,
     FormsModule,
     MatDialogModule,
-    MatCheckboxModule,
-    MatRadioModule,
     MatSelectModule,
     MatButtonModule,
-    MatInputModule,
     MatFormFieldModule,
     MatOptionModule,
     MatIconModule,
     MatTooltipModule,
-    MatDividerModule,
-    MatTableModule,
-    MatProgressSpinnerModule,
     MatProgressBarModule,
     TranslateModule
   ],
@@ -143,8 +135,53 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     private datePipe: DatePipe,
     private validationStateService: ValidationStateService,
     private translateService: TranslateService,
-    private dialog: MatDialog
+    private dialog: MatDialog,
+    private dialogRef: MatDialogRef<ExportCodingBookComponent>
   ) { }
+
+  private sharedUnitsSource: CodebookUnitOption[] | null = null;
+  private sharedUnitsCache: UnitSelectionItem[] = [];
+  private profilesSource: { id: number; label: string }[] | null = null;
+  private profilesCache: { id: number; label: string }[] = [];
+
+  get sharedUnits(): UnitSelectionItem[] {
+    if (this.sharedUnitsSource !== this.availableUnits) {
+      this.sharedUnitsSource = this.availableUnits;
+      this.sharedUnitsCache = this.availableUnits.map(unit => ({
+        unitId: unit.unitId,
+        key: unit.unitKey.replace(/\.vocs$/i, ''),
+        unitName: this.formatUnitName(unit.unitName),
+        unitAlias: unit.unitAlias
+      }));
+    }
+    return this.sharedUnitsCache;
+  }
+
+  get sharedMissingsProfiles(): { id: number; label: string }[] {
+    if (this.profilesSource !== this.missingsProfiles) {
+      this.profilesSource = this.missingsProfiles;
+      this.profilesCache = this.missingsProfiles.filter(profile => profile.id !== 0);
+    }
+    return this.profilesCache;
+  }
+
+  get isExportBusy(): boolean {
+    return this.codebookJobStatus === 'pending' || this.codebookJobStatus === 'processing';
+  }
+
+  onSharedExport(config: CodebookExportConfig): void {
+    if (this.isExportBusy) return;
+    this.unitList = [...config.selectedUnits];
+    this.selectedMissingsProfile = config.missingsProfileId;
+    this.contentOptions = {
+      ...this.contentOptions,
+      ...config.contentOptions,
+      trainingRequirement: this.contentOptions.trainingRequirement
+    };
+    this.exportCodingBook();
+  }
+
+  closeDialog(): void { this.dialogRef.close(false); }
 
   ngOnInit(): void {
     this.updateSelectedJobDefinitionDisplay();
@@ -157,7 +194,8 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     this.filterTextChanged
       .pipe(
         debounceTime(300),
-        distinctUntilChanged()
+        distinctUntilChanged(),
+        takeUntil(this.destroy$)
       )
       .subscribe(event => {
         this.applyFilter(event);
@@ -680,6 +718,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   }
 
   exportCodingBook(): void {
+    if (this.isExportBusy) return;
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return;
@@ -701,7 +740,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
       this.contentOptions.missingsProfile,
       this.contentOptions,
       this.unitList
-    ).subscribe({
+    ).pipe(takeUntil(this.destroy$)).subscribe({
       next: response => {
         this.codebookJobId = response.jobId;
         this.startCodebookPolling(workspaceId, response.jobId);
@@ -718,8 +757,8 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
 
     this.codebookPollingSubscription = interval(1500)
       .pipe(
-        takeUntil(this.destroy$),
-        switchMap(() => this.exportService.getCodebookJobStatus(workspaceId, jobId))
+        exhaustMap(() => this.exportService.getCodebookJobStatus(workspaceId, jobId)),
+        takeUntil(this.destroy$)
       )
       .subscribe({
         next: status => {
@@ -733,7 +772,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
           this.codebookJobProgress = status.progress || 0;
 
           if (status.status === 'completed') {
-            this.codebookJobStatus = 'completed';
+            this.codebookJobStatus = 'processing';
             this.stopCodebookPolling();
             this.downloadCodebookResult(workspaceId, jobId);
           } else if (status.status === 'failed') {
@@ -762,7 +801,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   }
 
   private downloadCodebookResult(workspaceId: number, jobId: string): void {
-    this.exportService.downloadCodebookFile(workspaceId, jobId).subscribe({
+    this.exportService.downloadCodebookFile(workspaceId, jobId).pipe(takeUntil(this.destroy$)).subscribe({
       next: blob => {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -774,6 +813,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
+        this.codebookJobStatus = 'completed';
       },
       error: () => {
         this.codebookJobStatus = 'failed';
