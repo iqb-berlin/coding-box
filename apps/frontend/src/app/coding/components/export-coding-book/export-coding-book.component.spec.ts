@@ -1,6 +1,8 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import {
+  ComponentFixture, TestBed, fakeAsync, tick
+} from '@angular/core/testing';
 import { DatePipe } from '@angular/common';
-import { MatDialog } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import {
   of, throwError, BehaviorSubject, Subject
 } from 'rxjs';
@@ -165,6 +167,7 @@ describe('ExportCodingBookComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ExportCodingBookComponent],
       providers: [
+        { provide: MatDialogRef, useValue: { close: jest.fn() } },
         { provide: CodingExportService, useValue: exportServiceMock },
         { provide: CodingJobBackendService, useValue: codingJobBackendServiceMock },
         { provide: MissingsProfileService, useValue: missingsProfileServiceMock },
@@ -694,6 +697,53 @@ describe('ExportCodingBookComponent', () => {
       expect(component.codebookJobProgress).toBe(0);
     });
   });
+
+  it('keeps host scope filters when the shared form requests an export', () => {
+    component.selectedJobDefinitionId = 10;
+    component.selectedVariableBundleIds = [5];
+    component.contentOptions.trainingRequirement = 'required';
+    exportService.startCodebookJob.mockReturnValue(new Subject());
+    component.onSharedExport({
+      selectedUnits: [2],
+      missingsProfileId: 1,
+      contentOptions: { ...component.contentOptions, exportFormat: 'json' }
+    });
+    component.onSharedExport({
+      selectedUnits: [1],
+      missingsProfileId: 2,
+      contentOptions: { ...component.contentOptions, exportFormat: 'docx' }
+    });
+    expect(exportService.startCodebookJob).toHaveBeenCalledTimes(1);
+    expect(exportService.startCodebookJob).toHaveBeenCalledWith(1, '1', expect.objectContaining({
+      exportFormat: 'json', trainingRequirement: 'required', jobDefinitionId: 10, variableBundleIds: [5]
+    }), [2]);
+  });
+
+  it('does not overlap slow status requests and cancels them when the dialog closes', fakeAsync(() => {
+    const status = new Subject<{ status: string; progress: number }>();
+    exportService.startCodebookJob.mockReturnValue(of({ jobId: 'job', message: 'ok' }));
+    exportService.getCodebookJobStatus.mockReturnValue(status);
+    component.unitList = [1]; component.exportCodingBook();
+    tick(4500);
+    expect(exportService.getCodebookJobStatus).toHaveBeenCalledTimes(1);
+    expect(status.observed).toBe(true);
+    component.ngOnDestroy();
+    expect(status.observed).toBe(false);
+    tick(4500);
+    expect(exportService.getCodebookJobStatus).toHaveBeenCalledTimes(1);
+  }));
+
+  it('keeps export locked until the completed job has been downloaded', fakeAsync(() => {
+    exportService.startCodebookJob.mockReturnValue(of({ jobId: 'job', message: 'ok' }));
+    exportService.getCodebookJobStatus.mockReturnValue(of({ status: 'completed', progress: 100 }));
+    const download = new Subject<Blob>();
+    exportService.downloadCodebookFile.mockReturnValue(download);
+    component.unitList = [1]; component.exportCodingBook(); tick(1500);
+    component.exportCodingBook();
+    expect(component.isExportBusy).toBe(true);
+    expect(exportService.startCodebookJob).toHaveBeenCalledTimes(1);
+    component.ngOnDestroy(); expect(download.observed).toBe(false);
+  }));
 
   describe('resetCodebookJob', () => {
     it('should reset all codebook job state', () => {
