@@ -472,6 +472,8 @@ test-frontend-zoneless:
     - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
       changes:
         - apps/frontend/**/*
+        - scripts/qa/**/*
+        - docs/qa/**/*
         - api-dto/coding/**/*
         - package.json
         - package-lock.json
@@ -482,6 +484,8 @@ test-frontend-zoneless:
         $CI_PIPELINE_SOURCE != "external_pull_request_event"
       changes:
         - apps/frontend/**/*
+        - scripts/qa/**/*
+        - docs/qa/**/*
         - api-dto/coding/**/*
         - package.json
         - package-lock.json
@@ -490,7 +494,33 @@ test-frontend-zoneless:
   script:
     - npx nx run frontend:lint
     - npx nx run frontend:test --maxWorkers=2
+    - npx nx run frontend:zoneless-inventory
+    - npx nx run frontend:zoneless-inventory-test
+    - npx nx run frontend:test-zoneless --maxWorkers=2
     - npx nx build frontend --configuration=production
+
+test-zoneless-approval:
+  extends: test-frontend-zoneless
+  script:
+    - npx nx run frontend:zoneless-approval
+
+test-browser-zoneless:
+  stage: test-replay
+  interruptible: true
+  image: ${CYPRESS_IMAGE}
+  needs:
+    - install-dependencies
+  rules:
+    - !reference [ .default_rules, rules ]
+  script:
+    - npx cypress install
+    - npx nx run frontend:e2e --configuration=zoneless --browser=electron
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - cypress/screenshots
+      - cypress/videos
 
 test-replay-live:
   stage: test-replay
@@ -516,6 +546,8 @@ test-replay-live:
         - apps/frontend/**/*
         - cypress/fixtures/replay-datasets/**/*
         - cypress/e2e/replay-live.cy.ts
+        - cypress/auth/**/*
+        - cypress.auth.config.ts
         - cypress/e2e/item-matrix-live.cy.ts
         - cypress/support/replay-e2e.ts
         - cypress.replay.config.ts
@@ -532,6 +564,8 @@ test-replay-live:
         - apps/frontend/**/*
         - cypress/fixtures/replay-datasets/**/*
         - cypress/e2e/replay-live.cy.ts
+        - cypress/auth/**/*
+        - cypress.auth.config.ts
         - cypress/e2e/item-matrix-live.cy.ts
         - cypress/support/replay-e2e.ts
         - cypress.replay.config.ts
@@ -544,7 +578,7 @@ test-replay-live:
     - until docker info > /dev/null 2>&1; do sleep 1; done
     - npx cypress install
   script:
-    - npx nx run frontend:e2e-replay-live
+    - npx nx run frontend:e2e-replay-live --configuration=zoneless
   artifacts:
     when: always
     expire_in: 7 days
@@ -552,6 +586,12 @@ test-replay-live:
       - cypress/replay-artifacts/screenshots
       - cypress/replay-artifacts/videos
       - tmp/replay-e2e-artifacts
+
+test-auth-live-zoneless:
+  extends: test-replay-live
+  script:
+    - npx nx run frontend:e2e-auth-live --configuration=zoneless
+    - npx nx run frontend:e2e-auth-live --configuration=production
 
 lint-app:
   stage: lint

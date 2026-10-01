@@ -1,4 +1,6 @@
-import { Component, inject, OnInit } from '@angular/core';
+import {
+  ChangeDetectorRef, Component, inject, OnInit
+} from '@angular/core';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -139,6 +141,8 @@ export interface ExportOptions {
   `]
 })
 export class ExportOptionsDialogComponent implements OnInit {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   readonly dialogRef = inject(MatDialogRef<ExportOptionsDialogComponent>);
   readonly testResultBackendService = inject(TestResultBackendService);
   readonly dialogData = inject(MAT_DIALOG_DATA);
@@ -166,6 +170,7 @@ export class ExportOptionsDialogComponent implements OnInit {
   ngOnInit(): void {
     if (this.dialogData && this.dialogData.workspaceId) {
       this.testResultBackendService.getExportOptions(this.dialogData.workspaceId).subscribe((options: typeof this.availableOptions) => {
+        this.changeDetectorRef.markForCheck();
         this.availableOptions = options;
       });
     }

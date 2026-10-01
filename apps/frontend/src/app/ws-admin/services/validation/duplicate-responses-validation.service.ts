@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { switchMap, tap, map } from 'rxjs/operators';
+import { switchMap, tap } from 'rxjs/operators';
 import { BaseValidationService } from './base-validation.service';
 import { DuplicateResponsesResultDto } from '../../../../../../../api-dto/files/duplicate-response.dto';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
@@ -24,12 +24,7 @@ export class DuplicateResponsesValidationService extends BaseValidationService<D
       .createDeleteResponsesTask(workspaceId, responseIdsToDelete)
       .pipe(
         tap((task: ValidationTaskDto) => this.storeTaskId(task)),
-        switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
-        tap(() => {
-          this.removeTaskId();
-          this.invalidateWorkspaceValidationCache();
-        }),
-        map(() => undefined)
+        switchMap((task: ValidationTaskDto) => this.trackMutation(task, workspaceId))
       );
   }
 
@@ -45,12 +40,7 @@ export class DuplicateResponsesValidationService extends BaseValidationService<D
       )
       .pipe(
         tap((task: ValidationTaskDto) => this.storeTaskId(task)),
-        switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
-        tap(() => {
-          this.removeTaskId();
-          this.invalidateWorkspaceValidationCache();
-        }),
-        map(() => undefined)
+        switchMap((task: ValidationTaskDto) => this.trackMutation(task, workspaceId))
       );
   }
 

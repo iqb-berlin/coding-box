@@ -1,5 +1,5 @@
 import {
-  Component, OnDestroy, OnInit, inject
+  ChangeDetectorRef, Component, OnDestroy, OnInit, inject
 } from '@angular/core';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import {
@@ -68,6 +68,8 @@ export interface ResourcePackagesDialogData {
   ]
 })
 export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   dialogRef = inject<MatDialogRef<ResourcePackagesDialogComponent>>(MatDialogRef);
   data = inject<ResourcePackagesDialogData>(MAT_DIALOG_DATA);
   resourcePackageService = inject(ResourcePackageService);
@@ -108,6 +110,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     this.resourcePackageTextFilterSubscription = this.resourcePackageTextFilterChanged
       .pipe(debounceTime(300)) // Debounce für 300ms
       .subscribe(() => {
+        this.changeDetectorRef.markForCheck();
         this.applyResourcePackageFilters();
       });
   }
@@ -135,12 +138,14 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     this.resourcePackageService.getResourcePackages(workspaceId)
       .subscribe({
         next: (packages: ResourcePackageDto[]) => {
+          this.changeDetectorRef.markForCheck();
           this.resourcePackages = packages;
           this.resourcePackageDataSource = new MatTableDataSource(packages);
           this.setupResourcePackageFilterPredicate();
           this.isLoadingResourcePackages = false;
         },
         error: () => {
+          this.changeDetectorRef.markForCheck();
           this.isLoadingResourcePackages = false;
           this.snackBar.open(
             this.translate.instant('Error loading resource packages'),
@@ -236,6 +241,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     });
 
     dialogRef.afterClosed().subscribe((confirmed: boolean) => {
+      this.changeDetectorRef.markForCheck();
       if (!confirmed) {
         return;
       }
@@ -245,6 +251,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
       this.resourcePackageService.deleteResourcePackages(workspaceId, packageIds)
         .subscribe({
           next: (success: boolean) => {
+            this.changeDetectorRef.markForCheck();
             this.isLoadingResourcePackages = false;
             if (success) {
               this.snackBar.open(
@@ -264,6 +271,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
             }
           },
           error: () => {
+            this.changeDetectorRef.markForCheck();
             this.isLoadingResourcePackages = false;
             this.snackBar.open(
               'Ressourcenpakete konnten nicht gelöscht werden.',
@@ -294,6 +302,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     this.resourcePackageService.downloadResourcePackageWithProgress(workspaceId, resourcePackage.name)
       .subscribe({
         next: event => {
+          this.changeDetectorRef.markForCheck();
           if (event.type === HttpEventType.DownloadProgress) {
             this.updateResourcePackageProgress(event.loaded, event.total || 0);
             this.resourcePackageOperationText = `Download: ${resourcePackage.name} (${this.resourcePackageProgressPercent}%)`;
@@ -354,6 +363,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
       this.resourcePackageService.uploadResourcePackageWithProgress(workspaceId, file)
         .subscribe({
           next: event => {
+            this.changeDetectorRef.markForCheck();
             if (event.type === HttpEventType.UploadProgress) {
               this.updateResourcePackageProgress(event.loaded, event.total || file.size);
               this.resourcePackageOperationText = `Upload: ${file.name} (${this.resourcePackageProgressPercent}%)`;
@@ -419,6 +429,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     });
 
     dialogRef.afterClosed().subscribe((confirmed: boolean) => {
+      this.changeDetectorRef.markForCheck();
       if (!confirmed) {
         return;
       }
@@ -429,6 +440,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
       this.resourcePackageService.installGeoGebraPackage(workspaceId)
         .subscribe({
           next: event => {
+            this.changeDetectorRef.markForCheck();
             if (event instanceof HttpResponse) {
               this.finishResourcePackageOperation();
               this.snackBar.open(
@@ -513,6 +525,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
   }
 
   private finishResourcePackageOperation(): void {
+    this.changeDetectorRef.markForCheck();
     this.isResourcePackageOperationActive = false;
     this.activeDownloadPackageId = null;
     this.resourcePackageOperationText = '';

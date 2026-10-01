@@ -1,3 +1,5 @@
+import { ChangeDetectorRef } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { DuplicateResponseSelectionDto } from '../../../../models/duplicate-response-selection.dto';
 import { DuplicateResponsesValidationPanelComponent } from './duplicate-responses-validation-panel.component';
@@ -10,10 +12,13 @@ describe('DuplicateResponsesValidationPanelComponent', () => {
     const snackBar = {
       open: jest.fn()
     };
-    const component = new DuplicateResponsesValidationPanelComponent(
+    TestBed.configureTestingModule({
+      providers: [{ provide: ChangeDetectorRef, useValue: { markForCheck: jest.fn() } }]
+    });
+    const component = TestBed.runInInjectionContext(() => new DuplicateResponsesValidationPanelComponent(
       validationService as never,
       snackBar as never
-    );
+    ));
     jest.spyOn(component, 'onValidate').mockImplementation();
 
     component.duplicateResponses = [

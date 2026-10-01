@@ -209,6 +209,7 @@ implements OnInit, OnDestroy, OnChanges {
     const targetWorkspaces = this.getTargetWorkspaces(workspaces || []);
     this.currentWorkspaces = targetWorkspaces;
     this.isLoading = true;
+    this.cdr.markForCheck();
     this.loadJobsSubscription?.unsubscribe();
 
     if (targetWorkspaces.length > 0) {
@@ -269,6 +270,7 @@ implements OnInit, OnDestroy, OnChanges {
           );
           this.clearLoadedJobs();
           this.isLoading = false;
+          this.cdr.markForCheck();
         }
       });
     } else {

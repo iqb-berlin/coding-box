@@ -1,8 +1,8 @@
+import { provideZonelessChangeDetection } from '@angular/core';
+import { delay } from 'rxjs/operators';
 import {
   ComponentFixture,
-  TestBed,
-  fakeAsync,
-  tick
+  TestBed
 } from '@angular/core/testing';
 import {
   MatDialogRef,
@@ -129,6 +129,7 @@ describe('VariableAnalysisDialogComponent', () => {
         VariableAnalysisDialogComponent
       ],
       providers: [
+        provideZonelessChangeDetection(),
         { provide: MatDialogRef, useValue: mockDialogRef },
         { provide: MAT_DIALOG_DATA, useValue: mockDialogData },
         {
@@ -210,17 +211,19 @@ describe('VariableAnalysisDialogComponent', () => {
   });
 
   describe('filterVariables', () => {
-    it('should filter variables based on searchText', fakeAsync(() => {
+    it('should filter variables based on searchText', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'requestAnimationFrame'] });
       component.onSearchChange({
         target: { value: 'VAR1' }
       } as unknown as Event);
-      tick(300);
+      jest.advanceTimersByTime(300);
+      jest.useRealTimers();
 
       expect(component.variableCombos.length).toBe(1);
       expect(component.variableCombos[0].variableId).toBe('VAR1');
-    }));
+    });
 
-    it('should render filtered analysis table rows', fakeAsync(() => {
+    it('should render filtered analysis table rows', async () => {
       const getAnalysisTableText = (): string => (
         fixture.nativeElement.querySelector('.analysis-table')?.textContent || ''
       );
@@ -233,10 +236,12 @@ describe('VariableAnalysisDialogComponent', () => {
       expect(tableText).toContain('VAR1');
       expect(tableText).toContain('Val1');
 
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'requestAnimationFrame'] });
       component.onSearchChange({
         target: { value: 'VAR2' }
       } as unknown as Event);
-      tick(300);
+      jest.advanceTimersByTime(300);
+      jest.useRealTimers();
       fixture.detectChanges();
       tableText = getAnalysisTableText();
 
@@ -246,7 +251,7 @@ describe('VariableAnalysisDialogComponent', () => {
       expect(tableText).toContain('VAR2');
       expect(tableText).toContain('Val2');
       expect(tableText).not.toContain('VAR1');
-    }));
+    });
 
     it('should keep rows with missing labels last when sorting descending', () => {
       component.data.analysisResults = {
@@ -568,7 +573,7 @@ describe('VariableAnalysisDialogComponent', () => {
       });
     });
 
-    it('should dismiss stale loading snackbars without applying stale results', fakeAsync(() => {
+    it('should dismiss stale loading snackbars without applying stale results', async () => {
       const firstResults = new Subject<VariableAnalysisResultPageDto>();
       const secondResults = new Subject<VariableAnalysisResultPageDto>();
       const firstDismiss = jest.fn();
@@ -580,10 +585,12 @@ describe('VariableAnalysisDialogComponent', () => {
         .mockReturnValueOnce(secondResults);
 
       component.viewJobResults(1);
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'requestAnimationFrame'] });
       component.onSearchChange({
         target: { value: 'VAR' }
       } as unknown as Event);
-      tick(300);
+      jest.advanceTimersByTime(300);
+      jest.useRealTimers();
 
       firstResults.next({
         variableCombos: [],
@@ -597,7 +604,7 @@ describe('VariableAnalysisDialogComponent', () => {
 
       expect(firstDismiss).toHaveBeenCalled();
       expect(component.data.analysisResults?.total).not.toBe(1);
-    }));
+    });
   });
 
   describe('downloadAnalysisResults', () => {
@@ -635,5 +642,17 @@ describe('VariableAnalysisDialogComponent', () => {
 
       clickSpy.mockRestore();
     });
+  });
+  it('renders a delayed server response without another user action', async () => {
+    const backend = TestBed.inject(VariableAnalysisService);
+    const response = backend.getAllJobs(1).pipe(delay(30));
+    jest.spyOn(backend, 'getAllJobs').mockReturnValue(response);
+    fixture.destroy();
+    fixture = TestBed.createComponent(VariableAnalysisDialogComponent);
+    component = fixture.componentInstance;
+    fixture.autoDetectChanges();
+    await new Promise<void>(resolve => { setTimeout(resolve, 80); });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('variable-analysis.analysis-running');
   });
 });

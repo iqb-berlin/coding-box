@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -22,6 +22,8 @@ import {
   imports: [MatCheckbox, MatButton, MatTooltip, FormsModule, TranslateModule, MatIcon]
 })
 export class WsAccessRightsComponent {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   private userBackendService = inject(UserBackendService);
   appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
@@ -36,6 +38,7 @@ export class WsAccessRightsComponent {
     this.workspaceUsers = new WorkspaceUserToCheckCollection([]);
     this.userBackendService.getUsers(this.appService.selectedWorkspaceId)
       .subscribe(users => {
+        this.changeDetectorRef.markForCheck();
         if (users.length > 0) {
           this.workspaceUsers = new WorkspaceUserToCheckCollection(users);
         }

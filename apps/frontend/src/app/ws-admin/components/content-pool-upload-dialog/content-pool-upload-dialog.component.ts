@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnDestroy, inject
+  ChangeDetectorRef, Component, Inject, OnDestroy, inject
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
@@ -67,6 +67,8 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
 
   changelog = '';
 
+  private readonly changeDetector = inject(ChangeDetectorRef);
+
   acps: ContentPoolAcpSummary[] = [];
 
   selectedAcpId = '';
@@ -106,6 +108,7 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
       .listAccessibleAcps(this.data.workspaceId)
       .subscribe({
         next: response => {
+          this.changeDetector.markForCheck();
           this.isLoadingAcps = false;
           this.hasLoadedAcps = true;
           this.acps = response.acps || [];
@@ -114,6 +117,7 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
           }
         },
         error: error => {
+          this.changeDetector.markForCheck();
           this.isLoadingAcps = false;
           this.errorMessage = this.extractErrorMessage(
             error,
@@ -152,6 +156,7 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
       })
       .subscribe({
         next: progress => {
+          this.changeDetector.markForCheck();
           this.uploadProgress = progress;
 
           if (progress.status === 'failed') {
@@ -170,6 +175,7 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
           }
         },
         error: error => {
+          this.changeDetector.markForCheck();
           this.isUploading = false;
           this.errorMessage = this.extractErrorMessage(
             error,
