@@ -1,11 +1,12 @@
 import { By } from '@angular/platform-browser';
+import { TranslateModule } from '@ngx-translate/core';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { provideHttpClient } from '@angular/common/http';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import * as csvExport from './shared/validation-export.util';
 import {
   VariablesValidationPanelComponent, VariableTypesValidationPanelComponent, ResponseStatusValidationPanelComponent, GroupResponsesValidationPanelComponent, DuplicateResponsesValidationPanelComponent
@@ -32,7 +33,7 @@ describe('Validation panels inside their real parent dialog', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ValidationDialogComponent],
+      imports: [ValidationDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideHttpClient(), provideHttpClientTesting(), provideNoopAnimations(), provideZonelessChangeDetection(),
         { provide: AppService, useValue: { selectedWorkspaceId: 5 } },
@@ -46,6 +47,37 @@ describe('Validation panels inside their real parent dialog', () => {
     fixture = TestBed.createComponent(ValidationDialogComponent);
     fixture.autoDetectChanges();
     await fixture.whenStable();
+  });
+
+  it('cancels the XML request when the validation dialog is destroyed', () => {
+    const http = TestBed.inject(HttpTestingController);
+    fixture.componentInstance.showUnitXml('UNIT');
+    const pending = http.expectOne(request => request.url.endsWith('/unit/UNIT/content'));
+    fixture.destroy();
+    expect(pending.cancelled).toBe(true);
+    expect(document.querySelector('coding-box-content-dialog')).toBeNull();
+    expect(TestBed.inject(MatSnackBar).open).not.toHaveBeenCalled();
+    http.verify();
+  });
+
+  it('renders a delayed XML response in the real content dialog', async () => {
+    const http = TestBed.inject(HttpTestingController);
+    const dialogs = TestBed.inject(MatDialog);
+    fixture.componentInstance.showUnitXml('UNIT');
+    expect(document.querySelector('coding-box-content-dialog')).toBeNull();
+    http.expectOne(request => request.url.endsWith('/unit/UNIT/content'))
+      .flush({ content: '<Unit><Metadata><Id>DELAYED_UNIT</Id></Metadata></Unit>' });
+    await fixture.whenStable();
+    try {
+      const content = document.querySelector('coding-box-content-dialog');
+      expect(content?.textContent).toContain('Unit XML: UNIT');
+      expect(content?.querySelector('coding-box-xml-viewer')).not.toBeNull();
+      expect(content?.textContent).toContain('DELAYED_UNIT');
+      http.verify();
+    } finally {
+      dialogs.closeAll();
+      await fixture.whenStable();
+    }
   });
 
   function finishAcceptedJobAfterClose(http: HttpTestingController, type: ValidationType): void {
@@ -131,6 +163,50 @@ describe('Validation panels inside their real parent dialog', () => {
     ['variableTypes', VariableTypesValidationPanelComponent],
     ['responseStatus', ResponseStatusValidationPanelComponent]
   ] as const)('%s pagination', (type, panelType) => {
+    it('does not publish an old page into a newly opened workspace dialog', async () => {
+      const panel = fixture.debugElement.query(By.directive(panelType));
+      const http = TestBed.inject(HttpTestingController);
+      panel.componentInstance.onPageChange({ pageIndex: 1, pageSize: 10, length: 20 });
+      const pending = http.expectOne(request => request.url.includes('/workspace/5/'));
+      TestBed.inject(AppService).selectedWorkspaceId = 6;
+      const currentResult = {
+        status: 'failed' as const,
+        timestamp: 2,
+        details: {
+          data: [{
+            responseId: 6, fileName: 'CURRENT_WORKSPACE', variableId: 'v', value: 'x'
+          }],
+          total: 1,
+          page: 1,
+          limit: 10
+        }
+      };
+      state.setValidationResult(6, type, currentResult);
+      const current = TestBed.createComponent(ValidationDialogComponent);
+      current.autoDetectChanges();
+      await current.whenStable();
+      try {
+        const currentPanel = current.debugElement.query(By.directive(panelType));
+        expect(currentPanel.nativeElement.textContent).toContain('CURRENT_WORKSPACE');
+        pending.flush({
+          data: [{
+            responseId: 5, fileName: 'OLD_WORKSPACE', variableId: 'v', value: 'y'
+          }],
+          total: 20,
+          page: 2,
+          limit: 10
+        });
+        await current.whenStable();
+        expect(currentPanel.nativeElement.textContent).toContain('CURRENT_WORKSPACE');
+        expect(currentPanel.nativeElement.textContent).not.toContain('OLD_WORKSPACE');
+        expect(state.getAllValidationResults(6)[type]).toEqual(currentResult);
+        expect(state.getAllValidationResults(5)[type].details).toMatchObject({ page: 2 });
+        http.verify();
+      } finally {
+        current.destroy();
+      }
+    });
+
     it.each(['error', 'success'] as const)('releases the table after delayed page %s in the real dialog', async outcome => {
       state.setValidationResult(5, type, {
         status: 'failed',

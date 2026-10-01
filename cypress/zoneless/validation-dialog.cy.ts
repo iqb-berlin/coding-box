@@ -76,6 +76,31 @@ describe('Zoneless validation dialog in the browser', () => {
     cy.then(() => { expect(unexpectedRequests, 'all API calls have explicit fixtures').to.deep.equal([]); });
   });
 
+  for (const selector of ['variables', 'variable-types', 'response-status']) {
+    it(`opens delayed XML from ${selector} and resets the copy confirmation`, () => {
+      cy.intercept('GET', '**/api/admin/workspace/5/unit/UNIT_ZL/content', {
+        delay: 400, body: { content: '<Unit id="SYNTHETIC_XML"/>' }
+      }).as('unitXml');
+      cy.get(`coding-box-${selector}-validation-panel`).as('panel');
+      cy.get('@panel').find('mat-expansion-panel-header').first().click();
+      cy.get('@panel').contains('button', 'Details anzeigen').click();
+      cy.get('@panel').contains('a', 'UNIT_ZL').click();
+      cy.wait('@unitXml');
+      cy.get('coding-box-content-dialog').should('contain.text', 'SYNTHETIC_XML');
+      cy.document().then(doc => {
+        cy.stub(doc, 'execCommand').callsFake(command => {
+          expect(command).to.equal('copy');
+          expect((doc.activeElement as HTMLTextAreaElement).value).to.equal('<Unit id="SYNTHETIC_XML"/>');
+          return true;
+        }).as('clipboardWrite');
+      });
+      cy.get('coding-box-xml-viewer').contains('button', 'content_copy').click();
+      cy.get('@clipboardWrite').should('have.been.calledOnce');
+      cy.get('coding-box-xml-viewer').contains('button', 'done').should('be.visible');
+      cy.get('coding-box-xml-viewer').contains('button', 'content_copy').should('be.visible');
+    });
+  }
+
   for (const panel of exportPanels) {
     it(`downloads the actual ${panel.type} CSV after an export error and retry`, () => {
       let attempts = 0;

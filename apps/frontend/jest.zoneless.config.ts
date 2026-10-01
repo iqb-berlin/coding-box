@@ -5,6 +5,9 @@ export default {
   displayName: 'frontend-zoneless',
   setupFilesAfterEnv: ['<rootDir>/src/test-setup-zoneless.ts'],
   testMatch: [
+    '<rootDir>/src/app/ws-admin/components/files-validation-result/files-validation.component.spec.ts',
+    '<rootDir>/src/app/ws-admin/components/test-results/test-results.component.spec.ts',
+    '<rootDir>/src/app/components/home/home.component.spec.ts',
     '<rootDir>/src/app/coding/components/my-coding-jobs/my-coding-jobs.component.spec.ts',
     '<rootDir>/src/app/coding/components/coding-management-manual/coding-management-manual.component.spec.ts',
     '<rootDir>/src/app/coding/components/coding-management/coding-management.component.spec.ts',

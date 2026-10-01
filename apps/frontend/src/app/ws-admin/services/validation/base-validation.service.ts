@@ -67,8 +67,7 @@ export abstract class BaseValidationService<TResult> {
   /**
    * Retrieves the results of a completed validation task
    */
-  protected getResults(taskId: number): Observable<TResult> {
-    const workspaceId = this.appService.selectedWorkspaceId;
+  protected getResults(taskId: number, workspaceId = this.appService.selectedWorkspaceId): Observable<TResult> {
     return this.validationService.getValidationResults(
       workspaceId,
       taskId
@@ -78,8 +77,7 @@ export abstract class BaseValidationService<TResult> {
   /**
    * Saves validation results to the state service
    */
-  protected saveResult(result: TResult): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
+  protected saveResult(result: TResult, workspaceId = this.appService.selectedWorkspaceId): void {
     this.validationTaskStateService.setValidationResult(
       workspaceId,
       this.validationType as
@@ -111,8 +109,7 @@ export abstract class BaseValidationService<TResult> {
   /**
    * Stores the task details in the state service
    */
-  protected storeTaskId(task: ValidationTaskDto): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
+  protected storeTaskId(task: ValidationTaskDto, workspaceId = this.appService.selectedWorkspaceId): void {
     this.validationTaskStateService.setTaskId(
       workspaceId,
       this.validationType as
@@ -227,16 +224,17 @@ export abstract class BaseValidationService<TResult> {
   }
 
   validate(...args: unknown[]): Observable<TResult> {
+    const workspaceId = this.appService.selectedWorkspaceId;
     return this.createTask(
       this.validationType,
       ...(args as [number?, number?, Record<string, unknown>?])
     ).pipe(
-      tap((task: ValidationTaskDto) => this.storeTaskId(task)),
-      switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
-      switchMap(finalTask => this.getResults(finalTask.id)),
+      tap((task: ValidationTaskDto) => this.storeTaskId(task, workspaceId)),
+      switchMap((task: ValidationTaskDto) => this.handleTaskResult(task, workspaceId)),
+      switchMap(finalTask => this.getResults(finalTask.id, workspaceId)),
       tap(result => {
-        this.saveResult(result);
-        this.removeTaskId();
+        this.saveResult(result, workspaceId);
+        this.removeTaskId(workspaceId);
       })
     );
   }

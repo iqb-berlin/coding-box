@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
-  ChangeDetectorRef, Component,
+  ChangeDetectorRef, Component, DestroyRef,
   EventEmitter,
   Input,
   OnChanges,
@@ -11,6 +11,7 @@ import {
   SimpleChanges,
   inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MatTableModule } from '@angular/material/table';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -33,6 +34,7 @@ import {
   debounceTime,
   of,
   shareReplay,
+  finalize,
   tap
 } from 'rxjs';
 import { FileService } from '../../../shared/services/file/file.service';
@@ -211,6 +213,7 @@ const SPECIFIC_LOG_MEDIA_FILTERS: FlatTableMediaFilter[] = [
   styleUrls: ['./test-results-flat-table.component.scss']
 })
 export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
   private readonly changeDetectorRef = inject(ChangeDetectorRef);
 
   private fileService = inject(FileService);
@@ -923,6 +926,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       return;
     }
 
+    const workspaceId = this.appService.selectedWorkspaceId;
     const normalizedBookletId = String(row.booklet).toUpperCase();
 
     const loadingSnackBar = this.snackBar.open(
@@ -932,9 +936,11 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     );
 
     this.fileService
-      .getBookletInfo(this.appService.selectedWorkspaceId, normalizedBookletId)
+      .getBookletInfo(workspaceId, normalizedBookletId)
+      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => loadingSnackBar.dismiss()))
       .subscribe({
         next: bookletInfo => {
+          if (this.appService.selectedWorkspaceId !== workspaceId) return;
           loadingSnackBar.dismiss();
 
           this.dialog.open(BookletInfoDialogComponent, {
@@ -949,6 +955,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
           });
         },
         error: () => {
+          if (this.appService.selectedWorkspaceId !== workspaceId) return;
           loadingSnackBar.dismiss();
           this.snackBar.open(
             'Fehler beim Laden der Testheft-Informationen',
@@ -960,12 +967,14 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   }
 
   openUnitInfoFromFlatRow(row: FlatResponseRow): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
     if (!this.appService.selectedWorkspaceId) {
       return;
     }
 
-    this.getPersonTestResults(row.personId).subscribe({
+    this.getPersonTestResults(row.personId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: booklets => {
+        if (this.appService.selectedWorkspaceId !== workspaceId) return;
         const booklet = (booklets || []).find(b => b.name === row.booklet);
         if (!booklet) {
           this.snackBar.open('Testheft nicht gefunden', 'Info', {
@@ -991,9 +1000,11 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         );
 
         this.fileService
-          .getUnitInfo(this.appService.selectedWorkspaceId, unitFileId)
+          .getUnitInfo(workspaceId, unitFileId)
+          .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => loadingSnackBar.dismiss()))
           .subscribe({
             next: unitInfo => {
+              if (this.appService.selectedWorkspaceId !== workspaceId) return;
               loadingSnackBar.dismiss();
 
               this.dialog.open(UnitInfoDialogComponent, {
@@ -1008,6 +1019,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
               });
             },
             error: () => {
+              if (this.appService.selectedWorkspaceId !== workspaceId) return;
               loadingSnackBar.dismiss();
               this.snackBar.open(
                 'Fehler beim Laden der Aufgaben-Informationen',
@@ -1018,6 +1030,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
           });
       },
       error: () => {
+        if (this.appService.selectedWorkspaceId !== workspaceId) return;
         this.snackBar.open(
           'Fehler beim Laden der Aufgaben-Informationen',
           'Fehler',

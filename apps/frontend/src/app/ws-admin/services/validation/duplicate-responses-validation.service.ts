@@ -23,7 +23,7 @@ export class DuplicateResponsesValidationService extends BaseValidationService<D
     return this.validationService
       .createDeleteResponsesTask(workspaceId, responseIdsToDelete)
       .pipe(
-        tap((task: ValidationTaskDto) => this.storeTaskId(task)),
+        tap((task: ValidationTaskDto) => this.storeTaskId(task, workspaceId)),
         switchMap((task: ValidationTaskDto) => this.trackMutation(task, workspaceId))
       );
   }
@@ -39,7 +39,7 @@ export class DuplicateResponsesValidationService extends BaseValidationService<D
         this.validationType as 'duplicateResponses'
       )
       .pipe(
-        tap((task: ValidationTaskDto) => this.storeTaskId(task)),
+        tap((task: ValidationTaskDto) => this.storeTaskId(task, workspaceId)),
         switchMap((task: ValidationTaskDto) => this.trackMutation(task, workspaceId))
       );
   }
@@ -71,7 +71,7 @@ export class DuplicateResponsesValidationService extends BaseValidationService<D
     const workspaceId = this.appService.selectedWorkspaceId;
     return this.validationService
       .validateDuplicateResponses(workspaceId, page, limit)
-      .pipe(tap(result => this.saveResult(result)));
+      .pipe(tap(result => this.saveResult(result, workspaceId)));
   }
 
   /**

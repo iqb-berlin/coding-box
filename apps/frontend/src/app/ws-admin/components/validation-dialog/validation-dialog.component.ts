@@ -153,7 +153,7 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
   showUnitXml(fileName: string): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
-    this.fileService.getUnitContentXml(workspaceId, fileName).subscribe(xmlContent => {
+    const subscription = this.fileService.getUnitContentXml(workspaceId, fileName).subscribe(xmlContent => {
       if (!xmlContent) {
         this.snackBar.open(
           `Fehler beim Abrufen der Unit-XML für ${fileName}`,
@@ -173,6 +173,7 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
         }
       });
     });
+    this.subscriptions.push(subscription);
   }
 
   /**

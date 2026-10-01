@@ -2,15 +2,18 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  DestroyRef,
   inject,
   OnInit
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { firstValueFrom, of, timer } from 'rxjs';
 import {
   filter,
   finalize,
   switchMap,
   take,
+  takeUntil,
   tap
 } from 'rxjs/operators';
 import { MetadataResolver } from '@iqb/metadata-resolver';
@@ -182,6 +185,7 @@ type FilesValidationView = Omit<FilesValidation, ValidationSectionKey> & {
 export class FilesValidationDialogComponent implements OnInit {
   dialogRef = inject<MatDialogRef<FilesValidationDialogComponent>>(MatDialogRef);
   private dialog = inject(MatDialog);
+  private readonly destroyRef = inject(DestroyRef);
   private cdr = inject(ChangeDetectorRef);
 
   data = inject<{
@@ -1517,6 +1521,10 @@ export class FilesValidationDialogComponent implements OnInit {
     this.fileService.getBookletInfo(
       this.data.workspaceId,
       normalizedBookletId
+    ).pipe(
+      takeUntil(this.dialogRef.beforeClosed()),
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => loadingSnackBar.dismiss())
     ).subscribe({
       next: (bookletInfo: unknown) => {
         loadingSnackBar.dismiss();
@@ -1559,6 +1567,10 @@ export class FilesValidationDialogComponent implements OnInit {
     this.fileService.getUnitInfo(
       this.data.workspaceId,
       unitId
+    ).pipe(
+      takeUntil(this.dialogRef.beforeClosed()),
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => loadingSnackBar.dismiss())
     ).subscribe({
       next: (unitInfo: unknown) => {
         loadingSnackBar.dismiss();
@@ -1599,6 +1611,10 @@ export class FilesValidationDialogComponent implements OnInit {
     this.fileService.getCodingSchemeFile(
       this.data.workspaceId,
       schemeId
+    ).pipe(
+      takeUntil(this.dialogRef.beforeClosed()),
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => loadingSnackBar.dismiss())
     ).subscribe({
       next: (fileDownload: { base64Data: string; filename: string } | null) => {
         loadingSnackBar.dismiss();
@@ -1660,6 +1676,7 @@ export class FilesValidationDialogComponent implements OnInit {
     }
 
     this.fileService.getTestTakerContentXml(this.data.workspaceId, testTakerId)
+      .pipe(takeUntil(this.dialogRef.beforeClosed()), takeUntilDestroyed(this.destroyRef))
       .subscribe((xmlContent: string | null) => {
         if (xmlContent) {
           this.dialog.open(ContentDialogComponent, {

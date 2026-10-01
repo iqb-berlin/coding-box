@@ -10,7 +10,9 @@ import { TranslateModule } from '@ngx-translate/core';
 import {
   catchError, forkJoin, of
 } from 'rxjs';
-import { ActivatedRoute, Params, Router } from '@angular/router';
+import {
+  ActivatedRoute, NavigationStart, Params, Router
+} from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService, AuthBootstrapStatus } from '../../core/services/app.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -59,10 +61,14 @@ export class HomeComponent implements OnInit {
   authBootstrapStatus: AuthBootstrapStatus = 'checking';
   private isPersonalCodingJobsRedirectChecked = false;
   private authDataRefreshRequested = false;
+  private navigationStarted = false;
   private authDataFailedQueryParamActive = false;
   private authDataFailedMessageShown = false;
 
   ngOnInit(): void {
+    this.router.events.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(event => {
+      if (event instanceof NavigationStart) this.navigationStarted = true;
+    });
     this.appService.authData$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((authData: AuthDataDto) => {
       if (authData) {
         this.authData = authData;
@@ -102,7 +108,7 @@ export class HomeComponent implements OnInit {
 
   private refreshHomeAuthData(): void {
     this.appService.refreshAuthData().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
-      if (!this.isPersonalCodingJobsRedirectChecked &&
+      if (!this.navigationStarted && !this.isPersonalCodingJobsRedirectChecked &&
         this.authData.userId > 0 &&
         !this.authData.isAdmin) {
         this.redirectPureCoderToPersonalCodingJobs(this.authData.userId);
@@ -121,7 +127,7 @@ export class HomeComponent implements OnInit {
     const observables = workspaceIds.map(workspaceId => this.userService.getUsers(workspaceId));
 
     forkJoin(observables).pipe(catchError(() => of(null)), takeUntilDestroyed(this.destroyRef)).subscribe(responses => {
-      if (!responses) {
+      if (this.navigationStarted || !responses) {
         return;
       }
 

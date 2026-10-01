@@ -26,6 +26,7 @@ describe('TestResultsFlatTableComponent', () => {
   let snackBar: { open: jest.Mock };
   let testResultService: {
     getFlatResponses: jest.Mock;
+    getPersonTestResults: jest.Mock;
     getFlatResponseFilterOptions: jest.Mock;
     getFlatResponseFrequencies: jest.Mock;
     workspaceCacheInvalidated$: Subject<number>;
@@ -52,6 +53,7 @@ describe('TestResultsFlatTableComponent', () => {
       open: jest.fn().mockReturnValue({ dismiss: jest.fn() })
     };
     testResultService = {
+      getPersonTestResults: jest.fn().mockReturnValue(of([{ name: 'BOOKLET', units: [{ id: 10, name: 'UNIT' }] }])),
       getFlatResponses: jest.fn().mockReturnValue(of({
         data: [],
         total: 0,
@@ -71,7 +73,7 @@ describe('TestResultsFlatTableComponent', () => {
       ],
       providers: [
         provideZonelessChangeDetection(),
-        { provide: FileService, useValue: {} },
+        { provide: FileService, useValue: { getBookletInfo: jest.fn().mockReturnValue(of({})), getUnitInfo: jest.fn().mockReturnValue(of({})) } },
         {
           provide: UnitNoteService,
           useValue: {
@@ -454,5 +456,43 @@ describe('TestResultsFlatTableComponent', () => {
     await fixture.whenStable();
     expect(fixture.nativeElement.querySelector('mat-spinner')).toBeNull();
     expect(fixture.nativeElement.textContent).toContain('Keine Ergebnisse gefunden');
+  });
+  it.each(['booklet', 'unit-person', 'unit-info'].flatMap(stage => ['destroy', 'workspace'].flatMap(end => ['success', 'error'].map(outcome => ({ stage, end, outcome })))))('ignores delayed $stage $outcome after $end', async ({ stage, end, outcome }) => {
+    const response = new Subject<unknown>();
+    const files = TestBed.inject(FileService) as unknown as { getBookletInfo: jest.Mock; getUnitInfo: jest.Mock };
+    if (stage === 'booklet') files.getBookletInfo.mockReturnValue(response);
+    else if (stage === 'unit-person') testResultService.getPersonTestResults.mockReturnValue(response);
+    else files.getUnitInfo.mockReturnValue(response);
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    const row = {
+      bookletId: 1,
+      responseId: 1,
+      unitId: 10,
+      personId: 20,
+      code: '',
+      group: '',
+      login: '',
+      booklet: 'BOOKLET',
+      unit: 'UNIT',
+      response: 'v',
+      responseStatus: '',
+      responseValue: '',
+      tags: []
+    };
+    if (stage === 'booklet') component.openBookletInfoFromFlatRow(row);
+    else component.openUnitInfoFromFlatRow(row);
+    const loading = snackBar.open.mock.results.at(-1)?.value;
+    if (end === 'destroy') fixture.destroy();
+    else TestBed.inject(AppService).selectedWorkspaceId = 2;
+    if (outcome === 'error') response.error(new Error('Synthetic error'));
+    else {
+      response.next(stage === 'unit-person' ? [{ name: 'BOOKLET', units: [{ id: 10, name: 'UNIT' }] }] : {});
+      response.complete();
+    }
+    expect(snackBar.open).toHaveBeenCalledTimes(stage === 'unit-person' ? 0 : 1);
+    if (stage !== 'unit-person') expect(loading.dismiss).toHaveBeenCalled();
+    expect(TestBed.inject(MatDialog).open).not.toHaveBeenCalled();
+    if (stage === 'unit-person') expect(files.getUnitInfo).not.toHaveBeenCalled();
   });
 });

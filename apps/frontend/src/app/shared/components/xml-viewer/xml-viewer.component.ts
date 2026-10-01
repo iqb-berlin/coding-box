@@ -1,6 +1,8 @@
 import { Clipboard } from '@angular/cdk/clipboard';
 
-import { Component, Input, OnChanges } from '@angular/core';
+import {
+  ChangeDetectorRef, Component, Input, OnChanges, OnDestroy, inject
+} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -23,7 +25,7 @@ type XmlFormatResult = {
   templateUrl: './xml-viewer.component.html',
   styleUrls: ['./xml-viewer.component.scss']
 })
-export class XmlViewerComponent implements OnChanges {
+export class XmlViewerComponent implements OnChanges, OnDestroy {
   @Input() xml: string | null | undefined = '';
 
   formattedXml = '';
@@ -33,6 +35,8 @@ export class XmlViewerComponent implements OnChanges {
 
   private readonly indentUnit = '  ';
   private rawXml = '';
+  private copyResetTimer?: number;
+  private readonly cdr = inject(ChangeDetectorRef);
 
   constructor(private clipboard: Clipboard) {}
 
@@ -49,12 +53,19 @@ export class XmlViewerComponent implements OnChanges {
     this.lineWrap = !this.lineWrap;
   }
 
+  ngOnDestroy(): void {
+    window.clearTimeout(this.copyResetTimer);
+  }
+
   copyToClipboard(): void {
+    window.clearTimeout(this.copyResetTimer);
     this.copySucceeded = this.clipboard.copy(this.rawXml);
 
     if (this.copySucceeded) {
-      window.setTimeout(() => {
+      this.copyResetTimer = window.setTimeout(() => {
         this.copySucceeded = false;
+        this.copyResetTimer = undefined;
+        this.cdr.markForCheck();
       }, 1500);
     }
   }

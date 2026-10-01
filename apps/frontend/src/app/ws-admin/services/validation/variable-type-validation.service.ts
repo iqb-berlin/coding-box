@@ -30,7 +30,7 @@ export class VariableTypeValidationService extends BaseValidationService<Variabl
     return this.validationService
       .createDeleteResponsesTask(workspaceId, responseIds)
       .pipe(
-        tap((task: ValidationTaskDto) => this.storeTaskId(task)),
+        tap((task: ValidationTaskDto) => this.storeTaskId(task, workspaceId)),
         switchMap((task: ValidationTaskDto) => this.trackMutation(task, workspaceId))
       );
   }
@@ -46,7 +46,7 @@ export class VariableTypeValidationService extends BaseValidationService<Variabl
         this.validationType as 'variableTypes'
       )
       .pipe(
-        tap((task: ValidationTaskDto) => this.storeTaskId(task)),
+        tap((task: ValidationTaskDto) => this.storeTaskId(task, workspaceId)),
         switchMap((task: ValidationTaskDto) => this.trackMutation(task, workspaceId))
       );
   }
@@ -78,7 +78,7 @@ export class VariableTypeValidationService extends BaseValidationService<Variabl
     const workspaceId = this.appService.selectedWorkspaceId;
     return this.validationService
       .validateVariableTypes(workspaceId, page, limit)
-      .pipe(tap(result => this.saveResult(result)));
+      .pipe(tap(result => this.saveResult(result, workspaceId)));
   }
 
   /**

@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClient } from '@angular/common/http';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, NavigationStart, Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   BehaviorSubject, Observable, Subject, of, throwError
@@ -75,6 +75,7 @@ describe('HomeComponent', () => {
   let snackBarOpen: jest.Mock;
   let routerNavigate: jest.Mock;
   let getUsers: jest.Mock;
+  let routerEvents: Subject<NavigationStart>;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -84,6 +85,7 @@ describe('HomeComponent', () => {
     snackBarOpen = jest.fn();
     routerNavigate = jest.fn();
     getUsers = jest.fn();
+    routerEvents = new Subject<NavigationStart>();
     mockActivatedRoute.queryParams = queryParamsSubject.asObservable();
     mockAppService.authBootstrapStatus$ = authStatusSubject.asObservable();
     mockAppService.authData$ = authDataSubject.asObservable();
@@ -114,7 +116,7 @@ describe('HomeComponent', () => {
             navigate: routerNavigate,
             createUrlTree: jest.fn().mockReturnValue({}),
             serializeUrl: jest.fn().mockReturnValue('/workspace-admin/11'),
-            events: of({})
+            events: routerEvents.asObservable()
           }
         },
         provideHttpClient(),
@@ -128,6 +130,26 @@ describe('HomeComponent', () => {
     component = fixture.componentInstance;
     fixture.detectChanges();
   }
+
+  it.each(['rights', 'refresh'])('does not redirect after navigation starts during pending %s', async pending => {
+    const rights = new Subject<{ id: number; accessLevel: number; canCode: boolean }[]>();
+    const refresh = new Subject<AuthDataRefreshOutcome>();
+    getUsers.mockReturnValue(rights);
+    if (pending === 'refresh') mockAppService.refreshAuthData.mockReturnValue(refresh);
+    authDataSubject.next({
+      ...defaultAuthData,
+      userId: 7,
+      workspaces: [{ id: 11 } as WorkspaceFullDto]
+    });
+    createComponent();
+    routerEvents.next(new NavigationStart(2, '/workspace-admin/11/test-results'));
+    refresh.next('updated');
+    refresh.complete();
+    rights.next([{ id: 7, accessLevel: 1, canCode: true }]);
+    rights.complete();
+    await fixture.whenStable();
+    expect(routerNavigate).not.toHaveBeenCalledWith(['/coding']);
+  });
 
   it('should create', () => {
     createComponent();
