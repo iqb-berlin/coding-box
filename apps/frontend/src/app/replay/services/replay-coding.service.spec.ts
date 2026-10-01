@@ -908,6 +908,32 @@ describe('ReplayCodingService', () => {
       expect(service.notes.has(noteKey)).toBe(false);
     });
 
+    it('keeps the newest note visible while earlier saves are still pending', async () => {
+      const subjects: Subject<CodingJob>[] = [];
+      codingJobBackendServiceMock.saveCodingNotes.mockImplementation(() => {
+        const subject = new Subject<CodingJob>();
+        subjects.push(subject);
+        return subject.asObservable();
+      });
+      service.codingJobId = 100;
+
+      const firstSave = service.saveNotes(1, 'p1', 'u1', 'v1', 'P');
+      await Promise.resolve();
+      const secondSave = service.saveNotes(1, 'p1', 'u1', 'v1', 'Persisted live note');
+      expect(service.getNotes('p1', 'u1', 'v1')).toBe('Persisted live note');
+
+      subjects[0].next({} as CodingJob);
+      subjects[0].complete();
+      await firstSave;
+      await Promise.resolve();
+      expect(service.getNotes('p1', 'u1', 'v1')).toBe('Persisted live note');
+
+      subjects[1].next({} as CodingJob);
+      subjects[1].complete();
+      await secondSave;
+      expect(service.getNotes('p1', 'u1', 'v1')).toBe('Persisted live note');
+    });
+
     it('keeps note save errors until the failed note saves successfully', async () => {
       codingJobBackendServiceMock.saveCodingNotes
         .mockReturnValueOnce(throwError(() => new Error('note save failed')))
