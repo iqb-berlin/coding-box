@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { prepareAuthEnvironment } from './auth-environment.mjs';
+import { startLoopbackForwarders } from './loopback-forwarders.mjs';
 import {
   cleanupReplayWorkspaceFromState,
   redactReplayArtifactLog
@@ -22,13 +23,14 @@ const composeFile = path.join(scriptDir, 'docker-compose.replay.yml');
 const authMode = process.argv.includes('--auth');
 const zoneless = process.argv.includes('--zoneless');
 const production = process.argv.includes('--production');
-const connectHost = process.env.REPLAY_E2E_CONNECT_HOST || '127.0.0.1';
+const dockerConnectHost = process.env.REPLAY_E2E_CONNECT_HOST || '127.0.0.1';
+const connectHost = authMode ? '127.0.0.1' : dockerConnectHost;
 const publishHost = process.env.REPLAY_E2E_PUBLISH_HOST || '127.0.0.1';
-const [apiPort, frontendPort, keycloakPort] = await Promise.all([
-  reservePort(),
-  reservePort(),
-  reservePort()
-]);
+const [apiPort, frontendPort, keycloakPort, ...authDockerPorts] = await Promise.all(
+  Array.from({ length: authMode ? 6 : 3 }, () => reservePort())
+);
+const [dockerApiPort, dockerFrontendPort, dockerKeycloakPort] = authMode ?
+  authDockerPorts : [apiPort, frontendPort, keycloakPort];
 const jwtSecret = randomBytes(48).toString('hex');
 const compose = await findComposeCommand();
 
@@ -40,8 +42,9 @@ const authEnvironment = authMode ? await prepareAuthEnvironment(runDir, keycloak
 const replayEnvironment = {
   ...process.env,
   ...authEnvironment,
+  REPLAY_E2E_CONNECT_HOST: connectHost,
   REPLAY_E2E_FRONTEND_CONFIGURATION: production ? 'production' : (zoneless ? 'zoneless' : 'development'),
-  REPLAY_E2E_API_PORT: String(apiPort),
+  REPLAY_E2E_API_PORT: String(dockerApiPort),
   REPLAY_E2E_API_URL: `http://${connectHost}:${apiPort}`,
   REPLAY_E2E_BASE_URL: `http://${connectHost}:${frontendPort}`,
   REPLAY_E2E_PUBLISH_HOST: publishHost,
@@ -54,7 +57,8 @@ const replayEnvironment = {
     'replay-datasets',
     'two-person-multipage'
   ),
-  REPLAY_E2E_FRONTEND_PORT: String(frontendPort),
+  REPLAY_E2E_FRONTEND_PORT: String(dockerFrontendPort),
+  REPLAY_E2E_KEYCLOAK_PORT: String(dockerKeycloakPort),
   REPLAY_E2E_JWT_SECRET: jwtSecret,
   REPLAY_E2E_REDIS_PREFIX: `replay-e2e:${runId}`,
   REPLAY_E2E_REPO_DIR: repoDir,
@@ -63,7 +67,16 @@ const replayEnvironment = {
 };
 
 let exitCode = 1;
+let forwarders;
 try {
+  if (authMode) {
+    forwarders = await startLoopbackForwarders(dockerConnectHost,
+      [
+        { localPort: apiPort, remotePort: dockerApiPort },
+        { localPort: frontendPort, remotePort: dockerFrontendPort },
+        { localPort: keycloakPort, remotePort: dockerKeycloakPort }
+      ]);
+  }
   await run(
     compose.command,
     [
@@ -136,6 +149,11 @@ try {
     true
   ).catch((error) => {
     process.stderr.write(`Replay stack cleanup failed: ${error.message}\n`);
+    exitCode = 1;
+  });
+
+  await forwarders?.close().catch(error => {
+    process.stderr.write(`Auth loopback forwarding cleanup failed: ${error.message}\n`);
     exitCode = 1;
   });
 

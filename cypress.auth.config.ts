@@ -4,6 +4,7 @@ import { expireAuthSession } from './scripts/e2e/replay/auth-fixture.mjs';
 
 export default defineConfig({
   video: false,
+  retries: 0,
   screenshotsFolder: 'cypress/replay-artifacts/screenshots',
   defaultCommandTimeout: 30_000,
   requestTimeout: 30_000,
@@ -16,6 +17,8 @@ export default defineConfig({
       const harness = createReplayHarness(process.env);
       on('task', {
         'coding:setup': () => harness.setup(),
+        'coding:read-file-settings': () => harness.readFileSettings(),
+        'coding:prepare-file-settings': () => harness.prepareFileSettings(),
         'coding:expire-session': () => expireAuthSession(),
         'coding:cleanup': () => harness.cleanup()
       });

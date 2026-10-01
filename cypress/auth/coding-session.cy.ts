@@ -33,6 +33,10 @@ describe('real Keycloak coding session', () => {
     cy.intercept('GET', '**/realms/coding-e2e/account').as('profile');
     cy.intercept('GET', '**/api/auth-data*').as('authData');
     cy.visit('/');
+    cy.window().then(win => {
+      expect(win.isSecureContext, 'Keycloak requires a secure browser context').to.equal(true);
+      expect(win.crypto.subtle, 'native Web Crypto').to.exist;
+    });
     cy.get('.login-button').click();
     cy.origin(
       setup.keycloakUrl,
@@ -719,4 +723,147 @@ describe('real Keycloak coding session', () => {
     cy.get('coding-box-ws-settings .database-export-card .export-progress')
       .should('not.exist');
   });
+
+  for (const role of [
+    ...[0, 1, 2, 3].map(accessLevel => ({ username: `file-access-${accessLevel}`, accessLevel, isAdmin: false })),
+    { username: 'file-access-admin', accessLevel: 0, isAdmin: true },
+    { username: 'coding-e2e', accessLevel: 3, isAdmin: true }
+  ]) {
+    it(`verifies persisted file settings and backend access for ${role.username}`, () => {
+      let roleToken = '';
+      let fileRequests = 0;
+      let configRequests = 0;
+      let releaseRegex: (() => void) | undefined;
+      let releaseConfig: (() => void) | undefined;
+      const allowed = role.isAdmin || role.accessLevel >= 3;
+      const api = (method: 'GET' | 'POST' | 'PUT', route: string, body?: Record<string, unknown>) => (
+        cy.then(() => cy.request({
+          method, url: `${setup.apiUrl}/api${route}`,
+          headers: { authorization: `Bearer ${roleToken}` },
+          body, log: false, failOnStatusCode: false
+        }))
+      );
+      cy.task('coding:prepare-file-settings', null, { log: false });
+      cy.intercept('POST', '**/realms/coding-e2e/protocol/openid-connect/token').as('fileRoleToken');
+      cy.intercept('GET', '**/api/auth-data*', request => {
+        delete request.headers['if-none-match'];
+        request.continue();
+      }).as('fileRoleAuth');
+      cy.visit('/');
+      cy.get('.login-button').click();
+      cy.origin(setup.keycloakUrl, { args: { username: role.username, password: setup.password } },
+        ({ username, password }) => {
+          cy.get('#username').type(username);
+          cy.get('#password').type(password, { log: false });
+          cy.get('#kc-login').click();
+        });
+      cy.wait('@fileRoleToken', { log: false }).then(({ response }) => {
+        expect(response?.statusCode).to.equal(200);
+        roleToken = response?.body.access_token;
+      });
+      cy.wait('@fileRoleAuth', { log: false }).then(({ response }) => {
+        expect(response?.statusCode).to.equal(200);
+        expect(response?.body.isAdmin).to.equal(role.isAdmin);
+      });
+      cy.get('coding-box-home').should('be.visible');
+      cy.window().should('not.have.property', 'Zone');
+
+      // These calls go directly to the real backend; browser intercepts below only hold real responses.
+      api('GET', `/admin/workspace/${setup.workspaceId}/files?page=1&limit=100`).then(({ status, body }) => {
+        expect(status).to.equal(allowed ? 200 : 401);
+        if (allowed) expect(body.data.some((file: { filename: string }) => file.filename === 'UNIT-REPLAY.xml')).to.equal(true);
+      });
+      api('GET', `/admin/workspace/${setup.workspaceId}/content-pool/config`).then(({ status, body }) => {
+        expect(status).to.equal(allowed ? 200 : 401);
+        if (allowed) {
+          expect(body).to.include({ enabled: true, hasApplicationToken: true, baseUrl: 'https://synthetic.example.invalid' });
+          expect(body).not.to.have.property('applicationToken');
+        }
+      });
+      api('POST', `/workspace/${setup.workspaceId}/settings`, {
+        key: 'enable-regex-search', value: JSON.stringify({ enabled: false })
+      }).then(({ status }) => { expect(status).to.equal(allowed ? 201 : 401); });
+      api('GET', `/workspace/${setup.workspaceId}/settings/enable-regex-search`).then(({ status, body }) => {
+        expect(status).to.equal(role.isAdmin || role.accessLevel > 0 ? 200 : 401);
+        if (status === 200) expect(JSON.parse(body.value).enabled).to.equal(!allowed);
+      });
+      if (allowed) {
+        api('POST', `/workspace/${setup.workspaceId}/settings`, {
+          key: 'enable-regex-search', value: JSON.stringify({ enabled: true })
+        }).then(({ status }) => { expect(status).to.equal(201); });
+      }
+      api('PUT', '/admin/content-pool/settings', {
+        enabled: false, baseUrl: '', clearApplicationToken: true
+      }).then(({ status }) => { expect(status).to.equal(role.isAdmin ? 200 : 401); });
+      if (role.isAdmin) {
+        api('GET', `/admin/workspace/${setup.workspaceId}/content-pool/config`).then(({ body }) => {
+          expect(body).to.deep.equal({ enabled: false, baseUrl: '', hasApplicationToken: false });
+        });
+        api('PUT', '/admin/content-pool/settings', {
+          enabled: true, baseUrl: 'https://synthetic.example.invalid', applicationToken: 'file-settings-e2e-synthetic-token'
+        }).then(({ status }) => { expect(status).to.equal(200); });
+      }
+      cy.task('coding:read-file-settings', null, { log: false }).then(value => {
+        const stored = value as { regex: { enabled: boolean }; pool: { enabled: boolean; hasApplicationToken: boolean } };
+        expect(stored.regex.enabled).to.equal(true);
+        expect(stored.pool).to.include({ enabled: true, hasApplicationToken: true });
+      });
+
+      cy.intercept('GET', `**/workspace/${setup.workspaceId}/files?*`, request => {
+        fileRequests += 1;
+        delete request.headers['if-none-match'];
+        request.continue();
+      }).as('realRoleFiles');
+      cy.intercept('GET', `**/workspace/${setup.workspaceId}/settings/enable-regex-search`, request => (
+        new Cypress.Promise<void>(resolve => {
+          releaseRegex = () => {
+            delete request.headers['if-none-match'];
+            request.continue(); resolve();
+          };
+        })
+      )).as('realRoleRegex');
+      cy.intercept('GET', `**/workspace/${setup.workspaceId}/content-pool/config`, request => {
+        configRequests += 1;
+        return new Cypress.Promise<void>(resolve => {
+          releaseConfig = () => {
+            delete request.headers['if-none-match'];
+            request.continue(); resolve();
+          };
+        });
+      }).as('realRoleConfig');
+      cy.window().then(win => { win.location.hash = `/workspace-admin/${setup.workspaceId}/test-files`; });
+      if (allowed) {
+        cy.wait('@realRoleFiles').its('response.statusCode').should('equal', 200);
+        cy.get('coding-box-test-files mat-row').should('contain.text', 'UNIT-REPLAY.xml');
+        cy.get('coding-box-test-files').should('not.contain.text', 'ACP aus Content Pool');
+        cy.get('coding-box-test-files mat-row mat-checkbox input').first().check();
+        cy.get('coding-box-search-filter input').focus().type('[');
+        cy.wrap(null).should(() => {
+          expect(releaseRegex).to.be.a('function');
+          expect(releaseConfig).to.be.a('function');
+        });
+        cy.then(() => { releaseRegex?.(); });
+        cy.wait('@realRoleRegex').its('response.statusCode').should('equal', 200);
+        cy.get('coding-box-search-filter .regex-filter-error').should('be.visible');
+        cy.then(() => { releaseConfig?.(); });
+        cy.wait('@realRoleConfig').its('response.statusCode').should('equal', 200);
+        cy.get('coding-box-test-files').contains('a', 'ACP aus Content Pool').should('not.have.attr', 'aria-disabled', 'true');
+        cy.get('coding-box-test-files').contains('a', 'Auswahl zu Content Pool').should('not.have.attr', 'aria-disabled', 'true');
+        cy.then(() => {
+          expect(fileRequests).to.equal(1);
+          expect(configRequests).to.equal(1);
+        });
+      } else {
+        const destination = role.accessLevel === 1 ? '/coding/my-jobs' :
+          role.accessLevel === 2 ? '/coding/statistics' : 'auth=access-denied';
+        cy.location('hash').should('contain', destination);
+        cy.get('coding-box-test-files').should('not.exist');
+        cy.then(() => {
+          expect(fileRequests).to.equal(0);
+          expect(configRequests).to.equal(0);
+        });
+      }
+      cy.window().should('not.have.property', 'Zone');
+    });
+  }
 });

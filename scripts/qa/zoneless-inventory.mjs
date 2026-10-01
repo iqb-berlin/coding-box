@@ -146,7 +146,8 @@ if (process.argv.includes('--update')) {
       const unchanged = old?.fingerprint === entry.fingerprint;
       return { ...entry, review: unchanged ? old.review : { status: 'open', caller: '', roles: [], scenarios: {}, tests: [], evidence: [], reason: '' } };
     }) };
-  fs.writeFileSync(matrixFile, `${JSON.stringify(matrix, null, 2)}\n`);
+  // One inventory record per line keeps generated evidence out of lengthy PR diffs.
+  fs.writeFileSync(matrixFile, `{"schemaVersion":1,"scenarios":${JSON.stringify(requiredScenarios)},"entries":[\n${matrix.entries.map(entry => JSON.stringify(entry)).join(',\n')}\n]}\n`);
 } else {
   const currentIds = new Set(entries.map(entry => entry.id));
   const missing = entries.filter(entry => oldById.get(entry.id)?.fingerprint !== entry.fingerprint);
@@ -170,6 +171,37 @@ if (process.argv.includes('--update')) {
     if (incomplete.length) {
       console.error(`${incomplete.length} entries lack complete reviewed evidence; no zoneless approval.`);
       process.exitCode = 1;
+    }
+  }
+  if (process.argv.includes('--require-risk-coverage')) {
+    const argument = process.argv.indexOf('--risk-matrix');
+    const riskFile = argument >= 0 ? process.argv[argument + 1] : path.join(root, 'docs/qa/zoneless-risk-coverage.json');
+    const risk = JSON.parse(fs.readFileSync(riskFile, 'utf8'));
+    const areas = ['management', 'jobs', 'coding-replay', 'results-validation', 'files-exports-metadata', 'administration'];
+    const mechanisms = ['http', 'progress', 'ordering', 'lifecycle', 'timers-promises', 'browser-libraries', 'roles-persistence'];
+    const validTest = test => typeof test === 'string' && /\.(spec|cy)\.ts$/.test(test) && fs.existsSync(path.resolve(root, test));
+    const findings = [...new Set(fs.readFileSync(path.join(root, 'docs/qa/zoneless-audit.md'), 'utf8').match(/ZL-\d{3}/g))];
+    const coveredFindings = new Set((risk.areas || []).flatMap(area => area.findings || []));
+    const invalid = risk.schemaVersion !== 1 || risk.scope !== 'risk-based' ||
+      risk.areas?.length !== areas.length || areas.some(id => {
+        const matches = risk.areas?.filter(area => area.id === id) || [];
+        const area = matches[0];
+        return matches.length !== 1 || !area.name || !area.risk || !Array.isArray(area.tests) ||
+          !area.tests.length || area.tests.some(test => !validTest(test)) || !Array.isArray(area.findings);
+      }) || risk.mechanisms?.length !== mechanisms.length || mechanisms.some(id => {
+        const matches = risk.mechanisms?.filter(mechanism => mechanism.id === id) || [];
+        const mechanism = matches[0];
+        return matches.length !== 1 || !mechanism.evidence || !Array.isArray(mechanism.areas) ||
+          !mechanism.areas.length || mechanism.areas.some(area => !areas.includes(area));
+      }) || findings.some(id => !coveredFindings.has(id)) ||
+      !Array.isArray(risk.unresolvedFindings) || risk.unresolvedFindings.length > 0 ||
+      !Array.isArray(risk.residualLimits) || risk.residualLimits.length < 1 ||
+      risk.residualLimits.some(limit => typeof limit !== 'string' || !limit.trim());
+    if (invalid) {
+      console.error('Risk coverage lacks required areas, mechanisms, regression references or residual limits, or has unresolved findings.');
+      process.exitCode = 1;
+    } else {
+      console.log(`Risk coverage references verified: ${areas.length} areas, ${mechanisms.length} mechanisms, ${findings.length} corrected findings. Test execution and CI results are separate requirements.`);
     }
   }
 }

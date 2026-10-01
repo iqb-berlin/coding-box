@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import { findComposeContainer } from './compose-container.mjs';
+import { FILE_ACCESS_USERS } from './file-access-users.mjs';
 
 const exec = promisify(execFile);
 
@@ -37,6 +38,24 @@ export async function setupCodingFixture(state, environment) {
   if (!Number.isInteger(userId) || userId <= 0)
     throw new Error('Invalid coding fixture user id');
   await api(`/admin/users/${userId}/workspaces`, [workspaceId]);
+  for (const user of FILE_ACCESS_USERS) {
+    const fileUserId = Number(await api('/admin/users', {
+      username: user.username,
+      identity: user.identity,
+      issuer: config.issuer,
+      isAdmin: user.isAdmin
+    }));
+    if (!Number.isInteger(fileUserId) || fileUserId <= 0) {
+      throw new Error(`Invalid file access fixture user id for ${user.username}`);
+    }
+    if (user.accessLevel > 0) {
+      await api(`/admin/users/access/${workspaceId}`, [{
+        id: fileUserId,
+        accessLevel: user.accessLevel,
+        canCode: user.accessLevel === 1
+      }], 'PATCH');
+    }
+  }
 
   const scheme = {
     version: '3.4',

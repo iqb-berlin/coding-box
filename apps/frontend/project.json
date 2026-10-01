@@ -143,6 +143,13 @@
         }
       }
     },
+    "test-e2e-harness": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node --test scripts/e2e/replay/loopback-forwarders.test.mjs"
+      }
+    },
     "e2e-replay-live": {
       "executor": "nx:run-commands",
       "cache": false,
@@ -195,6 +202,13 @@
       }
     },
     "zoneless-approval": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/qa/zoneless-inventory.mjs --require-risk-coverage"
+      }
+    },
+    "zoneless-exhaustive-approval": {
       "executor": "nx:run-commands",
       "cache": false,
       "options": {

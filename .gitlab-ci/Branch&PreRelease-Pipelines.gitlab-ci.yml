@@ -474,6 +474,9 @@ test-frontend-zoneless:
         - apps/frontend/**/*
         - scripts/qa/**/*
         - docs/qa/**/*
+        - cypress/**/*
+        - cypress*.config.ts
+        - scripts/e2e/replay/**/*
         - api-dto/coding/**/*
         - package.json
         - package-lock.json
@@ -486,6 +489,9 @@ test-frontend-zoneless:
         - apps/frontend/**/*
         - scripts/qa/**/*
         - docs/qa/**/*
+        - cypress/**/*
+        - cypress*.config.ts
+        - scripts/e2e/replay/**/*
         - api-dto/coding/**/*
         - package.json
         - package-lock.json
@@ -521,6 +527,12 @@ test-browser-zoneless:
     paths:
       - cypress/screenshots
       - cypress/videos
+
+test-browser-production:
+  extends: test-browser-zoneless
+  script:
+    - npx cypress install
+    - npx nx run frontend:e2e --configuration=production --cypressConfig=cypress.zoneless.config.ts --browser=electron
 
 test-replay-live:
   stage: test-replay
@@ -590,6 +602,7 @@ test-replay-live:
 test-auth-live-zoneless:
   extends: test-replay-live
   script:
+    - npx nx run frontend:test-e2e-harness
     - npx nx run frontend:e2e-auth-live --configuration=zoneless
     - npx nx run frontend:e2e-auth-live --configuration=production
 
