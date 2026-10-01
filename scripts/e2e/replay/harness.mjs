@@ -494,7 +494,12 @@ async function pollExportJob(config, workspaceId, token, jobId) {
       `/admin/workspace/${workspaceId}/coding/export/job/${encodeURIComponent(jobId)}`,
       { token }
     );
-    if (lastStatus.status === 'failed' || lastStatus.status === 'completed') {
+    // The queue can expose the failed state before failedReason (and therefore
+    // the public diagnostic metadata) is visible through the status endpoint.
+    if (
+      lastStatus.status === 'completed' ||
+      (lastStatus.status === 'failed' && lastStatus.error)
+    ) {
       return lastStatus;
     }
     await new Promise((resolve) => setTimeout(resolve, 250));

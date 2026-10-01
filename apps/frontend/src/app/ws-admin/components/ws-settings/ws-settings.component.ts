@@ -1,6 +1,6 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import {
-  Component, inject, OnDestroy, OnInit
+  ChangeDetectorRef, Component, inject, OnDestroy, OnInit
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -91,6 +91,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
   private translateService = inject(TranslateService);
   private rawServerUrl = inject(SERVER_URL);
+  private changeDetector = inject(ChangeDetectorRef);
   private exportPollingSubscription: Subscription | null = null;
 
   authToken: string | null = null;
@@ -121,16 +122,19 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       this.workspaceSettingsService
         .getReplayUrlExportMode(workspaceId)
         .subscribe(mode => {
+          this.changeDetector.markForCheck();
           this.replayUrlExportMode = mode;
         });
       this.workspaceSettingsService
         .getAuthSessionIdleTimeoutMinutes(workspaceId)
         .subscribe(timeoutMinutes => {
+          this.changeDetector.markForCheck();
           this.authSessionIdleTimeoutMinutes = timeoutMinutes;
         });
       this.workspaceSettingsService
         .getEvaluationMode(workspaceId)
         .subscribe(enabled => {
+          this.changeDetector.markForCheck();
           this.evaluationMode = enabled;
           if (enabled) {
             this.applyEvaluationModeLocalPreset(true);
@@ -139,6 +143,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       this.workspaceSettingsService
         .getAutoFetchCodingStatistics(workspaceId)
         .subscribe(enabled => {
+          this.changeDetector.markForCheck();
           this.autoFetchCodingStatistics = this.evaluationMode ?
             false :
             enabled;
@@ -146,6 +151,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       this.workspaceSettingsService
         .getAutoRefreshManualCodingJobs(workspaceId)
         .subscribe(enabled => {
+          this.changeDetector.markForCheck();
           this.autoRefreshManualCodingJobs = this.evaluationMode ?
             false :
             enabled;
@@ -153,16 +159,19 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       this.workspaceSettingsService
         .getIncludeDeriveErrorInManualCoding(workspaceId)
         .subscribe(enabled => {
+          this.changeDetector.markForCheck();
           this.includeDeriveErrorInManualCoding = enabled;
         });
       this.workspaceSettingsService
         .getEnableRegexSearch(workspaceId)
         .subscribe(enabled => {
+          this.changeDetector.markForCheck();
           this.enableRegexSearch = enabled;
         });
       this.workspaceSettingsService
         .getShowTestResultsLogAnomalies(workspaceId)
         .subscribe(enabled => {
+          this.changeDetector.markForCheck();
           this.showTestResultsLogAnomalies = enabled;
         });
     }
@@ -215,6 +224,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: (authToken: string) => {
+          this.changeDetector.markForCheck();
           this.authToken = authToken;
           this.snackBar.open(
             this.translateService.instant(
@@ -225,6 +235,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
           );
         },
         error: () => {
+          this.changeDetector.markForCheck();
           this.snackBar.open(
             this.translateService.instant('ws-settings.token-generation-failed'),
             this.translateService.instant('close'),
@@ -260,6 +271,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   private loadWorkspaceTokenPolicy(workspaceId?: number): void {
     this.appService.getWorkspaceTokenPolicy().subscribe({
       next: policy => {
+        this.changeDetector.markForCheck();
         this.maxTokenDurationDays = this.getMaxTokenDurationDaysForScopes(
           policy,
           this.externalReplayTokenScopes
@@ -281,6 +293,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         this.maxTokenDurationDays
       )
       .subscribe(durationDays => {
+        this.changeDetector.markForCheck();
         this.replayUrlExportTokenDurationDays = durationDays;
       });
   }
@@ -323,6 +336,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         .setReplayUrlExportMode(workspaceId, mode)
         .subscribe({
           next: () => {
+            this.changeDetector.markForCheck();
             this.snackBar.open(
               this.translateService.instant(
                 'ws-settings.replay-url-export-mode-saved'
@@ -332,6 +346,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
             );
           },
           error: () => {
+            this.changeDetector.markForCheck();
             this.replayUrlExportMode = previousMode;
             this.snackBar.open(
               this.translateService.instant('ws-settings.error-saving-setting'),
@@ -369,6 +384,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: () => {
+          this.changeDetector.markForCheck();
           this.snackBar.open(
             this.translateService.instant(
               'ws-settings.replay-url-export-token-duration-saved'
@@ -378,6 +394,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
           );
         },
         error: () => {
+          this.changeDetector.markForCheck();
           this.snackBar.open(
             this.translateService.instant('ws-settings.error-saving-setting'),
             this.translateService.instant('close'),
@@ -412,6 +429,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: () => {
+          this.changeDetector.markForCheck();
           this.snackBar.open(
             this.translateService.instant(
               'ws-settings.auth-session-idle-timeout-saved'
@@ -421,6 +439,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
           );
         },
         error: () => {
+          this.changeDetector.markForCheck();
           this.snackBar.open(
             this.translateService.instant('ws-settings.error-saving-setting'),
             this.translateService.instant('close'),
@@ -465,6 +484,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         .setEvaluationMode(workspaceId, enabled)
         .subscribe({
           next: () => {
+            this.changeDetector.markForCheck();
             this.snackBar.open(
               enabled ?
                 this.translateService.instant(
@@ -478,6 +498,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
             );
           },
           error: () => {
+            this.changeDetector.markForCheck();
             this.evaluationMode = previousState.evaluationMode;
             this.autoFetchCodingStatistics =
               previousState.autoFetchCodingStatistics;
@@ -512,6 +533,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         )
         .subscribe({
           next: () => {
+            this.changeDetector.markForCheck();
             this.snackBar.open(
               this.autoFetchCodingStatistics ?
                 this.translateService.instant(
@@ -525,6 +547,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
             );
           },
           error: () => {
+            this.changeDetector.markForCheck();
             this.snackBar.open(
               this.translateService.instant('ws-settings.error-saving-setting'),
               this.translateService.instant('close'),
@@ -555,6 +578,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         )
         .subscribe({
           next: () => {
+            this.changeDetector.markForCheck();
             this.snackBar.open(
               this.autoRefreshManualCodingJobs ?
                 this.translateService.instant(
@@ -568,6 +592,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
             );
           },
           error: () => {
+            this.changeDetector.markForCheck();
             this.snackBar.open(
               this.translateService.instant('ws-settings.error-saving-setting'),
               this.translateService.instant('close'),
@@ -600,6 +625,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         )
         .subscribe({
           next: () => {
+            this.changeDetector.markForCheck();
             this.snackBar.open(
               this.includeDeriveErrorInManualCoding ?
                 this.translateService.instant(
@@ -613,6 +639,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
             );
           },
           error: () => {
+            this.changeDetector.markForCheck();
             this.snackBar.open(
               this.translateService.instant('ws-settings.error-saving-setting'),
               this.translateService.instant('close'),
@@ -637,6 +664,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         .setEnableRegexSearch(workspaceId, this.enableRegexSearch)
         .subscribe({
           next: () => {
+            this.changeDetector.markForCheck();
             this.snackBar.open(
               this.enableRegexSearch ?
                 this.translateService.instant(
@@ -650,6 +678,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
             );
           },
           error: () => {
+            this.changeDetector.markForCheck();
             this.snackBar.open(
               this.translateService.instant('ws-settings.error-saving-setting'),
               this.translateService.instant('close'),
@@ -676,6 +705,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         )
         .subscribe({
           next: () => {
+            this.changeDetector.markForCheck();
             this.snackBar.open(
               this.showTestResultsLogAnomalies ?
                 this.translateService.instant(
@@ -689,6 +719,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
             );
           },
           error: () => {
+            this.changeDetector.markForCheck();
             this.snackBar.open(
               this.translateService.instant('ws-settings.error-saving-setting'),
               this.translateService.instant('close'),
@@ -731,9 +762,11 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       .post<{ jobId: string; message: string }>(`${apiUrl}/job`, {}, { headers: authHeaders })
       .subscribe({
         next: ({ jobId }) => {
+          this.changeDetector.markForCheck();
           this.startExportPolling(workspaceId, jobId, authHeaders);
         },
         error: error => {
+          this.changeDetector.markForCheck();
           this.isExporting = false;
           const message = this.extractErrorMessage(
             error,
@@ -781,6 +814,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: state => {
+          this.changeDetector.markForCheck();
           this.databaseExportStatus = state.status;
           this.databaseExportProgress = Math.max(0, Math.min(100, Math.round(state.progress || 0)));
 
@@ -806,6 +840,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
           }
         },
         error: error => {
+          this.changeDetector.markForCheck();
           this.stopExportPolling();
           this.isExporting = false;
           const message = this.extractErrorMessage(
@@ -833,6 +868,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       })
       .subscribe({
         next: blob => {
+          this.changeDetector.markForCheck();
           this.saveBlob(
             blob,
             `workspace-${workspaceId}-export-${new Date().toISOString().split('T')[0]}.sqlite`
@@ -847,6 +883,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
           );
         },
         error: error => {
+          this.changeDetector.markForCheck();
           this.isExporting = false;
           this.databaseExportStatus = 'failed';
           this.databaseExportError = this.extractErrorMessage(

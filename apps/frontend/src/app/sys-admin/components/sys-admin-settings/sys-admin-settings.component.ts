@@ -1,6 +1,6 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import {
-  Component, OnDestroy, OnInit, SecurityContext, inject
+  ChangeDetectorRef, Component, OnDestroy, OnInit, SecurityContext, inject
 } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
@@ -65,6 +65,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private rawServerUrl = inject(SERVER_URL);
   private sanitizer = inject(DomSanitizer);
+  private changeDetector = inject(ChangeDetectorRef);
   private exportPollingSubscription: Subscription | null = null;
 
   selectedFile: File | null = null;
@@ -131,6 +132,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
 
     const reader = new FileReader();
     reader.onload = () => {
+      this.changeDetector.markForCheck();
       this.previewUrl = reader.result as string;
     };
     reader.readAsDataURL(this.selectedFile);
@@ -150,6 +152,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
 
     this.logoService.uploadLogo(this.selectedFile).subscribe({
       next: response => {
+        this.changeDetector.markForCheck();
         const newLogo: AppLogoDto = {
           data: response.path,
           alt: this.logoAltText,
@@ -161,6 +164,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
         this.isDefaultLogo = false;
         this.logoService.saveLogoSettings(newLogo).subscribe({
           next: settingsResponse => {
+            this.changeDetector.markForCheck();
             if (settingsResponse.success) {
               this.snackBar.open('Logo erfolgreich aktualisiert', 'Schließen', { duration: 3000 });
             } else {
@@ -169,12 +173,14 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
             this.resetFileInput();
           },
           error: () => {
+            this.changeDetector.markForCheck();
             this.snackBar.open('Logo aktualisiert, aber Fehler beim Speichern der Einstellungen', 'Schließen', { duration: 3000 });
             this.resetFileInput();
           }
         });
       },
       error: () => {
+        this.changeDetector.markForCheck();
         this.snackBar.open('Fehler beim Hochladen des Logos', 'Schließen', { duration: 3000 });
       }
     });
@@ -183,6 +189,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   resetToDefaultLogo(): void {
     this.logoService.deleteLogo().subscribe({
       next: response => {
+        this.changeDetector.markForCheck();
         if (response.success) {
           this.appService.appLogo = standardLogo;
           this.isDefaultLogo = true;
@@ -195,6 +202,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
         this.resetFileInput();
       },
       error: () => {
+        this.changeDetector.markForCheck();
         this.snackBar.open('Fehler beim Zurücksetzen des Logos', 'Schließen', { duration: 3000 });
       }
     });
@@ -210,6 +218,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
 
     this.logoService.saveLogoSettings(updatedLogo).subscribe({
       next: response => {
+        this.changeDetector.markForCheck();
         if (response.success) {
           this.snackBar.open('Alternativtext erfolgreich gespeichert', 'Schließen', { duration: 3000 });
         } else {
@@ -217,6 +226,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
         }
       },
       error: () => {
+        this.changeDetector.markForCheck();
         this.snackBar.open('Fehler beim Speichern des Alternativtexts', 'Schließen', { duration: 3000 });
       }
     });
@@ -231,6 +241,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     this.appService.appLogo = updatedLogo;
     this.logoService.saveLogoSettings(updatedLogo).subscribe({
       next: response => {
+        this.changeDetector.markForCheck();
         if (response.success) {
           this.snackBar.open('Hintergrundfarbe erfolgreich gespeichert', 'Schließen', { duration: 3000 });
         } else {
@@ -238,6 +249,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
         }
       },
       error: () => {
+        this.changeDetector.markForCheck();
         this.snackBar.open('Fehler beim Speichern der Hintergrundfarbe', 'Schließen', { duration: 3000 });
       }
     });
@@ -252,6 +264,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     this.appService.appLogo = updatedLogo;
     this.logoService.saveLogoSettings(updatedLogo).subscribe({
       next: response => {
+        this.changeDetector.markForCheck();
         if (response.success) {
           this.snackBar.open('Hintergrundfarbe auf Standard zurückgesetzt', 'Schließen', { duration: 3000 });
         } else {
@@ -259,6 +272,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
         }
       },
       error: () => {
+        this.changeDetector.markForCheck();
         this.snackBar.open('Fehler beim Zurücksetzen der Hintergrundfarbe', 'Schließen', { duration: 3000 });
       }
     });
@@ -268,12 +282,14 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     this.isLoadingLegalNotice = true;
     this.systemSettingsService.getLegalNotice().subscribe({
       next: legalNotice => {
+        this.changeDetector.markForCheck();
         this.legalNoticeHtml = legalNotice.html || defaultLegalNoticeHtml;
         this.isLegalNoticeDefault = legalNotice.isDefault;
         this.updateLegalNoticePreview();
         this.isLoadingLegalNotice = false;
       },
       error: () => {
+        this.changeDetector.markForCheck();
         this.legalNoticeHtml = defaultLegalNoticeHtml;
         this.isLegalNoticeDefault = true;
         this.updateLegalNoticePreview();
@@ -301,6 +317,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     this.isSavingLegalNotice = true;
     this.systemSettingsService.updateLegalNotice({ html }).subscribe({
       next: legalNotice => {
+        this.changeDetector.markForCheck();
         this.legalNoticeHtml = legalNotice.html;
         this.isLegalNoticeDefault = legalNotice.isDefault;
         this.updateLegalNoticePreview();
@@ -312,6 +329,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
         );
       },
       error: error => {
+        this.changeDetector.markForCheck();
         this.isSavingLegalNotice = false;
         const message = this.extractErrorMessage(
           error,
@@ -326,6 +344,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     this.isSavingLegalNotice = true;
     this.systemSettingsService.resetLegalNotice().subscribe({
       next: legalNotice => {
+        this.changeDetector.markForCheck();
         this.legalNoticeHtml = legalNotice.html;
         this.isLegalNoticeDefault = legalNotice.isDefault;
         this.updateLegalNoticePreview();
@@ -337,6 +356,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
         );
       },
       error: error => {
+        this.changeDetector.markForCheck();
         this.isSavingLegalNotice = false;
         const message = this.extractErrorMessage(
           error,
@@ -376,6 +396,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     this.isLoadingContentPoolSettings = true;
     this.systemSettingsService.getContentPoolSettings().subscribe({
       next: settings => {
+        this.changeDetector.markForCheck();
         this.contentPoolSettings = {
           enabled: !!settings.enabled,
           baseUrl: (settings.baseUrl || '').trim(),
@@ -386,6 +407,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
         this.isLoadingContentPoolSettings = false;
       },
       error: () => {
+        this.changeDetector.markForCheck();
         this.isLoadingContentPoolSettings = false;
         this.snackBar.open(
           'Content-Pool-Einstellungen konnten nicht geladen werden.',
@@ -430,6 +452,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
       })
       .subscribe({
         next: settings => {
+          this.changeDetector.markForCheck();
           this.contentPoolSettings = {
             enabled: !!settings.enabled,
             baseUrl: (settings.baseUrl || '').trim(),
@@ -445,6 +468,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
           );
         },
         error: error => {
+          this.changeDetector.markForCheck();
           this.isSavingContentPoolSettings = false;
           const message = this.extractErrorMessage(
             error,
@@ -499,6 +523,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
       })
       .subscribe({
         next: result => {
+          this.changeDetector.markForCheck();
           this.isTestingContentPoolConnection = false;
           this.snackBar.open(
             result.message ||
@@ -508,6 +533,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
           );
         },
         error: error => {
+          this.changeDetector.markForCheck();
           this.isTestingContentPoolConnection = false;
           const message = this.extractErrorMessage(
             error,
@@ -533,9 +559,11 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
       .post<{ jobId: string; message: string }>(`${this.exportBaseUrl}/job`, {}, { headers: authHeaders })
       .subscribe({
         next: ({ jobId }) => {
+          this.changeDetector.markForCheck();
           this.startExportPolling(jobId, authHeaders);
         },
         error: error => {
+          this.changeDetector.markForCheck();
           this.isExporting = false;
           const message = this.extractErrorMessage(
             error,
@@ -560,6 +588,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: state => {
+          this.changeDetector.markForCheck();
           this.databaseExportStatus = state.status;
           this.databaseExportProgress = Math.max(0, Math.min(100, Math.round(state.progress || 0)));
 
@@ -580,6 +609,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
           }
         },
         error: error => {
+          this.changeDetector.markForCheck();
           this.stopExportPolling();
           this.isExporting = false;
           const message = this.extractErrorMessage(
@@ -601,6 +631,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
       })
       .subscribe({
         next: blob => {
+          this.changeDetector.markForCheck();
           this.saveBlob(
             blob,
             `database-export-${new Date().toISOString().split('T')[0]}.sqlite`
@@ -611,6 +642,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
           this.snackBar.open('Datenbank erfolgreich exportiert', 'Schließen', { duration: 3000 });
         },
         error: error => {
+          this.changeDetector.markForCheck();
           this.isExporting = false;
           this.databaseExportStatus = 'failed';
           this.databaseExportError = this.extractErrorMessage(

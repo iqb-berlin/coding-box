@@ -130,6 +130,7 @@ export async function setupCodingFixture(state, environment) {
     variables: [{ unitName: 'UNIT-REPLAY', variableId: 'answer_1' }],
     allowComments: true
   });
+  await seedAdditionalCodingCase(config, workspaceId, adminToken);
   return {
     codingJobId: job.id,
     userId,
@@ -138,6 +139,70 @@ export async function setupCodingFixture(state, environment) {
     keycloakUrl: environment.REPLAY_E2E_KEYCLOAK_URL,
     zoneless: environment.REPLAY_E2E_FRONTEND_CONFIGURATION === 'zoneless'
   };
+}
+
+async function seedAdditionalCodingCase(config, workspaceId, adminToken) {
+  const source = await readFile(
+    path.join(config.fixtureDir, 'responses.csv'), 'utf8'
+  );
+  const [header, firstResponse] = source.trimEnd().split(/\r?\n/);
+  if (!header || !firstResponse?.includes('replay-login-a')) {
+    throw new Error('The additional coding case source is unavailable.');
+  }
+  const additionalResponse = firstResponse
+    .replaceAll('replay-login-a', 'replay-login-c')
+    .replaceAll('replay-code-a', 'replay-code-c')
+    .replaceAll('PERSON-A-RESPONSE', 'PERSON-C-RESPONSE');
+  const form = new FormData();
+  form.append('files', new Blob([`${header}\n${additionalResponse}\n`], {
+    type: 'text/csv'
+  }), 'additional-coding-case.csv');
+  const imported = await fetch(
+    `${config.apiUrl}/api/admin/workspace/${workspaceId}/upload/results/responses?overwriteExisting=true&overwriteMode=replace&scope=person`,
+    {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminToken}` },
+      body: form
+    }
+  );
+  if (!imported.ok) {
+    throw new Error(`Additional coding case import failed: HTTP ${imported.status}`);
+  }
+  const jobId = (await imported.json())?.[0]?.jobId;
+  if (!jobId) throw new Error('Additional coding case import returned no job id.');
+
+  const deadline = Date.now() + 120_000;
+  let completed = false;
+  while (Date.now() < deadline) {
+    const response = await fetch(
+      `${config.apiUrl}/api/admin/workspace/${workspaceId}/upload/status/${encodeURIComponent(jobId)}`,
+      { headers: { authorization: `Bearer ${adminToken}` } }
+    );
+    if (!response.ok) throw new Error(`Additional coding case status: HTTP ${response.status}`);
+    const status = await response.json();
+    if (status.status === 'completed') {
+      completed = true;
+      break;
+    }
+    if (status.status === 'failed') {
+      throw new Error(`Additional coding case import failed: ${status.error || 'unknown error'}`);
+    }
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  if (!completed) throw new Error('Additional coding case import timed out.');
+
+  const { stdout } = await exec('docker', [
+    'exec', `${config.composeProject}-db-1`,
+    'psql', '-U', 'replay_e2e', '-d', 'replay_e2e',
+    '-v', 'ON_ERROR_STOP=1',
+    '-c', `UPDATE response SET status_v1=8 WHERE variableid='answer_1' AND unitid IN
+      (SELECT unit.id FROM unit JOIN booklet ON booklet.id=unit.bookletid
+       JOIN persons ON persons.id=booklet.personid
+       WHERE persons.workspace_id=${workspaceId} AND persons.login='replay-login-c')`
+  ]);
+  if (!stdout.includes('UPDATE 1')) {
+    throw new Error(`Additional coding case status update affected the wrong count: ${stdout.trim()}`);
+  }
 }
 
 export async function expireAuthSession(environment = process.env) {
@@ -170,5 +235,16 @@ export async function expireAuthSession(environment = process.env) {
     throw new Error(
       `Keycloak session invalidation failed: HTTP ${expired.status}`
     );
-  return null;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const sessions = await fetch(
+      `${url}/admin/realms/coding-e2e/users/11111111-1111-4111-8111-111111111111/sessions`,
+      { headers: { authorization: `Bearer ${token}` } }
+    );
+    if (!sessions.ok) {
+      throw new Error(`Keycloak session check failed: HTTP ${sessions.status}`);
+    }
+    if ((await sessions.json()).length === 0) return null;
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  throw new Error('Keycloak did not invalidate the coding session in time.');
 }

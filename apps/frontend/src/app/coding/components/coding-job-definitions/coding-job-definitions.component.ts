@@ -1,4 +1,5 @@
 import {
+  ChangeDetectorRef,
   Component,
   OnDestroy,
   OnInit,
@@ -112,6 +113,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   private codingJobService = inject(CodingJobService);
   private translateService = inject(TranslateService);
   private sessionRecoveryService = inject(SessionRecoveryService);
+  private changeDetector = inject(ChangeDetectorRef);
   private destroy$ = new Subject<void>();
 
   jobDefinitions: JobDefinition[] = [];
@@ -167,9 +169,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       .subscribe({
         next: coders => {
           this.coders = coders || [];
+          this.changeDetector.markForCheck();
         },
         error: () => {
           this.coders = [];
+          this.changeDetector.markForCheck();
         }
       });
   }
@@ -195,6 +199,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         next: definitions => {
           this.jobDefinitions = definitions;
           this.isLoading = false;
+          this.changeDetector.markForCheck();
         },
         error: error => {
           this.showError(
@@ -203,6 +208,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
             })
           );
           this.isLoading = false;
+          this.changeDetector.markForCheck();
         }
       });
   }
@@ -1117,6 +1123,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       );
     } finally {
       this.isBulkCreating = false;
+      this.changeDetector.markForCheck();
     }
 
     this.loadJobDefinitions();

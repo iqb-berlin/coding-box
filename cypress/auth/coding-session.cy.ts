@@ -92,6 +92,7 @@ describe('real Keycloak coding session', () => {
       'have.value',
       'Persisted live note'
     );
+
     cy.wait('@persistedNote').its('response.statusCode').should('eq', 201);
     cy.get('app-code-selector .next-button').should('not.be.disabled');
     cy.reload();
@@ -103,6 +104,28 @@ describe('real Keycloak coding session', () => {
       'have.value',
       'Persisted live note'
     );
+
+    // Hold a real progress save while the coder adds a problem marker.
+    let releaseProgress: (() => void) | undefined;
+    let holdProgress = true;
+    cy.intercept('POST', '**/coding-job/*/progress', request => {
+      if (request.body.selectedCode?.codingIssueOption === -2) request.alias = 'newCodeNeeded';
+      if (!holdProgress) return;
+      holdProgress = false;
+      return new Promise<void>(resolve => {
+        releaseProgress = () => { request.continue(); resolve(); };
+      });
+    });
+    cy.get('app-code-selector [data-code-id="0"]').click();
+    cy.wrap(null).should(() => { expect(releaseProgress).to.be.a('function'); });
+    cy.get('app-code-selector [data-code-id="-2"]').click();
+    cy.then(() => releaseProgress!());
+    cy.wait('@newCodeNeeded').its('response.statusCode').should('eq', 201);
+    cy.reload();
+    cy.get('app-code-selector [data-code-id="-2"]').should('have.class', 'selected');
+    cy.get('app-code-selector .deselect-button').click();
+    cy.get('app-code-selector [data-code-id="1"]').click();
+    cy.get('app-code-selector .next-button').should('not.be.disabled');
 
     let failNotes = true;
     cy.intercept('POST', '**/coding-job/*/notes', (request) => {
@@ -117,7 +140,19 @@ describe('real Keycloak coding session', () => {
       .clear()
       .type('Recovered live draft')
       .blur();
-    cy.task('coding:expire-session', null, { log: false });
+    let rejectExpiredRefresh = false;
+    cy.intercept('POST', '**/realms/coding-e2e/protocol/openid-connect/token', request => {
+      if (rejectExpiredRefresh && String(request.body).includes('grant_type=refresh_token')) {
+        request.alias = 'expiredRefresh';
+        request.reply({
+          statusCode: 400,
+          body: { error: 'invalid_grant', error_description: 'Session not active' }
+        });
+      }
+    });
+    cy.task('coding:expire-session', null, { log: false }).then(() => {
+      rejectExpiredRefresh = true;
+    });
     cy.get('app-code-selector textarea').then((textarea) => {
       const field = textarea[0] as HTMLTextAreaElement;
       if (!field.disabled) {
@@ -129,6 +164,7 @@ describe('real Keycloak coding session', () => {
         field.dispatchEvent(new InputEvent('input', { bubbles: true }));
       }
     });
+    cy.wait('@expiredRefresh').its('response.statusCode').should('eq', 400);
     cy.get('.re-authentication button', { timeout: 60_000 }).should(
       'be.visible'
     );
@@ -145,6 +181,7 @@ describe('real Keycloak coding session', () => {
     });
     cy.then(() => {
       failNotes = false;
+      rejectExpiredRefresh = false;
     });
     cy.get('.re-authentication button').click();
     cy.origin(
@@ -173,6 +210,19 @@ describe('real Keycloak coding session', () => {
       'Recovered live draft'
     );
 
+    cy.intercept('PUT', '**/coding-job/*', (request) => {
+      if (request.body.comment === 'Live job comment') request.alias = 'jobComment';
+    });
+    cy.get('app-code-selector .comment-button').click();
+    cy.get('coding-box-coding-job-comment-dialog textarea').type('Live job comment');
+    cy.get('coding-box-coding-job-comment-dialog').contains('button', 'Speichern').click();
+    cy.wait('@jobComment').its('response.statusCode').should('be.oneOf', [200, 201]);
+    cy.reload();
+    cy.get('app-code-selector .comment-button').click();
+    cy.get('coding-box-coding-job-comment-dialog textarea')
+      .should('have.value', 'Live job comment');
+    cy.get('coding-box-coding-job-comment-dialog').contains('button', 'Abbrechen').click();
+
     cy.intercept('POST', '**/coding-job/*/pause').as('pause');
     cy.intercept('POST', '**/coding-job/*/resume').as('resume');
     cy.get('app-code-selector .pause-button').click();
@@ -180,6 +230,11 @@ describe('real Keycloak coding session', () => {
     cy.get('.pause-overlay .resume-button').should('be.visible').click();
     cy.wait('@resume').its('response.statusCode').should('eq', 201);
     cy.get('.pause-overlay').should('not.exist');
+    cy.get('app-code-selector .next-button').click();
+    cy.get('app-code-selector .current-position').should('have.text', '2');
+    cy.get('app-code-selector .prev-button').click();
+    cy.get('app-code-selector .current-position').should('have.text', '1');
+    cy.get('app-code-selector [data-code-id="1"]').should('have.class', 'selected');
     cy.get('app-code-selector .next-button').click();
     cy.get('app-code-selector .current-position').should('have.text', '2');
     cy.get('app-code-selector [data-code-id="0"]').click();
@@ -323,9 +378,17 @@ describe('real Keycloak coding session', () => {
       .should('contain.text', setup.username);
     cy.contains('coding-box-users-selection mat-row', setup.username)
       .find('mat-checkbox').click();
+    let releaseWorkspaceList: (() => void) | undefined;
+    cy.intercept('GET', '**/api/admin/workspace', request => new Promise<void>(resolve => {
+      releaseWorkspaceList = () => { request.continue(); resolve(); };
+    }));
     cy.get('coding-box-users-menu button').eq(2).click();
     cy.wait('@userWorkspaces').its('response.statusCode')
       .should('be.oneOf', [200, 304]);
+    cy.get('coding-box-workspace-access-rights-dialog mat-dialog-actions button').first()
+      .should('be.disabled');
+    cy.wrap(null).should(() => { expect(releaseWorkspaceList).to.be.a('function'); });
+    cy.then(() => releaseWorkspaceList!());
     cy.contains('coding-box-workspace-access-rights-dialog mat-row', 'replay-e2e-')
       .find('input[type="checkbox"]').should('be.checked');
     cy.get('coding-box-workspace-access-rights-dialog')
@@ -359,13 +422,285 @@ describe('real Keycloak coding session', () => {
     cy.window().then((win) => {
       win.location.hash = `/workspace-admin/${setup.workspaceId}/coding/manual`;
     });
+    cy.intercept('GET', '**/api/wsg-admin/workspace/*/coding-job?*').as('codingJobs');
     cy.get('coding-box-coding-management-manual', { timeout: 30_000 })
       .should('contain.text', 'Manuelle Kodierung');
     cy.get('coding-box-coding-management-manual .planning-status-banner')
       .should('be.visible');
     cy.get('coding-box-coding-management-manual .manual-coding-tabs')
       .contains('Durchführung').click();
+    cy.wait('@codingJobs').then(({ response }) => {
+      expect(response?.statusCode).to.be.oneOf([200, 304]);
+      if (response?.statusCode === 200) {
+        expect(response.body?.data?.some((job: { name: string }) =>
+          job.name === 'Live authentication coding job')).to.equal(true);
+      }
+    });
     cy.get('coding-box-coding-jobs', { timeout: 30_000 })
       .should('contain.text', 'Live authentication coding job');
+    cy.contains('coding-box-coding-jobs mat-row', 'Live authentication coding job')
+      .find('button[aria-label^="Weitere Aktionen:"]').click();
+    cy.get('button[aria-label="Ergebnisse anzeigen: Live authentication coding job"]')
+      .click();
+    cy.get('coding-box-coding-job-result-dialog .result-summary', { timeout: 30_000 })
+      .should('contain.text', '2 von 2 Ergebnissen');
+    cy.get('coding-box-coding-job-result-dialog button[aria-label="Dialog schließen"]')
+      .click();
+
+    cy.intercept('GET', '**/api/admin/content-pool/settings').as('contentPoolSettings');
+    cy.window().then((win) => { win.location.hash = '/admin/settings'; });
+    cy.wait('@contentPoolSettings').its('response.statusCode')
+      .should('be.oneOf', [200, 304]);
+    cy.get('coding-box-sys-admin-settings .content-pool-settings-card')
+      .should('contain.text', 'Content-Pool Integration');
+    cy.get('coding-box-sys-admin-settings input[placeholder*="content-pool.example.org"]')
+      .clear().type('https://content-pool.test');
+    cy.intercept('PUT', '**/api/admin/content-pool/settings').as('saveContentPoolSettings');
+    cy.get('coding-box-sys-admin-settings .content-pool-settings-card')
+      .contains('button', 'Einstellungen speichern').click();
+    cy.wait('@saveContentPoolSettings').its('response.statusCode').should('eq', 200);
+    cy.reload();
+    cy.get('coding-box-sys-admin-settings input[placeholder*="content-pool.example.org"]')
+      .should('have.value', 'https://content-pool.test');
+
+    cy.intercept('GET', '**/api/admin/workspace/*/processes').as('processes');
+    cy.window().then((win) => {
+      win.location.hash = `/workspace-admin/${setup.workspaceId}/settings`;
+    });
+    cy.get('coding-box-ws-settings').contains('button', 'Prozesse anzeigen').click();
+    cy.wait('@processes').its('response.statusCode')
+      .should('be.oneOf', [200, 304]);
+    cy.get('coding-box-process-overview-dialog .loading-overlay').should('not.exist');
+    cy.get('coding-box-process-overview-dialog').should('contain.text', 'Zentrale Prozess-Übersicht');
+  });
+
+  it('creates, codes, reviews and applies a manual coding job', () => {
+    const createdJobName = 'Job UNIT-REPLAY - answer_1 (coding-e2e)';
+    cy.intercept('GET', '**/api/auth-data*').as('authData');
+    cy.visit('/');
+    cy.get('.login-button').click();
+    cy.origin(
+      setup.keycloakUrl,
+      { args: { username: setup.username, password: setup.password } },
+      ({ username, password }) => {
+        cy.get('#username').type(username);
+        cy.get('#password').type(password, { log: false });
+        cy.get('#kc-login').click();
+      }
+    );
+    cy.wait('@authData').its('response.statusCode').should('be.oneOf', [200, 304]);
+    cy.window().then(win => {
+      expect('Zone' in win).to.equal(!setup.zoneless);
+      win.location.hash = `/workspace-admin/${setup.workspaceId}/coding/manual`;
+    });
+    cy.get('coding-box-coding-management-manual .manual-coding-tabs')
+      .contains('Planung').click();
+    cy.get('coding-box-coding-job-definitions')
+      .contains('button', 'Neue Definition erstellen').click();
+    cy.get('coding-box-coding-job-definition-dialog input[formcontrolname="name"]')
+      .type('Zoneless UI coding job');
+    cy.get('coding-box-coding-job-definition-dialog .coder-card')
+      .contains('coding-e2e').click();
+    cy.get('coding-box-coding-job-definition-dialog mat-tab-group')
+      .contains('Einzelne Variablen').click();
+    cy.get('coding-box-coding-job-definition-dialog .variable-card')
+      .contains('UNIT-REPLAY_answer_1').click();
+    cy.intercept('POST', '**/coding/job-definitions').as('createDefinition');
+    cy.get('coding-box-coding-job-definition-dialog .dialog-actions')
+      .contains('button', 'Definition erstellen').click();
+    cy.wait('@createDefinition').its('response.statusCode').should('eq', 201);
+    cy.contains('coding-box-coding-job-definitions tr', 'Zoneless UI coding job')
+      .contains('button', 'Einreichen').click();
+    cy.contains('coding-box-coding-job-definitions tr', 'Zoneless UI coding job')
+      .contains('button', 'Freigeben').click();
+    cy.contains('coding-box-coding-job-definitions tr', 'Zoneless UI coding job')
+      .contains('button', 'Jobs erstellen').click();
+    cy.get('coding-box-coding-job-bulk-creation-dialog .dialog-actions')
+      .contains('button', 'Trotzdem fortfahren').click();
+    cy.intercept('POST', '**/coding/job-definitions/*/create-job').as('createJobs');
+    cy.get('coding-box-coding-job-bulk-creation-dialog .dialog-actions')
+      .contains('button', '1 Aufträge erstellen').click();
+    cy.wait('@createJobs').then(({ response }) => {
+      expect(response?.statusCode).to.equal(201);
+      expect(response?.body?.jobsCreated).to.equal(1);
+      expect(response?.body?.jobs?.[0]?.jobName).to.equal(createdJobName);
+    });
+
+    cy.get('coding-box-coding-management-manual .manual-coding-tabs')
+      .contains('Durchführung').click();
+    cy.contains('coding-box-coding-jobs mat-row', createdJobName)
+      .should('contain.text', 'Ausstehend');
+    cy.intercept('POST', '**/coding-job/*/start').as('startCreatedJob');
+    cy.window().then(win => { cy.stub(win, 'open').as('openCoding'); });
+    cy.contains('coding-box-coding-jobs mat-row', createdJobName)
+      .contains('button', 'Starten').click();
+    cy.wait('@startCreatedJob').then(({ request, response }) => {
+      expect(response?.statusCode).to.equal(201);
+      expect(response?.body?.total).to.equal(1);
+      const jobId = request.url.match(/coding-job\/(\d+)\/start$/)?.[1];
+      expect(jobId).to.be.a('string');
+      const replay = new URL(response.body.firstReplayUrl, setup.baseUrl);
+      const local = new URL(setup.baseUrl);
+      replay.protocol = local.protocol;
+      replay.host = local.host;
+      const [route, query = ''] = replay.hash.split('?');
+      const params = new URLSearchParams(query);
+      params.set('mode', 'coding');
+      params.set('codingJobId', jobId!);
+      params.set('workspaceId', String(setup.workspaceId));
+      replay.hash = `${route}?${params}`;
+      cy.visit(replay.toString());
+    });
+    cy.get('app-code-selector [data-code-id="1"]').click();
+    cy.intercept('POST', '**/coding-job/*/submit').as('submitCreatedJob');
+    cy.window().then(win => { cy.stub(win, 'close'); });
+    cy.get('.completion-overlay .submit-button').should('not.be.disabled').click();
+    cy.wait('@submitCreatedJob').its('response.statusCode').should('eq', 201);
+    cy.intercept('GET', '**/api/auth-data*').as('returnAuthData');
+    cy.visit('/');
+    cy.wait('@returnAuthData').its('response.statusCode').should('be.oneOf', [200, 304]);
+    cy.get('coding-box-home').should('be.visible');
+    cy.window().then(win => {
+      win.location.hash = `/workspace-admin/${setup.workspaceId}/coding/manual`;
+    });
+    cy.get('coding-box-coding-management-manual .manual-coding-tabs')
+      .contains('Durchführung').click();
+    cy.contains('coding-box-coding-jobs mat-row', createdJobName)
+      .should('contain.text', 'Abgeschlossen');
+
+    cy.intercept('GET', '**/coding-job/*/review').as('prepareReview');
+    cy.window().then(win => { cy.stub(win, 'open').as('openReview'); });
+    cy.contains('coding-box-coding-jobs mat-row', createdJobName)
+      .find(`button[aria-label="Review öffnen: ${createdJobName}"]`).click();
+    cy.wait('@prepareReview').then(({ response }) => {
+      expect(response?.statusCode).to.equal(200);
+      expect(response?.body?.total).to.equal(1);
+      expect(response?.body?.firstReplayUrl).to.be.a('string');
+    });
+    cy.get('@openReview').should('have.been.calledOnce');
+    cy.get('@openReview').then(openReview => {
+      const reviewUrl = (openReview as { firstCall: { args: string[] } }).firstCall.args[0];
+      expect(reviewUrl).to.include('mode=coding-review');
+      cy.visit(reviewUrl);
+    });
+    cy.get('app-code-selector [data-code-id="1"]')
+      .should('have.class', 'selected')
+      .and('have.class', 'read-only');
+    cy.intercept('GET', '**/api/auth-data*').as('reviewReturnAuthData');
+    cy.visit('/');
+    cy.wait('@reviewReturnAuthData').its('response.statusCode').should('be.oneOf', [200, 304]);
+    cy.get('coding-box-home').should('be.visible');
+    cy.window().then(win => {
+      win.location.hash = `/workspace-admin/${setup.workspaceId}/coding/manual`;
+    });
+
+    cy.get('coding-box-coding-management-manual .manual-coding-tabs')
+      .contains('Abschluss').click();
+    cy.contains('.completed-job-apply-row', createdJobName)
+      .scrollIntoView()
+      .should('be.visible');
+    cy.intercept('POST', '**/coding/jobs/*/apply-results').as('applyResults');
+    cy.contains('.completed-job-apply-row', createdJobName)
+      .contains('button', 'Ergebnisse anwenden').click();
+    cy.get('coding-box-apply-coding-results-dialog')
+      .should('contain.text', createdJobName)
+      .contains('button', 'Anwenden').click();
+    cy.wait('@applyResults').then(({ request, response }) => {
+      expect(response?.statusCode).to.equal(201);
+      expect(request.body).to.deep.equal({ overwriteExisting: false });
+      expect(response?.body?.success).to.equal(true);
+    });
+    cy.get('coding-box-coding-management-manual .manual-coding-tabs')
+      .contains('Durchführung').click();
+    cy.contains('coding-box-coding-jobs mat-row', createdJobName)
+      .should('contain.text', 'Ergebnisse angewendet');
+  });
+
+  it('persists further settings and completes a background database export', () => {
+    cy.intercept('GET', '**/api/auth-data*').as('authData');
+    cy.visit('/');
+    cy.get('.login-button').click();
+    cy.origin(
+      setup.keycloakUrl,
+      { args: { username: setup.username, password: setup.password } },
+      ({ username, password }) => {
+        cy.get('#username').type(username);
+        cy.get('#password').type(password, { log: false });
+        cy.get('#kc-login').click();
+      }
+    );
+    cy.wait('@authData').its('response.statusCode').should('be.oneOf', [200, 304]);
+    cy.window().then(win => {
+      expect('Zone' in win).to.equal(!setup.zoneless);
+      win.location.hash = '/admin/settings';
+    });
+
+    cy.intercept('PUT', '**/api/legal-notice').as('saveLegalNotice');
+    cy.get('coding-box-sys-admin-settings .legal-notice-settings-card textarea')
+      .should('not.be.disabled').clear().type('<p>Zoneless legal notice</p>');
+    cy.get('coding-box-sys-admin-settings .legal-notice-settings-card')
+      .contains('button', 'Text speichern').click();
+    cy.wait('@saveLegalNotice').its('response.statusCode').should('eq', 200);
+    cy.reload();
+    cy.get('coding-box-sys-admin-settings .legal-notice-settings-card textarea')
+      .should('have.value', '<p>Zoneless legal notice</p>');
+    cy.intercept('DELETE', '**/api/legal-notice').as('resetLegalNotice');
+    cy.get('coding-box-sys-admin-settings .legal-notice-settings-card')
+      .contains('button', 'Standard wiederherstellen').click();
+    cy.wait('@resetLegalNotice').its('response.statusCode').should('eq', 200);
+    cy.get('coding-box-sys-admin-settings .legal-notice-settings-card textarea')
+      .should('not.have.value', '<p>Zoneless legal notice</p>');
+
+    cy.intercept('GET', '**/settings/replay-url-export-mode').as('loadReplayMode');
+    cy.window().then(win => {
+      win.location.hash = `/workspace-admin/${setup.workspaceId}/settings`;
+    });
+    cy.wait('@loadReplayMode').its('response.statusCode').should('be.oneOf', [200, 304]);
+    cy.intercept('POST', '**/workspace/*/settings', request => {
+      if (request.body.key === 'replay-url-export-mode') request.alias = 'saveReplayMode';
+    });
+    cy.get('coding-box-ws-settings .replay-url-export-mode-card mat-slide-toggle button')
+      .should('have.attr', 'aria-checked', 'true').click();
+    cy.wait('@saveReplayMode').its('response.statusCode').should('eq', 201);
+    cy.get('coding-box-ws-settings .replay-url-export-mode-card mat-slide-toggle button')
+      .should('have.attr', 'aria-checked', 'false');
+    cy.reload();
+    cy.wait('@loadReplayMode').its('response.statusCode').should('be.oneOf', [200, 304]);
+    cy.get('coding-box-ws-settings .replay-url-export-mode-card mat-slide-toggle button')
+      .should('have.attr', 'aria-checked', 'false').click();
+    cy.wait('@saveReplayMode').its('response.statusCode').should('eq', 201);
+    cy.reload();
+    cy.wait('@loadReplayMode').its('response.statusCode').should('be.oneOf', [200, 304]);
+    cy.get('coding-box-ws-settings .replay-url-export-mode-card mat-slide-toggle button')
+      .should('have.attr', 'aria-checked', 'true');
+
+    cy.intercept('POST', '**/export/sqlite/job').as('startDatabaseExport');
+    let runningPolls = 3;
+    cy.intercept('GET', /\/export\/sqlite\/job\/[^/]+$/, request => {
+      if (runningPolls > 0) {
+        runningPolls -= 1;
+        request.reply({ statusCode: 200, body: { status: 'running', progress: 42 } });
+      } else {
+        request.continue();
+      }
+    }).as('databaseExportStatus');
+    cy.intercept('GET', '**/export/sqlite/job/*/download').as('downloadDatabaseExport');
+    cy.get('coding-box-ws-settings .database-export-card button')
+      .contains('Datenbank exportieren').click();
+    cy.wait('@startDatabaseExport').its('response.statusCode').should('eq', 201);
+    for (let poll = 0; poll < 3; poll += 1) {
+      cy.wait('@databaseExportStatus').its('response.body.status').should('eq', 'running');
+      cy.get('coding-box-ws-settings .database-export-card .progress-text')
+        .should('contain.text', '42%');
+      cy.get('coding-box-ws-settings .database-export-actions button')
+        .should('contain.text', 'Exportiere...')
+        .and('be.disabled');
+    }
+    cy.get('coding-box-ws-settings .database-export-card .export-progress')
+      .should('be.visible');
+    cy.wait('@downloadDatabaseExport', { timeout: 120_000 })
+      .its('response.statusCode').should('eq', 200);
+    cy.get('coding-box-ws-settings .database-export-card .export-progress')
+      .should('not.exist');
   });
 });
