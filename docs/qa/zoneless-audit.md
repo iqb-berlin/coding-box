@@ -36,8 +36,8 @@ Entwicklungsdaten und Produktion gehören nicht zur Prüfung.
 
 ## Matrix
 
-Aktueller Umfang: 154 Komponenten, 72 Services, fünf Pipes und 21 externe
-Bibliotheken. Insgesamt 8.706 Einträge einschließlich Template-Ereignissen,
+Aktueller Umfang: 155 Komponenten, 73 Services, fünf Pipes und 24 externe
+Bibliotheken. Insgesamt 8.728 Einträge einschließlich Template-Ereignissen,
 Bindungen und asynchronen Quellen. Alle Gesamteinträge sind noch offen.
 
 `zoneless-coverage.json` erfasst Komponenten, Services, Pipes, Template-Ereignisse,
@@ -615,3 +615,211 @@ Die vollständigen Läufe bestehen: 615 native Tests in 23 Suites
 Frontend-Tests in 217 Suites (`/tmp/zoneless-file-info-regular.log`, Exit 0).
 Die vier geänderten asynchronen Quellen erhalten gezielte Teilnachweise
 in der Matrix. Ihre Gesamtfreigabe bleibt offen.
+
+## ZL-016: Metadatenabruf nach Schließen der Dateivalidierung
+
+16 kontrollierte Fälle reproduzieren Folgeanfragen, Metadatendialoge oder
+Fehlermeldungen nach Schließen beziehungsweise Zerstörung in allen vier
+Phasen: Dateisuche, Download, Unit-Profil und Item-Profil. Erfolg und Fehler
+sind je Phase geprüft (`/tmp/zoneless-metadata-lifecycle-red.log`, 16 Fehler,
+29 bestehende Tests bestanden, Exit 1).
+
+Der Abruf erhält einen gemeinsamen Abbruchkanal, der sowohl HTTP-Observables
+als auch das Warten auf Resolver-Promises beendet. Ladebenachrichtigung und
+Schließ-/Zerstörungslistener werden aufgeräumt. Der Workspace wird einmal
+beim Start erfasst. Die 16 Fälle bestehen; acht zusätzliche Fälle prüfen
+Erfolg und Fehler bei weiterhin geöffnetem Dialog. Insgesamt 53 Tests der
+Dateivalidierung bestehen (`/tmp/zoneless-metadata-lifecycle-expanded.log`,
+Exit 0). Abbruchtests warten auf das Ende der Methode, bevor sie die alte
+Antwort liefern; nach Abbruch ist kein HTTP-Subscriber mehr vorhanden.
+
+Technische Grenze: MetadataResolver 0.2.0 bietet am verwendeten öffentlichen
+Aufruf keinen AbortSignal-Parameter. Bereits laufende Profilauflösung samt
+bibliotheksinternen Vokabularabrufen kann daher weiterlaufen. Ihr Ergebnis
+und ihre Fehler werden nach Abbruch verworfen; der Aufrufer startet keine
+weitere Phase und öffnet keine Ansicht mehr. Workspace-Wechsel über den
+produktiven Aufrufer bleibt separat offen.
+
+## ZL-017: Metadateneditor nach Timer und Webkomponenten-Ereignissen
+
+Mit echtem Angular-Template und kontrolliertem Bootstrap der Webkomponente
+bleibt die Ladeanzeige nach dem Initialisierungstimer stehen. Ein natives
+metadataChange-Ereignis aktualisiert den Speichern-Button ebenfalls nicht.
+Weitere Tests zeigen einen weiterlaufenden Initialisierungstimer und einen
+noch aktiven Listener nach Zerstörung. Der bereinigte Reproduktionslauf
+gegen den bisherigen Editor bestätigt alle vier Fehler
+(`/tmp/zoneless-metadata-dialog-red-final.log`, Exit 1). Der Timertest
+prüft Auswirkungen auf ein nachfolgendes Formular; eine frühere globale
+Timerzählung war wegen zusätzlicher Framework-Timer ungeeignet.
+
+Die Komponente benachrichtigt Angular nach Initialisierung und Metadaten-
+Änderungen, entfernt Timer und Listener bei Zerstörung und startet nach
+verspätetem Bootstrap keine Initialisierung mehr. Die vier Regressionen
+bestehen (`/tmp/zoneless-metadata-dialog-green-final.log`, Exit 0).
+
+Der erweiterte Browserfall nutzt die echte Metadatenbibliothek und ein
+synthetisches Textprofil. Er prüft den verzögerten Abruf über die
+Dateivalidierung, das Ende der Ladeanzeige, gesperrtes und editierbares
+Textfeld sowie den sichtbaren Speichern-Button nach Eingabe. Alle drei
+Browserfälle bestehen (`/tmp/zoneless-metadata-browser-green.log`, Exit 0).
+Die früheren Browserläufe scheiterten an Sichtbarkeitsprüfungen leerer
+Host-Elemente und sind keine Reproduktionsnachweise des Zoneless-Fehlers.
+Keine Backend-Persistenz wird behauptet; dieser Aufrufer öffnet Metadaten
+zur Ansicht. Mehrere gleichzeitig geöffnete Metadatendialoge, sämtliche
+Feldtypen und weitere Einbettungen bleiben offen.
+
+Abschlussprüfungen dieses Schritts: Frontend-Lint
+(`/tmp/zoneless-metadata-all-lint.log`), 643 native Tests in 24 Suites
+(`/tmp/zoneless-metadata-native.log`) und 2.388 allgemeine Frontend-Tests
+in 218 Suites (`/tmp/zoneless-metadata-regular.log`) bestehen jeweils mit
+Exit 0. Die Matrix ordnet die Teilnachweise den Metadaten-Abrufen sowie
+Timer und Ereignislistener des Editors zu; Gesamtfreigaben bleiben offen.
+
+## ZL-018: Gleichzeitig geöffnete Metadatendialoge
+
+Vier neue native Tests mit zwei echten Dialogtemplates reproduzieren die
+globale Formularzuordnung: Initialisierung überschreibt das erste Formular,
+Bearbeitungsmodus und Profilwechsel treffen die falsche Instanz, und ein
+Metadatenereignis des zweiten Formulars erreicht nicht dessen Dialog.
+`/tmp/zoneless-metadata-multiple-red.log`: vier neue Fehler, vier bestehende
+Tests bestanden, Exit 1.
+
+MetadataDialogComponent verwendet jetzt ViewChild mit einer lokalen
+Template-Referenz für Initialisierung, Profilwechsel und Bearbeitungsmodus.
+Die mehrfach vergebene globale DOM-ID entfällt. Alle acht nativen Fälle
+bestehen (`/tmp/zoneless-metadata-multiple-green.log`, Exit 0).
+
+Drei zusätzliche Browserfälle öffnen über den produktiven Dateivalidierungs-
+aufrufer per Doppelklick zwei Metadatendialoge, während beide Anfragen noch
+laufen. Download-Verzögerungen 150/150, 300/150 und 150/300 Millisekunden
+prüfen unterschiedliche Antwortreihenfolgen ohne Test-Retries. Die tatsächliche
+Metadatenbibliothek erhält unterschiedliche synthetische Werte. Beide Werte
+werden angezeigt; Bearbeiten und Texteingabe im oberen Dialog lassen Wert,
+Sperre und Speichern-Schaltfläche des unteren Dialogs unverändert. Zusammen
+mit den drei bisherigen Fällen bestehen sechs Browsertests
+(`/tmp/zoneless-metadata-multiple-browser.log`, Exit 0).
+
+Die Prüfung deckt diese konkrete Mehrfachöffnung mit Textfeldern ab. Sie
+ersetzt weder die Prüfung aller Metadatenfeldtypen und Einbettungen noch
+den abschließenden dreifachen Lauf sämtlicher asynchroner Kernabläufe.
+
+Abschlussprüfungen dieses Schritts bestehen mit Exit 0: Frontend-Lint
+(`/tmp/zoneless-metadata-multiple-lint.log`), 647 native Tests in 24 Suites
+(`/tmp/zoneless-metadata-multiple-native.log`), 2.392 allgemeine Frontend-
+Tests in 218 Suites (`/tmp/zoneless-metadata-multiple-regular.log`).
+Die Matrix enthält Teilnachweise für die Instanzzuordnung und die drei
+Antwortreihenfolgen; keine pauschale Komponentenfreigabe.
+
+CI-Zwischenstand: GitHub meldet für e349759c CodeQL SUCCESS und die
+GitLab-Pipeline 102471 FAILURE. Die Pipeline-Seite
+https://scm.cms.hu-berlin.de/iqb/coding-box/-/pipelines/102471 leitet am
+30.09.2026 beim lesenden Abruf auf `/users/sign_in` um. Die konkreten
+fehlgeschlagenen Jobs und ihre Ursachen sind damit nicht bestätigt.
+Der Status darf nicht allein dem weiterhin offenen Abdeckungsgate
+zugeschrieben werden. Dieser CI-Stand gehört zum vorherigen Commit.
+
+## Laufende Erweiterung: Vokabulare und Dateivalidierungsabschluss
+
+Die echte Metadatenbibliothek erwartet `vocabularyProvider`; die bisher gesetzte
+Eigenschaft `resolver` versorgte die Inline-Auswahl nicht. Der lokale Adapter
+normalisiert optionale Resolver-Felder ohne Änderung der Quelldaten. Zusätzlich
+fehlte dem separat gestarteten Bibliotheks-Injektor der TranslateService für den
+Vokabulardialog. Die lokale Registrierung nutzt nun die Injektorhierarchie der
+Anwendung. Elf fokussierte native Tests bestehen
+(`/tmp/zoneless-metadata-integration-native.log`, Exit 0). Diese Änderungen sind
+noch nicht abschließend freigegeben.
+
+Der anschließende Browserlauf reproduzierte NG0100 in TestFilesComponent beim
+Öffnen der Vokabularauswahl. Fortschritt und Abschluss der Dateivalidierung
+benachrichtigen Angular jetzt ausdrücklich. Im Folgelauf ist die strikte
+Console-Prüfung erfolgreich; Auswahl, Bestätigung und Entfernen eines
+Vokabularchips funktionieren. Der Lauf bleibt mit sieben bestandenen und einem
+fehlgeschlagenen Fall rot (`/tmp/zoneless-validation-notification-browser.log`,
+Exit 1): Die Dauer entspricht nach der Eingabe nicht dem erwarteten Wert.
+Eine unmittelbar nach der Eingabe ergänzte Assertion lokalisiert das Problem
+bereits auf das Minutenfeld (`/tmp/zoneless-duration-input-browser.log`, Exit 1).
+Die Bibliothek formatiert ein geleertes Feld sofort als „00“. Der Test prüft
+als Nächstes das Ersetzen einer markierten Eingabe; Leeren und Neueingabe bleibt
+als eigener Bedienungsbefund offen. Keine Exception wird unterdrückt.
+
+Auch das Ersetzen der markierten Eingabe zeigt einen Bibliotheksfehler:
+Minuten „2“ werden korrekt als „02“ angezeigt, aber die nacheinander getippten
+Sekunden „15“ erscheinen als „51“ (`/tmp/zoneless-duration-replace-browser.log`,
+Exit 1, sieben übrige Browserfälle bestanden). Die sofortige Rückformatierung
+bei jedem ngModelChange verändert die Eingabeposition. Dieser Befund ist noch
+nicht behoben; der Test behält die Erwartung „15“ bei.
+
+### Dauer-Eingabe: Korrektur und Browsernachweis
+
+Die Eingabeereignisse zeigen keinen Fokuswechsel zwischen Leeren und Tippen.
+ProfileFormComponent liest native Zahlenfelder bereits in der Capture-Phase
+und schreibt den berechneten Wert über das Formular zurück. Deshalb reicht
+es nicht, nur die Formatierung in durationChange zu verschieben.
+Die lokale MetadataDurationComponent bewahrt während des Fokus eigene
+Eingabetexte und normalisiert beim Verlassen des Feldes. Der Bibliotheksselektor
+`iqb-formly-duration` bleibt erhalten, weil der übergeordnete native Handler
+hierüber Minuten und Sekunden zusammenliest. Umrechnung und Grenzwerte
+werden weiterhin aus der Bibliothekskomponente übernommen. Externe
+Control-Änderungen benachrichtigen Angular; Subscriptions enden bei Zerstörung.
+
+Der Browser prüft weiterhin echtes Leeren und Tippen, sichtbare Werte 02:15,
+Inline-Vokabulare, Dialogauswahl und Entfernen des Chips. Alle acht Fälle
+bestehen (`/tmp/zoneless-duration-draft-browser.log`, Exit 0). Dreizehn
+fokussierte native Tests bestehen (`/tmp/zoneless-duration-draft-native.log`,
+Exit 0); der Regressionstest wird zusätzlich um die Rückmeldung des
+übergeordneten Controls während jeder Eingabe erweitert. Die vollständigen
+Suites, aktualisierte Matrix und Veröffentlichung dieses Schritts stehen noch aus.
+
+
+Abschlussprüfungen für die Metadatenkorrekturen: 652 native Zoneless-Tests
+(`/tmp/zoneless-metadata-complete-native.log`) und 2.397 allgemeine Frontend-Tests
+(`/tmp/zoneless-metadata-complete-regular.log`) bestehen mit Exit 0. Frontend-Lint
+besteht (`/tmp/zoneless-duration-final-lint.log`, Exit 0). Der erweiterte
+Regressionstest mit Control-Rückmeldungen besteht ebenfalls
+(`/tmp/zoneless-duration-echo-native.log`, 13 Tests, Exit 0).
+Das aktualisierte Inventar umfasst 8.728 Einträge; Teilnachweise sind zugeordnet,
+Gesamtfreigaben bleiben offen.
+Der Produktionsbuild besteht ebenfalls
+(`/tmp/zoneless-metadata-production-build.log`, Exit 0), ebenso die erneute
+Inventarprüfung (`/tmp/zoneless-metadata-inventory-final.log`, Exit 0).
+Dieser Build ersetzt keinen Browserlauf gegen das Produktionsartefakt.
+
+## ZL-019: Vokabularzustand gleichzeitig geöffneter Formulare
+
+Die gesamte vorhandene Zoneless-Browsersuite besteht am gepushten Commit
+c4007124: 50 Tests in zehn Dateien, Exit 0
+(`/tmp/zoneless-all-browser-c4007124.log`). Ein anschließend ergänzter Fall
+mit unterschiedlichen Vokabularen bestätigt zunächst die korrekte
+Inline-Darstellung. Die später geöffnete Baum-Auswahl des ersten Dialogs ist
+nach Bearbeiten und Schließen des zweiten jedoch leer
+(`/tmp/zoneless-distinct-vocab-dialog-red.log`, acht bestehende Fälle bestanden,
+ein neuer Fehler, Exit 1). Die Bibliothek liest für diesen Dialog den zuletzt
+gesetzten Provider aus dem gemeinsamen MetadataService.
+
+Die Registrierung erzeugt nun für jede Webkomponenteninstanz einen eigenen
+MetadataService über einen Element-Injektor. Übersetzungen und gemeinsame
+Formly-Konfiguration werden weiterhin von der Anwendung geerbt. Der native
+Test prüft getrennte Serviceinstanzen und denselben Übersetzungsdienst;
+14 fokussierte Metadatentests bestehen
+(`/tmp/zoneless-vocab-isolation-native.log`, Exit 0). Der erste Browserversuch
+nach der Korrektur scheiterte an der abstrakten Rückgabetypisierung von
+createCustomElement (TS2656); die konkrete HTMLElement-Konstruktorschnittstelle
+ist nun explizit typisiert. Dieser Compilerfehler war kein Laufzeitbefund.
+
+Die erweiterte Browserprüfung besteht nach der Korrektur mit neun Fällen
+(`/tmp/zoneless-vocab-isolation-browser-final.log`, Exit 0): Beide
+Inline-Auswahlen bleiben getrennt; nach Schließen des zweiten Dialogs lädt
+die Baum-Auswahl des ersten weiterhin dessen Begriff und übernimmt ihn als
+sichtbaren Chip. Frontend-Lint besteht
+(`/tmp/zoneless-vocab-isolation-lint-final.log`, Exit 0). Die Elementklasse liegt
+als eigene Factory in metadata-profile-element.ts, entsprechend der
+Projektregel für eine Klasse je Datei.
+
+Abschluss dieses Schritts: 653 native Tests
+(`/tmp/zoneless-vocab-isolation-full-native.log`), 2.398 allgemeine Tests
+(`/tmp/zoneless-vocab-isolation-full-regular.log`), erneute Inventarprüfung
+(`/tmp/zoneless-vocab-isolation-inventory-final.log`) sowie neun Browserfälle
+mit der endgültigen Factory-Datei
+(`/tmp/zoneless-vocab-isolation-factory-browser.log`) bestehen jeweils mit
+Exit 0. Die Gesamtfreigabe bleibt offen. CodeQL für c4007124 ist erfolgreich;
+GitLab-Pipeline 102483 war beim letzten lesenden Abruf weiterhin Pending.
