@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import AdmZip from 'adm-zip';
+import { findComposeContainer } from './compose-container.mjs';
 
 const REQUIRED_ENV = [
   'REPLAY_E2E_API_URL',
@@ -431,10 +432,11 @@ async function seedIncompleteItemMatrixFixture(config, workspaceId) {
     )
     SELECT COUNT(*) FROM updated_responses;
   `;
+  const dbContainer = await findComposeContainer(config.composeProject, 'db');
   const output = await runCapture('docker', [
     'exec',
     '-i',
-    `${config.composeProject}-db-1`,
+    dbContainer,
     'psql',
     '--username=replay_e2e',
     '--dbname=replay_e2e',

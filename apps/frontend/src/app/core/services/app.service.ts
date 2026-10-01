@@ -88,7 +88,16 @@ export class AppService {
     this.reAuthenticationRequired.set(value);
   }
 
-  sessionExpiryWarning = false;
+  private readonly sessionExpiryWarningVisible = signal(false);
+
+  get sessionExpiryWarning(): boolean {
+    return this.sessionExpiryWarningVisible();
+  }
+
+  set sessionExpiryWarning(value: boolean) {
+    this.sessionExpiryWarningVisible.set(value);
+  }
+
   reAuthenticationReturnUrl?: string;
   private selectedWorkspaceIdValue = 0;
   private readonly selectedWorkspaceIdSubject = new Subject<number>();

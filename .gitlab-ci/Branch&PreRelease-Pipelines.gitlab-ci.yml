@@ -462,11 +462,43 @@ test-app:
   script:
     - npx nx affected --base=HEAD~1 --target=test --parallel=1 -- --maxWorkers=2
 
+test-frontend-zoneless:
+  stage: test-units
+  interruptible: true
+  image: ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
+  needs:
+    - install-dependencies
+  rules:
+    - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
+      changes:
+        - apps/frontend/**/*
+        - api-dto/coding/**/*
+        - package.json
+        - package-lock.json
+        - .gitlab-ci/Branch&PreRelease-Pipelines.gitlab-ci.yml
+    - if: $CI_COMMIT_BRANCH &&
+        $CI_COMMIT_BRANCH != "main" &&
+        $CI_COMMIT_BRANCH != "develop" &&
+        $CI_PIPELINE_SOURCE != "external_pull_request_event"
+      changes:
+        - apps/frontend/**/*
+        - api-dto/coding/**/*
+        - package.json
+        - package-lock.json
+        - .gitlab-ci/Branch&PreRelease-Pipelines.gitlab-ci.yml
+    - when: never
+  script:
+    - npx nx run frontend:lint
+    - npx nx run frontend:test --maxWorkers=2
+    - npx nx build frontend --configuration=production
+
 test-replay-live:
   stage: test-replay
   interruptible: true
-  allow_failure: true
   image: ${CYPRESS_IMAGE}
+  variables:
+    REPLAY_E2E_CONNECT_HOST: docker
+    REPLAY_E2E_PUBLISH_HOST: 0.0.0.0
   services:
     - name: ${DOCKER_SERVICE}
       variables:
@@ -481,13 +513,30 @@ test-replay-live:
         - api-dto/coding/**/*
         - apps/backend/src/app/admin/workspace/workspace-coding-replay*
         - apps/backend/src/app/database/services/test-results/**/*
-        - apps/frontend/src/app/replay/**/*
+        - apps/frontend/**/*
         - cypress/fixtures/replay-datasets/**/*
         - cypress/e2e/replay-live.cy.ts
+        - cypress/e2e/item-matrix-live.cy.ts
         - cypress/support/replay-e2e.ts
         - cypress.replay.config.ts
         - scripts/e2e/replay/**/*
-      when: manual
+        - .gitlab-ci/Branch&PreRelease-Pipelines.gitlab-ci.yml
+    - if: $CI_COMMIT_BRANCH &&
+        $CI_COMMIT_BRANCH != "main" &&
+        $CI_COMMIT_BRANCH != "develop" &&
+        $CI_PIPELINE_SOURCE != "external_pull_request_event"
+      changes:
+        - api-dto/coding/**/*
+        - apps/backend/src/app/admin/workspace/workspace-coding-replay*
+        - apps/backend/src/app/database/services/test-results/**/*
+        - apps/frontend/**/*
+        - cypress/fixtures/replay-datasets/**/*
+        - cypress/e2e/replay-live.cy.ts
+        - cypress/e2e/item-matrix-live.cy.ts
+        - cypress/support/replay-e2e.ts
+        - cypress.replay.config.ts
+        - scripts/e2e/replay/**/*
+        - .gitlab-ci/Branch&PreRelease-Pipelines.gitlab-ci.yml
     - when: never
   before_script:
     - apt-get update

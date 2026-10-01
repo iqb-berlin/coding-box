@@ -5,10 +5,11 @@ import path from 'node:path';
 export async function prepareAuthEnvironment(
   runDir,
   keycloakPort,
-  frontendPort
+  frontendPort,
+  connectHost = '127.0.0.1'
 ) {
-  const url = `http://127.0.0.1:${keycloakPort}`;
-  const origin = `http://127.0.0.1:${frontendPort}`;
+  const url = `http://${connectHost}:${keycloakPort}`;
+  const origin = `http://${connectHost}:${frontendPort}`;
   const password = randomBytes(24).toString('hex');
   const adminPassword = randomBytes(24).toString('hex');
   const realm = {

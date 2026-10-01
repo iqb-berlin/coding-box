@@ -4,10 +4,12 @@ import {
   OnDestroy,
   inject,
   ChangeDetectorRef,
+  DestroyRef,
   Input,
   OnChanges,
   ViewChild
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
@@ -103,6 +105,7 @@ implements OnInit, OnDestroy, OnChanges {
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private cdr = inject(ChangeDetectorRef);
+  private readonly destroyRef = inject(DestroyRef);
   private translateService = inject(TranslateService);
   private route = inject(ActivatedRoute);
 
@@ -180,7 +183,7 @@ implements OnInit, OnDestroy, OnChanges {
       .pipe(debounceTime(300), distinctUntilChanged())
       .subscribe(() => this.reloadFirstPage());
 
-    this.appService.authData$.subscribe(authData => {
+    this.appService.authData$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(authData => {
       this.currentUserId = authData.userId;
       this.isAuthorized = true;
       const workspaces = authData.workspaces || [];

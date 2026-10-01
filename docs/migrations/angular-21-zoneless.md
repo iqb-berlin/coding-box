@@ -1,18 +1,29 @@
-# Angular 21 zoneless preparation
+# Angular 21 zoneless migration
 
-The production entry point still uses `provideZoneChangeDetection()` and ZoneJS.
-The migration configuration is opt-in and is not a production release switch.
+The regular `main.ts` entry point now uses `provideZonelessChangeDetection()`.
+Production and development builds omit the ZoneJS polyfill. The `zone.js`
+dependency remains for the existing Jest and Cypress component-test environments;
+removing it from those environments is a separate migration.
 
-## Run the candidate
+This is a source/build change, not confirmation of a deployed production switch.
+The production artifact from PR #1039 was validated on the test instance on
+2026-09-28. The production deployment is a separate release step. For rollback,
+retain the previous frontend image and restore it without changing the backend
+or database; no database migration is involved.
 
+## Run and validate
+
+- `env -u ELECTRON_RUN_AS_NODE npx nx run frontend:e2e-auth-live --configuration=production`
 - `npx nx serve frontend --configuration=zoneless`
 - `npx nx build frontend --configuration=zoneless`
 - `env -u ELECTRON_RUN_AS_NODE npx nx e2e frontend --configuration=zoneless`
 - `env -u ELECTRON_RUN_AS_NODE npx nx run frontend:e2e-replay-live --configuration=zoneless`
 
-The candidate uses `main.zoneless.ts`, omits the ZoneJS polyfill and writes builds
-to `dist/apps/frontend-zoneless`. The dedicated Cypress configuration keeps the
-ZoneJS absence assertion out of the regular E2E suite.
+The `zoneless` configuration remains as a compatibility alias with the same
+`main.ts` entry point and writes diagnostic builds to `dist/apps/frontend-zoneless`.
+The regular E2E suite now also checks that ZoneJS is absent. Use
+`npx nx build frontend --configuration=production` for the production artifact.
+The preparation and validation notes below describe the earlier migration stages.
 
 The code-selector replay integration tests and user-menu tests explicitly use
 `provideZonelessChangeDetection()` and wait for Angular stability rather than
@@ -55,31 +66,39 @@ recovery resets, comment validation and delayed profile/role changes.
   tests cover the job list, results and processes. The Keycloak suite opens a
   completed job's results and the process overview against the real backend.
 
-## Release gates still required
+## Release gates and current status
 
 A successful smoke test is not evidence that all application views are zoneless
 compatible. The isolated suite below covers login/logout, a complete coding job,
 delayed notes, a simulated save failure, real session invalidation and draft
-recovery in both builds. Before changing the production entry point:
+recovery in both builds. The production entry point has since been changed;
+before a production deployment:
 
 1. The real `coding-box` Keycloak realm and client accepted a manual PKCE login
    to a local zoneless frontend. The same frontend also loaded real workspaces
-   through the deployed `kodierbox-test.iqb.hu-berlin.de` backend. Deploy the
-   PR's zoneless frontend to the intended test instance and confirm its redirect
-   and origin settings before production rollout.
+   through the deployed `kodierbox-test.iqb.hu-berlin.de` backend. The PR's
+   production frontend was then deployed to the test instance, and login,
+   redirect origin, authenticated views and real workspace data were checked.
 2. Broaden zoneless browser checks to views and state changes outside the
    isolated suites. The current suites cover the replay player, uploads,
    item-dataset export, workspace administration, manual job creation and
    coding, read-only review, result application, Content Pool and legal-notice
    settings, replay URL export mode, process overview, system notifications,
    and the workspace database export through progress and download. Component
-   tests cover delayed database export progress in both settings views. Check
-   production-scale background jobs separately on the deployed test instance.
-3. Audit visible timer and subscription updates across those views. Signals,
-   AsyncPipe, bound events or `markForCheck()` must notify Angular for every
-   visible asynchronous update.
-4. Only then switch the default entry point, remove the ZoneJS polyfill and audit
-   test/component-test dependencies before removing the package.
+   tests cover delayed database export progress in both settings views. A small
+   real export completed on the test instance, while a longer background export
+   and delayed progress polls passed in the isolated Keycloak suite. A
+   production-scale background job on the deployed test instance remains a
+   release gate before production rollout.
+3. Known visible timer and subscription updates in these workflows use
+   signals, AsyncPipe, bound events or `markForCheck()` to notify Angular.
+   The live tests exercise representative status changes without a second
+   user action; untested views remain a rollout risk.
+4. The default entry point now uses zoneless change detection and has no ZoneJS
+   polyfill. The `zone.js` package remains for Jest and Cypress component tests.
+5. For production, build and publish the release frontend image, retain the
+   previous image for rollback, deploy only the frontend, and observe login,
+   coding, export and background-job health after rollout.
 
 The isolated `npx nx run frontend:e2e-replay-live` harness uses a real backend,
 database and embedded player, but uses replay tokens and deliberately does not
@@ -130,8 +149,9 @@ The manual check confirmed the empty-workspace screen after that fix. It did
 not exercise a deployed zoneless build or populated workspaces. A subsequent
 manual check connected the local zoneless frontend through a temporary local
 proxy to `https://kodierbox-test.iqb.hu-berlin.de/api/`. Login and the display
-of existing workspaces succeeded. The deployed test frontend itself still
-includes ZoneJS, so this does not replace a zoneless test deployment.
+of existing workspaces succeeded. At the time of that earlier check, the
+deployed test frontend still included ZoneJS; the deployment below supersedes
+that limitation.
 
 Reference: [Angular 21 zoneless guide](https://github.com/angular/angular/blob/v21.2.0/adev/src/content/guide/zoneless.md).
 
@@ -199,3 +219,35 @@ gates before switching the production entry point.
 
 These local checks do not validate the deployed zoneless test instance or
 production-scale background-job durations.
+
+## Deployed test-instance verification on 2026-09-28
+
+- PR head `c00115460b34524df7f4366054ff402d6ac53b9b` was built with the
+  regular production configuration and deployed as a frontend-only test image
+  to `https://kodierbox-test.iqb.hu-berlin.de/`. Backend, export worker,
+  database and Redis were unchanged. The previous frontend image remains
+  available for frontend-only rollback. This test image was built on the test
+  host and was not published as a release image.
+- The public frontend and `/api/health` returned HTTP 200. In the authenticated
+  test session, `window.Zone` was absent. Workspace lists, test files, the
+  test-result overview and manual-coding administration loaded without browser
+  warnings or errors.
+- The workspace-rights dialog loaded all 21 workspaces and filtered an entry
+  beyond the first 20. An unchanged rights selection for a test user saved
+  and reloaded. A temporary additional selection was reverted before closing;
+  no additional access was granted.
+- A workspace with existing work showed 40 coding jobs. Filtering and opening
+  a completed job's read-only review worked; navigation to the next of 46
+  cases updated without another click.
+- A v2 CSV test export without response values completed and its export job
+  was removed without downloading the file. Reloading the authenticated export
+  route kept the session and route.
+- The isolated production-build Keycloak/backend suite passed again (5/5,
+  exit 0), including note persistence, forced session expiration, recovery,
+  manual-job creation/completion/review/application and a background export.
+  The production-build rights suite passed (4/4, exit 0), including second-page
+  success and failure cases. The disposable containers were removed.
+
+These checks found no zoneless regression or test-side merge blocker. They do
+not claim a production deployment or production-scale load validation. The
+production-scale background-job check above remains open before rollout.

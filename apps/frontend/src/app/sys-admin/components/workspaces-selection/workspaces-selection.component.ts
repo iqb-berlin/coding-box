@@ -12,7 +12,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ChangeDetectorRef, Component, OnInit, SimpleChanges, ViewChild, inject,
+  ChangeDetectorRef, Component, OnInit, OnChanges, SimpleChanges, ViewChild, inject,
   DestroyRef, input,
   output
 } from '@angular/core';
@@ -24,7 +24,6 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { HasSelectionValuePipe } from '../../../shared/pipes/hasSelectionValue.pipe';
 import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';
-import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
 import { IsSelectedIdPipe } from '../../../shared/pipes/isSelectedId.pipe';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
@@ -35,9 +34,9 @@ import { WorkspaceBackendService } from '../../../workspace/services/workspace-b
   templateUrl: './workspaces-selection.component.html',
   styleUrls: ['./workspaces-selection.component.scss'],
   // eslint-disable-next-line max-len
-  imports: [SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, FormsModule, TranslateModule, IsSelectedPipe, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe]
+  imports: [SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, FormsModule, TranslateModule, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe]
 })
-export class WorkspacesSelectionComponent implements OnInit {
+export class WorkspacesSelectionComponent implements OnInit, OnChanges {
   private workspaceBackendService = inject(WorkspaceBackendService);
   private destroyRef = inject(DestroyRef);
   private changeDetectorRef = inject(ChangeDetectorRef);
@@ -52,6 +51,7 @@ export class WorkspacesSelectionComponent implements OnInit {
 
   @ViewChild(MatSort) sort = new MatSort();
   readonly selectedWorkspacesIds = input.required<number[]>();
+  readonly selectionDisabled = input(false);
   readonly workspaceSelectionChanged = output<WorkspaceInListDto[]>();
   readonly selectionChanged = output<WorkspaceInListDto[]>();
   readonly workspacesUpdated = output<boolean>();
@@ -115,6 +115,7 @@ export class WorkspacesSelectionComponent implements OnInit {
   }
 
   selectCheckbox(row: WorkspaceInListDto): void {
+    if (this.selectionDisabled()) return;
     this.tableSelectionCheckboxes.toggle(row);
     this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
     this.changeDetectorRef.markForCheck();
@@ -127,6 +128,7 @@ export class WorkspacesSelectionComponent implements OnInit {
   }
 
   masterToggle(): void {
+    if (this.selectionDisabled()) return;
     this.isAllSelected() || !this.objectsDatasource ?
       this.tableSelectionCheckboxes.clear() :
       this.objectsDatasource.data.forEach(row => this.tableSelectionCheckboxes.select(row));

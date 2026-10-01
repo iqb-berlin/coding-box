@@ -1,3 +1,5 @@
+import { AUTH_SESSION_WARNING_DELAY_MS } from '../../apps/frontend/src/app/core/services/auth-session.config';
+
 type CodingSetup = {
   apiUrl: string;
   baseUrl: string;
@@ -78,6 +80,20 @@ describe('real Keycloak coding session', () => {
       replay.hash = `${route}?${params}`;
       cy.visit(replay.toString(), { log: false });
     });
+    cy.get('app-code-selector [data-code-id="1"]').should('be.visible');
+    // Advance only browser timeout callbacks; Keycloak and the backend retain real time.
+    cy.clock(Date.now(), ['setTimeout', 'clearTimeout']);
+    cy.window().then(win => win.dispatchEvent(new Event('mousemove')));
+    cy.tick(AUTH_SESSION_WARNING_DELAY_MS);
+    cy.get('.session-expiry-warning').should('be.visible');
+    cy.clock().then(clock => clock.restore());
+    cy.intercept('POST', '**/realms/coding-e2e/protocol/openid-connect/token', request => {
+      if (String(request.body).includes('grant_type=refresh_token')) request.alias = 'extendSession';
+    });
+    cy.get('.session-expiry-warning button').click();
+    cy.wait('@extendSession').its('response.statusCode').should('eq', 200);
+    cy.get('.session-expiry-warning').should('not.exist');
+    cy.get('.re-authentication').should('not.exist');
     cy.get('app-code-selector [data-code-id="1"]').click();
     cy.intercept('POST', '**/coding-job/*/notes', (request) => {
       if (request.body.notes === 'Persisted live note') {
@@ -150,9 +166,9 @@ describe('real Keycloak coding session', () => {
         });
       }
     });
-    cy.task('coding:expire-session', null, { log: false }).then(() => {
-      rejectExpiredRefresh = true;
-    });
+    // A refresh can race with the server-side session revocation. Arm its observer first.
+    cy.then(() => { rejectExpiredRefresh = true; });
+    cy.task('coding:expire-session', null, { log: false });
     cy.get('app-code-selector textarea').then((textarea) => {
       const field = textarea[0] as HTMLTextAreaElement;
       if (!field.disabled) {
