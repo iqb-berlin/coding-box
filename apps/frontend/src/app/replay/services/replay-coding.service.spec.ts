@@ -48,6 +48,87 @@ describe('ReplayCodingService', () => {
     service = TestBed.inject(ReplayCodingService);
   });
 
+  it.each([true, false])('persists new-code-needed during a progress save (with regular code: %s)', async withRegularCode => {
+    const pending = new Subject<CodingJob>();
+    codingJobBackendServiceMock.saveCodingProgress.mockReturnValueOnce(pending).mockReturnValue(of({} as CodingJob));
+    codingJobBackendServiceMock.saveCodingNotes.mockReturnValue(of({} as CodingJob));
+    service.codingJobId = 100;
+    await service.saveNotes(1, 'p1', 'u1', 'v1', 'Existing saved explanation');
+    await service.flushPendingRowMutations();
+    const first = service.handleCodeSelected({
+      variableId: 'v1', code: { id: 1, label: 'Code 1' } as never, codingIssueOption: null
+    }, 'p1', 'u1', 1, null);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledTimes(1);
+    const second = service.handleCodeSelected({
+      variableId: 'v1',
+      code: withRegularCode ? { id: 1, label: 'Code 1' } as never : null,
+      codingIssueOption: { id: 'new-code', code: -2, label: 'New code needed' }
+    }, 'p1', 'u1', 1, null);
+    pending.next({} as CodingJob);
+    pending.complete();
+    await Promise.all([first, second]);
+    await service.flushPendingRowMutations();
+    expect(service.getPreSelectedCodingIssueOptionId('p1', 'u1', 'v1')).toBe(-2);
+    expect(service.hasSaveError).toBe(false);
+    expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenLastCalledWith(1, 100, expect.objectContaining({
+      selectedCode: expect.objectContaining({ codingIssueOption: -2 })
+    }));
+  });
+
+  it('keeps new-code-needed unsaved after a failed pending note and persists it after retry', async () => {
+    const pending = new Subject<CodingJob>();
+    codingJobBackendServiceMock.saveCodingNotes.mockReturnValueOnce(pending).mockReturnValue(of({} as CodingJob));
+    codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
+    service.codingJobId = 100;
+    const noteSave = service.saveNotes(1, 'p1', 'u1', 'v1', 'Explanation').catch(error => error);
+    await service.handleCodeSelected({
+      variableId: 'v1',
+      code: null,
+      codingIssueOption: { id: 'new-code', code: -2, label: 'New code needed' }
+    }, 'p1', 'u1', 1, null);
+    expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+    pending.error(new Error('Note failed'));
+    await noteSave;
+    expect(service.hasSaveError).toBe(true);
+    expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+    await service.saveNotes(1, 'p1', 'u1', 'v1', 'Explanation');
+    await service.flushPendingRowMutations();
+    expect(service.hasSaveError).toBe(false);
+    expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledWith(1, 100, expect.objectContaining({
+      selectedCode: expect.objectContaining({ codingIssueOption: -2 })
+    }));
+  });
+
+  it('does not persist new-code-needed if a newer queued note fails', async () => {
+    const firstNote = new Subject<CodingJob>();
+    const secondNote = new Subject<CodingJob>();
+    codingJobBackendServiceMock.saveCodingNotes
+      .mockReturnValueOnce(firstNote)
+      .mockReturnValueOnce(secondNote);
+    codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
+    service.codingJobId = 100;
+
+    const firstSave = service.saveNotes(1, 'p1', 'u1', 'v1', '');
+    await Promise.resolve();
+    const secondSave = service.saveNotes(1, 'p1', 'u1', 'v1', 'Unsaved explanation').catch(error => error);
+    await service.handleCodeSelected({
+      variableId: 'v1',
+      code: null,
+      codingIssueOption: { id: 'new-code', code: -2, label: 'New code needed' }
+    }, 'p1', 'u1', 1, null);
+
+    firstNote.next({} as CodingJob);
+    firstNote.complete();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenCalledTimes(2);
+    secondNote.error(new Error('Latest note failed'));
+    await Promise.all([firstSave, secondSave]);
+    expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+  });
+
   it('should be created', () => {
     expect(service).toBeTruthy();
   });

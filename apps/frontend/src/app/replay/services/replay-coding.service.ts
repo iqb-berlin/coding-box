@@ -79,6 +79,7 @@ export class ReplayCodingService {
   private failedSaveKeys = new Set<string>();
   private rowMutationChains = new Map<string, Promise<void>>();
   private pendingRowMutations = new Set<Promise<void>>();
+  private pendingNoteMutations = new Map<string, Promise<void>>();
   private latestSelectionRevisionByKey = new Map<string, number>();
   private latestRequestedSelectionByKey = new Map<string, SavedCode | null>();
   private selectionRevision = 0;
@@ -117,6 +118,7 @@ export class ReplayCodingService {
     this.failedSaveKeys.clear();
     this.rowMutationChains.clear();
     this.pendingRowMutations.clear();
+    this.pendingNoteMutations.clear();
     this.latestSelectionRevisionByKey.clear();
     this.latestRequestedSelectionByKey.clear();
     this.selectionRevision = 0;
@@ -762,7 +764,7 @@ export class ReplayCodingService {
       this.updateLocalNotes(testPerson, unitId, variableId, notes);
     }
 
-    await this.enqueueRowMutation(compositeKey, async () => {
+    const noteMutation = this.enqueueRowMutation(compositeKey, async () => {
       try {
         await firstValueFrom(
           this.codingJobBackendService.saveCodingNotes(workspaceId, jobId, {
@@ -791,7 +793,13 @@ export class ReplayCodingService {
         }
         throw error;
       }
-    });
+    }, true);
+    await noteMutation;
+
+    // An older note save must not persist the latest local text before a newer
+    // queued note has reached the backend. The newest save will sync the code.
+    const latestNoteMutation = this.pendingNoteMutations.get(compositeKey);
+    if (latestNoteMutation && latestNoteMutation !== noteMutation) return;
 
     if (this.isCurrentCodingContext(contextSnapshot)) {
       await this.syncNewCodeNeededProgressAfterNotes(
@@ -990,7 +998,7 @@ export class ReplayCodingService {
     if (!this.isSelectedCodePersistable(compositeKey, selectedCode)) return;
     // A new-code-needed choice requires a saved note. The pending note save
     // persists this choice after it succeeds.
-    if (this.isNewCodeNeededSelection(selectedCode) && this.rowMutationChains.has(compositeKey)) return;
+    if (this.isNewCodeNeededSelection(selectedCode) && this.pendingNoteMutations.has(compositeKey)) return;
 
     await this.saveCodingProgress(
       workspaceId,
@@ -1087,12 +1095,16 @@ export class ReplayCodingService {
     return -1;
   }
 
-  private enqueueRowMutation(key: string, operation: () => Promise<void>): Promise<void> {
+  private enqueueRowMutation(key: string, operation: () => Promise<void>, isNoteMutation = false): Promise<void> {
     const previous = this.rowMutationChains.get(key) ?? Promise.resolve();
     const next = previous.catch(() => undefined).then(operation);
     this.pendingRowMutations.add(next);
+    if (isNoteMutation) this.pendingNoteMutations.set(key, next);
     const tracked = next.catch(() => undefined).finally(() => {
       this.pendingRowMutations.delete(next);
+      if (this.pendingNoteMutations.get(key) === next) {
+        this.pendingNoteMutations.delete(key);
+      }
       if (this.rowMutationChains.get(key) === tracked) {
         this.rowMutationChains.delete(key);
         this.codingStateVersion.update(version => version + 1);

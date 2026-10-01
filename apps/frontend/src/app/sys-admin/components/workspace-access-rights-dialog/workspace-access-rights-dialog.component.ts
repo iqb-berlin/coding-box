@@ -26,6 +26,7 @@ export class WorkspaceAccessRightsDialogComponent {
 
   selectedWorkspacesIds: number[] = [];
   isLoadingUserWorkspaces = false;
+  workspaceListReady = false;
   userWorkspacesLoadingFailed = false;
   result: number[] = [];
   constructor() {

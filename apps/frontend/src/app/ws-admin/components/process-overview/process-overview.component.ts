@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, inject, ViewChild, AfterViewInit
+  ChangeDetectorRef, Component, OnInit, inject, ViewChild, AfterViewInit
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -238,6 +238,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
+  private changeDetector = inject(ChangeDetectorRef);
   data: { workspaceId: number } = inject(MAT_DIALOG_DATA);
 
   workspaceId: number = this.data.workspaceId;
@@ -320,6 +321,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
         this.lastLoadedAt = Date.now();
         this.isLoading = false;
         this.applyFilter();
+        this.changeDetector.markForCheck();
       },
       error: () => {
         this.snackBar.open(
@@ -328,6 +330,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
           { duration: 3000 }
         );
         this.isLoading = false;
+        this.changeDetector.markForCheck();
       }
     });
   }
@@ -361,6 +364,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     if (!action) return;
 
     this.isLoading = true;
+    this.changeDetector.markForCheck();
     this.processesService.deleteProcess(this.workspaceId, process.queueName, process.id.toString()).subscribe({
       next: success => {
         if (success) {
@@ -373,6 +377,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
             { duration: 4000 }
           );
           this.isLoading = false;
+          this.changeDetector.markForCheck();
         }
       },
       error: () => {
@@ -382,6 +387,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
           { duration: 4000 }
         );
         this.isLoading = false;
+        this.changeDetector.markForCheck();
       }
     });
   }

@@ -45,6 +45,15 @@ recovery resets, comment validation and delayed profile/role changes.
   suite covers workspace creation/deletion, user and workspace lists, access
   preselection, and notification creation/deletion with confirmation dialogs
   against the real backend.
+- System and workspace settings: notify Angular when settings load or save,
+  including legal notices, Content Pool settings, replay export options and
+  database export progress. Delayed-response component tests cover visible
+  settings and export status; the Keycloak suite saves Content Pool settings
+  and verifies them after reload.
+- Manual coding administration: notify Angular after coding job lists and result
+  dialogs load, and after process overview updates. Delayed-response component
+  tests cover the job list, results and processes. The Keycloak suite opens a
+  completed job's results and the process overview against the real backend.
 
 ## Release gates still required
 
@@ -58,12 +67,14 @@ recovery in both builds. Before changing the production entry point:
    through the deployed `kodierbox-test.iqb.hu-berlin.de` backend. Deploy the
    PR's zoneless frontend to the intended test instance and confirm its redirect
    and origin settings before production rollout.
-2. Complete zoneless browser checks for the remaining views and state changes,
-   especially deeper manual coding actions, workspace/system settings, and
-   background jobs. The replay player, test-file upload, real test-result
-   upload, item-dataset export, workspace creation/deletion, user/workspace
-   lists, access-rights preselection, manual execution job list and
-   system-notification dialog have dedicated coverage now.
+2. Broaden zoneless browser checks to views and state changes outside the
+   isolated suites. The current suites cover the replay player, uploads,
+   item-dataset export, workspace administration, manual job creation and
+   coding, read-only review, result application, Content Pool and legal-notice
+   settings, replay URL export mode, process overview, system notifications,
+   and the workspace database export through progress and download. Component
+   tests cover delayed database export progress in both settings views. Check
+   production-scale background jobs separately on the deployed test instance.
 3. Audit visible timer and subscription updates across those views. Signals,
    AsyncPipe, bound events or `markForCheck()` must notify Angular for every
    visible asynchronous update.
@@ -87,7 +98,8 @@ realm file after the run. Diagnostic logs are written beneath
 `tmp/replay-e2e-artifacts` with replay tokens redacted.
 
 The browser signs in through Keycloak with PKCE, starts a two-response coding job
-against the real backend, selects a code and checks notes after reload. Only the
+against the real backend, selects a code and checks notes after reload. It also
+saves and reloads a job comment and navigates backward and forward. Only the
 notes endpoint is temporarily made to fail to create an unsaved draft. The test
 invalidates the real Keycloak session, signs in again and checks draft persistence
 and cleanup, then pauses, resumes, finishes the job and signs out. The zoneless
@@ -98,7 +110,9 @@ upload API, wait for its background job result, and check the result dialog.
 They also open system administration, create and delete a workspace, verify
 the user and workspace lists, verify the current user's preselected workspace
 access, create and delete a system notification through its confirmation dialog,
-and verify the completed job in the manual execution tab. The generated realm
+and verify the completed job and its result dialog in the manual execution tab.
+They save Content Pool settings and verify the value after reload, then open
+the workspace process overview. The generated realm
 and disposable database keep these mutations isolated.
 
 The JavaScript adapter is updated from 23 to 26.2.4. Keycloak 25+ only puts the
@@ -140,3 +154,48 @@ Reference: [Angular 21 zoneless guide](https://github.com/angular/angular/blob/v
   server-side session invalidation, draft recovery and cleanup, pause/resume,
   completion and logout. The expanded three-case suite also passed in both
   modes with real response upload, system administration and manual coding entry.
+
+## Additional verification on 2026-09-26
+
+- Frontend lint: passed.
+- Frontend tests: 206 suites, 2,112 tests passed. Delayed-response zoneless
+  regression tests reproduce stale settings, export progress, process lists,
+  manual coding job lists and result dialogs before the corresponding fixes.
+- Production and opt-in zoneless builds: passed.
+- Isolated real Keycloak zoneless suite: 3 tests passed against the real backend,
+  PostgreSQL, Redis and Keycloak. It now checks persisted job comments and
+  backward/forward coding navigation, completed job results, saved Content Pool
+  settings after reload and the process overview. An earlier run passed the
+  new administration case but timed out waiting for reauthentication in the
+  existing session recovery case; the full suite passed on repeat. The comment
+  check now follows recovery so it cannot alter the setup timing of that case.
+
+The isolated suite does not prove behavior on the deployed zoneless test
+instance. The deployment and remaining browser checks above remain release
+gates before switching the production entry point.
+
+## Extended manual workflow verification on 2026-09-26
+
+- Frontend lint, 207 unit-test suites with 2,113 tests, the production build,
+  and the opt-in zoneless build passed.
+- The five-case isolated Keycloak suite passed in the zoneless browser against
+  the real backend, PostgreSQL, Redis, and Keycloak. The added case creates and
+  approves a manual job definition, distributes one coding job, codes and
+  submits it, opens the read-only review page with the saved code, and applies
+  the result through the completion tab. It verifies the resulting job status.
+- The same five-case live suite also passed with the regular ZoneJS frontend.
+- A second added case saves and reloads the legal notice, resets it, changes
+  the replay URL export mode in both directions across reloads, and starts a
+  real workspace SQLite export. It observes the progress indicator and the
+  successful download. Three running-status polls are held at 42% to verify
+  that the progress display and disabled export action persist over time.
+- The recovery case logs out the real Keycloak session and then rejects the
+  first refresh request with `invalid_grant`, so the reauthentication UI and
+  draft recovery are checked without depending on Keycloak refresh timing.
+- The browser run exposed missing change-detection notifications for manual
+  planning data, definition and dialog loading, and the completed-job and
+  applied-results views. These paths now call `markForCheck()` after asynchronous
+  updates; a separate zoneless component test covers delayed definition loading.
+
+These local checks do not validate the deployed zoneless test instance or
+production-scale background-job durations.

@@ -29,9 +29,7 @@ export class WorkspaceBackendService {
   private http = inject(HttpClient);
 
   getAllWorkspacesList(): Observable<PaginatedWorkspacesDto> {
-    return this.http
-      .get<PaginatedWorkspacesDto>(`${this.serverUrl}admin/workspace`,
-      {})
+    return this.getAllWorkspacesListOrFail()
       .pipe(
         catchError(() => {
           const defaultResponse: PaginatedWorkspacesDto = {
@@ -43,6 +41,10 @@ export class WorkspaceBackendService {
           return of(defaultResponse);
         })
       );
+  }
+
+  getAllWorkspacesListOrFail(): Observable<PaginatedWorkspacesDto> {
+    return this.http.get<PaginatedWorkspacesDto>(`${this.serverUrl}admin/workspace`, {});
   }
 
   getWorkspaceUsers(

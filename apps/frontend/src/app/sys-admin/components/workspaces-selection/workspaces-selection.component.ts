@@ -47,6 +47,8 @@ export class WorkspacesSelectionComponent implements OnInit {
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
   tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
   selectedWorkspaceId = 0;
+  private workspaceListLoaded = false;
+  readonly workspaceListReady = output<boolean>();
 
   @ViewChild(MatSort) sort = new MatSort();
   readonly selectedWorkspacesIds = input.required<number[]>();
@@ -71,18 +73,29 @@ export class WorkspacesSelectionComponent implements OnInit {
 
   private updateWorkspaceList(): void {
     this.selectedWorkspaceId = 0;
-    this.workspaceBackendService.getAllWorkspacesList()
+    this.workspaceListLoaded = false;
+    this.workspaceListReady.emit(false);
+    this.workspaceBackendService.getAllWorkspacesListOrFail()
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(workspaces => {
-        this.workspacesUpdated.emit(this.workspacesChanged());
-        this.setObjectsDatasource(workspaces.data);
-        this.tableSelectionRow.clear();
-        this.applySelectedWorkspaceIds();
-        this.changeDetectorRef.markForCheck();
+      .subscribe({
+        next: workspaces => {
+          this.workspacesUpdated.emit(this.workspacesChanged());
+          this.setObjectsDatasource(workspaces.data);
+          this.workspaceListLoaded = true;
+          this.tableSelectionRow.clear();
+          this.applySelectedWorkspaceIds();
+          this.workspaceListReady.emit(true);
+          this.changeDetectorRef.markForCheck();
+        },
+        error: () => {
+          this.workspaceListReady.emit(false);
+          this.changeDetectorRef.markForCheck();
+        }
       });
   }
 
   private applySelectedWorkspaceIds(): void {
+    if (!this.workspaceListLoaded) return;
     this.tableSelectionCheckboxes.clear();
     this.tableSelectionCheckboxes.select(...this.objectsDatasource.data
       .filter(workspace => this.selectedWorkspacesIds().includes(workspace.id)));

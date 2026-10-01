@@ -1,4 +1,5 @@
 import {
+  ChangeDetectorRef,
   Component,
   OnInit,
   OnDestroy,
@@ -168,6 +169,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
   private coderService = inject(CoderService);
   private testPersonCodingService = inject(TestPersonCodingService);
+  private changeDetector = inject(ChangeDetectorRef);
 
   canApplyResults = false;
   canReviewCodingJobs = false;
@@ -254,6 +256,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       .subscribe(coders => {
         this.allCoders = coders;
         this.updateCoderNamesMap(this.dataSource.data);
+        this.changeDetector.markForCheck();
       });
 
     this.jobNameFilterSubscription = this.jobNameFilterChanges
@@ -298,6 +301,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         this.canReviewCodingJobs = currentUser ?
           hasManagementWorkspaceAccess(currentUser) :
           false;
+        this.changeDetector.markForCheck();
       });
   }
 
@@ -344,6 +348,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
           this.jobDetailsCache.clear();
           this.hasLoadedJobs = true;
           this.isLoading = false;
+          this.changeDetector.markForCheck();
         },
         error: () => {
           this.snackBar.open('Fehler beim Laden der Kodierjobs', 'Schließen', {
@@ -351,6 +356,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
           });
           this.hasLoadedJobs = true;
           this.isLoading = false;
+          this.changeDetector.markForCheck();
         }
       });
   }
