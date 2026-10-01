@@ -14,6 +14,7 @@ import {
 import {
   Component,
   ChangeDetectorRef,
+  DestroyRef,
   ElementRef,
   inject,
   OnDestroy,
@@ -21,6 +22,7 @@ import {
   ViewChild
 } from '@angular/core';
 
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule, UntypedFormGroup } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -405,6 +407,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private validationTaskStateService = inject(ValidationTaskStateService);
   private unitsReplayService = inject(UnitsReplayService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
+  private readonly destroyRef = inject(DestroyRef);
+
   private changeDetectorRef = inject(ChangeDetectorRef);
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | null = null;
@@ -3122,6 +3126,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   openBookletInfo(bookletName: string): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
     const loadingSnackBar = this.snackBar.open(
       'Lade Booklet-Informationen...',
       '',
@@ -3129,9 +3134,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     );
 
     this.fileService
-      .getBookletInfo(this.appService.selectedWorkspaceId, bookletName)
+      .getBookletInfo(workspaceId, bookletName)
+      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => loadingSnackBar.dismiss()))
       .subscribe({
         next: (bookletInfo: BookletInfoDto) => {
+          if (this.appService.selectedWorkspaceId !== workspaceId) return;
           loadingSnackBar.dismiss();
 
           this.dialog.open(BookletInfoDialogComponent, {
@@ -3146,6 +3153,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           });
         },
         error: () => {
+          if (this.appService.selectedWorkspaceId !== workspaceId) return;
           loadingSnackBar.dismiss();
           this.snackBar.open(
             'Fehler beim Laden der Booklet-Informationen',
@@ -3157,6 +3165,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   openUnitInfoForSelectedUnit(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
     if (!this.selectedUnit || !this.selectedUnit.name) {
       this.snackBar.open('Keine Unit ausgewählt', 'Info', { duration: 3000 });
       return;
@@ -3177,9 +3186,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     );
 
     this.fileService
-      .getUnitInfo(this.appService.selectedWorkspaceId, unitFileId)
+      .getUnitInfo(workspaceId, unitFileId)
+      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => loadingSnackBar.dismiss()))
       .subscribe({
         next: (unitInfo: UnitInfoDto) => {
+          if (this.appService.selectedWorkspaceId !== workspaceId) return;
           loadingSnackBar.dismiss();
 
           this.dialog.open(UnitInfoDialogComponent, {
@@ -3194,6 +3205,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           });
         },
         error: () => {
+          if (this.appService.selectedWorkspaceId !== workspaceId) return;
           loadingSnackBar.dismiss();
           this.snackBar.open(
             'Fehler beim Laden der Unit-Informationen',
