@@ -89,3 +89,20 @@ Historie nicht umgeschrieben.
 Die Konsolidierung allein ist kein Qualitätsnachweis. Entscheidend sind die
 erfolgreichen Tests und CI des finalen Standes sowie die ausdrücklich benannten
 Restgrenzen in `zoneless-risk-coverage.json`.
+
+## Veröffentlichte Zusammenfassung
+
+Die acht Pakete wurden mit dem zusätzlichen Origin-Commit `7c497b05` zur
+VOCS-Vorschau integriert. Die ursprünglichen 67 Commits werden dadurch in neun
+Commits zusammengefasst. Vor den folgenden Nachweiskorrekturen war der Endbaum
+exakt identisch mit `7c497b05`; die ursprüngliche Historie bleibt lokal unter
+`fix-zoneless-dialog-updates` erhalten.
+
+Das neunte Paket enthält außerdem das aktualisierte Quelleninventar und die
+Testreferenzen der VOCS-Vorschau. Im Rollen-Browsertest wird die verzögerte
+Guard-Antwort explizit abgewartet und die anschließende Weiterleitung mit einem
+begrenzten Timeout geprüft. Dies behebt den beobachteten CI-Timeout ohne Retries.
+Der fehlgeschlagene Player-Download im Auth-Fixture von Pipeline `102644` ist
+als Infrastrukturfehler getrennt zu prüfen. Frühere grüne CI-Ergebnisse gelten
+für den jeweiligen ursprünglichen Commit; die neue Historie erhält einen eigenen
+CI-Lauf.

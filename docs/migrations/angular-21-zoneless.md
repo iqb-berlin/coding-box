@@ -44,6 +44,11 @@ recovery resets, comment validation and delayed profile/role changes.
   browser suite covers the success toast and the incomplete-export dialog.
 - Test files: notify Angular after the file list refreshes. The zoneless browser
   suite uploads a file, checks the result dialog and sees the refreshed row.
+- VOCS preview: notify Angular after Schemer loading finishes, preserve the XML
+  Schemer and scheme-type reference in the coding overview, and resolve the unit
+  reference for direct VOCS previews. Select the requested version range instead
+  of the latest uploaded module. Delayed-response component and browser tests
+  cover automatic iframe rendering, missing versions and failed downloads.
 - Test results: notify Angular when the overview, list or upload progress changes.
   The zoneless browser suite checks the response upload from the import dialog
   through chunk transfer, job completion, result dialog and refreshed overview

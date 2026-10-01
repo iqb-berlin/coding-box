@@ -60,6 +60,21 @@ describe('CodingManagementUiService', () => {
     expect(result).toBe('test-scheme');
   });
 
+  it('preserves the Schemer and scheme type from the unit XML through opening the preview', () => {
+    const reference = { content: 'DLB004.vocs', schemer: 'iqb-schemer@2.5', schemeType: 'iqb@3.0' };
+    mockFileService.getUnitContentXml!.mockReturnValue(of(
+      '<Unit><CodingSchemeRef schemer="iqb-schemer@2.5" schemeType="iqb@3.0">DLB004.vocs</CodingSchemeRef></Unit>'
+    ));
+    mockFileService.getCodingSchemeFile!.mockReturnValue(of({ filename: 'DLB004.vocs', base64Data: '{}', mimeType: 'Resource' }));
+    service.getCodingSchemeFromUnit(123).subscribe(result => {
+      expect(result).toEqual(reference);
+      service.showCodingSchemeDialog(result!);
+    });
+    expect(mockDialog.open).toHaveBeenCalledWith(SchemeEditorDialogComponent, expect.objectContaining({
+      data: expect.objectContaining({ content: '{}', codingSchemeRef: reference, readOnly: true })
+    }));
+  });
+
   it('should return null for invalid XML', () => {
     const xml = '<root></root>';
     const result = service.extractCodingSchemeRefFromXml(xml);
