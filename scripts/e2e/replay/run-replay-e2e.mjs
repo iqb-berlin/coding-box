@@ -21,6 +21,9 @@ const artifactDir = path.join(repoDir, 'tmp', 'replay-e2e-artifacts', runId);
 const composeFile = path.join(scriptDir, 'docker-compose.replay.yml');
 const authMode = process.argv.includes('--auth');
 const zoneless = process.argv.includes('--zoneless');
+const production = process.argv.includes('--production');
+const connectHost = process.env.REPLAY_E2E_CONNECT_HOST || '127.0.0.1';
+const publishHost = process.env.REPLAY_E2E_PUBLISH_HOST || '127.0.0.1';
 const [apiPort, frontendPort, keycloakPort] = await Promise.all([
   reservePort(),
   reservePort(),
@@ -33,14 +36,15 @@ await mkdir(runDir, { recursive: true });
 await mkdir(artifactDir, { recursive: true });
 
 const composeFiles = ['--file', composeFile, ...(authMode ? ['--file', path.join(scriptDir, 'docker-compose.auth.yml')] : [])];
-const authEnvironment = authMode ? await prepareAuthEnvironment(runDir, keycloakPort, frontendPort) : {};
+const authEnvironment = authMode ? await prepareAuthEnvironment(runDir, keycloakPort, frontendPort, connectHost) : {};
 const replayEnvironment = {
   ...process.env,
   ...authEnvironment,
-  REPLAY_E2E_FRONTEND_CONFIGURATION: zoneless ? 'zoneless' : 'development',
+  REPLAY_E2E_FRONTEND_CONFIGURATION: production ? 'production' : (zoneless ? 'zoneless' : 'development'),
   REPLAY_E2E_API_PORT: String(apiPort),
-  REPLAY_E2E_API_URL: `http://127.0.0.1:${apiPort}`,
-  REPLAY_E2E_BASE_URL: `http://127.0.0.1:${frontendPort}`,
+  REPLAY_E2E_API_URL: `http://${connectHost}:${apiPort}`,
+  REPLAY_E2E_BASE_URL: `http://${connectHost}:${frontendPort}`,
+  REPLAY_E2E_PUBLISH_HOST: publishHost,
   REPLAY_E2E_CACHE_DIR: path.join(repoDir, 'cache', 'replay-player'),
   REPLAY_E2E_COMPOSE_PROJECT: projectName,
   REPLAY_E2E_FIXTURE_DIR: path.join(

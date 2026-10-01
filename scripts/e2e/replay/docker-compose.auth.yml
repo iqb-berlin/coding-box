@@ -9,7 +9,7 @@ services:
     volumes:
       - ${REPLAY_E2E_AUTH_DIR}/coding-e2e-realm.json:/opt/keycloak/data/import/coding-e2e-realm.json:ro
     ports:
-      - '127.0.0.1:${REPLAY_E2E_KEYCLOAK_PORT}:8080'
+      - '${REPLAY_E2E_PUBLISH_HOST:-127.0.0.1}:${REPLAY_E2E_KEYCLOAK_PORT}:8080'
   backend:
     environment:
       OIDC_ISSUER: ${REPLAY_E2E_OIDC_ISSUER}

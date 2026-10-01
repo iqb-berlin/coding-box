@@ -99,6 +99,22 @@ describe('MyCodingJobsComponent', () => {
     component = fixture.componentInstance;
   });
 
+  it('stops loading jobs from auth updates after the view is destroyed', () => {
+    const authData = new BehaviorSubject({ userId: 7, workspaces: [] });
+    const appService = TestBed.inject(AppService) as unknown as { authData$: Observable<unknown> };
+    appService.authData$ = authData.asObservable();
+    const loadJobs = jest.spyOn(component, 'loadMyCodingJobs').mockImplementation(() => {});
+    fixture.detectChanges();
+    expect(loadJobs).toHaveBeenCalledTimes(1);
+    authData.next({ userId: 8, workspaces: [] });
+    expect(loadJobs).toHaveBeenCalledTimes(2);
+
+    fixture.destroy();
+    authData.next({ userId: 9, workspaces: [] });
+    expect(loadJobs).toHaveBeenCalledTimes(2);
+    expect(component.currentUserId).toBe(8);
+  });
+
   it('renders completed coding jobs with start and submit-for-review actions', () => {
     fixture.detectChanges();
     component.isAuthorized = true;

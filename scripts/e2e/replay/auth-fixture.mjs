@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
+import { findComposeContainer } from './compose-container.mjs';
 
 const exec = promisify(execFile);
 
@@ -109,9 +110,10 @@ export async function setupCodingFixture(state, environment) {
     );
 
   // Limit seeding to the disposable fixture workspace. Status 8 = CODING_INCOMPLETE.
+  const dbContainer = await findComposeContainer(config.composeProject, 'db');
   await exec('docker', [
     'exec',
-    `${config.composeProject}-db-1`,
+    dbContainer,
     'psql',
     '-U',
     'replay_e2e',
@@ -137,7 +139,7 @@ export async function setupCodingFixture(state, environment) {
     username: 'coding-e2e',
     password: environment.REPLAY_E2E_AUTH_PASSWORD,
     keycloakUrl: environment.REPLAY_E2E_KEYCLOAK_URL,
-    zoneless: environment.REPLAY_E2E_FRONTEND_CONFIGURATION === 'zoneless'
+    zoneless: true
   };
 }
 
@@ -191,8 +193,9 @@ async function seedAdditionalCodingCase(config, workspaceId, adminToken) {
   }
   if (!completed) throw new Error('Additional coding case import timed out.');
 
+  const dbContainer = await findComposeContainer(config.composeProject, 'db');
   const { stdout } = await exec('docker', [
-    'exec', `${config.composeProject}-db-1`,
+    'exec', dbContainer,
     'psql', '-U', 'replay_e2e', '-d', 'replay_e2e',
     '-v', 'ON_ERROR_STOP=1',
     '-c', `UPDATE response SET status_v1=8 WHERE variableid='answer_1' AND unitid IN

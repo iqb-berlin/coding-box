@@ -1,3 +1,4 @@
+import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
@@ -24,7 +25,7 @@ describe('WorkspaceAccessRightsDialogComponent', () => {
     };
 
     await TestBed.configureTestingModule({
-      providers: [{
+      providers: [provideZonelessChangeDetection(), {
         provide: MAT_DIALOG_DATA,
         useValue: {
           selectedUser: [{ id: 5, username: 'user-5' }]
@@ -129,6 +130,47 @@ describe('WorkspaceAccessRightsDialogComponent', () => {
     workspaceList$.error(new Error('list unavailable'));
     fixture.detectChanges();
     expect(component.result).toEqual([2, 3]);
+    expect(fixture.nativeElement.querySelector('mat-dialog-actions button').disabled).toBe(true);
+  });
+
+  it('blocks selection until delayed user rights arrive and keeps the result consistent with the checkboxes', async () => {
+    await fixture.whenStable();
+    const checkboxes = Array.from(
+      fixture.nativeElement.querySelectorAll('mat-table input[type="checkbox"]')
+    ) as HTMLInputElement[];
+    const saveButton = fixture.nativeElement.querySelector('mat-dialog-actions button') as HTMLButtonElement;
+    expect(checkboxes).toHaveLength(3);
+    expect(checkboxes.every(checkbox => checkbox.disabled)).toBe(true);
+    expect(saveButton.disabled).toBe(true);
+
+    checkboxes[2].click();
+    await fixture.whenStable();
+    expect(component.result).toEqual([]);
+
+    workspacesByUser$.next([2]);
+    workspacesByUser$.complete();
+    await fixture.whenStable();
+    expect(checkboxes.every(checkbox => !checkbox.disabled)).toBe(true);
+    expect(checkboxes.slice(1).map(checkbox => checkbox.checked)).toEqual([true, false]);
+    expect(component.result).toEqual([2]);
+    expect(saveButton.disabled).toBe(false);
+
+    checkboxes[1].click();
+    checkboxes[2].click();
+    await fixture.whenStable();
+    expect(checkboxes.slice(1).map(checkbox => checkbox.checked)).toEqual([false, true]);
+    expect(component.result).toEqual([3]);
+  });
+
+  it('keeps selection disabled after user rights fail to load', async () => {
+    await fixture.whenStable();
+    workspacesByUser$.error(new Error('rights unavailable'));
+    await fixture.whenStable();
+
+    const checkboxes = Array.from(
+      fixture.nativeElement.querySelectorAll('mat-table input[type="checkbox"]')
+    ) as HTMLInputElement[];
+    expect(checkboxes.every(checkbox => checkbox.disabled)).toBe(true);
     expect(fixture.nativeElement.querySelector('mat-dialog-actions button').disabled).toBe(true);
   });
 });

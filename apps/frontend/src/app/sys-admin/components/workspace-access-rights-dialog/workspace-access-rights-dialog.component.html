@@ -4,6 +4,7 @@
     (workspaceSelectionChanged)="setWorkspacesSelection($event)"
     (workspaceListReady)="workspaceListReady = $event"
     [selectedWorkspacesIds]="selectedWorkspacesIds"
+    [selectionDisabled]="!workspaceListReady || isLoadingUserWorkspaces || userWorkspacesLoadingFailed"
     [workspacesChanged]="true" />
 </mat-dialog-content>
 

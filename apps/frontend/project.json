@@ -27,9 +27,7 @@
           "browser": ""
         },
         "index": "apps/frontend/src/index.html",
-        "polyfills": [
-          "apps/frontend/src/polyfills.ts"
-        ],
+        "polyfills": [],
         "tsConfig": "apps/frontend/tsconfig.app.json",
         "inlineStyleLanguage": "scss",
         "assets": [
@@ -71,7 +69,6 @@
           "namedChunks": true
         },
         "zoneless": {
-          "browser": "apps/frontend/src/main.zoneless.ts",
           "polyfills": [],
           "outputPath": {
             "base": "dist/apps/frontend-zoneless",
@@ -80,8 +77,7 @@
           "optimization": false,
           "extractLicenses": false,
           "sourceMap": true,
-          "namedChunks": true,
-          "tsConfig": "apps/frontend/tsconfig.zoneless.json"
+          "namedChunks": true
         }
       },
       "defaultConfiguration": "production"
@@ -175,6 +171,9 @@
       "configurations": {
         "zoneless": {
           "command": "node scripts/e2e/replay/run-replay-e2e.mjs --auth --zoneless"
+        },
+        "production": {
+          "command": "node scripts/e2e/replay/run-replay-e2e.mjs --auth --production"
         }
       }
     }
