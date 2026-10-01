@@ -13,10 +13,11 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, OnInit, SimpleChanges, inject,
+  ViewChild, Component, OnInit, SimpleChanges, ChangeDetectorRef, DestroyRef, inject,
   input,
   output
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
@@ -40,6 +41,8 @@ import { SearchFilterComponent } from '../../../shared/search-filter/search-filt
 export class UsersSelectionComponent implements OnInit {
   private userBackendService = inject(UserBackendService);
   private workspaceBackendService = inject(WorkspaceBackendService);
+  private changeDetectorRef = inject(ChangeDetectorRef);
+  private destroyRef = inject(DestroyRef);
 
   userObjectsDatasource = new MatTableDataSource<UserFullDto>();
   displayedUserColumns = ['selectCheckbox', 'username', 'displayName'];
@@ -75,23 +78,29 @@ export class UsersSelectionComponent implements OnInit {
   }
 
   updateUserList(): void {
-    this.userBackendService.getUsersFull().subscribe(
-      (users: UserFullDto[]) => {
-        if (users.length > 0) {
-          this.setObjectsDatasource(users);
-          this.setCheckboxes();
-        } else {
-          this.tableSelectionCheckboxes.clear();
-          this.tableSelectionRow.clear();
+    this.userBackendService.getUsersFull()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(
+        (users: UserFullDto[]) => {
+          if (users.length > 0) {
+            this.setObjectsDatasource(users);
+            this.setCheckboxes();
+          } else {
+            this.tableSelectionCheckboxes.clear();
+            this.tableSelectionRow.clear();
+          }
+          this.changeDetectorRef.markForCheck();
         }
-      }
-    );
+      );
   }
 
   createWorkspaceList(): void {
-    this.workspaceBackendService.getAllWorkspacesList().subscribe(workspaces => {
-      if (workspaces.data.length > 0) { this.userWorkspaces = workspaces.data; }
-    });
+    this.workspaceBackendService.getAllWorkspacesList()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(workspaces => {
+        if (workspaces.data.length > 0) { this.userWorkspaces = workspaces.data; }
+        this.changeDetectorRef.markForCheck();
+      });
   }
 
   setCheckboxes(): void {
@@ -115,9 +124,12 @@ export class UsersSelectionComponent implements OnInit {
 
   updateUserWorkspacesList(userId: number): void {
     if (this.tableSelectionCheckboxes.selected.length === 1) {
-      this.userBackendService.getWorkspacesByUserList(userId).subscribe(workspaces => {
-        this.filteredUserWorkspaces = this.userWorkspaces.filter(workspace => workspaces.includes(workspace.id));
-      });
+      this.userBackendService.getWorkspacesByUserList(userId)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe(workspaces => {
+          this.filteredUserWorkspaces = this.userWorkspaces.filter(workspace => workspaces.includes(workspace.id));
+          this.changeDetectorRef.markForCheck();
+        });
     }
   }
 

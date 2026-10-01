@@ -13,6 +13,7 @@ import {
 } from '@angular/material/table';
 import {
   Component,
+  ChangeDetectorRef,
   ElementRef,
   inject,
   OnDestroy,
@@ -404,6 +405,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private validationTaskStateService = inject(ValidationTaskStateService);
   private unitsReplayService = inject(UnitsReplayService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
+  private changeDetectorRef = inject(ChangeDetectorRef);
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | null = null;
   private deleteTaskSubscription: Subscription | null = null;
@@ -505,6 +507,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         } else {
           this.isUploadingResults = false;
         }
+        this.changeDetectorRef.markForCheck();
       }
     );
 
@@ -520,6 +523,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         );
         this.isLoading = false;
         this.isUploadingResults = false;
+        this.changeDetectorRef.markForCheck();
       }
     });
 
@@ -1238,6 +1242,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.isLoading = false;
+          this.changeDetectorRef.markForCheck();
         }
       });
   }
@@ -1252,9 +1257,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             this.overview = result;
           }
           this.isLoadingOverview = false;
+          this.changeDetectorRef.markForCheck();
         },
         error: () => {
           this.isLoadingOverview = false;
+          this.changeDetectorRef.markForCheck();
         }
       });
   }
@@ -1929,6 +1936,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.dataSource = new MatTableDataSource(mappedResults);
     this.totalRecords = total;
     this.dataSource.sort = this.sort;
+    this.changeDetectorRef.markForCheck();
   }
 
   openImportDialog(): void {

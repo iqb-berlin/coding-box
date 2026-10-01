@@ -8,6 +8,7 @@ The migration configuration is opt-in and is not a production release switch.
 - `npx nx serve frontend --configuration=zoneless`
 - `npx nx build frontend --configuration=zoneless`
 - `env -u ELECTRON_RUN_AS_NODE npx nx e2e frontend --configuration=zoneless`
+- `env -u ELECTRON_RUN_AS_NODE npx nx run frontend:e2e-replay-live --configuration=zoneless`
 
 The candidate uses `main.zoneless.ts`, omits the ZoneJS polyfill and writes builds
 to `dist/apps/frontend-zoneless`. The dedicated Cypress configuration keeps the
@@ -26,40 +27,116 @@ recovery resets, comment validation and delayed profile/role changes.
   and lifecycle-bound authentication subscriptions.
 - Home and application shell: lifecycle-bound subscriptions. Home also cancels
   pending workspace-access requests, preventing navigation after destruction.
+- Replay: notify Angular when a new response arrives or a failed navigation
+  clears the embedded player. The live replay test caught the stale player.
+- Export status: notify Angular when background job updates arrive. The zoneless
+  browser suite covers the success toast and the incomplete-export dialog.
+- Test files: notify Angular after the file list refreshes. The zoneless browser
+  suite uploads a file, checks the result dialog and sees the refreshed row.
+- Test results: notify Angular when the overview, list or upload progress changes.
+  The zoneless browser suite checks the response upload from the import dialog
+  through chunk transfer, job completion, result dialog and refreshed overview
+  with stubbed server responses.
+- System administration: notify Angular when the user list, user workspace list,
+  system-notification list, or workspace mutation state changes after a server
+  response. Refresh the workspace list only after a real mutation so a pending
+  refresh does not reset a user's checkbox selection. Keep asynchronous
+  workspace-access preselection in sync with its dialog. The isolated Keycloak
+  suite covers workspace creation/deletion, user and workspace lists, access
+  preselection, and notification creation/deletion with confirmation dialogs
+  against the real backend.
 
 ## Release gates still required
 
 A successful smoke test is not evidence that all application views are zoneless
-compatible. Before changing the production entry point:
+compatible. The isolated suite below covers login/logout, a complete coding job,
+delayed notes, a simulated save failure, real session invalidation and draft
+recovery in both builds. Before changing the production entry point:
 
-1. Validate login and logout against the intended Keycloak test realm.
-2. Open a coding job, select codes and notes, verify persisted data after reload,
-   then complete/pause/resume the job. Check delayed saves and network failures.
-3. Expire the session during an unsaved change, reauthenticate, restore the draft,
-   and verify it is cleared only after persistence succeeds.
-4. Validate embedded-player messages, route changes, dialogs, uploads, exports,
-   timers and asynchronous subscriptions for missing change notifications.
-5. Run the same flows in the zoneless build. Signals, AsyncPipe, bound events or
-   `markForCheck()` must notify Angular for every visible asynchronous update.
-6. Only then switch the default entry point, remove the ZoneJS polyfill and audit
+1. The real `coding-box` Keycloak realm and client accepted a manual PKCE login
+   to a local zoneless frontend. The same frontend also loaded real workspaces
+   through the deployed `kodierbox-test.iqb.hu-berlin.de` backend. Deploy the
+   PR's zoneless frontend to the intended test instance and confirm its redirect
+   and origin settings before production rollout.
+2. Complete zoneless browser checks for the remaining views and state changes,
+   especially deeper manual coding actions, workspace/system settings, and
+   background jobs. The replay player, test-file upload, real test-result
+   upload, item-dataset export, workspace creation/deletion, user/workspace
+   lists, access-rights preselection, manual execution job list and
+   system-notification dialog have dedicated coverage now.
+3. Audit visible timer and subscription updates across those views. Signals,
+   AsyncPipe, bound events or `markForCheck()` must notify Angular for every
+   visible asynchronous update.
+4. Only then switch the default entry point, remove the ZoneJS polyfill and audit
    test/component-test dependencies before removing the package.
 
 The isolated `npx nx run frontend:e2e-replay-live` harness uses a real backend,
 database and embedded player, but uses replay tokens and deliberately does not
-provide a real Keycloak realm. It cannot replace gates 1–3.
+provide a real Keycloak realm. The authentication suite below covers those flows.
+
+## Isolated authentication and recovery test
+
+- `env -u ELECTRON_RUN_AS_NODE npx nx run frontend:e2e-auth-live`
+- `env -u ELECTRON_RUN_AS_NODE npx nx run frontend:e2e-auth-live --configuration=zoneless`
+
+These commands extend the disposable replay stack with Keycloak 26.4.0, a generated
+realm and random temporary passwords. They need Docker Compose and enough free
+space for the application image, database and Keycloak. No production account or
+external test realm is required. The runner removes its containers, volumes and
+realm file after the run. Diagnostic logs are written beneath
+`tmp/replay-e2e-artifacts` with replay tokens redacted.
+
+The browser signs in through Keycloak with PKCE, starts a two-response coding job
+against the real backend, selects a code and checks notes after reload. Only the
+notes endpoint is temporarily made to fail to create an unsaved draft. The test
+invalidates the real Keycloak session, signs in again and checks draft persistence
+and cleanup, then pauses, resumes, finishes the job and signs out. The zoneless
+variant also asserts that `window.Zone` is absent.
+
+Additional cases log in again, upload a response CSV through the real chunked
+upload API, wait for its background job result, and check the result dialog.
+They also open system administration, create and delete a workspace, verify
+the user and workspace lists, verify the current user's preselected workspace
+access, create and delete a system notification through its confirmation dialog,
+and verify the completed job in the manual execution tab. The generated realm
+and disposable database keep these mutations isolated.
+
+The JavaScript adapter is updated from 23 to 26.2.4. Keycloak 25+ only puts the
+nonce in the ID token; the old adapter also expected it in access and refresh
+tokens. Nonce validation remains enabled, and PKCE S256 is explicit. See the
+[Keycloak migration guide](https://www.keycloak.org/docs/latest/upgrading/#using-older-javascript-adapter).
+The adapter requires a secure browser context (HTTPS, or localhost for these
+tests). This isolated realm does not verify the deployed realm's settings.
+Manual login against the deployed `coding-box` realm with the local zoneless
+frontend additionally confirmed token acceptance by an isolated backend. Its
+empty database exposed a home-screen loading state that stayed visible after
+the successful response. The home view now marks asynchronous authentication
+state updates for checking; a zoneless regression test covers the empty state.
+The manual check confirmed the empty-workspace screen after that fix. It did
+not exercise a deployed zoneless build or populated workspaces. A subsequent
+manual check connected the local zoneless frontend through a temporary local
+proxy to `https://kodierbox-test.iqb.hu-berlin.de/api/`. Login and the display
+of existing workspaces succeeded. The deployed test frontend itself still
+includes ZoneJS, so this does not replace a zoneless test deployment.
 
 Reference: [Angular 21 zoneless guide](https://github.com/angular/angular/blob/v21.2.0/adev/src/content/guide/zoneless.md).
 
 ## Verification on 2026-09-25
 
 - Frontend lint: passed.
-- Frontend tests: 206 suites, 2,097 tests passed.
+- Frontend tests: 206 suites, 2,099 tests passed.
 - Production build and opt-in zoneless build: passed.
-- Regular browser smoke suite: 3 tests passed.
-- Zoneless browser suite: 4 tests passed, including absence of `window.Zone`.
+- Regular browser suite: 7 tests passed. The default Cypress configuration now
+  excludes the two live specs, which require their own backend harness.
+- Zoneless browser suite: 10 tests passed, including absence of `window.Zone`,
+  item-dataset export dialogs, a test-file upload and the stubbed test-result
+  response-upload flow through job completion and refreshed overview.
 - Isolated live suite: replay and item-matrix export both passed against the
-  real backend, PostgreSQL, Redis and embedded Aspect player. The temporary
-  containers were removed by the harness.
-- Real Keycloak login, session expiry and coding-draft recovery remain unverified:
-  no designated test realm/account was supplied. Existing unit tests cover the
-  corresponding recovery logic but are not a substitute for those live flows.
+  real backend, PostgreSQL, Redis and embedded Aspect player. The zoneless
+  variant also passed after fixing the stale player on a failed navigation.
+  The temporary containers were removed by the harness.
+- Isolated real Keycloak coding/session suite: passed with ZoneJS and zoneless.
+  It covers login, persisted code and notes after reload, a failed note save,
+  server-side session invalidation, draft recovery and cleanup, pause/resume,
+  completion and logout. The expanded three-case suite also passed in both
+  modes with real response upload, system administration and manual coding entry.
