@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
-import { writeFile } from 'node:fs/promises';
+import { chown, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { FILE_ACCESS_USERS } from './file-access-users.mjs';
 
 export async function prepareAuthEnvironment(
   runDir,
@@ -49,14 +50,32 @@ export async function prepareAuthEnvironment(
         realmRoles: ['admin'],
         clientRoles: { account: ['manage-account', 'view-profile'] },
         credentials: [{ type: 'password', value: password, temporary: false }]
-      }
+      },
+      ...FILE_ACCESS_USERS.map(user => ({
+        id: user.identity,
+        username: user.username,
+        enabled: true,
+        emailVerified: true,
+        email: `${user.username}@example.invalid`,
+        firstName: 'Files',
+        lastName: 'E2E',
+        realmRoles: [],
+        clientRoles: { account: ['manage-account', 'view-profile'] },
+        credentials: [{ type: 'password', value: password, temporary: false }]
+      }))
     ]
   };
+  const realmFile = path.join(runDir, 'coding-e2e-realm.json');
   await writeFile(
-    path.join(runDir, 'coding-e2e-realm.json'),
+    realmFile,
     JSON.stringify(realm),
     { mode: 0o600 }
   );
+  // Linux CI writes as root; Keycloak 26.4 runs as UID 1000 and must read this
+  // private bind-mounted fixture. Keep mode 0600 rather than exposing passwords.
+  if (process.platform === 'linux' && process.getuid?.() === 0) {
+    await chown(realmFile, 1000, 0);
+  }
   await writeFile(
     path.join(runDir, 'runtime-config.js'),
     `window.RUNTIME_CONFIG = ${JSON.stringify({

@@ -70,7 +70,7 @@ describe('TestFilesComponent', () => {
         },
         {
           provide: AppService,
-          useValue: { selectedWorkspaceId: 1 }
+          useValue: { selectedWorkspaceId: 1, selectedWorkspaceId$: new Subject<number>() }
         },
         {
           provide: FileService,

@@ -1,6 +1,7 @@
 import {
-  ChangeDetectorRef, Component, OnDestroy, OnInit, ViewChild, inject
+  ChangeDetectorRef, Component, DestroyRef, OnDestroy, OnInit, ViewChild, inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { UntypedFormGroup, FormsModule } from '@angular/forms';
@@ -42,6 +43,7 @@ import {
   finalize,
   switchMap,
   take,
+  takeUntil,
   tap
 } from 'rxjs/operators';
 import {
@@ -159,6 +161,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   private translate = inject(TranslateService);
   private contentPoolIntegrationService = inject(ContentPoolIntegrationService);
   private validationService = inject(ValidationService);
+  private readonly destroyRef = inject(DestroyRef);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private changeDetectorRef = inject(ChangeDetectorRef);
 
@@ -231,16 +234,28 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
   private textFilterChanged: Subject<string> = new Subject<string>();
   private textFilterSubscription: Subscription | undefined;
+  private fileListSubscription: Subscription | undefined;
 
   page: number = 1;
   limit: number = 100;
   total: number = 0;
 
   ngOnInit(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
     this.workspaceSettingsService
-      .getEnableRegexSearch(this.appService.selectedWorkspaceId)
+      .getEnableRegexSearch(workspaceId)
+      .pipe(
+        takeUntil(this.appService.selectedWorkspaceId$.pipe(filter(id => id !== workspaceId))),
+        takeUntilDestroyed(this.destroyRef)
+      )
       .subscribe(enabled => {
+        const modeChanged = this.enableRegexSearch !== enabled;
         this.enableRegexSearch = enabled;
+        if (modeChanged && this.textFilterValue) {
+          this.fileListSubscription?.unsubscribe();
+          this.applyFilters();
+        }
+        this.changeDetectorRef.markForCheck();
       });
     this.loadTestFiles();
     this.loadContentPoolSettings();
@@ -327,11 +342,13 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.fileListSubscription?.unsubscribe();
+    const workspaceId = this.appService.selectedWorkspaceId;
     this.isLoading = true;
-    this.isValidating = false;
-    this.fileService
+    this.changeDetectorRef.markForCheck();
+    this.fileListSubscription = this.fileService
       .getFilesList(
-        this.appService.selectedWorkspaceId,
+        workspaceId,
         this.page,
         this.limit,
         this.selectedFileType,
@@ -340,6 +357,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         this.enableRegexSearch
       )
       .pipe(
+        takeUntil(this.appService.selectedWorkspaceId$.pipe(filter(id => id !== workspaceId))),
+        takeUntilDestroyed(this.destroyRef),
         finalize(() => {
           this.isLoading = false;
           this.changeDetectorRef.markForCheck();
@@ -401,10 +420,13 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   private loadContentPoolSettings(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
     this.isLoadingContentPoolConfig = true;
     this.contentPoolIntegrationService
-      .getWorkspaceConfig(this.appService.selectedWorkspaceId)
+      .getWorkspaceConfig(workspaceId)
       .pipe(
+        takeUntil(this.appService.selectedWorkspaceId$.pipe(filter(id => id !== workspaceId))),
+        takeUntilDestroyed(this.destroyRef),
         finalize(() => {
           this.isLoadingContentPoolConfig = false;
           this.changeDetectorRef.markForCheck();
@@ -1114,6 +1136,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   validateFiles(): void {
+    if (this.isValidating) return;
     this.isValidating = true;
     this.validationProgress = 0;
     this.validationProgressMessage =
@@ -1124,7 +1147,9 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     this.validationService
       .createValidationTask(workspaceId, 'testFiles')
       .pipe(
+        filter(() => this.appService.selectedWorkspaceId === workspaceId),
         switchMap(task => this.waitForValidationTask(workspaceId, task)),
+        filter(() => this.appService.selectedWorkspaceId === workspaceId),
         switchMap(task => {
           if (task.status === 'failed') {
             throw new Error(task.error || 'Validierung fehlgeschlagen');
@@ -1138,6 +1163,10 @@ export class TestFilesComponent implements OnInit, OnDestroy {
             task.id
           );
         }),
+        takeUntil(this.appService.selectedWorkspaceId$.pipe(
+          filter(selectedWorkspaceId => selectedWorkspaceId !== workspaceId)
+        )),
+        takeUntilDestroyed(this.destroyRef),
         finalize(() => {
           this.isValidating = false;
           this.changeDetectorRef.markForCheck();
@@ -1145,9 +1174,11 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: result => {
-          this.handleValidationResponse(result as FileValidationResultDto);
+          if (this.appService.selectedWorkspaceId !== workspaceId) return;
+          this.handleValidationResponse(result as FileValidationResultDto, workspaceId);
         },
         error: () => {
+          if (this.appService.selectedWorkspaceId !== workspaceId) return;
           this.snackBar.open(
             this.translate.instant('ws-admin.validation-failed'),
             this.translate.instant('error'),
@@ -1206,9 +1237,12 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   private handleValidationResponse(
-    res: boolean | FileValidationResultDto
+    res: boolean | FileValidationResultDto,
+    workspaceId = this.appService.selectedWorkspaceId
   ): void {
-    this.isLoading = false;
+    const workspaceChanged$ = this.appService.selectedWorkspaceId$.pipe(
+      filter(selectedWorkspaceId => selectedWorkspaceId !== workspaceId)
+    );
     this.isValidating = false;
     if (res === false) {
       this.snackBar.open(
@@ -1229,14 +1263,29 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           }
         });
 
-        confirmRef.afterClosed().subscribe(result => {
+        confirmRef.afterClosed().pipe(
+          takeUntil(workspaceChanged$),
+          takeUntilDestroyed(this.destroyRef)
+        ).subscribe(result => {
           if (result === true) {
             this.isLoading = true;
+            this.changeDetectorRef.markForCheck();
+            let creationPending = true;
             this.fileService
-              .createDummyTestTakerFile(this.appService.selectedWorkspaceId)
+              .createDummyTestTakerFile(workspaceId)
+              .pipe(
+                takeUntil(workspaceChanged$),
+                takeUntilDestroyed(this.destroyRef),
+                finalize(() => {
+                  if (creationPending) this.isLoading = false;
+                  this.changeDetectorRef.markForCheck();
+                })
+              )
               .subscribe({
                 next: success => {
+                  creationPending = false;
                   this.isLoading = false;
+                  this.changeDetectorRef.markForCheck();
                   if (success) {
                     this.snackBar.open(
                       'Testtaker-Datei wurde erfolgreich erstellt.',
@@ -1244,9 +1293,10 @@ export class TestFilesComponent implements OnInit, OnDestroy {
                       { duration: 3000 }
                     );
                     this.loadTestFiles();
-                    setTimeout(() => {
-                      this.validateFiles();
-                    }, 1000);
+                    timer(1000).pipe(
+                      takeUntil(workspaceChanged$),
+                      takeUntilDestroyed(this.destroyRef)
+                    ).subscribe(() => this.validateFiles());
                   } else {
                     this.snackBar.open(
                       'Fehler beim Erstellen der Testtaker-Datei.',
@@ -1256,7 +1306,9 @@ export class TestFilesComponent implements OnInit, OnDestroy {
                   }
                 },
                 error: () => {
+                  creationPending = false;
                   this.isLoading = false;
+                  this.changeDetectorRef.markForCheck();
                   this.snackBar.open(
                     'Fehler beim Erstellen der Testtaker-Datei.',
                     this.translate.instant('error'),
@@ -1284,11 +1336,14 @@ export class TestFilesComponent implements OnInit, OnDestroy {
                   duplicateTestTakers: res.duplicateTestTakers,
                   unusedTestFiles: res.unusedTestFiles,
                   geogebra: res.geogebra,
-                  workspaceId: this.appService.selectedWorkspaceId
+                  workspaceId
                 }
               });
 
-              dialogRef.afterClosed().subscribe((dialogResult: boolean) => {
+              dialogRef.afterClosed().pipe(
+                takeUntil(workspaceChanged$),
+                takeUntilDestroyed(this.destroyRef)
+              ).subscribe((dialogResult: boolean) => {
                 if (dialogResult) {
                   this.loadTestFiles();
                 }
@@ -1310,11 +1365,14 @@ export class TestFilesComponent implements OnInit, OnDestroy {
             duplicateTestTakers: res.duplicateTestTakers,
             unusedTestFiles: res.unusedTestFiles,
             geogebra: res.geogebra,
-            workspaceId: this.appService.selectedWorkspaceId
+            workspaceId
           }
         });
 
-        dialogRef.afterClosed().subscribe((result: boolean) => {
+        dialogRef.afterClosed().pipe(
+          takeUntil(workspaceChanged$),
+          takeUntilDestroyed(this.destroyRef)
+        ).subscribe((result: boolean) => {
           if (result) {
             this.loadTestFiles();
           }

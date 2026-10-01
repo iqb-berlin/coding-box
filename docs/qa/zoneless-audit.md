@@ -1,12 +1,16 @@
-# Zoneless-Prüfung: Nachweise und offene Abdeckung
+# Zoneless-Prüfung: risikobasierte Freigabe
 
 ## Status
 
-Die umfassende Prüfung ist **noch nicht abgeschlossen**. Ein erfolgreicher Testlauf
-ist keine vollständige Freigabe aller Komponenten und Aktionen.
+Seit 01.10.2026 gilt auf ausdrücklichen Nutzerwunsch eine **risikobasierte Freigabe**.
+Die Prüfung jedes einzelnen UI-Elements und aller zehn Szenarien pro Bindung
+ist kein Abschlusskriterium mehr. Maßgeblich sind die sechs Fachbereiche,
+sieben asynchronen Mechanismen und die Regressionen bestätigter Fehler in
+`zoneless-risk-coverage.json`. Die Freigabe ist noch nicht erteilt:
+Abschlussläufe und erfolgreicher CI-Nachweis des endgültigen Commits fehlen.
 Ausgangspunkt: PR #1039, Commit `aaae7be16c7aeadb2abbb8d1001e367d7bccf598`.
-Die Erweiterungen bis einschließlich CSV-Export und Seiten-Lebenszyklus wurden
-mit `467fe811` auf den PR-Branch gepusht. Weitere Prüfschritte sind unten dokumentiert.
+Prüfschritte, Korrekturen und zugehörige Testergebnisse sind unten dokumentiert.
+Lokale Nachweise, gepushte Änderungen und entfernte CI-Ergebnisse werden getrennt ausgewiesen.
 
 ## Prüfinfrastruktur
 
@@ -18,6 +22,7 @@ npx nx run frontend:test-zoneless --runInBand
 npx nx lint frontend
 npx nx test frontend --runInBand
 npx nx e2e frontend --spec=cypress/e2e/zoneless-dialogs.cy.ts --browser=electron
+npx nx run frontend:test-e2e-harness
 npx nx run frontend:e2e-auth-live --configuration=zoneless
 npx nx run frontend:e2e-replay-live --configuration=zoneless
 npx nx run frontend:e2e-auth-live --configuration=production
@@ -37,7 +42,7 @@ Entwicklungsdaten und Produktion gehören nicht zur Prüfung.
 ## Matrix
 
 Aktueller Umfang: 155 Komponenten, 73 Services, fünf Pipes und 24 externe
-Bibliotheken. Insgesamt 8.728 Einträge einschließlich Template-Ereignissen,
+Bibliotheken. Insgesamt 8.729 Einträge einschließlich Template-Ereignissen,
 Bindungen und asynchronen Quellen. Alle Gesamteinträge sind noch offen.
 
 `zoneless-coverage.json` erfasst Komponenten, Services, Pipes, Template-Ereignisse,
@@ -55,14 +60,71 @@ node scripts/qa/zoneless-inventory.mjs --update
 Geänderte Fingerprints setzen die betreffende Prüfung auf `open` zurück.
 Komponenten-Fingerprints berücksichtigen den Klasseninhalt und das Template.
 Das normale Inventar-Target erkennt neue, veränderte und entfernte Einträge.
-`zoneless-approval` scheitert zusätzlich an offenen Prüfungen, fehlenden
-Testdateien und nicht begründeten Szenario-Ausschlüssen. Die Szenarien sind im
-Prüfskript festgelegt und lassen sich nicht durch Kürzen der Matrix umgehen.
+Das Inventar bleibt eine Suchhilfe und wird kompakt mit einem Eintrag pro Zeile
+gespeichert. Seine offenen Einzelprüfungen blockieren die risikobasierte Freigabe
+nicht. `zoneless-approval` verlangt die sechs Fachbereiche, sieben Mechanismen,
+Testreferenzen für alle dokumentierten Fehlerkorrekturen, benannte Restgrenzen
+und keine offenen bestätigten Befunde. Dieser Strukturtest führt die referenzierten
+Tests nicht aus; deren erfolgreiche Ausführung ist eine zusätzliche Voraussetzung.
+Die alte Vollprüfung bleibt unter `zoneless-exhaustive-approval` optional verfügbar.
 
 Die CI führt die Inventarprüfung, den separaten Jest-Lauf, Browserprüfungen
-und Live-Prüfungen aus. Der zusätzliche Job `test-zoneless-approval` bleibt bei
-offener Matrix absichtlich rot; er ist kein `allow_failure`-Job. Die Konfiguration
-ist noch nicht durch einen entfernten CI-Lauf bestätigt.
+und Live-Prüfungen aus. `test-zoneless-approval` verwendet jetzt die risikobasierte
+Matrix und bleibt verpflichtend. Fehlende Inventarzuordnungen und ungültige
+Risikonachweise schlagen weiterhin fehl. Pipeline `102590` hat das Risikogate
+und `test-frontend-zoneless` erfolgreich ausgeführt. Eine vollständige grüne CI
+steht wegen der unten dokumentierten Fehler im Testaufbau noch aus.
+
+### CI-Befunde vom 01.10.2026
+
+Pipeline `102590`, Commit `15630c38`, bestätigt Build, allgemeine Tests,
+native Zoneless-Prüfungen, Risikogate und Live-Replay. Zwei Browserjobs bestehen
+jeweils 80 von 81 Fällen; der Auth-Job scheitert vor dem ersten Browsertest.
+
+- **Linux-Rechte des Auth-Fixtures:** Keycloak läuft als UID 1000, der CI-Prozess
+  erzeugte die bind-gemountete Realm-Datei als root mit Modus 0600. Das Stack-Log
+  von Job `464027` bestätigt `Permission denied` beim Realm-Import. Unter Linux
+  mit root wird nur diese private synthetische Datei UID 1000 zugeordnet; der
+  Modus bleibt 0600. Ein Linux-Containercheck bestätigt Eigentümer, Modus und
+  Lesen als UID 1000. Bestehende Dateien und Berechtigungen werden nicht geändert.
+- **Budget für Guard-Weiterleitungen:** Jobs `464024` und `464025` scheitern
+  bei der Kodiermanager-Weiterleitung nach 4 Sekunden. Der Fehlerscreenshot des
+  Produktionsjobs zeigt bereits `/coding/statistics`. Der Test wartet jetzt
+  ausdrücklich auf die erste neue Rechteantwort und gibt der Folge mehrerer
+  verzögerter Guards und Lazy-Routen bis zu 15 Sekunden. Er prüft weiter die
+  Zielansicht und das Ausbleiben unberechtigter Datei-/Konfigurationsanfragen.
+  Retries und feste Wartepausen bleiben deaktiviert.
+
+Diese beiden Korrekturen betreffen ausschließlich den Testaufbau. Die grüne
+Ausführung des korrigierten Standes muss durch eine neue Pipeline bestätigt werden.
+
+Pipeline `102597` bestätigt anschließend beide vollständigen Browserläufe,
+allgemeine und native Zoneless-Tests, Build, Lint, Risikogate und Live-Replay.
+Der Realm-Import startet; der Auth-Job erreicht jetzt alle elf Browsertests.
+Sie scheitern am gemeinsamen Fehler `Web Crypto API is not available`, weil
+`http://docker:<port>` kein sicherer Browserkontext ist.
+
+Der isolierte Auth-Aufbau leitet deshalb die drei entfernten Docker-Ports für
+Backend, Frontend und Keycloak auf getrennte `127.0.0.1`-Ports des Testrunners
+weiter. Auch lokale Auth-Läufe verwenden diesen Weg. Die Anwendung erhält die
+native Web-Crypto-API eines regulären Loopback-Kontexts; weder Browserflags noch
+Crypto-Mocks oder Exception-Filter umgehen den Fehler. Der Auth-Test prüft
+`isSecureContext` und `crypto.subtle` vor dem Login. Drei Harness-Tests prüfen
+echte HTTP-Weiterleitung, offene Streams beim Aufräumen und Freigabe zuvor
+gestarteter Listener bei einem fehlgeschlagenen Start. Sie laufen ebenfalls im
+verpflichtenden Auth-CI-Job. Eine vollständige grüne Pipeline bleibt Voraussetzung.
+
+Lokal sind die drei Harness-Tests und beide Auth-Läufe über Loopback mit jeweils
+elf Fällen bestanden; alle drei Nx-Kommandos endeten mit Exit-Code 0 und die
+isolierten Compose-Ressourcen wurden entfernt. Die Produktionskonfiguration
+verwendet ebenfalls den echten Keycloak- und Backend-Aufbau.
+
+CodeQL meldete am Loopback-Testaufbau zunächst eine reflektierte HTTP-Antwort
+im privaten Harness-Testserver (`loopback-forwarders.test.mjs`). Dieser antwortet
+jetzt mit festem Klartext und explizitem `Content-Type: text/plain`; Methode und
+Pfad der empfangenen Anfrage werden separat geprüft. Es wird kein Befund
+unterdrückt. Der endgültige Stand benötigt weiterhin einen grünen CodeQL- und
+GitLab-Nachweis.
 
 Ein Matrixeintrag darf erst `passed` werden, wenn Aufrufer, Rollen, Testreferenz,
 Nachweise und alle zehn Szenarien geprüft sind. Einzelne erfolgreiche Szenarien
@@ -94,19 +156,62 @@ benötigen die fünf Panels mit serverseitiger Pagination eine eigene Benachrich
 Die ergänzten Tests prüfen HTTP-500-Antworten und das Ende der Ladesperre; bei
 Variablen, Variablentypen und Antwortstatus zusätzlich erfolgreiche Seitenantworten.
 
-## Noch notwendige Arbeit für die vollständige Freigabe
+## Abschlusskriterien der risikobasierten Freigabe
 
-- Jede produktive Aufrufkette, Rolle, UI-Aktion und sichtbaren Zustände fachlich
-  zuordnen; statische Kandidaten allein reichen nicht.
-- Alle zehn Szenarien je relevantem Ablauf prüfen, einschließlich weiterer
-  Management-Anfragen, Timer, Dateioperationen, Player-Nachrichten und Dialoge.
-- Browserabdeckung aller erreichbaren Ansichten und wesentlichen Aktionen
-  ergänzen; echte Diagramme, Overlays, Metadateneditoren und Player prüfen.
-- Ausschlüsse durch nachgewiesene Nichterreichbarkeit begründen.
-- Abschließende Suite-, Browser-, Backend- und Produktionsläufe auf demselben
-  unveränderten Commit durchführen und deren CI-Ergebnisse dokumentieren.
+- Repräsentative Prüfungen für die sechs Fachbereiche und sieben Mechanismen
+  ausführen; vorhandene Regressionen bestätigter Fehler bleiben erhalten.
+- Verzögerte Antworten, Fehler/Wiederholung, Fortschritt, Antwortreihenfolge,
+  Kontextwechsel und Aufräumen anhand der dafür geeigneten Abläufe prüfen.
+- Browsernachweise für echte Bibliotheken sowie isolierte Backend-/Keycloak-
+  Nachweise für Speichern, Rechte und Sitzungswiederherstellung beibehalten.
+- Lint, allgemeine Suite, native Zoneless-Suite, Browser, Live-Backend/Replay
+  und Produktionskonfiguration an einem Abschlussstand erfolgreich prüfen.
+- CI desselben Commits bestätigen; lokale Ergebnisse, Push und CI getrennt ausweisen.
+- Keine bestätigten Fehler offen lassen; die Restgrenzen der Risikomatrix
+  im Abschlussbericht ausdrücklich nennen.
 
-Solange diese Punkte offen sind, muss `frontend:zoneless-approval` fehlschlagen.
+Ein erfolgreicher Strukturtest allein erteilt keine Freigabe. Historische Aussagen
+über eine wegen offener Einzelabdeckung gesperrte Gesamtfreigabe im folgenden
+Arbeitsprotokoll beschreiben die inzwischen abgelösten Kriterien.
+
+## Umstellung auf Risikofreigabe und Rollenprüfung am 01.10.2026
+
+Die ursprüngliche Vollabdeckung wurde auf ausdrücklichen Nutzerwunsch durch die
+oben beschriebenen Risikokriterien ersetzt. Der Commit-Review mit acht möglichen
+Paketen steht in `zoneless-commit-review.md`; die veröffentlichte Historie wurde
+dabei nicht umgeschrieben. Die JSON-Werte des kompakten Inventars wurden vollständig
+gegen den gepushten Stand `5ff9d430` verglichen und sind identisch.
+
+Die isolierte Keycloak-Fixture enthält zusätzlich Workspace-Rollen 0–3 und einen
+persistierten Systemadministrator ohne Realm-Adminrolle. Sechs neue Browserfälle
+prüfen echte Backend-Autorisierung, gespeicherte Regex-/Content-Pool-Einstellungen
+und die Dateiansicht mit kontrolliert verzögerten echten Serverantworten. Verweigerte
+Schreibanfragen werden anschließend über die gespeicherten Werte kontrolliert.
+Die aktuelle Rechte-API vergibt keine Stufe 4; diese historische Variante bleibt
+eine ausdrücklich benannte Restgrenze.
+
+Der erste neue Lauf bestand neun von elf Fällen (Exit 1). Zwei Testaufbaufehler
+betrafen ETag-Antworten mit HTTP 304; dadurch blieb eine kontrolliert angehaltene
+Anfrage bis zum Test-Timeout offen. Die Tests entfernen jetzt den bedingten
+Cache-Header dieser Requests und prüfen echte neue Backend-Antworten. Der frühere
+unterbrochene Lauf erwartete für fehlende Adminrechte fälschlich HTTP 403; der
+vorhandene AdminGuard liefert HTTP 401. Dafür war keine Produktänderung notwendig.
+
+| Prüfung der Umstellung | Ergebnis | Exit-Code | Lokales Artefakt |
+|---|---|---:|---|
+| Isolierter Backend-/Keycloak-Lauf, Zoneless | 11 von 11 Browserfällen bestanden; Compose-Ressourcen entfernt | 0 | `tmp/zoneless-audit/risk-auth-zoneless-final.log` |
+| Isolierter Backend-/Keycloak-Lauf, Produktionskonfiguration | 11 von 11 Browserfällen bestanden; Compose-Ressourcen entfernt | 0 | `tmp/zoneless-audit/risk-auth-production.log` |
+| Inventar-/Risiko-Schutztests | Zwei Tests einschließlich Negativfällen bestanden | 0 | `tmp/zoneless-audit/risk-matrix-tests.log` |
+| Risikobasierte Referenzprüfung | Sechs Bereiche, sieben Mechanismen, 25 Befunde zugeordnet | 0 | `tmp/zoneless-audit/risk-approval.log` |
+| Frontend-Lint | bestanden | 0 | `tmp/zoneless-audit/risk-lint.log` |
+| Allgemeine Frontend-Suite | 2.482 Tests in 222 Suites bestanden | 0 | `tmp/zoneless-audit/risk-frontend-tests.log` |
+| Native Zoneless-Suite | 737 Tests in 28 Suites bestanden | 0 | `tmp/zoneless-audit/risk-native-tests.log` |
+| Produktionsbuild | bestanden | 0 | `tmp/zoneless-audit/risk-production-build.log` |
+
+Dies sind lokale Nachweise. Der zuletzt ausgelesene entfernte Stand `5ff9d430`
+meldet erfolgreiches CodeQL und eine fehlgeschlagene GitLab-Pipeline 102578.
+Die GitLab-Detailseite verlangt eine Anmeldung; der konkrete Jobfehler ist nicht
+bestätigt. Die Umstellung selbst hat noch keinen erfolgreichen CI-Nachweis.
 
 ## Bisherige lokale Ausführung
 
@@ -823,3 +928,357 @@ mit der endgültigen Factory-Datei
 (`/tmp/zoneless-vocab-isolation-factory-browser.log`) bestehen jeweils mit
 Exit 0. Die Gesamtfreigabe bleibt offen. CodeQL für c4007124 ist erfolgreich;
 GitLab-Pipeline 102483 war beim letzten lesenden Abruf weiterhin Pending.
+
+## ZL-020: Dateivalidierung nach Verlassen der Ansicht
+
+Zwei neue native Tests mit echtem TestFilesComponent-Template zeigen
+weiter abonnierte Anfragen beim Anlegen eines Validierungsjobs und beim
+Laden des Ergebnisses nach Zerstörung der Ansicht
+(`/tmp/zoneless-files-validation-lifecycle-red.log`, zwei Fehler, ein
+bestandener Fehler-/Wiederholungsfall, Exit 1). Die gesamte Validierungskette
+endet jetzt über takeUntilDestroyed; dies umfasst auch Timer und laufende
+Polling-Anfragen. Beide Regressionen bestehen.
+
+Drei weitere Szenarien prüfen den sichtbaren Fehlerzustand mit erneuter
+Ausführung, Fortschritt 10/55 mit anschließendem Abbruch des Pollings sowie
+100 Prozent mit verzögertem Ergebnis und Ende des Overlays. Insgesamt fünf
+Fälle bestehen (`/tmp/zoneless-files-validation-completion.log`, Exit 0).
+Nach Antworten gibt es keine manuell erzwungene Änderungserkennung. Dialog
+und Snackbar sind an der Komponentengrenze gemockt. Der erste Polling-Test
+blockierte durch mitgefälschte Angular-Scheduler-Timer; queueMicrotask und
+requestAnimationFrame bleiben im korrigierten Aufbau echt. Workspace-Wechsel,
+überlappende Starts und automatische Testtaker-Erstellung bleiben gesondert offen.
+
+## ZL-021: Workspace und überlappende Dateivalidierungen
+
+Vier Fälle reproduzieren verspätete Erfolge beziehungsweise Fehler nach
+Workspace-Wechsel in den Phasen Jobanlage und Ergebnisabruf. Ein fünfter
+Fall zeigt zwei Jobanlagen bei doppeltem Start
+(`/tmp/zoneless-files-workspace-red.log`, fünf Fehler, fünf bestehende Fälle
+bestanden, Exit 1). Folgeanfragen, Ergebnisdialoge und Fehlermeldungen prüfen
+jetzt den beim Start erfassten Workspace. Ein aktiver Lauf verhindert eine
+zweite Jobanlage.
+
+Zwei zusätzliche Polling-Fälle prüfen verspäteten Zwischenstand und Abschluss
+nach einem Workspace-Wechsel. Der alte Zwischenstand ließ das Overlay stehen
+(`/tmp/zoneless-files-poll-context-red.log`, ein Fehler, elf bestandene Fälle,
+Exit 1). Eine weitere Prüfung ohne eintreffende Statusantwort zeigte, dass
+die aktive Anfrage trotz Workspace-Wechsel weiter abonnierte
+(`/tmp/zoneless-files-pending-context-red.log`, ein Fehler, zwölf bestandene
+Fälle, Exit 1). Beim nächsten regulären Polling-Intervall wird jetzt die alte
+Anfrage abbestellt und der Lauf ohne Folgeabruf beendet. Die Verzögerung
+beträgt höchstens das vorhandene 300-ms-Intervall.
+
+Alle 13 fokussierten Fälle bestehen
+(`/tmp/zoneless-files-context-expanded-green.log`, Exit 0). Die Tests verwenden
+weiterhin das echte Template und erzwingen nach Antworten keine Erkennung.
+Ein Wechsel hin und zurück vor Eintreffen einer Antwort und die automatische
+Testtaker-Erstellung sind dadurch noch nicht geprüft. Die vollständigen
+Abschlussläufe und Browsernachweise dieses Schritts folgen separat.
+
+Abschlussläufe für ZL-020/ZL-021 bestehen mit Exit 0: Frontend-Lint
+(`/tmp/zoneless-files-context-lint-corrected.log`), 666 native Tests in 27 Suites
+(`/tmp/zoneless-files-context-full-native.log`), 2.411 allgemeine Frontend-Tests
+in 221 Suites (`/tmp/zoneless-files-context-full-regular.log`) und zehn
+Browserfälle (`/tmp/zoneless-files-progress-browser.log`). Der neue Browserfall
+prüft die produktive Dateiansicht, Doppelklick, genau eine Jobanlage sowie
+sichtbaren Fortschritt 10/55/100, Ende des Overlays und echten Ergebnisdialog.
+Die neuen Workspace-/Abbruchfälle haben weiterhin ausschließlich native
+Nachweise; die Browserprüfung behauptet deren Abdeckung nicht.
+
+Die Inventarmatrix ordnet diese Teilnachweise den Validierungsquellen zu und
+bleibt insgesamt offen. CI für den vorherigen Commit bacdc625 meldet CodeQL
+SUCCESS und GitLab-Pipeline 102491 FAILURE. Die konkrete Jobursache ist ohne
+Zugriff auf deren Logs nicht bestätigt.
+
+## ZL-022: Rückkehr zum selben Workspace während einer Validierung
+
+Vier neue Fälle prüfen Jobanlage und Ergebnisabruf, jeweils mit Erfolg und
+Fehler nach einem Workspace-Wechsel 1 → 2 → 1. Ein fünfter Fall startet nach
+der Rückkehr eine frische Validierung und liefert anschließend das alte
+Ergebnis. Alle fünf reproduzieren die fehlende dauerhafte Abmeldung
+(`/tmp/zoneless-files-roundtrip-red.log`, fünf Fehler, 13 bestehende Fälle
+bestanden, Exit 1). Der Vergleich der aktuellen ID allein erkennt den
+zwischenzeitlichen Wechsel nicht.
+
+Die Anfragekette wird jetzt durch das vorhandene selectedWorkspaceId$-Ereignis
+bereits beim ersten Wegwechsel beendet. Der Polling-Abbruch wartet dadurch
+nicht mehr auf das 300-ms-Intervall. Die Prüfungen verwenden den echten
+AppService samt dessen Workspace-Setter; nur LogoService liefert eine
+kontrollierte leere Antwort. Ein zusätzlicher globaler Aktualisierungs- oder
+Überwachungstimer wird nicht benötigt. Die frühere Polling-Prüfung der aktuellen
+ID entfällt zugunsten des Abbruchs der gesamten Kette.
+
+Drei weitere Fälle prüfen verspäteten Zwischenstand, Abschluss und Fehler
+eines abgebrochenen Pollings nach Rückkehr zum gleichen Workspace.
+Alle 21 Fälle bestehen (`/tmp/zoneless-files-roundtrip-expanded.log`, Exit 0).
+Eine alte Antwort verändert weder den frischen Ladezustand noch dessen
+Subscription. Diese neuen Kontextfälle haben native Nachweise mit echtem
+Template; Browser- und vollständige Abschlussläufe folgen separat.
+
+Die Abschlussläufe für ZL-022 bestehen mit Exit 0: Frontend-Lint
+(`/tmp/zoneless-files-roundtrip-lint.log`), 674 native Tests in 27 Suites
+(`/tmp/zoneless-files-roundtrip-full-native.log`) und 2.419 allgemeine Tests
+in 221 Suites (`/tmp/zoneless-files-roundtrip-full-regular.log`).
+Zwölf Browserfälle bestehen (`/tmp/zoneless-files-roundtrip-browser.log`).
+Zwei neue Browserfälle verlassen die produktive Dateiansicht während Jobanlage
+beziehungsweise Ergebnisabruf und öffnen sie erneut. Sie warten auf die
+kontrollierte alte Serveranfrage und prüfen anschließend, dass kein alter
+Ergebnisdialog und kein altes Overlay erscheinen. Eine alte Jobantwort löst
+keinen Ergebnisabruf aus. Diese Browsernavigation zerstört und erzeugt die
+Dateiansicht; das Wiederverwenden derselben Instanz bei ID-Wechsel wird durch
+die nativen Tests mit echtem AppService geprüft.
+Die Matrix ordnet diese Nachweise den zwei Quellen zu; die Gesamtfreigabe
+bleibt wegen weiterer Abläufe und Rollen offen.
+
+## ZL-023: Automatische Testtaker-Erstellung und Folgeaktionen
+
+Acht neue Fälle reproduzieren weiter aktive Bestätigungsdialog-Abonnements,
+Datei-Anfragen und den Wiederholungstimer nach Zerstörung der Ansicht oder
+Workspace-Wechsel 1 → 2 → 1. Bei Fehler beziehungsweise false-Antwort bleibt
+außerdem das Ladeoverlay stehen (`/tmp/zoneless-dummy-lifecycle-red.log`,
+acht Fehler, 21 bestehende Fälle bestanden, Exit 1).
+
+Die Bestätigung, Datei-Anfrage und der Timer verwenden nun den erfassten
+Workspace sowie takeUntil und DestroyRef. Nach Abbruch werden Ladezustand
+und Angular-Benachrichtigung aufgeräumt. Erfolgreiche Erstellung lädt die
+Dateiliste neu und validiert nach dem bisherigen Ein-Sekunden-Timer erneut.
+Das Ende der Erstellungsanfrage setzt den inzwischen begonnenen
+Dateilisten-Ladezustand nicht zurück. Die Schließabonnements der beiden
+Ergebnisdialogpfade enden ebenfalls bei Navigation und Workspace-Wechsel.
+
+35 fokussierte Fälle bestehen (`/tmp/zoneless-dummy-dialog-expanded.log`,
+Exit 0). Zusätzliche Fälle prüfen die erfolgreiche Erstellung mit noch
+laufendem Dateilistenabruf, den regulären Wiederholungstimer, Ablehnung der
+Erstellung und vier Abbruchfälle der Ergebnisdialog-Rückmeldung. Diese
+nativen Prüfungen verwenden das echte Dateiansicht-Template und den echten
+AppService; MatDialog und Snackbar sind an ihrer Grenze gemockt.
+Frontend-Lint besteht (`/tmp/zoneless-dummy-lint-final.log`, Exit 0).
+
+
+Abschlussprüfungen für ZL-023: 688 native Tests in 27 Suites
+(`/tmp/zoneless-dummy-full-native.log`) und 2.433 allgemeine Tests in 221 Suites
+(`/tmp/zoneless-dummy-full-regular.log`) bestehen mit Exit 0. Vierzehn Browserfälle
+bestehen (`/tmp/zoneless-dummy-browser.log`, Exit 0). Zwei neue Browserfälle
+prüfen den echten Bestätigungsdialog: Ablehnen startet keine Erstellung;
+HTTP 500 löst eine sichtbare Fehlermeldung aus, eine erneute Bestätigung führt
+zu erfolgreicher Erstellung, sichtbarem Dateilisten-Ladezustand und anschließend
+zur automatischen Validierung. API-Fixtures zählen zwei Erstellungsversuche
+und drei Validierungsjobs. Backend-Persistenz wird hier nicht nachgewiesen.
+Das Inventar enthält nun 8.729 Einträge. Teilnachweise sind den sechs Quellen
+zugeordnet; die Gesamtfreigabe bleibt offen.
+
+
+## ZL-024: Dateiliste, Antwortreihenfolge und verzögerte Suche
+
+15 neue native Fälle reproduzieren das Überschreiben neuer Dateilisten durch
+alte Antworten, das vorzeitige Ende des Ladeoverlays durch alte Abschlüsse
+und weiter aktive Anfragen nach Zerstörung oder Workspace-Wechsel
+(`/tmp/zoneless-file-list-fixture-red.log`, 15 Fehler, 37 bestandene Fälle,
+Exit 1). Filter, Pagination und erneutes Laden werden jeweils mit drei festen
+Antwortfolgen geprüft: alte Antwort zuerst, neue Antwort zuerst und alter Fehler.
+Der erste Versuch enthielt eine unvollständige Testdatei ohne file_type und
+scheiterte im echten Template; die oben angegebene Reproduktion verwendet die
+vollständige synthetische Dateizeile.
+
+Ein weiterer Fall mit dem echten SearchFilterComponent zeigt nach dessen
+300-ms-Debouncing und dem folgenden 300-ms-Timer der Dateiansicht eine
+laufende Anfrage ohne sichtbares Ladeoverlay
+(`/tmp/zoneless-file-list-debounce-red.log`, ein Fehler, Exit 1).
+
+Beim Beginn eines neuen Abrufs wird nun die vorherige Subscription beendet,
+bevor der neue Ladezustand gesetzt wird. Workspace-Ereignisse und DestroyRef
+beenden den Abruf auch ohne weitere Antwort; ein Wechsel 1 → 2 → 1 kann den
+alten Abruf nicht wieder aktivieren. Der neue Ladezustand benachrichtigt Angular
+bereits beim Start, sodass auch die verzögerte Suche sichtbar lädt.
+API-Parameter und fachliche Filterregeln bleiben unverändert.
+
+53 fokussierte native Fälle bestehen nach der Korrektur
+(`/tmp/zoneless-file-list-green.log`, Exit 0). Zwei zusätzliche Fälle prüfen das
+Zerstören der Ansicht während beider Debouncing-Phasen. Die Tests verwenden
+das echte Dateiansicht- und Suchfeld-Template und erzwingen nach Antworten
+keine Änderungserkennung. Snackbar und Dialog bleiben an ihrer Grenze gemockt.
+
+Acht neue Browserfälle bestehen
+(`/tmp/zoneless-file-list-browser-focused.log`, Exit 0): verzögerte Suche samt
+sichtbarer Ladeanzeige und deaktivierter Validierung, leerer Zustand,
+HTTP 500 mit Wiederholung, echter Paginator mit zurückgesetzter Auswahl,
+drei Antwortfolgen sowie Navigation während des Abrufs mit erneutem Öffnen.
+Die drei Überlappungsfälle senden die zweite Suche mit force trotz des
+Ladeoverlays; sie prüfen gezielt einen Kontextwechsel während der Anfrage,
+keine reguläre Bedienbarkeit durch das Overlay. Die übrigen Fälle verwenden
+regulär verfügbare Controls. Der erste Browserlauf scheiterte bei vier
+Suchfeldeingaben am überlagernden Material-Label; vorheriger Fokus behebt den
+Testaufbau. Es gibt keine Exception-Unterdrückung oder Test-Retries.
+Rollen und Backend-Persistenz bleiben separat offen.
+
+Die vollständigen Jest-Läufe bestehen mit Exit 0: 708 native Tests in 27 Suites
+(`/tmp/zoneless-file-list-full-native.log`) und 2.453 allgemeine Tests in
+221 Suites (`/tmp/zoneless-file-list-full-regular.log`). Der allgemeine
+TestFilesComponent-Aufbau stellt nun auch selectedWorkspaceId$ als
+kontrollierten Subject bereit. Die beiden zusätzlichen Abbruchprüfungen
+während des Debouncings sind in beiden Läufen enthalten.
+
+Die gesamte vorhandene Zoneless-Browsersuite besteht mit 64 Tests in elf
+Spezifikationen (`/tmp/zoneless-file-list-all-browser.log`, Exit 0).
+Die Inventarmatrix bleibt bei 8.729 Einträgen. Die Dateilisten-Subscription
+und die beiden Debouncing-Quellen erhalten gezielte Teilnachweise; Rollen,
+weitere Refresh-Aufrufer und die vollständige fachliche Abdeckung bleiben offen.
+
+Frontend-Lint (`/tmp/zoneless-file-list-lint-final.log`), Inventarprüfung
+(`/tmp/zoneless-file-list-inventory-final.log`) und Produktionsbuild
+(`/tmp/zoneless-file-list-production-build.log`) bestehen mit Exit 0.
+22 ausgewählte Browserfälle für Dateiliste, Validierung und echte Metadaten-
+Web-Components bestehen außerdem mit der optimierten Produktionskonfiguration
+(`/tmp/zoneless-file-list-production-browser.log`, Exit 0). Der vorhandene
+CI-Browserjob nimmt die neue Dateilisten-Spezifikation über das Zoneless-
+Konfigurationsmuster automatisch auf. Der Gesamtfreigabegate bleibt wegen
+8.729 unvollständiger Gesamteinträge gesperrt
+(`/tmp/zoneless-file-list-approval.log`, Exit 1).
+
+
+## CI-Prüfung der vollständigen Produktions-Browsersuite
+
+Der neue Job test-browser-production erweitert test-browser-zoneless und
+verwendet frontend:e2e mit configuration=production sowie
+cypress.zoneless.config.ts. Dadurch laufen alle vorhandenen Zoneless-
+Browserspezifikationen auch mit optimierten Produktionsbundles. Der Job
+erbt Image, Regeln, Dependencies und Fehlerartefakte; allow_failure wird
+nicht gesetzt. Die vorhandene Keycloak-/Backend-Prüfung bleibt ein separater
+Live-Nachweis.
+
+Der vollständige lokale Produktionslauf besteht mit 64 Fällen in elf
+Spezifikationen (`/tmp/zoneless-production-all-browser.log`, Exit 0).
+Die Konfiguration lässt sich mit js-yaml und dem vorhandenen GitLab-
+!reference-Sequenztyp parsen. Der entfernte CI-Lauf dieses neuen Jobs ist
+noch nicht bestätigt. Alle Browserdaten bleiben synthetische API-Fixtures;
+diese Suite ersetzt weder Backend-Persistenztests noch die offene fachliche
+Gesamtabdeckung.
+
+
+## ZL-025: Verzögerte Dateiansicht-Einstellungen und Suchmodus
+
+Elf native Fälle reproduzieren die fehlende Darstellung einer geänderten
+Regex-Einstellung und weiter aktive Settings-Subscriptions nach Navigation,
+Workspace-Wechsel und Rückkehr 1 → 2 → 1
+(`/tmp/zoneless-file-settings-red.log`, elf Fehler, 59 bestandene Fälle,
+Exit 1). Beide Einstellungsabrufe binden sich jetzt an den beim Start erfassten
+Workspace und DestroyRef. Die Regex-Antwort benachrichtigt Angular.
+Normale aktivierte, deaktivierte und tokenlose Content-Pool-Konfigurationen
+waren bereits korrekt dargestellt und behalten ihre Regeln.
+
+Vier zusätzliche Fälle zeigen, dass ein zunächst als Textsuche gesendeter
+Abruf nach dem verspäteten Wechsel auf Regex aktiv bleibt und keine passende
+Regex-Anfrage entsteht
+(`/tmp/zoneless-file-settings-query-context-red.log`, vier Fehler, Exit 1).
+Bei geändertem Modus und vorhandenem Suchtext endet nun die alte Anfrage.
+Eine gültige Suche wird erneut geladen; ein ungültiger Regex sendet keinen
+neuen Abruf. Drei feste Antwortfolgen sichern alte Erfolge und Fehler gegen
+die neue Suche ab.
+
+82 fokussierte native Fälle in zwei Suites bestehen
+(`/tmp/zoneless-file-settings-expanded-green.log`, Exit 0). Acht davon verwenden
+die echten WorkspaceSettingsService- und ContentPoolIntegrationService-
+Implementierungen mit HttpTestingController. Sie prüfen Darstellung, HTTP-500-
+und JSON-Fallback sowie Abbruch der Content-Pool-Anfrage. Der bestehende
+WorkspaceSettingsService hält seine gemeinsam genutzte HTTP-Anfrage für den
+Cache absichtlich bis zum Abschluss aktiv. Eine danach eintreffende Antwort
+des alten Workspaces verändert die abgemeldete Ansicht nicht. Der gemeinsame
+Cache wurde nicht verändert.
+
+16 Dateilisten-Browserfälle bestehen nach Ergänzung der neuen Abläufe
+(`/tmp/zoneless-file-settings-browser-ready.log`, Exit 0). Sie prüfen die
+verzögerte Regex-Einstellung, Content-Pool-Konfiguration mit und ohne Token,
+HTTP-500 mit erneutem Öffnen, Navigation während einer alten Config-Anfrage
+und drei Antwortfolgen beim Wechsel des Suchmodus.
+Ein zuvor gezielt unterbrochener Lauf geriet beim Reload einer Hash-Route
+in eine Auth-Mock-Schleife mit wiederholt angehängten #code-Fragmenten.
+Der Browserzustand und ein CPU-Profil belegten den noch laufenden Prozess
+(`/tmp/zoneless-file-settings-browser-stall.cpuprofile`). Nx meldete beim
+Beenden des Cypress-Prozesses Exit 0, ohne vollständige Cypress-Zusammenfassung.
+Dieser Lauf wird ausdrücklich nicht als bestanden gewertet. Der erneute
+Browserstart verwendet die vorhandene Auth-Fixture an der Startseite.
+Drei weitere Testaufbaufehler entstanden durch Navigation vor Ende der
+Anmeldesequenz; der sichtbare Home-Zustand dient nun als Bereitschaftsnachweis.
+Keine Produkt-Authentifizierung wurde geändert.
+
+Sieben Browser-Rollenfälle bestehen
+(`/tmp/zoneless-file-settings-roles-browser-consistent.log`, Exit 0).
+Zugriffsstufen 0/1/2 erreichen die Dateiansicht nicht und senden keinen
+Dateilisten- oder Content-Pool-Konfigurationsabruf. Stufen 3/4 und beide
+Systemadmin-Varianten sehen die echte Dateiansicht und korrekt aktualisierte
+Settings. Ein erster Rollenlauf scheiterte an einer widersprüchlichen Fixture:
+Keycloak admin mit authData.isAdmin=false. JwtStrategy.validateKeycloakPayload
+ruft syncKeycloakUser auf; diese Methode setzt bei der Adminrolle auch das
+persistierte isAdmin auf true. Die Fixture bildet nun diesen bestehenden
+Backend-Vertrag ab. Berechtigungsregeln und Backend wurden nicht verändert.
+
+Zwei zusätzliche Regressionen sichern überlappende Datei- und Validierungsanfragen:
+
+- Das Neuladen der Dateiliste setzte `isValidating` zurück und entfernte die
+  laufende Fortschrittsanzeige
+  (`/tmp/zoneless-file-settings-validation-overlap-red.log`, ein Fehler, Exit 1).
+- Ein erfolgreicher Validierungsabschluss setzte `isLoading` zurück und entfernte
+  die Ladeanzeige einer noch laufenden Dateianfrage
+  (`/tmp/zoneless-file-settings-validation-success-red.log`, ein Fehler, ein
+  bestandener Fall, 74 gezielt nicht ausgewählte Fälle, Exit 1).
+
+Die beiden Abläufe setzen jetzt nur ihren eigenen Zustand zurück. Die native
+Regression prüft Erfolg und Fehler des Validierungsjobs während einer noch
+aktiven Dateianfrage sowie die Sperre gegen einen zweiten Validierungsstart.
+Die Browserfälle steuern Settings-, Datei- und Jobantworten mit getrennten
+Freigaben und prüfen beide Abschlussreihenfolgen.
+
+Der erste vollständige Browserlauf dieses Arbeitsstands besteht 79 von 80
+Fällen; ein Fall scheitert an der strikten Prüfung unerwarteter Requests
+(`/tmp/zoneless-file-settings-all-browser-final.log`, Exit 1). Der echte
+Ergebnisdialog ruft zusätzlich die Workspace-Einstellungen ab. Die fehlende
+synthetische Antwort wurde gezielt ergänzt; die Fehlerprüfung bleibt aktiv.
+
+CI-Abfrage am 01.10.2026: Der PR-Head `45e12f4f` hat erfolgreiche CodeQL-Prüfungen
+und einen fehlgeschlagenen GitLab-Status für Pipeline 102576. Der direkte Abruf
+der Jobliste liefert eine Bot-Schutz-Seite anstelle von Jobdaten. Die
+konkrete Fehlerursache ist damit nicht bestätigt; dieser Status wird weder
+als Erfolg noch allein als Folge des offenen Abdeckungsgates interpretiert.
+
+Nach beiden Korrekturen besteht der vollständige native Zoneless-Lauf mit
+737 Tests in 28 Suites
+(`/tmp/zoneless-file-settings-full-native-final.log`, Exit 0). Der vollständige
+Browserlauf besteht 81 Fälle in zwölf Spezifikationen
+(`/tmp/zoneless-file-settings-all-browser-green.log`, Exit 0). Enthalten sind
+18 Dateilistenfälle und sieben Fälle mit den echten Browser-Guards. Die beiden
+überlappenden Abläufe verwenden kontrollierte Freigaben statt zufälliger
+Wartezeiten; alle Browserfälle dieser Suite laufen ohne Test-Retries.
+
+Dieselben 81 Browserfälle bestehen mit Produktionseinstellungen
+(`/tmp/zoneless-file-settings-production-all-browser.log`, Exit 0). Die Suite
+prüft das Fehlen von `window.Zone`; echte Material-Overlays, Tabellen,
+Auswahlzustände und Dialoge bleiben Bestandteil der Prüfung. Die API-Antworten
+dieses Browserlaufs sind weiterhin synthetische Fixtures.
+
+### Abschlussläufe für ZL-025
+
+Die folgenden Läufe verwenden denselben unveränderten App- und Teststand.
+Nachträglich wurden ausschließlich Nachweise und Matrix-Zuordnungen ergänzt.
+
+| Prüfung | Ergebnis | Exit | Lokales Protokoll |
+|---|---|---|---|
+| Native Zoneless-Suite | 737 Tests / 28 Suites bestanden | 0 | `/tmp/zoneless-file-settings-full-native-final.log` |
+| Allgemeine Frontend-Suite | 2.482 Tests / 222 Suites bestanden | 0 | `/tmp/zoneless-file-settings-general-suite-final.log` |
+| Vollständige Zoneless-Browsersuite | 81 Fälle / zwölf Spezifikationen bestanden | 0 | `/tmp/zoneless-file-settings-all-browser-green.log` |
+| Vollständige Browsersuite mit Produktionseinstellungen | 81 Fälle / zwölf Spezifikationen bestanden | 0 | `/tmp/zoneless-file-settings-production-all-browser.log` |
+| Frontend-Lint | bestanden | 0 | `/tmp/zoneless-file-settings-lint-complete.log` |
+| Produktionsbuild | bestanden | 0 | `/tmp/zoneless-file-settings-production-build.log` |
+| Inventarprüfung | 8.729 Einträge, keine Abweichung | 0 | `/tmp/zoneless-file-settings-inventory-final.log` |
+| Regression des Inventarprüfers | ein Test bestanden | 0 | `/tmp/zoneless-file-settings-inventory-tests.log` |
+| Vollständige Zoneless-Freigabe | 8.729 Einträge ohne vollständigen Nachweis | 1 | `/tmp/zoneless-file-settings-approval-final.log` |
+
+229 Matrixeinträge haben Testreferenzen, 67 haben Szenarionachweise. Alle
+Gesamtfreigaben bleiben offen. Die Settings-Nachweise unterscheiden die
+getesteten Browser-Guards von der noch ausstehenden Prüfung tatsächlicher
+Backend-Berechtigungen und gespeicherter Konfiguration. Weitere Upload-,
+Download-, Metadaten- und Refresh-Aufrufer bleiben ebenfalls offen.
+Diese Ergebnisse geben ZL-025 lokale Regressionsevidenz; die gesamte
+fachliche Abdeckung und erfolgreiche entfernte CI sind nicht bestätigt.
+Die `/tmp`-Protokolle sind lokale Nachweise und keine veröffentlichten
+CI-Artefakte.

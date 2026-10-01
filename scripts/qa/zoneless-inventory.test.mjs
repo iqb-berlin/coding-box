@@ -45,3 +45,33 @@ test('inventory rejects missing, changed and unreviewed coverage', () => {
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('risk approval requires every area, mechanism, regression and declared limit', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'zoneless-risk-test-'));
+  const matrix = path.join(directory, 'risk.json');
+  const original = JSON.parse(fs.readFileSync(new URL('../../docs/qa/zoneless-risk-coverage.json', import.meta.url), 'utf8'));
+  const run = value => {
+    fs.writeFileSync(matrix, JSON.stringify(value));
+    return spawnSync(process.execPath, [script, '--require-risk-coverage', '--risk-matrix', matrix], { encoding: 'utf8' });
+  };
+  try {
+    assert.equal(run(original).status, 0);
+    const mutations = [
+      value => value.areas.pop(),
+      value => value.mechanisms.pop(),
+      value => { value.areas[0].tests = ['missing.spec.ts']; },
+      value => { value.areas[0].findings = []; },
+      value => { value.residualLimits = []; },
+      value => { value.unresolvedFindings = ['Confirmed UI regression']; }
+    ];
+    for (const mutate of mutations) {
+      const value = structuredClone(original);
+      mutate(value);
+      const result = run(value);
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /Risk coverage lacks/);
+    }
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});

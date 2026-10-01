@@ -34,6 +34,128 @@ describe('Zoneless information from file validation', () => {
     cy.then(() => { expect(unexpectedRequests).to.deep.equal([]); });
   });
 
+  it('shows validation progress and creates one task after a double click', () => {
+    cy.get('files-validation-dialog').contains('button', 'Schließen').click();
+    cy.get('files-validation-dialog').should('not.exist');
+    let starts = 0;
+    let polls = 0;
+    cy.intercept('POST', '**/api/admin/workspace/5/validation-tasks?type=testFiles', request => {
+      starts += 1;
+      request.reply({ delay: 150, body: { id: 701, status: 'processing', progress: 10 } });
+    }).as('progressTask');
+    cy.intercept('GET', '**/api/admin/workspace/5/validation-tasks/701', request => {
+      polls += 1;
+      request.reply({ delay: 100, body: { id: 701, status: polls === 1 ? 'processing' : 'completed',
+        progress: polls === 1 ? 55 : 100, progress_message: 'Kontrollierter Prüfschritt' } });
+    }).as('progressPoll');
+    cy.get('coding-box-test-files').contains('a', 'Validieren').dblclick();
+    cy.wait('@progressTask');
+    cy.get('.validation-busy-percent').should('contain.text', '10%');
+    cy.wait('@progressPoll');
+    cy.get('.validation-busy-percent').should('contain.text', '55%');
+    cy.get('.validation-busy-text').should('contain.text', 'Kontrollierter Prüfschritt');
+    cy.wait('@progressPoll');
+    cy.get('.validation-busy-percent').should('contain.text', '100%');
+    cy.wait('@validation');
+    cy.get('files-validation-dialog').should('be.visible');
+    cy.get('coding-box-test-files .busy-overlay').should('not.exist');
+    cy.then(() => { expect(starts).to.equal(1); });
+  });
+
+  for (const phase of ['creation', 'results']) {
+    it(`keeps the returned file view clear after leaving during validation ${phase}`, () => {
+      cy.get('files-validation-dialog').contains('button', 'Schließen').click();
+      cy.get('files-validation-dialog').should('not.exist');
+      let pendingStarted = false;
+      let resultRequests = 0;
+      cy.intercept('POST', '**/api/admin/workspace/5/validation-tasks?type=testFiles', request => {
+        if (phase === 'creation') pendingStarted = true;
+        request.reply({ delay: phase === 'creation' ? 1000 : 0,
+          body: { id: 702, status: 'completed', progress: 100 } });
+      }).as('oldTask');
+      cy.intercept('GET', '**/api/admin/workspace/5/validation-tasks/702/results', request => {
+        resultRequests += 1;
+        pendingStarted = true;
+        request.reply({ delay: 1000, body: { testTakersFound: true, validationResults: [] } });
+      }).as('oldResults');
+      cy.get('coding-box-test-files').contains('a', 'Validieren').click();
+      cy.wrap(null).should(() => { expect(pendingStarted).to.equal(true); });
+      cy.window().then(win => { win.location.hash = '/'; });
+      cy.get('coding-box-home').should('be.visible');
+      cy.window().then(win => { win.location.hash = '/workspace-admin/5/test-files'; });
+      cy.wait('@files');
+      cy.get('coding-box-test-files').should('be.visible');
+      cy.wait(phase === 'creation' ? '@oldTask' : '@oldResults');
+      cy.get('files-validation-dialog').should('not.exist');
+      cy.get('coding-box-test-files .busy-overlay').should('not.exist');
+      cy.then(() => { expect(resultRequests).to.equal(phase === 'creation' ? 0 : 1); });
+    });
+  }
+
+  it('retries dummy testtaker creation after an error and validates the refreshed files', () => {
+    cy.get('files-validation-dialog').contains('button', 'Schließen').click();
+    cy.get('files-validation-dialog').should('not.exist');
+    let jobs = 0;
+    let results = 0;
+    let creations = 0;
+    cy.intercept('POST', '**/api/admin/workspace/5/validation-tasks?type=testFiles', request => {
+      jobs += 1;
+      request.reply({ body: { id: 701, status: 'completed', progress: 100 } });
+    });
+    cy.intercept('GET', '**/api/admin/workspace/5/validation-tasks/701/results', request => {
+      results += 1;
+      request.reply({ delay: 150, body: { testTakersFound: results > 2, validationResults: [] } });
+    }).as('dummyValidation');
+    cy.intercept('POST', '**/api/admin/workspace/5/files/create-dummy-testtaker', request => {
+      creations += 1;
+      request.reply(creations === 1 ? { delay: 150, statusCode: 500 } : { delay: 150, body: true });
+    }).as('dummyCreation');
+    cy.intercept('GET', '**/api/admin/workspace/5/files?*', {
+      delay: 300, body: { data: [], total: 0, page: 1, limit: 100, fileTypes: [] }
+    }).as('dummyRefresh');
+    cy.get('coding-box-test-files').contains('a', 'Validieren').click();
+    cy.wait('@dummyValidation');
+    cy.get('tc-confirm-dialog').should('contain.text', 'Keine Testtaker gefunden').contains('button', 'Ja').click();
+    cy.wait('@dummyCreation').its('response.statusCode').should('equal', 500);
+    cy.get('mat-snack-bar-container').should('contain.text', 'Fehler beim Erstellen');
+    cy.get('coding-box-test-files .busy-overlay').should('not.exist');
+    cy.get('coding-box-test-files').contains('a', 'Validieren').click();
+    cy.wait('@dummyValidation');
+    cy.get('tc-confirm-dialog').contains('button', 'Ja').click();
+    cy.wait('@dummyCreation').its('response.statusCode').should('equal', 200);
+    cy.get('coding-box-test-files .busy-overlay').should('be.visible');
+    cy.wait('@dummyRefresh');
+    cy.get('coding-box-test-files .busy-overlay').should('not.exist');
+    cy.wait('@dummyValidation');
+    cy.get('files-validation-dialog').should('be.visible');
+    cy.get('tc-confirm-dialog').should('not.exist');
+    cy.then(() => {
+      expect(creations).to.equal(2);
+      expect(jobs).to.equal(3);
+      expect(results).to.equal(3);
+    });
+  });
+
+  it('does not create a testtaker when the confirmation is declined', () => {
+    cy.get('files-validation-dialog').contains('button', 'Schließen').click();
+    cy.get('files-validation-dialog').should('not.exist');
+    let creations = 0;
+    cy.intercept('GET', '**/api/admin/workspace/5/validation-tasks/701/results', {
+      delay: 150, body: { testTakersFound: false, validationResults: [] }
+    }).as('missingTesttakers');
+    cy.intercept('POST', '**/api/admin/workspace/5/files/create-dummy-testtaker', request => {
+      creations += 1;
+      request.reply({ body: true });
+    });
+    cy.get('coding-box-test-files').contains('a', 'Validieren').click();
+    cy.wait('@missingTesttakers');
+    cy.get('tc-confirm-dialog').contains('button', 'Abbrechen').click();
+    cy.get('tc-confirm-dialog').should('not.exist');
+    cy.get('mat-snack-bar-container').should('contain.text', 'Keine Testtaker-Dateien vorhanden.');
+    cy.get('coding-box-test-files .busy-overlay').should('not.exist');
+    cy.then(() => { expect(creations).to.equal(0); });
+  });
+
   it('retries test taker XML after an error and opens the actual viewer', () => {
     let attempts = 0;
     cy.intercept('GET', '**/api/admin/workspace/5/files/testtakers/TESTTAKER_ZL/content', request => {

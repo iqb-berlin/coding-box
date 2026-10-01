@@ -68,6 +68,13 @@ recovery resets, comment validation and delayed profile/role changes.
 
 ## Release gates and current status
 
+Since 2026-10-01, PR acceptance uses the user-approved risk-based scope in
+[the audit](../qa/zoneless-audit.md) and `docs/qa/zoneless-risk-coverage.json`.
+Representative workflows and asynchronous mechanisms, regression tests for
+confirmed defects, successful final checks and CI are required. Individual
+inventory bindings are no longer separate release gates. The documented
+residual limits apply; production rollout remains a separate operation.
+
 A successful smoke test is not evidence that all application views are zoneless
 compatible. The isolated suite below covers login/logout, a complete coding job,
 delayed notes, a simulated save failure, real session invalidation and draft
