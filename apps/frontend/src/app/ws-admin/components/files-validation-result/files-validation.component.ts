@@ -7,7 +7,9 @@ import {
   OnInit
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { firstValueFrom, of, timer } from 'rxjs';
+import {
+  firstValueFrom, from, Observable, of, Subject, timer
+} from 'rxjs';
 import {
   filter,
   finalize,
@@ -1702,13 +1704,26 @@ export class FilesValidationDialogComponent implements OnInit {
       return;
     }
 
+    const workspaceId = this.data.workspaceId;
     const loadingSnackBar = this.snackBar.open('Lade Metadaten...', '', { duration: 3000 });
+    const canceled$ = new Subject<void>();
+    let canceled = false;
+    const cancel = () => {
+      canceled = true;
+      canceled$.next();
+      loadingSnackBar.dismiss();
+    };
+    const closingSubscription = this.dialogRef.beforeClosed().subscribe(cancel);
+    const unregisterDestroy = this.destroyRef.onDestroy(cancel);
+    const waitFor = <T>(source: Observable<T>) => firstValueFrom(
+      source.pipe(takeUntil(canceled$)), { defaultValue: undefined }
+    );
 
     try {
       // 1. Find file ID
-      const filesList = await firstValueFrom(
+      const filesList = await waitFor(
         this.fileService.getFilesList(
-          this.data.workspaceId,
+          workspaceId,
           1,
           20,
           'Resource',
@@ -1716,6 +1731,8 @@ export class FilesValidationDialogComponent implements OnInit {
           filename
         )
       );
+
+      if (canceled || !filesList) return;
 
       // eslint-disable-next-line no-console
       console.log('Metadata file search:', {
@@ -1743,10 +1760,11 @@ export class FilesValidationDialogComponent implements OnInit {
       }
 
       // 2. Download file content
-      const fileDownload = await firstValueFrom(
-        this.fileService.downloadFile(this.data.workspaceId, fileEntry.id)
+      const fileDownload = await waitFor(
+        this.fileService.downloadFile(workspaceId, fileEntry.id)
       );
 
+      if (canceled) return;
       if (!fileDownload) {
         loadingSnackBar.dismiss();
         this.snackBar.open('Fehler beim Laden der Datei.', 'Fehler', { duration: 3000 });
@@ -1768,7 +1786,8 @@ export class FilesValidationDialogComponent implements OnInit {
 
       const resolver = new MetadataResolver();
       const unitProfileUrl = unitProfile.profileId;
-      const unitProfileWithVocabs = await resolver.loadProfileWithVocabularies(unitProfileUrl);
+      const unitProfileWithVocabs = await waitFor(from(resolver.loadProfileWithVocabularies(unitProfileUrl)));
+      if (canceled || !unitProfileWithVocabs) return;
 
       let itemProfileData = null;
       const firstItem = vomdData.items?.[0];
@@ -1776,7 +1795,8 @@ export class FilesValidationDialogComponent implements OnInit {
 
       if (itemProfile) {
         const itemProfileUrl = itemProfile.profileId;
-        const itemProfileWithVocabs = await resolver.loadProfileWithVocabularies(itemProfileUrl);
+        const itemProfileWithVocabs = await waitFor(from(resolver.loadProfileWithVocabularies(itemProfileUrl)));
+        if (canceled || !itemProfileWithVocabs) return;
         itemProfileData = itemProfileWithVocabs.profile;
       }
 
@@ -1798,10 +1818,16 @@ export class FilesValidationDialogComponent implements OnInit {
         }
       });
     } catch (error) {
+      if (canceled) return;
       // eslint-disable-next-line no-console
       console.error('Error opening metadata file:', error);
       loadingSnackBar.dismiss();
       this.snackBar.open('Fehler beim Öffnen der Metadaten-Datei.', 'Fehler', { duration: 3000 });
+    } finally {
+      closingSubscription.unsubscribe();
+      unregisterDestroy();
+      canceled$.complete();
+      loadingSnackBar.dismiss();
     }
   }
 }

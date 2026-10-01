@@ -1132,6 +1132,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           this.validationProgress = 100;
           this.validationProgressMessage =
             task.progress_message || 'Validierungsergebnis wird geladen...';
+          this.changeDetectorRef.markForCheck();
           return this.validationService.getValidationResults(
             workspaceId,
             task.id
@@ -1139,6 +1140,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         }),
         finalize(() => {
           this.isValidating = false;
+          this.changeDetectorRef.markForCheck();
         })
       )
       .subscribe({
@@ -1173,6 +1175,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   private updateValidationProgress(task: ValidationTaskDto): void {
+    this.changeDetectorRef.markForCheck();
     const progress = task.progress ?? 0;
     this.validationProgress = Math.max(this.validationProgress, progress);
     if (task.progress_message) {

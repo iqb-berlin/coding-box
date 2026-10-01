@@ -94056,6 +94056,468 @@
       }
     },
     {
+      "id": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts#MetadataDurationComponent:async-source:ngOnInit/this.formControl.valueChanges.pipe(takeUntilDestroyed(this.destroyRef))\n      .subscribe:1",
+      "file": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "owner": "MetadataDurationComponent",
+      "kind": "async-source",
+      "name": "ngOnInit/this.formControl.valueChanges.pipe(takeUntilDestroyed(this.destroyRef))\n      .subscribe",
+      "line": 49,
+      "fingerprint": "73cd6f703d4c302f",
+      "review": {
+        "status": "open",
+        "caller": "MetadataWebComponentService Formly duration type inside the actual metadata profile form",
+        "roles": [],
+        "scenarios": {
+          "delayed-success": {
+            "status": "passed",
+            "evidence": "External FormControl update renders 02:05 without manual detection; echoed updates preserve focused edit text."
+          },
+          "destroy": {
+            "status": "passed",
+            "evidence": "Control update after fixture destruction no longer changes component duration."
+          }
+        },
+        "tests": [
+          "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#dauer-eingabe-korrektur-und-browsernachweis"
+        ],
+        "reason": "Native and browser checks cover digit order, blank editing, blur normalization, read-only controls and model echoes. Numeric limits, additional embeddings and all role/context scenarios remain open."
+      }
+    },
+    {
+      "id": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts#MetadataDurationComponent:Component:MetadataDurationComponent:1",
+      "file": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "owner": "MetadataDurationComponent",
+      "kind": "Component",
+      "name": "MetadataDurationComponent",
+      "line": 10,
+      "fingerprint": "7786da966ea30743",
+      "selector": "iqb-formly-duration",
+      "testCandidates": [
+        "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts"
+      ],
+      "callerCandidates": [
+        "apps/frontend/src/app/shared/services/metadata-web-component.service.ts"
+      ],
+      "review": {
+        "status": "open",
+        "caller": "MetadataWebComponentService Formly duration type inside the actual metadata profile form",
+        "roles": [],
+        "scenarios": {},
+        "tests": [
+          "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#dauer-eingabe-korrektur-und-browsernachweis"
+        ],
+        "reason": "Native and browser checks cover digit order, blank editing, blur normalization, read-only controls and model echoes. Numeric limits, additional embeddings and all role/context scenarios remain open."
+      }
+    },
+    {
+      "id": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts#MetadataDurationComponent:template-binding:aria-label:1",
+      "file": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "owner": "MetadataDurationComponent",
+      "kind": "template-binding",
+      "name": "aria-label",
+      "line": 17,
+      "fingerprint": "e57f8269e03b9651",
+      "templateFile": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "expression": "'metadata-duration.minutes' | translate",
+      "review": {
+        "status": "open",
+        "caller": "MetadataWebComponentService Formly duration type inside the actual metadata profile form",
+        "roles": [],
+        "scenarios": {},
+        "tests": [
+          "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#dauer-eingabe-korrektur-und-browsernachweis"
+        ],
+        "reason": "Native and browser checks cover digit order, blank editing, blur normalization, read-only controls and model echoes. Numeric limits, additional embeddings and all role/context scenarios remain open."
+      }
+    },
+    {
+      "id": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts#MetadataDurationComponent:template-binding:aria-label:2",
+      "file": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "owner": "MetadataDurationComponent",
+      "kind": "template-binding",
+      "name": "aria-label",
+      "line": 25,
+      "fingerprint": "38f0d9d8f626992a",
+      "templateFile": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "expression": "'metadata-duration.seconds' | translate",
+      "review": {
+        "status": "open",
+        "caller": "MetadataWebComponentService Formly duration type inside the actual metadata profile form",
+        "roles": [],
+        "scenarios": {},
+        "tests": [
+          "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#dauer-eingabe-korrektur-und-browsernachweis"
+        ],
+        "reason": "Native and browser checks cover digit order, blank editing, blur normalization, read-only controls and model echoes. Numeric limits, additional embeddings and all role/context scenarios remain open."
+      }
+    },
+    {
+      "id": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts#MetadataDurationComponent:template-binding:disabled:1",
+      "file": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "owner": "MetadataDurationComponent",
+      "kind": "template-binding",
+      "name": "disabled",
+      "line": 18,
+      "fingerprint": "a8c6efdbe9bf285f",
+      "templateFile": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "expression": "props.readonly ?? false",
+      "review": {
+        "status": "open",
+        "caller": "MetadataWebComponentService Formly duration type inside the actual metadata profile form",
+        "roles": [],
+        "scenarios": {},
+        "tests": [
+          "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#dauer-eingabe-korrektur-und-browsernachweis"
+        ],
+        "reason": "Native and browser checks cover digit order, blank editing, blur normalization, read-only controls and model echoes. Numeric limits, additional embeddings and all role/context scenarios remain open."
+      }
+    },
+    {
+      "id": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts#MetadataDurationComponent:template-binding:disabled:2",
+      "file": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "owner": "MetadataDurationComponent",
+      "kind": "template-binding",
+      "name": "disabled",
+      "line": 26,
+      "fingerprint": "a8c6efdbe9bf285f",
+      "templateFile": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "expression": "props.readonly ?? false",
+      "review": {
+        "status": "open",
+        "caller": "MetadataWebComponentService Formly duration type inside the actual metadata profile form",
+        "roles": [],
+        "scenarios": {},
+        "tests": [
+          "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#dauer-eingabe-korrektur-und-browsernachweis"
+        ],
+        "reason": "Native and browser checks cover digit order, blank editing, blur normalization, read-only controls and model echoes. Numeric limits, additional embeddings and all role/context scenarios remain open."
+      }
+    },
+    {
+      "id": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts#MetadataDurationComponent:template-binding:max:1",
+      "file": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "owner": "MetadataDurationComponent",
+      "kind": "template-binding",
+      "name": "max",
+      "line": 19,
+      "fingerprint": "788e9b57a0de3853",
+      "templateFile": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "expression": "maxMinutes > 0 ? maxMinutes : null",
+      "review": {
+        "status": "open",
+        "caller": "MetadataWebComponentService Formly duration type inside the actual metadata profile form",
+        "roles": [],
+        "scenarios": {},
+        "tests": [
+          "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#dauer-eingabe-korrektur-und-browsernachweis"
+        ],
+        "reason": "Native and browser checks cover digit order, blank editing, blur normalization, read-only controls and model echoes. Numeric limits, additional embeddings and all role/context scenarios remain open."
+      }
+    },
+    {
+      "id": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts#MetadataDurationComponent:template-binding:max:2",
+      "file": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "owner": "MetadataDurationComponent",
+      "kind": "template-binding",
+      "name": "max",
+      "line": 27,
+      "fingerprint": "a26726089ad6e55f",
+      "templateFile": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "expression": "maxSeconds > 0 ? maxSeconds : null",
+      "review": {
+        "status": "open",
+        "caller": "MetadataWebComponentService Formly duration type inside the actual metadata profile form",
+        "roles": [],
+        "scenarios": {},
+        "tests": [
+          "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#dauer-eingabe-korrektur-und-browsernachweis"
+        ],
+        "reason": "Native and browser checks cover digit order, blank editing, blur normalization, read-only controls and model echoes. Numeric limits, additional embeddings and all role/context scenarios remain open."
+      }
+    },
+    {
+      "id": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts#MetadataDurationComponent:template-binding:min:1",
+      "file": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "owner": "MetadataDurationComponent",
+      "kind": "template-binding",
+      "name": "min",
+      "line": 18,
+      "fingerprint": "8521edff913c41ac",
+      "templateFile": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "expression": "minMinutes",
+      "review": {
+        "status": "open",
+        "caller": "MetadataWebComponentService Formly duration type inside the actual metadata profile form",
+        "roles": [],
+        "scenarios": {},
+        "tests": [
+          "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#dauer-eingabe-korrektur-und-browsernachweis"
+        ],
+        "reason": "Native and browser checks cover digit order, blank editing, blur normalization, read-only controls and model echoes. Numeric limits, additional embeddings and all role/context scenarios remain open."
+      }
+    },
+    {
+      "id": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts#MetadataDurationComponent:template-binding:min:2",
+      "file": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "owner": "MetadataDurationComponent",
+      "kind": "template-binding",
+      "name": "min",
+      "line": 26,
+      "fingerprint": "63f54e3db67c3357",
+      "templateFile": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "expression": "minSeconds",
+      "review": {
+        "status": "open",
+        "caller": "MetadataWebComponentService Formly duration type inside the actual metadata profile form",
+        "roles": [],
+        "scenarios": {},
+        "tests": [
+          "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#dauer-eingabe-korrektur-und-browsernachweis"
+        ],
+        "reason": "Native and browser checks cover digit order, blank editing, blur normalization, read-only controls and model echoes. Numeric limits, additional embeddings and all role/context scenarios remain open."
+      }
+    },
+    {
+      "id": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts#MetadataDurationComponent:template-binding:value:1",
+      "file": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "owner": "MetadataDurationComponent",
+      "kind": "template-binding",
+      "name": "value",
+      "line": 20,
+      "fingerprint": "90e63d85fa1ab2c8",
+      "templateFile": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "expression": "minutes",
+      "review": {
+        "status": "open",
+        "caller": "MetadataWebComponentService Formly duration type inside the actual metadata profile form",
+        "roles": [],
+        "scenarios": {},
+        "tests": [
+          "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#dauer-eingabe-korrektur-und-browsernachweis"
+        ],
+        "reason": "Native and browser checks cover digit order, blank editing, blur normalization, read-only controls and model echoes. Numeric limits, additional embeddings and all role/context scenarios remain open."
+      }
+    },
+    {
+      "id": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts#MetadataDurationComponent:template-binding:value:2",
+      "file": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "owner": "MetadataDurationComponent",
+      "kind": "template-binding",
+      "name": "value",
+      "line": 28,
+      "fingerprint": "59f006d63bd009b7",
+      "templateFile": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "expression": "seconds",
+      "review": {
+        "status": "open",
+        "caller": "MetadataWebComponentService Formly duration type inside the actual metadata profile form",
+        "roles": [],
+        "scenarios": {},
+        "tests": [
+          "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#dauer-eingabe-korrektur-und-browsernachweis"
+        ],
+        "reason": "Native and browser checks cover digit order, blank editing, blur normalization, read-only controls and model echoes. Numeric limits, additional embeddings and all role/context scenarios remain open."
+      }
+    },
+    {
+      "id": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts#MetadataDurationComponent:template-event:blur:1",
+      "file": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "owner": "MetadataDurationComponent",
+      "kind": "template-event",
+      "name": "blur",
+      "line": 21,
+      "fingerprint": "787561c5e7d00c23",
+      "templateFile": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "expression": "normalizeDuration()",
+      "review": {
+        "status": "open",
+        "caller": "MetadataWebComponentService Formly duration type inside the actual metadata profile form",
+        "roles": [],
+        "scenarios": {},
+        "tests": [
+          "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#dauer-eingabe-korrektur-und-browsernachweis"
+        ],
+        "reason": "Native and browser checks cover digit order, blank editing, blur normalization, read-only controls and model echoes. Numeric limits, additional embeddings and all role/context scenarios remain open."
+      }
+    },
+    {
+      "id": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts#MetadataDurationComponent:template-event:blur:2",
+      "file": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "owner": "MetadataDurationComponent",
+      "kind": "template-event",
+      "name": "blur",
+      "line": 29,
+      "fingerprint": "787561c5e7d00c23",
+      "templateFile": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "expression": "normalizeDuration()",
+      "review": {
+        "status": "open",
+        "caller": "MetadataWebComponentService Formly duration type inside the actual metadata profile form",
+        "roles": [],
+        "scenarios": {},
+        "tests": [
+          "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#dauer-eingabe-korrektur-und-browsernachweis"
+        ],
+        "reason": "Native and browser checks cover digit order, blank editing, blur normalization, read-only controls and model echoes. Numeric limits, additional embeddings and all role/context scenarios remain open."
+      }
+    },
+    {
+      "id": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts#MetadataDurationComponent:template-event:focus:1",
+      "file": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "owner": "MetadataDurationComponent",
+      "kind": "template-event",
+      "name": "focus",
+      "line": 20,
+      "fingerprint": "0d4cad7d61280d69",
+      "templateFile": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "expression": "editing = true",
+      "review": {
+        "status": "open",
+        "caller": "MetadataWebComponentService Formly duration type inside the actual metadata profile form",
+        "roles": [],
+        "scenarios": {},
+        "tests": [
+          "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#dauer-eingabe-korrektur-und-browsernachweis"
+        ],
+        "reason": "Native and browser checks cover digit order, blank editing, blur normalization, read-only controls and model echoes. Numeric limits, additional embeddings and all role/context scenarios remain open."
+      }
+    },
+    {
+      "id": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts#MetadataDurationComponent:template-event:focus:2",
+      "file": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "owner": "MetadataDurationComponent",
+      "kind": "template-event",
+      "name": "focus",
+      "line": 28,
+      "fingerprint": "0d4cad7d61280d69",
+      "templateFile": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "expression": "editing = true",
+      "review": {
+        "status": "open",
+        "caller": "MetadataWebComponentService Formly duration type inside the actual metadata profile form",
+        "roles": [],
+        "scenarios": {},
+        "tests": [
+          "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#dauer-eingabe-korrektur-und-browsernachweis"
+        ],
+        "reason": "Native and browser checks cover digit order, blank editing, blur normalization, read-only controls and model echoes. Numeric limits, additional embeddings and all role/context scenarios remain open."
+      }
+    },
+    {
+      "id": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts#MetadataDurationComponent:template-event:input:1",
+      "file": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "owner": "MetadataDurationComponent",
+      "kind": "template-event",
+      "name": "input",
+      "line": 20,
+      "fingerprint": "1962011e5256e6ce",
+      "templateFile": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "expression": "setMinutes($event)",
+      "review": {
+        "status": "open",
+        "caller": "MetadataWebComponentService Formly duration type inside the actual metadata profile form",
+        "roles": [],
+        "scenarios": {},
+        "tests": [
+          "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#dauer-eingabe-korrektur-und-browsernachweis"
+        ],
+        "reason": "Native and browser checks cover digit order, blank editing, blur normalization, read-only controls and model echoes. Numeric limits, additional embeddings and all role/context scenarios remain open."
+      }
+    },
+    {
+      "id": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts#MetadataDurationComponent:template-event:input:2",
+      "file": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "owner": "MetadataDurationComponent",
+      "kind": "template-event",
+      "name": "input",
+      "line": 28,
+      "fingerprint": "77000102fbe5b12b",
+      "templateFile": "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+      "expression": "setSeconds($event)",
+      "review": {
+        "status": "open",
+        "caller": "MetadataWebComponentService Formly duration type inside the actual metadata profile form",
+        "roles": [],
+        "scenarios": {},
+        "tests": [
+          "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#dauer-eingabe-korrektur-und-browsernachweis"
+        ],
+        "reason": "Native and browser checks cover digit order, blank editing, blur normalization, read-only controls and model echoes. Numeric limits, additional embeddings and all role/context scenarios remain open."
+      }
+    },
+    {
       "id": "apps/frontend/src/app/shared/components/xml-viewer/xml-viewer.component.ts#XmlViewerComponent:async-source:copyToClipboard/window.setTimeout:1",
       "file": "apps/frontend/src/app/shared/components/xml-viewer/xml-viewer.component.ts",
       "owner": "XmlViewerComponent",
@@ -95781,16 +96243,35 @@
       "owner": "MetadataDialogComponent",
       "kind": "async-source",
       "name": "initializeWebComponent/form.addEventListener",
-      "line": 259,
-      "fingerprint": "08f5696a4afc15a4",
+      "line": 281,
+      "fingerprint": "ec3a67a7f621517a",
       "review": {
         "status": "open",
-        "caller": "",
+        "caller": "Metadata dialog opened from file validation; simultaneous pending open requests reproduce two productive instances",
         "roles": [],
-        "scenarios": {},
-        "tests": [],
-        "evidence": [],
-        "reason": ""
+        "scenarios": {
+          "destroy": {
+            "status": "passed",
+            "evidence": "Timer cannot initialize replacement form after destruction; old metadataChange listener no longer modifies closed component."
+          },
+          "delayed-success": {
+            "status": "passed",
+            "evidence": "Native DOM checks verify spinner removal and save action without forced detection; browser uses actual text field and library."
+          },
+          "out-of-order": {
+            "status": "passed",
+            "evidence": "Three browser cases with download delays 150/150, 300/150, 150/300 preserve each dialog value and independent editing. Native tests additionally verify independent item profile selection and event routing."
+          }
+        },
+        "tests": [
+          "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#zl-017-metadateneditor-nach-timer-und-webkomponenten-ereignissen",
+          "docs/qa/zoneless-audit.md#zl-018-gleichzeitig-geöffnete-metadatendialoge"
+        ],
+        "reason": "Simultaneous-dialog isolation verified with text profiles. Additional embeddings, roles, field types and other scenarios remain open."
       }
     },
     {
@@ -95799,16 +96280,35 @@
       "owner": "MetadataDialogComponent",
       "kind": "async-source",
       "name": "ngOnInit/setTimeout",
-      "line": 236,
-      "fingerprint": "69cd29ef887751d1",
+      "line": 250,
+      "fingerprint": "86588d1a9155297f",
       "review": {
         "status": "open",
-        "caller": "",
+        "caller": "Metadata dialog opened from file validation; simultaneous pending open requests reproduce two productive instances",
         "roles": [],
-        "scenarios": {},
-        "tests": [],
-        "evidence": [],
-        "reason": ""
+        "scenarios": {
+          "destroy": {
+            "status": "passed",
+            "evidence": "Timer cannot initialize replacement form after destruction; old metadataChange listener no longer modifies closed component."
+          },
+          "delayed-success": {
+            "status": "passed",
+            "evidence": "Native DOM checks verify spinner removal and save action without forced detection; browser uses actual text field and library."
+          },
+          "out-of-order": {
+            "status": "passed",
+            "evidence": "Three browser cases with download delays 150/150, 300/150, 150/300 preserve each dialog value and independent editing. Native tests additionally verify independent item profile selection and event routing."
+          }
+        },
+        "tests": [
+          "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#zl-017-metadateneditor-nach-timer-und-webkomponenten-ereignissen",
+          "docs/qa/zoneless-audit.md#zl-018-gleichzeitig-geöffnete-metadatendialoge"
+        ],
+        "reason": "Simultaneous-dialog isolation verified with text profiles. Additional embeddings, roles, field types and other scenarios remain open."
       }
     },
     {
@@ -95817,8 +96317,8 @@
       "owner": "MetadataDialogComponent",
       "kind": "await",
       "name": "ngOnInit",
-      "line": 233,
-      "fingerprint": "d3ffaed7371741b6",
+      "line": 246,
+      "fingerprint": "7cd745ee8fb2244b",
       "review": {
         "status": "open",
         "caller": "",
@@ -95835,10 +96335,12 @@
       "owner": "MetadataDialogComponent",
       "kind": "Component",
       "name": "MetadataDialogComponent",
-      "line": 61,
-      "fingerprint": "df08ca2f954c4962",
+      "line": 62,
+      "fingerprint": "97eb70c4931605ee",
       "selector": "app-metadata-dialog",
-      "testCandidates": [],
+      "testCandidates": [
+        "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.zoneless.spec.ts"
+      ],
       "callerCandidates": [
         "apps/frontend/src/app/shared/dialogs/item-list-dialog/item-list-dialog.component.ts",
         "apps/frontend/src/app/ws-admin/components/files-validation-result/files-validation.component.ts",
@@ -95846,12 +96348,17 @@
       ],
       "review": {
         "status": "open",
-        "caller": "",
+        "caller": "File validation dialog metadata action",
         "roles": [],
         "scenarios": {},
-        "tests": [],
-        "evidence": [],
-        "reason": ""
+        "tests": [
+          "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#laufende-erweiterung-vokabulare-und-dateivalidierungsabschluss"
+        ],
+        "reason": "Eight browser cases cover opening, independent text dialogs, number/boolean/multiline/item edits, duration and vocabulary selection. Further embeddings, bounds, roles and other scenarios remain open."
       }
     },
     {
@@ -95860,7 +96367,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-binding",
       "name": "display",
-      "line": 100,
+      "line": 101,
       "fingerprint": "c9b8fd1bef68e1bd",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "isLoading ? 'none' : 'block'",
@@ -95880,7 +96387,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-binding",
       "name": "language",
-      "line": 149,
+      "line": 150,
       "fingerprint": "e6bb1f8f28ff94de",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "data.language || 'de'",
@@ -95900,7 +96407,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-binding",
       "name": "ngModel",
-      "line": 85,
+      "line": 86,
       "fingerprint": "3a0dd3c07c73f4b7",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "isEditing",
@@ -95920,7 +96427,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-binding",
       "name": "ngModel",
-      "line": 104,
+      "line": 105,
       "fingerprint": "1d3e1bb2a82ca077",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "selectedView",
@@ -95940,7 +96447,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-binding",
       "name": "readonly",
-      "line": 121,
+      "line": 122,
       "fingerprint": "787164c6744c6190",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "!isEditing",
@@ -95960,7 +96467,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-binding",
       "name": "readonly",
-      "line": 129,
+      "line": 130,
       "fingerprint": "787164c6744c6190",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "!isEditing",
@@ -95980,7 +96487,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-binding",
       "name": "readonly",
-      "line": 137,
+      "line": 138,
       "fingerprint": "787164c6744c6190",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "!isEditing",
@@ -96000,7 +96507,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-binding",
       "name": "readonly",
-      "line": 150,
+      "line": 151,
       "fingerprint": "4f750f32a755cae2",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "isEditing ? null : ''",
@@ -96020,7 +96527,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-binding",
       "name": "value",
-      "line": 107,
+      "line": 108,
       "fingerprint": "a04d5d31410893f7",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "item.uuid",
@@ -96040,7 +96547,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-binding",
       "name": "value",
-      "line": 120,
+      "line": 121,
       "fingerprint": "3a7d758603f21f1b",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "getSelectedItem()!.id",
@@ -96060,7 +96567,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-binding",
       "name": "value",
-      "line": 128,
+      "line": 129,
       "fingerprint": "d2f81db5ee09e2f8",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "getSelectedItem()!.variableId",
@@ -96080,7 +96587,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-binding",
       "name": "value",
-      "line": 136,
+      "line": 137,
       "fingerprint": "1ac7954a08955633",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "getSelectedItem()!.description",
@@ -96100,7 +96607,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-condition",
       "name": "control-flow",
-      "line": 94,
+      "line": 95,
       "fingerprint": "efd4473641340e06",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "isLoading",
@@ -96120,7 +96627,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-condition",
       "name": "control-flow",
-      "line": 106,
+      "line": 107,
       "fingerprint": "5f3c4f8580d392e4",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "items",
@@ -96140,7 +96647,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-condition",
       "name": "control-flow",
-      "line": 115,
+      "line": 116,
       "fingerprint": "7aa6270e1b27f66e",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "selectedView !== 'unit'",
@@ -96160,7 +96667,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-condition",
       "name": "control-flow",
-      "line": 163,
+      "line": 164,
       "fingerprint": "e390deb38dbc2e3f",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "isEditing && hasChanges",
@@ -96180,18 +96687,23 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-event",
       "name": "change",
-      "line": 86,
+      "line": 87,
       "fingerprint": "2a5fcb783a107c2f",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "onEditModeChange()",
       "review": {
         "status": "open",
-        "caller": "",
+        "caller": "Metadata dialog opened from file validation; simultaneous pending open requests reproduce two productive instances",
         "roles": [],
         "scenarios": {},
-        "tests": [],
-        "evidence": [],
-        "reason": ""
+        "tests": [
+          "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#zl-018-gleichzeitig-geöffnete-metadatendialoge"
+        ],
+        "reason": "Simultaneous-dialog isolation verified with text profiles. Additional embeddings, roles, field types and other scenarios remain open."
       }
     },
     {
@@ -96200,7 +96712,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-event",
       "name": "click",
-      "line": 159,
+      "line": 160,
       "fingerprint": "ef4c8d0e96030535",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "close(false)",
@@ -96220,7 +96732,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-event",
       "name": "click",
-      "line": 164,
+      "line": 165,
       "fingerprint": "92f6ef2989ccb9ad",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "close(true)",
@@ -96240,7 +96752,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-event",
       "name": "input",
-      "line": 122,
+      "line": 123,
       "fingerprint": "f5b720a7ea67048d",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "updateItemProperty('id', $any($event.target).value)",
@@ -96260,7 +96772,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-event",
       "name": "input",
-      "line": 130,
+      "line": 131,
       "fingerprint": "131b296090c45aa2",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "updateItemProperty('variableId', $any($event.target).value)",
@@ -96280,7 +96792,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-event",
       "name": "input",
-      "line": 139,
+      "line": 140,
       "fingerprint": "ff0aedffa50da3e2",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "updateItemProperty('description', $any($event.target).value)",
@@ -96300,7 +96812,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-event",
       "name": "ngModelChange",
-      "line": 85,
+      "line": 86,
       "fingerprint": "3a0dd3c07c73f4b7",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "isEditing",
@@ -96320,7 +96832,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-event",
       "name": "ngModelChange",
-      "line": 104,
+      "line": 105,
       "fingerprint": "1d3e1bb2a82ca077",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "selectedView",
@@ -96340,18 +96852,23 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-event",
       "name": "selectionChange",
-      "line": 104,
+      "line": 105,
       "fingerprint": "68435a9cc88de0b1",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "onViewChange()",
       "review": {
         "status": "open",
-        "caller": "",
+        "caller": "Metadata dialog opened from file validation; simultaneous pending open requests reproduce two productive instances",
         "roles": [],
         "scenarios": {},
-        "tests": [],
-        "evidence": [],
-        "reason": ""
+        "tests": [
+          "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#zl-018-gleichzeitig-geöffnete-metadatendialoge"
+        ],
+        "reason": "Simultaneous-dialog isolation verified with text profiles. Additional embeddings, roles, field types and other scenarios remain open."
       }
     },
     {
@@ -96360,7 +96877,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-text",
       "name": "interpolation",
-      "line": 82,
+      "line": 83,
       "fingerprint": "f9044ac59c6c731d",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": "{{ data.title }}",
@@ -96380,7 +96897,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-text",
       "name": "interpolation",
-      "line": 88,
+      "line": 89,
       "fingerprint": "e0df8b89fb6936f3",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": " {{ isEditing ? 'Bearbeiten aktiv' : 'Bearbeiten' }} ",
@@ -96400,7 +96917,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-text",
       "name": "interpolation",
-      "line": 108,
+      "line": 109,
       "fingerprint": "a9b4bb3d7e903c08",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": " Item {{ item.id }} ",
@@ -96420,7 +96937,7 @@
       "owner": "MetadataDialogComponent",
       "kind": "template-text",
       "name": "interpolation",
-      "line": 160,
+      "line": 161,
       "fingerprint": "fcd14d74bdeb4f08",
       "templateFile": "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
       "expression": " {{ isEditing && hasChanges ? 'Abbrechen' : 'Schließen' }} ",
@@ -97128,6 +97645,37 @@
         "tests": [],
         "evidence": [],
         "reason": ""
+      }
+    },
+    {
+      "id": "apps/frontend/src/app/shared/services/metadata-web-component.service.ts#MetadataWebComponentService:Injectable:MetadataWebComponentService:1",
+      "file": "apps/frontend/src/app/shared/services/metadata-web-component.service.ts",
+      "owner": "MetadataWebComponentService",
+      "kind": "Injectable",
+      "name": "MetadataWebComponentService",
+      "line": 14,
+      "fingerprint": "a2fc2114016bbd96",
+      "selector": "",
+      "testCandidates": [
+        "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.zoneless.spec.ts",
+        "apps/frontend/src/app/shared/services/metadata-web-component.service.zoneless.spec.ts"
+      ],
+      "callerCandidates": [
+        "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts"
+      ],
+      "review": {
+        "status": "open",
+        "caller": "MetadataDialogComponent.ngOnInit via per-element factory",
+        "roles": [],
+        "scenarios": {},
+        "tests": [
+          "apps/frontend/src/app/shared/services/metadata-web-component.service.zoneless.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#zl-019-vokabularzustand-gleichzeitig-geöffneter-formulare"
+        ],
+        "reason": "Separate providers verified for simultaneous dialogs, including delayed tree selection after closing the other dialog. Further roles, embeddings and context changes remain open."
       }
     },
     {
@@ -113968,7 +114516,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "deleteSelectedUnusedFiles/this.fileService.deleteFilesWithResult(this.data.workspaceId, idsToDelete)\n      .subscribe",
-      "line": 1106,
+      "line": 1108,
       "fingerprint": "f7012cdc5af31749",
       "review": {
         "status": "open",
@@ -113986,7 +114534,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "ensureBookletData/firstValueFrom",
-      "line": 844,
+      "line": 846,
       "fingerprint": "5835026610bc0b2c",
       "review": {
         "status": "open",
@@ -114004,7 +114552,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "installCompatibleAspectPlayer/this.fileService.installCompatibleAspectPlayer(this.data.workspaceId)\n      .pipe(finalize(() => {\n        this.isInstallingCompatibleAspectPlayer = false;\n        this.cdr.markForCheck();\n      }))\n      .subscribe",
-      "line": 569,
+      "line": 571,
       "fingerprint": "dd00e7838ebb303c",
       "review": {
         "status": "open",
@@ -114022,7 +114570,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "loadBookletData/this.fileService.getBookletInfo(this.data.workspaceId, bookletId).subscribe",
-      "line": 934,
+      "line": 936,
       "fingerprint": "0c8dbe57fb56a631",
       "review": {
         "status": "open",
@@ -114040,7 +114588,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "loadWorkspaceSettings/this.workspaceService.getWorkspaceSettings(this.data.workspaceId).subscribe",
-      "line": 769,
+      "line": 771,
       "fingerprint": "02a60e217e90ff6a",
       "review": {
         "status": "open",
@@ -114058,7 +114606,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "markTestTakersAsConsidered/setTimeout",
-      "line": 1353,
+      "line": 1355,
       "fingerprint": "c1e8a0aefb25898a",
       "review": {
         "status": "open",
@@ -114076,7 +114624,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "markTestTakersAsConsidered/this.workspaceService.markTestTakersAsConsidered(this.data.workspaceId!, batchLogins)\n          .subscribe",
-      "line": 1338,
+      "line": 1340,
       "fingerprint": "93fd422d8debb047",
       "review": {
         "status": "open",
@@ -114094,7 +114642,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "markTestTakersAsConsidered/this.workspaceService.markTestTakersAsConsidered(this.data.workspaceId!, logins)\n        .subscribe",
-      "line": 1376,
+      "line": 1378,
       "fingerprint": "cc48b18aac291e57",
       "review": {
         "status": "open",
@@ -114112,7 +114660,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "markTestTakersAsExcluded/setTimeout",
-      "line": 1439,
+      "line": 1441,
       "fingerprint": "c1e8a0aefb25898a",
       "review": {
         "status": "open",
@@ -114130,7 +114678,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "markTestTakersAsExcluded/this.workspaceService.markTestTakersAsExcluded(this.data.workspaceId!, batchLogins)\n          .subscribe",
-      "line": 1421,
+      "line": 1423,
       "fingerprint": "57944722554616b6",
       "review": {
         "status": "open",
@@ -114148,7 +114696,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "markTestTakersAsExcluded/this.workspaceService.markTestTakersAsExcluded(this.data.workspaceId!, logins)\n        .subscribe",
-      "line": 1468,
+      "line": 1470,
       "fingerprint": "15cd9b6d37aa18a3",
       "review": {
         "status": "open",
@@ -114166,7 +114714,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "openAffectedUnitsDialog/ref.afterClosed().subscribe",
-      "line": 691,
+      "line": 693,
       "fingerprint": "1c2459e3d959ab44",
       "review": {
         "status": "open",
@@ -114184,7 +114732,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "openBookletInfo/this.fileService.getBookletInfo(\n      this.data.workspaceId,\n      normalizedBookletId\n    ).pipe(\n      takeUntil(this.dialogRef.beforeClosed()),\n      takeUntilDestroyed(this.destroyRef),\n      finalize(() => loadingSnackBar.dismiss())\n    ).subscribe",
-      "line": 1521,
+      "line": 1523,
       "fingerprint": "ccd7b1863486a10a",
       "review": {
         "status": "open",
@@ -114220,7 +114768,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "openGeoGebraResourcePackagesDialog/dialogRef.afterClosed().subscribe",
-      "line": 554,
+      "line": 556,
       "fingerprint": "47e002eb3707a67c",
       "review": {
         "status": "open",
@@ -114238,34 +114786,62 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "openMetadataFile/firstValueFrom",
-      "line": 1709,
-      "fingerprint": "20467339e9bc8ca7",
+      "line": 1718,
+      "fingerprint": "126720af8f3abcb4",
       "review": {
         "status": "open",
-        "caller": "",
+        "caller": "File validation metadata file action via TestFilesComponent",
         "roles": [],
-        "scenarios": {},
-        "tests": [],
-        "evidence": [],
-        "reason": ""
+        "scenarios": {
+          "destroy": {
+            "status": "passed",
+            "evidence": "Sixteen controlled cancellation cases across search, download and both profile phases; operation settles before delayed success/error is released."
+          },
+          "delayed-success": {
+            "status": "passed",
+            "evidence": "Four delayed native phases; browser exercises actual resolver and metadata web component with synthetic text profile."
+          }
+        },
+        "tests": [
+          "apps/frontend/src/app/ws-admin/components/files-validation-result/files-validation.component.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#zl-016-metadatenabruf-nach-schließen-der-dateivalidierung"
+        ],
+        "reason": "Workspace changes, out-of-order/repeated opens and all failure/empty shapes remain open. Already running resolver requests cannot be aborted through its public API."
       }
     },
     {
-      "id": "apps/frontend/src/app/ws-admin/components/files-validation-result/files-validation.component.ts#FilesValidationDialogComponent:async-source:openMetadataFile/firstValueFrom:2",
+      "id": "apps/frontend/src/app/ws-admin/components/files-validation-result/files-validation.component.ts#FilesValidationDialogComponent:async-source:openMetadataFile/this.dialogRef.beforeClosed().subscribe:1",
       "file": "apps/frontend/src/app/ws-admin/components/files-validation-result/files-validation.component.ts",
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
-      "name": "openMetadataFile/firstValueFrom",
-      "line": 1746,
-      "fingerprint": "a47f1516a2f154da",
+      "name": "openMetadataFile/this.dialogRef.beforeClosed().subscribe",
+      "line": 1716,
+      "fingerprint": "2d47f90e2be591b2",
       "review": {
         "status": "open",
-        "caller": "",
+        "caller": "File validation metadata file action via TestFilesComponent",
         "roles": [],
-        "scenarios": {},
-        "tests": [],
-        "evidence": [],
-        "reason": ""
+        "scenarios": {
+          "destroy": {
+            "status": "passed",
+            "evidence": "Sixteen controlled cancellation cases across search, download and both profile phases; operation settles before delayed success/error is released."
+          },
+          "delayed-success": {
+            "status": "passed",
+            "evidence": "Four delayed native phases; browser exercises actual resolver and metadata web component with synthetic text profile."
+          }
+        },
+        "tests": [
+          "apps/frontend/src/app/ws-admin/components/files-validation-result/files-validation.component.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#zl-016-metadatenabruf-nach-schließen-der-dateivalidierung"
+        ],
+        "reason": "Workspace changes, out-of-order/repeated opens and all failure/empty shapes remain open. Already running resolver requests cannot be aborted through its public API."
       }
     },
     {
@@ -114274,7 +114850,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "openSchemeFile/this.fileService.getCodingSchemeFile(\n      this.data.workspaceId,\n      schemeId\n    ).pipe(\n      takeUntil(this.dialogRef.beforeClosed()),\n      takeUntilDestroyed(this.destroyRef),\n      finalize(() => loadingSnackBar.dismiss())\n    ).subscribe",
-      "line": 1611,
+      "line": 1613,
       "fingerprint": "707fa3c6e84c2300",
       "review": {
         "status": "open",
@@ -114305,7 +114881,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "openUnitInfo/this.fileService.getUnitInfo(\n      this.data.workspaceId,\n      unitId\n    ).pipe(\n      takeUntil(this.dialogRef.beforeClosed()),\n      takeUntilDestroyed(this.destroyRef),\n      finalize(() => loadingSnackBar.dismiss())\n    ).subscribe",
-      "line": 1567,
+      "line": 1569,
       "fingerprint": "19c1433d09abbc8f",
       "review": {
         "status": "open",
@@ -114336,7 +114912,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "refreshValidationData/this.validationService.createValidationTask(workspaceId, 'testFiles').pipe(\n      switchMap(task => this.waitForValidationTask(workspaceId, task)),\n      switchMap(task => {\n        if (task.status === 'failed') {\n          throw new Error(task.error || 'Validierung fehlgeschlagen');\n        }\n        this.refreshValidationProgress = 100;\n        this.refreshValidationProgressMessage = task.progress_message || 'Validierungsergebnis wird geladen...';\n        this.cdr.markForCheck();\n        return this.validationService.getValidationResults(workspaceId, task.id);\n      }),\n      finalize(() => {\n        this.isRefreshingValidation = false;\n        this.cdr.markForCheck();\n      })\n    ).subscribe",
-      "line": 475,
+      "line": 477,
       "fingerprint": "9b4109a1591553c2",
       "review": {
         "status": "open",
@@ -114354,7 +114930,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "resolveDuplicateTestTakers/this.workspaceService.resolveDuplicateTestTakers(this.data.workspaceId, Object.fromEntries(resolutionMap))\n      .subscribe",
-      "line": 1205,
+      "line": 1207,
       "fingerprint": "de02540eaa0e61d7",
       "review": {
         "status": "open",
@@ -114372,7 +114948,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "saveCurrentWorkspaceSettings/this.workspaceService.saveWorkspaceSettings(this.data.workspaceId, settings).subscribe",
-      "line": 954,
+      "line": 956,
       "fingerprint": "185cda438f12f09f",
       "review": {
         "status": "open",
@@ -114390,7 +114966,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "showTestTakerXml/this.fileService.getTestTakerContentXml(this.data.workspaceId, testTakerId)\n      .pipe(takeUntil(this.dialogRef.beforeClosed()), takeUntilDestroyed(this.destroyRef))\n      .subscribe",
-      "line": 1678,
+      "line": 1680,
       "fingerprint": "4af46b8f3ea461fa",
       "review": {
         "status": "open",
@@ -114426,7 +115002,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "toggleAllSelection/setTimeout",
-      "line": 1247,
+      "line": 1249,
       "fingerprint": "0a17a8923aa325e8",
       "review": {
         "status": "open",
@@ -114444,7 +115020,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "toggleModeSelection/setTimeout",
-      "line": 1286,
+      "line": 1288,
       "fingerprint": "0a17a8923aa325e8",
       "review": {
         "status": "open",
@@ -114462,7 +115038,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "async-source",
       "name": "waitForValidationTask/timer",
-      "line": 517,
+      "line": 519,
       "fingerprint": "140927142ea0da12",
       "review": {
         "status": "open",
@@ -114480,7 +115056,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "await",
       "name": "ensureBookletData",
-      "line": 844,
+      "line": 846,
       "fingerprint": "1093e56811f734e0",
       "review": {
         "status": "open",
@@ -114498,7 +115074,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "await",
       "name": "findBookletsWithTestlet",
-      "line": 863,
+      "line": 865,
       "fingerprint": "755f59770c56b309",
       "review": {
         "status": "open",
@@ -114516,16 +115092,30 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "await",
       "name": "openMetadataFile",
-      "line": 1709,
-      "fingerprint": "64543e343e3fd29a",
+      "line": 1724,
+      "fingerprint": "4947cf3ea64f49f2",
       "review": {
         "status": "open",
-        "caller": "",
+        "caller": "File validation metadata file action via TestFilesComponent",
         "roles": [],
-        "scenarios": {},
-        "tests": [],
-        "evidence": [],
-        "reason": ""
+        "scenarios": {
+          "destroy": {
+            "status": "passed",
+            "evidence": "Sixteen controlled cancellation cases across search, download and both profile phases; operation settles before delayed success/error is released."
+          },
+          "delayed-success": {
+            "status": "passed",
+            "evidence": "Four delayed native phases; browser exercises actual resolver and metadata web component with synthetic text profile."
+          }
+        },
+        "tests": [
+          "apps/frontend/src/app/ws-admin/components/files-validation-result/files-validation.component.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#zl-016-metadatenabruf-nach-schließen-der-dateivalidierung"
+        ],
+        "reason": "Workspace changes, out-of-order/repeated opens and all failure/empty shapes remain open. Already running resolver requests cannot be aborted through its public API."
       }
     },
     {
@@ -114534,16 +115124,30 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "await",
       "name": "openMetadataFile",
-      "line": 1746,
-      "fingerprint": "0c0c61d5a16491d8",
+      "line": 1763,
+      "fingerprint": "2b469c2f4a26d304",
       "review": {
         "status": "open",
-        "caller": "",
+        "caller": "File validation metadata file action via TestFilesComponent",
         "roles": [],
-        "scenarios": {},
-        "tests": [],
-        "evidence": [],
-        "reason": ""
+        "scenarios": {
+          "destroy": {
+            "status": "passed",
+            "evidence": "Sixteen controlled cancellation cases across search, download and both profile phases; operation settles before delayed success/error is released."
+          },
+          "delayed-success": {
+            "status": "passed",
+            "evidence": "Four delayed native phases; browser exercises actual resolver and metadata web component with synthetic text profile."
+          }
+        },
+        "tests": [
+          "apps/frontend/src/app/ws-admin/components/files-validation-result/files-validation.component.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#zl-016-metadatenabruf-nach-schließen-der-dateivalidierung"
+        ],
+        "reason": "Workspace changes, out-of-order/repeated opens and all failure/empty shapes remain open. Already running resolver requests cannot be aborted through its public API."
       }
     },
     {
@@ -114552,16 +115156,30 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "await",
       "name": "openMetadataFile",
-      "line": 1771,
-      "fingerprint": "3b3556a0c3f53dfa",
+      "line": 1789,
+      "fingerprint": "02a34c1a8692eb38",
       "review": {
         "status": "open",
-        "caller": "",
+        "caller": "File validation metadata file action via TestFilesComponent",
         "roles": [],
-        "scenarios": {},
-        "tests": [],
-        "evidence": [],
-        "reason": ""
+        "scenarios": {
+          "destroy": {
+            "status": "passed",
+            "evidence": "Sixteen controlled cancellation cases across search, download and both profile phases; operation settles before delayed success/error is released."
+          },
+          "delayed-success": {
+            "status": "passed",
+            "evidence": "Four delayed native phases; browser exercises actual resolver and metadata web component with synthetic text profile."
+          }
+        },
+        "tests": [
+          "apps/frontend/src/app/ws-admin/components/files-validation-result/files-validation.component.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#zl-016-metadatenabruf-nach-schließen-der-dateivalidierung"
+        ],
+        "reason": "Workspace changes, out-of-order/repeated opens and all failure/empty shapes remain open. Already running resolver requests cannot be aborted through its public API."
       }
     },
     {
@@ -114570,16 +115188,30 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "await",
       "name": "openMetadataFile",
-      "line": 1779,
-      "fingerprint": "daf1e245355c6df2",
+      "line": 1798,
+      "fingerprint": "b53217bb31c6bd40",
       "review": {
         "status": "open",
-        "caller": "",
+        "caller": "File validation metadata file action via TestFilesComponent",
         "roles": [],
-        "scenarios": {},
-        "tests": [],
-        "evidence": [],
-        "reason": ""
+        "scenarios": {
+          "destroy": {
+            "status": "passed",
+            "evidence": "Sixteen controlled cancellation cases across search, download and both profile phases; operation settles before delayed success/error is released."
+          },
+          "delayed-success": {
+            "status": "passed",
+            "evidence": "Four delayed native phases; browser exercises actual resolver and metadata web component with synthetic text profile."
+          }
+        },
+        "tests": [
+          "apps/frontend/src/app/ws-admin/components/files-validation-result/files-validation.component.spec.ts",
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#zl-016-metadatenabruf-nach-schließen-der-dateivalidierung"
+        ],
+        "reason": "Workspace changes, out-of-order/repeated opens and all failure/empty shapes remain open. Already running resolver requests cannot be aborted through its public API."
       }
     },
     {
@@ -114588,7 +115220,7 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "await",
       "name": "toggleTestletIgnoreForAllBooklets",
-      "line": 1037,
+      "line": 1039,
       "fingerprint": "f455e27d18bd03cc",
       "review": {
         "status": "open",
@@ -114606,8 +115238,8 @@
       "owner": "FilesValidationDialogComponent",
       "kind": "Component",
       "name": "FilesValidationDialogComponent",
-      "line": 165,
-      "fingerprint": "95b46c47ff55bb3f",
+      "line": 167,
+      "fingerprint": "6fdc0e185fd41874",
       "selector": "files-validation-dialog",
       "testCandidates": [
         "apps/frontend/src/app/high-coverage-component-methods.spec.ts",
@@ -134848,7 +135480,7 @@
       "owner": "TestFilesComponent",
       "kind": "async-source",
       "name": "handleValidationResponse/confirmRef.afterClosed().subscribe",
-      "line": 1229,
+      "line": 1232,
       "fingerprint": "52ae96a282331dba",
       "review": {
         "status": "open",
@@ -134866,7 +135498,7 @@
       "owner": "TestFilesComponent",
       "kind": "async-source",
       "name": "handleValidationResponse/dialogRef.afterClosed().subscribe",
-      "line": 1288,
+      "line": 1291,
       "fingerprint": "dfbe63cca3023703",
       "review": {
         "status": "open",
@@ -134884,7 +135516,7 @@
       "owner": "TestFilesComponent",
       "kind": "async-source",
       "name": "handleValidationResponse/dialogRef.afterClosed().subscribe",
-      "line": 1314,
+      "line": 1317,
       "fingerprint": "03a6ffcde6ed79b0",
       "review": {
         "status": "open",
@@ -134902,7 +135534,7 @@
       "owner": "TestFilesComponent",
       "kind": "async-source",
       "name": "handleValidationResponse/setTimeout",
-      "line": 1244,
+      "line": 1247,
       "fingerprint": "5c433abc6910cf7b",
       "review": {
         "status": "open",
@@ -134920,7 +135552,7 @@
       "owner": "TestFilesComponent",
       "kind": "async-source",
       "name": "handleValidationResponse/this.fileService\n              .createDummyTestTakerFile(this.appService.selectedWorkspaceId)\n              .subscribe",
-      "line": 1232,
+      "line": 1235,
       "fingerprint": "7542bffcd1a46ccc",
       "review": {
         "status": "open",
@@ -135100,7 +135732,7 @@
       "owner": "TestFilesComponent",
       "kind": "async-source",
       "name": "openGithubReleasesDialog/dialogRef.afterClosed().subscribe",
-      "line": 1349,
+      "line": 1352,
       "fingerprint": "1d78add919ce9e39",
       "review": {
         "status": "open",
@@ -135118,7 +135750,7 @@
       "owner": "TestFilesComponent",
       "kind": "async-source",
       "name": "openMetadataDialog/dialogRef.afterClosed().subscribe",
-      "line": 1477,
+      "line": 1480,
       "fingerprint": "211d33d77fb293eb",
       "review": {
         "status": "open",
@@ -135136,7 +135768,7 @@
       "owner": "TestFilesComponent",
       "kind": "async-source",
       "name": "openResourcePackagesDialog/dialogRef.afterClosed().subscribe",
-      "line": 1333,
+      "line": 1336,
       "fingerprint": "7b99c3c18ccb1735",
       "review": {
         "status": "open",
@@ -135154,7 +135786,7 @@
       "owner": "TestFilesComponent",
       "kind": "async-source",
       "name": "saveMetadata/this.fileService.uploadTestFiles(\n      this.appService.selectedWorkspaceId,\n      files,\n      true, // overwriteExisting\n      [originalFile.filename]\n    ).pipe(\n      finalize(() => {\n        this.isLoading = false;\n      })\n    ).subscribe",
-      "line": 1502,
+      "line": 1505,
       "fingerprint": "281c514c6aff013a",
       "review": {
         "status": "open",
@@ -135172,7 +135804,7 @@
       "owner": "TestFilesComponent",
       "kind": "async-source",
       "name": "showFileContent/dialogRef.afterClosed().subscribe",
-      "line": 1386,
+      "line": 1389,
       "fingerprint": "2e28b2571c845a7c",
       "review": {
         "status": "open",
@@ -135190,7 +135822,7 @@
       "owner": "TestFilesComponent",
       "kind": "async-source",
       "name": "showFileContent/this.fileService\n      .downloadFile(this.appService.selectedWorkspaceId, file.id)\n      .subscribe",
-      "line": 1364,
+      "line": 1367,
       "fingerprint": "434a74898804f7f8",
       "review": {
         "status": "open",
@@ -135221,21 +135853,25 @@
       }
     },
     {
-      "id": "apps/frontend/src/app/ws-admin/components/test-files/test-files.component.ts#TestFilesComponent:async-source:validateFiles/this.validationService\n      .createValidationTask(workspaceId, 'testFiles')\n      .pipe(\n        switchMap(task => this.waitForValidationTask(workspaceId, task)),\n        switchMap(task => {\n          if (task.status === 'failed') {\n            throw new Error(task.error || 'Validierung fehlgeschlagen');\n          }\n          this.validationProgress = 100;\n          this.validationProgressMessage =\n            task.progress_message || 'Validierungsergebnis wird geladen...';\n          return this.validationService.getValidationResults(\n            workspaceId,\n            task.id\n          );\n        }),\n        finalize(() => {\n          this.isValidating = false;\n        })\n      )\n      .subscribe:1",
+      "id": "apps/frontend/src/app/ws-admin/components/test-files/test-files.component.ts#TestFilesComponent:async-source:validateFiles/this.validationService\n      .createValidationTask(workspaceId, 'testFiles')\n      .pipe(\n        switchMap(task => this.waitForValidationTask(workspaceId, task)),\n        switchMap(task => {\n          if (task.status === 'failed') {\n            throw new Error(task.error || 'Validierung fehlgeschlagen');\n          }\n          this.validationProgress = 100;\n          this.validationProgressMessage =\n            task.progress_message || 'Validierungsergebnis wird geladen...';\n          this.changeDetectorRef.markForCheck();\n          return this.validationService.getValidationResults(\n            workspaceId,\n            task.id\n          );\n        }),\n        finalize(() => {\n          this.isValidating = false;\n          this.changeDetectorRef.markForCheck();\n        })\n      )\n      .subscribe:1",
       "file": "apps/frontend/src/app/ws-admin/components/test-files/test-files.component.ts",
       "owner": "TestFilesComponent",
       "kind": "async-source",
-      "name": "validateFiles/this.validationService\n      .createValidationTask(workspaceId, 'testFiles')\n      .pipe(\n        switchMap(task => this.waitForValidationTask(workspaceId, task)),\n        switchMap(task => {\n          if (task.status === 'failed') {\n            throw new Error(task.error || 'Validierung fehlgeschlagen');\n          }\n          this.validationProgress = 100;\n          this.validationProgressMessage =\n            task.progress_message || 'Validierungsergebnis wird geladen...';\n          return this.validationService.getValidationResults(\n            workspaceId,\n            task.id\n          );\n        }),\n        finalize(() => {\n          this.isValidating = false;\n        })\n      )\n      .subscribe",
+      "name": "validateFiles/this.validationService\n      .createValidationTask(workspaceId, 'testFiles')\n      .pipe(\n        switchMap(task => this.waitForValidationTask(workspaceId, task)),\n        switchMap(task => {\n          if (task.status === 'failed') {\n            throw new Error(task.error || 'Validierung fehlgeschlagen');\n          }\n          this.validationProgress = 100;\n          this.validationProgressMessage =\n            task.progress_message || 'Validierungsergebnis wird geladen...';\n          this.changeDetectorRef.markForCheck();\n          return this.validationService.getValidationResults(\n            workspaceId,\n            task.id\n          );\n        }),\n        finalize(() => {\n          this.isValidating = false;\n          this.changeDetectorRef.markForCheck();\n        })\n      )\n      .subscribe",
       "line": 1124,
-      "fingerprint": "8f5fa3c93b1ddbb1",
+      "fingerprint": "607d4a8a37e40204",
       "review": {
         "status": "open",
-        "caller": "",
+        "caller": "File validation action in workspace files view",
         "roles": [],
         "scenarios": {},
-        "tests": [],
-        "evidence": [],
-        "reason": ""
+        "tests": [
+          "cypress/zoneless/file-validation-info.cy.ts"
+        ],
+        "evidence": [
+          "docs/qa/zoneless-audit.md#laufende-erweiterung-vokabulare-und-dateivalidierungsabschluss"
+        ],
+        "reason": "Completed validation followed by actual metadata vocabulary dialog no longer logs NG0100. Intermediate progress, error and lifecycle scenarios remain open."
       }
     },
     {
@@ -135244,7 +135880,7 @@
       "owner": "TestFilesComponent",
       "kind": "async-source",
       "name": "waitForValidationTask/timer",
-      "line": 1167,
+      "line": 1169,
       "fingerprint": "fe4613fd34b77b86",
       "review": {
         "status": "open",
@@ -135262,7 +135898,7 @@
       "owner": "TestFilesComponent",
       "kind": "await",
       "name": "openMetadataDialog",
-      "line": 1446,
+      "line": 1449,
       "fingerprint": "3b3556a0c3f53dfa",
       "review": {
         "status": "open",
@@ -135280,7 +135916,7 @@
       "owner": "TestFilesComponent",
       "kind": "await",
       "name": "openMetadataDialog",
-      "line": 1452,
+      "line": 1455,
       "fingerprint": "daf1e245355c6df2",
       "review": {
         "status": "open",
@@ -135299,7 +135935,7 @@
       "kind": "Component",
       "name": "TestFilesComponent",
       "line": 114,
-      "fingerprint": "93e7afa17f4819b3",
+      "fingerprint": "c2d52cc25d546150",
       "selector": "coding-box-test-files",
       "testCandidates": [
         "apps/frontend/src/app/high-coverage-component-methods.spec.ts",
@@ -175924,7 +176560,7 @@
       "kind": "external-library",
       "name": "@angular/core",
       "line": 1,
-      "fingerprint": "d1076cad1e248b08",
+      "fingerprint": "1eefbbc74406b528",
       "version": "21.2.24",
       "lockedVersion": "21.2.24",
       "callerCandidates": [
@@ -176042,6 +176678,7 @@
         "apps/frontend/src/app/services/facades/validation-facade.service.ts",
         "apps/frontend/src/app/services/facades/workspace-facade.service.ts",
         "apps/frontend/src/app/shared/components/error-message-display/error-message-display.component.ts",
+        "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
         "apps/frontend/src/app/shared/components/xml-viewer/xml-viewer.component.ts",
         "apps/frontend/src/app/shared/confirm-dialog/confirm-dialog.component.ts",
         "apps/frontend/src/app/shared/dialogs/confirm-dialog.component.ts",
@@ -176061,6 +176698,8 @@
         "apps/frontend/src/app/shared/services/file/file.service.ts",
         "apps/frontend/src/app/shared/services/file/import.service.ts",
         "apps/frontend/src/app/shared/services/german-paginator-intl.service.ts",
+        "apps/frontend/src/app/shared/services/metadata-profile-element.ts",
+        "apps/frontend/src/app/shared/services/metadata-web-component.service.ts",
         "apps/frontend/src/app/shared/services/response/resource-package.service.ts",
         "apps/frontend/src/app/shared/services/response/response.service.ts",
         "apps/frontend/src/app/shared/services/response/variable-analysis.service.ts",
@@ -176181,13 +176820,36 @@
       }
     },
     {
+      "id": "package.json#@angular/elements:external-library:@angular/elements:1",
+      "file": "package.json",
+      "owner": "@angular/elements",
+      "kind": "external-library",
+      "name": "@angular/elements",
+      "line": 1,
+      "fingerprint": "7ffb07fe6f0499d0",
+      "version": "21.2.24",
+      "lockedVersion": "21.2.24",
+      "callerCandidates": [
+        "apps/frontend/src/app/shared/services/metadata-profile-element.ts"
+      ],
+      "review": {
+        "status": "open",
+        "caller": "",
+        "roles": [],
+        "scenarios": {},
+        "tests": [],
+        "evidence": [],
+        "reason": ""
+      }
+    },
+    {
       "id": "package.json#@angular/forms:external-library:@angular/forms:1",
       "file": "package.json",
       "owner": "@angular/forms",
       "kind": "external-library",
       "name": "@angular/forms",
       "line": 1,
-      "fingerprint": "0e20f94bb047889d",
+      "fingerprint": "c4509eca751969de",
       "version": "21.2.24",
       "lockedVersion": "21.2.24",
       "callerCandidates": [
@@ -176228,6 +176890,7 @@
         "apps/frontend/src/app/replay/components/replay/replay.component.ts",
         "apps/frontend/src/app/replay/components/unit-player/unit-player.component.ts",
         "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
+        "apps/frontend/src/app/shared/services/metadata-web-component.service.ts",
         "apps/frontend/src/app/sys-admin/components/edit-user/edit-user.component.ts",
         "apps/frontend/src/app/sys-admin/components/sys-admin-settings/sys-admin-settings.component.ts",
         "apps/frontend/src/app/sys-admin/components/system-notifications/system-notifications.component.ts",
@@ -176288,7 +176951,7 @@
       "kind": "external-library",
       "name": "@angular/material",
       "line": 1,
-      "fingerprint": "762a68d7223aaf19",
+      "fingerprint": "30a74aaaa2e6465b",
       "version": "21.2.14",
       "lockedVersion": "21.2.14",
       "callerCandidates": [
@@ -176357,6 +177020,7 @@
         "apps/frontend/src/app/replay/components/units-replay/units-replay.component.ts",
         "apps/frontend/src/app/replay/services/replay-coding.service.ts",
         "apps/frontend/src/app/shared/components/error-message-display/error-message-display.component.ts",
+        "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
         "apps/frontend/src/app/shared/components/xml-viewer/xml-viewer.component.ts",
         "apps/frontend/src/app/shared/confirm-dialog/confirm-dialog.component.ts",
         "apps/frontend/src/app/shared/dialogs/confirm-dialog.component.ts",
@@ -176545,11 +177209,14 @@
       "kind": "external-library",
       "name": "@iqb/metadata-components",
       "line": 1,
-      "fingerprint": "c96a773ff08edfd7",
+      "fingerprint": "0ddb4e3dbe752fe3",
       "version": "1.0.0",
       "lockedVersion": "1.0.0",
       "callerCandidates": [
-        "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts"
+        "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
+        "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.component.ts",
+        "apps/frontend/src/app/shared/services/metadata-profile-element.ts",
+        "apps/frontend/src/app/shared/services/metadata-web-component.service.ts"
       ],
       "review": {
         "status": "open",
@@ -176683,13 +177350,59 @@
       }
     },
     {
+      "id": "package.json#@ngx-formly/core:external-library:@ngx-formly/core:1",
+      "file": "package.json",
+      "owner": "@ngx-formly/core",
+      "kind": "external-library",
+      "name": "@ngx-formly/core",
+      "line": 1,
+      "fingerprint": "3d7daf8aea85e2e4",
+      "version": "^7.0.0",
+      "lockedVersion": "7.1.0",
+      "callerCandidates": [
+        "apps/frontend/src/app/shared/services/metadata-web-component.service.ts"
+      ],
+      "review": {
+        "status": "open",
+        "caller": "",
+        "roles": [],
+        "scenarios": {},
+        "tests": [],
+        "evidence": [],
+        "reason": ""
+      }
+    },
+    {
+      "id": "package.json#@ngx-formly/material:external-library:@ngx-formly/material:1",
+      "file": "package.json",
+      "owner": "@ngx-formly/material",
+      "kind": "external-library",
+      "name": "@ngx-formly/material",
+      "line": 1,
+      "fingerprint": "3d7daf8aea85e2e4",
+      "version": "^7.0.0",
+      "lockedVersion": "7.1.0",
+      "callerCandidates": [
+        "apps/frontend/src/app/shared/services/metadata-web-component.service.ts"
+      ],
+      "review": {
+        "status": "open",
+        "caller": "",
+        "roles": [],
+        "scenarios": {},
+        "tests": [],
+        "evidence": [],
+        "reason": ""
+      }
+    },
+    {
       "id": "package.json#@ngx-translate/core:external-library:@ngx-translate/core:1",
       "file": "package.json",
       "owner": "@ngx-translate/core",
       "kind": "external-library",
       "name": "@ngx-translate/core",
       "line": 1,
-      "fingerprint": "c21f2dfe46599e15",
+      "fingerprint": "5c201b43455dcd47",
       "version": "^15.0.0",
       "lockedVersion": "15.0.0",
       "callerCandidates": [
@@ -176754,6 +177467,7 @@
         "apps/frontend/src/app/replay/components/units-replay/units-replay.component.ts",
         "apps/frontend/src/app/replay/services/replay-coding.service.ts",
         "apps/frontend/src/app/shared/components/error-message-display/error-message-display.component.ts",
+        "apps/frontend/src/app/shared/components/metadata-duration/metadata-duration.component.ts",
         "apps/frontend/src/app/shared/components/xml-viewer/xml-viewer.component.ts",
         "apps/frontend/src/app/shared/confirm-dialog/confirm-dialog.component.ts",
         "apps/frontend/src/app/shared/dialogs/confirm-dialog.component.ts",
