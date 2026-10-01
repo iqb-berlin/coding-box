@@ -1056,6 +1056,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.prefixResponseServerTimings(responsePayload.serverTimings)
       );
       this.appliedReplayContext = context;
+      this.changeDetectorRef.markForCheck();
       this.setIsLoaded();
       return true;
     } catch (error) {
@@ -1436,6 +1437,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (!preserveCodingData) {
       this.codingService.resetCodingData();
     }
+    this.changeDetectorRef.markForCheck();
   }
 
   private createReplayRecoveryDraft(): ReplayRecoveryDraft | null {

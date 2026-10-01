@@ -1,5 +1,5 @@
 import {
-  Component, OnDestroy, OnInit, ViewChild, inject
+  ChangeDetectorRef, Component, OnDestroy, OnInit, ViewChild, inject
 } from '@angular/core';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
@@ -160,6 +160,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   private contentPoolIntegrationService = inject(ContentPoolIntegrationService);
   private validationService = inject(ValidationService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
+  private changeDetectorRef = inject(ChangeDetectorRef);
 
   displayedColumns: string[] = [
     'selectCheckbox',
@@ -341,6 +342,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       .pipe(
         finalize(() => {
           this.isLoading = false;
+          this.changeDetectorRef.markForCheck();
         })
       )
       .subscribe({
@@ -366,6 +368,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }): void {
     this.dataSource = new MatTableDataSource(files.data);
     this.fileTypes = files.fileTypes;
+    this.changeDetectorRef.markForCheck();
   }
 
   applyFilters(): void {

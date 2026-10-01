@@ -1,5 +1,7 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
+import {
+  ChangeDetectorRef, Component, OnInit, inject
+} from '@angular/core';
 import {
   AbstractControl,
   FormBuilder,
@@ -77,6 +79,8 @@ export class SystemNotificationsComponent implements OnInit {
 
   private readonly dialog = inject(MatDialog);
 
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   readonly types = Object.values(SystemNotificationType);
 
   readonly severities = Object.values(SystemNotificationSeverity);
@@ -112,10 +116,12 @@ export class SystemNotificationsComponent implements OnInit {
       next: notifications => {
         this.notifications = notifications;
         this.loading = false;
+        this.changeDetectorRef.markForCheck();
       },
       error: () => {
         this.loading = false;
         this.showMessage('system-notifications.load-error');
+        this.changeDetectorRef.markForCheck();
       }
     });
   }

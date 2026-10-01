@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, DestroyRef, inject
+  ChangeDetectorRef, Component, OnInit, DestroyRef, inject
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -47,6 +47,7 @@ import {
 export class HomeComponent implements OnInit {
   readonly appService: AppService = inject(AppService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
   private readonly route = inject(ActivatedRoute);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
@@ -69,6 +70,7 @@ export class HomeComponent implements OnInit {
         if (authData.userId > 0) {
           this.resolveAuthDataFailedQueryParam();
         }
+        this.changeDetectorRef.markForCheck();
       }
     });
 
@@ -83,6 +85,7 @@ export class HomeComponent implements OnInit {
         }
 
         this.resolveAuthDataFailedQueryParam();
+        this.changeDetectorRef.markForCheck();
       });
 
     this.route.queryParams.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {

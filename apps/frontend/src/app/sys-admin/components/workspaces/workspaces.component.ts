@@ -1,4 +1,6 @@
-import { Component, ViewChild, inject } from '@angular/core';
+import {
+  ChangeDetectorRef, Component, ViewChild, inject
+} from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSort } from '@angular/material/sort';
@@ -34,10 +36,11 @@ export class WorkspacesComponent {
   private workspaceBackendService = inject(WorkspaceBackendService);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
+  private changeDetectorRef = inject(ChangeDetectorRef);
 
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
   tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
-  selectedWorkspaceId = 0;
+  readonly initialSelectedWorkspaceIds: number[] = [];
   selectedWorkspaces: number[] = [];
   workspacesChanged: boolean = false;
   isDeleting: boolean = false;
@@ -57,6 +60,7 @@ export class WorkspacesComponent {
         if (mutationResult.mutationSucceeded) {
           this.showMutationSuccess('admin.workspace-created', mutationResult);
           this.workspacesChanged = true;
+          this.changeDetectorRef.markForCheck();
         } else {
           this.snackBar.open(
             this.translateService.instant('admin.workspace-not-created'),
@@ -80,6 +84,7 @@ export class WorkspacesComponent {
           if (result.mutationSucceeded) {
             this.showMutationSuccess('admin.workspace-edited', result);
             this.workspacesChanged = true;
+            this.changeDetectorRef.markForCheck();
           } else {
             this.snackBar.open(
               this.translateService.instant('admin.workspace-not-edited'),
@@ -93,6 +98,7 @@ export class WorkspacesComponent {
 
   deleteWorkspace(workspace_ids: number[]): void {
     this.isDeleting = true;
+    this.changeDetectorRef.markForCheck();
     const deleteSteps = [
       'admin.deleting-workspace-starting',
       'admin.deleting-workspace-files',
@@ -104,6 +110,7 @@ export class WorkspacesComponent {
     const interval = setInterval(() => {
       if (stepIndex < deleteSteps.length) {
         this.deleteStatus = this.translateService.instant(deleteSteps[stepIndex]);
+        this.changeDetectorRef.markForCheck();
         // eslint-disable-next-line no-plusplus
         stepIndex++;
       } else {
@@ -120,10 +127,12 @@ export class WorkspacesComponent {
           clearInterval(interval);
           if (result.mutationSucceeded) {
             this.deleteStatus = this.translateService.instant('admin.deleting-workspace-success');
+            this.changeDetectorRef.markForCheck();
             setTimeout(() => {
               this.showMutationSuccess('admin.workspace-deleted', result);
               this.workspacesChanged = true;
               this.isDeleting = false;
+              this.changeDetectorRef.markForCheck();
             }, 1000);
           } else {
             this.snackBar.open(
@@ -131,6 +140,7 @@ export class WorkspacesComponent {
               this.translateService.instant('error'),
               { duration: 1000 });
             this.isDeleting = false;
+            this.changeDetectorRef.markForCheck();
           }
         }
       );
@@ -138,10 +148,12 @@ export class WorkspacesComponent {
 
   workspacesUpdated(): void {
     this.workspacesChanged = false;
+    this.changeDetectorRef.markForCheck();
   }
 
   workspaceSelectionChanged(workspaceData: WorkspaceData[]): void {
     this.selectedWorkspaces = workspaceData.map(workspace => workspace.id);
+    this.changeDetectorRef.markForCheck();
   }
 
   setWorkspaceUsersAccessRight(users: number[]): void {
