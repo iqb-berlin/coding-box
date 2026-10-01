@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
   BehaviorSubject,
@@ -78,7 +78,16 @@ export class AppService {
   errorMessages: AppHttpError[] = [];
   errorMessageCounter = 0;
   backendUnavailable = false;
-  needsReAuthentication = false;
+  private readonly reAuthenticationRequired = signal(false);
+
+  get needsReAuthentication(): boolean {
+    return this.reAuthenticationRequired();
+  }
+
+  set needsReAuthentication(value: boolean) {
+    this.reAuthenticationRequired.set(value);
+  }
+
   sessionExpiryWarning = false;
   reAuthenticationReturnUrl?: string;
   private selectedWorkspaceIdValue = 0;

@@ -756,12 +756,14 @@ export class ReplayCodingService {
       return;
     }
 
+    // Show the latest keystroke immediately. Earlier queued saves must never
+    // write their captured note text back over a newer local draft.
+    if (this.isCurrentCodingContext(contextSnapshot)) {
+      this.updateLocalNotes(testPerson, unitId, variableId, notes);
+    }
+
     await this.enqueueRowMutation(compositeKey, async () => {
       try {
-        if (this.isCurrentCodingContext(contextSnapshot)) {
-          this.updateLocalNotes(testPerson, unitId, variableId, notes);
-        }
-
         await firstValueFrom(
           this.codingJobBackendService.saveCodingNotes(workspaceId, jobId, {
             testPerson,
@@ -986,6 +988,9 @@ export class ReplayCodingService {
     selectedCode: SavedCode
   ): Promise<void> {
     if (!this.isSelectedCodePersistable(compositeKey, selectedCode)) return;
+    // A new-code-needed choice requires a saved note. The pending note save
+    // persists this choice after it succeeds.
+    if (this.isNewCodeNeededSelection(selectedCode) && this.rowMutationChains.has(compositeKey)) return;
 
     await this.saveCodingProgress(
       workspaceId,

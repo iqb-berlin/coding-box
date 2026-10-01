@@ -321,6 +321,24 @@ describe('HomeComponent', () => {
     expect(routerNavigate).not.toHaveBeenCalledWith(['/coding']);
   });
 
+  it('cancels pending workspace access checks when leaving home', () => {
+    const users = new Subject<unknown[]>();
+    getUsers.mockReturnValue(users);
+    authDataSubject.next({
+      ...defaultAuthData,
+      userId: 7,
+      workspaces: [{ id: 11 } as WorkspaceFullDto]
+    });
+    createComponent();
+    expect(users.observed).toBe(true);
+
+    fixture.destroy();
+    expect(users.observed).toBe(false);
+    users.next([{ id: 7, accessLevel: 1, canCode: true }]);
+    users.complete();
+    expect(routerNavigate).not.toHaveBeenCalledWith(['/coding']);
+  });
+
   it('should not route to coding when canCode is explicitly false for a level 1 user', async () => {
     getUsers.mockReturnValue(of([{ id: 7, accessLevel: 1, canCode: false }]));
     authDataSubject.next({

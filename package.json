@@ -87,7 +87,7 @@
     "jwt-decode": "^4.0.0",
     "katex": "^0.16.11",
     "keycloak-angular": "21.0.0",
-    "keycloak-js": "^23.0.6",
+    "keycloak-js": "^26.2.4",
     "libxmljs2": "^0.37.0",
     "mathml2omml": "^0.5.0",
     "multer": "^2.0.1",

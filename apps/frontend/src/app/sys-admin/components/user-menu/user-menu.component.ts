@@ -1,4 +1,7 @@
-import { Component, inject, OnInit } from '@angular/core';
+import {
+  ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, signal
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatMenu, MatMenuTrigger } from '@angular/material/menu';
@@ -12,6 +15,7 @@ import { AuthDataDto } from '../../../../../../../api-dto/auth-data-dto';
 
 @Component({
   selector: 'coding-box-user-menu',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './user-menu.component.html',
   styleUrls: ['./user-menu.component.scss'],
   imports: [
@@ -26,23 +30,25 @@ import { AuthDataDto } from '../../../../../../../api-dto/auth-data-dto';
   ]
 })
 export class UserMenuComponent implements OnInit {
-  private authService = inject(AuthService);
-  private appService: AppService = inject(AppService);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly authService = inject(AuthService);
+  private readonly appService: AppService = inject(AppService);
 
-  userName: string = '';
-  userStatus: string = '';
+  readonly userName = signal('');
+  readonly userStatus = signal('');
 
   async ngOnInit() {
     try {
       const userProfile = await this.authService.loadUserProfile();
+      if (this.destroyRef.destroyed) return;
       if (userProfile.firstName && userProfile.lastName) {
-        this.userName = `${userProfile.firstName} ${userProfile.lastName}`;
+        this.userName.set(`${userProfile.firstName} ${userProfile.lastName}`);
       } else if (userProfile.username) {
-        this.userName = userProfile.username;
+        this.userName.set(userProfile.username);
       }
 
-      this.appService.authData$.subscribe((authData: AuthDataDto) => {
-        this.userStatus = authData.isAdmin ? 'Administrator' : 'Nutzer';
+      this.appService.authData$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((authData: AuthDataDto) => {
+        this.userStatus.set(authData.isAdmin ? 'Administrator' : 'Nutzer');
       });
     } catch (error) {
       // Handle error silently or log to a service if needed
