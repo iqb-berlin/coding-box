@@ -927,6 +927,8 @@
   },
   "coding": {
     "schemer": {
+      "loading": "Kodierschema wird geladen",
+      "not-found": "Kein passender Schemer im Arbeitsbereich gefunden ({{schemer}}). Das Kodierschema wird als Text angezeigt.",
       "save-success": "Antwortschema erfolgreich gespeichert",
       "save-error": "Fehler beim Speichern des Antwortschemas",
       "save-freshness-warning": "Datei wurde gespeichert, aber der Kodierstand konnte nicht zuverlässig aktualisiert werden. Bitte prüfen Sie den Kodierstand erneut.",

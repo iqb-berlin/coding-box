@@ -13,6 +13,7 @@ import {
   Component, EventEmitter, Input, Output
 } from '@angular/core';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
+import { SchemerConfig } from '../schemer/schemer-config.interface';
 import { UnitScheme } from '../schemer/unit-scheme.interface';
 import { SchemeEditorDialogComponent, SchemeEditorDialogData } from './scheme-editor-dialog.component';
 import { FileService } from '../../../shared/services/file/file.service';
@@ -28,6 +29,7 @@ import { StandaloneUnitSchemerComponent } from '../schemer/unit-schemer.componen
 class MockStandaloneUnitSchemerComponent {
   @Input() schemerHtml = '';
   @Input() unitScheme?: UnitScheme;
+  @Input() schemerConfig?: SchemerConfig;
   @Output() schemeChanged = new EventEmitter<UnitScheme>();
   @Output() error = new EventEmitter<string>();
 }

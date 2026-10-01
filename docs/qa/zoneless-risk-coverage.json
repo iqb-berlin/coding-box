@@ -89,6 +89,8 @@
       "tests": [
         "apps/frontend/src/app/ws-admin/components/test-files/test-files.component.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/components/test-files/test-files-settings.component.zoneless.spec.ts",
+        "apps/frontend/src/app/coding/components/scheme-editor-dialog/scheme-editor-dialog.component.zoneless.spec.ts",
+        "apps/frontend/src/app/coding/utils/coding-scheme-reference.spec.ts",
         "apps/frontend/src/app/ws-admin/components/files-validation-result/files-validation.component.spec.ts",
         "apps/frontend/src/app/shared/components/xml-viewer/xml-viewer.zoneless.spec.ts",
         "apps/frontend/src/app/shared/dialogs/metadata-dialog/metadata-dialog.zoneless.spec.ts",
@@ -102,6 +104,7 @@
         "cypress/zoneless/file-validation-info.cy.ts",
         "cypress/zoneless/info-dialogs.cy.ts",
         "cypress/zoneless/test-files-upload.cy.ts",
+        "cypress/zoneless/scheme-preview.cy.ts",
         "cypress/zoneless/export-item-dataset.cy.ts",
         "cypress/auth/coding-session.cy.ts"
       ]

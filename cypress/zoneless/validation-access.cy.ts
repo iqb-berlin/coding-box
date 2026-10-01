@@ -40,6 +40,7 @@ describe('Zoneless validation access', () => {
             });
           });
         }
+        request.alias = 'validationRouteRights';
         request.reply({ delay: 400, body: rights });
       }).as('rights');
       cy.intercept('GET', '**/api/workspace/5/settings/*', { body: { value: '{"enabled":true}' } });
@@ -76,7 +77,9 @@ describe('Zoneless validation access', () => {
         }, { once: true });
         win.location.hash = '/workspace-admin/5/test-results';
       });
-      cy.location('hash').should('contain', role.destination);
+      cy.wait('@validationRouteRights').its('response.statusCode').should('eq', 200);
+      // The manager redirect traverses several delayed guards and lazy routes.
+      cy.location('hash', { timeout: 15_000 }).should('contain', role.destination);
       if (role.allowed) {
         cy.get('coding-box-test-results').should('be.visible');
         cy.contains('button', 'Validieren').should('be.enabled').click();
