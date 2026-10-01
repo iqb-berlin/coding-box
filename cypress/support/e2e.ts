@@ -119,6 +119,12 @@ Cypress.Commands.add(
       `**/api/workspace/${workspaceId}/settings/auth-session-idle-timeout-minutes`,
       { body: 30 }
     );
+    cy.intercept('GET', `**/api/admin/workspace/${workspaceId}/coding/export-missings-profiles`, {
+      body: []
+    });
+    cy.intercept('GET', `**/api/admin/workspace/${workspaceId}/coding/freshness`, {
+      body: { workspaceId, currentRevision: 0, items: [] }
+    });
     cy.intercept(
       'GET',
       `**/api/admin/workspace/${workspaceId}/responses/geogebra-existence`,

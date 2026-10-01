@@ -1,3 +1,5 @@
+import { provideZonelessChangeDetection } from '@angular/core';
+import { delay } from 'rxjs/operators';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
@@ -62,6 +64,7 @@ describe('CoderTrainingsListComponent', () => {
         TranslateModule.forRoot()
       ],
       providers: [
+        provideZonelessChangeDetection(),
         {
           provide: CodingTrainingBackendService,
           useValue: codingTrainingBackendServiceMock
@@ -203,5 +206,18 @@ describe('CoderTrainingsListComponent', () => {
     expect(codingTrainingBackendServiceMock.getCoderTrainings).toHaveBeenCalledWith(1);
     expect(codingTrainingBackendServiceMock.getCoderTrainings).toHaveBeenCalledWith(2);
     expect(component.coderTrainings).toEqual(workspace2Trainings);
+  });
+  it('renders a delayed server response without another user action', async () => {
+    const backend = TestBed.inject(CodingTrainingBackendService);
+    const response = backend.getCoderTrainings(1).pipe(delay(30));
+    jest.spyOn(backend, 'getCoderTrainings').mockReturnValue(response);
+    fixture.destroy();
+    fixture = TestBed.createComponent(CoderTrainingsListComponent);
+    component = fixture.componentInstance;
+    fixture.autoDetectChanges();
+    await new Promise<void>(resolve => { setTimeout(resolve, 80); });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('mat-spinner')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Unique Label');
   });
 });

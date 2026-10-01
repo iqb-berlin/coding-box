@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, ViewChild, AfterViewInit, inject
+  ChangeDetectorRef, Component, OnInit, ViewChild, AfterViewInit, inject
 } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
@@ -63,6 +63,8 @@ import { CodingJobBackendService } from '../../services/coding-job-backend.servi
   ]
 })
 export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   private variableBundleGroupService = inject(VariableBundleService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
@@ -91,12 +93,14 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
 
     this.variableBundleGroupService.getBundles(1, 10000).subscribe({
       next: (paginatedResult: PaginatedBundles) => {
+        this.changeDetectorRef.markForCheck();
         this.originalData = paginatedResult.bundles;
         this.dataSource.data = paginatedResult.bundles;
         this.applyFilters();
         this.isLoading = false;
       },
       error: () => {
+        this.changeDetectorRef.markForCheck();
         this.isLoading = false;
         this.snackBar.open('Fehler beim Laden der Variablenbündel', 'Schließen', { duration: 3000 });
       }
@@ -126,6 +130,7 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
 
     this.codingJobBackendService.getCodingIncompleteVariables(workspaceId).subscribe({
       next: (incompleteVariables: Variable[]) => {
+        this.changeDetectorRef.markForCheck();
         const dialogRef = this.dialog.open(VariableBundleDialogComponent, {
           width: '900px',
           data: {
@@ -135,9 +140,11 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
         });
 
         dialogRef.afterClosed().subscribe(result => {
+          this.changeDetectorRef.markForCheck();
           if (result) {
             this.variableBundleGroupService.createBundle(result).subscribe({
               next: newBundleGroup => {
+                this.changeDetectorRef.markForCheck();
                 this.loadVariableBundleGroups();
                 this.snackBar.open(`Variablenbündel "${newBundleGroup.name}" wurde erstellt`, 'Schließen', { duration: 3000 });
               },
@@ -163,6 +170,7 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
 
     this.codingJobBackendService.getCodingIncompleteVariables(workspaceId).subscribe({
       next: (incompleteVariables: Variable[]) => {
+        this.changeDetectorRef.markForCheck();
         const dialogRef = this.dialog.open(VariableBundleDialogComponent, {
           width: '900px',
           data: {
@@ -173,9 +181,11 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
         });
 
         dialogRef.afterClosed().subscribe(result => {
+          this.changeDetectorRef.markForCheck();
           if (result) {
             this.variableBundleGroupService.updateBundle(bundleGroup.id, result).subscribe({
               next: updatedBundleGroup => {
+                this.changeDetectorRef.markForCheck();
                 if (updatedBundleGroup) {
                   this.loadVariableBundleGroups();
                   this.snackBar.open(`Variablenbündel "${updatedBundleGroup.name}" wurde aktualisiert`, 'Schließen', { duration: 3000 });
@@ -205,9 +215,11 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
     });
 
     dialogRef.afterClosed().subscribe(result => {
+      this.changeDetectorRef.markForCheck();
       if (result) {
         this.variableBundleGroupService.deleteBundle(bundleGroup.id).subscribe({
           next: success => {
+            this.changeDetectorRef.markForCheck();
             if (success) {
               this.loadVariableBundleGroups();
               this.snackBar.open(`Variablenbündel "${bundleGroup.name}" wurde gelöscht`, 'Schließen', { duration: 3000 });

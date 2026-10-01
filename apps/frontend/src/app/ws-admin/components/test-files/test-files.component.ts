@@ -407,6 +407,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       .pipe(
         finalize(() => {
           this.isLoadingContentPoolConfig = false;
+          this.changeDetectorRef.markForCheck();
         })
       )
       .subscribe({

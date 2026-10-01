@@ -176,6 +176,37 @@
           "command": "node scripts/e2e/replay/run-replay-e2e.mjs --auth --production"
         }
       }
+    },
+    "test-zoneless": {
+      "executor": "@nx/jest:jest",
+      "outputs": [
+        "{workspaceRoot}/coverage/apps/frontend-zoneless"
+      ],
+      "options": {
+        "jestConfig": "apps/frontend/jest.zoneless.config.ts",
+        "passWithNoTests": false
+      }
+    },
+    "zoneless-inventory": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/qa/zoneless-inventory.mjs"
+      }
+    },
+    "zoneless-approval": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/qa/zoneless-inventory.mjs --require-complete"
+      }
+    },
+    "zoneless-inventory-test": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node --test scripts/qa/zoneless-inventory.test.mjs"
+      }
     }
   }
 }

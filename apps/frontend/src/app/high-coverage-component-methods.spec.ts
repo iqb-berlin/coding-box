@@ -147,6 +147,7 @@ const createInstance = (ClassExport: ConstructorExport) => {
   const instance = Object.create(ClassExport.prototype || {});
 
   Object.assign(instance, {
+    changeDetectorRef: { markForCheck: jest.fn(), detectChanges: jest.fn() },
     appService: {
       selectedWorkspaceId: 1,
       authData: { userName: 'Reviewer' },

@@ -1,4 +1,6 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import {
+  ChangeDetectorRef, Component, Inject, OnInit, inject
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -40,6 +42,8 @@ interface VariableOption {
   styleUrls: ['./test-results-response-cleanup-dialog.component.scss']
 })
 export class TestResultsResponseCleanupDialogComponent implements OnInit {
+  private readonly changeDetector = inject(ChangeDetectorRef);
+
   availableUnits: string[] = [];
   private variableOptions: VariableOption[] = [];
   selectedUnitNames: string[] = [];
@@ -70,6 +74,7 @@ export class TestResultsResponseCleanupDialogComponent implements OnInit {
       )
     }).subscribe({
       next: ({ exportOptions, unitVariables }) => {
+        this.changeDetector.markForCheck();
         this.availableUnits = Array.from(
           new Set((exportOptions.units || []).filter(Boolean))
         ).sort((a, b) => a.localeCompare(b));
@@ -77,6 +82,7 @@ export class TestResultsResponseCleanupDialogComponent implements OnInit {
         this.isLoading = false;
       },
       error: () => {
+        this.changeDetector.markForCheck();
         this.loadFailed = true;
         this.isLoading = false;
       }

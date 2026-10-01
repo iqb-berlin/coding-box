@@ -233,6 +233,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private document = inject(DOCUMENT);
   private changeDetector = inject(ChangeDetectorRef);
   private destroy$ = new Subject<void>();
+  private codingProgressRequestVersion = 0;
 
   validationProgress: ValidationProgress | null = null;
   isLoading = false;
@@ -621,6 +622,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.codingProgressRequestVersion += 1;
     this.discardPendingPlanningDataBundle();
     this.cancelResponseAnalysisRequest();
     this.responseAnalysisRequestCancel$.complete();
@@ -3867,30 +3869,38 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private loadCodingProgressOverview(): void {
+    this.codingProgressRequestVersion += 1;
+    const requestVersion = this.codingProgressRequestVersion;
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return;
     }
 
+    const isCurrentRequest = (): boolean => requestVersion === this.codingProgressRequestVersion &&
+      workspaceId === this.appService.selectedWorkspaceId;
     this.isLoadingCodingProgress = true;
     this.testPersonCodingService
       .getCodingProgressOverview(workspaceId)
       .pipe(
         takeUntil(this.destroy$),
         finalize(() => {
+          if (!isCurrentRequest()) return;
           this.isLoadingCodingProgress = false;
+          this.changeDetector.markForCheck();
           this.focusManualFreshnessTargetIfReady();
           this.trySavePlanningDataBundleSnapshot();
         })
       )
       .subscribe({
         next: (overview: CodingProgressOverview | null) => {
+          if (!isCurrentRequest()) return;
           this.codingProgressOverview = overview;
           if (!overview) {
             this.markPlanningDataBundleLoadFailed();
           }
         },
         error: () => {
+          if (!isCurrentRequest()) return;
           this.codingProgressOverview = null;
           this.markPlanningDataBundleLoadFailed();
         }

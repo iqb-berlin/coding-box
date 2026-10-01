@@ -265,6 +265,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
         )
       )
       .subscribe(coders => {
+        this.changeDetectorRef.markForCheck();
         this.availableCoders = coders;
       });
   }
@@ -286,6 +287,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     })
       .pipe(takeUntil(this.destroy$))
       .subscribe(({ jobDefinitions, coderTrainings }) => {
+        this.changeDetectorRef.markForCheck();
         const sortedJobDefinitions = [...jobDefinitions]
           .filter(
             definition => definition.id !== undefined &&
@@ -1023,6 +1025,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   loadData(): void {
+    this.changeDetectorRef.markForCheck();
     this.isLoading = true;
     const agreementFilter = this.agreementControl.value || 'all';
     this.showOnlyConflicts = agreementFilter === 'differ';
@@ -1064,6 +1067,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: response => {
+          this.changeDetectorRef.markForCheck();
           this.allData = response.data.map(item => ({
             ...item,
             availableCodes:
@@ -1084,6 +1088,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
           this.isLoading = false;
         },
         error: () => {
+          this.changeDetectorRef.markForCheck();
           this.updateDisplayedColumns([]);
           this.translateService
             .get('double-coded-review.errors.failed-to-load')
@@ -1272,6 +1277,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       .applyDoubleCodedResolutions(workspaceId, { decisions })
       .subscribe({
         next: response => {
+          this.changeDetectorRef.markForCheck();
           if (response.failedCount > 0 || response.skippedCount > 0) {
             this.translateService
               .get('double-coded-review.errors.resolutions-partially-applied', {
@@ -1297,6 +1303,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
           this.loadData();
         },
         error: () => {
+          this.changeDetectorRef.markForCheck();
           this.translateService
             .get('double-coded-review.errors.failed-to-apply')
             .subscribe(message => {

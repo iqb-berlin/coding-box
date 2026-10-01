@@ -1,3 +1,5 @@
+import { provideZonelessChangeDetection } from '@angular/core';
+import { delay } from 'rxjs/operators';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -80,6 +82,7 @@ describe('CodingVariablesDialogComponent', () => {
         CodingVariablesDialogComponent
       ],
       providers: [
+        provideZonelessChangeDetection(),
         { provide: MatDialogRef, useValue: dialogRefMock },
         { provide: MAT_DIALOG_DATA, useValue: { workspaceId: 1 } },
         { provide: FileBackendService, useValue: fileBackendServiceMock },
@@ -171,5 +174,18 @@ describe('CodingVariablesDialogComponent', () => {
     expect(component.trainingRequiredFilter).toBe('all');
     expect(component.selectedTypes).toEqual([]);
     expect(component.dataSource.filteredData).toHaveLength(3);
+  });
+  it('renders a delayed server response without another user action', async () => {
+    const backend = TestBed.inject(FileBackendService);
+    const response = backend.getUnitVariables(1).pipe(delay(30));
+    jest.spyOn(backend, 'getUnitVariables').mockReturnValue(response);
+    fixture.destroy();
+    fixture = TestBed.createComponent(CodingVariablesDialogComponent);
+    component = fixture.componentInstance;
+    fixture.autoDetectChanges();
+    await new Promise<void>(resolve => { setTimeout(resolve, 80); });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('mat-spinner')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Alias_1');
   });
 });

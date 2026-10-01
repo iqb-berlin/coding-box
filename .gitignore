@@ -26,6 +26,7 @@ docker.env
 /tmp
 /cache/replay-player/
 /cypress/replay-artifacts/
+/cypress/downloads/
 /out-tsc
 
 # dependencies

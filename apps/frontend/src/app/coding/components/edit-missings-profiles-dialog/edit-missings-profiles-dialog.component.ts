@@ -1,4 +1,6 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import {
+  ChangeDetectorRef, inject, Component, Inject, OnInit
+} from '@angular/core';
 
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -44,6 +46,8 @@ import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/co
   ]
 })
 export class EditMissingsProfilesDialogComponent implements OnInit {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   private readonly requiredMissingIds = ['mir', 'mci'];
 
   missingsProfiles: { label: string; id: number }[] = [];
@@ -73,6 +77,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
       this.loading = true;
       this.missingsProfileService.getMissingsProfiles(workspaceId).subscribe({
         next: profiles => {
+          this.changeDetectorRef.markForCheck();
           this.missingsProfiles = profiles;
           this.loading = false;
           // Auto-select IQB-Standard profile if it exists
@@ -82,6 +87,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
           }
         },
         error: () => {
+          this.changeDetectorRef.markForCheck();
           this.loading = false;
           this.snackBar.open(this.translateService.instant('workspace.error-loading-missings-profiles'), this.translateService.instant('close'), { duration: 3000 });
         }
@@ -97,6 +103,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
         this.loading = true;
         this.missingsProfileService.getMissingsProfileDetails(workspaceId, profile.id).subscribe({
           next: profileDetails => {
+            this.changeDetectorRef.markForCheck();
             const missingsProfile = new MissingsProfilesDto();
             if (profileDetails) {
               missingsProfile.id = profileDetails.id;
@@ -107,6 +114,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
             this.loading = false;
           },
           error: () => {
+            this.changeDetectorRef.markForCheck();
             this.loading = false;
             this.snackBar.open(this.translateService.instant('workspace.error-loading-missings-profile-details'), this.translateService.instant('close'), { duration: 3000 });
           }
@@ -161,6 +169,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
       if (existingProfile) {
         this.missingsProfileService.updateMissingsProfile(workspaceId, existingProfile.label, this.selectedProfile).subscribe({
           next: profile => {
+            this.changeDetectorRef.markForCheck();
             if (!profile) {
               this.saving = false;
               this.snackBar.open(this.translateService.instant('workspace.error-updating-missings-profile'), this.translateService.instant('close'), { duration: 3000 });
@@ -177,6 +186,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
             this.snackBar.open(this.translateService.instant('workspace.profile-updated-successfully'), this.translateService.instant('close'), { duration: 3000 });
           },
           error: () => {
+            this.changeDetectorRef.markForCheck();
             this.saving = false;
             this.snackBar.open(this.translateService.instant('workspace.error-updating-missings-profile'), this.translateService.instant('close'), { duration: 3000 });
           }
@@ -184,6 +194,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
       } else {
         this.missingsProfileService.createMissingsProfile(workspaceId, this.selectedProfile).subscribe({
           next: profile => {
+            this.changeDetectorRef.markForCheck();
             if (!profile) {
               this.saving = false;
               this.snackBar.open(this.translateService.instant('workspace.error-creating-missings-profile'), this.translateService.instant('close'), { duration: 3000 });
@@ -200,6 +211,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
             this.snackBar.open(this.translateService.instant('workspace.profile-created-successfully'), this.translateService.instant('close'), { duration: 3000 });
           },
           error: () => {
+            this.changeDetectorRef.markForCheck();
             this.saving = false;
             this.snackBar.open(this.translateService.instant('workspace.error-creating-missings-profile'), this.translateService.instant('close'), { duration: 3000 });
           }
@@ -214,6 +226,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
       this.saving = true;
       this.missingsProfileService.deleteMissingsProfile(workspaceId, this.selectedProfile.label).subscribe({
         next: success => {
+          this.changeDetectorRef.markForCheck();
           if (success) {
             this.selectedProfile = null;
             this.saving = false;
@@ -226,6 +239,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
           }
         },
         error: () => {
+          this.changeDetectorRef.markForCheck();
           this.saving = false;
           this.snackBar.open('Error deleting missings profile', 'Close', { duration: 3000 });
         }

@@ -1,11 +1,15 @@
 import {
   Component,
+  ChangeDetectorRef,
+  DestroyRef,
+  inject,
   Input,
   Output,
   EventEmitter,
   OnInit,
   OnDestroy
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatButtonModule } from '@angular/material/button';
@@ -106,6 +110,9 @@ interface ResponseStatusValidationResult {
 })
 export class ResponseStatusValidationPanelComponent
 implements OnInit, OnDestroy {
+  private readonly changeDetector = inject(ChangeDetectorRef);
+  private readonly destroyRef = inject(DestroyRef);
+
   @Input() disabled = false;
   @Output() validate = new EventEmitter<void>();
   @Output() showUnitXml = new EventEmitter<string>();
@@ -234,9 +241,11 @@ implements OnInit, OnDestroy {
           this.currentPage = result.page;
           this.pageSize = result.limit;
           this.isLoadingPage = false;
+          this.changeDetector.markForCheck();
         },
         error: () => {
           this.isLoadingPage = false;
+          this.changeDetector.markForCheck();
           this.snackBar.open('Fehler beim Laden der Seite', 'Schließen', {
             duration: 5000
           });
@@ -278,9 +287,11 @@ implements OnInit, OnDestroy {
     this.isDeletingResponses = true;
     this.responseStatusValidationService
       .deleteSelected(Array.from(this.selectedResponses))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.isDeletingResponses = false;
+          this.changeDetector.markForCheck();
           this.selectedResponses.clear();
           this.snackBar.open('Ausgewählte Antworten wurden gelöscht', 'OK', {
             duration: 3000
@@ -289,6 +300,7 @@ implements OnInit, OnDestroy {
         },
         error: () => {
           this.isDeletingResponses = false;
+          this.changeDetector.markForCheck();
           this.snackBar.open('Fehler beim Löschen', 'Schließen', {
             duration: 5000
           });
@@ -302,9 +314,10 @@ implements OnInit, OnDestroy {
     }
 
     this.isDeletingResponses = true;
-    this.responseStatusValidationService.deleteAll().subscribe({
+    this.responseStatusValidationService.deleteAll().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.isDeletingResponses = false;
+        this.changeDetector.markForCheck();
         this.selectedResponses.clear();
         this.snackBar.open('Alle ungültigen Antworten wurden gelöscht', 'OK', {
           duration: 3000
@@ -313,6 +326,7 @@ implements OnInit, OnDestroy {
       },
       error: () => {
         this.isDeletingResponses = false;
+        this.changeDetector.markForCheck();
         this.snackBar.open('Fehler beim Löschen', 'Schließen', {
           duration: 5000
         });
@@ -344,9 +358,11 @@ implements OnInit, OnDestroy {
             duration: 3000
           });
           this.isExporting = false;
+          this.changeDetector.markForCheck();
         },
         error: () => {
           this.isExporting = false;
+          this.changeDetector.markForCheck();
           this.snackBar.open('Fehler beim CSV-Export', 'Schließen', {
             duration: 5000
           });

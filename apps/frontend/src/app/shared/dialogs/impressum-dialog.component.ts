@@ -2,7 +2,7 @@ import {
   MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose
 } from '@angular/material/dialog';
 import {
-  Component, OnInit, SecurityContext, inject
+  ChangeDetectorRef, Component, OnInit, SecurityContext, inject
 } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 import { MatButton } from '@angular/material/button';
@@ -45,6 +45,8 @@ import { SystemSettingsService } from '../../core/services/system-settings.servi
   imports: [MatDialogTitle, MatDialogContent, MatDialogActions, MatButton, MatDialogClose]
 })
 export class ImpressumDialogComponent implements OnInit {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   private readonly systemSettingsService = inject(SystemSettingsService);
 
   private readonly sanitizer = inject(DomSanitizer);
@@ -55,6 +57,7 @@ export class ImpressumDialogComponent implements OnInit {
     this.systemSettingsService.getLegalNotice()
       .pipe(catchError(() => of({ html: defaultLegalNoticeHtml, isDefault: true })))
       .subscribe(legalNotice => {
+        this.changeDetectorRef.markForCheck();
         this.legalNoticeHtml = this.sanitizeHtml(legalNotice.html);
       });
   }

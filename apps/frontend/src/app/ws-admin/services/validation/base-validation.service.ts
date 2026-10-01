@@ -1,7 +1,7 @@
 import { inject } from '@angular/core';
 import { Observable, of, throwError } from 'rxjs';
 import {
-  distinctUntilChanged, map, switchMap, tap
+  distinctUntilChanged, map, shareReplay, switchMap, tap
 } from 'rxjs/operators';
 import { ValidationService } from '../../../shared/services/validation/validation.service';
 import { AppService } from '../../../core/services/app.service';
@@ -54,9 +54,9 @@ export abstract class BaseValidationService<TResult> {
    */
   protected pollTask(
     taskId: number,
-    pollInterval: number = 2000
+    pollInterval: number = 2000,
+    workspaceId = this.appService.selectedWorkspaceId
   ): Observable<ValidationTaskDto> {
-    const workspaceId = this.appService.selectedWorkspaceId;
     return this.validationService.pollValidationTask(
       workspaceId,
       taskId,
@@ -97,8 +97,7 @@ export abstract class BaseValidationService<TResult> {
     );
   }
 
-  protected invalidateWorkspaceValidationCache(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
+  protected invalidateWorkspaceValidationCache(workspaceId = this.appService.selectedWorkspaceId): void {
     this.validationTaskStateService.invalidateWorkspace(workspaceId);
   }
 
@@ -141,8 +140,7 @@ export abstract class BaseValidationService<TResult> {
   /**
    * Removes the task details from the state service
    */
-  protected removeTaskId(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
+  protected removeTaskId(workspaceId = this.appService.selectedWorkspaceId): void {
     this.validationTaskStateService.removeTaskId(
       workspaceId,
       this.validationType as
@@ -181,8 +179,11 @@ export abstract class BaseValidationService<TResult> {
   /**
    * Polls a validation task and handles potential failure
    */
-  handleTaskResult(task: ValidationTaskDto): Observable<ValidationTaskDto> {
-    return this.pollTask(task.id).pipe(
+  handleTaskResult(
+    task: ValidationTaskDto,
+    workspaceId = this.appService.selectedWorkspaceId
+  ): Observable<ValidationTaskDto> {
+    return this.pollTask(task.id, 2000, workspaceId).pipe(
       switchMap(finalTask => {
         if (finalTask.status === 'failed') {
           // Store a failed result in the state service
@@ -192,7 +193,7 @@ export abstract class BaseValidationService<TResult> {
             details: { error: finalTask.error || 'Validation failed' }
           };
           this.validationTaskStateService.setValidationResult(
-            this.appService.selectedWorkspaceId,
+            workspaceId,
             this.validationType as
               | 'variables'
               | 'variableTypes'
@@ -202,13 +203,26 @@ export abstract class BaseValidationService<TResult> {
               | 'duplicateResponses',
             result
           );
-          this.removeTaskId();
+          this.removeTaskId(workspaceId);
           return throwError(
             () => new Error(finalTask.error || 'Validation failed')
           );
         }
         return of(finalTask);
       })
+    );
+  }
+
+  // An accepted backend job outlives its dialog. Keep its shared status accurate
+  // without retaining component subscriptions or starting another validation.
+  protected trackMutation(task: ValidationTaskDto, workspaceId: number): Observable<void> {
+    return this.handleTaskResult(task, workspaceId).pipe(
+      tap(() => {
+        this.removeTaskId(workspaceId);
+        this.invalidateWorkspaceValidationCache(workspaceId);
+      }),
+      map(() => undefined),
+      shareReplay({ bufferSize: 1, refCount: false })
     );
   }
 

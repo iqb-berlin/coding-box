@@ -1,4 +1,6 @@
-import { Component, DestroyRef, inject } from '@angular/core';
+import {
+  ChangeDetectorRef, Component, DestroyRef, inject
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatCardModule } from '@angular/material/card';
@@ -74,6 +76,8 @@ type OptionLoadResult<T> = { ok: true; value: T } | { ok: false };
   ]
 })
 export class ExportComponent {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   private appService = inject(AppService);
   private exportJobService = inject(ExportJobService);
   private translateService = inject(TranslateService);
@@ -132,6 +136,7 @@ export class ExportComponent {
     this.appService.selectedWorkspaceId$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
+        this.changeDetectorRef.markForCheck();
         this.resetWorkspaceOptions();
         this.loadGeneralOptions();
         if (this.selectedFormat === 'psychometrics') {
@@ -151,6 +156,7 @@ export class ExportComponent {
     this.responseService
       .hasGeogebraResponses(workspaceId)
       .subscribe(hasGeoGebraResponses => {
+        this.changeDetectorRef.markForCheck();
         if (workspaceId !== this.appService.selectedWorkspaceId) return;
         this.hasGeoGebraResponses = hasGeoGebraResponses;
         this.clearUnsupportedResultsOptions();
@@ -178,6 +184,7 @@ export class ExportComponent {
         this.exportJobService.getPsychometricDomainCandidates(workspaceId)
       )
     }).subscribe(result => {
+      this.changeDetectorRef.markForCheck();
       if (workspaceId !== this.appService.selectedWorkspaceId) return;
       this.applyMissingsProfileResult(
         result.profiles,
@@ -214,6 +221,7 @@ export class ExportComponent {
         this.exportJobService.getItemDatasetOptions(workspaceId)
       )
     }).subscribe(result => {
+      this.changeDetectorRef.markForCheck();
       if (workspaceId !== this.appService.selectedWorkspaceId) return;
       this.applyMissingsProfileResult(
         result.profiles,
@@ -246,6 +254,7 @@ export class ExportComponent {
     this.missingsProfileService.getExportMissingsProfilesOrThrow(workspaceId)
       .subscribe({
         next: profiles => {
+          this.changeDetectorRef.markForCheck();
           if (workspaceId !== this.appService.selectedWorkspaceId) return;
           this.resultsMissingsProfiles = profiles.filter(profile => (
             Number.isSafeInteger(profile.id) && profile.id > 0
@@ -260,6 +269,7 @@ export class ExportComponent {
           this.isLoadingResultsOptions = false;
         },
         error: () => {
+          this.changeDetectorRef.markForCheck();
           if (workspaceId !== this.appService.selectedWorkspaceId) return;
           this.resultsMissingsProfiles = [];
           this.selectedResultsMissingsProfileId = null;
@@ -383,6 +393,7 @@ export class ExportComponent {
       .startJob(workspaceId, this.buildExportConfig())
       .subscribe({
         next: () => {
+          this.changeDetectorRef.markForCheck();
           this.snackBar.open(
             this.translateService.instant('ws-admin.export.job-started'),
             this.translateService.instant('close'),
@@ -391,6 +402,7 @@ export class ExportComponent {
           this.isStartingExport = false;
         },
         error: () => {
+          this.changeDetectorRef.markForCheck();
           this.snackBar.open(
             this.translateService.instant(
               'ws-admin.export.errors.start-failed'
