@@ -42,7 +42,7 @@ Entwicklungsdaten und Produktion gehören nicht zur Prüfung.
 ## Matrix
 
 Aktueller Umfang: 155 Komponenten, 73 Services, fünf Pipes und 24 externe
-Bibliotheken. Insgesamt 8.729 Einträge einschließlich Template-Ereignissen,
+Bibliotheken. Insgesamt 8.777 Einträge einschließlich Template-Ereignissen,
 Bindungen und asynchronen Quellen. Alle Gesamteinträge sind noch offen.
 
 `zoneless-coverage.json` erfasst Komponenten, Services, Pipes, Template-Ereignisse,
@@ -1282,3 +1282,51 @@ Diese Ergebnisse geben ZL-025 lokale Regressionsevidenz; die gesamte
 fachliche Abdeckung und erfolgreiche entfernte CI sind nicht bestätigt.
 Die `/tmp`-Protokolle sind lokale Nachweise und keine veröffentlichten
 CI-Artefakte.
+
+### ZL-026: Replay-Statistik bleibt nach der Serverantwort im Ladezustand
+
+Ausgangspunkt ist PR #1039, Commit `2351fc108e2dae9cfbfc07bb3b3b41959de1b2bd`.
+Die Statistikantworten änderten gewöhnliche Felder. Ohne Zone.js blieb der
+Spinner stehen, obwohl alle Antworten vorlagen. Ladezustand, Statistik- und
+Diagrammdaten sowie die durch ResizeObserver aktualisierten Diagrammgrößen
+sind jetzt Signals. Sortierte Daten werden als neue Arrays veröffentlicht.
+
+Die native Regression verwendet das echte Template und verzögerte Subjects.
+Sie prüft den erfolgreichen Abschluss sowie Fehler beim Frequenzabruf und
+bei der letzten Anfrage, ohne nach den Antworten `detectChanges()` oder
+`markForCheck()` aufzurufen. Der Browserfall verwendet echte ngx-charts und
+prüft das Ende des Ladezustands, die Kennzahlen und den gerenderten Balken
+nach der verzögerten letzten Antwort. `window.Zone` muss fehlen.
+
+### ZL-027: Kodierbuch-Fortschritt und Abschluss aktualisieren die Ansicht nicht
+
+Jobstatus, Fortschritt und Fehleranzeige wurden nach asynchronen Antworten
+in gewöhnliche Felder geschrieben. Dadurch blieben Fortschrittsanzeige und
+Export-Schaltfläche veraltet. Diese Felder sowie die asynchron geladenen
+Auswahllisten sind jetzt Signals. Ausgewählte Einheiten und Exportoptionen
+werden unveränderlich aktualisiert; der Validierungszustand wird abgeleitet.
+
+Sechs native Regressionen prüfen verzögerte Einheitenlisten, deren Ladefehler,
+64 Prozent Fortschritt, Jobabschluss, Pollingfehler mit Zurücksetzen sowie
+Start- und Downloadfehler. Zwei Browserfälle öffnen den echten Material-Dialog,
+ändern eine Exportoption und prüfen den Request sowie Fortschritt und beide
+Job-Ausgänge. API-Antworten sind synthetische Fixtures; Produktion und externe
+CI sind kein Bestandteil dieses lokalen Nachweises.
+
+### Lokale Abschlussläufe für ZL-026 und ZL-027 am 02.10.2026
+
+Die App- und Testquellen blieben während aller Abschlussläufe unverändert.
+Aktualisiert wurden ausschließlich Inventar, Testreferenzen und Dokumentation.
+
+| Nx-Prüfung | Ergebnis | Exit |
+|---|---|---|
+| `frontend:test --maxWorkers=2` | 2.527 Tests / 227 Suites bestanden | 0 |
+| `frontend:test-zoneless --maxWorkers=2` | 765 Tests / 32 Suites bestanden, darunter neun neue Regressionen | 0 |
+| `frontend:e2e --configuration=zoneless --spec=cypress/zoneless/statistics-codebook.cy.ts` | Drei neue Browserfälle bestanden | 0 |
+| `frontend:lint` | bestanden | 0 |
+| `frontend:build --configuration=production` | bestanden | 0 |
+| `frontend:zoneless-approval` | Inventar ohne Abweichung, sechs Bereiche / sieben Mechanismen / 27 Befunde referenziert | 0 |
+
+Die vorhandenen Zoneless- und Browser-Targets erfassen die neuen Spezifikationen
+automatisch. Diese lokalen Ergebnisse sind kein CI-Nachweis. Die CI des
+veröffentlichten Commits ist gesondert zu prüfen.

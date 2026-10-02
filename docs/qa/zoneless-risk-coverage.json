@@ -86,9 +86,12 @@
         "ZL-022",
         "ZL-023",
         "ZL-024",
-        "ZL-025"
+        "ZL-025",
+        "ZL-027"
       ],
       "tests": [
+        "apps/frontend/src/app/coding/components/export-coding-book/export-coding-book.component.zoneless.spec.ts",
+        "cypress/zoneless/statistics-codebook.cy.ts",
         "apps/frontend/src/app/ws-admin/components/test-files/test-files.component.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/components/test-files/test-files-settings.component.zoneless.spec.ts",
         "apps/frontend/src/app/coding/components/scheme-editor-dialog/scheme-editor-dialog.component.zoneless.spec.ts",
@@ -117,9 +120,12 @@
       "risk": "Verzögerte Rechte und Anmeldung dürfen nicht falsch weiterleiten; Einstellungen und Benachrichtigungen müssen nach Serverantworten sichtbar sein.",
       "findings": [
         "ZL-009",
-        "ZL-010"
+        "ZL-010",
+        "ZL-026"
       ],
       "tests": [
+        "apps/frontend/src/app/ws-admin/components/replay-statistics-dialog/replay-statistics-dialog.component.zoneless.spec.ts",
+        "cypress/zoneless/statistics-codebook.cy.ts",
         "apps/frontend/src/app/components/home/home.component.spec.ts",
         "apps/frontend/src/app/ws-admin/components/ws-admin/ws-admin.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/components/ws-access-rights/ws-access-rights.component.spec.ts",

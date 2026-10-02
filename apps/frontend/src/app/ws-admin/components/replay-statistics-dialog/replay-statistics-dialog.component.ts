@@ -5,7 +5,8 @@ import {
   OnDestroy,
   OnInit,
   ViewChild,
-  inject
+  inject,
+  signal
 } from '@angular/core';
 
 import { MatDialogModule, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -40,14 +41,14 @@ interface ReplayFrequencyData {
   template: `
     <h2 mat-dialog-title>{{ 'workspace.replay-statistics' | translate }}</h2>
     <mat-dialog-content class="dialog-content" #dialogContent>
-      @if (loading) {
+      @if (loading()) {
         <div class="loading-container">
           <mat-spinner diameter="50"></mat-spinner>
           <p>{{ 'workspace.loading-statistics' | translate }}</p>
         </div>
       }
 
-      @if (!loading) {
+      @if (!loading()) {
         <div class="dialog-body">
           <div class="stats-container source-summary">
             <mat-card>
@@ -55,15 +56,15 @@ interface ReplayFrequencyData {
                 <div class="source-summary-grid">
                   <div class="source-summary-item">
                     <span class="stat-label">{{ 'workspace.total-replays' | translate }}</span>
-                    <span class="stat-value">{{ sourceSummary.total }}</span>
+                    <span class="stat-value">{{ sourceSummary().total }}</span>
                   </div>
                   <div class="source-summary-item">
                     <span class="stat-label">{{ 'workspace.internal-replays' | translate }}</span>
-                    <span class="stat-value">{{ sourceSummary.internal }}</span>
+                    <span class="stat-value">{{ sourceSummary().internal }}</span>
                   </div>
                   <div class="source-summary-item">
                     <span class="stat-label">{{ 'workspace.external-token-replays' | translate }}</span>
-                    <span class="stat-value">{{ sourceSummary.external }}</span>
+                    <span class="stat-value">{{ sourceSummary().external }}</span>
                   </div>
                 </div>
               </mat-card-content>
@@ -72,15 +73,15 @@ interface ReplayFrequencyData {
           <mat-tab-group
             class="tabs"
             dynamicHeight="false"
-            (selectedIndexChange)="selectedTabIndex = $event"
+            (selectedIndexChange)="selectedTabIndex.set($event)"
             >
             <!-- Frequency Tab -->
             <mat-tab label="{{ 'workspace.replay-frequency' | translate }}">
               <div class="chart-container">
                 <h3>{{ 'workspace.replay-frequency-by-unit' | translate }}</h3>
-                @if (selectedTabIndex === 0) {
+                @if (selectedTabIndex() === 0) {
                   <ngx-charts-bar-vertical
-                    [results]="frequencyData"
+                    [results]="frequencyData()"
                     [xAxis]="true"
                     [yAxis]="true"
                     [showXAxisLabel]="true"
@@ -91,7 +92,7 @@ interface ReplayFrequencyData {
                     [showDataLabel]="false"
                     [rotateXAxisTicks]="true"
                     [xAxisTickFormatting]="formatXAxisTick"
-                    [view]="wideView"
+                    [view]="wideView()"
                   ></ngx-charts-bar-vertical>
                 }
               </div>
@@ -107,7 +108,7 @@ interface ReplayFrequencyData {
                           >{{ 'workspace.min-duration' | translate }}:</span
                           >
                           <span class="stat-value">{{
-                            formatMilliseconds(durationStats.min)
+                            formatMilliseconds(durationStats().min)
                           }}</span>
                         </div>
                         <div class="stat-item">
@@ -115,7 +116,7 @@ interface ReplayFrequencyData {
                             >{{ 'workspace.max-duration' | translate }}:</span
                             >
                             <span class="stat-value">{{
-                              formatMilliseconds(durationStats.max)
+                              formatMilliseconds(durationStats().max)
                             }}</span>
                           </div>
                           <div class="stat-item">
@@ -123,7 +124,7 @@ interface ReplayFrequencyData {
                               >{{ 'workspace.avg-duration' | translate }}:</span
                               >
                               <span class="stat-value">{{
-                                formatMilliseconds(durationStats.average)
+                                formatMilliseconds(durationStats().average)
                               }}</span>
                             </div>
                           </mat-card-content>
@@ -134,9 +135,9 @@ interface ReplayFrequencyData {
                           <h3>
                             {{ 'workspace.replay-duration-distribution' | translate }}
                           </h3>
-                          @if (selectedTabIndex === 1) {
+                          @if (selectedTabIndex() === 1) {
                             <ngx-charts-bar-vertical
-                              [results]="durationDistributionData"
+                              [results]="durationDistributionData()"
                               [xAxis]="true"
                               [yAxis]="true"
                               [showXAxisLabel]="true"
@@ -145,15 +146,15 @@ interface ReplayFrequencyData {
                               [yAxisLabel]="'workspace.replay-count' | translate"
                               [scheme]="colorScheme"
                               [showDataLabel]="false"
-                              [view]="halfView"
+                              [view]="halfView()"
                             ></ngx-charts-bar-vertical>
                           }
                         </div>
                         <div class="chart-column">
                           <h3>{{ 'workspace.avg-duration-by-unit' | translate }}</h3>
-                          @if (selectedTabIndex === 1) {
+                          @if (selectedTabIndex() === 1) {
                             <ngx-charts-bar-vertical
-                              [results]="unitDurationData"
+                              [results]="unitDurationData()"
                               [xAxis]="true"
                               [yAxis]="true"
                               [showXAxisLabel]="true"
@@ -166,7 +167,7 @@ interface ReplayFrequencyData {
                               [showDataLabel]="false"
                               [rotateXAxisTicks]="true"
                               [xAxisTickFormatting]="formatXAxisTick"
-                              [view]="halfView"
+                              [view]="halfView()"
                             ></ngx-charts-bar-vertical>
                           }
                         </div>
@@ -179,9 +180,9 @@ interface ReplayFrequencyData {
                     >
                     <div class="chart-container">
                       <h3>{{ 'workspace.replay-distribution-by-day' | translate }}</h3>
-                      @if (selectedTabIndex === 2) {
+                      @if (selectedTabIndex() === 2) {
                         <ngx-charts-bar-vertical
-                          [results]="dayDistributionData"
+                          [results]="dayDistributionData()"
                           [xAxis]="true"
                           [yAxis]="true"
                           [showXAxisLabel]="true"
@@ -190,7 +191,7 @@ interface ReplayFrequencyData {
                           [yAxisLabel]="'workspace.replay-count' | translate"
                           [scheme]="colorScheme"
                           [showDataLabel]="false"
-                          [view]="wideView"
+                          [view]="wideView()"
                         ></ngx-charts-bar-vertical>
                       }
                     </div>
@@ -201,9 +202,9 @@ interface ReplayFrequencyData {
                     >
                     <div class="chart-container">
                       <h3>{{ 'workspace.replay-distribution-by-hour' | translate }}</h3>
-                      @if (selectedTabIndex === 3) {
+                      @if (selectedTabIndex() === 3) {
                         <ngx-charts-bar-vertical
-                          [results]="hourDistributionData"
+                          [results]="hourDistributionData()"
                           [xAxis]="true"
                           [yAxis]="true"
                           [showXAxisLabel]="true"
@@ -212,7 +213,7 @@ interface ReplayFrequencyData {
                           [yAxisLabel]="'workspace.replay-count' | translate"
                           [scheme]="colorScheme"
                           [showDataLabel]="false"
-                          [view]="wideView"
+                          [view]="wideView()"
                         ></ngx-charts-bar-vertical>
                       }
                     </div>
@@ -228,7 +229,7 @@ interface ReplayFrequencyData {
                                 >{{ 'workspace.success-rate' | translate }}:</span
                                 >
                                 <span class="stat-value"
-                                  >{{ errorStats.successRate.toFixed(2) }}%</span
+                                  >{{ errorStats().successRate.toFixed(2) }}%</span
                                   >
                                 </div>
                                 <div class="stat-item">
@@ -236,7 +237,7 @@ interface ReplayFrequencyData {
                                     >{{ 'workspace.total-replays' | translate }}:</span
                                     >
                                     <span class="stat-value">{{
-                                      errorStats.totalReplays
+                                      errorStats().totalReplays
                                     }}</span>
                                   </div>
                                   <div class="stat-item">
@@ -244,7 +245,7 @@ interface ReplayFrequencyData {
                                       >{{ 'workspace.successful-replays' | translate }}:</span
                                       >
                                       <span class="stat-value">{{
-                                        errorStats.successfulReplays
+                                        errorStats().successfulReplays
                                       }}</span>
                                     </div>
                                     <div class="stat-item">
@@ -252,18 +253,18 @@ interface ReplayFrequencyData {
                                         >{{ 'workspace.failed-replays' | translate }}:</span
                                         >
                                         <span class="stat-value">{{
-                                          errorStats.failedReplays
+                                          errorStats().failedReplays
                                         }}</span>
                                       </div>
                                     </mat-card-content>
                                   </mat-card>
                                 </div>
-                                @if (errorStats.commonErrors.length > 0) {
+                                @if (errorStats().commonErrors.length > 0) {
                                   <div>
                                     <h3>{{ 'workspace.common-errors' | translate }}</h3>
                                     <mat-card>
                                       <mat-card-content>
-                                        @for (error of errorStats.commonErrors; track error) {
+                                        @for (error of errorStats().commonErrors; track error) {
                                           <div
                                             class="error-item"
                                             >
@@ -276,8 +277,8 @@ interface ReplayFrequencyData {
                                   </div>
                                 }
                                 @if (
-                                  errorStats.commonErrors.length === 0 &&
-                                  errorStats.failedReplays > 0
+                                  errorStats().commonErrors.length === 0 &&
+                                  errorStats().failedReplays > 0
                                   ) {
                                   <div
                                     >
@@ -294,14 +295,14 @@ interface ReplayFrequencyData {
                                 <h3>
                                   {{ 'workspace.failure-distribution-by-unit' | translate }}
                                 </h3>
-                                @if (failureByUnitData.length === 0) {
+                                @if (failureByUnitData().length === 0) {
                                   <div>
                                     <p>{{ 'workspace.no-failures' | translate }}</p>
                                   </div>
                                 }
-                                @if (failureByUnitData.length > 0 && selectedTabIndex === 5) {
+                                @if (failureByUnitData().length > 0 && selectedTabIndex() === 5) {
                                   <ngx-charts-bar-vertical
-                                    [results]="failureByUnitData"
+                                    [results]="failureByUnitData()"
                                     [xAxis]="true"
                                     [yAxis]="true"
                                     [showXAxisLabel]="true"
@@ -312,7 +313,7 @@ interface ReplayFrequencyData {
                                     [showDataLabel]="false"
                                     [rotateXAxisTicks]="true"
                                     [xAxisTickFormatting]="formatXAxisTick"
-                                    [view]="wideView"
+                                    [view]="wideView()"
                                   ></ngx-charts-bar-vertical>
                                 }
                               </div>
@@ -323,14 +324,14 @@ interface ReplayFrequencyData {
                               >
                               <div class="chart-container">
                                 <h3>{{ 'workspace.failure-distribution-by-day' | translate }}</h3>
-                                @if (failureByDayData.length === 0) {
+                                @if (failureByDayData().length === 0) {
                                   <div>
                                     <p>{{ 'workspace.no-failures' | translate }}</p>
                                   </div>
                                 }
-                                @if (failureByDayData.length > 0 && selectedTabIndex === 6) {
+                                @if (failureByDayData().length > 0 && selectedTabIndex() === 6) {
                                   <ngx-charts-bar-vertical
-                                    [results]="failureByDayData"
+                                    [results]="failureByDayData()"
                                     [xAxis]="true"
                                     [yAxis]="true"
                                     [showXAxisLabel]="true"
@@ -339,7 +340,7 @@ interface ReplayFrequencyData {
                                     [yAxisLabel]="'workspace.failure-count' | translate"
                                     [scheme]="colorScheme"
                                     [showDataLabel]="false"
-                                    [view]="wideView"
+                                    [view]="wideView()"
                                   ></ngx-charts-bar-vertical>
                                 }
                               </div>
@@ -352,14 +353,14 @@ interface ReplayFrequencyData {
                                 <h3>
                                   {{ 'workspace.failure-distribution-by-hour' | translate }}
                                 </h3>
-                                @if (failureByHourData.length === 0) {
+                                @if (failureByHourData().length === 0) {
                                   <div>
                                     <p>{{ 'workspace.no-failures' | translate }}</p>
                                   </div>
                                 }
-                                @if (failureByHourData.length > 0 && selectedTabIndex === 7) {
+                                @if (failureByHourData().length > 0 && selectedTabIndex() === 7) {
                                   <ngx-charts-bar-vertical
-                                    [results]="failureByHourData"
+                                    [results]="failureByHourData()"
                                     [xAxis]="true"
                                     [yAxis]="true"
                                     [showXAxisLabel]="true"
@@ -368,7 +369,7 @@ interface ReplayFrequencyData {
                                     [yAxisLabel]="'workspace.failure-count' | translate"
                                     [scheme]="colorScheme"
                                     [showDataLabel]="false"
-                                    [view]="wideView"
+                                    [view]="wideView()"
                                   ></ngx-charts-bar-vertical>
                                 }
                               </div>
@@ -521,11 +522,11 @@ implements OnInit, AfterViewInit, OnDestroy {
     dialogContent?: ElementRef<HTMLElement>;
 
   workspaceId: number;
-  loading = true;
-  selectedTabIndex = 0;
+  readonly loading = signal(true);
+  readonly selectedTabIndex = signal(0);
 
-  wideView: [number, number] = [900, 520];
-  halfView: [number, number] = [440, 380];
+  readonly wideView = signal<[number, number]>([900, 520]);
+  readonly halfView = signal<[number, number]>([440, 380]);
 
   private readonly defaultLastDays = 30;
   private readonly topUnitsCount = 25;
@@ -534,38 +535,38 @@ implements OnInit, AfterViewInit, OnDestroy {
   private rafPending = false;
 
   // Chart data
-  frequencyData: ReplayFrequencyData[] = [];
-  durationDistributionData: { name: string; value: number }[] = [];
-  unitDurationData: ReplayFrequencyData[] = [];
-  dayDistributionData: ReplayFrequencyData[] = [];
-  hourDistributionData: ReplayFrequencyData[] = [];
+  readonly frequencyData = signal<ReplayFrequencyData[]>([]);
+  readonly durationDistributionData = signal<{ name: string; value: number }[]>([]);
+  readonly unitDurationData = signal<ReplayFrequencyData[]>([]);
+  readonly dayDistributionData = signal<ReplayFrequencyData[]>([]);
+  readonly hourDistributionData = signal<ReplayFrequencyData[]>([]);
 
   // Failure distribution data
-  failureByUnitData: ReplayFrequencyData[] = [];
-  failureByDayData: ReplayFrequencyData[] = [];
-  failureByHourData: ReplayFrequencyData[] = [];
+  readonly failureByUnitData = signal<ReplayFrequencyData[]>([]);
+  readonly failureByDayData = signal<ReplayFrequencyData[]>([]);
+  readonly failureByHourData = signal<ReplayFrequencyData[]>([]);
 
   // Error statistics data
-  errorStats = {
+  readonly errorStats = signal({
     successRate: 0,
     totalReplays: 0,
     successfulReplays: 0,
     failedReplays: 0,
     commonErrors: [] as Array<{ message: string; count: number }>
-  };
+  });
 
-  sourceSummary: ReplaySourceSummaryResponse = {
+  readonly sourceSummary = signal<ReplaySourceSummaryResponse>({
     internal: 0,
     external: 0,
     total: 0
-  };
+  });
 
   // Duration statistics
-  durationStats = {
+  readonly durationStats = signal({
     min: 0,
     max: 0,
     average: 0
-  };
+  });
 
   // Chart configuration
   colorScheme = 'vivid';
@@ -627,8 +628,8 @@ implements OnInit, AfterViewInit, OnDestroy {
     const halfWidth = Math.max(420, Math.floor((width - 20) / 2));
     const halfHeight = Math.max(380, Math.floor(rect.height * 0.6));
 
-    this.wideView = [width, wideHeight];
-    this.halfView = [halfWidth, halfHeight];
+    this.wideView.set([width, wideHeight]);
+    this.halfView.set([halfWidth, halfHeight]);
   }
 
   private toTopNWithOther(
@@ -664,7 +665,7 @@ implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private loadReplayStatistics(): void {
-    this.loading = true;
+    this.loading.set(true);
 
     const options = {
       lastDays: this.defaultLastDays,
@@ -675,7 +676,7 @@ implements OnInit, AfterViewInit, OnDestroy {
       .getReplaySourceSummary(this.workspaceId, options)
       .subscribe({
         next: data => {
-          this.sourceSummary = data;
+          this.sourceSummary.set(data);
           this.loadReplayFrequency(options);
         },
         error: () => {
@@ -689,17 +690,17 @@ implements OnInit, AfterViewInit, OnDestroy {
       .getReplayFrequencyByUnit(this.workspaceId, options)
       .subscribe({
         next: (data: Record<string, number>) => {
-          this.frequencyData = this.toTopNWithOther(
+          this.frequencyData.set(this.toTopNWithOther(
             data,
             this.topUnitsCount,
             'Other'
-          );
+          ));
 
           // Load day distribution data
           this.loadDayDistribution(options);
         },
         error: () => {
-          this.loading = false;
+          this.loading.set(false);
         }
       });
   }
@@ -709,15 +710,12 @@ implements OnInit, AfterViewInit, OnDestroy {
       .getReplayDistributionByDay(this.workspaceId, options)
       .subscribe({
         next: (data: Record<string, number>) => {
-          this.dayDistributionData = Object.entries(data).map(
+          this.dayDistributionData.set(Object.entries(data).map(
             ([day, count]) => ({
               name: day,
               value: count
             })
-          );
-
-          // Sort by date (oldest first)
-          this.dayDistributionData.sort((a, b) => a.name.localeCompare(b.name));
+          ).sort((a, b) => a.name.localeCompare(b.name)));
 
           // Load hour distribution data
           this.loadHourDistribution(options);
@@ -734,19 +732,16 @@ implements OnInit, AfterViewInit, OnDestroy {
       .getReplayDistributionByHour(this.workspaceId, options)
       .subscribe({
         next: (data: Record<string, number>) => {
-          this.hourDistributionData = Object.entries(data).map(
+          this.hourDistributionData.set(Object.entries(data).map(
             ([hour, count]) => ({
               name: `${hour}:00`,
               value: count
             })
-          );
-
-          // Sort by hour (earliest first)
-          this.hourDistributionData.sort((a, b) => {
+          ).sort((a, b) => {
             const hourA = parseInt(a.name.split(':')[0], 10);
             const hourB = parseInt(b.name.split(':')[0], 10);
             return hourA - hourB;
-          });
+          }));
 
           // Load duration statistics
           this.loadDurationStatistics(options);
@@ -770,33 +765,30 @@ implements OnInit, AfterViewInit, OnDestroy {
           unitAverages?: Record<string, number>;
         }) => {
           // Set duration statistics
-          this.durationStats = {
+          this.durationStats.set({
             min: data.min,
             max: data.max,
             average: data.average
-          };
+          });
 
           // Set duration distribution data
-          this.durationDistributionData = Object.entries(data.distribution).map(
+          this.durationDistributionData.set(Object.entries(data.distribution).map(
             ([range, count]) => ({
               name: range,
               value: count as number
             })
-          );
-
-          // Sort by duration range
-          this.durationDistributionData.sort((a, b) => {
+          ).sort((a, b) => {
             const aStart = parseInt(a.name.split('-')[0], 10);
             const bStart = parseInt(b.name.split('-')[0], 10);
             return aStart - bStart;
-          });
+          }));
 
           // Set unit duration data
           if (data.unitAverages) {
-            this.unitDurationData = this.toTopN(
+            this.unitDurationData.set(this.toTopN(
               data.unitAverages as Record<string, number>,
               this.topUnitsCount
-            );
+            ));
           }
 
           // Load error statistics
@@ -820,7 +812,7 @@ implements OnInit, AfterViewInit, OnDestroy {
           failedReplays: number;
           commonErrors: Array<{ message: string; count: number }>;
         }) => {
-          this.errorStats = data;
+          this.errorStats.set(data);
 
           // Load failure distributions
           this.loadFailureDistributions(options);
@@ -838,11 +830,11 @@ implements OnInit, AfterViewInit, OnDestroy {
       .getFailureDistributionByUnit(this.workspaceId, options)
       .subscribe({
         next: (data: Record<string, number>) => {
-          this.failureByUnitData = this.toTopNWithOther(
+          this.failureByUnitData.set(this.toTopNWithOther(
             data,
             this.topUnitsCount,
             'Other'
-          );
+          ));
 
           this.loadFailureDistributionByDay(options);
         },
@@ -857,13 +849,10 @@ implements OnInit, AfterViewInit, OnDestroy {
       .getFailureDistributionByDay(this.workspaceId, options)
       .subscribe({
         next: (data: Record<string, number>) => {
-          this.failureByDayData = Object.entries(data).map(([day, count]) => ({
+          this.failureByDayData.set(Object.entries(data).map(([day, count]) => ({
             name: day,
             value: count
-          }));
-
-          // Sort by date (oldest first)
-          this.failureByDayData.sort((a, b) => a.name.localeCompare(b.name));
+          })).sort((a, b) => a.name.localeCompare(b.name)));
 
           this.loadFailureDistributionByHour(options);
         },
@@ -878,24 +867,21 @@ implements OnInit, AfterViewInit, OnDestroy {
       .getFailureDistributionByHour(this.workspaceId, options)
       .subscribe({
         next: (data: Record<string, number>) => {
-          this.failureByHourData = Object.entries(data).map(
+          this.failureByHourData.set(Object.entries(data).map(
             ([hour, count]) => ({
               name: `${hour}:00`,
               value: count
             })
-          );
-
-          // Sort by hour (earliest first)
-          this.failureByHourData.sort((a, b) => {
+          ).sort((a, b) => {
             const hourA = parseInt(a.name.split(':')[0], 10);
             const hourB = parseInt(b.name.split(':')[0], 10);
             return hourA - hourB;
-          });
+          }));
 
-          this.loading = false;
+          this.loading.set(false);
         },
         error: () => {
-          this.loading = false;
+          this.loading.set(false);
         }
       });
   }
