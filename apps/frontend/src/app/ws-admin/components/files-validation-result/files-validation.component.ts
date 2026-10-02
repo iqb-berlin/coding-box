@@ -1554,10 +1554,13 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   toggleFilesList(testTaker: string, section: keyof ExpandedFilesLists): void {
-    const sections = this.expandedFilesLists().get(testTaker);
-    if (sections) {
-      sections[section] = !sections[section];
-    }
+    this.expandedFilesLists.update(current => {
+      const sections = current.get(testTaker);
+      if (!sections) return current;
+      const next = new Map(current);
+      next.set(testTaker, { ...sections, [section]: !sections[section] });
+      return next;
+    });
   }
 
   isFilesListExpanded(testTaker: string, section: keyof ExpandedFilesLists): boolean {

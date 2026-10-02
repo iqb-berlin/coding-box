@@ -68,7 +68,7 @@ import {
   DoubleCodedReviewSortDirection
 } from '../../../../../../../api-dto/coding/double-coded-review.dto';
 import { DoubleCodedDecisionCellComponent } from './double-coded-decision-cell.component';
-import { DoubleCodedReviewFacade } from './double-coded-review.facade';
+import { DoubleCodedReviewFacade, ManagerDraftUpdate } from './double-coded-review.facade';
 import {
   ConflictType,
   CoderResult,
@@ -214,6 +214,9 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   private readonly standaloneCodingIssueOptionIds = new Set([-3, -4]);
 
   ngOnInit(): void {
+    this.reviewFacade.managerDraftUpdates$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(update => this.applyManagerDraftUpdate(update));
     this.reviewFacade.connectRecovery(() => this.allData());
     this.setupFilters();
     this.loadCoders();
@@ -224,9 +227,9 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.reviewFacade.destroy(this.allData());
     this.destroy$.next();
     this.destroy$.complete();
+    this.reviewFacade.destroy(this.allData());
   }
 
   private setupFilters(): void {
@@ -1116,6 +1119,22 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   onSelectionChange(item: DoubleCodedItem, selectedValue: string): void {
     this.reviewFacade.select(item, selectedValue);
     this.refreshReviewRows(item);
+  }
+
+  private applyManagerDraftUpdate(update: ManagerDraftUpdate): void {
+    if (update.workspaceId !== this.appService.selectedWorkspaceId ||
+      update.managerUserId !== this.appService.userId) return;
+
+    const item = this.allData().find(candidate => candidate.responseId === update.responseId);
+    if (!item || item.isResolved) return;
+
+    // A queued response may belong to an older row object. Merge its draft into
+    // the current row so newer selections and other managers' decisions survive.
+    const retainedDrafts = item.managerDrafts.filter(draft => draft.managerUserId !== update.managerUserId);
+    this.refreshReviewRows({
+      ...item,
+      managerDrafts: update.savedDraft ? [...retainedDrafts, update.savedDraft] : retainedDrafts
+    });
   }
 
   private refreshReviewRows(item: DoubleCodedItem): void {

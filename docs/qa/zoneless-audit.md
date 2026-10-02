@@ -1690,3 +1690,85 @@ und Variablenkarten sowie ein erreichbarer asynchroner Bulk-Browserpfad
 fehlen wie oben beschrieben. Die Abschlussprüfungen fanden vor Commit und
 Push statt; CI am veröffentlichten Commit und echte Backend-Persistenz sind durch
 diese lokalen Prüfungen nicht bestätigt.
+
+
+### ZL-039: Externer Kodierimport benachrichtigt den Vergleichsdialog nicht
+
+Der erreichbare Importvergleich behielt nach der globalen Zoneless-Aktivierung
+normale Felder für Ladezustand und Fortschritt. Verzögerte Statusantworten
+änderten das Modell, während die Anzeige bei 0 Prozent blieb. Nach einem
+fehlgeschlagenen Start oder einer fehlgeschlagenen Statusabfrage blieb die
+Wiederholung deaktiviert; eine echte Snackbar konnte zusätzlich NG0100 auslösen.
+
+`isLoading` und `applyProgress` sind jetzt Signals und werden im Template gelesen.
+Alle Schreibpfade einschließlich Excel-Download, Start, Polling und Ergebnisabruf
+aktualisieren diese führenden Zustandsquellen.
+`import-comparison-dialog.component.zoneless.spec.ts` prüft mit echtem Template
+und Material-Snackbar verzögerten Fortschritt, Start- und Statusfehler, einen
+fehlgeschlagenen Job, Abschluss mit nachfolgendem Ergebnisabruf und das
+Beenden einer laufenden Statusabfrage beim Zerstören. Nach Antworten wird
+keine Änderungserkennung erzwungen.
+
+### ZL-040: Gespeicherter Managerentwurf bleibt in vorhandener Spalte unsichtbar
+
+Enthielt eine Reviewseite bereits eine angewendete Entscheidung des aktuellen
+Managers, existierte seine Tabellenspalte auch für andere offene Zeilen.
+Der verzögerte Entwurfserfolg änderte dort die verschachtelte Draft-Liste per
+`splice`, ohne die Tabelle zu benachrichtigen. Das Modell enthielt den Entwurf,
+die Zelle zeigte weiterhin einen Strich. Der Ausschluss eigener Entwürfe bei
+der Spaltenerzeugung verhindert diesen gemischten Seitenzustand nicht.
+
+Die Facade veröffentlicht erfolgreiche Speicher- und Löschantworten über
+`managerDraftUpdates$`. Die Komponente übernimmt sie immutable in die aktuelle
+Zeile und aktualisiert den Tabellen-DataSource. Neuere Auswahlwerte und
+Entscheidungen anderer Manager bleiben erhalten; Antworten aus einem früheren
+Workspace oder Benutzerkontext werden verworfen. Das Abonnement endet vor
+dem abschließenden Flush beim Zerstören. Bereits gestartete und eingereihte
+Backend-Schreibvorgänge dürfen weiterhin abschließen.
+
+Native Regressionen in `double-coded-review.component.spec.ts` verwenden das
+vollständige Template und die echte Facade mit verzögerten Speicherantworten.
+Sie prüfen den gemischten Managerzustand, unveränderte frühere Snapshots und
+die Aktualisierung der dargestellten Zeile ohne erzwungene Änderungserkennung.
+
+### Signal-Konsistenz beim Aufklappen der Dateilisten
+
+`toggleFilesList()` ersetzt die Map und ihren betroffenen Eintrag über `.update()`.
+Es verändert weder frühere Snapshots noch Einträge anderer Testtaker. Der
+gebundene Klick aktualisierte die Ansicht bereits zuvor; diese Korrektur stellt
+zusätzlich die Benachrichtigung reaktiver Leser sicher. Der bestehende native
+Dateivalidierungstest prüft einen `computed`-Leser und die Snapshot-Isolation.
+
+### Lokale Abschlussläufe für ZL-039 und ZL-040 am 02.10.2026
+
+Die Korrekturen wurden in einem isolierten Checkout auf Basis von PR-Head
+`1f7af8e577cb9777966236a62c735978eb8cd8c6` geprüft. Zwölf ergänzte native
+Regressionen decken die beiden Zoneless-Befunde und die immutable Map-Aktualisierung
+ab. Nach den vollständigen Testläufen wurden ausschließlich Formatverstöße
+in ergänzten Zeilen korrigiert. Der anschließende Lint- und Produktionsbuild
+bestand mit diesen Formatkorrekturen.
+
+| Nx-Prüfung | Ergebnis | Exit |
+|---|---|---|
+| `frontend:test --maxWorkers=2` | 2.642 Tests / 247 Suites bestanden | 0 |
+| `frontend:test-zoneless --maxWorkers=2` | 880 Tests / 52 Suites bestanden | 0 |
+| `frontend:e2e --configuration=zoneless --port=cypress-auto --browser=electron` mit `review-notifications.cy.ts` | Beide Browserfälle bestanden; `window.Zone` fehlt | 0 |
+| `frontend:lint` | bestanden | 0 |
+| `frontend:build --configuration=production` | bestanden mit `NG_BUILD_MAX_WORKERS=2` | 0 |
+| `frontend:zoneless-approval` | Inventar ohne Abweichung; sechs Bereiche, sieben Mechanismen und 40 Befunde referenziert | 0 |
+
+Der Import-Browserfall öffnet den Vergleich über den realen CSV-Upload und
+prüft Fortschritt, HTTP-409 beim Start, einen fehlgeschlagenen Job, Wiederholung
+und Abschluss. Der Review-Browserfall hält die Speicherantwort zurück und
+prüft die Managerzelle, die aktuelle Auswahl und die Kodierer-Markierung vor
+und nach der Antwort. Die Reviewdaten werden dabei nur einmal geladen.
+Beide Fälle erkennen API-Aufrufe ohne explizite Fixtures; Anmeldung und
+API-Antworten sind synthetisch und bestätigen keine reale Backend-Persistenz.
+
+Der erste Produktionsbuild endete in der Sandbox mit einem esbuild-Deadlock
+ohne Compilerdiagnose. Der Wiederholungslauf außerhalb der Sandbox bestand;
+der lokale Angular-Server und Electron liefen ebenfalls außerhalb der Sandbox.
+Das aktualisierte Inventar umfasst 8.781 Einträge aus 325 Produktionsdateien.
+Die Prüfungen erfolgten vor Commit und Push; CI für diese Korrekturen ist
+durch die lokalen Läufe nicht bestätigt. Die oben dokumentierten Grenzen des
+risikobasierten Nachweises gelten weiterhin.
