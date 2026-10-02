@@ -119,6 +119,58 @@ describe('Zoneless asynchronous coding dialogs', () => {
     });
   }
 
+  it('shows a parsing error and allows a valid Excel upload retry without another interaction', () => {
+    const combination = {
+      unit_key: 'UNIT', login_name: 'synthetic-login', login_code: 'synthetic-code',
+      booklet_id: 'BOOKLET', variable_id: 'VAR'
+    };
+    cy.intercept({ method: 'POST', pathname: '/api/admin/workspace/5/coding/validate-completeness' }, request => {
+      expect(request.body).to.deep.equal({ expectedCombinations: [combination], page: 1, pageSize: 50 });
+      request.reply({ delay: 800, body: {
+        results: [{ combination, status: 'EXISTS', responseFound: true, issues: [] }],
+        total: 1, missing: 0, currentPage: 1, pageSize: 50, totalPages: 1,
+        hasNextPage: false, hasPreviousPage: false, cacheKey: 'retry-validation'
+      } });
+    }).as('validationRetry');
+
+    openManagement();
+    cy.contains('app-coding-management .action-buttons-toolbar a', 'Kodierliste').click();
+    cy.get('app-export-dialog').as('exportDialog');
+    cy.get('@exportDialog').find('input[type="file"]').selectFile({
+      contents: Cypress.Buffer.from('Invalid workbook'), fileName: 'invalid.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    }, { force: true });
+    cy.get('@exportDialog').find('.validation-error-section')
+      .should('exist').and('contain.text', 'Fehler beim Parsen der Excel-Datei');
+    cy.get('@exportDialog').find('.validation-progress-section').should('not.exist');
+    cy.get('@exportDialog').find('.validation-controls button').should('be.enabled');
+    cy.get('@exportDialog').find('.validation-error-section button').should('be.enabled');
+    // Establish async rendering before scrolling the newly rendered error into view.
+    cy.get('@exportDialog').find('.validation-error-section').scrollIntoView().should('be.visible');
+
+    cy.then(async () => {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Coding list');
+      worksheet.addRow(['unit_key', 'login_name', 'login_code', 'booklet_id', 'variable_id']);
+      worksheet.addRow(Object.values(combination));
+      return Cypress.Buffer.from(await workbook.xlsx.writeBuffer());
+    }).then(contents => {
+      cy.get('@exportDialog').find('input[type="file"]').selectFile({
+        contents, fileName: 'valid-retry.xlsx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      }, { force: true });
+    });
+    cy.get('@exportDialog').find('.validation-error-section').should('not.exist');
+    cy.get('@exportDialog').find('.validation-progress-section').should('be.visible');
+    cy.wait('@validationRetry');
+    cy.get('coding-box-coding-validation-results-dialog').should('exist');
+    cy.get('coding-box-coding-validation-results-dialog .results-table').should('be.visible');
+    cy.get('coding-box-coding-validation-results-dialog .results-table tbody tr')
+      .should('have.length', 1).and('contain.text', 'UNIT');
+    cy.get('@exportDialog').find('.validation-progress-section').should('not.exist');
+    cy.get('@exportDialog').find('.validation-results-section').should('exist');
+  });
+
   it('renders delayed completeness pagination after uploading an Excel coding list', () => {
     const combinations = Array.from({ length: 51 }, (_, index) => ({
       unit_key: `UNIT_${index + 1}`, login_name: 'synthetic-login', login_code: 'synthetic-code',

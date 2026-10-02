@@ -1,6 +1,7 @@
 import {
-  Component, inject, OnInit, OnDestroy
+  Component, computed, DestroyRef, inject, OnInit, signal
 } from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MatDialogRef, MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatRadioModule } from '@angular/material/radio';
@@ -11,11 +12,10 @@ import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import * as ExcelJS from 'exceljs';
-import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { finalize } from 'rxjs/operators';
 import { MatButtonToggle, MatButtonToggleGroup } from '@angular/material/button-toggle';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
-import { ValidationStateService, ValidationProgress } from '../../services/validation-state.service';
+import { ValidationStateService } from '../../services/validation-state.service';
 import { AppService } from '../../../core/services/app.service';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 import {
@@ -46,58 +46,38 @@ export type ExportFormat = 'json' | 'csv' | 'excel';
     DatePipe
   ]
 })
-export class ExportDialogComponent implements OnInit, OnDestroy {
+export class ExportDialogComponent implements OnInit {
   dialogRef = inject<MatDialogRef<ExportDialogComponent>>(MatDialogRef);
   private testPersonCodingService = inject(TestPersonCodingService);
   private appService: AppService = inject(AppService);
   private validationStateService = inject(ValidationStateService);
   private translate = inject(TranslateService);
   private matDialog = inject(MatDialog);
-  private destroy$ = new Subject<void>();
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly isDownloadingValidation = signal(false);
 
   selectedFormat: ExportFormat = 'json';
   trainingRequiredFilter: 'all' | 'true' | 'false' = 'all';
 
-  validationResults: ValidateCodingCompletenessResponseDto | null = null;
-  validationProgress: ValidationProgress | null = null;
-  isValidating = false;
-  validationCacheKey: string | null = null;
+  readonly validationResults = toSignal(this.validationStateService.validationResults$, { requireSync: true });
+  readonly validationProgress = toSignal(this.validationStateService.validationProgress$, { requireSync: true });
+  readonly isValidating = computed(() => this.isDownloadingValidation() ||
+    this.validationProgress().status === 'loading' || this.validationProgress().status === 'processing');
+
+  readonly validationCacheKey = computed(() => this.validationResults()?.cacheKey || null);
   validationCurrentPage = 1;
   expectedCombinations: ExpectedCombinationDto[] = [];
   private readonly maxDisplayedMappingErrors = 5;
 
   ngOnInit(): void {
-    this.validationStateService.validationProgress$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(progress => {
-        this.validationProgress = progress;
-        this.isValidating = progress.status === 'loading' || progress.status === 'processing';
-      });
-
     this.validationStateService.validationResults$
-      .pipe(takeUntil(this.destroy$))
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(results => {
-        this.validationResults = results;
         if (results) {
-          this.validationCacheKey = results.cacheKey || null;
           // Open validation results dialog when validation completes
           this.openValidationResultsDialog(results);
         }
       });
-
-    const currentResults = this.validationStateService.getValidationResults();
-    if (currentResults) {
-      this.validationResults = currentResults;
-    }
-
-    const currentProgress = this.validationStateService.getValidationProgress();
-    this.validationProgress = currentProgress;
-    this.isValidating = currentProgress.status === 'loading' || currentProgress.status === 'processing';
-  }
-
-  ngOnDestroy(): void {
-    this.destroy$.next();
-    this.destroy$.complete();
   }
 
   onCancel(): void {
@@ -337,15 +317,19 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
   downloadValidationExcel(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
-    if (!workspaceId || !this.validationCacheKey) {
+    const validationCacheKey = this.validationCacheKey();
+    if (!workspaceId || !validationCacheKey) {
       return;
     }
 
-    this.isValidating = true;
+    this.isDownloadingValidation.set(true);
 
     this.testPersonCodingService.downloadValidationResultsAsExcel(
       workspaceId,
-      this.validationCacheKey
+      validationCacheKey
+    ).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.isDownloadingValidation.set(false))
     ).subscribe({
       next: blob => {
         const url = window.URL.createObjectURL(blob);
@@ -357,11 +341,8 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
-        this.isValidating = false;
       },
-      error: () => {
-        this.isValidating = false;
-      }
+      error: () => {}
     });
   }
 
@@ -372,7 +353,7 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
       maxHeight: '90vh',
       data: {
         validationResults: results,
-        validationCacheKey: this.validationCacheKey,
+        validationCacheKey: results.cacheKey || null,
         expectedCombinations: this.expectedCombinations
       }
     });

@@ -84,8 +84,8 @@ describe('CodingJobBulkCreationDialogComponent', () => {
       }
     });
 
-    expect(component.jobPreviews).toHaveLength(1);
-    expect(component.jobPreviews[0]).toMatchObject({
+    expect(component.jobPreviews()).toHaveLength(1);
+    expect(component.jobPreviews()[0]).toMatchObject({
       name: 'Job Unit 1 - Var 1 (Ada)',
       caseCount: 4,
       coderName: 'Ada'
@@ -122,11 +122,11 @@ describe('CodingJobBulkCreationDialogComponent', () => {
       }]
     });
 
-    expect(component.warnings).toEqual([expect.objectContaining({
+    expect(component.warnings()).toEqual([expect.objectContaining({
       unitName: 'Unit 1',
       variableId: 'Var 1'
     })]);
-    expect(component.showWarningsPanel).toBe(true);
+    expect(component.showWarningsPanel()).toBe(true);
     expect(mockDistributedCodingService.calculateDistribution).not.toHaveBeenCalled();
   });
 
@@ -166,12 +166,12 @@ describe('CodingJobBulkCreationDialogComponent', () => {
     });
     await fixture.whenStable();
 
-    expect(component.warnings).toEqual([expect.objectContaining({
+    expect(component.warnings()).toEqual([expect.objectContaining({
       unitName: 'Unit 1',
       variableId: 'Var 1'
     })]);
-    expect(component.showWarningsPanel).toBe(true);
-    expect(component.jobPreviews).toHaveLength(1);
+    expect(component.showWarningsPanel()).toBe(true);
+    expect(component.jobPreviews()).toHaveLength(1);
   });
 
   it('uses backend-created job names and counts in the results view', () => {
@@ -216,7 +216,7 @@ describe('CodingJobBulkCreationDialogComponent', () => {
       }
     });
 
-    expect(component.jobPreviews).toEqual([
+    expect(component.jobPreviews()).toEqual([
       expect.objectContaining({
         name: 'Job Unit 1 - Var 1 (Ada)',
         caseCount: 3,

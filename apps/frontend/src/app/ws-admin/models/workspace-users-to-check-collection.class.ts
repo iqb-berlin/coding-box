@@ -1,3 +1,4 @@
+import { signal } from '@angular/core';
 import { WorkspaceUserChecked } from './workspace-user-checked.class';
 import { UserInListDto } from '../../../../../../api-dto/user/user-in-list-dto';
 import { UserWorkspaceAccessDto } from '../../../../../../api-dto/workspaces/user-workspace-access-dto';
@@ -7,7 +8,11 @@ import { getEffectiveCanCode } from '../../shared/utils/workspace-access';
 export class WorkspaceUserToCheckCollection {
   entries: WorkspaceUserChecked[];
   private workspacesUsersIds: UserWorkspaceAccessDto[] = [];
-  hasChanged = false;
+  private readonly hasChangedState = signal(false);
+
+  get hasChanged(): boolean {
+    return this.hasChangedState();
+  }
 
   constructor(users: UserInListDto[]) {
     this.entries = [];
@@ -47,7 +52,7 @@ export class WorkspaceUserToCheckCollection {
         user.canCode = false;
       }
     });
-    this.hasChanged = false;
+    this.hasChangedState.set(false);
   }
 
   getChecks(): UserWorkspaceAccessDto[] {
@@ -68,20 +73,13 @@ export class WorkspaceUserToCheckCollection {
   }
 
   updateHasChanged(): void {
-    this.hasChanged = false;
-    this.entries.forEach(user => {
+    const hasChanged = this.entries.some(user => {
       const workspaceUser = this.workspacesUsersIds
         .find(workspacesUsersId => user.id === workspacesUsersId.id);
-      if ((user.isChecked && !workspaceUser) || (!user.isChecked && workspaceUser)) {
-        this.hasChanged = true;
-      }
-      if (workspaceUser && user.accessLevel !== workspaceUser.accessLevel) {
-        this.hasChanged = true;
-      }
-      if (workspaceUser && user.canCode !== workspaceUser.canCode) {
-        this.hasChanged = true;
-      }
+      return (user.isChecked && !workspaceUser) || (!user.isChecked && !!workspaceUser) ||
+        (!!workspaceUser && (user.accessLevel !== workspaceUser.accessLevel || user.canCode !== workspaceUser.canCode));
     });
+    this.hasChangedState.set(hasChanged);
   }
 
   setHasChangedFalse(): void {
@@ -95,6 +93,6 @@ export class WorkspaceUserToCheckCollection {
         });
       }
     });
-    this.hasChanged = false;
+    this.hasChangedState.set(false);
   }
 }

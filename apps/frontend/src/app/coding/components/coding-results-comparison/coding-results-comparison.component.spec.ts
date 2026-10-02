@@ -667,7 +667,7 @@ describe('CodingResultsComparisonComponent', () => {
     }));
     component.comparisonMode = 'within-training';
     component.selectedTrainingForWithin = 5;
-    component.availableTrainings = [{
+    component.availableTrainings.set([{
       id: 5,
       workspace_id: 1,
       label: 'Training with hidden instructions',
@@ -677,7 +677,7 @@ describe('CodingResultsComparisonComponent', () => {
       show_score: true,
       allow_comments: false,
       suppress_general_instructions: true
-    }];
+    }]);
 
     component.openReplay({
       responseId: 77,
@@ -726,8 +726,7 @@ describe('CodingResultsComparisonComponent', () => {
       jobsCount: 2
     } as CoderTraining;
 
-    component.availableTrainings = [training];
-    component.filteredTrainings = [training];
+    component.availableTrainings.set([training]);
 
     expect(component.getTrainingOptionTitle(training)).toBe('Duplicate Label · ID 33');
     expect(component.getTrainingOptionMeta(training)).toContain('2 Kodierer');
@@ -739,7 +738,7 @@ describe('CodingResultsComparisonComponent', () => {
 
     component.applyTrainingFilter({ target: { value: '33' } } as unknown as Event);
 
-    expect(component.filteredTrainings).toEqual([training]);
+    expect(component.filteredTrainings()).toEqual([training]);
   });
 
   it('should show discussion result as the main header and manager as subordinate info', () => {

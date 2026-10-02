@@ -1,6 +1,6 @@
 import {
   Component, Inject, inject, OnInit,
-  ViewChild
+  ViewChild, computed, signal
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
@@ -301,8 +301,16 @@ export class CodingResultsComparisonComponent implements OnInit {
   dataSource = new MatTableDataSource<TrainingComparison | WithinTrainingComparison>([]);
   displayedColumns: string[] = ['index', 'unitVariable', 'personInfo', 'replay', 'givenAnswer', 'match'];
   dynamicCoderColumns: string[] = [];
-  availableTrainings: CoderTraining[] = [];
-  filteredTrainings: CoderTraining[] = [];
+  readonly availableTrainings = signal<CoderTraining[]>([]);
+  private readonly trainingFilter = signal('');
+  readonly filteredTrainings = computed(() => {
+    const filter = this.trainingFilter();
+    const trainings = this.availableTrainings();
+    return filter ? trainings.filter(training => (
+      `${training.label} ${training.id} ${this.getTrainingOptionMeta(training)}`.toLowerCase().includes(filter)
+    )) : trainings;
+  });
+
   selectedTrainings = new SelectionModel<number>(true, []);
   comparisonData: TrainingComparison[] = [];
   withinTrainingData: WithinTrainingComparison[] = [];
@@ -430,6 +438,8 @@ export class CodingResultsComparisonComponent implements OnInit {
         this.selectedTrainingForWithin = this.data.selectedTraining.id;
         this.loadComparison();
       }
+    }).catch(() => {
+      // Loading errors are already reported by loadCoderTrainings.
     });
 
     this.postMessageService.getMessages<ReplayCodeSelectedMessage>('replayCodeSelected')
@@ -650,7 +660,7 @@ export class CodingResultsComparisonComponent implements OnInit {
       return undefined;
     }
 
-    return this.availableTrainings.find(training => training.id === this.selectedTrainingForWithin) ||
+    return this.availableTrainings().find(training => training.id === this.selectedTrainingForWithin) ||
       (this.data.selectedTraining?.id === this.selectedTrainingForWithin ? this.data.selectedTraining : undefined);
   }
 
@@ -659,7 +669,7 @@ export class CodingResultsComparisonComponent implements OnInit {
       return [];
     }
 
-    return this.availableTrainings.filter(training => (
+    return this.availableTrainings().filter(training => (
       this.selectedTrainings.isSelected(training.id) &&
       !this.comparisonData.some(row => (
         row.coders.some(coder => coder.trainingId === training.id && coder.code !== null)
@@ -1594,8 +1604,8 @@ export class CodingResultsComparisonComponent implements OnInit {
               workspaceId !== this.data.workspaceId) {
               return;
             }
-            this.availableTrainings = trainings;
-            this.filteredTrainings = [...trainings];
+            this.availableTrainings.set([...trainings]);
+            this.trainingFilter.set('');
             resolve();
           },
           error: () => {
@@ -1626,7 +1636,7 @@ export class CodingResultsComparisonComponent implements OnInit {
     this.cancelComparisonRequest();
     this.resetKappaState();
     this.selectedTrainings.clear();
-    this.filteredTrainings = [...this.availableTrainings];
+    this.trainingFilter.set('');
     this.selectedTrainingForWithin = null;
     this.comparisonData = [];
     this.withinTrainingData = [];
@@ -2081,14 +2091,7 @@ export class CodingResultsComparisonComponent implements OnInit {
 
   applyTrainingFilter(event: Event): void {
     const value = ((event.target as HTMLInputElement)?.value || '').trim().toLowerCase();
-    if (!value) {
-      this.filteredTrainings = [...this.availableTrainings];
-      return;
-    }
-
-    this.filteredTrainings = this.availableTrainings.filter(training => (
-      `${training.label} ${training.id} ${this.getTrainingOptionMeta(training)}`.toLowerCase().includes(value)
-    ));
+    this.trainingFilter.set(value);
   }
 
   trackByCoder(index: number, coder: { jobId: number; coderName: string }): number {

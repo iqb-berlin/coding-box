@@ -1,6 +1,48 @@
 import '../e2e/workspace-access-rights.cy';
 
 describe('zoneless users in workspace access rights', () => {
+  it('clears the saved change indicator even when the delayed auth refresh fails', () => {
+    const unexpectedRequests: string[] = [];
+    cy.intercept('**/api/**', request => {
+      unexpectedRequests.push(`${request.method} ${request.url}`);
+      request.reply({ statusCode: 501, body: { message: 'Missing test fixture' } });
+    });
+    cy.mockKeycloakAuthentication();
+    cy.stubWorkspace({ workspaceId: 5 });
+    cy.intercept('GET', '**/api/workspace/5/settings/*', { body: { value: '{"enabled":false}' } });
+    cy.intercept('GET', '**/api/admin/workspace/token-policy', {
+      body: { scopes: { 'replay:read': { maxDurationDays: 365 } } }
+    });
+    cy.intercept('GET', '**/api/admin/workspace/5/journal?*', {
+      body: { data: [], total: 0, page: 1, limit: 20 }
+    });
+    cy.intercept('GET', '**/api/admin/users/access/5', { body: [
+      { id: 7, name: 'Workspace user', accessLevel: 1, canCode: false }
+    ] });
+    cy.intercept('PATCH', '**/api/admin/users/access/5', request => {
+      expect(request.body).to.deep.equal([{ id: 7, accessLevel: 3, canCode: false }]);
+      request.reply({ delay: 300, body: true });
+    }).as('saveWorkspaceRights');
+
+    cy.visit('/');
+    cy.wait('@authData');
+    cy.window().then(win => { win.location.hash = '/workspace-admin/5/settings'; });
+    cy.get('coding-box-ws-access-rights').as('rights');
+    cy.get('@rights').contains('tr', 'Workspace user').find('input[type="checkbox"]').eq(2).check();
+    cy.get('@rights').find('button').should('be.enabled');
+    cy.intercept('GET', '**/api/auth-data?identity=e2e-user', {
+      delay: 800, statusCode: 400, body: { message: 'Synthetic auth refresh failure' }
+    }).as('failedAuthRefresh');
+    cy.get('@rights').find('button').click();
+    cy.wait(['@saveWorkspaceRights', '@failedAuthRefresh']);
+    cy.get('@rights').find('button').should('be.disabled');
+    cy.get('mat-snack-bar-container').should('contain.text', 'gespeichert');
+    cy.get('@rights').contains('tr', 'Workspace user').find('input[type="checkbox"]').eq(2)
+      .should('be.checked');
+    cy.window().should('not.have.property', 'Zone');
+    cy.then(() => { expect(unexpectedRequests).to.deep.equal([]); });
+  });
+
   it('renders users when their response arrives after the existing rights', () => {
     let releaseUsers: (() => void) | undefined;
     cy.mockKeycloakAuthentication();

@@ -1517,3 +1517,176 @@ unverändert. Anschließend wurde nur diese Prüfdokumentation ergänzt.
 Das aktualisierte Inventar enthält weiterhin 8.780 Einträge aus 325
 Produktionsdateien. CI am veröffentlichten Commit und reale Backend-Jobs
 sind durch diese lokalen Prüfungen mit synthetischen Daten nicht bestätigt.
+
+
+### ZL-034: Asynchrone Bulk-Vorschau bleibt beim Spinner stehen
+
+Wird `CodingJobBulkCreationDialogComponent` ohne vorberechnete Verteilung
+geöffnet, setzt die verzögerte Backendantwort nach `firstValueFrom()` die Vorschau; zuvor
+meldeten weder diese Felder noch das Zurücksetzen von `isLoading` eine
+Templateänderung. Dadurch konnten Spinner und gesperrte Bestätigung trotz
+erfolgreicher Berechnung sichtbar bleiben.
+
+`isLoading`, `jobPreviews`, `distributionMatrix`, `doubleCodingPreview`,
+`warnings`, `showWarningsPanel` und `warningsConfirmed` sind jetzt Signals.
+Die Initialisierung erzeugt neue Listen und veröffentlicht sie mit `set()`;
+`finally` beendet den Ladezustand auch bei leerer Antwort oder Fehler. Das
+Template liest diese Quellen direkt. Die Bestätigung von Warnungen bleibt
+ein eigener Schritt vor dem Schließen des Dialogs.
+
+`apps/frontend/src/app/coding/components/coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component.zoneless.spec.ts`
+verwendet das echte Template und ein verzögert freigegebenes Subject. Die
+Regressionen prüfen Spinner, Vorschau, Doppelkodierungsübersicht und
+Bestätigungsbutton, den zweistufigen Warnungsablauf sowie Leerzustand und
+Anfragefehler. Nach dem Fortsetzen der Promise wird `whenStable()` abgewartet;
+es gibt keinen erzwungenen Render nach der Antwort.
+
+Für diesen asynchronen Bulk-Antwortpfad wird derzeit nur die native
+Templateabdeckung referenziert. Der erreichbare Definitionsablauf übergibt
+bereits eine fertige Verteilung. Der direkte Neuauftrag, der die interne
+asynchrone Berechnung verwenden würde, hat derzeit keinen Template-Einstieg.
+Die Verteilungsprüfung in
+`cypress/zoneless/async-coding-dialogs.cy.ts` betrifft
+`VariableAnalysisDialogComponent` und ist kein Bulk-Browsernachweis.
+
+### ZL-035: Verzögerte Trainingsoptionen erscheinen nicht im Vergleich
+
+`CodingResultsComparisonComponent` lud die Trainingsliste asynchron in normale
+Arrays. Nach dem initialen Material-Rendering konnte eine spätere Antwort
+ohne weitere Benutzeraktion deshalb keine Trainingsoptionen anzeigen.
+
+`availableTrainings` ist jetzt die führende Signalliste. Ein privates Signal
+führt den normalisierten Filter; `filteredTrainings` ist ein `computed`, das
+ausschließlich aus diesen beiden Quellen ableitet. Beide Auswahltemplates
+lesen die Signalwerte. Die ursprüngliche Reihenfolge, Suche nach Label, ID
+und Metadaten sowie Filterreset beim Moduswechsel bleiben erhalten. Die
+vorhandenen Anfrage- und Workspace-Prüfungen verwerfen überholte Antworten.
+
+`apps/frontend/src/app/coding/components/coding-results-comparison/coding-results-comparison.zoneless.spec.ts`
+prüft das echte Template mit kontrollierten, verzögerten Trainingsantworten.
+Vor deren Freigabe wartet die Suite nach `whenStable()` zusätzlich reale
+50 Millisekunden und erneut `whenStable()`, damit initiale Material-Termine
+die fehlende Änderungsbenachrichtigung nicht verdecken. Weitere Fälle prüfen
+Filter und Reset, Leerantwort mit Wiederholung, Ladefehler mit Wiederholung
+sowie die ältere Antwort nach einem neueren erfolgreichen Ladevorgang.
+Ein spezifischer Browsernachweis für diese Trainingsauswahl liegt nicht vor.
+
+### ZL-036: XLSX-Parsefehler blockiert Upload und Wiederholung
+
+Im Exportdialog kann eine beschädigte XLSX-Datei erst nach FileReader und
+ExcelJS-Promise scheitern. Der `ValidationStateService` meldete den Fehler
+bereits, während die aus normalen Subscriber-Feldern gerenderte Ansicht
+weiter Fortschritt und gesperrte Buttons zeigen konnte.
+
+Die bestehenden `BehaviorSubject`s für Fortschritt und Ergebnisse bleiben
+die führenden Quellen. `toSignal(..., { requireSync: true })` liefert daraus
+schreibgeschützte Templateansichten; `isValidating` und `validationCacheKey`
+sind abgeleitete `computed`s. Der Download hat ein unabhängiges Signal, das
+durch `finalize()` beendet wird. Weitere Ergebnismeldungen setzen einen noch
+laufenden Download dadurch nicht vorzeitig zurück. Der Ergebnisdialog erhält
+den Cache-Key direkt aus der jeweiligen Ergebnismeldung; sein Abonnement
+endet mit `takeUntilDestroyed()`.
+
+`apps/frontend/src/app/coding/components/export-dialog/export-dialog.component.zoneless.spec.ts`
+prüft im echten Template eine beschädigte Datei über den echten FileReader
+und ExcelJS-Parser: Fortschritt verschwindet, Fehler erscheint und Upload
+sowie Wiederholung werden freigegeben. Weitere Fälle verwenden eine echte
+generierte XLSX-Datei mit verzögertem Backend-Erfolg beziehungsweise -Fehler,
+prüfen die unabhängige Downloadsperre und das Ausbleiben neuer Ergebnisdialoge
+nach dem Zerstören der Ansicht. Sie erzwingen nach den Antworten keinen Render.
+
+`cypress/zoneless/async-coding-dialogs.cy.ts` öffnet den Export über »Kodierliste«,
+lädt eine beschädigte Datei hoch und prüft Fehler, verschwundenen Fortschritt
+und verfügbare Wiederholung. Danach erzeugt der Browserfall eine gültige
+ExcelJS-Datei und prüft nach verzögerter synthetischer Validierungsantwort
+den Ergebnisdialog und die aktualisierte Exportansicht.
+
+### ZL-037: Debouncte Variablenfilter aktualisieren die Karten nicht
+
+`VariableBundleDialogComponent` rendert Karten mit `@for`; dort ist keine
+Material-Tabelle angeschlossen, die Änderungen des `MatTableDataSource`
+meldet. Der verzögerte Filtercallback änderte dessen `filteredData`, ohne
+die Karten zu benachrichtigen. Erst eine weitere Benutzeraktion konnte die
+bereits berechnete Filterung sichtbar machen.
+
+`filteredVariables` verwendet jetzt
+`toSignal(this.dataSource.connect(), { initialValue: [] })` als Templatequelle.
+Der DataSource bleibt für Filter und sichtbare Karten maßgeblich; »Alle
+auswählen« arbeitet weiterhin mit dessen `filteredData`. Die verfügbare Liste
+und Ladezustände sind Signals. Bestehende Abonnements werden beim Zerstören
+beendet und der DataSource wird getrennt.
+
+`apps/frontend/src/app/coding/components/variable-bundle-dialog/variable-bundle-dialog.component.zoneless.spec.ts`
+dispatcht echte Input-Ereignisse im vollständigen Template und wartet reale
+350 Millisekunden auf den 300-Millisekunden-Debounce. Die Fälle prüfen
+Einheiten- und Variablenfilter, leere Treffer, Wiederherstellung nach dem
+Leeren der Filter sowie Auswahl und Rückgabe ausschließlich sichtbarer
+Variablen. Verzögerter Listenerfolg, Leerantwort und Fehler prüfen zusätzlich
+die Karten und Ladeanzeige ohne weiteren Klick. Ein spezifischer
+Browsernachweis für diese Kartenfilter liegt nicht vor.
+
+### ZL-038: Gespeicherte Rechte behalten nach Auth-Fehler den Änderungsstatus
+
+Nach erfolgreichem Speichern der Workspace-Rechte und fehlgeschlagener
+Auth-Aktualisierung setzt die Komponente die gespeicherten Werte als neue
+Ausgangslage. Das bisher normale `hasChanged`-Feld im enthaltenen
+`WorkspaceUserToCheckCollection` änderte dabei jedoch nicht die Identität des
+äußeren `workspaceUsers`-Signals. Der Speichern-Button konnte deshalb weiterhin
+aktiv bleiben, obwohl die Änderung bereits angenommen war.
+
+Der Änderungsstatus hat jetzt mit dem privaten `hasChangedState`-Signal eine
+eigene führende Quelle; der bestehende `hasChanged`-Getter liest dieses Signal
+auch im Template. `setChecks()`, `updateHasChanged()` und
+`setHasChangedFalse()` aktualisieren dieselbe Quelle. Die neue Ausgangslage
+enthält weiterhin die gespeicherten Rechte. Ein fehlgeschlagener
+Speichervorgang lässt den Änderungsstatus bestehen; eine fehlgeschlagene
+nachgelagerte Auth-Aktualisierung zeigt die Meldung für bereits gespeicherte
+Änderungen und setzt den Status zurück.
+
+`apps/frontend/src/app/ws-admin/components/ws-access-rights/ws-access-rights.component.zoneless.spec.ts`
+klickt Checkbox und Speichern im echten Template. Getrennte Subjects geben
+Speicherantwort und Auth-Aktualisierung erst danach frei. Die Fälle prüfen
+die Auth-Ergebnisse `updated`, `failed` und `invalidated`, die gesperrte
+Speichern-Aktion nach erfolgreicher Mutation, eine danach erneut erkennbare
+Änderung sowie den weiterhin aktiven Button bei fehlgeschlagener Mutation.
+Die tatsächliche Material-Snackbar gehört zur Prüfung.
+
+`cypress/zoneless/workspace-access-rights.cy.ts` prüft denselben Ablauf im
+Browser mit verzögert erfolgreichem PATCH und danach fehlschlagender
+Auth-Antwort. Der Speichern-Button wird gesperrt, die ausgewählte Rechtstufe
+bleibt sichtbar und die Meldung enthält den Speichererfolg. API und Anmeldung
+sind synthetisch; dieser Fall bestätigt keine reale Backend-Persistenz.
+
+### Lokale Abschlussläufe für ZL-034 bis ZL-038 am 02.10.2026
+
+Die Korrekturen wurden im isolierten Checkout auf Basis von PR-Head
+`ec84464cd974161c0e39dab757156f2a5c3e2731` geprüft. Die fünf neuen nativen
+Testdateien ergänzen 23 Regressionen. Die Produktquellen und nativen Tests
+blieben während der vollständigen Prüfungen unverändert. Danach wurden die
+Cypress-Sichtbarkeitsprüfungen an den tatsächlich scrollbaren Dialoginhalt
+angepasst und beide Browserdateien gemeinsam abschließend ausgeführt.
+
+| Nx-Prüfung | Ergebnis | Exit |
+|---|---|---|
+| `frontend:test --maxWorkers=2` | 2.630 Tests / 246 Suites bestanden | 0 |
+| `frontend:test-zoneless --maxWorkers=2` | 868 Tests / 51 Suites bestanden | 0 |
+| `frontend:e2e --configuration=zoneless --port=cypress-auto --browser=electron` mit `async-coding-dialogs.cy.ts` und `workspace-access-rights.cy.ts` | Alle zwölf Browserfälle bestanden; `window.Zone` fehlt | 0 |
+| `frontend:lint` | bestanden | 0 |
+| `frontend:build --configuration=production --verbose` | bestanden mit `NG_BUILD_MAX_WORKERS=2` | 0 |
+| `frontend:zoneless-approval` | Inventar ohne Abweichung; sechs Bereiche, sieben Mechanismen und 38 Befunde referenziert | 0 |
+
+Der Produktionsbuild brach in der lokalen Sandbox zweimal ohne
+Compilerdiagnose ab; der Abschlusslauf außerhalb der Sandbox bestand.
+Der lokale Angular-Server und Electron liefen ebenfalls außerhalb der
+Sandbox. Die beiden Browserfälle für ZL-036 und ZL-038 verwenden synthetische
+Anmeldung und API-Antworten. Der XLSX-Fall prüft das Erscheinen des Fehlers,
+das Ende des Fortschritts und freigegebene Buttons vor dem Scrollen; die
+anschließende Sichtbarkeitsprüfung bezieht sich auf den Dialoginhalt.
+
+Das aktualisierte Inventar umfasst weiterhin 8.780 Einträge aus 325
+Produktionsdateien. Der risikobasierte Nachweis bestätigt keine vollständige
+Prüfung jedes UI-Elements. Spezifische Browsernachweise für die Trainingswahl
+und Variablenkarten sowie ein erreichbarer asynchroner Bulk-Browserpfad
+fehlen wie oben beschrieben. Die Abschlussprüfungen fanden vor Commit und
+Push statt; CI am veröffentlichten Commit und echte Backend-Persistenz sind durch
+diese lokalen Prüfungen nicht bestätigt.
