@@ -76,24 +76,20 @@ export class WsAccessRightsComponent {
       });
   }
 
-  changeAccessLevel(checked: boolean, user: WorkspaceUserChecked, level: number): void {
-    if (checked) {
-      user.accessLevel = level;
-      user.isChecked = true;
-    } else {
-      user.accessLevel = 0;
-      user.isChecked = false;
-      user.canCode = false;
-    }
-    this.workspaceUsers().updateHasChanged();
+  changeAccessLevel(checked: boolean, user: Readonly<WorkspaceUserChecked>, level: number): void {
+    this.workspaceUsers().updateEntry(user.id, current => (checked ? {
+      ...current, accessLevel: level, isChecked: true
+    } : {
+      ...current, accessLevel: 0, isChecked: false, canCode: false
+    }));
   }
 
-  changeCanCode(checked: boolean, user: WorkspaceUserChecked): void {
-    if (checked && !user.isChecked) {
-      user.isChecked = true;
-      user.accessLevel = 1;
-    }
-    user.canCode = checked && user.isChecked;
-    this.workspaceUsers().updateHasChanged();
+  changeCanCode(checked: boolean, user: Readonly<WorkspaceUserChecked>): void {
+    this.workspaceUsers().updateEntry(user.id, current => ({
+      ...current,
+      isChecked: checked || current.isChecked,
+      accessLevel: checked && !current.isChecked ? 1 : current.accessLevel,
+      canCode: checked
+    }));
   }
 }

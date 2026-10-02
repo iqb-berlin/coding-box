@@ -235,7 +235,7 @@
 
           <div class="mode-selection">
             <div class="select-all-row">
-              <mat-checkbox [checked]="allSelected()" [indeterminate]="selection.hasValue() && !allSelected()"
+              <mat-checkbox [checked]="allSelected()" [indeterminate]="selectedTestTakerCount() > 0 && !allSelected()"
                 (change)="toggleAllSelection()">
                 Alle auswählen
               </mat-checkbox>
@@ -253,7 +253,7 @@
 
           <cdk-virtual-scroll-viewport class="test-takers-list" [itemSize]="48" [minBufferPx]="200" [maxBufferPx]="400">
             <div *cdkVirtualFor="let item of filteredTestTakers(); trackBy: trackByFn" class="virtual-item">
-              <mat-checkbox [checked]="selection.isSelected(item)" (change)="toggleSelection(item)">
+              <mat-checkbox [checked]="isTestTakerSelected(item)" (change)="toggleSelection(item)">
                 <strong>{{ item.testTaker }}:</strong> {{ item.login }} ({{ item.mode }})
                 @if (item.consider === true) {
                 <mat-icon matTooltip="Wird berücksichtigt">check_circle</mat-icon>
@@ -267,22 +267,22 @@
 
           <div class="exclude-button-container">
             <button mat-raised-button color="primary" class="exclude-button" (click)="markTestTakersAsConsidered()"
-              [disabled]="isConsidering() || selection.selected.length === 0">
+              [disabled]="isConsidering() || selectedTestTakerCount() === 0">
               <mat-icon>{{ isConsidering() ? 'hourglass_empty' : 'check_circle' }}</mat-icon>
               @if (isConsidering()) {
               Wird bearbeitet... ({{ consideringProgress() }}%)
               } @else {
-              Ausgewählte TestTaker berücksichtigen ({{ selection.selected.length }})
+              Ausgewählte TestTaker berücksichtigen ({{ selectedTestTakerCount() }})
               }
             </button>
 
             <button mat-raised-button color="warn" class="exclude-button" (click)="markTestTakersAsExcluded()"
-              [disabled]="isExcluding() || selection.selected.length === 0">
+              [disabled]="isExcluding() || selectedTestTakerCount() === 0">
               <mat-icon>{{ isExcluding() ? 'hourglass_empty' : 'block' }}</mat-icon>
               @if (isExcluding()) {
               Wird bearbeitet... ({{ excludingProgress() }}%)
               } @else {
-              Ausgewählte TestTaker ausschließen ({{ selection.selected.length }})
+              Ausgewählte TestTaker ausschließen ({{ selectedTestTakerCount() }})
               }
             </button>
 

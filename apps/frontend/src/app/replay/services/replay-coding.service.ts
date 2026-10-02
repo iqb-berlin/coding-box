@@ -851,6 +851,7 @@ export class ReplayCodingService {
   }
 
   getOpenCount(unitsData: UnitsReplay | null = null): number {
+    this.codingStateVersion();
     if (!unitsData) return this.openUnitKeys.size;
 
     return unitsData.units.filter((unit: UnitsReplayUnit) => {
@@ -870,18 +871,21 @@ export class ReplayCodingService {
   }
 
   getPreSelectedCodeId(testPerson: string, unitId: string, variableId: string): number | null {
+    this.codingStateVersion();
     const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
     const selectedCode = this.selectedCodes.get(compositeKey);
     return selectedCode ? selectedCode.id : null;
   }
 
   getPreSelectedCodingIssueOptionId(testPerson: string, unitId: string, variableId: string): number | null {
+    this.codingStateVersion();
     const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
     const selectedCode = this.selectedCodes.get(compositeKey);
     return selectedCode && selectedCode.codingIssueOption ? selectedCode.codingIssueOption : null;
   }
 
   getNotes(testPerson: string, unitId: string, variableId: string): string {
+    this.codingStateVersion();
     const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
     return this.notes.get(compositeKey) || '';
   }

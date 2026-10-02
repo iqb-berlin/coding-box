@@ -584,10 +584,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     draft.variables.forEach(variable => {
       if (variable.bundleId && variable.bundleCaseOrderingMode) {
-        const bundle = this.availableBundles().find(candidate => candidate.id === variable.bundleId);
-        if (bundle) {
-          bundle.caseOrderingMode = variable.bundleCaseOrderingMode;
-        }
+        this.setAvailableBundleCaseOrderingMode(variable.bundleId, variable.bundleCaseOrderingMode);
       }
 
       this.addVariable(
@@ -1054,7 +1051,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       this.showError(`${duplicateVariables.length} Variable(n) waren bereits hinzugefügt: ${duplicateVariables.join(', ')}`);
     }
 
-    bundle.caseOrderingMode = effectiveCaseOrderingMode;
+    this.setAvailableBundleCaseOrderingMode(bundleId, effectiveCaseOrderingMode);
 
     this.checkForOverlaps();
   }
@@ -1427,16 +1424,18 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   updateBundleCaseOrderingMode(bundleId: number, mode: 'continuous' | 'alternating'): void {
-    const bundle = this.availableBundles().find(b => b.id === bundleId);
-    if (bundle) {
-      bundle.caseOrderingMode = mode;
-    }
+    this.setAvailableBundleCaseOrderingMode(bundleId, mode);
     this.variablesFormArray.controls.forEach(control => {
       if (control.get('bundleId')?.value === bundleId) {
         control.get('bundleCaseOrderingMode')?.setValue(mode, { emitEvent: false });
       }
     });
     this.updateGroupedVariables();
+  }
+
+  private setAvailableBundleCaseOrderingMode(bundleId: number, caseOrderingMode: 'continuous' | 'alternating'): void {
+    this.availableBundles.update(bundles => bundles.map(bundle => (bundle.id === bundleId ?
+      { ...bundle, caseOrderingMode } : bundle)));
   }
 
   hasInsufficientCases(bundleGroup: { variables: { control: FormGroup }[] }): boolean {

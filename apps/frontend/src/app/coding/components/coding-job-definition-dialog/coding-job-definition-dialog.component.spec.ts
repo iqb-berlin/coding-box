@@ -826,7 +826,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
     component.selectedVariables().select(variable);
     component.setDeriveErrorIncluded(variable, true);
 
-    expect(component.getAvailabilityText(variable)).toBe('3/3');
+    expect(component.getAvailabilityText(component.variables()[0])).toBe('3/3');
     expect(component.getTotalCodingCases()).toBe(3);
 
     await component.onSubmit();
@@ -1724,7 +1724,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
       missingsProfileId: 9
     });
     component.updateCoderCapacityPercent(selectedCoder, 150);
-    component.selectedCoders.select(selectedCoder);
+    component.selectedCoders.select(component.availableCoders()[0]);
     component.selectedVariables().select(selectedVariable);
     component.toggleBundleSelection(selectedBundle);
     component.setBundleOrderingMode(selectedBundle, 'alternating');

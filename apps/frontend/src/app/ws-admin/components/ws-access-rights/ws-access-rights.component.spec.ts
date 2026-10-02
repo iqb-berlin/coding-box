@@ -78,32 +78,32 @@ describe('WsAccessRightsComponent', () => {
   it('should change access level correctly', () => {
     const user = component.workspaceUsers().entries[0];
     component.changeAccessLevel(true, user, 3);
-    expect(user.accessLevel).toBe(3);
-    expect(user.isChecked).toBe(true);
+    expect(component.workspaceUsers().entries[0].accessLevel).toBe(3);
+    expect(component.workspaceUsers().entries[0].isChecked).toBe(true);
     expect(component.workspaceUsers().hasChanged).toBe(true);
 
     component.changeAccessLevel(false, user, 3);
-    expect(user.accessLevel).toBe(0);
-    expect(user.isChecked).toBe(false);
-    expect(user.canCode).toBe(false);
+    expect(component.workspaceUsers().entries[0].accessLevel).toBe(0);
+    expect(component.workspaceUsers().entries[0].isChecked).toBe(false);
+    expect(component.workspaceUsers().entries[0].canCode).toBe(false);
   });
 
   it('should keep coding capability independent when changing workspace access', () => {
     const user = component.workspaceUsers().entries[1];
 
     component.changeAccessLevel(true, user, 3);
-    expect(user.accessLevel).toBe(3);
-    expect(user.canCode).toBe(false);
+    expect(component.workspaceUsers().entries[1].accessLevel).toBe(3);
+    expect(component.workspaceUsers().entries[1].canCode).toBe(false);
 
     component.changeCanCode(true, user);
     component.changeAccessLevel(true, user, 2);
-    expect(user.accessLevel).toBe(2);
-    expect(user.canCode).toBe(true);
+    expect(component.workspaceUsers().entries[1].accessLevel).toBe(2);
+    expect(component.workspaceUsers().entries[1].canCode).toBe(true);
 
     component.changeCanCode(false, user);
     component.changeAccessLevel(true, user, 1);
-    expect(user.accessLevel).toBe(1);
-    expect(user.canCode).toBe(false);
+    expect(component.workspaceUsers().entries[1].accessLevel).toBe(1);
+    expect(component.workspaceUsers().entries[1].canCode).toBe(false);
   });
 
   it('should change coding capability independently from access level', () => {
@@ -111,8 +111,8 @@ describe('WsAccessRightsComponent', () => {
 
     component.changeCanCode(true, user);
 
-    expect(user.accessLevel).toBe(2);
-    expect(user.canCode).toBe(true);
+    expect(component.workspaceUsers().entries[1].accessLevel).toBe(2);
+    expect(component.workspaceUsers().entries[1].canCode).toBe(true);
     expect(component.workspaceUsers().hasChanged).toBe(true);
   });
 
@@ -121,8 +121,8 @@ describe('WsAccessRightsComponent', () => {
 
     component.changeCanCode(false, user);
 
-    expect(user.accessLevel).toBe(1);
-    expect(user.canCode).toBe(false);
+    expect(component.workspaceUsers().entries[0].accessLevel).toBe(1);
+    expect(component.workspaceUsers().entries[0].canCode).toBe(false);
     expect(component.workspaceUsers().hasChanged).toBe(true);
   });
 

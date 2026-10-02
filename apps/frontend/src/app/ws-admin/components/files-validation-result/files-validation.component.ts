@@ -1,7 +1,7 @@
 import {
   ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, signal, computed
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import {
   firstValueFrom, from, Observable, of, Subject, timer
 } from 'rxjs';
@@ -203,7 +203,15 @@ export class FilesValidationDialogComponent implements OnInit {
   readonly replayCompatibilityWarnings = signal<ReplayCompatibilityWarning[]>([]);
   readonly validationResults = signal<FilesValidationView[]>([]);
 
-  selection = new SelectionModel<FilteredTestTaker>(true, []);
+  readonly selection = new SelectionModel<FilteredTestTaker>(true, []);
+  private readonly selectionChanges = toSignal(this.selection.changed, { initialValue: null });
+
+  // Read the selected collection lazily, once per render rather than once per batch item.
+  readonly selectedTestTakerCount = computed(() => {
+    this.selectionChanges();
+    return this.selection.selected.length;
+  });
+
   readonly duplicateSelection = signal(new Map<string, string>()); // Maps login to selected testTaker file
 
   unusedFilesSelection = new SelectionModel<UnusedTestFile>(true, []);
@@ -1374,9 +1382,15 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   isModeSelected(mode: string): boolean {
+    this.selectionChanges();
     return this.filteredTestTakers()
       .filter(item => item.mode === mode && this.isKnownTestTaker(item))
       .every(item => this.selection.isSelected(item));
+  }
+
+  isTestTakerSelected(testTaker: FilteredTestTaker): boolean {
+    this.selectionChanges();
+    return this.selection.isSelected(testTaker);
   }
 
   markTestTakersAsConsidered(): void {

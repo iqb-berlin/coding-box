@@ -6,59 +6,60 @@ import { WorkspaceUserInListDto } from '../../../../../../api-dto/user/workspace
 import { getEffectiveCanCode } from '../../shared/utils/workspace-access';
 
 export class WorkspaceUserToCheckCollection {
-  entries: WorkspaceUserChecked[];
-  private workspacesUsersIds: UserWorkspaceAccessDto[] = [];
+  private readonly entriesState = signal<readonly Readonly<WorkspaceUserChecked>[]>([]);
+  private readonly workspacesUsersIds = signal<readonly Readonly<UserWorkspaceAccessDto>[]>([]);
   private readonly hasChangedState = signal(false);
 
   get hasChanged(): boolean {
     return this.hasChangedState();
   }
 
+  get entries(): readonly Readonly<WorkspaceUserChecked>[] {
+    return this.entriesState();
+  }
+
   constructor(users: UserInListDto[]) {
-    this.entries = [];
-    users.forEach(user => {
-      const checkedUser = new WorkspaceUserChecked(user);
-      this.entries.push(checkedUser);
-      if (checkedUser.isChecked) {
-        this.workspacesUsersIds.push({
-          id: checkedUser.id,
-          accessLevel: checkedUser.accessLevel,
-          canCode: checkedUser.canCode
-        });
-      }
-    });
+    this.entriesState.set(users.map(user => new WorkspaceUserChecked(user)));
+    this.setHasChangedFalse();
+  }
+
+  updateEntry(
+    userId: number,
+    update: (user: Readonly<WorkspaceUserChecked>) => Readonly<WorkspaceUserChecked>
+  ): void {
+    this.entriesState.update(entries => entries.map(user => (user.id === userId ? update(user) : user)));
+    this.updateHasChanged();
   }
 
   setChecks(workspaceUsers?: WorkspaceUserInListDto[]): void {
-    this.workspacesUsersIds = [];
-    if (workspaceUsers) {
-      workspaceUsers.forEach(u => this.workspacesUsersIds.push(
-        {
-          id: u.id,
-          accessLevel: u.accessLevel,
-          canCode: getEffectiveCanCode(u)
-        }));
-    }
-    this.entries.forEach(user => {
-      const workspaceUser = this.workspacesUsersIds
+    const baseline = (workspaceUsers || []).map(user => ({
+      id: user.id,
+      accessLevel: user.accessLevel,
+      canCode: getEffectiveCanCode(user)
+    }));
+    this.workspacesUsersIds.set(baseline);
+    this.entriesState.set(this.entries.map(user => {
+      const workspaceUser = baseline
         .find(workspacesUsersId => user.id === workspacesUsersId.id);
       if (workspaceUser) {
-        user.isChecked = true;
-        user.accessLevel = workspaceUser.accessLevel;
-        user.canCode = getEffectiveCanCode(workspaceUser);
-      } else {
-        user.isChecked = false;
-        user.accessLevel = 0;
-        user.canCode = false;
+        return {
+          ...user,
+          isChecked: true,
+          accessLevel: workspaceUser.accessLevel,
+          canCode: getEffectiveCanCode(workspaceUser)
+        };
       }
-    });
+      return {
+        ...user, isChecked: false, accessLevel: 0, canCode: false
+      };
+    }));
     this.hasChangedState.set(false);
   }
 
   getChecks(): UserWorkspaceAccessDto[] {
     const checkedUserIds: UserWorkspaceAccessDto[] = [];
     this.entries.forEach(user => {
-      const workspaceUser = this.workspacesUsersIds
+      const workspaceUser = this.workspacesUsersIds()
         .find(workspacesUsersId => user.id === workspacesUsersId.id);
       if (user.isChecked || workspaceUser) {
         checkedUserIds.push(
@@ -74,7 +75,7 @@ export class WorkspaceUserToCheckCollection {
 
   updateHasChanged(): void {
     const hasChanged = this.entries.some(user => {
-      const workspaceUser = this.workspacesUsersIds
+      const workspaceUser = this.workspacesUsersIds()
         .find(workspacesUsersId => user.id === workspacesUsersId.id);
       return (user.isChecked && !workspaceUser) || (!user.isChecked && !!workspaceUser) ||
         (!!workspaceUser && (user.accessLevel !== workspaceUser.accessLevel || user.canCode !== workspaceUser.canCode));
@@ -83,16 +84,11 @@ export class WorkspaceUserToCheckCollection {
   }
 
   setHasChangedFalse(): void {
-    this.workspacesUsersIds = [];
-    this.entries.forEach(user => {
-      if (user.isChecked) {
-        this.workspacesUsersIds.push({
-          id: user.id,
-          accessLevel: user.accessLevel,
-          canCode: user.canCode
-        });
-      }
-    });
+    this.workspacesUsersIds.set(this.entries.filter(user => user.isChecked).map(user => ({
+      id: user.id,
+      accessLevel: user.accessLevel,
+      canCode: user.canCode
+    })));
     this.hasChangedState.set(false);
   }
 }
