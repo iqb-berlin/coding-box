@@ -89,8 +89,8 @@ describe('TestPersonCodingComponent', () => {
 
       component.startJobStatusPolling('freshness-job-1');
 
-      expect(component.jobStatus).toBeNull();
-      expect(component.activeJobId).toBeNull();
+      expect(component.jobStatus()).toBeNull();
+      expect(component.activeJobId()).toBeNull();
       expect(component.lastObservedJobId).toBe('freshness-job-1');
       expect(component.getLastObservedJobStatus('freshness-job-1')).toBe('failed');
       expect(jest.getTimerCount()).toBe(0);
@@ -124,7 +124,7 @@ describe('TestPersonCodingComponent', () => {
 
       component.startJobStatusPolling('freshness-job-1');
 
-      expect(component.activeJobId).toBe('freshness-job-1');
+      expect(component.activeJobId()).toBe('freshness-job-1');
       expect(codingBackgroundJobsService.isStatusCheckGuardActive(1)).toBe(true);
       expect(jest.getTimerCount()).toBe(1);
       expect(setJobRunningSpy).not.toHaveBeenCalledWith(
@@ -142,7 +142,7 @@ describe('TestPersonCodingComponent', () => {
         false,
         'freshness-job-1'
       );
-      expect(component.activeJobId).toBeNull();
+      expect(component.activeJobId()).toBeNull();
       expect(codingBackgroundJobsService.isStatusCheckGuardActive(1)).toBe(false);
       expect(jest.getTimerCount()).toBe(0);
       expect(

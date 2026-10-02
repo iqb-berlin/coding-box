@@ -1,4 +1,7 @@
-import { Component, Input, inject } from '@angular/core';
+import {
+  Component, DestroyRef, Input, inject, signal
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
 import { RouterLink } from '@angular/router';
 import { MatAnchor, MatButton } from '@angular/material/button';
@@ -16,12 +19,13 @@ import { AppService, AuthBootstrapStatus } from '../../../core/services/app.serv
 })
 
 export class UserWorkspacesComponent {
+  private readonly destroyRef = inject(DestroyRef);
   authService = inject(AuthService);
   appService = inject(AppService);
   @Input() workspaces!: WorkspaceFullDto[];
   @Input() authBootstrapStatus: AuthBootstrapStatus = 'checking';
   @Input() authDataLoaded = false;
-  authDataReloadRunning = false;
+  readonly authDataReloadRunning = signal(false);
 
   get showLoading(): boolean {
     return this.authService.isLoggedIn() === true &&
@@ -48,19 +52,21 @@ export class UserWorkspacesComponent {
   }
 
   reloadAuthData(): void {
-    if (this.authDataReloadRunning) {
+    if (this.authDataReloadRunning()) {
       return;
     }
 
-    this.authDataReloadRunning = true;
-    this.appService.retryAuthDataLoad().subscribe({
-      error: () => {
-        this.authDataReloadRunning = false;
-      },
-      complete: () => {
-        this.authDataReloadRunning = false;
-      }
-    });
+    this.authDataReloadRunning.set(true);
+    this.appService.retryAuthDataLoad()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        error: () => {
+          this.authDataReloadRunning.set(false);
+        },
+        complete: () => {
+          this.authDataReloadRunning.set(false);
+        }
+      });
   }
 
   login(): void {

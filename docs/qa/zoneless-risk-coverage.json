@@ -26,12 +26,15 @@
       "id": "jobs",
       "name": "Jobdefinitionen und Kodierjobs",
       "risk": "Erstellung, Verteilung und Review dürfen keine veralteten oder ungespeicherten Ergebnisse zeigen.",
-      "findings": [],
+      "findings": [
+        "ZL-030"
+      ],
       "tests": [
         "apps/frontend/src/app/coding/components/coding-job-definitions/coding-job-definitions.zoneless.spec.ts",
         "apps/frontend/src/app/coding/components/double-coded-review/double-coded-review.component.spec.ts",
         "apps/frontend/src/app/coding/components/coder-trainings-list/coder-trainings-list.component.spec.ts",
-        "cypress/auth/coding-session.cy.ts"
+        "cypress/auth/coding-session.cy.ts",
+        "apps/frontend/src/app/coding/components/test-person-coding/test-person-coding.component.zoneless.spec.ts"
       ]
     },
     {
@@ -90,7 +93,8 @@
         "ZL-023",
         "ZL-024",
         "ZL-025",
-        "ZL-027"
+        "ZL-027",
+        "ZL-029"
       ],
       "tests": [
         "apps/frontend/src/app/coding/components/export-coding-book/export-coding-book.component.zoneless.spec.ts",
@@ -114,7 +118,9 @@
         "cypress/zoneless/test-files-upload.cy.ts",
         "cypress/zoneless/scheme-preview.cy.ts",
         "cypress/zoneless/export-item-dataset.cy.ts",
-        "cypress/auth/coding-session.cy.ts"
+        "cypress/auth/coding-session.cy.ts",
+        "apps/frontend/src/app/ws-admin/components/test-center-import/test-center-import.component.zoneless.spec.ts",
+        "cypress/zoneless/testcenter-import.cy.ts"
       ]
     },
     {
@@ -124,7 +130,9 @@
       "findings": [
         "ZL-009",
         "ZL-010",
-        "ZL-026"
+        "ZL-026",
+        "ZL-031",
+        "ZL-032"
       ],
       "tests": [
         "apps/frontend/src/app/ws-admin/components/replay-statistics-dialog/replay-statistics-dialog.component.zoneless.spec.ts",
@@ -136,7 +144,9 @@
         "cypress/zoneless/app.cy.ts",
         "cypress/zoneless/workspace-access-rights.cy.ts",
         "cypress/e2e/zoneless-dialogs.cy.ts",
-        "cypress/auth/coding-session.cy.ts"
+        "cypress/auth/coding-session.cy.ts",
+        "apps/frontend/src/app/workspace/components/user-workspaces/user-workspaces.component.zoneless.spec.ts",
+        "apps/frontend/src/app/core/services/app.service.zoneless.spec.ts"
       ]
     }
   ],
@@ -147,7 +157,8 @@
         "management",
         "results-validation",
         "files-exports-metadata",
-        "administration"
+        "administration",
+        "jobs"
       ],
       "evidence": "Kontrollierte Subjects/HttpTestingController: verzögerter Erfolg, Leerzustand und Fehler mit Wiederholung im echten Template."
     },
@@ -156,7 +167,8 @@
       "areas": [
         "management",
         "results-validation",
-        "files-exports-metadata"
+        "files-exports-metadata",
+        "jobs"
       ],
       "evidence": "Mehrere feste Fortschrittsfolgen, Job-Abschluss und Export-Download; Browser und isoliertes Backend."
     },
@@ -164,7 +176,8 @@
       "id": "ordering",
       "areas": [
         "management",
-        "files-exports-metadata"
+        "files-exports-metadata",
+        "jobs"
       ],
       "evidence": "Vertauschte Listen-/Statistikantworten, Such- und Seitenwechsel sowie beide Abschlussreihenfolgen unabhängiger Anfragen."
     },
@@ -173,7 +186,8 @@
       "areas": [
         "results-validation",
         "files-exports-metadata",
-        "administration"
+        "administration",
+        "jobs"
       ],
       "evidence": "Schließen, DestroyRef und Workspace-Wechsel; verspätete Antworten erzeugen keine Folgeansichten."
     },
