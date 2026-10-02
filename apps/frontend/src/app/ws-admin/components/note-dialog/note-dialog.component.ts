@@ -1,4 +1,6 @@
-import { Component, OnInit, inject } from '@angular/core';
+import {
+  ChangeDetectorRef, Component, OnInit, inject
+} from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -260,6 +262,7 @@ export class NoteDialogComponent implements OnInit {
   private unitNoteService = inject(UnitNoteService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
+  private cdr = inject(ChangeDetectorRef);
 
   notes: UnitNoteDto[] = [];
   newNoteText: string = '';
@@ -308,6 +311,7 @@ export class NoteDialogComponent implements OnInit {
       next: note => {
         this.notes.unshift(note); // Add to the beginning of the array
         this.newNoteText = ''; // Clear the input field
+        this.cdr.markForCheck();
 
         this.snackBar.open(
           'Notiz erfolgreich hinzugefügt',
@@ -337,6 +341,7 @@ export class NoteDialogComponent implements OnInit {
       next: success => {
         if (success) {
           this.notes = this.notes.filter(note => note.id !== noteId);
+          this.cdr.markForCheck();
 
           this.snackBar.open(
             'Notiz erfolgreich gelöscht',
