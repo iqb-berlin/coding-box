@@ -136,7 +136,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
 
     if (selectedProfileValue) {
       const missings = selectedProfileValue.parseMissings();
-      this.editMissings.set(Array.isArray(missings) ? [...missings] : []);
+      this.editMissings.set(Array.isArray(missings) ? missings.map(missing => ({ ...missing })) : []);
     }
     this.editMode.set(true);
   }
@@ -430,18 +430,30 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
     return missing.score === null;
   }
 
-  setMissingScoreNa(missing: MissingDto, isNa: boolean): void {
-    missing.score = isNa ? null : 0;
+  setMissingScoreNa(missing: MissingDto | number, isNa: boolean): void {
+    this.setMissingField(missing, 'score', isNa ? null : 0);
   }
 
-  setMissingScore(missing: MissingDto, value: unknown): void {
+  setMissingScore(missing: MissingDto | number, value: unknown): void {
     if (value === null || value === undefined || value === '') {
-      (missing as { score: unknown }).score = '';
+      this.setMissingField(missing, 'score', '');
       return;
     }
 
     const score = Number(value);
-    (missing as { score: unknown }).score = Number.isFinite(score) ? score : value;
+    this.setMissingField(missing, 'score', Number.isFinite(score) ? score : value);
+  }
+
+  setMissingField(missing: MissingDto | number, key: keyof MissingDto, value: unknown): void {
+    this.editMissings.update(missings => {
+      const index = typeof missing === 'number' ? missing : missings.indexOf(missing);
+      return missings.map((candidate, candidateIndex) => (candidateIndex === index ?
+        { ...candidate, [key]: value } as MissingDto : candidate));
+    });
+  }
+
+  trackMissingRow(index: number): number {
+    return index;
   }
 
   getScoreDisplay(score: number | null): string | number {

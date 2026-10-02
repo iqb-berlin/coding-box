@@ -84,6 +84,7 @@ export class WorkspacesSelectionComponent implements OnInit, OnChanges {
           this.workspaceListReady.emit(true);
         },
         error: () => {
+          this.workspacesUpdated.emit(this.workspacesChanged());
           this.workspaceListReady.emit(false);
         }
       });

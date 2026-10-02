@@ -1,4 +1,4 @@
-import { provideZonelessChangeDetection } from '@angular/core';
+import { computed, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormBuilder } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
@@ -31,7 +31,10 @@ describe('CodingJobDefinitionDialogComponent in zoneless mode', () => {
       variableId,
       responseCount: 6,
       availableCases: 6,
-      uniqueCasesAfterAggregation: 6
+      uniqueCasesAfterAggregation: 6,
+      deriveErrorResponseCount: 2,
+      availableCasesWithDeriveError: 8,
+      uniqueCasesAfterAggregationWithDeriveError: 8
     }));
 
     await TestBed.configureTestingModule({
@@ -78,6 +81,11 @@ describe('CodingJobDefinitionDialogComponent in zoneless mode', () => {
           <span id="cases">{{ getTotalCodingCases() }}</span>
           <span id="total-time">{{ getFormattedTotalTime() }}</span>
           <span id="time-per-coder">{{ getFormattedTimePerCoder() }}</span>
+          <span id="selected-count">{{ selectedVariableValues().length }}</span>
+          <span id="variable-selected">{{ isVariableSelected(variables()[0]) }}</span>
+          <span id="availability">{{ variables()[0]?.availableCases }}</span>
+          <span id="capacity">{{ availableCoders()[0]?.capacityPercent }}</span>
+          <span id="bundle-ordering">{{ variableBundles()[0]?.caseOrderingMode }}</span>
         `
       }
     }).compileComponents();
@@ -133,6 +141,116 @@ describe('CodingJobDefinitionDialogComponent in zoneless mode', () => {
     expect(fixture.nativeElement.querySelector('#cases').textContent).toBe('6');
     expect(fixture.nativeElement.querySelector('#total-time').textContent).toBe('0:18');
     expect(fixture.nativeElement.querySelector('#time-per-coder').textContent).toBe('0:18');
+  });
+
+  it('updates derived and rendered selection state for programmatic SelectionModel changes', async () => {
+    const component = fixture.componentInstance;
+    const selectedCount = computed(() => component.selectedVariableValues().length);
+    expect(selectedCount()).toBe(0);
+
+    component.selectedVariables().select(component.variables()[0]);
+    expect(selectedCount()).toBe(1);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('#selected-count').textContent).toBe('1');
+    expect(fixture.nativeElement.querySelector('#variable-selected').textContent).toBe('true');
+
+    component.selectedVariables().deselect(component.variables()[0]);
+    expect(selectedCount()).toBe(0);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('#selected-count').textContent).toBe('0');
+    expect(fixture.nativeElement.querySelector('#variable-selected').textContent).toBe('false');
+  });
+
+  it('preserves derive-error opt-in and binds the selected variable to fresh rows after a backend reload', async () => {
+    const component = fixture.componentInstance;
+    component.includeDeriveErrorInManualCoding.set(true);
+    const previousRow = component.variables()[0];
+    const previousSelection = component.selectedVariables();
+    component.selectedVariables().select(previousRow);
+    component.setDeriveErrorIncluded(previousRow, true);
+    const selectedCount = computed(() => component.selectedVariableValues().length);
+    expect(selectedCount()).toBe(1);
+
+    component.loadCodingIncompleteVariables(undefined, true);
+    const currentRow = component.variables()[0];
+    expect(currentRow).not.toBe(previousRow);
+    expect(previousRow.includeDeriveError).toBe(false);
+    expect(currentRow.includeDeriveError).toBe(true);
+    expect(component.selectedVariableValues()).toEqual([currentRow]);
+    expect(component.selectedVariableValues()[0]).toBe(currentRow);
+    expect(component.selectedVariables().isSelected(currentRow)).toBe(true);
+
+    previousSelection.select(component.variables()[1]);
+    expect(selectedCount()).toBe(1);
+    component.selectedVariables().deselect(currentRow);
+    expect(selectedCount()).toBe(0);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('#selected-count').textContent).toBe('0');
+  });
+
+  it('publishes immutable availability rows and keeps the current selected row', async () => {
+    const component = fixture.componentInstance;
+    const previousRows = component.variables();
+    const previousRow = previousRows[0];
+    component.selectedVariables().select(previousRow);
+    const availableCases = computed(() => component.variables()[0].availableCases);
+    expect(availableCases()).toBe(6);
+    component.existingJobDefinitions.set([{ id: 2, plannedVariableUsage: { 'U1::V1': 2 } }] as never);
+
+    component.applyJobDefinitionUsage();
+    expect(availableCases()).toBe(4);
+    expect(previousRow.availableCases).toBe(6);
+    expect(component.variables()).not.toBe(previousRows);
+    expect(component.selectedVariableValues()[0]).toBe(component.variables()[0]);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('#availability').textContent).toBe('4');
+  });
+
+  it('retains coder selection after a capacity update and toggles the current row without duplicates', async () => {
+    const component = fixture.componentInstance;
+    const previousCoder = component.availableCoders()[0];
+    const otherCoder = { id: 2, name: 'Other coder', capacityPercent: 150 };
+    component.availableCoders.update(coders => [...coders, { ...otherCoder, capacityPercent: 100 }]);
+    component.selectedCoders.select(previousCoder, otherCoder);
+    const capacity = computed(() => component.availableCoders()[0].capacityPercent);
+    expect(capacity()).toBe(100);
+
+    component.updateCoderCapacityPercent(previousCoder, 50);
+    const currentCoder = component.availableCoders()[0];
+    expect(capacity()).toBe(50);
+    expect(previousCoder.capacityPercent).toBe(100);
+    expect(component.selectedCoders.selected[0]).toBe(currentCoder);
+    expect(component.selectedCoders.selected[1]).toBe(otherCoder);
+    expect(component.getCoderCapacityPercent(component.selectedCoders.selected[1])).toBe(150);
+    expect(component.selectedCoders.isSelected(currentCoder)).toBe(true);
+    component.selectedCoders.toggle(currentCoder);
+    expect(component.selectedCoders.selected).toEqual([otherCoder]);
+    component.selectedCoders.select(previousCoder, currentCoder);
+    expect(component.selectedCoders.selected).toHaveLength(2);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('#capacity').textContent).toBe('50');
+  });
+
+  it('retains bundle selection across ordering and backend updates with current row identities', async () => {
+    const component = fixture.componentInstance;
+    component.toggleBundleSelection(component.variableBundles()[0]);
+    const previousBundle = component.variableBundles()[0];
+    const ordering = computed(() => component.variableBundles()[0].caseOrderingMode);
+    expect(ordering()).toBe('continuous');
+
+    component.setBundleOrderingMode(previousBundle, 'alternating');
+    expect(ordering()).toBe('alternating');
+    expect(previousBundle.caseOrderingMode).toBe('continuous');
+    expect(component.selectedVariableBundles.selected[0]).toBe(component.variableBundles()[0]);
+    component.loadVariableBundles();
+    const currentBundle = component.variableBundles()[0];
+    expect(ordering()).toBe('alternating');
+    expect(component.selectedVariableBundles.selected[0]).toBe(currentBundle);
+    expect(component.selectedVariableBundles.isSelected(currentBundle)).toBe(true);
+    component.toggleBundleSelection(currentBundle);
+    expect(component.selectedVariableBundles.selected).toHaveLength(0);
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('#bundle-ordering').textContent).toBe('alternating');
   });
 
   function variablesForBundle(): { unitName: string; variableId: string }[] {

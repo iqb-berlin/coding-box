@@ -1,4 +1,4 @@
-import { provideZonelessChangeDetection } from '@angular/core';
+import { computed, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
@@ -64,6 +64,38 @@ describe('Workspace access rights save without ZoneJS', () => {
     await fixture.whenStable();
     expect(saveUsers).toHaveBeenCalledWith(1, [{ id: 1, accessLevel: 3, canCode: true }]);
   }
+
+  it('updates derived rights after repeated edits while changes remain pending', async () => {
+    const component = fixture.componentInstance;
+    const originalEntries = component.workspaceUsers().entries;
+    const user = originalEntries[0];
+    const rights = computed(() => component.workspaceUsers().entries.map(entry => ({
+      accessLevel: entry.accessLevel,
+      canCode: entry.canCode
+    })));
+    expect(rights()).toEqual([{ accessLevel: 1, canCode: true }]);
+
+    component.changeAccessLevel(true, user, 3);
+    const firstEntries = component.workspaceUsers().entries;
+    expect(rights()).toEqual([{ accessLevel: 3, canCode: true }]);
+    expect(component.workspaceUsers().hasChanged).toBe(true);
+
+    component.changeAccessLevel(true, user, 2);
+    expect(rights()).toEqual([{ accessLevel: 2, canCode: true }]);
+    expect(component.workspaceUsers().hasChanged).toBe(true);
+
+    component.changeCanCode(false, user);
+    expect(rights()).toEqual([{ accessLevel: 2, canCode: false }]);
+    expect(component.workspaceUsers().hasChanged).toBe(true);
+    expect(originalEntries[0]).toMatchObject({ accessLevel: 1, canCode: true });
+    expect(firstEntries[0]).toMatchObject({ accessLevel: 3, canCode: true });
+    await fixture.whenStable();
+
+    const checkboxes = fixture.nativeElement.querySelectorAll('input[type="checkbox"]');
+    expect((checkboxes[1] as HTMLInputElement).checked).toBe(true);
+    expect((checkboxes[3] as HTMLInputElement).checked).toBe(false);
+    expect(button.disabled).toBe(false);
+  });
 
   it.each<AuthDataRefreshOutcome>(['updated', 'failed', 'invalidated'])(
     'disables Save after persisted rights and delayed auth refresh outcome %s', async outcome => {

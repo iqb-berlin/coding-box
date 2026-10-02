@@ -721,19 +721,27 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.booklets().forEach(booklet => {
+    this.booklets.update(booklets => booklets.map(booklet => {
       if (booklet.units && Array.isArray(booklet.units)) {
-        booklet.units.sort((a, b) => {
+        const units = [...booklet.units].sort((a, b) => {
           const aliasA = a.alias || a.name || '';
           const aliasB = b.alias || b.name || '';
           return aliasA.localeCompare(aliasB);
         });
+        return { ...booklet, units };
       }
-    });
+      return booklet;
+    }));
   }
 
   getUnitTags(unitId: number): UnitTagDto[] {
     return this.unitTagsMap().get(unitId) || [];
+  }
+
+  toggleResponseExpansion(responseId: number): void {
+    this.responses.update(responses => responses.map(response => (response.id === responseId ? {
+      ...response, expanded: !response.expanded
+    } : response)));
   }
 
   loadAllUnitTags(): void {
@@ -2937,12 +2945,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           .subscribe({
             next: result => {
               if (result.success) {
-                const unitIndex = booklet.units.findIndex(
-                  u => u.id === unit.id
-                );
-                if (unitIndex !== -1) {
-                  booklet.units.splice(unitIndex, 1);
-                }
+                this.booklets.update(booklets => booklets.map(current => (
+                  current.id === booklet.id ? {
+                    ...current, units: current.units.filter(candidate => candidate.id !== unit.id)
+                  } : current
+                )));
 
                 if (this.selectedUnit()?.id === unit.id) {
                   this.selectedUnit.set(undefined);

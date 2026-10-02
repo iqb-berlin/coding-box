@@ -1,6 +1,7 @@
 import {
-  ChangeDetectorRef, Component, Inject, OnInit, OnDestroy, inject, signal
+  ChangeDetectorRef, Component, Inject, OnInit, OnDestroy, computed, inject, signal
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import {
   FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, FormControl, Validators, ValidatorFn
@@ -26,7 +27,7 @@ import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
-import { SelectionModel } from '@angular/cdk/collections';
+import { SelectionChange, SelectionModel } from '@angular/cdk/collections';
 import { MatTooltip } from '@angular/material/tooltip';
 import {
   catchError, firstValueFrom, forkJoin, merge, Observable, of, Subject, Subscription,
@@ -245,6 +246,15 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   // Variables
   readonly variables = signal<Variable[]>([]);
   readonly selectedVariables = signal(this.createVariableSelectionModel());
+  private readonly variableSelectionChanges = new Subject<SelectionChange<Variable>>();
+  private readonly variableSelectionChange = toSignal(this.variableSelectionChanges, { initialValue: null });
+  // SelectionModel changes its collection in place. Bridge those changes before
+  // reading the collection lazily so computed consumers and templates stay current.
+  readonly selectedVariableValues = computed(() => {
+    this.variableSelectionChange();
+    return [...this.selectedVariables().selected];
+  });
+
   displayedColumns: string[] = ['select', 'unitName', 'variableId'];
   dataSource = new MatTableDataSource<Variable>([]);
 
@@ -252,7 +262,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   readonly coders = signal<Coder[]>([]);
   readonly isLoadingCoders = signal(false);
   readonly availableCoders = signal<Coder[]>([]);
-  selectedCoders = new SelectionModel<Coder>(true, []);
+  selectedCoders = this.createCoderSelectionModel();
   readonly isLoadingAvailableCoders = signal(false);
   private readonly defaultCoderCapacityPercent = 100;
   private readonly minCoderCapacityPercent = 10;
@@ -260,7 +270,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
   // Variable bundles
   readonly variableBundles = signal<VariableBundle[]>([]);
-  selectedVariableBundles = new SelectionModel<VariableBundle>(true, []);
+  selectedVariableBundles = this.createBundleSelectionModel();
   bundlesDataSource = new MatTableDataSource<VariableBundle>([]);
   readonly isLoadingBundles = signal(false);
 
@@ -457,7 +467,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       (formValue.missingsProfileId ?? 0) !== 0
     );
 
-    return this.selectedVariables().selected.length > 0 ||
+    return this.selectedVariableValues().length > 0 ||
       this.selectedVariableBundles.selected.length > 0 ||
       this.selectedCoders.selected.length > 0 ||
       this.unitNameFilter().trim().length > 0 ||
@@ -524,8 +534,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     this.restoreRecoveredCoders(draft.selectedCoderConfigs);
     this.selectedVariables.set(this.createVariableSelectionModel(draft.selectedVariables.map(variable => this.findRecoveredVariable(variable))));
-    this.selectedVariableBundles = new SelectionModel<VariableBundle>(
-      true,
+    this.selectedVariableBundles = this.createBundleSelectionModel(
       draft.selectedVariableBundles.map(bundle => this.findRecoveredBundle(bundle))
     );
     this.bindSelectionPreviewRefresh();
@@ -546,8 +555,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       ...coder,
       capacityPercent: configByCoderId.get(coder.id) ?? this.getCoderCapacityPercent(coder)
     })));
-    this.selectedCoders = new SelectionModel<Coder>(
-      true,
+    this.selectedCoders = this.createCoderSelectionModel(
       this.availableCoders().filter(coder => configByCoderId.has(coder.id))
     );
   }
@@ -558,8 +566,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       candidate.variableId === savedVariable.variableId
     ));
     if (variable) {
-      variable.includeDeriveError = savedVariable.includeDeriveError === true;
-      return variable;
+      const recovered = { ...variable, includeDeriveError: savedVariable.includeDeriveError === true };
+      this.variables.update(variables => variables.map(candidate => (candidate === variable ? recovered : candidate)));
+      this.applyAvailabilityFilter();
+      return recovered;
     }
 
     return {
@@ -579,20 +589,22 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       };
     }
 
-    bundle.caseOrderingMode = savedBundle.caseOrderingMode;
     const savedVariablesByKey = new Map(
       savedBundle.variables.map(variable => [
         this.getVariableUsageKey(variable.unitName, variable.variableId),
         variable
       ])
     );
-    bundle.variables.forEach(variable => {
-      const savedVariable = savedVariablesByKey.get(
-        this.getVariableUsageKey(variable.unitName, variable.variableId)
-      );
-      variable.includeDeriveError = savedVariable?.includeDeriveError === true;
+    return this.replaceBundleRow({
+      ...bundle,
+      caseOrderingMode: savedBundle.caseOrderingMode,
+      variables: bundle.variables.map(variable => ({
+        ...variable,
+        includeDeriveError: savedVariablesByKey.get(
+          this.getVariableUsageKey(variable.unitName, variable.variableId)
+        )?.includeDeriveError === true
+      }))
     });
-    return bundle;
   }
 
   private clearDefinitionRecoveryDraft(): void {
@@ -604,7 +616,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     this.selectionPreviewSubscription = new Subscription();
 
     this.selectionPreviewSubscription.add(
-      this.selectedVariables().changed.subscribe(() => this.queueDistributionPreviewRefresh())
+      this.selectedVariables().changed.subscribe(change => {
+        this.variableSelectionChanges.next(change);
+        this.queueDistributionPreviewRefresh();
+      })
     );
     this.selectionPreviewSubscription.add(
       this.selectedVariableBundles.changed.subscribe(() => this.queueDistributionPreviewRefresh())
@@ -629,7 +644,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       this.hasInvalidDistributionPreviewControls() ||
       this.selectedCoders.selected.length === 0 ||
       (
-        this.selectedVariables().selected.length === 0 &&
+        this.selectedVariableValues().length === 0 &&
         this.selectedVariableBundles.selected.length === 0
       )
     ) {
@@ -736,9 +751,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
         if (assignedIds.length > 0) {
           const preSelectedCoders = this.availableCoders().filter(c => assignedIds.includes(c.id));
-          this.selectedCoders = new SelectionModel<Coder>(true, preSelectedCoders);
+          this.selectedCoders = this.createCoderSelectionModel(preSelectedCoders);
         } else {
-          this.selectedCoders = new SelectionModel<Coder>(true, []);
+          this.selectedCoders = this.createCoderSelectionModel();
         }
         this.bindSelectionPreviewRefresh();
         this.queueDistributionPreviewRefresh();
@@ -783,7 +798,13 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
-    coder.capacityPercent = this.normalizeCoderCapacityPercent(value);
+    const capacityPercent = this.normalizeCoderCapacityPercent(value);
+    this.availableCoders.update(coders => coders.map(candidate => (candidate.id === coder.id ?
+      { ...candidate, capacityPercent } : candidate)));
+    const updatedCoder = this.availableCoders().find(candidate => candidate.id === coder.id);
+    this.selectedCoders = this.createCoderSelectionModel(this.selectedCoders.selected.map(candidate => (candidate.id === coder.id ?
+      updatedCoder || { ...candidate, capacityPercent } : candidate)));
+    this.bindSelectionPreviewRefresh();
     this.queueDistributionPreviewRefresh();
   }
 
@@ -862,7 +883,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         this.isLoadingCoders.set(false);
         const assignedIds = coders.map(c => c.id);
         const preSelectedCoders = this.availableCoders().filter(c => assignedIds.includes(c.id));
-        this.selectedCoders = new SelectionModel<Coder>(true, preSelectedCoders);
+        this.selectedCoders = this.createCoderSelectionModel(preSelectedCoders);
         this.bindSelectionPreviewRefresh();
         this.queueDistributionPreviewRefresh();
       },
@@ -1045,7 +1066,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private processVariableSelection(): void {
     const originallyAssigned = this.data.codingJob?.assignedVariables ?? this.data.codingJob?.variables;
 
-    const selectedByKey = new Map(this.selectedVariables().selected.map(variable => [
+    const selectedByKey = new Map(this.selectedVariableValues().map(variable => [
       this.getVariableSelectionKey(variable),
       variable
     ]));
@@ -1057,24 +1078,29 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const currentVariableKeys = new Set(
       this.variables().map(variable => this.getVariableSelectionKey(variable))
     );
-    const nextSelectedVariables = this.selectedVariables().selected.filter(
+    const nextSelectedVariables = this.selectedVariableValues().filter(
       variable => !currentVariableKeys.has(this.getVariableSelectionKey(variable))
     );
 
-    this.variables().forEach(rowVar => {
+    const variables = this.variables().map(rowVar => {
       const rowKey = this.getVariableSelectionKey(rowVar);
       const selectedVariable = selectedByKey.get(rowKey);
       const assignedVariable = assignedByKey.get(rowKey);
 
-      rowVar.includeDeriveError =
-        this.includeDeriveErrorInManualCoding() &&
-        (selectedVariable?.includeDeriveError === true || assignedVariable?.includeDeriveError === true);
+      const nextRow = {
+        ...rowVar,
+        includeDeriveError: this.includeDeriveErrorInManualCoding() &&
+          (selectedVariable?.includeDeriveError === true || assignedVariable?.includeDeriveError === true)
+      };
 
       if (selectedKeys.has(rowKey)) {
-        nextSelectedVariables.push(rowVar);
+        nextSelectedVariables.push(nextRow);
       }
+      return nextRow;
     });
 
+    this.variables.set(variables);
+    this.applyAvailabilityFilter();
     this.selectedVariables.set(this.createVariableSelectionModel(nextSelectedVariables));
     this.bindSelectionPreviewRefresh();
     this.syncSelectionWithAvailability();
@@ -1088,6 +1114,14 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       true,
       (first, second) => this.getVariableSelectionKey(first) === this.getVariableSelectionKey(second)
     );
+  }
+
+  private createCoderSelectionModel(initiallySelectedValues: Coder[] = []): SelectionModel<Coder> {
+    return new SelectionModel<Coder>(true, initiallySelectedValues, true, (first, second) => first.id === second.id);
+  }
+
+  private createBundleSelectionModel(initiallySelectedValues: VariableBundle[] = []): SelectionModel<VariableBundle> {
+    return new SelectionModel<VariableBundle>(true, initiallySelectedValues, true, (first, second) => first.id === second.id);
   }
 
   private getVariableSelectionKey(variable: unknown): string {
@@ -1110,42 +1144,30 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     if (workspaceId) {
       this.codingJobBackendService.getVariableBundles(workspaceId).subscribe({
         next: bundles => {
-          const enrichedBundles = bundles.map(bundle => ({
-            ...bundle,
-            variables: bundle.variables.map((bundleVar: Variable) => {
-              const metrics = this.getVariableMetrics(bundleVar);
-              return { ...bundleVar, ...metrics };
-            })
-          }));
+          const assignedBundles = this.data.isEdit && this.data.codingJob ?
+            this.data.codingJob.variableBundles || this.data.codingJob.assignedVariableBundles || [] : [];
+          const selectedBundlesById = new Map(this.selectedVariableBundles.selected.map(bundle => [bundle.id, bundle]));
+          const enrichedBundles = bundles.map(bundle => {
+            const savedBundle = selectedBundlesById.get(bundle.id) || assignedBundles.find(assigned => assigned.id === bundle.id);
+            const savedVariablesByKey = new Map((savedBundle?.variables || []).map(variable => [
+              this.getVariableSelectionKey(variable), variable
+            ]));
+            return {
+              ...bundle,
+              ...(savedBundle?.caseOrderingMode ? { caseOrderingMode: savedBundle.caseOrderingMode } : {}),
+              variables: bundle.variables.map((bundleVar: Variable) => ({
+                ...bundleVar,
+                ...this.getVariableMetrics(bundleVar),
+                ...(savedBundle ? { includeDeriveError: savedVariablesByKey.get(this.getVariableSelectionKey(bundleVar))?.includeDeriveError === true } : {})
+              }))
+            };
+          });
 
-          this.variableBundles.set(enrichedBundles);
-          this.bundlesDataSource.data = enrichedBundles;
+          this.replaceBundleRows(enrichedBundles);
           this.isLoadingBundles.set(false);
-          if (this.data.isEdit && this.data.codingJob) {
-            const assignedBundles = this.data.codingJob.variableBundles || this.data.codingJob.assignedVariableBundles;
-            if (assignedBundles && assignedBundles.length > 0) {
-              const ids = assignedBundles.map(b => b.id);
-              const preSelected = this.variableBundles().filter(b => ids.includes(b.id));
-              preSelected.forEach(bundle => {
-                const savedBundle = assignedBundles.find(ab => ab.id === bundle.id);
-                if (savedBundle?.caseOrderingMode) {
-                  bundle.caseOrderingMode = savedBundle.caseOrderingMode;
-                }
-                const savedVariablesByKey = new Map(
-                  (savedBundle?.variables || []).map(variable => [
-                    this.getVariableUsageKey(variable.unitName, variable.variableId),
-                    variable
-                  ])
-                );
-                bundle.variables.forEach(variable => {
-                  const savedVariable = savedVariablesByKey.get(
-                    this.getVariableUsageKey(variable.unitName, variable.variableId)
-                  );
-                  variable.includeDeriveError = savedVariable?.includeDeriveError === true;
-                });
-              });
-              this.selectedVariableBundles.select(...preSelected);
-            }
+          if (assignedBundles.length > 0) {
+            const ids = assignedBundles.map(bundle => bundle.id);
+            this.selectedVariableBundles.select(...enrichedBundles.filter(bundle => ids.includes(bundle.id)));
           }
           this.variableBundlesLoadedForRecovery = true;
           this.restoreDefinitionRecoveryDraft();
@@ -1242,7 +1264,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     // Adjust available cases based on cases used in definitions.
     // Start with backend availability so already created coding jobs remain reserved.
-    this.variables().forEach(v => {
+    const variables = this.variables().map(v => {
       const key = makeKey(v.unitName, v.variableId);
       const regularCasesUsed = regularCasesUsedInDefinitions.get(key) || 0;
       const totalCasesUsed = totalCasesUsedInDefinitions.get(key) || 0;
@@ -1255,15 +1277,44 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         this.baseAvailableCasesWithDeriveErrorByVariable.get(key) ??
         v.availableCasesWithDeriveError ??
         originalAvailable;
-      v.availableCases = Math.max(0, originalAvailable - regularCasesUsed);
-      v.availableCasesWithDeriveError = Math.max(
-        0,
-        originalAvailableWithDeriveError - totalCasesUsed
-      );
+      return {
+        ...v,
+        availableCases: Math.max(0, originalAvailable - regularCasesUsed),
+        availableCasesWithDeriveError: Math.max(0, originalAvailableWithDeriveError - totalCasesUsed)
+      };
     });
 
+    this.replaceVariableRows(variables);
     this.syncBundleVariablesWithAvailability();
     this.syncSelectionWithAvailability();
+  }
+
+  private replaceVariableRows(variables: Variable[]): void {
+    const selectedByKey = new Map(this.selectedVariableValues().map(variable => [this.getVariableSelectionKey(variable), variable]));
+    const nextRows = variables.map(variable => (variable.includeDeriveError === undefined &&
+      selectedByKey.get(this.getVariableSelectionKey(variable))?.includeDeriveError === true ?
+      { ...variable, includeDeriveError: true } : variable));
+    const variablesByKey = new Map(nextRows.map(variable => [this.getVariableSelectionKey(variable), variable]));
+    const selected = this.selectedVariableValues().map(variable => variablesByKey.get(this.getVariableSelectionKey(variable)) || variable);
+    this.variables.set(nextRows);
+    this.selectedVariables.set(this.createVariableSelectionModel(selected));
+    this.bindSelectionPreviewRefresh();
+    this.applyAvailabilityFilter();
+  }
+
+  private replaceBundleRow(bundle: VariableBundle): VariableBundle {
+    this.replaceBundleRows(this.variableBundles().map(candidate => (candidate.id === bundle.id ? bundle : candidate)));
+    return bundle;
+  }
+
+  private replaceBundleRows(bundles: VariableBundle[]): void {
+    const bundlesById = new Map(bundles.map(bundle => [bundle.id, bundle]));
+    this.variableBundles.set(bundles);
+    this.bundlesDataSource.data = bundles;
+    this.selectedVariableBundles = this.createBundleSelectionModel(
+      this.selectedVariableBundles.selected.map(bundle => bundlesById.get(bundle.id) || bundle)
+    );
+    this.bindSelectionPreviewRefresh();
   }
 
   private getVariableMetrics(variable: Pick<Variable, 'unitName' | 'variableId'>): Pick<Variable, 'responseCount' | 'deriveErrorResponseCount' | 'availableCases' | 'uniqueCasesAfterAggregation' | 'availableCasesWithDeriveError' | 'uniqueCasesAfterAggregationWithDeriveError' | 'casesInJobs' | 'isDerived' | 'coderTrainingRequired'> {
@@ -1289,19 +1340,17 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.variableBundles.set(this.variableBundles().map(bundle => ({
+    this.replaceBundleRows(this.variableBundles().map(bundle => ({
       ...bundle,
       variables: bundle.variables.map(bundleVar => {
         const metrics = this.getVariableMetrics(bundleVar);
         return { ...bundleVar, ...metrics };
       })
     })));
-
-    this.bundlesDataSource.data = this.variableBundles();
   }
 
   private syncSelectionWithAvailability(): void {
-    const toDeselect = this.selectedVariables().selected.filter(v => this.getVariableSelectableAvailableCases(v) === 0 &&
+    const toDeselect = this.selectedVariableValues().filter(v => this.getVariableSelectableAvailableCases(v) === 0 &&
       !(this.data.isEdit && this.isVariableOriginallyAssigned(v))
     );
 
@@ -1440,7 +1489,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   getCodingJobCount(): number {
-    const itemCount = this.selectedVariables().selected.length + this.selectedVariableBundles.selected.length;
+    const itemCount = this.selectedVariableValues().length + this.selectedVariableBundles.selected.length;
     const coderCount = this.selectedCoders.selected.length;
 
     if (itemCount === 0 || coderCount === 0) {
@@ -1505,7 +1554,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   private hasSelectedVariablesRequiringDeriveErrorSelection(): boolean {
-    return this.selectedVariables().selected.some(variable => this.requiresExplicitDeriveErrorSelection(variable)) ||
+    return this.selectedVariableValues().some(variable => this.requiresExplicitDeriveErrorSelection(variable)) ||
       this.selectedVariableBundles.selected.some(bundle => bundle.variables.some(
         variable => this.requiresExplicitDeriveErrorSelection(variable as Variable)
       ));
@@ -1531,7 +1580,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   getSelectedEffectiveCodingCases(): number {
-    let total = this.selectedVariables().selected
+    let total = this.selectedVariableValues()
       .reduce((sum, variable) => sum + this.getVariableEffectiveCases(variable), 0);
 
     this.selectedVariableBundles.selected.forEach(bundle => {
@@ -1544,7 +1593,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   getDistributableCodingCasesBeforeLimit(): number {
-    let total = this.selectedVariables().selected
+    let total = this.selectedVariableValues()
       .reduce((sum, variable) => sum + this.getVariableAvailableCases(variable), 0);
 
     this.selectedVariableBundles.selected.forEach(bundle => {
@@ -1680,7 +1729,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       }
     });
 
-    this.selectedVariables().selected.forEach(variable => {
+    this.selectedVariableValues().forEach(variable => {
       const itemKey = `${variable.unitName}::${variable.variableId}`;
       const cases = this.getEstimatedItemCases([variable], caseOrderingMode, itemKey);
 
@@ -1877,9 +1926,14 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
   isAllSelected(): boolean {
     const selectableRows = this.getMasterToggleRows();
-    const numSelected = selectableRows.filter(v => this.selectedVariables().isSelected(v)).length;
+    const numSelected = selectableRows.filter(v => this.isVariableSelected(v)).length;
     const numRows = selectableRows.length;
     return numSelected === numRows && numRows > 0;
+  }
+
+  isVariableSelected(variable: Variable): boolean {
+    this.variableSelectionChange();
+    return this.selectedVariables().isSelected(variable);
   }
 
   masterToggle(): void {
@@ -1916,13 +1970,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
-    variable.includeDeriveError = includeDeriveError;
-    const selectedVariable = this.selectedVariables().selected.find(
-      selected => selected.unitName === variable.unitName && selected.variableId === variable.variableId
-    );
-    if (selectedVariable) {
-      selectedVariable.includeDeriveError = includeDeriveError;
-    }
+    const key = this.getVariableSelectionKey(variable);
+    this.replaceVariableRows(this.variables().map(candidate => (this.getVariableSelectionKey(candidate) === key ?
+      { ...candidate, includeDeriveError } : candidate)));
     this.queueDistributionPreviewRefresh();
   }
 
@@ -1939,14 +1989,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const bundleVariable = bundle.variables.find(currentVariable => (
-      currentVariable.unitName === variable.unitName &&
-      currentVariable.variableId === variable.variableId
-    ));
-    if (bundleVariable) {
-      bundleVariable.includeDeriveError = includeDeriveError;
-    }
-    variable.includeDeriveError = includeDeriveError;
+    const currentBundle = this.variableBundles().find(candidate => candidate.id === bundle.id) || bundle;
+    this.replaceBundleRow({
+      ...currentBundle,
+      variables: currentBundle.variables.map(candidate => (this.getVariableSelectionKey(candidate) === this.getVariableSelectionKey(variable) ?
+        { ...candidate, includeDeriveError } : candidate))
+    });
     this.queueDistributionPreviewRefresh();
   }
 
@@ -1959,7 +2007,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   private getSelectedDefinitionVariables(): Variable[] {
-    return this.selectedVariables().selected.map(variable => ({
+    return this.selectedVariableValues().map(variable => ({
       unitName: variable.unitName,
       variableId: variable.variableId,
       ...(this.includeDeriveErrorInManualCoding() &&
@@ -2026,7 +2074,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         return;
       }
 
-      if (this.selectedVariables().selected.length === 0 && this.selectedVariableBundles.selected.length === 0) {
+      if (this.selectedVariableValues().length === 0 && this.selectedVariableBundles.selected.length === 0) {
         this.snackBar.open(
           this.translateService.instant('coding-job-definition-dialog.validation.variable-or-bundle-required'),
           this.translateService.instant('common.close'),
@@ -2065,7 +2113,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         return;
       }
 
-      if (this.selectedVariables().selected.length === 0 && this.selectedVariableBundles.selected.length === 0) {
+      if (this.selectedVariableValues().length === 0 && this.selectedVariableBundles.selected.length === 0) {
         this.snackBar.open(
           this.translateService.instant('coding-job-definition-dialog.validation.variable-or-bundle-required'),
           this.translateService.instant('common.close'),
@@ -2101,9 +2149,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       created_at: this.data.codingJob?.created_at || new Date(),
       updated_at: new Date(),
       assignedCoders: selectedCoderIds,
-      variables: this.selectedVariables().selected,
+      variables: this.selectedVariableValues(),
       variableBundles: this.selectedVariableBundles.selected,
-      assignedVariables: this.selectedVariables().selected,
+      assignedVariables: this.selectedVariableValues(),
       assignedVariableBundles: this.selectedVariableBundles.selected
     };
 
@@ -2155,9 +2203,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       created_at: new Date(),
       updated_at: new Date(),
       assignedCoders: selectedCoderIds,
-      variables: this.selectedVariables().selected,
+      variables: this.selectedVariableValues(),
       variableBundles: this.selectedVariableBundles.selected,
-      assignedVariables: this.selectedVariables().selected,
+      assignedVariables: this.selectedVariableValues(),
       assignedVariableBundles: this.selectedVariableBundles.selected
     };
 
@@ -2193,7 +2241,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
   private buildBulkCreationData(creationResults?: CreationResults): BulkCreationData {
     const baseData: BulkCreationData = {
-      selectedVariables: this.selectedVariables().selected,
+      selectedVariables: this.selectedVariableValues(),
       selectedVariableBundles: this.selectedVariableBundles.selected,
       selectedCoders: this.getSelectedCodersForDistribution(),
       doubleCodingAbsolute: this.codingJobForm.value.doubleCodingAbsolute,
@@ -2305,7 +2353,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     if (!wasSelected && isNowSelected) {
       if (!bundle.caseOrderingMode) {
-        bundle.caseOrderingMode = this.codingJobForm.value.caseOrderingMode || 'continuous';
+        this.replaceBundleRow({ ...bundle, caseOrderingMode: this.codingJobForm.value.caseOrderingMode || 'continuous' });
       }
       this.removeConflictingIndividualSelections(bundle);
     }
@@ -2316,16 +2364,13 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
-    bundle.caseOrderingMode = mode;
-    const selectedBundle = this.selectedVariableBundles.selected.find(b => b.id === bundle.id);
-    if (selectedBundle && selectedBundle !== bundle) {
-      selectedBundle.caseOrderingMode = mode;
-    }
+    const currentBundle = this.variableBundles().find(candidate => candidate.id === bundle.id) || bundle;
+    this.replaceBundleRow({ ...currentBundle, caseOrderingMode: mode });
     this.queueDistributionPreviewRefresh();
   }
 
   private removeConflictingIndividualSelections(bundle: VariableBundle): void {
-    const variablesToRemove = this.selectedVariables().selected.filter(variable => bundle.variables.some(bundleVar => bundleVar.unitName === variable.unitName && bundleVar.variableId === variable.variableId
+    const variablesToRemove = this.selectedVariableValues().filter(variable => bundle.variables.some(bundleVar => bundleVar.unitName === variable.unitName && bundleVar.variableId === variable.variableId
     )
     );
 
@@ -2728,7 +2773,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     // Validate that at least one variable or variable bundle is selected
-    if (this.selectedVariables().selected.length === 0 && this.selectedVariableBundles.selected.length === 0) {
+    if (this.selectedVariableValues().length === 0 && this.selectedVariableBundles.selected.length === 0) {
       this.snackBar.open(
         this.translateService.instant('coding-job-definition-dialog.validation.variable-or-bundle-required'),
         this.translateService.instant('common.close'),

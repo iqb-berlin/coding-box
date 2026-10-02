@@ -1,5 +1,5 @@
 // eslint-disable-next-line max-classes-per-file
-import { provideZonelessChangeDetection } from '@angular/core';
+import { computed, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
@@ -373,6 +373,80 @@ describe('TestResultsComponent', () => {
 
     expect(testResultService.getWorkspaceOverview).toHaveBeenCalledWith(1);
     expect(testPersonCodingService.notifyTestResultsChanged).toHaveBeenCalled();
+  });
+
+  it('updates derived unit order without mutating booklet snapshots', () => {
+    const units = [
+      { id: 7, alias: 'Z', name: 'Unit 7' },
+      { id: 8, alias: '', name: 'A' }
+    ];
+    component.booklets.set([{ id: 1, name: 'Booklet', units }] as never);
+    const originalBooklets = component.booklets();
+    const unitOrder = computed(() => component.booklets().map(
+      booklet => booklet.units.map(unit => unit.id)
+    ));
+    expect(unitOrder()).toEqual([[7, 8]]);
+
+    component.sortBookletUnits();
+
+    expect(unitOrder()).toEqual([[8, 7]]);
+    expect(originalBooklets[0].units.map(unit => unit.id)).toEqual([7, 8]);
+    expect(component.booklets()[0]).not.toBe(originalBooklets[0]);
+    expect(component.booklets()[0].units).not.toBe(originalBooklets[0].units);
+  });
+
+  it('updates derived units after delayed deletion without mutating booklet snapshots', async () => {
+    const dialog = TestBed.inject(MatDialog) as unknown as { open: jest.Mock };
+    const unitService = TestBed.inject(UnitService) as unknown as { deleteUnit: jest.Mock };
+    const deleteResponse = new Subject<{
+      success: boolean;
+      report: { deletedUnit: number; warnings: string[] };
+    }>();
+    const unit = { id: 7, alias: 'Unit 7', name: 'Unit 7' };
+    const booklet = { id: 1, name: 'Booklet 1', units: [unit, { id: 8, alias: 'Unit 8', name: 'Unit 8' }] };
+    const otherBooklet = { id: 2, name: 'Booklet 2', units: [{ id: 9, alias: 'Unit 9', name: 'Unit 9' }] };
+    component.booklets.set([booklet, otherBooklet] as never);
+    const originalBooklets = component.booklets();
+    const unitIds = computed(() => component.booklets().map(
+      current => current.units.map(currentUnit => currentUnit.id)
+    ));
+    expect(unitIds()).toEqual([[7, 8], [9]]);
+    dialog.open.mockReturnValue({ afterClosed: () => of(true) });
+    unitService.deleteUnit.mockReturnValue(deleteResponse.asObservable());
+
+    component.deleteUnit(unit as never, booklet as never);
+    await fixture.whenStable();
+    expect(unitIds()).toEqual([[7, 8], [9]]);
+
+    deleteResponse.next({ success: true, report: { deletedUnit: 7, warnings: [] } });
+    deleteResponse.complete();
+    await fixture.whenStable();
+
+    expect(unitIds()).toEqual([[8], [9]]);
+    expect(originalBooklets[0].units.map(current => current.id)).toEqual([7, 8]);
+    expect(component.booklets()[0]).not.toBe(originalBooklets[0]);
+    expect(component.booklets()[1]).toBe(originalBooklets[1]);
+  });
+
+  it('updates derived expanded responses without mutating response snapshots', () => {
+    component.responses.set([
+      { id: 13, variableid: 'VAR_1', expanded: false },
+      { id: 14, variableid: 'VAR_2', expanded: false }
+    ] as never);
+    const originalResponses = component.responses();
+    const expandedIds = computed(() => component.responses()
+      .filter(response => response.expanded).map(response => response.id));
+    expect(expandedIds()).toEqual([]);
+
+    component.toggleResponseExpansion(13);
+    const expandedResponses = component.responses();
+    expect(expandedIds()).toEqual([13]);
+    expect(originalResponses[0].expanded).toBe(false);
+    expect(expandedResponses[1]).toBe(originalResponses[1]);
+
+    component.toggleResponseExpansion(13);
+    expect(expandedIds()).toEqual([]);
+    expect(expandedResponses[0].expanded).toBe(true);
   });
 
   it('should reload workspace overview after deleting a response', () => {

@@ -44,6 +44,7 @@
             <table
               mat-table
               [dataSource]="editMode() ? editMissings() : getMissings()"
+              [trackBy]="trackMissingRow"
               class="missings-table"
               >
               <!-- ID Column -->
@@ -53,7 +54,7 @@
                 </th>
                 <td mat-cell *matCellDef="let missing; let i = index">
                   <mat-form-field appearance="fill">
-                    <input matInput [(ngModel)]="missing.id" />
+                    <input matInput [ngModel]="missing.id" (ngModelChange)="setMissingField(i, 'id', $event)" />
                   </mat-form-field>
                 </td>
               </ng-container>
@@ -64,7 +65,7 @@
                 </th>
                 <td mat-cell *matCellDef="let missing; let i = index">
                   <mat-form-field appearance="fill">
-                    <input matInput [(ngModel)]="missing.label" />
+                    <input matInput [ngModel]="missing.label" (ngModelChange)="setMissingField(i, 'label', $event)" />
                   </mat-form-field>
                 </td>
               </ng-container>
@@ -75,7 +76,7 @@
                 </th>
                 <td mat-cell *matCellDef="let missing; let i = index">
                   <mat-form-field appearance="fill">
-                    <input matInput [(ngModel)]="missing.description" />
+                    <input matInput [ngModel]="missing.description" (ngModelChange)="setMissingField(i, 'description', $event)" />
                   </mat-form-field>
                 </td>
               </ng-container>
@@ -86,7 +87,7 @@
                 </th>
                 <td mat-cell *matCellDef="let missing; let i = index">
                   <mat-form-field appearance="fill">
-                    <input matInput type="number" [(ngModel)]="missing.code" />
+                    <input matInput type="number" [ngModel]="missing.code" (ngModelChange)="setMissingField(i, 'code', $event)" />
                   </mat-form-field>
                 </td>
               </ng-container>
@@ -102,13 +103,13 @@
                         matInput
                         type="number"
                         [ngModel]="missing.score"
-                        (ngModelChange)="setMissingScore(missing, $event)"
+                        (ngModelChange)="setMissingScore(i, $event)"
                         [disabled]="isMissingScoreNa(missing)"
                         />
                     </mat-form-field>
                     <mat-checkbox
                       [checked]="isMissingScoreNa(missing)"
-                      (change)="setMissingScoreNa(missing, $event.checked)"
+                      (change)="setMissingScoreNa(i, $event.checked)"
                       >
                       NA
                     </mat-checkbox>
