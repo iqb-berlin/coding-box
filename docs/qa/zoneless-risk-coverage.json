@@ -27,14 +27,16 @@
       "name": "Jobdefinitionen und Kodierjobs",
       "risk": "Erstellung, Verteilung und Review dürfen keine veralteten oder ungespeicherten Ergebnisse zeigen.",
       "findings": [
-        "ZL-030"
+        "ZL-030",
+        "ZL-033"
       ],
       "tests": [
         "apps/frontend/src/app/coding/components/coding-job-definitions/coding-job-definitions.zoneless.spec.ts",
         "apps/frontend/src/app/coding/components/double-coded-review/double-coded-review.component.spec.ts",
         "apps/frontend/src/app/coding/components/coder-trainings-list/coder-trainings-list.component.spec.ts",
         "cypress/auth/coding-session.cy.ts",
-        "apps/frontend/src/app/coding/components/test-person-coding/test-person-coding.component.zoneless.spec.ts"
+        "apps/frontend/src/app/coding/components/test-person-coding/test-person-coding.component.zoneless.spec.ts",
+        "cypress/zoneless/test-person-coding-feedback.cy.ts"
       ]
     },
     {

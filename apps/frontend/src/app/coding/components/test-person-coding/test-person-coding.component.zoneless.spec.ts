@@ -2,8 +2,9 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
-import { TranslateModule } from '@ngx-translate/core';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { OverlayContainer } from '@angular/cdk/overlay';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
 import { TestPersonCodingComponent } from './test-person-coding.component';
 import {
@@ -12,6 +13,8 @@ import {
 import { AppService } from '../../../core/services/app.service';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
+
+jest.unmock('@angular/material/snack-bar');
 
 describe('Test person coding delayed responses without Zone.js', () => {
   let fixture: ComponentFixture<TestPersonCodingComponent>;
@@ -140,6 +143,7 @@ describe('Test person coding delayed responses without Zone.js', () => {
     await fixture.whenStable();
     expect(element().querySelector('.job-status-card')?.textContent).toContain('new-job');
     expect(element().querySelector('.job-status-card')?.textContent).toContain('25%');
+    expect(snackBar.open).not.toHaveBeenCalled();
     expect(service.notifyAutoCodingCompleted).not.toHaveBeenCalled();
   });
 
@@ -172,6 +176,22 @@ describe('Test person coding delayed responses without Zone.js', () => {
     expect(element().querySelector('table')?.textContent).toContain('newer-job');
     expect(element().querySelector('table')?.textContent).not.toContain('older-job');
     expect((element().querySelector('.group-selection-container button') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('does not repeat a polling error when the independent job list succeeds', async () => {
+    fixture.componentInstance.initialJobId = 'freshness-job';
+    fixture.componentInstance.startJobStatusPolling('freshness-job');
+    status.next({ error: 'temporary status error' });
+    await fixture.whenStable();
+    expect(snackBar.open).toHaveBeenCalledTimes(1);
+    jobs.next([{ jobId: 'freshness-job', status: 'processing', progress: 30 }]);
+    jobs.complete();
+    await fixture.whenStable();
+    status.next({ error: 'temporary status error' });
+    await fixture.whenStable();
+    expect(snackBar.open).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.activeJobId()).toBe('freshness-job');
+    expect(element().querySelector('.job-status-card')?.textContent).toContain('30%');
   });
 
   it('ignores a status from an earlier polling session of the same job', async () => {
@@ -229,5 +249,132 @@ describe('Test person coding delayed responses without Zone.js', () => {
     expect(coding.observed).toBe(false);
     coding.next({ jobId: 'late-job', message: 'late' });
     expect(service.getJobStatus).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Test person coding terminal feedback without Zone.js', () => {
+  let fixture: ComponentFixture<TestPersonCodingComponent>;
+  let jobs: Subject<JobInfo[]>;
+  let status: Subject<JobStatus>;
+  let service: jest.Mocked<Partial<TestPersonCodingService>>;
+  let openSnackBar: jest.SpyInstance;
+  let overlay: HTMLElement;
+  const jobId = 'terminal-job';
+  const warning = 'Cache finalization remained incomplete';
+  const error = 'Coding could not finish';
+  const terminalCases: { label: string; response: JobStatus; message: string }[] = [
+    { label: 'completion', response: { status: 'completed', progress: 100 }, message: 'Kodierung abgeschlossen' },
+    {
+      label: 'completion with warnings',
+      response: { status: 'completed', progress: 100, result: { totalResponses: 1, statusCounts: { CODED: 1 }, warnings: [warning] } },
+      message: `Kodierung mit Warnung: ${warning}`
+    },
+    { label: 'failure', response: { status: 'failed', progress: 100, error }, message: `Kodierung fehlgeschlagen: ${error}` },
+    { label: 'cancellation', response: { status: 'cancelled', progress: 100 }, message: 'Kodierung abgebrochen' },
+    { label: 'pause', response: { status: 'paused', progress: 100 }, message: 'Kodierung pausiert' }
+  ];
+
+  beforeEach(async () => {
+    jobs = new Subject();
+    status = new Subject();
+    service = {
+      getAllJobs: jest.fn(() => jobs),
+      getWorkspaceGroups: jest.fn(() => of([])),
+      getJobStatus: jest.fn(() => status),
+      getCodingStatistics: jest.fn(() => of({ totalResponses: 0, statusCounts: {} })),
+      notifyAutoCodingCompleted: jest.fn()
+    };
+    await TestBed.configureTestingModule({
+      imports: [TestPersonCodingComponent, MatSnackBarModule, TranslateModule.forRoot()],
+      providers: [
+        provideZonelessChangeDetection(), provideNoopAnimations(),
+        { provide: TestPersonCodingService, useValue: service },
+        { provide: AppService, useValue: { selectedWorkspaceId: 1 } },
+        { provide: TestResultService, useValue: {} },
+        { provide: BackendMessageTranslatorService, useValue: { translateMessage: (message: string) => message } },
+        { provide: MatDialog, useValue: { open: jest.fn() } }
+      ]
+    }).compileComponents();
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('de', {
+      'test-person-coding': {
+        'job-completed': 'Kodierung abgeschlossen',
+        'job-completed-with-warnings': 'Kodierung mit Warnung: {{warning}}',
+        'job-completed-with-error': 'Kodierung fehlgeschlagen: {{error}}',
+        'job-cancelled': 'Kodierung abgebrochen',
+        'job-paused': 'Kodierung pausiert'
+      },
+      close: 'Schließen'
+    });
+    translate.use('de');
+    openSnackBar = jest.spyOn(TestBed.inject(MatSnackBar), 'open');
+    overlay = TestBed.inject(OverlayContainer).getContainerElement();
+    fixture = TestBed.createComponent(TestPersonCodingComponent);
+    fixture.componentRef.setInput('initialJobId', jobId);
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+  });
+
+  afterEach(() => {
+    TestBed.inject(MatSnackBar).dismiss();
+    fixture.destroy();
+    openSnackBar.mockRestore();
+  });
+
+  describe.each(['list first', 'status first'])('%s', order => {
+    it.each(terminalCases)('renders $label once after delayed responses', async ({ response, message }) => {
+      const answerList = () => {
+        jobs.next([{ jobId, ...response }]);
+        jobs.complete();
+      };
+      const answerStatus = () => {
+        status.next(response);
+        status.complete();
+      };
+      if (order === 'list first') answerList();
+      else answerStatus();
+      await fixture.whenStable();
+      expect(overlay.querySelector('mat-snack-bar-container')?.textContent).toContain(message);
+      expect(openSnackBar).toHaveBeenCalledTimes(1);
+      expect(fixture.componentInstance.getLastObservedJobStatus(jobId)).toBe(response.status);
+      expect(fixture.componentInstance.activeJobId()).toBeNull();
+      expect(fixture.componentInstance.jobStatusInterval).toBeNull();
+
+      if (order === 'list first') answerStatus();
+      else answerList();
+      await fixture.whenStable();
+      const repeatedJobs = new Subject<JobInfo[]>();
+      service.getAllJobs?.mockReturnValueOnce(repeatedJobs);
+      fixture.componentInstance.loadAllJobs();
+      repeatedJobs.next([{ jobId, ...response }]);
+      repeatedJobs.complete();
+      await fixture.whenStable();
+      expect(openSnackBar).toHaveBeenCalledTimes(1);
+      expect(overlay.querySelector('mat-snack-bar-container')?.textContent).toContain(message);
+      expect(fixture.nativeElement.querySelector('table')?.textContent).toContain(jobId);
+      expect(service.notifyAutoCodingCompleted).toHaveBeenCalledTimes(response.status === 'completed' ? 1 : 0);
+    });
+  });
+
+  it('reports completion after resuming a paused job with the same id', async () => {
+    jobs.next([{ jobId, status: 'paused', progress: 20 }]);
+    jobs.complete();
+    await fixture.whenStable();
+    expect(overlay.textContent).toContain('Kodierung pausiert');
+    const oldStatus = status;
+    status = new Subject();
+    fixture.componentInstance.startJobStatusPolling(jobId);
+    oldStatus.next({ status: 'completed', progress: 100 });
+    oldStatus.complete();
+    await fixture.whenStable();
+    expect(fixture.componentInstance.activeJobId()).toBe(jobId);
+    expect(openSnackBar).toHaveBeenCalledTimes(1);
+    status.next({ status: 'completed', progress: 100 });
+    status.complete();
+    await fixture.whenStable();
+    expect(overlay.textContent).toContain('Kodierung abgeschlossen');
+    expect(openSnackBar).toHaveBeenCalledTimes(2);
+    expect(service.notifyAutoCodingCompleted).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.getLastObservedJobStatus(jobId)).toBe('completed');
   });
 });

@@ -205,20 +205,7 @@ export class TestPersonCodingComponent implements OnInit {
               job => job.jobId === this.activeJobId()
             );
             if (activeJob) {
-              this.rememberJobStatus(activeJob.jobId, activeJob);
-              this.jobStatus.set(activeJob);
-              this.updateFreshnessCodingGuardFromStatus(activeJob.jobId, activeJob);
-              if (
-                ['completed', 'failed', 'cancelled', 'paused'].includes(
-                  activeJob.status
-                )
-              ) {
-                this.stopJobStatusPolling();
-
-                if (activeJob.status === 'completed') {
-                  this.handleAutoCodingCompleted(activeJob.jobId);
-                }
-              }
+              this.applyJobStatus(activeJob.jobId, activeJob);
             }
           }
         }),
@@ -391,60 +378,65 @@ export class TestPersonCodingComponent implements OnInit {
         }
 
         this.hasShownJobStatusPollingError = false;
-        this.jobStatus.set(status);
-        this.rememberJobStatus(jobId, status);
-        this.updateFreshnessCodingGuardFromStatus(jobId, status);
-
-        if (
-          ['completed', 'failed', 'cancelled', 'paused'].includes(
-            status.status
-          )
-        ) {
-          this.stopJobStatusPolling();
-
-          if (status.status === 'completed') {
-            const warnings = status.result?.warnings || [];
-            this.snackBar.open(
-              this.translateService.instant(
-                warnings.length > 0 ?
-                  'test-person-coding.job-completed-with-warnings' :
-                  'test-person-coding.job-completed',
-                { warning: warnings.join(' ') }
-              ),
-              this.translateService.instant('close'),
-              { duration: warnings.length > 0 ? 8000 : 3000 }
-            );
-            this.handleAutoCodingCompleted(jobId);
-          } else if (status.status === 'failed') {
-            this.snackBar.open(
-              this.translateService.instant(
-                'test-person-coding.job-completed-with-error',
-                {
-                  error:
-                    status.error ||
-                    this.translateService.instant('error.unknown')
-                }
-              ),
-              this.translateService.instant('close'),
-              { duration: 5000 }
-            );
-          } else if (status.status === 'cancelled') {
-            this.snackBar.open(
-              this.translateService.instant(
-                'test-person-coding.job-cancelled'
-              ),
-              this.translateService.instant('close'),
-              { duration: 3000 }
-            );
-          } else if (status.status === 'paused') {
-            this.snackBar.open(
-              this.translateService.instant('test-person-coding.job-paused'),
-              this.translateService.instant('close'),
-              { duration: 3000 }
-            );
-          }
-        }
+        this.applyJobStatus(jobId, status);
       });
+  }
+
+  private applyJobStatus(jobId: string, status: JobStatus): void {
+    this.jobStatus.set(status);
+    this.rememberJobStatus(jobId, status);
+    this.updateFreshnessCodingGuardFromStatus(jobId, status);
+
+    if (
+      ['completed', 'failed', 'cancelled', 'paused'].includes(
+        status.status
+      )
+    ) {
+      // Invalidate other pending responses before emitting terminal feedback.
+      this.stopJobStatusPolling();
+
+      if (status.status === 'completed') {
+        const warnings = status.result?.warnings || [];
+        this.snackBar.open(
+          this.translateService.instant(
+            warnings.length > 0 ?
+              'test-person-coding.job-completed-with-warnings' :
+              'test-person-coding.job-completed',
+            { warning: warnings.join(' ') }
+          ),
+          this.translateService.instant('close'),
+          { duration: warnings.length > 0 ? 8000 : 3000 }
+        );
+        this.handleAutoCodingCompleted(jobId);
+      } else if (status.status === 'failed') {
+        this.snackBar.open(
+          this.translateService.instant(
+            'test-person-coding.job-completed-with-error',
+            {
+              error:
+                status.error ||
+                this.translateService.instant('error.unknown')
+            }
+          ),
+          this.translateService.instant('close'),
+          { duration: 5000 }
+        );
+      } else if (status.status === 'cancelled') {
+        this.snackBar.open(
+          this.translateService.instant(
+            'test-person-coding.job-cancelled'
+          ),
+          this.translateService.instant('close'),
+          { duration: 3000 }
+        );
+      } else if (status.status === 'paused') {
+        this.snackBar.open(
+          this.translateService.instant('test-person-coding.job-paused'),
+          this.translateService.instant('close'),
+          { duration: 3000 }
+        );
+      }
+    }
   }
 
   getLastObservedJobStatus(jobId?: string | null): JobStatus['status'] | null {
