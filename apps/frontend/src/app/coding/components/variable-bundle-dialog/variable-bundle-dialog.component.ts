@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnInit, OnDestroy, inject, ViewChild, ElementRef
+  Component, Inject, OnInit, OnDestroy, inject, ViewChild, ElementRef, signal
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 
 import {
   FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators
@@ -71,15 +72,16 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   bundleGroupForm!: FormGroup;
-  isLoading = false;
+  readonly isLoading = signal(false);
 
   // Variables
-  availableVariables: Variable[] = [];
+  readonly availableVariables = signal<Variable[]>([]);
   selectedVariables = new SelectionModel<Variable>(true, []);
   displayedColumns: string[] = ['select', 'unitName', 'variableId'];
-  dataSource = new MatTableDataSource<Variable>([]);
+  readonly dataSource = new MatTableDataSource<Variable>([]);
+  readonly filteredVariables = toSignal(this.dataSource.connect(), { initialValue: [] as Variable[] });
 
-  isLoadingVariableAnalysis = false;
+  readonly isLoadingVariableAnalysis = signal(false);
 
   // Filters
   unitNameFilter = '';
@@ -118,6 +120,7 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    this.dataSource.disconnect();
   }
 
   private setupFilterDebounce(): void {
@@ -183,33 +186,33 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
   }
 
   loadCodingIncompleteVariables(unitNameFilter?: string): void {
-    this.isLoadingVariableAnalysis = true;
+    this.isLoadingVariableAnalysis.set(true);
     if (this.data.preloadedIncompleteVariables && !unitNameFilter) {
-      this.availableVariables = this.data.preloadedIncompleteVariables;
-      this.dataSource.data = this.availableVariables;
+      this.availableVariables.set(this.data.preloadedIncompleteVariables);
+      this.dataSource.data = this.availableVariables();
       this.processVariableSelection();
-      this.isLoadingVariableAnalysis = false;
+      this.isLoadingVariableAnalysis.set(false);
       return;
     }
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.isLoadingVariableAnalysis = false;
+      this.isLoadingVariableAnalysis.set(false);
       return;
     }
 
     this.codingJobBackendService.getCodingIncompleteVariables(
       workspaceId,
       unitNameFilter || undefined
-    ).subscribe({
+    ).pipe(takeUntil(this.destroy$)).subscribe({
       next: (variables: Variable[]) => {
-        this.availableVariables = variables;
-        this.dataSource.data = this.availableVariables;
+        this.availableVariables.set(variables);
+        this.dataSource.data = this.availableVariables();
         this.processVariableSelection();
-        this.isLoadingVariableAnalysis = false;
+        this.isLoadingVariableAnalysis.set(false);
       },
       error: () => {
-        this.isLoadingVariableAnalysis = false;
+        this.isLoadingVariableAnalysis.set(false);
       }
     });
   }
@@ -217,7 +220,7 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
   private processVariableSelection(): void {
     if (this.data.bundleGroup?.variables) {
       this.data.bundleGroup.variables.forEach((variable: Variable) => {
-        const foundVariable = this.availableVariables.find(
+        const foundVariable = this.availableVariables().find(
           v => v.unitName === variable.unitName && v.variableId === variable.variableId
         );
         if (foundVariable) {

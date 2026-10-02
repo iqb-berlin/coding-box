@@ -44,7 +44,7 @@
                     />
                 </mat-form-field>
               </div>
-              @for (training of filteredTrainings; track training) {
+              @for (training of filteredTrainings(); track training) {
                 <mat-checkbox
                   class="training-checkbox"
                   [checked]="selectedTrainings.isSelected(training.id)"
@@ -113,7 +113,7 @@
                         </span>
                       }
                     </mat-select-trigger>
-                    @for (training of availableTrainings; track training) {
+                    @for (training of availableTrainings(); track training) {
                       <mat-option
                         [value]="training.id"
                         >

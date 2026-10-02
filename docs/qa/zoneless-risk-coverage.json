@@ -28,7 +28,10 @@
       "risk": "Erstellung, Verteilung und Review dürfen keine veralteten oder ungespeicherten Ergebnisse zeigen.",
       "findings": [
         "ZL-030",
-        "ZL-033"
+        "ZL-033",
+        "ZL-034",
+        "ZL-035",
+        "ZL-037"
       ],
       "tests": [
         "apps/frontend/src/app/coding/components/coding-job-definitions/coding-job-definitions.zoneless.spec.ts",
@@ -36,7 +39,10 @@
         "apps/frontend/src/app/coding/components/coder-trainings-list/coder-trainings-list.component.spec.ts",
         "cypress/auth/coding-session.cy.ts",
         "apps/frontend/src/app/coding/components/test-person-coding/test-person-coding.component.zoneless.spec.ts",
-        "cypress/zoneless/test-person-coding-feedback.cy.ts"
+        "cypress/zoneless/test-person-coding-feedback.cy.ts",
+        "apps/frontend/src/app/coding/components/coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component.zoneless.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-results-comparison/coding-results-comparison.zoneless.spec.ts",
+        "apps/frontend/src/app/coding/components/variable-bundle-dialog/variable-bundle-dialog.component.zoneless.spec.ts"
       ]
     },
     {
@@ -96,7 +102,8 @@
         "ZL-024",
         "ZL-025",
         "ZL-027",
-        "ZL-029"
+        "ZL-029",
+        "ZL-036"
       ],
       "tests": [
         "apps/frontend/src/app/coding/components/export-coding-book/export-coding-book.component.zoneless.spec.ts",
@@ -122,7 +129,9 @@
         "cypress/zoneless/export-item-dataset.cy.ts",
         "cypress/auth/coding-session.cy.ts",
         "apps/frontend/src/app/ws-admin/components/test-center-import/test-center-import.component.zoneless.spec.ts",
-        "cypress/zoneless/testcenter-import.cy.ts"
+        "cypress/zoneless/testcenter-import.cy.ts",
+        "apps/frontend/src/app/coding/components/export-dialog/export-dialog.component.zoneless.spec.ts",
+        "cypress/zoneless/async-coding-dialogs.cy.ts"
       ]
     },
     {
@@ -134,7 +143,8 @@
         "ZL-010",
         "ZL-026",
         "ZL-031",
-        "ZL-032"
+        "ZL-032",
+        "ZL-038"
       ],
       "tests": [
         "apps/frontend/src/app/ws-admin/components/replay-statistics-dialog/replay-statistics-dialog.component.zoneless.spec.ts",
@@ -142,6 +152,7 @@
         "apps/frontend/src/app/components/home/home.component.spec.ts",
         "apps/frontend/src/app/ws-admin/components/ws-admin/ws-admin.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/components/ws-access-rights/ws-access-rights.component.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/ws-access-rights/ws-access-rights.component.zoneless.spec.ts",
         "apps/frontend/src/app/zoneless-dialog-responses.spec.ts",
         "cypress/zoneless/app.cy.ts",
         "cypress/zoneless/workspace-access-rights.cy.ts",
@@ -197,9 +208,10 @@
       "id": "timers-promises",
       "areas": [
         "coding-replay",
-        "files-exports-metadata"
+        "files-exports-metadata",
+        "jobs"
       ],
-      "evidence": "Debouncing, Initialisierungstimer, Resolver-Promises und Wiederherstellung abgelaufener Sitzungen."
+      "evidence": "Debouncing, Initialisierungstimer, Resolver-Promises und Wiederherstellung abgelaufener Sitzungen; ZL-034/035 prüfen verzögerte Promise-Fortsetzung und ZL-037 den realen Kartenfilter-Debounce im nativen Template."
     },
     {
       "id": "browser-libraries",
@@ -224,6 +236,7 @@
   "residualLimits": [
     "Nicht jedes UI-Element, jede Template-Bindung oder jede Kombination von Aktionen ist einzeln nachgewiesen. Das detaillierte Inventar bleibt eine Suchhilfe.",
     "Nicht alle Dialogeinbettungen, Rollen je Einzelaktion, Trainingsvarianten und Metadatenfeldtypen sind im Browser geprüft.",
+    "ZL-034, ZL-035 und ZL-037 sind durch native Jest-Regressionen mit echten Templates abgesichert; spezifische Browsernachweise für den asynchronen Bulk-Antwortpfad, Trainingsauswahl und Variablenkartenfilter liegen nicht vor. Der erreichbare Bulk-Definitionsablauf übergibt bereits eine fertige Verteilung.",
     "Der MetadataResolver unterstützt am verwendeten öffentlichen Aufruf kein AbortSignal; laufende interne Arbeit kann weitergehen, ihr Ergebnis wird nach Abbruch verworfen.",
     "Ein bereits angenommener Backend-Job wird durch Schließen des Dialogs nicht zurückgerollt.",
     "Historische Workspace-Stufe 4 ist nur synthetisch geprüft. Die aktuelle Rechte-API vergibt Stufen 0–3; ein echtes Backend-Szenario für historische Stufe 4 fehlt.",
