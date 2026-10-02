@@ -1465,3 +1465,55 @@ geprüft. Das Inventar enthält 8.780 Einträge aus 325 Produktionsdateien und b
 eine Suchhilfe; diese Ergebnisse bestätigen keine lückenlose Prüfung jedes
 UI-Elements. CI am veröffentlichten Commit und reale Testcenter-Verbindungen
 sind gesondert zu prüfen.
+
+
+### ZL-033: Terminale Jobmeldungen gehen bei früherer Jobliste verloren
+
+Im Review von `f92c7379` wurde folgende Reihenfolge reproduziert: Die Jobliste
+meldet den aktiven Job als abgeschlossen, fehlgeschlagen, abgebrochen oder
+pausiert und beendet das Polling. Die anschließende Statusantwort wird durch
+die Prüfung von aktivem Job und Pollinggeneration verworfen. Da nur die
+Statusabfrage die Snackbar auslöste, fehlten die Abschlussmeldung und
+gegebenenfalls Warnungen oder Fehlerdetails.
+
+Jobliste und Statusabfrage verwenden jetzt dieselbe Statusverarbeitung.
+Sie merkt den letzten Jobstatus, aktualisiert den Freshness-Guard und beendet
+bei terminalem Status das Polling, bevor die passende Meldung ausgegeben wird.
+Das Stoppen invalidiert weitere Antworten; identische Meldungen und globale
+Abschlussereignisse werden dadurch nicht doppelt ausgelöst. Die bestehenden
+Prüfungen gegen Antworten alter Jobs, Workspaces und Pollingläufe bleiben
+bestehen. Eine Pause verhindert keinen späteren Abschluss desselben Jobs.
+
+Elf neue native Tests verwenden das echte Komponententemplate und die echte
+Angular-Material-Snackbar. Sie prüfen alle fünf Meldungsfälle (Abschluss,
+Abschluss mit Warnung, Fehler, Abbruch und Pause) in beiden Antwortreihenfolgen
+sowie Pause und erneutes Polling desselben Jobs. Nach jeder Antwort wird
+`whenStable()` abgewartet; `detectChanges()` und `markForCheck()` werden nicht
+verwendet. Vor der Korrektur scheiterten sechs Fälle an der fehlenden Meldung.
+Eine zusätzliche Regression erhält die bisherige Unterdrückung wiederholter
+Statusabfragefehler, auch wenn die unabhängige Jobliste erfolgreich antwortet.
+Im finalen Stand bestehen alle 24 Tests dieser Datei.
+
+`cypress/zoneless/test-person-coding-feedback.cy.ts` öffnet den echten Dialog
+über »Automatisch Kodieren« und startet einen Job. Zwei Browserfälle liefern
+Warnung beziehungsweise Fehler über eine frühere Jobliste und prüfen die
+Snackbar automatisch, während die verzögerte Statusantwort noch aussteht.
+Die Anmeldung und API-Daten bleiben synthetisch.
+
+
+### Lokale Abschlussläufe für ZL-033 am 02.10.2026
+
+Die endgültigen App- und Testquellen blieben während dieser Abschlussläufe
+unverändert. Anschließend wurde nur diese Prüfdokumentation ergänzt.
+
+| Nx-Prüfung | Ergebnis | Exit |
+|---|---|---|
+| `frontend:test --maxWorkers=2` | 2.582 Tests / 232 Suites bestanden | 0 |
+| `frontend:test-zoneless --maxWorkers=2` | 820 Tests / 37 Suites bestanden, darunter zwölf neue Regressionen | 0 |
+| `frontend:e2e --configuration=zoneless --spec=cypress/zoneless/test-person-coding-feedback.cy.ts` | Beide Browserfälle in Electron bestanden; `window.Zone` fehlt | 0 |
+| `frontend:lint` | bestanden | 0 |
+| `frontend:zoneless-approval` | Inventar ohne Abweichung, sechs Bereiche / sieben Mechanismen / 33 Befunde referenziert | 0 |
+
+Das aktualisierte Inventar enthält weiterhin 8.780 Einträge aus 325
+Produktionsdateien. CI am veröffentlichten Commit und reale Backend-Jobs
+sind durch diese lokalen Prüfungen mit synthetischen Daten nicht bestätigt.
