@@ -1,5 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import type {
+  ExportJobStatusResponseDto
+} from '../../../../../../api-dto/coding/export-request.dto';
 import {
   CodingJob,
   VariableBundle
@@ -20,8 +23,7 @@ import {
 import {
   CodingTrainingBackendService,
   CreateCoderTrainingJobsResponse,
-  TrainingCodingResult,
-  WithinTrainingCodingResult,
+  TrainingComparisonQueryOptions,
   CodingJobForTraining
 } from '../../coding/services/coding-training-backend.service';
 import { CodingExecutionService } from '../../coding/services/coding-execution.service';
@@ -41,6 +43,10 @@ import { ResponseEntity } from '../../shared/models/response-entity.model';
 import { CoderTraining } from '../../coding/models/coder-training.model';
 import { CodeBookContentSetting } from '../../../../../../api-dto/coding/codebook-content-setting';
 import { MissingsProfilesDto } from '../../../../../../api-dto/coding/missings-profiles.dto';
+import {
+  TrainingCodingComparisonPageDto,
+  WithinTrainingCodingComparisonPageDto
+} from '../../../../../../api-dto/coding/training-comparison.dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -99,24 +105,7 @@ export interface BulkApplyCodingResultsResponse {
   results: BulkApplyResultItem[];
 }
 
-export interface ExportJobStatus {
-  status: string;
-  progress: number;
-  progressPhase?: 'preparing' | 'counting' | 'writing' | 'finalizing' | 'completed';
-  processedRows?: number;
-  totalRows?: number;
-  progressMessage?: string;
-  result?: {
-    fileId: string;
-    fileName: string;
-    fileSize: number;
-    workspaceId: number;
-    userId: number;
-    exportType: string;
-    createdAt: number;
-  };
-  error?: string;
-}
+export type ExportJobStatus = ExportJobStatusResponseDto;
 
 interface DistributedCodingDisplayOptions {
   showScore?: boolean;
@@ -168,6 +157,7 @@ export class CodingFacadeService {
   getCodingResultsByVersion(
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     includeReplayUrls: boolean = false,
     includeResponseValues: boolean = true,
     includeGeoGebraResponseValues: boolean = false
@@ -175,6 +165,7 @@ export class CodingFacadeService {
     return this.codingExportService.getCodingResultsByVersion(
       workspaceId,
       version,
+      missingsProfileId,
       includeReplayUrls,
       includeResponseValues,
       includeGeoGebraResponseValues
@@ -184,6 +175,7 @@ export class CodingFacadeService {
   getCodingResultsByVersionAsExcel(
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     includeReplayUrls: boolean = false,
     includeResponseValues: boolean = true,
     includeGeoGebraResponseValues: boolean = false
@@ -191,6 +183,7 @@ export class CodingFacadeService {
     return this.codingExportService.getCodingResultsByVersionAsExcel(
       workspaceId,
       version,
+      missingsProfileId,
       includeReplayUrls,
       includeResponseValues,
       false,
@@ -281,12 +274,20 @@ export class CodingFacadeService {
     return this.codingTrainingBackendService.deleteCoderTraining(workspaceId, trainingId);
   }
 
-  compareTrainingCodingResults(workspaceId: number, trainingIds: string): Observable<TrainingCodingResult[]> {
-    return this.codingTrainingBackendService.compareTrainingCodingResults(workspaceId, trainingIds);
+  compareTrainingCodingResults(
+    workspaceId: number,
+    trainingIds: string,
+    options?: TrainingComparisonQueryOptions
+  ): Observable<TrainingCodingComparisonPageDto> {
+    return this.codingTrainingBackendService.compareTrainingCodingResults(workspaceId, trainingIds, options);
   }
 
-  compareWithinTrainingCodingResults(workspaceId: number, trainingId: number): Observable<WithinTrainingCodingResult[]> {
-    return this.codingTrainingBackendService.compareWithinTrainingCodingResults(workspaceId, trainingId);
+  compareWithinTrainingCodingResults(
+    workspaceId: number,
+    trainingId: number,
+    options?: TrainingComparisonQueryOptions
+  ): Observable<WithinTrainingCodingComparisonPageDto> {
+    return this.codingTrainingBackendService.compareWithinTrainingCodingResults(workspaceId, trainingId, options);
   }
 
   getCodingJobsForTraining(workspaceId: number, trainingId: number): Observable<CodingJobForTraining[]> {

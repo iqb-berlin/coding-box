@@ -9,6 +9,7 @@ import { CodingFreshnessService } from './coding-freshness.service';
 import { CodingFreshnessVersion } from '../../../../../../../api-dto/coding/coding-freshness.dto';
 import { CodingAnalysisService } from './coding-analysis.service';
 import { CodingValidationService } from './coding-validation.service';
+import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
 type ResetCodingVersion = 'v1' | 'v2' | 'v3';
 type ResetUnitIdsByVersion = Record<ResetCodingVersion, Set<number>>;
@@ -30,6 +31,31 @@ export class CodingVersionService {
   ) { }
 
   async resetCodingVersion(
+    workspaceId: number,
+    version: ResetCodingVersion,
+    unitFilters?: string[],
+    variableFilters?: string[],
+    progressCallback?: (progress: number) => Promise<void>
+  ): Promise<{
+      affectedResponseCount: number;
+      deletedGeneratedResponseCount: number;
+      cascadeResetVersions: ('v2' | 'v3')[];
+      message: string;
+    }> {
+    return withWorkspaceTestResultsMutationLock(
+      this.responseRepository.manager.connection,
+      workspaceId,
+      () => this.resetCodingVersionUnlocked(
+        workspaceId,
+        version,
+        unitFilters,
+        variableFilters,
+        progressCallback
+      )
+    );
+  }
+
+  private async resetCodingVersionUnlocked(
     workspaceId: number,
     version: ResetCodingVersion,
     unitFilters?: string[],

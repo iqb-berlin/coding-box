@@ -29,7 +29,8 @@ import {
   CodingStatisticsService,
   CodingJobService,
   CodingProgressService,
-  CodingReviewService,
+  AutoCodingRunGuardService,
+  DoubleCodingReviewQueryService,
   CodingFreshnessService,
   CodingProcessService,
   CodingReadinessService,
@@ -48,6 +49,7 @@ import {
 import { AutocodingReadinessDto } from '../../../../../../api-dto/coding/autocoding-readiness.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { sanitizeCsvText } from '../../utils/csv.util';
+import { DistributionPreviewLimiterService } from '../workspace-coding/distribution-preview-limiter.service';
 
 type CodingStatisticsJobStatusResponse = {
   status: string;
@@ -252,12 +254,14 @@ export class WorkspaceCodingStatisticsController {
     private codingJobService: CodingJobService,
     private personService: PersonService,
     private codingProgressService: CodingProgressService,
-    private codingReviewService: CodingReviewService,
+    private doubleCodingReviewQueryService: DoubleCodingReviewQueryService,
     private codingFreshnessService: CodingFreshnessService,
+    private autoCodingRunGuardService: AutoCodingRunGuardService,
     private codingProcessService: CodingProcessService,
     private codingReadinessService: CodingReadinessService,
     private codingReplayService: CodingReplayService,
-    private jobQueueService: JobQueueService
+    private jobQueueService: JobQueueService,
+    private distributionPreviewLimiterService: DistributionPreviewLimiterService
   ) { }
 
   private calculateMeanKappa(
@@ -686,7 +690,8 @@ export class WorkspaceCodingStatisticsController {
   private async createCohensKappaReplayUrlMap(
     workspaceId: number,
     sourceItems: KappaSourceItem[],
-    req?: Request
+    req?: Request,
+    authToken = ''
   ): Promise<Map<string, string>> {
     const serverUrl = this.getServerUrlFromRequest(req);
     if (!serverUrl || sourceItems.length === 0) {
@@ -707,7 +712,8 @@ export class WorkspaceCodingStatisticsController {
     const replayRows = await this.codingReplayService.generateReplayUrlsForItemsBulk(
       workspaceId,
       replayItems,
-      serverUrl
+      serverUrl,
+      authToken
     );
 
     return new Map(replayRows.map(row => [
@@ -720,7 +726,8 @@ export class WorkspaceCodingStatisticsController {
     workspaceId: number,
     statistics: KappaStatisticsResponse,
     sourceItems: KappaSourceItem[],
-    req?: Request
+    req?: Request,
+    authToken = ''
   ): Promise<Buffer> {
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'Kodierbox';
@@ -728,7 +735,8 @@ export class WorkspaceCodingStatisticsController {
     const replayUrlByItemKey = await this.createCohensKappaReplayUrlMap(
       workspaceId,
       sourceItems,
-      req
+      req,
+      authToken
     );
 
     this.addRowsWorksheet(
@@ -765,7 +773,7 @@ export class WorkspaceCodingStatisticsController {
       }${options.variableId ? `, variable: ${options.variableId}` : ''}`
     );
 
-    const allCodedItems = (await this.codingReviewService.getCodedVariablesForKappa(
+    const allCodedItems = (await this.doubleCodingReviewQueryService.getCodedVariablesForKappa(
       workspaceId,
       options.excludeTrainings,
       options.jobDefinitionIds,
@@ -820,7 +828,7 @@ export class WorkspaceCodingStatisticsController {
     });
 
     const variables: KappaStatisticsResponse['variables'] = [];
-    const allKappaResults: KappaCoderPairStatistics[] = [];
+    const allKappaResults: Array<KappaMeanInput & KappaAgreementInput> = [];
     const uniqueVariables = new Set<string>();
     const uniqueCoders = new Set<number>();
 
@@ -917,31 +925,44 @@ export class WorkspaceCodingStatisticsController {
         }
       }
 
-      const kappaResults = coderPairs.length > 0 ?
+      const rawKappaResults = coderPairs.length > 0 ?
         this.codingStatisticsService
-          .calculateCohensKappa(coderPairs, options.calculationLevel)
-          .map(result => ({
-            ...result,
+          .calculateCohensKappa(coderPairs, options.calculationLevel) :
+        [];
+      const kappaResults = rawKappaResults
+        .map(result => {
+          const roundedResult = this.codingStatisticsService
+            .roundKappaCalculationResult(result);
+          return {
+            coder1Id: roundedResult.coder1Id,
+            coder1Name: roundedResult.coder1Name,
+            coder2Id: roundedResult.coder2Id,
+            coder2Name: roundedResult.coder2Name,
+            kappa: roundedResult.kappa,
+            agreement: roundedResult.agreement,
+            totalItems: roundedResult.totalItems,
+            validPairs: roundedResult.validPairs,
+            interpretation: roundedResult.interpretation,
             ...(pairMetadataByKey.get(
               this.getCoderPairKey(result.coder1Id, result.coder2Id)
             ) ?? this.emptyKappaPairMetadata())
-          })) as KappaCoderPairStatistics[] :
-        [];
+          };
+        }) as KappaCoderPairStatistics[];
 
-      allKappaResults.push(...kappaResults);
-      const validPairCount = kappaResults.reduce(
+      allKappaResults.push(...rawKappaResults);
+      const validPairCount = rawKappaResults.reduce(
         (sum, result) => sum + (result.validPairs > 0 ? result.validPairs : 0),
         0
       );
-      const coderPairCount = kappaResults.filter(result => result.validPairs > 0).length;
+      const coderPairCount = rawKappaResults.filter(result => result.validPairs > 0).length;
       const caseCount = items.length;
       const doubleCodedCount = doubleCodedItems.length;
 
       variables.push({
         unitName: unitNameKey,
         variableId: variableIdKey,
-        meanKappa: this.calculateMeanKappa(kappaResults, options.weightedMean),
-        meanAgreement: this.calculateMeanAgreement(kappaResults, options.weightedMean),
+        meanKappa: this.calculateMeanKappa(rawKappaResults, options.weightedMean),
+        meanAgreement: this.calculateMeanAgreement(rawKappaResults, options.weightedMean),
         caseCount,
         doubleCodedCount,
         doubleCodedRate: caseCount > 0 ? doubleCodedCount / caseCount : null,
@@ -1065,7 +1086,12 @@ export class WorkspaceCodingStatisticsController {
   @ApiQuery({
     name: 'forceRefresh',
     required: false,
-    description: 'Ignore the short-lived readiness cache and recalculate.'
+    description: 'Ignore the readiness cache and recalculate.'
+  })
+  @ApiQuery({
+    name: 'cacheOnly',
+    required: false,
+    description: 'Return cached readiness only and do not recalculate.'
   })
   @ApiOkResponse({
     description: 'Auto-coding readiness diagnostics retrieved successfully.'
@@ -1073,12 +1099,19 @@ export class WorkspaceCodingStatisticsController {
   async getAutocodingReadiness(
     @WorkspaceId() workspace_id: number,
       @Query('autoCoderRun') autoCoderRun?: string | string[],
-      @Query('forceRefresh') forceRefresh?: string | string[]
-  ): Promise<AutocodingReadinessDto> {
-    return this.codingReadinessService.getReadiness(workspace_id, {
+      @Query('forceRefresh') forceRefresh?: string | string[],
+      @Query('cacheOnly') cacheOnly?: string | string[]
+  ): Promise<AutocodingReadinessDto | null> {
+    const options = {
       autoCoderRun: this.parseAutoCoderRun(autoCoderRun),
       forceRefresh: this.parseBooleanQuery(forceRefresh)
-    });
+    };
+
+    if (this.parseBooleanQuery(cacheOnly)) {
+      return this.codingReadinessService.getReadinessFromCache(workspace_id, options);
+    }
+
+    return this.codingReadinessService.getReadiness(workspace_id, options);
   }
 
   @Post(':workspace_id/coding/freshness/code')
@@ -1126,7 +1159,7 @@ export class WorkspaceCodingStatisticsController {
       };
     }
 
-    await this.codingFreshnessService.assertAutoCodingRunCanStart(
+    await this.autoCodingRunGuardService.assertAutoCodingRunCanStart(
       workspace_id,
       version === 'v3' ? 2 : 1
     );
@@ -1397,6 +1430,11 @@ export class WorkspaceCodingStatisticsController {
           description:
             'Raw status total before covered source variables are excluded'
         },
+        responseAnalysisRawCases: {
+          type: 'number',
+          description:
+            'Raw response count covered by response analysis statuses'
+        },
         coveredSourceVariableCount: {
           type: 'number',
           description:
@@ -1449,6 +1487,7 @@ export class WorkspaceCodingStatisticsController {
   ): Promise<{
         totalCasesToCode: number;
         statusTotalCasesToCode: number;
+        responseAnalysisRawCases: number;
         coveredSourceVariableCount: number;
         coveredSourceResponseCount: number;
         completedCases: number;
@@ -1481,6 +1520,11 @@ export class WorkspaceCodingStatisticsController {
           type: 'number',
           description:
             'Raw status total before covered source variables are excluded'
+        },
+        responseAnalysisRawCases: {
+          type: 'number',
+          description:
+            'Raw response count covered by response analysis statuses'
         },
         coveredSourceVariableCount: {
           type: 'number',
@@ -1557,6 +1601,7 @@ export class WorkspaceCodingStatisticsController {
   ): Promise<{
         totalIncompleteResponses: number;
         statusTotalIncompleteResponses: number;
+        responseAnalysisRawCases: number;
         coveredSourceVariableCount: number;
         coveredSourceResponseCount: number;
         appliedResponses: number;
@@ -1594,6 +1639,11 @@ export class WorkspaceCodingStatisticsController {
           type: 'number',
           description:
             'Raw status total before covered source variables are excluded'
+        },
+        responseAnalysisRawCases: {
+          type: 'number',
+          description:
+            'Raw response count covered by response analysis statuses'
         },
         coveredSourceVariableCount: {
           type: 'number',
@@ -1660,6 +1710,7 @@ export class WorkspaceCodingStatisticsController {
   async getCaseCoverageOverview(@WorkspaceId() workspace_id: number): Promise<{
     totalCasesToCode: number;
     statusTotalCasesToCode: number;
+    responseAnalysisRawCases: number;
     coveredSourceVariableCount: number;
     coveredSourceResponseCount: number;
     effectiveTotalCasesToCode: number;
@@ -1795,6 +1846,10 @@ export class WorkspaceCodingStatisticsController {
                           type: 'number',
                           description: 'Job definition ID'
                         },
+                        name: {
+                          type: 'string',
+                          description: 'User-facing job definition name'
+                        },
                         status: {
                           type: 'string',
                           description: 'Job definition status'
@@ -1842,6 +1897,7 @@ export class WorkspaceCodingStatisticsController {
             variableKey: string;
             conflictingDefinitions: Array<{
               id: number;
+              name?: string;
               status: string;
             }>;
           }>;
@@ -2337,6 +2393,12 @@ export class WorkspaceCodingStatisticsController {
     description: 'Limit export to one or more coder IDs (comma-separated or repeated query parameters)',
     type: String
   })
+  @ApiQuery({
+    name: 'authToken',
+    required: false,
+    description: 'Temporary workspace auth token for replay URLs in the workbook',
+    type: String
+  })
   @ApiOkResponse({
     description:
       "Cohen's Kappa workbook exported as XLSX with summary, pairwise details and coding results sheets.",
@@ -2358,6 +2420,7 @@ export class WorkspaceCodingStatisticsController {
       @Query('jobDefinitionIds') jobDefinitionIds: string | string[] | undefined,
       @Query('coderTrainingIds') coderTrainingIds: string | string[] | undefined,
       @Query('coderIds') coderIds: string | string[] | undefined,
+      @Query('authToken') authToken: string | undefined,
       @Query('level') level: string | string[] | undefined,
       @Req() req: Request,
       @Res() res: Response
@@ -2378,7 +2441,8 @@ export class WorkspaceCodingStatisticsController {
         workspace_id,
         statistics,
         statistics.sourceItems,
-        req
+        req,
+        authToken || ''
       );
       const exportDate = new Date().toISOString().slice(0, 10);
 
@@ -2550,7 +2614,7 @@ export class WorkspaceCodingStatisticsController {
       coderTrainingIds,
       coderIds
     });
-    return this.codingReviewService.getWorkspaceCohensKappaSummary(
+    return this.doubleCodingReviewQueryService.getWorkspaceCohensKappaSummary(
       workspace_id,
       options.weightedMean,
       options.excludeTrainings,
@@ -2722,9 +2786,25 @@ export class WorkspaceCodingStatisticsController {
                      caseOrderingMode?: 'continuous' | 'alternating';
                      maxCodingCases?: number;
                      distributionSeed?: string | number;
-                   }
+                   },
+                   @Res({ passthrough: true }) response: Response
   ): Promise<DistributionCalculationResponse> {
-    return this.codingJobService.calculateDistribution(workspace_id, body);
+    const cancellation = new AbortController();
+    const cancelOnDisconnect = () => {
+      if (!response.writableEnded) {
+        cancellation.abort();
+      }
+    };
+    response.once('close', cancelOnDisconnect);
+
+    try {
+      return await this.distributionPreviewLimiterService.run(
+        () => this.codingJobService.calculateDistribution(workspace_id, body),
+        cancellation.signal
+      );
+    } finally {
+      response.removeListener('close', cancelOnDisconnect);
+    }
   }
 
   @Post(':workspace_id/coding/create-distributed-jobs')

@@ -115,6 +115,89 @@
         width: 100%;
         min-width: 0;
       }
+
+      .item-dataset-selection-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+
+        button {
+          white-space: normal;
+        }
+      }
+
+      .psychometric-info-block {
+        background-color: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+        padding: clamp(12px, 2vw, 20px);
+
+        .psychometric-info-header {
+          align-items: flex-start;
+          display: grid;
+          gap: 12px;
+          grid-template-columns: 24px minmax(0, 1fr);
+
+          mat-icon {
+            color: #546e7a;
+            height: 24px;
+            width: 24px;
+          }
+
+          p {
+            color: #444;
+            line-height: 1.5;
+            margin: 0;
+          }
+        }
+
+        .psychometric-item-count {
+          color: #333;
+          font-weight: 500;
+          margin: 12px 0 4px 36px;
+        }
+
+        .psychometric-info-toggle {
+          color: #555;
+          margin-left: 28px;
+
+          mat-icon {
+            font-size: 18px;
+            height: 18px;
+            margin-right: 4px;
+            width: 18px;
+          }
+        }
+
+        .psychometric-info-grid {
+          display: grid;
+          gap: 16px;
+          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+          margin-top: 12px;
+
+          .psychometric-info-item {
+            background: #fff;
+            border-left: 3px solid #78909c;
+            border-radius: 6px;
+            padding: 12px;
+
+            strong {
+              color: #333;
+              display: block;
+              font-size: 13px;
+              margin-bottom: 4px;
+            }
+
+            p {
+              color: #666;
+              font-size: 12px;
+              line-height: 1.4;
+              margin: 0;
+            }
+          }
+        }
+      }
     }
   }
 
@@ -129,6 +212,26 @@
     border-radius: 8px;
     background: #fff8e1;
 
+    &.export-warning--error {
+      border-color: #ef9a9a;
+      border-left-color: #c62828;
+      background: #ffebee;
+
+      mat-icon {
+        color: #b71c1c;
+      }
+    }
+
+    &.export-warning--notice {
+      border-color: #90caf9;
+      border-left-color: #1976d2;
+      background: #e3f2fd;
+
+      mat-icon {
+        color: #1565c0;
+      }
+    }
+
     mat-icon {
       color: #a86800;
       margin-top: 2px;
@@ -137,13 +240,11 @@
     .warning-title {
       font-weight: 600;
       color: #333;
-      margin-bottom: 4px;
+      margin-bottom: 8px;
     }
 
-    p {
-      margin: 0 0 10px;
-      color: #4f4f4f;
-      line-height: 1.4;
+    .diagnostic-summary {
+      min-width: 0;
     }
 
     button {
@@ -238,6 +339,13 @@
     .filter-section .filter-fields-container .selection-trigger {
       align-items: stretch;
       flex-direction: column;
+    }
+
+    .export-options-section
+      .results-options
+      .psychometric-info-block
+      .psychometric-info-grid {
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 }

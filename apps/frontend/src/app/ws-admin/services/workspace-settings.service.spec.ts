@@ -108,6 +108,41 @@ describe('WorkspaceSettingsService', () => {
     });
   });
 
+  describe('setWorkspaceSettings', () => {
+    it('should post settings as one batch', () => {
+      service.setWorkspaceSettings(1, [
+        { key: 'one', value: '1', description: 'First' },
+        { key: 'two', value: '2', description: 'Second' }
+      ]).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/batch`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        settings: [
+          { key: 'one', value: '1', description: 'First' },
+          { key: 'two', value: '2', description: 'Second' }
+        ]
+      });
+      req.flush([]);
+    });
+
+    it('should invalidate cached settings after persisting a batch', () => {
+      service.getWorkspaceSetting(1, 'one').subscribe();
+      const getReq = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/one`);
+      getReq.flush({ id: 1, key: 'one', value: 'old' });
+
+      service.setWorkspaceSettings(1, [
+        { key: 'one', value: 'new' }
+      ]).subscribe();
+      const postReq = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/batch`);
+      postReq.flush([{ id: 1, key: 'one', value: 'new' }]);
+
+      service.getWorkspaceSetting(1, 'one').subscribe();
+      const secondGetReq = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/one`);
+      secondGetReq.flush({ id: 1, key: 'one', value: 'new' });
+    });
+  });
+
   describe('getAutoFetchCodingStatistics', () => {
     it('should return parsed boolean', () => {
       service.getAutoFetchCodingStatistics(1).subscribe(val => {
@@ -117,9 +152,9 @@ describe('WorkspaceSettingsService', () => {
       req.flush({ value: '{"enabled":true}' });
     });
 
-    it('should return true on error', () => {
+    it('should return false on error', () => {
       service.getAutoFetchCodingStatistics(1).subscribe(val => {
-        expect(val).toBe(true);
+        expect(val).toBe(false);
       });
       const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/auto-fetch-coding-statistics`);
       req.flush({}, { status: 404, statusText: 'Not Found' });
@@ -144,6 +179,130 @@ describe('WorkspaceSettingsService', () => {
     });
   });
 
+  describe('getReplayUrlExportMode', () => {
+    it('should return parsed replay URL export mode', () => {
+      service.getReplayUrlExportMode(1).subscribe(val => {
+        expect(val).toBe('workspaceId');
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/replay-url-export-mode`);
+      req.flush({ value: '{"mode":"workspaceId"}' });
+    });
+
+    it('should return auth mode on error', () => {
+      service.getReplayUrlExportMode(1).subscribe(val => {
+        expect(val).toBe('auth');
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/replay-url-export-mode`);
+      req.flush({}, { status: 404, statusText: 'Not Found' });
+    });
+  });
+
+  describe('setReplayUrlExportMode', () => {
+    it('should persist the replay URL export mode', () => {
+      service.setReplayUrlExportMode(1, 'workspaceId').subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        key: 'replay-url-export-mode',
+        value: '{"mode":"workspaceId"}',
+        description:
+          'Controls whether exported replay URLs use temporary auth tokens or workspace login links'
+      });
+      req.flush({});
+    });
+  });
+
+  describe('getReplayUrlExportTokenDurationDays', () => {
+    it('should return parsed replay URL export token duration', () => {
+      service.getReplayUrlExportTokenDurationDays(1, 90).subscribe(val => {
+        expect(val).toBe(45);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/replay-url-export-token-duration-days`);
+      req.flush({ value: '{"durationDays":45}' });
+    });
+
+    it('should clamp replay URL export token duration to the policy maximum', () => {
+      service.getReplayUrlExportTokenDurationDays(1, 60).subscribe(val => {
+        expect(val).toBe(60);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/replay-url-export-token-duration-days`);
+      req.flush({ value: '{"durationDays":90}' });
+    });
+
+    it('should return the policy-clamped default on error', () => {
+      service.getReplayUrlExportTokenDurationDays(1, 60).subscribe(val => {
+        expect(val).toBe(60);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/replay-url-export-token-duration-days`);
+      req.flush({}, { status: 404, statusText: 'Not Found' });
+    });
+  });
+
+  describe('setReplayUrlExportTokenDurationDays', () => {
+    it('should persist the replay URL export token duration', () => {
+      service.setReplayUrlExportTokenDurationDays(1, 45, 90).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        key: 'replay-url-export-token-duration-days',
+        value: '{"durationDays":45}',
+        description: 'Controls how many days exported auth replay URLs stay valid'
+      });
+      req.flush({});
+    });
+  });
+
+  describe('getAuthSessionIdleTimeoutMinutes', () => {
+    it('should return parsed auth session idle timeout minutes', () => {
+      service.getAuthSessionIdleTimeoutMinutes(1).subscribe(val => {
+        expect(val).toBe(45);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/auth-session-idle-timeout-minutes`);
+      req.flush({ value: '{"timeoutMinutes":45}' });
+    });
+
+    it('should clamp auth session idle timeout minutes to the policy range', () => {
+      service.getAuthSessionIdleTimeoutMinutes(1).subscribe(val => {
+        expect(val).toBe(480);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/auth-session-idle-timeout-minutes`);
+      req.flush({ value: '{"timeoutMinutes":900}' });
+    });
+
+    it('should return the default on error', () => {
+      service.getAuthSessionIdleTimeoutMinutes(1).subscribe(val => {
+        expect(val).toBe(30);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/auth-session-idle-timeout-minutes`);
+      req.flush({}, { status: 404, statusText: 'Not Found' });
+    });
+  });
+
+  describe('setAuthSessionIdleTimeoutMinutes', () => {
+    it('should persist auth session idle timeout minutes', () => {
+      const changes: { workspaceId: number; timeoutMinutes: number }[] = [];
+      const subscription = service.authSessionIdleTimeoutChanged$.subscribe(change => {
+        changes.push(change);
+      });
+
+      service.setAuthSessionIdleTimeoutMinutes(1, 45).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        key: 'auth-session-idle-timeout-minutes',
+        value: '{"timeoutMinutes":45}',
+        description: 'Controls after how many inactive minutes users must reauthenticate'
+      });
+      req.flush({});
+
+      expect(changes).toEqual([{ workspaceId: 1, timeoutMinutes: 45 }]);
+      subscription.unsubscribe();
+    });
+  });
+
   describe('setAutoRefreshManualCodingJobs', () => {
     it('should persist the setting', () => {
       service.setAutoRefreshManualCodingJobs(1, false).subscribe();
@@ -157,6 +316,86 @@ describe('WorkspaceSettingsService', () => {
           'Controls whether coding status and manual coding views refresh automatically'
       });
       req.flush({});
+    });
+  });
+
+  describe('getEvaluationMode', () => {
+    it('should return parsed boolean', () => {
+      service.getEvaluationMode(1).subscribe(val => {
+        expect(val).toBe(true);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/evaluation-mode`);
+      req.flush({ value: '{"enabled":true}' });
+    });
+
+    it('should return false on error', () => {
+      service.getEvaluationMode(1).subscribe(val => {
+        expect(val).toBe(false);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/evaluation-mode`);
+      req.flush({}, { status: 404, statusText: 'Not Found' });
+    });
+  });
+
+  describe('setEvaluationMode', () => {
+    it('should persist evaluation mode and disable expensive automatic refreshes', () => {
+      service.setEvaluationMode(1, true).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/batch`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        settings: [
+          {
+            key: 'evaluation-mode',
+            value: '{"enabled":true}',
+            description:
+              'Controls whether expensive automatic coding refreshes are disabled for evaluation sessions'
+          },
+          {
+            key: 'auto-fetch-coding-statistics',
+            value: '{"enabled":false}',
+            description:
+              'Controls whether coding statistics are automatically fetched in the coding management component'
+          },
+          {
+            key: 'auto-refresh-manual-coding-jobs',
+            value: '{"enabled":false}',
+            description:
+              'Controls whether coding status and manual coding views refresh automatically'
+          }
+        ]
+      });
+      req.flush([]);
+    });
+
+    it('should persist evaluation mode off and restore normal automatic refresh defaults', () => {
+      service.setEvaluationMode(1, false).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/batch`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        settings: [
+          {
+            key: 'evaluation-mode',
+            value: '{"enabled":false}',
+            description:
+              'Controls whether expensive automatic coding refreshes are disabled for evaluation sessions'
+          },
+          {
+            key: 'auto-fetch-coding-statistics',
+            value: '{"enabled":false}',
+            description:
+              'Controls whether coding statistics are automatically fetched in the coding management component'
+          },
+          {
+            key: 'auto-refresh-manual-coding-jobs',
+            value: '{"enabled":true}',
+            description:
+              'Controls whether coding status and manual coding views refresh automatically'
+          }
+        ]
+      });
+      req.flush([]);
     });
   });
 
@@ -228,7 +467,7 @@ describe('WorkspaceSettingsService', () => {
       expect(req.request.body).toEqual({
         key: 'include-derive-error-in-manual-coding',
         value: '{"enabled":true}',
-        description: 'Controls whether DERIVE_ERROR responses can be included in manual coding jobs'
+        description: 'Controls whether DERIVE_ERROR responses are included in coding lists and can be selected for manual coding jobs'
       });
       req.flush({});
     });

@@ -6,7 +6,7 @@ import {
   MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef
 } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
-import { CommonModule } from '@angular/common';
+
 import { MatIconModule } from '@angular/material/icon';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
@@ -48,13 +48,11 @@ import { ValidationBatchRunnerService } from '../../../shared/services/validatio
   templateUrl: './validation-dialog.component.html',
   standalone: true,
   imports: [
-    CommonModule,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
     MatExpansionModule,
     MatSnackBarModule,
-    // Panel components
     ValidationResultBannerComponent,
     TestTakersValidationPanelComponent,
     VariablesValidationPanelComponent,

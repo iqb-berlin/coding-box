@@ -1,5 +1,5 @@
 import { Component, Inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import {
   MAT_DIALOG_DATA,
   MatDialogModule,
@@ -29,7 +29,6 @@ export type TestResultsExportDialogData = {
   selector: 'coding-box-test-results-export-dialog',
   standalone: true,
   imports: [
-    CommonModule,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
@@ -40,66 +39,71 @@ export type TestResultsExportDialogData = {
   template: `
     <h2 mat-dialog-title>Testergebnisse exportieren</h2>
     <mat-dialog-content>
-      <mat-list *ngIf="!data.isExporting">
-        <mat-list-item (click)="selectExportType('results')">
-          <mat-icon matListItemIcon>download</mat-icon>
-          <div matListItemTitle>Testergebnisse ohne Kodierung exportieren</div>
-          <div matListItemLine>Rohdaten aus der Testausführung exportieren</div>
-        </mat-list-item>
-        <mat-divider></mat-divider>
-        <mat-list-item (click)="selectExportType('logs')">
-          <mat-icon matListItemIcon>download</mat-icon>
-          <div matListItemTitle>Logs exportieren</div>
-          <div matListItemLine>Test-Logs exportieren</div>
-        </mat-list-item>
-      </mat-list>
+      @if (!data.isExporting) {
+        <mat-list>
+          <mat-list-item (click)="selectExportType('results')">
+            <mat-icon matListItemIcon>download</mat-icon>
+            <div matListItemTitle>Testergebnisse ohne Kodierung exportieren</div>
+            <div matListItemLine>Rohdaten aus der Testausführung exportieren</div>
+          </mat-list-item>
+          <mat-divider></mat-divider>
+          <mat-list-item (click)="selectExportType('logs')">
+            <mat-icon matListItemIcon>download</mat-icon>
+            <div matListItemTitle>Logs exportieren</div>
+            <div matListItemLine>Test-Logs exportieren</div>
+          </mat-list-item>
+        </mat-list>
+      }
 
       <mat-divider class="export-divider"></mat-divider>
 
       <!-- Export Progress Section -->
-      <div *ngIf="data.isExporting" class="export-progress-section">
-        <div class="export-progress-header">
-          <span class="export-status">
-            {{
+      @if (data.isExporting) {
+        <div class="export-progress-section">
+          <div class="export-progress-header">
+            <span class="export-status">
+              {{
               data.exportTypeInProgress === 'test-logs' ? 'Logs' : 'Ergebnisse'
-            }}:
-            {{ data.exportJobStatus || '...' }}
-          </span>
-          <span class="export-percentage">{{ data.exportJobProgress }}%</span>
+              }}:
+              {{ data.exportJobStatus || '...' }}
+            </span>
+            <span class="export-percentage">{{ data.exportJobProgress }}%</span>
+          </div>
+          <mat-progress-bar
+            mode="determinate"
+            [value]="data.exportJobProgress"
+          ></mat-progress-bar>
         </div>
-        <mat-progress-bar
-          mode="determinate"
-          [value]="data.exportJobProgress"
-        ></mat-progress-bar>
-      </div>
+      }
 
       <!-- Download Ready Section -->
-      <div
-        *ngIf="
-          data.exportJobStatus === 'completed' &&
-          !data.isExporting &&
-          data.exportJobId
-        "
-        class="download-ready-section"
-      >
-        <mat-divider></mat-divider>
-        <mat-list-item (click)="downloadExport()">
-          <mat-icon matListItemIcon>file_download</mat-icon>
-          <div matListItemTitle>Download bereit</div>
-          <div matListItemLine>Exportierte Datei herunterladen</div>
-        </mat-list-item>
-      </div>
+      @if (
+        data.exportJobStatus === 'completed' &&
+        !data.isExporting &&
+        data.exportJobId
+        ) {
+        <div
+          class="download-ready-section"
+          >
+          <mat-divider></mat-divider>
+          <mat-list-item (click)="downloadExport()">
+            <mat-icon matListItemIcon>file_download</mat-icon>
+            <div matListItemTitle>Download bereit</div>
+            <div matListItemLine>Exportierte Datei herunterladen</div>
+          </mat-list-item>
+        </div>
+      }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button (click)="cancel()">
         {{
-          data.isExporting && data.exportJobId ?
-            'Export abbrechen' :
-            'Abbrechen'
+        data.isExporting && data.exportJobId ?
+        'Export abbrechen' :
+        'Abbrechen'
         }}
       </button>
     </mat-dialog-actions>
-  `,
+    `,
   styles: [
     `
       mat-list-item {

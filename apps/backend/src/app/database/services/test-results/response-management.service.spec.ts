@@ -174,6 +174,55 @@ describe('ResponseManagementService', () => {
     expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
   });
 
+  it('clears database defaults for generated results created only by run 2', async () => {
+    const cleanupSelectQueryBuilder = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([])
+    };
+    const upsertUpdateQueryBuilder = createQueryBuilder({ affected: 1, raw: [{ id: 12 }] });
+    const manager = {
+      getRepository: jest.fn().mockReturnValue({
+        createQueryBuilder: jest.fn().mockReturnValue(cleanupSelectQueryBuilder)
+      }),
+      createQueryBuilder: jest.fn().mockReturnValue(upsertUpdateQueryBuilder),
+      insert: jest.fn(),
+      update: jest.fn(),
+      query: jest.fn().mockResolvedValue([])
+    };
+    const queryRunner = {
+      manager,
+      commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(),
+      release: jest.fn()
+    } as unknown as QueryRunner;
+    await createService().updateResponsesInDatabase(1, [{
+      id: -1,
+      isNew: true,
+      isAutocoderGenerated: true,
+      unitid: 1,
+      variableid: '_03',
+      value: '',
+      status: 3,
+      subform: 'elementCodes',
+      status_v3: 'CODING_COMPLETE',
+      code_v3: 1,
+      score_v3: 1
+    }], queryRunner, undefined, undefined, undefined, undefined, { unitIds: [1], autoCoderRun: 2, markCurrentVersion: 'v3' });
+    expect(upsertUpdateQueryBuilder.set).toHaveBeenCalledWith(expect.objectContaining({
+      status_v1: null,
+      code_v1: null,
+      score_v1: null,
+      status_v2: null,
+      code_v2: null,
+      score_v2: null,
+      status_v3: 5,
+      code_v3: 1,
+      score_v3: 1
+    }));
+  });
+
   it('marks applied jobs stale when generated autocoder upsert updates an existing row', async () => {
     const cleanupSelectQueryBuilder = {
       select: jest.fn().mockReturnThis(),
@@ -384,6 +433,60 @@ describe('ResponseManagementService', () => {
     expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
   });
 
+  it('throws database update errors after rolling back and releasing', async () => {
+    const persistenceError = new Error('database update failed');
+    const manager = {
+      query: jest.fn().mockResolvedValue([]),
+      update: jest.fn().mockRejectedValue(persistenceError)
+    };
+    const queryRunner = {
+      manager,
+      commitTransaction: jest.fn().mockResolvedValue(undefined),
+      rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+      release: jest.fn().mockResolvedValue(undefined)
+    } as unknown as QueryRunner;
+    const service = createService();
+
+    await expect(service.updateResponsesInDatabase(
+      1,
+      [{ id: 42, code_v1: 1 }],
+      queryRunner
+    )).rejects.toBe(persistenceError);
+
+    expect(queryRunner.rollbackTransaction).toHaveBeenCalledTimes(1);
+    expect(queryRunner.release).toHaveBeenCalledTimes(1);
+    expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
+  });
+
+  it('returns false only when cancellation is detected before a batch update', async () => {
+    const manager = {
+      query: jest.fn().mockResolvedValue([]),
+      update: jest.fn().mockResolvedValue({ affected: 1 })
+    };
+    const queryRunner = {
+      manager,
+      commitTransaction: jest.fn().mockResolvedValue(undefined),
+      rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+      release: jest.fn().mockResolvedValue(undefined)
+    } as unknown as QueryRunner;
+    const isJobCancelled = jest.fn().mockResolvedValue(true);
+    const service = createService();
+
+    await expect(service.updateResponsesInDatabase(
+      1,
+      [{ id: 42, code_v1: 1 }],
+      queryRunner,
+      'job-1',
+      isJobCancelled
+    )).resolves.toBe(false);
+
+    expect(isJobCancelled).toHaveBeenCalledWith('job-1');
+    expect(manager.update).not.toHaveBeenCalled();
+    expect(queryRunner.rollbackTransaction).toHaveBeenCalledTimes(1);
+    expect(queryRunner.release).toHaveBeenCalledTimes(1);
+    expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
+  });
+
   it('moves applied jobs back to completed/stale-source after auto-coding run 1 clears manual results', async () => {
     const cleanupSelectQueryBuilder = {
       select: jest.fn().mockReturnThis(),
@@ -452,6 +555,50 @@ describe('ResponseManagementService', () => {
       .toHaveBeenCalledWith(1, [42], 'AUTOCODE_RUN', 'stale_source', manager);
     expect(codingFreshnessService.markVersionCurrent)
       .toHaveBeenCalledWith(1, [1], 'v1', manager);
+  });
+
+  it('updates the value and raw status of an existing generated response', async () => {
+    const manager = {
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      query: jest.fn().mockResolvedValue([])
+    };
+    const queryRunner = {
+      manager,
+      commitTransaction: jest.fn().mockResolvedValue(undefined),
+      rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+      release: jest.fn().mockResolvedValue(undefined)
+    } as unknown as QueryRunner;
+    const service = createService();
+
+    await service.updateResponsesInDatabase(
+      1,
+      [
+        {
+          id: 42,
+          isAutocoderGenerated: true,
+          value: '2',
+          status: 3,
+          autocoderInvalidatedVersion: 'v2',
+          code_v3: 6,
+          status_v3: 'CODING_COMPLETE',
+          score_v3: 1
+        }
+      ],
+      queryRunner
+    );
+
+    expect(manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      42,
+      {
+        value: '2',
+        status: 3,
+        autocoder_invalidated_version: 'v2',
+        code_v3: 6,
+        status_v3: 5,
+        score_v3: 1
+      }
+    );
   });
 
   it('invalidates coding statistics after deleting a response directly', async () => {
@@ -597,5 +744,38 @@ describe('ResponseManagementService', () => {
       }),
       manager
     );
+  });
+
+  it('leaves commit, rollback, release, and cache invalidation to an external transaction owner', async () => {
+    const manager = {
+      query: jest.fn().mockResolvedValue([]),
+      update: jest.fn().mockResolvedValue({ affected: 1 })
+    };
+    const queryRunner = {
+      manager,
+      commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(),
+      release: jest.fn()
+    } as unknown as QueryRunner;
+    const service = createService();
+
+    await expect(service.updateResponsesInDatabase(
+      1,
+      [{ id: 10, code_v1: 1 }],
+      queryRunner,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { managedExternally: true }
+    )).resolves.toBe(true);
+
+    expect(manager.update).toHaveBeenCalledTimes(1);
+    expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
+    expect(queryRunner.rollbackTransaction).not.toHaveBeenCalled();
+    expect(queryRunner.release).not.toHaveBeenCalled();
+    expect(workspaceTestResultsService.invalidateWorkspaceStatsCache)
+      .not.toHaveBeenCalled();
   });
 });

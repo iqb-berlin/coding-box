@@ -1,4 +1,5 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Subject, of, throwError } from 'rxjs';
 import {
   ExportJobService,
@@ -7,28 +8,52 @@ import {
 } from './export-job.service';
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { AppService } from '../../../core/services/app.service';
+import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import {
+  DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
+  EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+} from '../../../core/services/auth-session.config';
 
 describe('ExportJobService', () => {
   let service: ExportJobService;
   let codingJobBackendServiceMock: jest.Mocked<CodingJobBackendService>;
   let appServiceMock: jest.Mocked<AppService>;
+  let workspaceSettingsServiceMock: jest.Mocked<WorkspaceSettingsService>;
 
   beforeEach(() => {
     codingJobBackendServiceMock = {
       startExportJob: jest.fn(),
       getExportJobStatus: jest.fn(),
       cancelExportJob: jest.fn(),
-      downloadExportFile: jest.fn()
+      downloadExportFile: jest.fn(),
+      getItemMatrixExportDiagnostics: jest.fn(),
+      downloadIncompleteItemMatrix: jest.fn(),
+      deleteExportJob: jest.fn().mockReturnValue(of({
+        success: true,
+        message: 'deleted'
+      }))
     } as unknown as jest.Mocked<CodingJobBackendService>;
     appServiceMock = {
-      createOwnToken: jest.fn().mockReturnValue(of('auth-token'))
+      createOwnToken: jest.fn().mockReturnValue(of('auth-token')),
+      getWorkspaceTokenPolicy: jest.fn().mockReturnValue(of({
+        scopes: {
+          'replay:read': { maxDurationDays: DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS },
+          'replay-statistics:write': { maxDurationDays: 1 },
+          'coding-job:operate': { maxDurationDays: 1 }
+        }
+      }))
     } as unknown as jest.Mocked<AppService>;
+    workspaceSettingsServiceMock = {
+      getReplayUrlExportMode: jest.fn().mockReturnValue(of('auth')),
+      getReplayUrlExportTokenDurationDays: jest.fn((_: number, maxDurationDays: number) => of(maxDurationDays))
+    } as unknown as jest.Mocked<WorkspaceSettingsService>;
 
     TestBed.configureTestingModule({
       providers: [
         ExportJobService,
         { provide: CodingJobBackendService, useValue: codingJobBackendServiceMock },
-        { provide: AppService, useValue: appServiceMock }
+        { provide: AppService, useValue: appServiceMock },
+        { provide: WorkspaceSettingsService, useValue: workspaceSettingsServiceMock }
       ]
     });
 
@@ -37,6 +62,52 @@ describe('ExportJobService', () => {
 
   it('should be created', () => {
     expect(service).toBeTruthy();
+  });
+
+  it.each([
+    ['a rejected deletion', of({ success: false, message: 'not deleted' })],
+    ['a failed deletion request', throwError(() => new Error('offline'))]
+  ])('keeps a job visible after %s', (_label, deletionResult) => {
+    codingJobBackendServiceMock.startExportJob.mockReturnValue(of({
+      jobId: 'j1',
+      message: 'Job started'
+    }));
+    codingJobBackendServiceMock.deleteExportJob.mockReturnValue(
+      deletionResult
+    );
+    service.startJob(1, {
+      exportType: 'aggregated',
+      userId: 1
+    }).subscribe();
+    let removed = true;
+
+    service.removeJob('j1').subscribe(result => {
+      removed = result;
+    });
+
+    expect(removed).toBe(false);
+    expect(service.activeJobs.map(job => job.jobId)).toContain('j1');
+    service.ngOnDestroy();
+  });
+
+  it('removes a job only after backend cleanup succeeds', () => {
+    codingJobBackendServiceMock.startExportJob.mockReturnValue(of({
+      jobId: 'j1',
+      message: 'Job started'
+    }));
+    service.startJob(1, {
+      exportType: 'aggregated',
+      userId: 1
+    }).subscribe();
+    let removed = false;
+
+    service.removeJob('j1').subscribe(result => {
+      removed = result;
+    });
+
+    expect(removed).toBe(true);
+    expect(service.activeJobs.map(job => job.jobId)).not.toContain('j1');
+    service.ngOnDestroy();
   });
 
   describe('startJob', () => {
@@ -63,7 +134,7 @@ describe('ExportJobService', () => {
     it('should keep structured progress details from polling', fakeAsync(() => {
       codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
       codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({
-        status: 'active',
+        status: 'processing',
         progress: 55,
         progressPhase: 'writing',
         processedRows: 100,
@@ -71,7 +142,11 @@ describe('ExportJobService', () => {
         progressMessage: '100/200 rows'
       }));
 
-      service.startJob(1, { exportType: 'results-by-version', userId: 1 }).subscribe();
+      service.startJob(1, {
+        exportType: 'results-by-version',
+        userId: 1,
+        missingsProfileId: 7
+      }).subscribe();
 
       tick(2000);
 
@@ -81,6 +156,45 @@ describe('ExportJobService', () => {
         processedRows: 100,
         totalRows: 200,
         progressMessage: '100/200 rows'
+      }));
+
+      service.ngOnDestroy();
+    }));
+
+    it('should expire item matrix actions without another status poll', fakeAsync(() => {
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(of({
+        jobId: 'j1',
+        message: 'Job started'
+      }));
+      codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({
+        status: 'failed',
+        progress: 90,
+        errorCode: 'ITEM_MATRIX_UNRESOLVED_CELLS',
+        errorDetails: {
+          total: 2,
+          groupCount: 1,
+          sampleLimit: 20,
+          diagnosticsAvailable: true,
+          incompleteDownloadAvailable: true,
+          expiresAt: Date.now() + 2500
+        }
+      }));
+
+      service.startJob(1, {
+        exportType: 'item-matrix',
+        missingsProfileId: 4
+      }).subscribe();
+
+      tick(2000);
+      expect(service.failedJobs[0].errorDetails).toEqual(expect.objectContaining({
+        diagnosticsAvailable: true,
+        incompleteDownloadAvailable: true
+      }));
+
+      tick(500);
+      expect(service.failedJobs[0].errorDetails).toEqual(expect.objectContaining({
+        diagnosticsAvailable: false,
+        incompleteDownloadAvailable: false
       }));
 
       service.ngOnDestroy();
@@ -133,8 +247,12 @@ describe('ExportJobService', () => {
 
       expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(
         1,
+        DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
+        EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
+      );
+      expect(workspaceSettingsServiceMock.getReplayUrlExportTokenDurationDays).toHaveBeenCalledWith(
         1,
-        ['replay:read', 'replay-statistics:write']
+        DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS
       );
       expect(codingJobBackendServiceMock.startExportJob).toHaveBeenCalledWith(
         1,
@@ -144,6 +262,22 @@ describe('ExportJobService', () => {
           authToken: 'auth-token',
           serverUrl: window.location.origin
         })
+      );
+    });
+
+    it('should use the configured export replay token duration', () => {
+      workspaceSettingsServiceMock.getReplayUrlExportTokenDurationDays.mockReturnValueOnce(of(30));
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
+
+      service.startJob(1, {
+        exportType: 'detailed',
+        includeReplayUrl: true
+      }).subscribe();
+
+      expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(
+        1,
+        30,
+        EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
       );
     });
 
@@ -179,6 +313,31 @@ describe('ExportJobService', () => {
         expect.objectContaining({
           includeReplayUrl: true,
           authToken: 'existing-token'
+        })
+      );
+    });
+
+    it('should use workspace login links without creating auth token in workspaceId mode', () => {
+      workspaceSettingsServiceMock.getReplayUrlExportMode.mockReturnValueOnce(of('workspaceId'));
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
+
+      service.startJob(1, {
+        exportType: 'detailed',
+        includeReplayUrl: true
+      }).subscribe();
+
+      expect(appServiceMock.createOwnToken).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.startExportJob).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          includeReplayUrl: true,
+          serverUrl: window.location.origin
+        })
+      );
+      expect(codingJobBackendServiceMock.startExportJob).toHaveBeenCalledWith(
+        1,
+        expect.not.objectContaining({
+          authToken: expect.any(String)
         })
       );
     });
@@ -255,4 +414,109 @@ describe('ExportJobService', () => {
       expect(service.completedJobs[0].status).toBe('completed');
     });
   });
+
+  it('loads diagnostics and downloads an incomplete matrix without changing its failed status', () => {
+    const diagnostics = { total: 2, sampleLimit: 20, groups: [] };
+    const blob = new Blob(['zip'], { type: 'application/zip' });
+    const job = {
+      jobId: 'j1',
+      workspaceId: 1,
+      exportType: 'item-matrix',
+      status: 'failed' as const,
+      progress: 90
+    };
+    codingJobBackendServiceMock.getItemMatrixExportDiagnostics
+      .mockReturnValue(of(diagnostics));
+    codingJobBackendServiceMock.downloadIncompleteItemMatrix
+      .mockReturnValue(of({
+        blob,
+        fileName: 'Itemdatensatz-UNVOLLSTAENDIG-2026-07-25.zip'
+      }));
+    const anchor = document.createElement('a');
+    jest.spyOn(anchor, 'click').mockImplementation();
+    const createElementSpy = jest.spyOn(document, 'createElement')
+      .mockReturnValue(anchor);
+    Object.defineProperty(window.URL, 'createObjectURL', {
+      value: jest.fn().mockReturnValue('blob:url'),
+      configurable: true
+    });
+    Object.defineProperty(window.URL, 'revokeObjectURL', {
+      value: jest.fn(),
+      configurable: true
+    });
+
+    let receivedTotal = 0;
+    service.getItemMatrixDiagnostics(job).subscribe(result => {
+      receivedTotal = result.total;
+    });
+    service.downloadIncompleteItemMatrix(job).subscribe();
+
+    expect(receivedTotal).toBe(2);
+    expect(
+      codingJobBackendServiceMock.downloadIncompleteItemMatrix
+    ).toHaveBeenCalledWith(1, 'j1');
+    expect(anchor.download).toBe(
+      'Itemdatensatz-UNVOLLSTAENDIG-2026-07-25.zip'
+    );
+    expect(job.status).toBe('failed');
+    createElementSpy.mockRestore();
+  });
+
+  it('cancels an in-flight incomplete download when destroyed', () => {
+    const download$ = new Subject<{
+      blob: Blob;
+      fileName?: string;
+    }>();
+    codingJobBackendServiceMock.downloadIncompleteItemMatrix
+      .mockReturnValue(download$);
+    service.downloadIncompleteItemMatrix({
+      jobId: 'j1',
+      workspaceId: 1,
+      exportType: 'item-matrix',
+      status: 'failed',
+      progress: 90
+    }).subscribe();
+
+    expect(download$.observers).toHaveLength(1);
+    service.ngOnDestroy();
+    expect(download$.observers).toHaveLength(0);
+  });
+
+  it('marks item matrix artifacts expired after a 404 download', fakeAsync(() => {
+    codingJobBackendServiceMock.startExportJob.mockReturnValue(of({
+      jobId: 'j1',
+      message: 'Job started'
+    }));
+    codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({
+      status: 'failed',
+      progress: 90,
+      errorCode: 'ITEM_MATRIX_UNRESOLVED_CELLS',
+      errorDetails: {
+        total: 2,
+        groupCount: 1,
+        sampleLimit: 20,
+        diagnosticsAvailable: true,
+        incompleteDownloadAvailable: true,
+        expiresAt: Date.now() + 3600000
+      }
+    }));
+    codingJobBackendServiceMock.downloadIncompleteItemMatrix.mockReturnValue(
+      throwError(() => new HttpErrorResponse({ status: 404 }))
+    );
+    service.startJob(1, {
+      exportType: 'item-matrix',
+      missingsProfileId: 4
+    }).subscribe();
+    tick(2000);
+
+    service.downloadIncompleteItemMatrix(service.failedJobs[0]).subscribe({
+      error: () => undefined
+    });
+
+    expect(service.failedJobs[0].errorDetails).toEqual(expect.objectContaining({
+      diagnosticsAvailable: false,
+      incompleteDownloadAvailable: false
+    }));
+    service.ngOnDestroy();
+  }));
 });

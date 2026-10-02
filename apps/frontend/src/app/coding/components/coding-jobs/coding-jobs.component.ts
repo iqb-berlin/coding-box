@@ -16,7 +16,8 @@ import {
   firstValueFrom,
   filter,
   Subject,
-  Subscription
+  Subscription,
+  takeUntil
 } from 'rxjs';
 import { MatSortModule, Sort } from '@angular/material/sort';
 import {
@@ -200,6 +201,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   dataSource = new MatTableDataSource<CodingJob>([]);
   selection = new SelectionModel<CodingJob>(true, []);
   isLoading = false;
+  hasLoadedJobs = false;
 
   coderTrainings: CoderTraining[] = [];
   selectedTrainingId: number | string | null = null;
@@ -217,6 +219,9 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
   private loadJobsSubscription?: Subscription;
   private jobNameFilterSubscription?: Subscription;
+  private permissionsSubscription?: Subscription;
+  private coderTrainingsSubscription?: Subscription;
+  private readonly destroy$ = new Subject<void>();
   private readonly jobNameFilterChanges = new Subject<string>();
   private readonly windowFocusReloadThrottleMs = 10000;
   private lastWindowFocusReloadAt = 0;
@@ -244,13 +249,19 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   };
 
   ngOnInit(): void {
-    this.coderService.getCoders().subscribe(coders => {
-      this.allCoders = coders;
-      this.updateCoderNamesMap(this.dataSource.data);
-    });
+    this.coderService.getCoders()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(coders => {
+        this.allCoders = coders;
+        this.updateCoderNamesMap(this.dataSource.data);
+      });
 
     this.jobNameFilterSubscription = this.jobNameFilterChanges
-      .pipe(debounceTime(300), distinctUntilChanged())
+      .pipe(
+        debounceTime(300),
+        distinctUntilChanged(),
+        takeUntil(this.destroy$)
+      )
       .subscribe(() => {
         this.selection.clear();
         this.reloadFirstPage();
@@ -266,26 +277,39 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
     const userId = this.appService.authData.userId;
     if (this.appService.authData.isAdmin || !workspaceId || userId <= 0) {
+      this.permissionsSubscription?.unsubscribe();
       this.canApplyResults = this.appService.authData.isAdmin;
       this.canReviewCodingJobs = this.appService.authData.isAdmin;
       this.canManageCodingJobs = this.appService.authData.isAdmin;
       return;
     }
-    this.userBackendService.getUsers(workspaceId).subscribe(users => {
-      const currentUser = users.find(u => u.id === userId);
-      const accessLevel = currentUser?.accessLevel ?? 0;
-      this.canManageCodingJobs = accessLevel >= 2;
-      this.canApplyResults = accessLevel >= 3;
-      this.canReviewCodingJobs = currentUser ?
-        hasManagementWorkspaceAccess(currentUser) :
-        false;
-    });
+    this.permissionsSubscription?.unsubscribe();
+    this.permissionsSubscription = this.userBackendService.getUsers(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(users => {
+        if (workspaceId !== this.appService.selectedWorkspaceId ||
+          userId !== this.appService.authData.userId) {
+          return;
+        }
+        const currentUser = users.find(u => u.id === userId);
+        const accessLevel = currentUser?.accessLevel ?? 0;
+        this.canManageCodingJobs = accessLevel >= 2;
+        this.canApplyResults = accessLevel >= 3;
+        this.canReviewCodingJobs = currentUser ?
+          hasManagementWorkspaceAccess(currentUser) :
+          false;
+      });
   }
 
   ngOnDestroy(): void {
     window.removeEventListener('focus', this.handleWindowFocus);
+    this.destroy$.next();
+    this.destroy$.complete();
     this.loadJobsSubscription?.unsubscribe();
     this.jobNameFilterSubscription?.unsubscribe();
+    this.permissionsSubscription?.unsubscribe();
+    this.coderTrainingsSubscription?.unsubscribe();
+    this.jobNameFilterChanges.complete();
   }
 
   loadCodingJobs(): void {
@@ -296,6 +320,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.isLoading = false;
+      this.hasLoadedJobs = true;
       return;
     }
 
@@ -307,6 +332,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         this.pageSize,
         this.getListOptions()
       )
+      .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: response => {
           const processedData = this.normalizeCodingJobs(response.data);
@@ -316,12 +342,14 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
           this.updateCoderNamesMap(processedData);
 
           this.jobDetailsCache.clear();
+          this.hasLoadedJobs = true;
           this.isLoading = false;
         },
         error: () => {
           this.snackBar.open('Fehler beim Laden der Kodierjobs', 'Schließen', {
             duration: 3000
           });
+          this.hasLoadedJobs = true;
           this.isLoading = false;
         }
       });
@@ -1097,17 +1125,27 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   loadCoderTrainings(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
+      this.coderTrainingsSubscription?.unsubscribe();
       return;
     }
 
-    this.codingTrainingBackendService.getCoderTrainings(workspaceId).subscribe({
-      next: trainings => {
-        this.coderTrainings = trainings;
-      },
-      error: () => {
-        this.coderTrainings = [];
-      }
-    });
+    this.coderTrainingsSubscription?.unsubscribe();
+    this.coderTrainingsSubscription = this.codingTrainingBackendService.getCoderTrainings(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: trainings => {
+          if (workspaceId !== this.appService.selectedWorkspaceId) {
+            return;
+          }
+          this.coderTrainings = trainings;
+        },
+        error: () => {
+          if (workspaceId !== this.appService.selectedWorkspaceId) {
+            return;
+          }
+          this.coderTrainings = [];
+        }
+      });
   }
 
   onTrainingFilterChange(): void {
@@ -1276,7 +1314,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       maxWidth: '100vw',
       height: '95vh',
       maxHeight: '100vh',
-      data: {}
+      data: { canApplyResults: this.canApplyResults }
     });
 
     dialogRef.afterClosed().subscribe(result => {

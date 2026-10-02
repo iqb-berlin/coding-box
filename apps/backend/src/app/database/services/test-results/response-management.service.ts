@@ -23,6 +23,10 @@ type AutocoderCleanup = {
   expectedSourceRevision?: number;
 };
 
+type ResponseUpdateTransactionOptions = {
+  managedExternally?: boolean;
+};
+
 @Injectable()
 export class ResponseManagementService {
   private readonly logger = new Logger(ResponseManagementService.name);
@@ -44,18 +48,38 @@ export class ResponseManagementService {
     isJobCancelled?: (jobId: string) => Promise<boolean>,
     progressCallback?: (progress: number) => void,
     metrics?: { [key: string]: number },
-    autocoderCleanup?: AutocoderCleanup
+    autocoderCleanup?: AutocoderCleanup,
+    transactionOptions: ResponseUpdateTransactionOptions = {}
   ): Promise<boolean> {
     const updateStart = Date.now();
     const updatedAutocoderGeneratedResponseIds = new Set<number>();
+    const managedExternally = transactionOptions.managedExternally === true;
+
+    const commitAndRelease = async (): Promise<void> => {
+      if (managedExternally) return;
+      await queryRunner.commitTransaction();
+      await queryRunner.release();
+      if (workspaceId) {
+        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+      }
+    };
+
+    const rollbackAndRelease = async (): Promise<void> => {
+      if (managedExternally) return;
+      try {
+        await queryRunner.rollbackTransaction();
+      } catch (rollbackError) {
+        this.logger.error(
+          'Fehler beim Rollback der Transaktion:',
+          rollbackError.message
+        );
+      }
+      await queryRunner.release();
+    };
+
     try {
       if (allCodedResponses.length === 0 && !autocoderCleanup) {
-        await queryRunner.release();
-
-        if (workspaceId) {
-          await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
-        }
-
+        await commitAndRelease();
         return true;
       }
 
@@ -97,11 +121,7 @@ export class ResponseManagementService {
           autocoderCleanup,
           queryRunner
         );
-        await queryRunner.commitTransaction();
-        await queryRunner.release();
-        if (workspaceId) {
-          await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
-        }
+        await commitAndRelease();
         return true;
       }
 
@@ -127,8 +147,7 @@ export class ResponseManagementService {
             `Job ${jobId} was cancelled or paused before updating batch #${index + 1
             }`
           );
-          await queryRunner.rollbackTransaction();
-          await queryRunner.release();
+          await rollbackAndRelease();
           return false;
         }
 
@@ -176,6 +195,19 @@ export class ResponseManagementService {
               if (response.score_v3 !== undefined) {
                 updateData.score_v3 = response.score_v3;
               }
+              if (response.autocoderInvalidatedVersion !== undefined) {
+                updateData.autocoder_invalidated_version =
+                  response.autocoderInvalidatedVersion;
+              }
+
+              if (!response.isNew && response.isAutocoderGenerated) {
+                if (response.value !== undefined) {
+                  updateData.value = response.value;
+                }
+                if (response.status !== undefined) {
+                  updateData.status = response.status;
+                }
+              }
 
               if (response.isNew) {
                 const newEntity: Partial<ResponseEntity> = {
@@ -186,6 +218,21 @@ export class ResponseManagementService {
                   subform: response.subform || null,
                   is_autocoder_generated: response.isAutocoderGenerated === true
                 };
+
+                if (
+                  response.isAutocoderGenerated &&
+                  autocoderCleanup?.autoCoderRun === 2
+                ) {
+                  // Database defaults must not make a v3-only generated result
+                  // look as though it was coded in run 1.
+                  updateData.status_v1 = null;
+                  updateData.code_v1 = null;
+                  updateData.score_v1 = null;
+                  updateData.status_v2 = null;
+                  updateData.code_v2 = null;
+                  updateData.score_v2 = null;
+                  Object.assign(newEntity, updateData);
+                }
 
                 if (response.code_v1 !== undefined) newEntity.code_v1 = response.code_v1;
                 if (response.status_v1 !== undefined) newEntity.status_v1 = statusStringToNumber(response.status_v1);
@@ -202,6 +249,10 @@ export class ResponseManagementService {
                   newEntity.status_v3 = response.status_v3 === null ? null : statusStringToNumber(response.status_v3);
                 }
                 if (response.score_v3 !== undefined) newEntity.score_v3 = response.score_v3;
+                if (response.autocoderInvalidatedVersion !== undefined) {
+                  newEntity.autocoder_invalidated_version =
+                    response.autocoderInvalidatedVersion;
+                }
 
                 if (response.isAutocoderGenerated) {
                   return this.upsertAutocoderGeneratedResponse(
@@ -247,9 +298,7 @@ export class ResponseManagementService {
             }):`,
             error.message
           );
-          await queryRunner.rollbackTransaction();
-          await queryRunner.release();
-          return false;
+          throw error;
         }
       }
 
@@ -265,7 +314,7 @@ export class ResponseManagementService {
         autocoderCleanup,
         queryRunner
       );
-      await queryRunner.commitTransaction();
+      await commitAndRelease();
       this.logger.log(
         `${allCodedResponses.length} Responses wurden erfolgreich aktualisiert.`
       );
@@ -274,25 +323,11 @@ export class ResponseManagementService {
         metrics.update = Date.now() - updateStart;
       }
 
-      await queryRunner.release();
-
-      if (workspaceId) {
-        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
-      }
-
       return true;
     } catch (error) {
       if (error instanceof AutocoderSourceRevisionStaleError) {
         this.logger.warn(error.message);
-        try {
-          await queryRunner.rollbackTransaction();
-        } catch (rollbackError) {
-          this.logger.error(
-            'Fehler beim Rollback der Transaktion:',
-            rollbackError.message
-          );
-        }
-        await queryRunner.release();
+        await rollbackAndRelease();
         throw error;
       }
 
@@ -300,16 +335,8 @@ export class ResponseManagementService {
         'Fehler beim Aktualisieren der Responses:',
         error.message
       );
-      try {
-        await queryRunner.rollbackTransaction();
-      } catch (rollbackError) {
-        this.logger.error(
-          'Fehler beim Rollback der Transaktion:',
-          rollbackError.message
-        );
-      }
-      await queryRunner.release();
-      return false;
+      await rollbackAndRelease();
+      throw error;
     }
   }
 
@@ -559,7 +586,8 @@ export class ResponseManagementService {
         score_v2: null,
         code_v3: null,
         status_v3: null,
-        score_v3: null
+        score_v3: null,
+        autocoder_invalidated_version: null
       } :
       {
         code_v3: null,

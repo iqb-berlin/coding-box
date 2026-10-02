@@ -31,9 +31,12 @@ import { CodingJobDefinitionsComponent } from '../coding-job-definitions/coding-
 import { VariableBundleManagerComponent } from '../variable-bundle-manager/variable-bundle-manager.component';
 import {
   CoderTrainingComponent,
+  CODER_TRAINING_RECOVERY_KEY,
+  CoderTrainingRecoveryDraft,
   VariableConfig
 } from '../coder-training/coder-training.component';
 import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-trainings-list.component';
+import { getJobDefinitionDisplayLabel } from '../../utils/job-definition-display.util';
 import { CoderTraining } from '../../models/coder-training.model';
 import {
   ImportComparisonDialogComponent,
@@ -63,9 +66,11 @@ import {
   CodingProgressOverview,
   TestPersonCodingService
 } from '../../services/test-person-coding.service';
+import { DoubleCodedReviewApiService } from '../../services/double-coded-review-api.service';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 import { ExternalCodingImportResultDto } from '../../../../../../../api-dto/coding/external-coding-import-result.dto';
 import { AppService } from '../../../core/services/app.service';
+import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import {
   ApplyCodingResultsResponse,
   BulkApplyCodingResultsResponse,
@@ -121,6 +126,7 @@ import {
 import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
 import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
 import { CodingBackgroundJobsService } from '../../services/coding-background-jobs.service';
+import type { ManualCodingPlanningSnapshot } from '../../services/manual-coding-planning-snapshot.model';
 
 interface SavedCodeProgress {
   id?: number;
@@ -129,6 +135,7 @@ interface SavedCodeProgress {
 }
 
 type PlanningStatusState =
+  'not-checked' |
   'loading' |
   'planning-data-required' |
   'preparation-required' |
@@ -206,10 +213,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     coderTrainingsListComponent?: CoderTrainingsListComponent;
 
   private testPersonCodingService = inject(TestPersonCodingService);
+  private doubleCodedReviewApi = inject(DoubleCodedReviewApiService);
   private codingJobBackendService = inject(CodingJobBackendService);
   private missingsProfileService = inject(MissingsProfileService);
   private statisticsService = inject(CodingStatisticsService);
   private appService = inject(AppService);
+  private sessionRecoveryService = inject(SessionRecoveryService);
   private snackBar = inject(MatSnackBar);
   private validationStateService = inject(ValidationStateService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
@@ -256,11 +265,18 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   };
 
   private hasLoadedPlanningDataBundle = false;
+  private isPlanningDataBundleLoadPending = false;
+  private planningDataBundleCacheGeneration: number | null = null;
+  private deferredPlanningDataBundleForceRefresh: boolean | null = null;
+  private isStartingPlanningDataBundleLoad = false;
+  private planningDataBundleLoadFailed = false;
 
   private pendingAutomaticManualTabLoad: ManualCodingTab | null = null;
 
   private readonly pendingCodingJobsReloadScopes =
     new Set<ConcreteCodingJobsReloadScope>();
+
+  private pendingCodingJobsReloadTimer?: ReturnType<typeof setTimeout>;
 
   private readonly manualCodingTabsWithoutCompletion: ManualCodingTab[] = [
     'preparation',
@@ -274,6 +290,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   isLoadingCaseCoverage = false;
   isLoadingCodingProgress = false;
   isLoadingManualCodeAvailability = false;
+  private isLoadingManualCodingScopeSummary = false;
   isLoadingCodingIncompleteVariables = false;
   isLoadingAppliedResultsOverview = false;
   isLoadingKappaSummary = false;
@@ -310,6 +327,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   // Duplicate aggregation state
   duplicateAggregationThreshold = 2;
   isApplyingDuplicateAggregation = false;
+  private readonly responseAnalysisRequestCancel$ = new Subject<void>();
+  private responseAnalysisRequestId = 0;
   private analysisPollingTimer?: ReturnType<typeof setTimeout>;
   private readonly windowFocusRefreshThrottleMs = 30000;
   private readonly codingFreshnessRefreshThrottleMs = 30000;
@@ -320,6 +339,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private responseAnalysisGuardWorkspaceId: number | null = null;
   private hasShownResponseAnalysisPollingError = false;
   private pendingManualStateRefreshAfterBackgroundJob = false;
+  private pendingForcedManualStateRefreshAfterBackgroundJob = false;
   private pendingCodingFreshnessRefreshAfterBackgroundJob = false;
   private pendingForcedCodingFreshnessRefreshAfterBackgroundJob = false;
   private readonly handleWindowFocus = () => {
@@ -379,6 +399,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         variableKey: string;
         conflictingDefinitions: Array<{
           id: number;
+          name?: string;
           status: string;
         }>;
       }>;
@@ -507,7 +528,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.jobDefinitionChangeSubject
       .pipe(debounceTime(500), takeUntil(this.destroy$))
       .subscribe(reloadScope => {
-        this.hasLoadedPlanningDataBundle = false;
+        this.invalidateCodingStatusCache();
         this.loadJobDefinitionsForExport();
         this.loadManualTabData(this.activeManualTab);
         this.refreshCodingJobsAfterDataChange(reloadScope);
@@ -558,18 +579,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.testPersonCodingService.autoCodingCompleted$
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
+        this.resetPlanningDataBundleState();
         if (!this.hasLoadedManualCodingJobRefreshSetting ||
           !this.autoRefreshManualCodingJobs) {
           return;
         }
 
         if (this.activeManualTab === 'planning') {
-          this.hasLoadedPlanningDataBundle = false;
           this.refreshCodingJobsAfterDataChange('rendered');
-          this.loadJobDefinitionsForExport();
-          if (this.codingJobDefinitionsComponent) {
-            this.codingJobDefinitionsComponent.refresh();
-          }
           return;
         }
 
@@ -591,6 +608,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         }
       });
 
+    this.sessionRecoveryService.restore$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.restoreCoderTrainingRecoveryOverlay());
+    this.restoreCoderTrainingRecoveryOverlay();
+
     this.loadInitialManualCodingState();
     this.loadManualCodingJobRefreshSetting();
     this.loadManualCodingApplyPermission();
@@ -598,11 +620,15 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    if (this.analysisPollingTimer) {
-      clearTimeout(this.analysisPollingTimer);
-    }
+    this.discardPendingPlanningDataBundle();
+    this.cancelResponseAnalysisRequest();
+    this.responseAnalysisRequestCancel$.complete();
     this.finalizeResponseAnalysisGuardOnDestroy();
     this.document.defaultView?.removeEventListener('focus', this.handleWindowFocus);
+    if (this.pendingCodingJobsReloadTimer) {
+      clearTimeout(this.pendingCodingJobsReloadTimer);
+      this.pendingCodingJobsReloadTimer = undefined;
+    }
     this.destroy$.next();
     this.destroy$.complete();
 
@@ -612,6 +638,52 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   get activeManualTab(): ManualCodingTab {
     return this.visibleManualCodingTabs[this.selectedManualTabIndex] || 'preparation';
+  }
+
+  private isResponseAnalysisTab(tab: ManualCodingTab): boolean {
+    return tab === 'preparation' || tab === 'planning';
+  }
+
+  private cancelResponseAnalysisRequest(
+    options: { markNotLoading?: boolean } = {}
+  ): void {
+    this.responseAnalysisRequestId += 1;
+    if (this.analysisPollingTimer) {
+      clearTimeout(this.analysisPollingTimer);
+      this.analysisPollingTimer = undefined;
+    }
+    this.responseAnalysisRequestCancel$.next();
+    if (options.markNotLoading !== false) {
+      this.isLoadingResponseAnalysis = false;
+    }
+  }
+
+  private shouldAcceptResponseAnalysisResult(
+    requestId: number,
+    workspaceId: number
+  ): boolean {
+    return requestId === this.responseAnalysisRequestId &&
+      this.appService.selectedWorkspaceId === workspaceId &&
+      this.isResponseAnalysisTab(this.activeManualTab);
+  }
+
+  private handOffResponseAnalysisGuardUntilComplete(): void {
+    if (!this.responseAnalysisGuardActive) {
+      return;
+    }
+
+    this.trackManualResponseAnalysisGuardUntilComplete(
+      this.responseAnalysisGuardWorkspaceId || this.appService.selectedWorkspaceId,
+      this.normalizeAggregationThreshold(this.duplicateAggregationThreshold)
+    );
+    this.responseAnalysisGuardActive = false;
+    this.responseAnalysisGuardWorkspaceId = null;
+  }
+
+  private stopResponseAnalysisView(): void {
+    this.discardPendingPlanningDataBundle();
+    this.cancelResponseAnalysisRequest();
+    this.handOffResponseAnalysisGuardUntilComplete();
   }
 
   get workspaceId(): number {
@@ -665,6 +737,16 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         !this.autoRefreshManualCodingJobs);
   }
 
+  shouldShowManualTabLoadHint(tab: ManualCodingTab): boolean {
+    const tabSupportsManualLoadHint =
+      tab === 'preparation' || tab === 'training' || tab === 'execution';
+
+    return tabSupportsManualLoadHint &&
+      this.isManualTab(tab) &&
+      this.shouldShowManualRefreshButton() &&
+      !this.shouldRenderManualTabData(tab);
+  }
+
   shouldShowPlanningOverview(): boolean {
     return this.isManualTab('planning') &&
       this.hasPlanningDataBundleSnapshot();
@@ -675,7 +757,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const previousTab = this.activeManualTab;
     this.selectedManualTabIndex = index;
+    if (this.isResponseAnalysisTab(previousTab) &&
+      !this.isResponseAnalysisTab(this.activeManualTab)) {
+      this.stopResponseAnalysisView();
+    }
     this.loadManualTabData(this.activeManualTab);
   }
 
@@ -686,7 +773,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     if (this.selectedManualTabIndex !== tabIndex) {
+      const previousTab = this.activeManualTab;
       this.selectedManualTabIndex = tabIndex;
+      if (this.isResponseAnalysisTab(previousTab) &&
+        !this.isResponseAnalysisTab(tab)) {
+        this.stopResponseAnalysisView();
+      }
       this.loadManualTabData(tab);
     }
 
@@ -1163,6 +1255,22 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   openCoderTraining(): void {
+    this.editTraining = null;
+    this.showCoderTraining = true;
+  }
+
+  private restoreCoderTrainingRecoveryOverlay(): void {
+    const draft = this.sessionRecoveryService.peekDraft<CoderTrainingRecoveryDraft>(
+      CODER_TRAINING_RECOVERY_KEY
+    );
+    if (!draft || draft.workspaceId !== this.appService.selectedWorkspaceId) {
+      return;
+    }
+    if (draft.mode === 'edit' && !draft.editTraining) {
+      return;
+    }
+
+    this.editTraining = draft.mode === 'edit' ? draft.editTraining ?? null : null;
     this.showCoderTraining = true;
   }
 
@@ -1279,9 +1387,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         context,
         coders: this.coders,
         jobDefinitions: context === 'execution' ? this.getJobDefinitionExportOptions() : undefined,
-        coderTrainings: context === 'training' ? this.getCoderTrainingsForExport() : undefined,
-        defaultJobDefinitionIds: context === 'execution' ? this.getJobDefinitionIds() : undefined,
-        defaultCoderTrainingIds: context === 'training' ? this.getCoderTrainingIds() : undefined
+        coderTrainings: context === 'training' ? this.getCoderTrainingsForExport() : undefined
       }
     }).afterClosed()
       .pipe(takeUntil(this.destroy$))
@@ -1310,6 +1416,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       userId: this.appService.userId,
       ...this.getManualCodingExportDisplayMetadata(result),
       includeReplayUrl: result.includeReplayUrl ?? false,
+      includeResponseValues: result.includeResponseValues ?? false,
       outputCommentsInsteadOfCodes: result.outputCommentsInsteadOfCodes,
       anonymizeCoders: result.anonymizeCoders,
       usePseudoCoders: result.usePseudoCoders,
@@ -1505,7 +1612,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         const status = jobDefinition.status ? ` (${jobDefinition.status})` : '';
         return {
           id: jobDefinition.id as number,
-          label: `Definition #${jobDefinition.id}${status}: ${variableCount} Variablen, ${bundleCount} Bündel`
+          label: `${getJobDefinitionDisplayLabel(jobDefinition)}${status}: ${variableCount} Variablen, ${bundleCount} Bündel`
         };
       });
   }
@@ -1609,10 +1716,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   reloadCodingJobsList(reloadScope: CodingJobsReloadScope = 'active'): void {
     const concreteReloadScopes =
       this.getConcreteCodingJobsReloadScopes(reloadScope);
-    this.getCodingJobsComponentsForReload(reloadScope)
-      .forEach(component => component.loadCodingJobs());
     concreteReloadScopes.forEach(scope => {
-      this.pendingCodingJobsReloadScopes.delete(scope);
+      const component = this.getCodingJobsComponentForScope(scope);
+      if (component) {
+        component.loadCodingJobs();
+        this.pendingCodingJobsReloadScopes.delete(scope);
+      } else {
+        this.pendingCodingJobsReloadScopes.add(scope);
+      }
     });
     if (this.shouldReloadCoderTrainings(reloadScope) &&
       this.coderTrainingsListComponent) {
@@ -1621,13 +1732,26 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   refreshManualCodingPlanning(): void {
+    const activeTab = this.activeManualTab;
     if (this.shouldSuppressCodingStatusChecks()) {
       this.pendingManualStateRefreshAfterBackgroundJob = true;
+      this.pendingForcedManualStateRefreshAfterBackgroundJob = true;
+      if (activeTab !== 'planning') {
+        this.pendingCodingFreshnessRefreshAfterBackgroundJob = true;
+        this.pendingForcedCodingFreshnessRefreshAfterBackgroundJob = true;
+      }
+      if (this.shouldLoadManualTabWhileStatusChecksAreSuppressed(activeTab)) {
+        this.loadManualTabData(activeTab, {
+          forceRefresh: true,
+          reloadCodingJobs: true,
+          codingJobsReloadScope: 'active',
+          deferStatusChecks: true
+        });
+      }
       return;
     }
 
     this.invalidateCodingStatusCache();
-    const activeTab = this.activeManualTab;
     this.loadManualTabData(activeTab, {
       forceRefresh: true,
       reloadCodingJobs: true,
@@ -1654,15 +1778,32 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private refreshManualStateAfterExternalChange(
-    options: { forceCodingFreshness?: boolean } = {}
+    options: {
+      forceCodingFreshness?: boolean;
+      forceManualTabData?: boolean;
+    } = {}
   ): void {
     if (this.shouldSuppressCodingStatusChecks()) {
       this.pendingManualStateRefreshAfterBackgroundJob = true;
+      if (options.forceManualTabData) {
+        this.pendingForcedManualStateRefreshAfterBackgroundJob = true;
+      }
+      if (options.forceCodingFreshness) {
+        this.pendingCodingFreshnessRefreshAfterBackgroundJob = true;
+        this.pendingForcedCodingFreshnessRefreshAfterBackgroundJob = true;
+      }
       return;
     }
 
     const activeTab = this.activeManualTab;
-    this.loadManualTabData(activeTab, { reloadCodingJobs: false });
+    const loadOptions: {
+      reloadCodingJobs: boolean;
+      forceRefresh?: boolean;
+    } = { reloadCodingJobs: false };
+    if (options.forceManualTabData) {
+      loadOptions.forceRefresh = true;
+    }
+    this.loadManualTabData(activeTab, loadOptions);
     if (activeTab !== 'planning') {
       if (options.forceCodingFreshness) {
         this.loadCodingFreshness({ force: true });
@@ -1683,18 +1824,21 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private refreshPendingManualStatusAfterBackgroundJob(): void {
     const shouldRefreshManualState = this.pendingManualStateRefreshAfterBackgroundJob;
+    const forceManualTabData = this.pendingForcedManualStateRefreshAfterBackgroundJob;
     const shouldRefreshCodingFreshness = this.pendingCodingFreshnessRefreshAfterBackgroundJob ||
       this.pendingForcedCodingFreshnessRefreshAfterBackgroundJob;
     const forceCodingFreshness = this.pendingForcedCodingFreshnessRefreshAfterBackgroundJob;
     const activeTab = this.activeManualTab;
 
     this.pendingManualStateRefreshAfterBackgroundJob = false;
+    this.pendingForcedManualStateRefreshAfterBackgroundJob = false;
     this.pendingCodingFreshnessRefreshAfterBackgroundJob = false;
     this.pendingForcedCodingFreshnessRefreshAfterBackgroundJob = false;
 
     if (shouldRefreshManualState) {
       this.refreshManualStateAfterExternalChange({
-        forceCodingFreshness: shouldRefreshCodingFreshness && forceCodingFreshness
+        forceCodingFreshness: shouldRefreshCodingFreshness && forceCodingFreshness,
+        forceManualTabData
       });
     }
 
@@ -1834,25 +1978,21 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return tab === 'preparation';
   }
 
-  private getCodingJobsComponentsForReload(
-    reloadScope: CodingJobsReloadScope
-  ): CodingJobsComponent[] {
-    return this.uniqueCodingJobsComponents(
-      this.getConcreteCodingJobsReloadScopes(reloadScope)
-        .map(scope => this.getCodingJobsComponentForScope(scope))
-    );
-  }
+  private schedulePendingCodingJobsReloadForTab(tab: ManualCodingTab): void {
+    const hasPendingReloadForTab = this.getCodingJobsScopeForTab(tab)
+      .some(scope => this.pendingCodingJobsReloadScopes.has(scope));
+    if (!hasPendingReloadForTab) {
+      return;
+    }
 
-  private uniqueCodingJobsComponents(
-    candidateComponents: Array<CodingJobsComponent | undefined>
-  ): CodingJobsComponent[] {
-    const uniqueComponents: CodingJobsComponent[] = [];
-    candidateComponents.forEach(component => {
-      if (component && !uniqueComponents.includes(component)) {
-        uniqueComponents.push(component);
-      }
-    });
-    return uniqueComponents;
+    if (this.pendingCodingJobsReloadTimer) {
+      clearTimeout(this.pendingCodingJobsReloadTimer);
+    }
+
+    this.pendingCodingJobsReloadTimer = setTimeout(() => {
+      this.pendingCodingJobsReloadTimer = undefined;
+      this.reloadPendingCodingJobsForTab(tab);
+    }, 0);
   }
 
   private getProductiveCodingJobsComponent(): CodingJobsComponent | undefined {
@@ -1930,8 +2070,28 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .includes('training');
   }
 
+  private shouldLoadManualTabWhileStatusChecksAreSuppressed(
+    tab: ManualCodingTab
+  ): boolean {
+    return tab === 'training' || tab === 'execution';
+  }
+
   isAnyPlanningDataLoading(): boolean {
     return this.isLoadingResponseAnalysis ||
+      this.isLoadingCodingProgress ||
+      this.isLoadingVariableCoverage ||
+      this.isLoadingCaseCoverage ||
+      this.isLoadingManualCodeAvailability ||
+      this.isLoadingManualCodingScopeSummary ||
+      this.isLoadingCodingIncompleteVariables ||
+      this.isLoadingAppliedResultsOverview ||
+      this.isLoadingManualFreshnessJobSummary ||
+      this.isLoadingDoubleCodingConflictSummary ||
+      this.isLoadingMatchingMode;
+  }
+
+  private isPlanningStatusLoading(): boolean {
+    return this.isLoadingInitialResponseAnalysisForStatus() ||
       this.isLoadingCodingProgress ||
       this.isLoadingVariableCoverage ||
       this.isLoadingCaseCoverage ||
@@ -1941,6 +2101,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.isLoadingManualFreshnessJobSummary ||
       this.isLoadingDoubleCodingConflictSummary ||
       this.isLoadingMatchingMode;
+  }
+
+  private isLoadingInitialResponseAnalysisForStatus(): boolean {
+    return this.isLoadingResponseAnalysis && !this.responseAnalysis;
   }
 
   private hasPlanningDataBundleSnapshot(): boolean {
@@ -2012,7 +2176,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   getResponseAnalysisReferenceRawCases(): number {
-    return this.getManualStatusPoolCount();
+    return this.codingProgressOverview?.responseAnalysisRawCases ??
+      this.caseCoverageOverview?.responseAnalysisRawCases ??
+      this.appliedResultsOverview?.responseAnalysisRawCases ??
+      this.getManualStatusPoolCount();
   }
 
   getManualStatusPoolCount(): number {
@@ -2424,6 +2591,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         return 'status-attention';
       case 'complete':
         return 'status-complete';
+      case 'not-checked':
       case 'loading':
       case 'planning-data-required':
       case 'planning-ready':
@@ -2435,7 +2603,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private getPlanningStatusState(): PlanningStatusState {
-    if (this.isAnyPlanningDataLoading()) {
+    if (this.activeManualTab !== 'planning' &&
+      !this.hasLoadedPlanningDataBundle) {
+      return 'not-checked';
+    }
+
+    if (this.isPlanningStatusLoading()) {
       return 'loading';
     }
 
@@ -2498,6 +2671,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   getPlanningStatusIcon(): string {
     switch (this.getPlanningStatusState()) {
+      case 'not-checked':
+        return 'help_outline';
       case 'loading':
         return 'sync';
       case 'planning-data-required':
@@ -2529,6 +2704,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   getPlanningStatusTitle(): string {
     switch (this.getPlanningStatusState()) {
+      case 'not-checked':
+        return 'Kodierstand nicht geprüft';
       case 'loading':
         return 'Status wird aktualisiert';
       case 'planning-data-required':
@@ -2564,6 +2741,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   getPlanningStatusDescription(): string {
     const planningStatusState = this.getPlanningStatusState();
+
+    if (planningStatusState === 'not-checked') {
+      return 'Öffnen oder aktualisieren Sie die Planung, um den aktuellen Kodierstand zu prüfen.';
+    }
 
     if (planningStatusState === 'loading') {
       return 'Die Planungs- und Kodierfortschritte werden geladen.';
@@ -2637,6 +2818,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   getPlanningNextStepTitle(): string {
     switch (this.getPlanningStatusState()) {
+      case 'not-checked':
+        return 'Kodierstand prüfen';
       case 'loading':
         return 'Planungsstand wird geladen';
       case 'planning-data-required':
@@ -2675,6 +2858,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const unavailableCases = this.getUnavailableCasesForNewJobs();
 
     switch (this.getPlanningStatusState()) {
+      case 'not-checked':
+        return 'Öffnen Sie die Planung, um den Kodierstand zu laden.';
       case 'loading':
         return 'Warten Sie kurz, bis die Planungsdaten aktualisiert sind.';
       case 'planning-data-required':
@@ -2719,6 +2904,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   getPlanningNextStepActionLabel(): string {
     switch (this.getPlanningStatusState()) {
+      case 'not-checked':
+        return 'Zur Planung';
       case 'warning':
         return this.hasVariableCoverageConflicts() ?
           'Zu den Jobdefinitionen' :
@@ -2826,6 +3013,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   getPlanningNextStepIcon(): string {
     switch (this.getPlanningStatusState()) {
+      case 'not-checked':
+        return 'fact_check';
       case 'planning-data-required':
         return 'refresh';
       case 'warning':
@@ -3021,6 +3210,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         finalize(() => {
           this.isLoadingMatchingMode = false;
           this.focusManualFreshnessTargetIfReady();
+          this.trySavePlanningDataBundleSnapshot();
         }),
         takeUntil(this.destroy$)
       )
@@ -3046,6 +3236,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       reloadCodingJobs?: boolean;
       codingJobsReloadScope?: CodingJobsReloadScope;
       forceRefresh?: boolean;
+      deferStatusChecks?: boolean;
     } = {}
   ): void {
     if (!this.isManualTabAvailable(tab)) {
@@ -3056,7 +3247,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const reloadCodingJobs = options.reloadCodingJobs ?? false;
     const codingJobsReloadScope = options.codingJobsReloadScope ?? 'active';
     const forceRefresh = options.forceRefresh ?? false;
-    if (this.shouldSkipAutomaticManualTabLoad(forceRefresh, tab)) {
+    const deferStatusChecks = options.deferStatusChecks ?? false;
+    const hasPlanningDataSnapshot = !forceRefresh &&
+      this.restorePlanningDataBundleSnapshot();
+    const canUsePlanningDataSnapshot =
+      tab === 'preparation' || tab === 'planning';
+    if (this.shouldSkipAutomaticManualTabLoad(forceRefresh, tab) &&
+      !(hasPlanningDataSnapshot && canUsePlanningDataSnapshot)) {
       return;
     }
 
@@ -3064,26 +3261,33 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
     switch (tab) {
       case 'preparation':
-        this.loadResponseAnalysis();
+        if (!hasPlanningDataSnapshot) {
+          this.loadResponseAnalysis();
+        }
         return;
       case 'planning':
-        if (forceRefresh) {
+        if (!hasPlanningDataSnapshot && !deferStatusChecks &&
+          (forceRefresh || this.autoRefreshManualCodingJobs)) {
           this.loadPlanningDataBundle(forceRefresh);
         }
         return;
       case 'training':
         if (reloadCodingJobs) {
           this.reloadCodingJobsList(codingJobsReloadScope);
+          this.schedulePendingCodingJobsReloadForTab(tab);
         } else {
           this.reloadPendingCodingJobsForTab(tab);
         }
         return;
       case 'execution':
-        this.loadCodingProgressOverview();
-        this.loadCaseCoverageOverview();
-        this.loadWorkspaceKappaSummary();
+        if (!deferStatusChecks) {
+          this.loadCodingProgressOverview();
+          this.loadCaseCoverageOverview();
+          this.loadWorkspaceKappaSummary();
+        }
         if (reloadCodingJobs) {
           this.reloadCodingJobsList(codingJobsReloadScope);
+          this.schedulePendingCodingJobsReloadForTab(tab);
         } else {
           this.reloadPendingCodingJobsForTab(tab);
         }
@@ -3098,14 +3302,152 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private loadPlanningDataBundle(forceRefresh: boolean): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    if (this.isPlanningDataBundleBusy()) {
+      this.deferredPlanningDataBundleForceRefresh =
+        (this.deferredPlanningDataBundleForceRefresh ?? false) || forceRefresh;
+      return;
+    }
+
+    this.deferredPlanningDataBundleForceRefresh = null;
     this.hasLoadedPlanningDataBundle = true;
+    this.isPlanningDataBundleLoadPending = true;
+    this.planningDataBundleLoadFailed = false;
+    this.planningDataBundleCacheGeneration =
+      this.testPersonCodingService.beginManualCodingPlanningSnapshot();
+    this.isStartingPlanningDataBundleLoad = true;
     this.loadVariableCoverageOverview();
     this.loadCaseCoverageOverview();
     this.loadCodingProgressOverview();
     this.loadCodingIncompleteVariables();
     this.loadManualFreshnessDecisionData();
-    this.loadCodingFreshness({ force: forceRefresh });
+    this.loadCodingFreshness({
+      force: forceRefresh,
+      invalidateCache: false
+    });
     this.loadResponseAnalysisForPlanningIfNeeded();
+    this.isStartingPlanningDataBundleLoad = false;
+    this.trySavePlanningDataBundleSnapshot();
+  }
+
+  private restorePlanningDataBundleSnapshot(): boolean {
+    if (this.hasLoadedPlanningDataBundle) {
+      return true;
+    }
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return false;
+    }
+
+    const snapshot = this.testPersonCodingService
+      .getManualCodingPlanningSnapshot(workspaceId);
+    if (!snapshot) {
+      return false;
+    }
+
+    this.applyPlanningDataBundleSnapshot(snapshot);
+    this.hasLoadedPlanningDataBundle = true;
+    this.loadedManualTabData.planning = true;
+    this.focusManualFreshnessTargetIfReady();
+    return true;
+  }
+
+  private applyPlanningDataBundleSnapshot(
+    snapshot: ManualCodingPlanningSnapshot
+  ): void {
+    this.responseAnalysis = snapshot.responseAnalysis;
+    this.responseAnalysisError = null;
+    this.codingProgressOverview = snapshot.codingProgressOverview;
+    this.variableCoverageOverview = snapshot.variableCoverageOverview;
+    this.caseCoverageOverview = snapshot.caseCoverageOverview;
+    this.codingIncompleteVariables = [...snapshot.codingIncompleteVariables];
+    this.manualCodingScopeSummary = snapshot.manualCodingScopeSummary;
+    this.setManualCodeAvailabilityWarnings([
+      ...snapshot.manualCodeAvailabilityWarnings
+    ]);
+    this.appliedResultsOverview = snapshot.appliedResultsOverview;
+    this.manualFreshnessJobSummary = snapshot.manualFreshnessJobSummary;
+    this.openDoubleCodingConflictCount =
+      snapshot.openDoubleCodingConflictCount;
+    this.codingFreshnessSummary = snapshot.codingFreshnessSummary;
+    this.lastCodingFreshnessRefreshAt = snapshot.codingFreshnessSummary ?
+      Date.now() : 0;
+  }
+
+  private trySavePlanningDataBundleSnapshot(): void {
+    if (this.isPlanningDataBundleBusy()) {
+      return;
+    }
+
+    const deferredForceRefresh = this.deferredPlanningDataBundleForceRefresh;
+    if (deferredForceRefresh !== null) {
+      this.deferredPlanningDataBundleForceRefresh = null;
+      this.loadPlanningDataBundle(deferredForceRefresh);
+      return;
+    }
+
+    if (!this.isPlanningDataBundleLoadPending) {
+      return;
+    }
+
+    if (this.responseAnalysisError || this.planningDataBundleLoadFailed) {
+      this.isPlanningDataBundleLoadPending = false;
+      this.planningDataBundleCacheGeneration = null;
+      return;
+    }
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    const cacheGeneration = this.planningDataBundleCacheGeneration;
+    if (!workspaceId || cacheGeneration === null) {
+      return;
+    }
+
+    this.testPersonCodingService.saveManualCodingPlanningSnapshot(
+      workspaceId,
+      {
+        responseAnalysis: this.responseAnalysis,
+        codingProgressOverview: this.codingProgressOverview,
+        variableCoverageOverview: this.variableCoverageOverview,
+        caseCoverageOverview: this.caseCoverageOverview,
+        codingIncompleteVariables: [...this.codingIncompleteVariables],
+        manualCodingScopeSummary: this.manualCodingScopeSummary,
+        manualCodeAvailabilityWarnings: [
+          ...this.manualCodeAvailabilityWarnings
+        ],
+        appliedResultsOverview: this.appliedResultsOverview,
+        manualFreshnessJobSummary: this.manualFreshnessJobSummary,
+        openDoubleCodingConflictCount: this.openDoubleCodingConflictCount,
+        codingFreshnessSummary: this.codingFreshnessSummary
+      },
+      cacheGeneration
+    );
+    this.isPlanningDataBundleLoadPending = false;
+    this.planningDataBundleCacheGeneration = null;
+  }
+
+  private markPlanningDataBundleLoadFailed(): void {
+    if (this.isPlanningDataBundleLoadPending) {
+      this.planningDataBundleLoadFailed = true;
+    }
+  }
+
+  private discardPendingPlanningDataBundle(): void {
+    if (this.isPlanningDataBundleLoadPending) {
+      this.resetPlanningDataBundleState();
+    }
+  }
+
+  private isPlanningDataBundleBusy(): boolean {
+    return this.isStartingPlanningDataBundleLoad ||
+      this.isAnyPlanningDataLoading() ||
+      this.isLoadingCodingFreshness ||
+      this.responseAnalysisGuardActive ||
+      this.responseAnalysis?.isCalculating === true;
   }
 
   private loadManualCodingJobRefreshSetting(): void {
@@ -3241,7 +3583,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       maxWidth: '100vw',
       height: '95vh',
       maxHeight: '100vh',
-      data: {}
+      data: { canApplyResults: this.canApplyManualCodingResults }
     });
 
     dialogRef.afterClosed().subscribe(result => {
@@ -3433,7 +3775,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return score === null ? 'NA' : score;
   }
 
-  private loadCodingFreshness(options: { force?: boolean } = {}): void {
+  private loadCodingFreshness(
+    options: { force?: boolean; invalidateCache?: boolean } = {}
+  ): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.codingFreshnessRequestGeneration += 1;
@@ -3464,7 +3808,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (options.force) {
+    if (options.force && options.invalidateCache !== false) {
       this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
     }
 
@@ -3492,6 +3836,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
             this.appService.selectedWorkspaceId === workspaceId
           ) {
             this.isLoadingCodingFreshness = false;
+            this.trySavePlanningDataBundleSnapshot();
           }
         })
       )
@@ -3532,14 +3877,19 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         finalize(() => {
           this.isLoadingCodingProgress = false;
           this.focusManualFreshnessTargetIfReady();
+          this.trySavePlanningDataBundleSnapshot();
         })
       )
       .subscribe({
         next: (overview: CodingProgressOverview | null) => {
           this.codingProgressOverview = overview;
+          if (!overview) {
+            this.markPlanningDataBundleLoadFailed();
+          }
         },
         error: () => {
           this.codingProgressOverview = null;
+          this.markPlanningDataBundleLoadFailed();
         }
       });
   }
@@ -3573,6 +3923,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.openDoubleCodingConflictCount = 0;
           this.isLoadingDoubleCodingConflictSummary = false;
           this.focusManualFreshnessTargetIfReady();
+          this.trySavePlanningDataBundleSnapshot();
         })
       )
       .subscribe({
@@ -3582,6 +3933,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.manualFreshnessJobSummary = null;
+          this.markPlanningDataBundleLoadFailed();
         }
       });
   }
@@ -3604,24 +3956,24 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingDoubleCodingConflictSummary = true;
-    this.testPersonCodingService
+    this.doubleCodedReviewApi
       .getDoubleCodedVariablesForReview(
         workspaceId,
-        1,
-        1,
-        true,
-        true,
-        undefined,
-        undefined,
-        undefined,
-        'unresolved',
-        'differ'
+        {
+          page: 1,
+          limit: 1,
+          onlyConflicts: true,
+          excludeTrainings: true,
+          resolvedFilter: 'unresolved',
+          agreementFilter: 'differ'
+        }
       )
       .pipe(
         takeUntil(this.destroy$),
         finalize(() => {
           this.isLoadingDoubleCodingConflictSummary = false;
           this.focusManualFreshnessTargetIfReady();
+          this.trySavePlanningDataBundleSnapshot();
         })
       )
       .subscribe({
@@ -3630,6 +3982,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.openDoubleCodingConflictCount = 0;
+          this.markPlanningDataBundleLoadFailed();
         }
       });
   }
@@ -3712,6 +4065,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         finalize(() => {
           this.isLoadingVariableCoverage = false;
           this.focusManualFreshnessTargetIfReady();
+          this.trySavePlanningDataBundleSnapshot();
         })
       )
       .subscribe({
@@ -3739,6 +4093,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
               variableKey: string;
               conflictingDefinitions: Array<{
                 id: number;
+                name?: string;
                 status: string;
               }>;
             }>;
@@ -3751,6 +4106,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.variableCoverageOverview = null;
+          this.markPlanningDataBundleLoadFailed();
         }
       });
   }
@@ -3769,6 +4125,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         finalize(() => {
           this.isLoadingCaseCoverage = false;
           this.focusManualFreshnessTargetIfReady();
+          this.trySavePlanningDataBundleSnapshot();
         })
       )
       .subscribe({
@@ -3777,6 +4134,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.caseCoverageOverview = null;
+          this.markPlanningDataBundleLoadFailed();
         }
       });
   }
@@ -3833,6 +4191,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.setManualCodeAvailabilityWarnings([]);
       this.isLoadingCodingIncompleteVariables = false;
       this.isLoadingManualCodeAvailability = false;
+      this.isLoadingManualCodingScopeSummary = false;
       return;
     }
 
@@ -3844,6 +4203,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         finalize(() => {
           this.isLoadingCodingIncompleteVariables = false;
           this.focusManualFreshnessTargetIfReady();
+          this.trySavePlanningDataBundleSnapshot();
         })
       )
       .subscribe({
@@ -3861,19 +4221,28 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.codingIncompleteVariables = [];
+          this.markPlanningDataBundleLoadFailed();
           this.loadAppliedResultsOverview();
         }
       });
 
+    this.isLoadingManualCodingScopeSummary = true;
     this.codingJobBackendService
       .getManualCodingScopeSummary(workspaceId)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoadingManualCodingScopeSummary = false;
+          this.trySavePlanningDataBundleSnapshot();
+        })
+      )
       .subscribe({
         next: summary => {
           this.manualCodingScopeSummary = summary;
         },
         error: () => {
           this.manualCodingScopeSummary = null;
+          this.markPlanningDataBundleLoadFailed();
         }
       });
 
@@ -3885,6 +4254,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         finalize(() => {
           this.isLoadingManualCodeAvailability = false;
           this.focusManualFreshnessTargetIfReady();
+          this.trySavePlanningDataBundleSnapshot();
         })
       )
       .subscribe({
@@ -3893,6 +4263,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.setManualCodeAvailabilityWarnings([]);
+          this.markPlanningDataBundleLoadFailed();
         }
       });
   }
@@ -3975,12 +4346,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         finalize(() => {
           this.isLoadingAppliedResultsOverview = false;
           this.focusManualFreshnessTargetIfReady();
+          this.trySavePlanningDataBundleSnapshot();
         })
       )
       .subscribe({
         next: overview => {
           if (!overview) {
             this.appliedResultsOverview = null;
+            this.markPlanningDataBundleLoadFailed();
             return;
           }
 
@@ -3997,6 +4370,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.appliedResultsOverview = null;
+          this.markPlanningDataBundleLoadFailed();
         }
       });
   }
@@ -4148,6 +4522,15 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     if (workspaceId) {
       this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
     }
+    this.resetPlanningDataBundleState();
+  }
+
+  private resetPlanningDataBundleState(): void {
+    this.hasLoadedPlanningDataBundle = false;
+    this.isPlanningDataBundleLoadPending = false;
+    this.planningDataBundleCacheGeneration = null;
+    this.deferredPlanningDataBundleForceRefresh = null;
+    this.planningDataBundleLoadFailed = false;
   }
 
   private formatApplyCodingResultsMessage(
@@ -4325,6 +4708,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       default:
         return status;
     }
+  }
+
+  getJobDefinitionIdentityLabel(definition: { id: number; name?: string }): string {
+    return getJobDefinitionDisplayLabel(definition);
   }
 
   private loadResponseMatchingMode(): void {
@@ -4570,11 +4957,16 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (this.analysisPollingTimer) {
-      clearTimeout(this.analysisPollingTimer);
-      this.analysisPollingTimer = undefined;
+    if (!this.isResponseAnalysisTab(this.activeManualTab)) {
+      this.stopResponseAnalysisView();
+      return;
     }
 
+    this.cancelResponseAnalysisRequest({
+      markNotLoading: false
+    });
+    const requestId = this.responseAnalysisRequestId + 1;
+    this.responseAnalysisRequestId = requestId;
     this.isLoadingResponseAnalysis = true;
     this.responseAnalysisError = null;
     this.testPersonCodingService
@@ -4586,9 +4978,16 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.duplicatePageIndex + 1,
         this.duplicatePageSize
       )
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        takeUntil(this.responseAnalysisRequestCancel$),
+        takeUntil(this.destroy$)
+      )
       .subscribe({
         next: (analysis: ResponseAnalysisDto & { isCalculating?: boolean }) => {
+          if (!this.shouldAcceptResponseAnalysisResult(requestId, workspaceId)) {
+            return;
+          }
+
           this.responseAnalysis = analysis;
           this.responseAnalysisError = null;
           this.isLoadingResponseAnalysis = false;
@@ -4599,13 +4998,20 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           if (analysis.isCalculating) {
             // Poll every 5 seconds if calculating
             this.analysisPollingTimer = setTimeout(() => {
-              if (this.responseAnalysis?.isCalculating) {
+              this.analysisPollingTimer = undefined;
+              if (this.responseAnalysis?.isCalculating &&
+                this.shouldAcceptResponseAnalysisResult(requestId, workspaceId)) {
                 this.loadResponseAnalysis();
               }
             }, 5000);
           }
+          this.trySavePlanningDataBundleSnapshot();
         },
         error: error => {
+          if (!this.shouldAcceptResponseAnalysisResult(requestId, workspaceId)) {
+            return;
+          }
+
           this.isLoadingResponseAnalysis = false;
           this.focusManualFreshnessTargetIfReady();
           const responseAnalysisError = `Fehler beim Laden der Antwortanalyse: ${error.message || error}`;
@@ -4625,6 +5031,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.setResponseAnalysisGuardActive(false);
           this.responseAnalysis = null;
           this.responseAnalysisError = responseAnalysisError;
+          this.markPlanningDataBundleLoadFailed();
+          this.trySavePlanningDataBundleSnapshot();
           this.snackBar.open(
             this.responseAnalysisError,
             'OK',

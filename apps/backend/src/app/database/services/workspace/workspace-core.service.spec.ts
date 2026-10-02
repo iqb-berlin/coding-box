@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { AdminWorkspaceNotFoundException } from '../../../exceptions/admin-workspace-not-found.exception';
 import Workspace from '../../entities/workspace.entity';
 import WorkspaceUser from '../../entities/workspace_user.entity';
@@ -14,7 +14,7 @@ const createRepo = () => ({
 
 describe('WorkspaceCoreService', () => {
   let repo: ReturnType<typeof createRepo>;
-  let cacheService: { delete: jest.Mock; deleteByPattern: jest.Mock };
+  let cacheService: { delete: jest.Mock; deleteByPattern: jest.Mock; incr: jest.Mock };
   let workspaceTestResultsService: { invalidateWorkspaceStatsCache: jest.Mock };
   let queryRunner: {
     connect: jest.Mock;
@@ -22,14 +22,19 @@ describe('WorkspaceCoreService', () => {
     commitTransaction: jest.Mock;
     rollbackTransaction: jest.Mock;
     release: jest.Mock;
-    manager: { delete: jest.Mock };
+    query: jest.Mock;
+    manager: { delete: jest.Mock; findOne: jest.Mock; save: jest.Mock };
   };
   let managerSave: jest.Mock;
   let service: WorkspaceCoreService;
 
   beforeEach(() => {
     repo = createRepo();
-    cacheService = { delete: jest.fn(), deleteByPattern: jest.fn() };
+    cacheService = {
+      delete: jest.fn(),
+      deleteByPattern: jest.fn(),
+      incr: jest.fn().mockResolvedValue(1)
+    };
     workspaceTestResultsService = { invalidateWorkspaceStatsCache: jest.fn() };
     queryRunner = {
       connect: jest.fn(),
@@ -37,7 +42,17 @@ describe('WorkspaceCoreService', () => {
       commitTransaction: jest.fn(),
       rollbackTransaction: jest.fn(),
       release: jest.fn(),
-      manager: { delete: jest.fn().mockResolvedValue({ affected: 1 }) }
+      query: jest.fn().mockImplementation(async (sql: string) => {
+        if (sql.includes('pg_try_advisory_lock')) {
+          return [{ locked: true }];
+        }
+        return [];
+      }),
+      manager: {
+        delete: jest.fn().mockResolvedValue({ affected: 1 }),
+        findOne: jest.fn(),
+        save: jest.fn().mockResolvedValue(undefined)
+      }
     };
     managerSave = jest.fn((entity: unknown, value: object) => {
       if (entity === Workspace) {
@@ -76,7 +91,11 @@ describe('WorkspaceCoreService', () => {
   });
 
   it('creates, patches and removes workspaces', async () => {
-    repo.findOne.mockResolvedValueOnce({ id: 1, name: 'Old', settings: {} });
+    queryRunner.manager.findOne.mockResolvedValueOnce({
+      id: 1,
+      name: 'Old',
+      settings: {}
+    });
 
     await expect(service.create({ name: 'New' } as never, 5)).resolves.toBe(9);
     expect(managerSave).toHaveBeenCalledWith(WorkspaceUser, {
@@ -86,7 +105,12 @@ describe('WorkspaceCoreService', () => {
       canCode: false
     });
     await expect(service.patch({ id: 1, name: 'Patched', settings: { a: true } } as never)).resolves.toBeUndefined();
+    expect(queryRunner.manager.save).toHaveBeenCalledWith(
+      Workspace,
+      { id: 1, name: 'Patched', settings: { a: true } }
+    );
     expect(cacheService.delete).toHaveBeenCalled();
+    expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
     await expect(service.remove([])).resolves.toBeUndefined();
     await expect(service.remove([1])).resolves.toBeUndefined();
     expect(queryRunner.commitTransaction).toHaveBeenCalled();
@@ -110,7 +134,7 @@ describe('WorkspaceCoreService', () => {
     jest.spyOn(service, 'findOne')
       .mockResolvedValueOnce({ id: 1, name: 'A', settings: { ignoredUnits: ['U1'] } } as never)
       .mockResolvedValueOnce({ id: 1, name: 'A', settings: { theme: 'dark' } } as never);
-    repo.findOne
+    queryRunner.manager.findOne
       .mockResolvedValueOnce({ id: 1, settings: {} })
       .mockResolvedValueOnce({ id: 1, settings: { a: true } })
       .mockResolvedValueOnce(null);
@@ -121,12 +145,50 @@ describe('WorkspaceCoreService', () => {
     await expect(service.setWorkspaceSettings(1, { b: true } as never)).resolves.toBeUndefined();
     await expect(service.setWorkspaceSettings(99, { b: true } as never)).rejects.toBeInstanceOf(AdminWorkspaceNotFoundException);
     expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
+    expect(cacheService.delete).toHaveBeenCalledWith('coding-statistics:schema-v5:1:v1');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding-statistics:schema-v5:1:v2');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding-statistics:schema-v5:1:v3');
     expect(cacheService.delete).toHaveBeenCalledWith('coding-statistics:schema-v4:1:v1');
     expect(cacheService.delete).toHaveBeenCalledWith('coding-statistics:schema-v4:1:v2');
     expect(cacheService.delete).toHaveBeenCalledWith('coding-statistics:schema-v4:1:v3');
+    expect(cacheService.incr).toHaveBeenCalledWith('coding_incomplete_variables_version:1');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v9:1');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_scope_v2:1');
     expect(cacheService.delete).toHaveBeenCalledWith('flat_response_filter_options:version:1');
     expect(cacheService.deleteByPattern).toHaveBeenCalledWith('response-analysis:1_*');
     expect(cacheService.deleteByPattern).toHaveBeenCalledWith('responses:1:*');
     expect(cacheService.deleteByPattern).toHaveBeenCalledWith('flat_response_filter_options:1:*');
+  });
+
+  it('unlocks Autocoder input before invalidating exclusion caches', async () => {
+    const callOrder: string[] = [];
+    queryRunner.manager.findOne.mockResolvedValueOnce({ id: 1, settings: {} });
+    queryRunner.manager.save.mockImplementationOnce(async () => {
+      callOrder.push('save');
+    });
+    queryRunner.query.mockImplementation(async (sql: string) => {
+      callOrder.push(sql.includes('pg_advisory_unlock') ? 'unlock' : 'lock');
+      return sql.includes('pg_try_advisory_lock') ? [{ locked: true }] : [];
+    });
+    cacheService.delete.mockImplementation(async () => {
+      callOrder.push('cache');
+    });
+
+    await service.setIgnoredUnits(1, ['U2']);
+
+    expect(callOrder.slice(0, 4)).toEqual(['lock', 'save', 'unlock', 'cache']);
+  });
+
+  it('fails fast without mutating when Autocoder input locks are occupied', async () => {
+    queryRunner.query.mockResolvedValue([{ locked: false }]);
+
+    await expect(service.setIgnoredUnits(1, ['U2']))
+      .rejects.toBeInstanceOf(ConflictException);
+    await expect(service.remove([1]))
+      .rejects.toBeInstanceOf(ConflictException);
+
+    expect(queryRunner.manager.findOne).not.toHaveBeenCalled();
+    expect(queryRunner.startTransaction).not.toHaveBeenCalled();
+    expect(cacheService.delete).not.toHaveBeenCalled();
   });
 });

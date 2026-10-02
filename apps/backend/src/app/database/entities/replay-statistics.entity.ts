@@ -28,6 +28,12 @@ export class ReplayStatistics {
   @Column({ type: 'varchar', length: 255, nullable: false })
     unit_id: string;
 
+  @Column({ type: 'varchar', length: 128, nullable: true })
+    replay_attempt_id: string;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+    request_id: string;
+
   @Column({ type: 'varchar', length: 255, nullable: true })
     booklet_id: string;
 

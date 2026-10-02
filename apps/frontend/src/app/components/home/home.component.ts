@@ -61,6 +61,7 @@ export class HomeComponent implements OnInit, OnDestroy {
 
   private authSubscription?: Subscription;
   private authBootstrapSubscription?: Subscription;
+  private authDataRefreshSubscription?: Subscription;
   private queryParamsSubscription?: Subscription;
 
   ngOnInit(): void {
@@ -68,9 +69,6 @@ export class HomeComponent implements OnInit, OnDestroy {
       if (authData) {
         this.authData = authData;
         this.workspaces = authData.workspaces;
-        if (!this.isPersonalCodingJobsRedirectChecked && authData.userId > 0 && !authData.isAdmin) {
-          this.redirectPureCoderToPersonalCodingJobs(authData.userId);
-        }
         if (authData.userId > 0) {
           this.resolveAuthDataFailedQueryParam();
         }
@@ -83,7 +81,7 @@ export class HomeComponent implements OnInit, OnDestroy {
 
         if (status === 'ready' && !this.authDataRefreshRequested) {
           this.authDataRefreshRequested = true;
-          this.refreshHomeAuthDataIfNeeded();
+          this.refreshHomeAuthData();
         }
 
         this.resolveAuthDataFailedQueryParam();
@@ -101,12 +99,14 @@ export class HomeComponent implements OnInit, OnDestroy {
     });
   }
 
-  private refreshHomeAuthDataIfNeeded(): void {
-    if (this.authData.userId > 0) {
-      return;
-    }
-
-    this.appService.refreshAuthData();
+  private refreshHomeAuthData(): void {
+    this.authDataRefreshSubscription = this.appService.refreshAuthData().subscribe(() => {
+      if (!this.isPersonalCodingJobsRedirectChecked &&
+        this.authData.userId > 0 &&
+        !this.authData.isAdmin) {
+        this.redirectPureCoderToPersonalCodingJobs(this.authData.userId);
+      }
+    });
   }
 
   private redirectPureCoderToPersonalCodingJobs(userId: number): void {
@@ -237,6 +237,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.authSubscription?.unsubscribe();
     this.authBootstrapSubscription?.unsubscribe();
+    this.authDataRefreshSubscription?.unsubscribe();
     this.queryParamsSubscription?.unsubscribe();
   }
 

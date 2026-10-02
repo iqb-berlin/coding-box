@@ -14,7 +14,10 @@ import { statusStringToNumber, statusNumberToString } from '../../utils/response
 import FileUpload from '../../entities/file_upload.entity';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
-import { getCodingIncompleteVariablesCacheKey } from './coding-incomplete-variables-cache-key.util';
+import {
+  getCodingIncompleteVariablesCacheKeys,
+  getCodingIncompleteVariablesCacheVersionKey
+} from './coding-incomplete-variables-cache-key.util';
 
 interface ExternalCodingRow {
   unit_key?: string;
@@ -427,7 +430,8 @@ export class ExternalCodingImportService {
                     .set({
                       status_v2: statusStringToNumber(validation.validatedStatus) ?? null,
                       code_v2: validation.validatedCode,
-                      score_v2: validation.validatedScore
+                      score_v2: validation.validatedScore,
+                      autocoder_invalidated_version: null
                     })
                     .where('id = :responseId', { responseId: validation.responseId })
                     .execute();
@@ -1079,10 +1083,29 @@ export class ExternalCodingImportService {
         };
       }
 
+      const hasScore = Object.prototype.hasOwnProperty.call(
+        codeDefinition,
+        'score'
+      );
+      const rawScore = (codeDefinition as { score?: unknown }).score;
+      if (
+        !hasScore ||
+        (rawScore !== null &&
+          (typeof rawScore !== 'number' || !Number.isFinite(rawScore)))
+      ) {
+        return {
+          isValid: false,
+          score: null,
+          status: 'CODING_INCOMPLETE',
+          reason: `Code '${code}' definiert im Kodierschema für Variable '${variableId}' keinen gültigen Score.`
+        };
+      }
+      const score = rawScore as number | null;
+
       // Code is valid, return the score and CODING_COMPLETE status
       return {
         isValid: true,
-        score: codeDefinition.score || 0,
+        score,
         status: 'CODING_COMPLETE'
       };
     } catch (error) {
@@ -1206,7 +1229,7 @@ export class ExternalCodingImportService {
   private async parseExcelFile(fileData: string): Promise<ExternalCodingRow[]> {
     const buffer = Buffer.from(fileData, 'base64');
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer as Buffer);
+    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]);
 
     const worksheet = workbook.getWorksheet(1);
     if (!worksheet) {
@@ -1256,18 +1279,19 @@ export class ExternalCodingImportService {
     return results;
   }
 
-  private generateIncompleteVariablesCacheKey(workspaceId: number): string {
-    return getCodingIncompleteVariablesCacheKey(workspaceId);
-  }
-
   /**
    * Clear the manual coding variables cache for a specific workspace
    * Should be called whenever coding status changes for the workspace
    * @param workspaceId The workspace ID to clear cache for
    */
   async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
-    const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
-    await this.cacheService.delete(cacheKey);
+    await this.cacheService.incr(
+      getCodingIncompleteVariablesCacheVersionKey(workspaceId)
+    );
+    await Promise.all(
+      getCodingIncompleteVariablesCacheKeys(workspaceId)
+        .map(cacheKey => this.cacheService.delete(cacheKey))
+    );
     this.logger.log(`Invalidated manual coding variables cache for workspace ${workspaceId}`);
   }
 }

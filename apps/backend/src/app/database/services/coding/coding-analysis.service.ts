@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
 import Persons from '../../entities/persons.entity';
 import { Unit } from '../../entities/unit.entity';
@@ -27,6 +27,7 @@ import {
   getCodingAnalysisCacheKey,
   getCodingAnalysisRunMarkerKey
 } from './coding-analysis-cache-key.util';
+import { tryWithWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
 export interface AggregationSettingsResult {
   success: boolean;
@@ -332,11 +333,45 @@ export class CodingAnalysisService {
     const normalizedFlags = this.codingJobService.normalizeResponseMatchingFlags(currentFlags);
 
     try {
-      await this.codingJobService.setAggregationThreshold(workspaceId, validThreshold);
-      const savedFlags = await this.codingJobService.setResponseMatchingMode(workspaceId, normalizedFlags);
-      const revertedCount = await this.revertMaterializedDuplicateAggregation(workspaceId);
-      await this.invalidateAggregationDependentCaches(workspaceId);
+      const lockAttempt = await tryWithWorkspaceTestResultsMutationLock(
+        this.responseRepository.manager.connection,
+        workspaceId,
+        async queryRunner => {
+          await this.codingJobService.setAggregationThreshold(
+            workspaceId,
+            validThreshold,
+            queryRunner.manager
+          );
+          const savedFlags = await this.codingJobService
+            .setResponseMatchingMode(
+              workspaceId,
+              normalizedFlags,
+              queryRunner.manager
+            );
+          const revertedCount =
+            await this.revertMaterializedDuplicateAggregation(
+              workspaceId,
+              queryRunner.manager
+            );
+          return { savedFlags, revertedCount };
+        }
+      );
 
+      if (!lockAttempt.acquired) {
+        return {
+          success: false,
+          threshold: validThreshold,
+          flags: normalizedFlags,
+          aggregationActive: !normalizedFlags.includes(ResponseMatchingFlag.NO_AGGREGATION),
+          revertedResponses: 0,
+          message:
+            'Aggregation settings cannot be changed while test results are being modified. ' +
+            'Please try again after auto-coding finishes.'
+        };
+      }
+
+      const { savedFlags, revertedCount } = lockAttempt.value;
+      await this.invalidateAggregationDependentCaches(workspaceId);
       return {
         success: true,
         threshold: validThreshold,
@@ -427,11 +462,11 @@ export class CodingAnalysisService {
   /**
    * Invalidates all cached analysis results for a given workspace
    */
-  async invalidateCache(workspaceId: number): Promise<void> {
+  async invalidateCache(workspaceId: number): Promise<boolean> {
     this.logger.log(`Invalidating response analysis cache for workspace ${workspaceId}`);
     // "response-analysis:1_*" matches all variations (flags, thresholds) for workspace 1
     const pattern = `${CODING_ANALYSIS_CACHE_KEY_PREFIX}:${workspaceId}_*`;
-    await this.cacheService.deleteByPattern(pattern);
+    return this.cacheService.deleteByPattern(pattern);
   }
 
   private async invalidateAggregationDependentCaches(workspaceId: number): Promise<void> {
@@ -456,8 +491,13 @@ export class CodingAnalysisService {
     return Math.min(100, Math.max(2, Math.round(parsed)));
   }
 
-  private async revertMaterializedDuplicateAggregation(workspaceId: number): Promise<number> {
-    const aggregatedResponses = await this.responseRepository
+  private async revertMaterializedDuplicateAggregation(
+    workspaceId: number,
+    manager?: EntityManager
+  ): Promise<number> {
+    const responseRepository = manager?.getRepository(ResponseEntity) ??
+      this.responseRepository;
+    const aggregatedResponses = await responseRepository
       .createQueryBuilder('response')
       .select('response.id', 'id')
       .innerJoin('response.unit', 'unit')
@@ -478,7 +518,7 @@ export class CodingAnalysisService {
     const chunkSize = 1000;
     for (let i = 0; i < responseIds.length; i += chunkSize) {
       const chunk = responseIds.slice(i, i + chunkSize);
-      await this.responseRepository.update(
+      await responseRepository.update(
         { id: In(chunk) },
         {
           code_v2: null,

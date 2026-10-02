@@ -2,7 +2,7 @@ import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { HttpErrorResponse, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { of } from 'rxjs';
-import { AppService } from './app.service';
+import { AppService, AuthDataRefreshOutcome } from './app.service';
 import { LogoService } from './logo.service';
 import { SERVER_URL } from '../../injection-tokens';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
@@ -13,11 +13,13 @@ import {
 import { SUPPRESS_GLOBAL_HTTP_ERROR } from '../interceptors/http-error-context';
 import { DecodedToken } from './auth.models';
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
+import { SessionRecoveryService } from './session-recovery.service';
 
 describe('AppService', () => {
   let service: AppService;
   let httpMock: HttpTestingController;
   let logoServiceMock: jest.Mocked<LogoService>;
+  let sessionRecoveryService: SessionRecoveryService;
 
   const mockServerUrl = 'http://localhost/api/';
 
@@ -47,14 +49,34 @@ describe('AppService', () => {
 
     service = TestBed.inject(AppService);
     httpMock = TestBed.inject(HttpTestingController);
+    sessionRecoveryService = TestBed.inject(SessionRecoveryService);
   });
 
   afterEach(() => {
     httpMock.verify();
+    sessionStorage.clear();
   });
 
   it('should be created', () => {
     expect(service).toBeTruthy();
+  });
+
+  describe('selectedWorkspaceId', () => {
+    it('should emit selected workspace changes', () => {
+      const workspaceIds: number[] = [];
+      const subscription = service.selectedWorkspaceId$.subscribe(workspaceId => {
+        workspaceIds.push(workspaceId);
+      });
+
+      service.selectedWorkspaceId = 1;
+      service.selectedWorkspaceId = 1;
+      service.selectedWorkspaceId = 2;
+      service.selectedWorkspaceId = null;
+
+      expect(workspaceIds).toEqual([1, 2, 0]);
+      expect(service.selectedWorkspaceId).toBe(0);
+      subscription.unsubscribe();
+    });
   });
 
   describe('createOwnToken', () => {
@@ -134,14 +156,173 @@ describe('AppService', () => {
 
     it('should refresh data if user is logged in', () => {
       service.loggedUser = { sub: 'user1' } as DecodedToken;
+      service.setAuthBootstrapStatus('ready');
       const mockAuthData = { userId: 1 } as unknown as AuthDataDto;
+      let refreshResult: AuthDataRefreshOutcome | undefined;
 
-      service.refreshAuthData();
+      service.refreshAuthData().subscribe(result => {
+        refreshResult = result;
+      });
 
       const req = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user1`);
       expect(req.request.method).toBe('GET');
       expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
       req.flush(mockAuthData);
+
+      expect(refreshResult).toBe('updated');
+      expect(service.authData).toEqual(mockAuthData);
+    });
+
+    it('should preserve ready auth state when a background refresh fails', () => {
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
+      service.setAuthBootstrapStatus('ready');
+
+      let refreshResult: AuthDataRefreshOutcome | undefined;
+      service.refreshAuthData().subscribe(result => {
+        refreshResult = result;
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user1`);
+      expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
+      req.flush('Not found', { status: 404, statusText: 'Not Found' });
+
+      expect(refreshResult).toBe('failed');
+      expect(service.authBootstrapStatus).toBe('ready');
+    });
+
+    it('should not refresh data while backend login is still running', () => {
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
+      service.setAuthBootstrapStatus('backend-login-running');
+
+      let refreshResult: AuthDataRefreshOutcome | undefined;
+      service.refreshAuthData().subscribe(result => {
+        refreshResult = result;
+      });
+
+      httpMock.expectNone(`${mockServerUrl}auth-data?identity=user1`);
+      expect(refreshResult).toBe('invalidated');
+    });
+
+    it('should refresh with the current OIDC identity', () => {
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
+      service.setAuthBootstrapStatus('ready');
+
+      service.refreshAuthData().subscribe(result => {
+        expect(result).toBe('updated');
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user1`);
+      req.flush({ userId: 1 } as AuthDataDto);
+    });
+
+    it('should not overwrite newer auth data and should report effective refresh success', () => {
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
+      service.setAuthBootstrapStatus('ready');
+      let firstResult: AuthDataRefreshOutcome | undefined;
+      let secondResult: AuthDataRefreshOutcome | undefined;
+
+      service.refreshAuthData().subscribe(result => {
+        firstResult = result;
+      });
+      service.refreshAuthData().subscribe(result => {
+        secondResult = result;
+      });
+
+      const requests = httpMock.match(`${mockServerUrl}auth-data?identity=user1`);
+      expect(requests).toHaveLength(2);
+      requests[1].flush({ userId: 1, userName: 'Current' } as AuthDataDto);
+      requests[0].flush({ userId: 1, userName: 'Stale' } as AuthDataDto);
+
+      expect(secondResult).toBe('updated');
+      expect(firstResult).toBe('superseded');
+      expect(service.authData.userName).toBe('Current');
+    });
+
+    it('should apply an older successful refresh if a newer refresh fails', () => {
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
+      service.setAuthBootstrapStatus('ready');
+      let firstResult: AuthDataRefreshOutcome | undefined;
+      let secondResult: AuthDataRefreshOutcome | undefined;
+
+      service.refreshAuthData().subscribe(result => {
+        firstResult = result;
+      });
+      service.refreshAuthData().subscribe(result => {
+        secondResult = result;
+      });
+
+      const requests = httpMock.match(`${mockServerUrl}auth-data?identity=user1`);
+      expect(requests).toHaveLength(2);
+      requests[1].flush('Not found', { status: 404, statusText: 'Not Found' });
+      requests[0].flush({ userId: 1, userName: 'Current' } as AuthDataDto);
+
+      expect(secondResult).toBe('failed');
+      expect(firstResult).toBe('updated');
+      expect(service.authData.userName).toBe('Current');
+    });
+
+    it('should finish the newest refresh after its subscriber unsubscribes', () => {
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
+      service.setAuthBootstrapStatus('ready');
+      let firstResult: AuthDataRefreshOutcome | undefined;
+
+      service.refreshAuthData().subscribe(result => {
+        firstResult = result;
+      });
+      const secondSubscription = service.refreshAuthData().subscribe();
+
+      const requests = httpMock.match(`${mockServerUrl}auth-data?identity=user1`);
+      expect(requests).toHaveLength(2);
+      secondSubscription.unsubscribe();
+      expect(requests[1].cancelled).toBe(false);
+      requests[0].flush({ userId: 1, userName: 'Stale' } as AuthDataDto);
+      requests[1].flush({ userId: 1, userName: 'Current' } as AuthDataDto);
+
+      expect(firstResult).toBe('updated');
+      expect(service.authData.userName).toBe('Current');
+    });
+
+    it('should not restore auth data from a refresh after auth state was cleared', () => {
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
+      service.setAuthBootstrapStatus('ready');
+      let refreshResult: AuthDataRefreshOutcome | undefined;
+
+      service.refreshAuthData().subscribe(result => {
+        refreshResult = result;
+      });
+      const request = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user1`);
+
+      service.clearAuthState();
+      request.flush({ userId: 1, userName: 'Former user' } as AuthDataDto);
+
+      expect(refreshResult).toBe('invalidated');
+      expect(service.authData).toEqual(AppService.defaultAuthData);
+    });
+
+    it('should not overwrite a newly authenticated user with an earlier refresh response', () => {
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
+      service.setAuthBootstrapStatus('ready');
+      let refreshResult: AuthDataRefreshOutcome | undefined;
+      let loginResult: boolean | undefined;
+
+      service.refreshAuthData().subscribe(result => {
+        refreshResult = result;
+      });
+      const oldRefreshRequest = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user1`);
+
+      service.loggedUser = { sub: 'user2' } as DecodedToken;
+      service.loadAuthenticatedUser('user2').subscribe(result => {
+        loginResult = result;
+      });
+      const newLoginRequest = httpMock.expectOne(`${mockServerUrl}auth-data?identity=user2`);
+      newLoginRequest.flush({ userId: 2, userName: 'Current user' } as AuthDataDto);
+      oldRefreshRequest.flush({ userId: 1, userName: 'Former user' } as AuthDataDto);
+
+      expect(loginResult).toBe(true);
+      expect(refreshResult).toBe('invalidated');
+      expect(service.authData.userName).toBe('Current user');
     });
   });
 
@@ -170,6 +351,14 @@ describe('AppService', () => {
       expect(service.authBootstrapStatus).toBe('ready');
     });
 
+    it('should clear recovery drafts when auth state is cleared explicitly', () => {
+      sessionRecoveryService.saveDraft('active-form', { field: 'value' });
+
+      service.clearAuthState();
+
+      expect(sessionRecoveryService.peekDraft('active-form')).toBeNull();
+    });
+
     it('should clear auth state and mark reauthentication as required', () => {
       service.requireReAuthentication('/coding');
 
@@ -187,7 +376,54 @@ describe('AppService', () => {
       expect(service.reAuthenticationReturnUrl).toBe('/workspace-admin/1');
     });
 
-    it('should clear reauthentication and return URL when explicitly requested', () => {
+    it('should capture registered recovery drafts before requiring reauthentication', () => {
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
+      const unregister = sessionRecoveryService.registerProvider({
+        key: 'active-form',
+        capture: () => ({ field: 'value' })
+      });
+
+      service.requireReAuthentication('/coding');
+
+      expect(sessionRecoveryService.peekDraft('active-form')).toEqual({ field: 'value' });
+      expect(sessionRecoveryService.consumeDraft('active-form')).toEqual({ field: 'value' });
+      unregister();
+    });
+
+    it('should keep recovery drafts saved during reauthentication scoped to the current user', () => {
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
+
+      service.requireReAuthentication('/coding');
+      sessionRecoveryService.saveDraft('late-active-form', { field: 'late-value' });
+
+      expect(sessionRecoveryService.peekDraft('late-active-form')).toEqual({ field: 'late-value' });
+      sessionRecoveryService.setOwnerId(undefined);
+      expect(sessionRecoveryService.peekDraft('late-active-form')).toBeNull();
+      sessionRecoveryService.setOwnerId('user1');
+      expect(sessionRecoveryService.consumeDraft('late-active-form')).toEqual({ field: 'late-value' });
+    });
+
+    it('should keep recovery drafts scoped when reauthentication is requested repeatedly', () => {
+      service.loggedUser = { sub: 'user1' } as DecodedToken;
+      let fieldValue = 'first-value';
+      const unregister = sessionRecoveryService.registerProvider({
+        key: 'active-form',
+        capture: () => ({ field: fieldValue })
+      });
+
+      service.requireReAuthentication('/coding');
+      fieldValue = 'second-value';
+      service.requireReAuthentication('/workspace-admin/1');
+
+      expect(sessionRecoveryService.peekDraft('active-form')).toEqual({ field: 'second-value' });
+      sessionRecoveryService.setOwnerId(undefined);
+      expect(sessionRecoveryService.peekDraft('active-form')).toBeNull();
+      sessionRecoveryService.setOwnerId('user1');
+      expect(sessionRecoveryService.consumeDraft('active-form')).toEqual({ field: 'second-value' });
+      unregister();
+    });
+
+    it('should clear the return URL when reauthentication is dismissed', () => {
       service.requireReAuthentication('/workspace-admin/1');
       service.clearAuthState({ clearReAuthentication: true, clearReturnUrl: true });
 

@@ -9,7 +9,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
-  combineLatest, debounceTime, fromEvent, Observable, Subject, Subscription, takeUntil
+  combineLatest, debounceTime, fromEvent, Observable, ReplaySubject, Subject, Subscription, takeUntil
 } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from '../../../core/services/app.service';
@@ -47,11 +47,14 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   private lastPageError: 'notInList' | 'notCurrent' | null = null;
   private hasEmittedResponseVisible = false;
   @ViewChild('hostingIframe') hostingIframe!: ElementRef;
-  private validPages: Subject<{ pages: string[], current: string }> = new Subject();
+  private validPages = new ReplaySubject<{ pages: string[], current: string }>(1);
   private iFrameElement: HTMLIFrameElement | undefined;
   postMessageTarget: Window | undefined;
   private ngUnsubscribe = new Subject<void>();
   private validPagesSubscription: Subscription | null = null;
+  private iframeLoadSubscription: Subscription | null = null;
+  private keyDownSubscription: Subscription | null = null;
+  private iframeHeightTimeout: ReturnType<typeof setTimeout> | null = null;
   playerApiVersion = 3;
   private sessionId = '';
   pageList: PageData[] = [];
@@ -62,46 +65,66 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   count: number = 0;
   dataParts!: { [key: string]: string };
   isLoaded: Subject<boolean> = new Subject<boolean>();
+  private currentPageId = '';
 
   ngOnChanges(changes: SimpleChanges): void {
     const unitDef = 'unitDef';
     const unitPlayer = 'unitPlayer';
     const unitResponses = 'unitResponses';
+    const pageId = 'pageId';
     const unitDefChange = changes[unitDef];
     const unitPlayerChange = changes[unitPlayer];
     const unitResponsesChange = changes[unitResponses];
+    const pageIdChange = changes[pageId];
 
     if (unitDefChange?.previousValue && !unitDefChange.currentValue) {
+      this.currentPageId = '';
       this.resetIframeContent();
       return;
     }
 
     if (unitDefChange?.currentValue && unitDefChange.previousValue !== unitDefChange.currentValue) {
       this.hasEmittedResponseVisible = false;
+      this.currentPageId = '';
       this.handleUnitDefChange(unitDefChange.currentValue, unitPlayerChange, unitResponsesChange);
     } else if (unitResponsesChange?.currentValue &&
       unitResponsesChange.previousValue !== unitResponsesChange.currentValue) {
       this.hasEmittedResponseVisible = false;
       this.handleResponsesChange(unitResponsesChange.currentValue);
       this.sendUnitData();
+      this.restartPageValidation(this.pageId());
+    } else if (pageIdChange?.previousValue !== pageIdChange?.currentValue) {
+      this.restartPageValidation(pageIdChange.currentValue);
     }
   }
 
   private updateIframeContent(content: string): void {
     if (this.iFrameElement && this.iFrameElement.srcdoc !== content) {
       this.iFrameElement.srcdoc = content;
-
-      // Add an event listener to recalculate height after content is loaded
-      fromEvent(this.iFrameElement, 'load')
-        .pipe(takeUntil(this.ngUnsubscribe))
-        .subscribe(() => {
-          this.forwardKeyEvents();
-          // Wait a bit for the content to render properly
-          setTimeout(() => {
-            this.calculateIFrameHeight();
-          }, 500);
-        });
     }
+  }
+
+  private subscribeForIframeLoad(): void {
+    this.iframeLoadSubscription?.unsubscribe();
+    this.iframeLoadSubscription = null;
+
+    if (!this.iFrameElement) {
+      return;
+    }
+
+    this.iframeLoadSubscription = fromEvent(this.iFrameElement, 'load')
+      .pipe(takeUntil(this.ngUnsubscribe))
+      .subscribe(() => {
+        this.forwardKeyEvents();
+
+        if (this.iframeHeightTimeout !== null) {
+          clearTimeout(this.iframeHeightTimeout);
+        }
+        this.iframeHeightTimeout = setTimeout(() => {
+          this.iframeHeightTimeout = null;
+          this.calculateIFrameHeight();
+        }, 500);
+      });
   }
 
   private resetIframeContent(): void {
@@ -160,6 +183,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
 
   ngAfterViewInit(): void {
     this.iFrameElement = this.hostingIframe?.nativeElement;
+    this.subscribeForIframeLoad();
     const unitPlayer = this.unitPlayer();
     if (this.iFrameElement && unitPlayer) {
       this.updateIframeContent(unitPlayer.replace('&quot;', ''));
@@ -167,8 +191,11 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   }
 
   private forwardKeyEvents(): void {
+    this.keyDownSubscription?.unsubscribe();
+    this.keyDownSubscription = null;
+
     if (this.iFrameElement?.contentWindow) {
-      fromEvent(this.iFrameElement.contentWindow, 'keydown')
+      this.keyDownSubscription = fromEvent(this.iFrameElement.contentWindow, 'keydown')
         .pipe(takeUntil(this.ngUnsubscribe))
         .subscribe((event: Event) => {
           const keyboardEvent = event as KeyboardEvent;
@@ -188,12 +215,13 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     }
   }
 
-  private subscribeForValidPages(): void {
+  private subscribeForValidPages(requestedPageId?: string): void {
     const pageId$ = new Observable<string>(observer => {
-      observer.next(this.pageId() || '');
+      const getPageId = () => requestedPageId || this.pageId() || '';
+      observer.next(getPageId());
 
       const callback = () => {
-        observer.next(this.pageId() || '');
+        observer.next(getPageId());
       };
 
       // Use a longer interval to reduce unnecessary checks
@@ -247,16 +275,25 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     if (newPageError !== this.lastPageError) {
       this.lastPageError = newPageError;
       this.invalidPage.emit(newPageError);
+    }
 
-      if (newPageError === null) {
-        this.cleanupValidPagesSubscription();
-      }
+    if (newPageError === null) {
+      this.cleanupValidPagesSubscription();
     }
   }
 
   private cleanupValidPagesSubscription(): void {
     this.validPagesSubscription?.unsubscribe();
     this.validPagesSubscription = null;
+  }
+
+  private restartPageValidation(requestedPageId?: string): void {
+    this.cleanupValidPagesSubscription();
+    if (this.lastPageError !== null) {
+      this.lastPageError = null;
+      this.invalidPage.emit(null);
+    }
+    this.subscribeForValidPages(requestedPageId);
   }
 
   private subscribeForMessages(): void {
@@ -423,7 +460,13 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   }
 
   // ++++++++++++ page nav ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  setPageList(validPages?: string[], currentPage?: string): void {
+  setPageList(
+    validPages?: string[],
+    currentPage?: string | number | null
+  ): void {
+    const normalizedCurrentPage = currentPage?.toString() ?? '';
+    this.currentPageId = normalizedCurrentPage;
+
     if ((validPages instanceof Array)) {
       const newPageList: PageData[] = [];
       if (validPages.length > 1) {
@@ -432,7 +475,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
             newPageList.push({
               index: -1,
               id: '#previous',
-              disabled: validPages[i] === currentPage,
+              disabled: validPages[i] === normalizedCurrentPage,
               type: '#previous'
             });
           }
@@ -440,7 +483,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
           newPageList.push({
             index: i + 1,
             id: validPages[i],
-            disabled: validPages[i] === currentPage,
+            disabled: validPages[i] === normalizedCurrentPage,
             type: '#goto'
           });
 
@@ -448,7 +491,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
             newPageList.push({
               index: -1,
               id: '#next',
-              disabled: validPages[i] === currentPage,
+              disabled: validPages[i] === normalizedCurrentPage,
               type: '#next'
             });
           }
@@ -457,7 +500,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       this.pageList = newPageList;
     } else if (this.pageList.length > 1 && currentPage !== undefined) {
       const currentPageIndex = this.pageList
-        .findIndex(page => page.id === currentPage && page.type === '#goto');
+        .findIndex(page => page.id === normalizedCurrentPage && page.type === '#goto');
 
       this.pageList.forEach((page, index) => {
         page.disabled = page.type === '#goto' && index === currentPageIndex;
@@ -538,6 +581,21 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     }
   }
 
+  navigateToPage(pageId: string): boolean {
+    if (!pageId || !this.postMessageTarget) {
+      return false;
+    }
+
+    const isCurrentPage = this.currentPageId === pageId;
+    this.hasEmittedResponseVisible = false;
+    this.restartPageValidation(pageId);
+    this.sendPageNavigationMessage(pageId);
+    if (isCurrentPage) {
+      this.notifyResponseVisible();
+    }
+    return true;
+  }
+
   /**
    * Finds the index of the current (disabled) page in the page list.
    * @returns The current page's index or -1 if not found.
@@ -604,6 +662,15 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   }
 
   ngOnDestroy(): void {
+    this.iframeLoadSubscription?.unsubscribe();
+    this.iframeLoadSubscription = null;
+    this.keyDownSubscription?.unsubscribe();
+    this.keyDownSubscription = null;
+    if (this.iframeHeightTimeout !== null) {
+      clearTimeout(this.iframeHeightTimeout);
+      this.iframeHeightTimeout = null;
+    }
+
     this.ngUnsubscribe.next();
     this.ngUnsubscribe.complete();
 

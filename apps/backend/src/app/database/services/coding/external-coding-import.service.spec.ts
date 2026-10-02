@@ -51,7 +51,10 @@ describe('ExternalCodingImportService', () => {
         }
       }
     };
-    const cacheService = { delete: jest.fn().mockResolvedValue(undefined) };
+    const cacheService = {
+      delete: jest.fn().mockResolvedValue(undefined),
+      incr: jest.fn().mockResolvedValue(1)
+    };
     const codingFreshnessService = {
       markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
     };
@@ -88,7 +91,8 @@ describe('ExternalCodingImportService', () => {
     expect(updateQuery.set).toHaveBeenCalledWith({
       status_v2: statusStringToNumber('CODING_COMPLETE'),
       code_v2: 1,
-      score_v2: 1
+      score_v2: 1,
+      autocoder_invalidated_version: null
     });
     expect(codingFreshnessService.markManualCodingCurrent).toHaveBeenCalledWith(
       17,
@@ -102,7 +106,9 @@ describe('ExternalCodingImportService', () => {
     expect(queryRunner.commitTransaction).toHaveBeenCalled();
     expect(queryRunner.rollbackTransaction).not.toHaveBeenCalled();
     expect(queryRunner.release).toHaveBeenCalled();
-    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v8:17');
+    expect(cacheService.incr).toHaveBeenCalledWith('coding_incomplete_variables_version:17');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_v9:17');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables_scope_v2:17');
   });
 
   it('imports DERIVE_ERROR without turning it into completed false coding', async () => {
@@ -140,7 +146,10 @@ describe('ExternalCodingImportService', () => {
         }
       }
     };
-    const cacheService = { delete: jest.fn().mockResolvedValue(undefined) };
+    const cacheService = {
+      delete: jest.fn().mockResolvedValue(undefined),
+      incr: jest.fn().mockResolvedValue(1)
+    };
     const codingFreshnessService = {
       markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
     };
@@ -172,7 +181,8 @@ describe('ExternalCodingImportService', () => {
     expect(updateQuery.set).toHaveBeenCalledWith({
       status_v2: statusStringToNumber('DERIVE_ERROR'),
       code_v2: null,
-      score_v2: null
+      score_v2: null,
+      autocoder_invalidated_version: null
     });
     expect(result.affectedRows[0]).toMatchObject({
       originalCodedStatus: 'DERIVE_ERROR',
@@ -221,7 +231,10 @@ describe('ExternalCodingImportService', () => {
         }
       }
     };
-    const cacheService = { delete: jest.fn().mockResolvedValue(undefined) };
+    const cacheService = {
+      delete: jest.fn().mockResolvedValue(undefined),
+      incr: jest.fn().mockResolvedValue(1)
+    };
     const codingFreshnessService = {
       markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
     };
@@ -260,7 +273,8 @@ describe('ExternalCodingImportService', () => {
     expect(updateQuery.set).toHaveBeenCalledWith({
       status_v2: statusStringToNumber('CODING_COMPLETE'),
       code_v2: 1,
-      score_v2: 2
+      score_v2: 2,
+      autocoder_invalidated_version: null
     });
   });
 
@@ -309,6 +323,71 @@ describe('ExternalCodingImportService', () => {
       score: 4,
       status: 'CODING_COMPLETE'
     });
+  });
+
+  it.each([
+    {
+      caseName: 'accepts an explicitly null score',
+      codeDefinition: { id: 4, score: null },
+      expected: {
+        isValid: true,
+        score: null,
+        status: 'CODING_COMPLETE'
+      }
+    },
+    {
+      caseName: 'rejects a missing score property',
+      codeDefinition: { id: 4 },
+      expected: {
+        isValid: false,
+        score: null,
+        status: 'CODING_INCOMPLETE',
+        reason: "Code '4' definiert im Kodierschema für Variable '04' keinen gültigen Score."
+      }
+    }
+  ])('$caseName in a matching code definition', async ({
+    codeDefinition,
+    expected
+  }) => {
+    const service = new ExternalCodingImportService(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { delete: jest.fn().mockResolvedValue(undefined) } as never,
+      { markManualCodingCurrent: jest.fn().mockResolvedValue(undefined) } as never
+    );
+    jest.spyOn(service as unknown as {
+      getCodingSchemeForUnit: () => Promise<unknown>;
+    }, 'getCodingSchemeForUnit')
+      .mockResolvedValue({
+        variableCodings: [
+          {
+            id: '04',
+            codes: [codeDefinition]
+          }
+        ]
+      });
+
+    const result = await (service as unknown as {
+      validateCodeAgainstScheme: (
+        unit: unknown,
+        variableId: string,
+        code: number | null
+      ) => Promise<{
+        isValid: boolean;
+        score: number | null;
+        status: string;
+        reason?: string;
+      }>;
+    }).validateCodeAgainstScheme(
+      { id: 1, name: 'DHB003', alias: 'DHB003' },
+      '04',
+      4
+    );
+
+    expect(result).toEqual(expected);
   });
 
   it('rejects unchanged coding-list exports with status_v1 as coding lists, not coding-results', async () => {

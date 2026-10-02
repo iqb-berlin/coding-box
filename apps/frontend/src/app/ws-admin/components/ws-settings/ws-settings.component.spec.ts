@@ -64,12 +64,20 @@ describe('WsSettingsComponent', () => {
       setAutoFetchCodingStatistics: jest.fn().mockReturnValue(of({})),
       getAutoRefreshManualCodingJobs: jest.fn().mockReturnValue(of(true)),
       setAutoRefreshManualCodingJobs: jest.fn().mockReturnValue(of({})),
+      getEvaluationMode: jest.fn().mockReturnValue(of(false)),
+      setEvaluationMode: jest.fn().mockReturnValue(of([])),
       getIncludeDeriveErrorInManualCoding: jest.fn().mockReturnValue(of(false)),
       setIncludeDeriveErrorInManualCoding: jest.fn().mockReturnValue(of({})),
       getShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of(false)),
       setShowTestResultsLogAnomalies: jest.fn().mockReturnValue(of({})),
       getEnableRegexSearch: jest.fn().mockReturnValue(of(false)),
-      setEnableRegexSearch: jest.fn().mockReturnValue(of({}))
+      setEnableRegexSearch: jest.fn().mockReturnValue(of({})),
+      getReplayUrlExportMode: jest.fn().mockReturnValue(of('auth')),
+      setReplayUrlExportMode: jest.fn().mockReturnValue(of({})),
+      getReplayUrlExportTokenDurationDays: jest.fn((_: number, maxDurationDays: number) => of(maxDurationDays)),
+      setReplayUrlExportTokenDurationDays: jest.fn().mockReturnValue(of({})),
+      getAuthSessionIdleTimeoutMinutes: jest.fn().mockReturnValue(of(45)),
+      setAuthSessionIdleTimeoutMinutes: jest.fn().mockReturnValue(of({}))
     } as unknown as jest.Mocked<WorkspaceSettingsService>;
 
     mockClipboard = {
@@ -128,6 +136,8 @@ describe('WsSettingsComponent', () => {
   describe('ngOnInit', () => {
     it('should load workspace settings on init', () => {
       expect(mockAppService.getWorkspaceTokenPolicy).toHaveBeenCalled();
+      expect(mockWorkspaceSettingsService.getEvaluationMode).toHaveBeenCalledWith(1);
+      expect(component.evaluationMode).toBe(false);
       expect(mockWorkspaceSettingsService.getAutoFetchCodingStatistics).toHaveBeenCalledWith(1);
       expect(component.autoFetchCodingStatistics).toBe(true);
       expect(mockWorkspaceSettingsService.getAutoRefreshManualCodingJobs).toHaveBeenCalledWith(1);
@@ -138,6 +148,12 @@ describe('WsSettingsComponent', () => {
       expect(component.showTestResultsLogAnomalies).toBe(false);
       expect(mockWorkspaceSettingsService.getEnableRegexSearch).toHaveBeenCalledWith(1);
       expect(component.enableRegexSearch).toBe(false);
+      expect(mockWorkspaceSettingsService.getReplayUrlExportMode).toHaveBeenCalledWith(1);
+      expect(component.replayUrlExportMode).toBe('auth');
+      expect(mockWorkspaceSettingsService.getReplayUrlExportTokenDurationDays).toHaveBeenCalledWith(1, 90);
+      expect(component.replayUrlExportTokenDurationDays).toBe(90);
+      expect(mockWorkspaceSettingsService.getAuthSessionIdleTimeoutMinutes).toHaveBeenCalledWith(1);
+      expect(component.authSessionIdleTimeoutMinutes).toBe(45);
     });
   });
 
@@ -213,6 +229,96 @@ describe('WsSettingsComponent', () => {
     });
   });
 
+  describe('toggleReplayUrlExportMode', () => {
+    it('should persist auth mode', () => {
+      component.toggleReplayUrlExportMode({ checked: true });
+
+      expect(component.replayUrlExportMode).toBe('auth');
+      expect(mockWorkspaceSettingsService.setReplayUrlExportMode).toHaveBeenCalledWith(1, 'auth');
+    });
+
+    it('should persist workspaceId mode', () => {
+      component.toggleReplayUrlExportMode({ checked: false });
+
+      expect(component.replayUrlExportMode).toBe('workspaceId');
+      expect(mockWorkspaceSettingsService.setReplayUrlExportMode).toHaveBeenCalledWith(1, 'workspaceId');
+    });
+
+    it('should revert replay URL export mode on error', () => {
+      component.replayUrlExportMode = 'auth';
+      mockWorkspaceSettingsService.setReplayUrlExportMode.mockReturnValue(
+        throwError(() => new Error('error'))
+      );
+
+      component.toggleReplayUrlExportMode({ checked: false });
+
+      expect(component.replayUrlExportMode).toBe('auth');
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+  });
+
+  describe('saveReplayUrlExportTokenDuration', () => {
+    it('should persist replay URL export token duration', () => {
+      component.replayUrlExportTokenDurationDays = 45;
+
+      component.saveReplayUrlExportTokenDuration();
+
+      expect(mockWorkspaceSettingsService.setReplayUrlExportTokenDurationDays).toHaveBeenCalledWith(1, 45, 90);
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+
+    it('should reject invalid replay URL export token durations before saving', () => {
+      component.replayUrlExportTokenDurationDays = 91;
+
+      component.saveReplayUrlExportTokenDuration();
+
+      expect(mockWorkspaceSettingsService.setReplayUrlExportTokenDurationDays).not.toHaveBeenCalled();
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+
+    it('should show an error when replay URL export token duration cannot be saved', () => {
+      mockWorkspaceSettingsService.setReplayUrlExportTokenDurationDays.mockReturnValue(
+        throwError(() => new Error('error'))
+      );
+      component.replayUrlExportTokenDurationDays = 45;
+
+      component.saveReplayUrlExportTokenDuration();
+
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+  });
+
+  describe('saveAuthSessionIdleTimeout', () => {
+    it('should persist auth session idle timeout minutes', () => {
+      component.authSessionIdleTimeoutMinutes = 60;
+
+      component.saveAuthSessionIdleTimeout();
+
+      expect(mockWorkspaceSettingsService.setAuthSessionIdleTimeoutMinutes).toHaveBeenCalledWith(1, 60);
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+
+    it('should reject invalid auth session idle timeout minutes before saving', () => {
+      component.authSessionIdleTimeoutMinutes = 481;
+
+      component.saveAuthSessionIdleTimeout();
+
+      expect(mockWorkspaceSettingsService.setAuthSessionIdleTimeoutMinutes).not.toHaveBeenCalled();
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+
+    it('should show an error when auth session idle timeout cannot be saved', () => {
+      mockWorkspaceSettingsService.setAuthSessionIdleTimeoutMinutes.mockReturnValue(
+        throwError(() => new Error('error'))
+      );
+      component.authSessionIdleTimeoutMinutes = 60;
+
+      component.saveAuthSessionIdleTimeout();
+
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+  });
+
   describe('editMissingsProfiles', () => {
     it('should open edit missings profiles dialog', () => {
       component.editMissingsProfiles();
@@ -224,6 +330,46 @@ describe('WsSettingsComponent', () => {
     it('should open access rights matrix dialog', () => {
       component.openAccessRightsMatrix();
       expect(mockDialog.open).toHaveBeenCalled();
+    });
+  });
+
+  describe('toggleEvaluationMode', () => {
+    it('should enable evaluation mode and turn off expensive automatic refreshes', () => {
+      component.toggleEvaluationMode({ checked: true });
+
+      expect(component.evaluationMode).toBe(true);
+      expect(component.autoFetchCodingStatistics).toBe(false);
+      expect(component.autoRefreshManualCodingJobs).toBe(false);
+      expect(mockWorkspaceSettingsService.setEvaluationMode).toHaveBeenCalledWith(1, true);
+    });
+
+    it('should disable evaluation mode and restore normal automatic refresh defaults', () => {
+      component.evaluationMode = true;
+      component.autoFetchCodingStatistics = false;
+      component.autoRefreshManualCodingJobs = false;
+
+      component.toggleEvaluationMode({ checked: false });
+
+      expect(component.evaluationMode).toBe(false);
+      expect(component.autoFetchCodingStatistics).toBe(false);
+      expect(component.autoRefreshManualCodingJobs).toBe(true);
+      expect(mockWorkspaceSettingsService.setEvaluationMode).toHaveBeenCalledWith(1, false);
+    });
+
+    it('should revert state on error', () => {
+      mockWorkspaceSettingsService.setEvaluationMode.mockReturnValue(
+        throwError(() => new Error('error'))
+      );
+      component.evaluationMode = false;
+      component.autoFetchCodingStatistics = true;
+      component.autoRefreshManualCodingJobs = true;
+
+      component.toggleEvaluationMode({ checked: true });
+
+      expect(component.evaluationMode).toBe(false);
+      expect(component.autoFetchCodingStatistics).toBe(true);
+      expect(component.autoRefreshManualCodingJobs).toBe(true);
+      expect(mockSnackBar.open).toHaveBeenCalled();
     });
   });
 
@@ -247,6 +393,14 @@ describe('WsSettingsComponent', () => {
       expect(component.autoFetchCodingStatistics).toBe(true);
       expect(mockSnackBar.open).toHaveBeenCalled();
     });
+
+    it('should ignore changes while evaluation mode is active', () => {
+      component.evaluationMode = true;
+
+      component.toggleAutoFetchCodingStatistics({ checked: true });
+
+      expect(mockWorkspaceSettingsService.setAutoFetchCodingStatistics).not.toHaveBeenCalled();
+    });
   });
 
   describe('toggleAutoRefreshManualCodingJobs', () => {
@@ -268,6 +422,14 @@ describe('WsSettingsComponent', () => {
       component.toggleAutoRefreshManualCodingJobs({ checked: false });
       expect(component.autoRefreshManualCodingJobs).toBe(true);
       expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+
+    it('should ignore changes while evaluation mode is active', () => {
+      component.evaluationMode = true;
+
+      component.toggleAutoRefreshManualCodingJobs({ checked: true });
+
+      expect(mockWorkspaceSettingsService.setAutoRefreshManualCodingJobs).not.toHaveBeenCalled();
     });
   });
 

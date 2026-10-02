@@ -9,7 +9,7 @@ import {
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { of, Subject } from 'rxjs';
+import { Observable, of, Subject } from 'rxjs';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from './coding-job-definition-dialog.component';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
@@ -22,6 +22,7 @@ import { MissingsProfileService } from '../../services/missings-profile.service'
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import { CodingJob, Variable, VariableBundle } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
+import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 
 describe('CodingJobDefinitionDialogComponent', () => {
   let component: CodingJobDefinitionDialogComponent;
@@ -204,7 +205,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
   const createComponent = (
     dataOverride?: Partial<CodingJobDefinitionDialogData>,
-    includeDeriveErrorInManualCoding = false
+    includeDeriveErrorInManualCoding = false,
+    provideValidDefinitionName = true
   ) => {
     (mockWorkspaceSettingsService.getIncludeDeriveErrorInManualCoding as jest.Mock)
       .mockReturnValue(of(includeDeriveErrorInManualCoding));
@@ -212,7 +214,18 @@ describe('CodingJobDefinitionDialogComponent', () => {
     fixture = TestBed.createComponent(CodingJobDefinitionDialogComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+    if (
+      provideValidDefinitionName &&
+      component.data.mode === 'definition' &&
+      !component.codingJobForm.get('name')?.value
+    ) {
+      component.codingJobForm.get('name')?.setValue('Testdefinition', { emitEvent: false });
+    }
   };
+
+  afterEach(() => {
+    TestBed.inject(SessionRecoveryService).clearAllDrafts();
+  });
 
   it('should create', () => {
     createComponent();
@@ -254,13 +267,27 @@ describe('CodingJobDefinitionDialogComponent', () => {
   });
 
   it('should initialize form with default values', () => {
-    createComponent();
+    createComponent(undefined, false, false);
     expect(component.codingJobForm).toBeDefined();
+    expect(component.codingJobForm.get('name')?.value).toBe('');
+    expect(component.codingJobForm.get('description')?.value).toBe('');
+    expect(component.codingJobForm.get('name')?.hasError('required')).toBe(true);
     expect(component.codingJobForm.get('durationSeconds')?.value).toBe(1);
     expect(component.codingJobForm.get('caseOrderingMode')?.value).toBe('continuous');
     expect(component.codingJobForm.get('missingsProfileId')?.value).toBe(7);
     expect(component.codingJobForm.get('showScore')?.value).toBe(false);
     expect(component.codingJobForm.get('allowComments')?.value).toBe(true);
+  });
+
+  it('validates the definition name length', () => {
+    createComponent(undefined, false, false);
+
+    component.codingJobForm.get('name')?.setValue('   ');
+    expect(component.codingJobForm.get('name')?.hasError('pattern')).toBe(true);
+
+    component.codingJobForm.get('name')?.setValue('A'.repeat(256));
+
+    expect(component.codingJobForm.get('name')?.hasError('maxlength')).toBe(true);
   });
 
   it('should initialize an edited definition with its camel-case missings profile id', () => {
@@ -639,7 +666,11 @@ describe('CodingJobDefinitionDialogComponent', () => {
     });
     (mockCodingJobBackendService.updateJobDefinition as jest.Mock).mockReturnValue(of({ id: 55 }));
 
-    component.codingJobForm.patchValue({ showScore: true });
+    component.codingJobForm.patchValue({
+      name: '  Neuer Anzeigename  ',
+      description: '   ',
+      showScore: true
+    });
     component.onSubmit();
     tick();
 
@@ -647,6 +678,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
       1,
       55,
       expect.objectContaining({
+        name: 'Neuer Anzeigename',
+        description: null,
         showScore: true
       })
     );
@@ -915,11 +948,17 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
     component.selectedCoders.select(mockCoders[0]);
     component.selectedVariables.select(mockVariables[0]);
-    component.codingJobForm.patchValue({ missingsProfileId: 9 });
+    component.codingJobForm.patchValue({
+      name: '  Lesen Klasse 4  ',
+      description: '  Erste Erhebung  ',
+      missingsProfileId: 9
+    });
 
     await component.onSubmit();
 
     expect(mockCodingJobBackendService.createJobDefinition).toHaveBeenCalledWith(1, expect.objectContaining({
+      name: 'Lesen Klasse 4',
+      description: 'Erste Erhebung',
       missingsProfileId: 9
     }));
   });
@@ -1522,6 +1561,63 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.getTimePerCoderInSeconds()).toBe(420);
   }));
 
+  it('should cancel an outdated distribution preview before starting the next one', fakeAsync(() => {
+    const firstPreviewCancelled = jest.fn();
+    const firstPreview = new Observable(() => firstPreviewCancelled);
+    (mockDistributedCodingService.calculateDistribution as jest.Mock)
+      .mockReturnValueOnce(firstPreview)
+      .mockReturnValue(of(emptyDistributionPreview));
+    createComponent();
+    (mockDistributedCodingService.calculateDistribution as jest.Mock).mockClear();
+
+    component.selectedCoders.select(component.availableCoders[0]);
+    component.selectedVariables.select(component.variables[0]);
+    tick(300);
+
+    expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledTimes(1);
+    expect(firstPreviewCancelled).not.toHaveBeenCalled();
+
+    component.codingJobForm.patchValue({ maxCodingCases: 5 });
+
+    expect(firstPreviewCancelled).toHaveBeenCalledTimes(1);
+    expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledTimes(1);
+
+    tick(300);
+
+    expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledTimes(2);
+  }));
+
+  it('should not recalculate distribution for unrelated definition fields', fakeAsync(() => {
+    createComponent();
+    component.selectedCoders.select(component.availableCoders[0]);
+    component.selectedVariables.select(component.variables[0]);
+    tick(300);
+    (mockDistributedCodingService.calculateDistribution as jest.Mock).mockClear();
+
+    component.codingJobForm.patchValue({
+      name: 'Neuer Name',
+      description: 'Neue Beschreibung',
+      durationSeconds: 60,
+      showScore: true
+    });
+    tick(300);
+
+    expect(mockDistributedCodingService.calculateDistribution).not.toHaveBeenCalled();
+  }));
+
+  it('should calculate distribution while the unrelated required name is empty', fakeAsync(() => {
+    createComponent(undefined, false, false);
+    (mockDistributedCodingService.calculateDistribution as jest.Mock).mockClear();
+
+    expect(component.codingJobForm.get('name')?.invalid).toBe(true);
+
+    component.selectedCoders.select(component.availableCoders[0]);
+    component.selectedVariables.select(component.variables[0]);
+    tick(300);
+
+    expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledTimes(1);
+  }));
+
   it('should send a stable distribution seed when submitting a new definition for review', () => {
     createComponent();
     (mockCodingJobBackendService.createJobDefinition as jest.Mock).mockReturnValue(of({ id: 123 }));
@@ -1599,5 +1695,92 @@ describe('CodingJobDefinitionDialogComponent', () => {
       { ...mockCoders[1], capacityPercent: 150 }
     );
     expect(component.getFormattedTimePerCoder()).toBe('7:30');
+  });
+
+  it('restores an active job definition draft after reauthentication', () => {
+    createComponent(undefined, true);
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    sessionRecoveryService.clearAllDrafts();
+
+    const selectedCoder = component.availableCoders[0];
+    const selectedVariable = component.variables[1];
+    const selectedBundle = component.variableBundles[0];
+
+    component.codingJobForm.patchValue({
+      name: 'Lesen Klasse 4',
+      description: 'Erste Erhebung',
+      durationSeconds: 90,
+      maxCodingCases: 4,
+      doubleCodingAbsolute: 2,
+      caseOrderingMode: 'alternating',
+      showScore: true,
+      allowComments: false,
+      suppressGeneralInstructions: true,
+      missingsProfileId: 9
+    });
+    component.updateCoderCapacityPercent(selectedCoder, 150);
+    component.selectedCoders.select(selectedCoder);
+    component.selectedVariables.select(selectedVariable);
+    component.toggleBundleSelection(selectedBundle);
+    component.setBundleOrderingMode(selectedBundle, 'alternating');
+    component.unitNameFilter = 'Unit';
+    component.variableIdFilter = 'Var';
+    component.bundleNameFilter = 'Bundle';
+    component.availabilityFilter = 'partial';
+    component.trainingRequiredFilter = 'false';
+
+    sessionRecoveryService.captureRegisteredDrafts();
+    expect(sessionRecoveryService.peekDraft('coding-job-definition-active-state')).toEqual(expect.objectContaining({
+      workspaceId: 1,
+      mode: 'definition',
+      isEdit: false,
+      formValue: expect.objectContaining({
+        name: 'Lesen Klasse 4',
+        description: 'Erste Erhebung'
+      }),
+      selectedCoderConfigs: [{ coderId: 1, capacityPercent: 150 }],
+      unitNameFilter: 'Unit',
+      variableIdFilter: 'Var',
+      bundleNameFilter: 'Bundle',
+      availabilityFilter: 'partial',
+      trainingRequiredFilter: 'false'
+    }));
+
+    fixture.destroy();
+    (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock).mockClear();
+    fixture = TestBed.createComponent(CodingJobDefinitionDialogComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    expect(component.codingJobForm.get('name')?.value).toBe('Lesen Klasse 4');
+    expect(component.codingJobForm.get('description')?.value).toBe('Erste Erhebung');
+    expect(component.codingJobForm.get('durationSeconds')?.value).toBe(90);
+    expect(component.codingJobForm.get('maxCodingCases')?.value).toBe(4);
+    expect(component.codingJobForm.get('doubleCodingAbsolute')?.value).toBe(2);
+    expect(component.codingJobForm.get('caseOrderingMode')?.value).toBe('alternating');
+    expect(component.codingJobForm.get('showScore')?.value).toBe(true);
+    expect(component.codingJobForm.get('allowComments')?.value).toBe(false);
+    expect(component.codingJobForm.get('suppressGeneralInstructions')?.value).toBe(true);
+    expect(component.codingJobForm.get('missingsProfileId')?.value).toBe(9);
+    expect(component.selectedCoders.selected).toEqual([
+      expect.objectContaining({ id: 1, capacityPercent: 150 })
+    ]);
+    // The restored backend filter reload reapplies availability and prunes unavailable variables.
+    expect(component.selectedVariables.selected).toEqual([]);
+    expect(component.selectedVariableBundles.selected).toEqual([
+      expect.objectContaining({ id: 1, caseOrderingMode: 'alternating' })
+    ]);
+    expect(component.unitNameFilter).toBe('Unit');
+    expect(component.variableIdFilter).toBe('Var');
+    expect(component.bundleNameFilter).toBe('Bundle');
+    expect(component.availabilityFilter).toBe('partial');
+    expect(component.trainingRequiredFilter).toBe('false');
+    expect(mockCodingJobBackendService.getCodingIncompleteVariables).toHaveBeenCalledWith(
+      1,
+      'Unit',
+      false,
+      true,
+      undefined
+    );
   });
 });

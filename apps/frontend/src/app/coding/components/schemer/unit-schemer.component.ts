@@ -1,7 +1,7 @@
 import {
   AfterViewInit, Component, ElementRef, EventEmitter, Input, OnDestroy, Output, ViewChild
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { Subject, takeUntil } from 'rxjs';
 import { UnitScheme } from './unit-scheme.interface';
 import { SchemerConfig } from './schemer-config.interface';
@@ -17,7 +17,7 @@ import { SchemerMessage } from '../../../core/services/post-message-types';
   templateUrl: './unit-schemer.component.html',
   styleUrls: ['./unit-schemer.component.scss'],
   standalone: true,
-  imports: [CommonModule]
+  imports: []
 })
 export class StandaloneUnitSchemerComponent implements AfterViewInit, OnDestroy {
   @ViewChild('hostingIframe') hostingIframe!: ElementRef;

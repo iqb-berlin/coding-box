@@ -22,6 +22,7 @@ import { Unit } from '../database/entities/unit.entity';
 import { Booklet } from '../database/entities/booklet.entity';
 import { ChunkEntity } from '../database/entities/chunk.entity';
 import { CodingUnitFreshness } from '../database/entities/coding-unit-freshness.entity';
+import { CodingAggregationPeerService } from '../database/services/coding/coding-aggregation-peer.service';
 
 import {
   CodingJobService,
@@ -33,6 +34,7 @@ import {
   CodingListStreamService,
   CodingStatisticsService,
   CodingResultsService,
+  EmptyResponseSelectionService,
   CodingExportService,
   CodingProcessService,
   CodingReplayAnchorService,
@@ -43,8 +45,15 @@ import {
   CodingValidationService,
   CodingAnalysisService,
   CodingFreshnessService,
+  AutoCodingRunGuardService,
   CodingReadinessService,
-  CodingItemMatrixExportService
+  CodingItemMatrixExportService,
+  ItemDatasetMetadataService,
+  CodingPsychometricExportService,
+  PsychometricMetadataResolver,
+  PsychometricResponseReader,
+  PsychometricAnalysisEngine,
+  PsychometricExportWriter
 } from '../database/services/coding';
 import { CODING_PROCESS_CACHE_INVALIDATOR } from '../database/services/coding/coding-process-cache-invalidator.token';
 import { CODING_READINESS_CACHE_INVALIDATOR } from '../database/services/coding/coding-readiness-cache-invalidator.token';
@@ -89,6 +98,7 @@ import { UserModule } from '../user/user.module';
     UserModule
   ],
   providers: [
+    CodingAggregationPeerService,
     CodingJobService,
     JobDefinitionService,
     CodingStatisticsService,
@@ -102,6 +112,7 @@ import { UserModule } from '../user/user.module';
     CoderTrainingService,
     CoderTrainingResultsApplyService,
     ExternalCodingImportService,
+    EmptyResponseSelectionService,
     CodingResultsService,
     CodingExportService,
     CodingProcessService,
@@ -109,8 +120,15 @@ import { UserModule } from '../user/user.module';
     CodingValidationService,
     CodingAnalysisService,
     CodingFreshnessService,
+    AutoCodingRunGuardService,
     CodingReadinessService,
+    ItemDatasetMetadataService,
     CodingItemMatrixExportService,
+    PsychometricMetadataResolver,
+    PsychometricResponseReader,
+    PsychometricAnalysisEngine,
+    PsychometricExportWriter,
+    CodingPsychometricExportService,
     {
       provide: CODING_PROCESS_CACHE_INVALIDATOR,
       useExisting: CodingProcessService
@@ -121,6 +139,7 @@ import { UserModule } from '../user/user.module';
     }
   ],
   exports: [
+    CodingAggregationPeerService,
     CodingJobService,
     JobDefinitionService,
     CodingStatisticsService,
@@ -134,6 +153,7 @@ import { UserModule } from '../user/user.module';
     CoderTrainingService,
     CoderTrainingResultsApplyService,
     ExternalCodingImportService,
+    EmptyResponseSelectionService,
     CodingResultsService,
     CodingExportService,
     CodingProcessService,
@@ -141,10 +161,14 @@ import { UserModule } from '../user/user.module';
     CodingValidationService,
     CodingAnalysisService,
     CodingFreshnessService,
+    AutoCodingRunGuardService,
     CodingReadinessService,
+    ItemDatasetMetadataService,
     CodingItemMatrixExportService,
+    PsychometricMetadataResolver,
+    CodingPsychometricExportService,
     CODING_PROCESS_CACHE_INVALIDATOR,
     CODING_READINESS_CACHE_INVALIDATOR
   ]
 })
-export class CodingModule { }
+export class CodingModule {}

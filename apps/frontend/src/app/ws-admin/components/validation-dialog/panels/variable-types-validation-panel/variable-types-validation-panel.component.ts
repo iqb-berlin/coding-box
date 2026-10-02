@@ -6,7 +6,7 @@ import {
   OnInit,
   OnDestroy
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -41,7 +41,6 @@ interface VariableTypesValidationResult {
   selector: 'coding-box-variable-types-validation-panel',
   standalone: true,
   imports: [
-    CommonModule,
     MatExpansionModule,
     MatButtonModule,
     MatProgressSpinnerModule,

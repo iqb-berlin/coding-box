@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -36,12 +37,14 @@ describe('CodingStatisticsService', () => {
     mockCacheService = {
       get: jest.fn(),
       set: jest.fn(),
-      delete: jest.fn()
+      delete: jest.fn(),
+      incr: jest.fn().mockResolvedValue(1)
     } as unknown as jest.Mocked<CacheService>;
 
     mockJobQueueService = {
       getTestPersonCodingJob: jest.fn(),
       getCodingStatisticsJob: jest.fn(),
+      getActiveCodingStatisticsJob: jest.fn().mockResolvedValue(undefined),
       addCodingStatisticsJob: jest.fn(),
       cancelTestPersonCodingJob: jest.fn(),
       deleteTestPersonCodingJob: jest.fn(),
@@ -312,6 +315,9 @@ describe('CodingStatisticsService', () => {
       await service.invalidateCache(1, 'v1');
 
       expect(mockCacheService.delete).toHaveBeenCalledWith(
+        'coding-statistics:schema-v5:1:v1'
+      );
+      expect(mockCacheService.delete).toHaveBeenCalledWith(
         'coding-statistics:schema-v4:1:v1'
       );
     });
@@ -321,6 +327,15 @@ describe('CodingStatisticsService', () => {
 
       await service.invalidateCache(1);
 
+      expect(mockCacheService.delete).toHaveBeenCalledWith(
+        'coding-statistics:schema-v5:1:v1'
+      );
+      expect(mockCacheService.delete).toHaveBeenCalledWith(
+        'coding-statistics:schema-v5:1:v2'
+      );
+      expect(mockCacheService.delete).toHaveBeenCalledWith(
+        'coding-statistics:schema-v5:1:v3'
+      );
       expect(mockCacheService.delete).toHaveBeenCalledWith(
         'coding-statistics:schema-v4:1:v1'
       );
@@ -337,8 +352,14 @@ describe('CodingStatisticsService', () => {
 
       await service.invalidateIncompleteVariablesCache(1);
 
+      expect(mockCacheService.incr).toHaveBeenCalledWith(
+        'coding_incomplete_variables_version:1'
+      );
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding_incomplete_variables_v8:1'
+        'coding_incomplete_variables_v9:1'
+      );
+      expect(mockCacheService.delete).toHaveBeenCalledWith(
+        'coding_incomplete_variables_scope_v2:1'
       );
     });
 
@@ -458,7 +479,7 @@ describe('CodingStatisticsService', () => {
 
       expect(result.jobId).toBe('job-123');
       expect(mockCacheService.get).toHaveBeenCalledWith(
-        'coding-statistics:schema-v4:1:v1'
+        'coding-statistics:schema-v5:1:v1'
       );
       expect(mockJobQueueService.addCodingStatisticsJob).toHaveBeenCalledWith(
         1,
@@ -477,8 +498,72 @@ describe('CodingStatisticsService', () => {
       expect(result.jobId).toBe('');
       expect(result.message).toBe('Using cached coding statistics');
       expect(mockCacheService.get).toHaveBeenCalledWith(
-        'coding-statistics:schema-v4:1:v1'
+        'coding-statistics:schema-v5:1:v1'
       );
+    });
+
+    it('should return an active statistics job for the same workspace and version', async () => {
+      mockCacheService.get.mockResolvedValue(null);
+      const mockJob: Partial<Job> = { id: 'job-active' };
+      mockJobQueueService.getActiveCodingStatisticsJob.mockResolvedValue(
+        mockJob as Job
+      );
+
+      const result = await service.createCodingStatisticsJob(1, 'v1');
+
+      expect(result).toEqual({
+        jobId: 'job-active',
+        message: 'Using active coding statistics job'
+      });
+      expect(mockJobQueueService.assertNoDependencyConflicts)
+        .toHaveBeenCalledWith('coding-statistics', 1);
+      expect(mockJobQueueService.getActiveCodingStatisticsJob)
+        .toHaveBeenCalledWith(1, 'v1');
+      expect(
+        mockJobQueueService.assertNoDependencyConflicts.mock.invocationCallOrder[0]
+      ).toBeLessThan(
+        mockJobQueueService.getActiveCodingStatisticsJob.mock.invocationCallOrder[0]
+      );
+      expect(mockCacheService.delete).not.toHaveBeenCalled();
+      expect(mockJobQueueService.addCodingStatisticsJob).not.toHaveBeenCalled();
+    });
+
+    it('should not reuse an active statistics job when dependency conflicts exist', async () => {
+      mockCacheService.get.mockResolvedValue(null);
+      const conflict = new ConflictException('Auto-coding is still active');
+      const mockJob: Partial<Job> = { id: 'job-active' };
+      mockJobQueueService.assertNoDependencyConflicts.mockRejectedValue(conflict);
+      mockJobQueueService.getActiveCodingStatisticsJob.mockResolvedValue(
+        mockJob as Job
+      );
+
+      await expect(service.createCodingStatisticsJob(1, 'v1'))
+        .rejects.toBe(conflict);
+
+      expect(mockJobQueueService.assertNoDependencyConflicts)
+        .toHaveBeenCalledWith('coding-statistics', 1);
+      expect(mockJobQueueService.getActiveCodingStatisticsJob)
+        .not.toHaveBeenCalled();
+      expect(mockCacheService.delete).not.toHaveBeenCalled();
+      expect(mockJobQueueService.addCodingStatisticsJob).not.toHaveBeenCalled();
+    });
+
+    it('should reuse an in-flight statistics job request for the same workspace and version', async () => {
+      mockCacheService.get.mockResolvedValue(null);
+      mockCacheService.delete.mockResolvedValue(true);
+      const mockJob: Partial<Job> = { id: 'job-123' };
+      mockJobQueueService.addCodingStatisticsJob.mockResolvedValue(
+        mockJob as Job
+      );
+
+      const [firstResult, secondResult] = await Promise.all([
+        service.createCodingStatisticsJob(1, 'v1'),
+        service.createCodingStatisticsJob(1, 'v1')
+      ]);
+
+      expect(firstResult).toEqual(secondResult);
+      expect(mockCacheService.get).toHaveBeenCalledTimes(1);
+      expect(mockJobQueueService.addCodingStatisticsJob).toHaveBeenCalledTimes(1);
     });
 
     it('should read coding statistics job status only from the statistics queue', async () => {
@@ -584,7 +669,9 @@ describe('CodingStatisticsService', () => {
       expect(result[0].validPairs).toBe(8);
       expect(result[0].totalItems).toBe(9);
       expect(result[0].agreement).toBe(0.625);
-      expect(result[0].kappa).toBe(0.489);
+      expect(result[0].kappa).toBeCloseTo(0.489362, 6);
+      expect(result[0].brennanPredigerKappa).toBe(0.5);
+      expect(service.roundKappaCalculationResult(result[0]).kappa).toBe(0.489);
     });
 
     it('should match the REQ-002 score-level perfect agreement convention', () => {
@@ -645,6 +732,7 @@ describe('CodingStatisticsService', () => {
       expect(result[0].validPairs).toBe(8);
       expect(result[0].agreement).toBe(0.75);
       expect(result[0].kappa).toBe(0.5);
+      expect(result[0].brennanPredigerKappa).toBe(0.5);
     });
 
     it('should handle no valid coding pairs', () => {
@@ -746,22 +834,26 @@ describe('CodingStatisticsService', () => {
       const summary = service.calculateKappaVariableSummary([
         {
           kappa: 0.5,
+          brennanPredigerKappa: 0.6,
           agreement: 0.8,
           validPairs: 10
         },
         {
           kappa: 0.7,
+          brennanPredigerKappa: 0.8,
           agreement: 0.9,
           validPairs: 5
         },
         {
           kappa: null,
+          brennanPredigerKappa: null,
           agreement: 0,
           validPairs: 0
         }
       ]);
 
       expect(summary.meanKappa).toBeCloseTo(0.6, 10);
+      expect(summary.meanBrennanPredigerKappa).toBeCloseTo(0.7, 10);
       expect(summary.meanAgreement).toBeCloseTo(0.85, 10);
       expect(summary.validPairCount).toBe(15);
       expect(summary.coderPairCount).toBe(2);
@@ -778,9 +870,87 @@ describe('CodingStatisticsService', () => {
 
       expect(summary).toEqual({
         meanKappa: null,
+        meanBrennanPredigerKappa: null,
         meanAgreement: null,
         validPairCount: 0,
         coderPairCount: 0
+      });
+    });
+
+    it('should weight variable summaries by valid pairs when requested', () => {
+      const summary = service.calculateKappaVariableSummary([
+        {
+          kappa: 0.5,
+          brennanPredigerKappa: 0.6,
+          agreement: 0.8,
+          validPairs: 10
+        },
+        {
+          kappa: 0.7,
+          brennanPredigerKappa: 0.8,
+          agreement: 0.9,
+          validPairs: 5
+        }
+      ], true);
+
+      expect(summary.meanKappa).toBeCloseTo(0.566667, 6);
+      expect(summary.meanBrennanPredigerKappa).toBeCloseTo(0.666667, 6);
+      expect(summary.meanAgreement).toBeCloseTo(0.833333, 6);
+    });
+
+    it('should match REQ-002 reference dataset C against irr::kappam.fleiss', () => {
+      const result = service.calculateFleissKappa([
+        [0, 0, 0],
+        [0, 0, 1],
+        [0, 1, 1],
+        [1, 1, 1],
+        [1, 2, 2],
+        [2, 2, 2]
+      ]);
+
+      expect(result).toEqual({
+        fleissKappa: 0.495,
+        completeCaseCount: 6,
+        raterCount: 3
+      });
+    });
+
+    it('should match irr::kappam.fleiss and omit incomplete cases listwise', () => {
+      const result = service.calculateFleissKappa([
+        [1, 1, 1],
+        [1, 1, 2],
+        [1, 2, 2],
+        [2, 2, 2],
+        [1, null, 2]
+      ]);
+
+      expect(result).toEqual({
+        fleissKappa: 0.333,
+        completeCaseCount: 4,
+        raterCount: 3
+      });
+    });
+
+    it('should return N/A for Fleiss kappa when no case is complete', () => {
+      expect(service.calculateFleissKappa([
+        [1, null, 1],
+        [null, 2, 2]
+      ])).toEqual({
+        fleissKappa: null,
+        completeCaseCount: 0,
+        raterCount: 3
+      });
+    });
+
+    it('should return N/A for Fleiss kappa with fewer than three raters', () => {
+      expect(service.calculateFleissKappa([
+        [1, 1],
+        [1, 2],
+        [null, 2]
+      ])).toEqual({
+        fleissKappa: null,
+        completeCaseCount: 2,
+        raterCount: 2
       });
     });
   });

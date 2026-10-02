@@ -11,24 +11,26 @@ import {
   DuplicateValueGroupDto
 } from '../../../../../../api-dto/coding/response-analysis.dto';
 import { CacheService } from '../../cache/cache.service';
-import { statusStringToNumber } from '../../database/utils/response-status-converter';
+import { MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES } from '../../database/utils/manual-coding-candidate.util';
 import { CodingAnalysisJobData } from '../job-queue.service';
 import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
 } from '../../database/services/workspace/workspace-exclusion.service';
-import { WorkspaceFilesService } from '../../database/services/workspace';
 import {
   createAggregationSummary,
   isAggregatableValue,
   isDerivedAggregationVariable,
   normalizeAggregationValue
 } from '../../database/services/coding/aggregation-metrics.util';
+import { EmptyResponseSelectionService } from '../../database/services/coding/empty-response-selection.service';
 import { getCodingAnalysisRunMarkerKey } from '../../database/services/coding/coding-analysis-cache-key.util';
 import {
   IQB_STANDARD_MISSING_CODES,
   MissingsProfilesService
 } from '../../database/services/coding/missings-profiles.service';
+
+const CODING_ANALYSIS_CACHE_TTL_SECONDS = 600;
 
 @Processor('response-analysis')
 export class CodingAnalysisProcessor {
@@ -39,7 +41,7 @@ export class CodingAnalysisProcessor {
     private responseRepository: Repository<ResponseEntity>,
     private cacheService: CacheService,
     private workspaceExclusionService: WorkspaceExclusionService,
-    private workspaceFilesService: WorkspaceFilesService,
+    private emptyResponseSelectionService: EmptyResponseSelectionService,
     @Optional()
     private missingsProfilesService?: MissingsProfilesService
   ) { }
@@ -78,7 +80,11 @@ export class CodingAnalysisProcessor {
         }
       }
 
-      await this.cacheService.set(cacheKey, analysis);
+      await this.cacheService.set(
+        cacheKey,
+        analysis,
+        CODING_ANALYSIS_CACHE_TTL_SECONDS
+      );
 
       this.logger.log(`Response analysis for workspace ${workspaceId} completed and cached.`);
       return analysis;
@@ -94,11 +100,11 @@ export class CodingAnalysisProcessor {
     threshold: number,
     job?: Job<CodingAnalysisJobData>
   ): Promise<ResponseAnalysisDto> {
-    const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
-    const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const defaultMirCode = await this.getDefaultMirCode(workspaceId);
-    const derivedVariableMap = await this.getDerivedVariableMap(workspaceId);
+    const emptyResponseContext =
+      await this.emptyResponseSelectionService.createContext(workspaceId);
+    const { derivedVariableMap } = emptyResponseContext;
 
     // 1. Identify relevant Unit+Variable combinations
     this.logger.log(`Identifying relevant variables for analysis in workspace ${workspaceId}...`);
@@ -113,7 +119,9 @@ export class CodingAnalysisProcessor {
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.status_v1 IN (:...statuses)', { statuses: [codingIncompleteStatus, intendedIncompleteStatus] });
+      .andWhere('response.status_v1 IN (:...statuses)', {
+        statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+      });
     applyResolvedExclusionsToQuery(relevantVariablesQuery, exclusions);
     const relevantVariables = await relevantVariablesQuery
       .getRawMany();
@@ -155,7 +163,9 @@ export class CodingAnalysisProcessor {
         .leftJoinAndSelect('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
-        .andWhere('response.status_v1 IN (:...statuses)', { statuses: [codingIncompleteStatus, intendedIncompleteStatus] })
+        .andWhere('response.status_v1 IN (:...statuses)', {
+          statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+        })
         // Exclude already-aggregated responses (non-master duplicates) so they don't reappear after aggregation
         .andWhere(
           '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :emptyCode))',
@@ -176,13 +186,19 @@ export class CodingAnalysisProcessor {
 
       const responsesBatch = await qb.getMany();
       totalProcessed += responsesBatch.length;
+      const effectivelyEmptyResponses =
+        await this.emptyResponseSelectionService.filterEffectivelyEmptyResponses(
+          responsesBatch,
+          emptyResponseContext
+        );
 
       this.analyzeBatch(
         responsesBatch,
         matchingFlags,
         emptyResponses,
         duplicateValueGroups,
-        derivedVariableMap
+        derivedVariableMap,
+        new Set(effectivelyEmptyResponses.map(response => response.id))
       );
 
       // Explicitly free memory if possible (though GC handles function scope)
@@ -261,7 +277,8 @@ export class CodingAnalysisProcessor {
     matchingFlags: ResponseMatchingFlag[],
     emptyResponses: EmptyResponseDto[],
     duplicateValueGroups: DuplicateValueGroupDto[],
-    derivedVariableMap: Map<string, Set<string>>
+    derivedVariableMap: Map<string, Set<string>>,
+    effectivelyEmptyResponseIds: Set<number>
   ) {
     // We group by Unit+Variable within this batch
     // Since our query chunked by Unit+Variable, we can treat this batch as a collection of complete groups
@@ -273,7 +290,7 @@ export class CodingAnalysisProcessor {
       // Empty Check - IMPROVED LOGIC
       const value = response.value;
 
-      if (!isAggregatableValue(value)) {
+      if (effectivelyEmptyResponseIds.has(response.id)) {
         emptyResponses.push({
           unitName: response.unit?.name || '',
           unitAlias: response.unit?.alias || null,
@@ -287,6 +304,10 @@ export class CodingAnalysisProcessor {
           isCoded: response.status_v2 !== null,
           assignedCode: response.code_v2
         });
+        continue;
+      }
+
+      if (!isAggregatableValue(value)) {
         continue; // Skip empty for duplicates
       }
 
@@ -366,17 +387,5 @@ export class CodingAnalysisProcessor {
     };
 
     return result;
-  }
-
-  private async getDerivedVariableMap(
-    workspaceId: number
-  ): Promise<Map<string, Set<string>>> {
-    try {
-      return await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn(`Could not load derived variable map for workspace ${workspaceId}: ${message}`);
-      return new Map<string, Set<string>>();
-    }
   }
 }

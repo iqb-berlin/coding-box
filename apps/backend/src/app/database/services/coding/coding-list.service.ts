@@ -179,6 +179,7 @@ export class CodingListService {
   async getCodingResultsByVersionCsvStream(
     workspace_id: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     authToken: string,
     serverUrl?: string,
     includeReplayUrls: boolean = false,
@@ -190,6 +191,7 @@ export class CodingListService {
     return this.streamService.getCodingResultsByVersionCsvStream(
       workspace_id,
       version,
+      missingsProfileId,
       authToken,
       serverUrl,
       includeReplayUrls,
@@ -207,6 +209,7 @@ export class CodingListService {
   async getCodingResultsByVersionAsExcel(
     workspace_id: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     authToken?: string,
     serverUrl?: string,
     includeReplayUrls: boolean = false,
@@ -218,6 +221,7 @@ export class CodingListService {
     return this.streamService.getCodingResultsByVersionAsExcel(
       workspace_id,
       version,
+      missingsProfileId,
       authToken,
       serverUrl,
       includeReplayUrls,
@@ -232,6 +236,7 @@ export class CodingListService {
     filePath: string,
     workspace_id: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     authToken?: string,
     serverUrl?: string,
     includeReplayUrls: boolean = false,
@@ -244,6 +249,7 @@ export class CodingListService {
       filePath,
       workspace_id,
       version,
+      missingsProfileId,
       authToken,
       serverUrl,
       includeReplayUrls,
@@ -257,6 +263,7 @@ export class CodingListService {
   async getCodingResultsByVersionAsGeoGebraZip(
     workspace_id: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     authToken?: string,
     serverUrl?: string,
     includeReplayUrls: boolean = false,
@@ -266,6 +273,7 @@ export class CodingListService {
     return this.streamService.getCodingResultsByVersionAsGeoGebraZip(
       workspace_id,
       version,
+      missingsProfileId,
       authToken,
       serverUrl,
       includeReplayUrls,
@@ -278,6 +286,7 @@ export class CodingListService {
     filePath: string,
     workspace_id: number,
     version: 'v1' | 'v2' | 'v3',
+    missingsProfileId: number,
     authToken?: string,
     serverUrl?: string,
     includeReplayUrls: boolean = false,
@@ -288,6 +297,7 @@ export class CodingListService {
       filePath,
       workspace_id,
       version,
+      missingsProfileId,
       authToken,
       serverUrl,
       includeReplayUrls,

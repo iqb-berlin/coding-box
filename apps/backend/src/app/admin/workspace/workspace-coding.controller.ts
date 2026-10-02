@@ -28,7 +28,7 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import {
-  CodingFreshnessService,
+  AutoCodingRunGuardService,
   CodingJobService,
   CodingProcessService,
   CodingResponseQueryService,
@@ -49,7 +49,7 @@ export class WorkspaceCodingController {
     private codingResponseQueryService: CodingResponseQueryService,
     private codingJobService: CodingJobService,
     private codingResultsService: CodingResultsService,
-    private codingFreshnessService: CodingFreshnessService,
+    private autoCodingRunGuardService: AutoCodingRunGuardService,
     private jobQueueService: JobQueueService
   ) { }
 
@@ -66,7 +66,7 @@ export class WorkspaceCodingController {
 
   private parseAutoCoderRun(autoCoderRun?: string | string[]): 1 | 2 {
     if (autoCoderRun === undefined) {
-      return 1;
+      throw new BadRequestException('autoCoderRun must be 1 or 2');
     }
 
     if (Array.isArray(autoCoderRun)) {
@@ -79,7 +79,7 @@ export class WorkspaceCodingController {
 
     const trimmedAutoCoderRun = autoCoderRun.trim();
     if (trimmedAutoCoderRun === '') {
-      return 1;
+      throw new BadRequestException('autoCoderRun must be 1 or 2');
     }
 
     const parsed = Number(trimmedAutoCoderRun);
@@ -95,7 +95,7 @@ export class WorkspaceCodingController {
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
     name: 'autoCoderRun',
-    required: false,
+    required: true,
     description:
       'Autocoder run type: 1 (standard) or 2 (uses v2 as input, saves to v3)',
     enum: [1, 2],
@@ -114,7 +114,7 @@ export class WorkspaceCodingController {
   ): Promise<CodingStatistics> {
     const autoCoderRunNumber = this.parseAutoCoderRun(autoCoderRun);
     await this.jobQueueService.assertNoDependencyConflicts('test-person-coding', workspace_id);
-    await this.codingFreshnessService.assertAutoCodingRunCanStart(
+    await this.autoCodingRunGuardService.assertAutoCodingRunCanStart(
       workspace_id,
       autoCoderRunNumber
     );

@@ -25,8 +25,13 @@ import { JournalComponent } from '../journal/journal.component';
 import { EditMissingsProfilesDialogComponent } from '../../../coding/components/edit-missings-profiles-dialog/edit-missings-profiles-dialog.component';
 import { ReplayStatisticsDialogComponent } from '../replay-statistics-dialog/replay-statistics-dialog.component';
 import {
+  DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
+  DEFAULT_REPLAY_URL_EXPORT_MODE,
   DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS,
   EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES,
+  MAX_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
+  MIN_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
+  type ReplayUrlExportMode,
   WorkspaceTokenScope
 } from '../../../core/services/auth-session.config';
 import { AccessRightsMatrixDialogComponent } from '../access-rights-matrix-dialog/access-rights-matrix-dialog.component';
@@ -92,9 +97,15 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   duration = DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
   readonly minTokenDurationDays = 1;
   maxTokenDurationDays = DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
+  readonly minAuthSessionIdleTimeoutMinutes = MIN_AUTH_SESSION_IDLE_TIMEOUT_MINUTES;
+  readonly maxAuthSessionIdleTimeoutMinutes = MAX_AUTH_SESSION_IDLE_TIMEOUT_MINUTES;
   readonly externalReplayTokenScopes = EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES;
+  replayUrlExportMode: ReplayUrlExportMode = DEFAULT_REPLAY_URL_EXPORT_MODE;
+  replayUrlExportTokenDurationDays = DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
+  authSessionIdleTimeoutMinutes = DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES;
   autoFetchCodingStatistics = true;
   autoRefreshManualCodingJobs = true;
+  evaluationMode = false;
   includeDeriveErrorInManualCoding = false;
   enableRegexSearch = false;
   showTestResultsLogAnomalies = false;
@@ -105,17 +116,39 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    this.loadWorkspaceTokenPolicy();
+    this.loadWorkspaceTokenPolicy(workspaceId);
     if (workspaceId) {
+      this.workspaceSettingsService
+        .getReplayUrlExportMode(workspaceId)
+        .subscribe(mode => {
+          this.replayUrlExportMode = mode;
+        });
+      this.workspaceSettingsService
+        .getAuthSessionIdleTimeoutMinutes(workspaceId)
+        .subscribe(timeoutMinutes => {
+          this.authSessionIdleTimeoutMinutes = timeoutMinutes;
+        });
+      this.workspaceSettingsService
+        .getEvaluationMode(workspaceId)
+        .subscribe(enabled => {
+          this.evaluationMode = enabled;
+          if (enabled) {
+            this.applyEvaluationModeLocalPreset(true);
+          }
+        });
       this.workspaceSettingsService
         .getAutoFetchCodingStatistics(workspaceId)
         .subscribe(enabled => {
-          this.autoFetchCodingStatistics = enabled;
+          this.autoFetchCodingStatistics = this.evaluationMode ?
+            false :
+            enabled;
         });
       this.workspaceSettingsService
         .getAutoRefreshManualCodingJobs(workspaceId)
         .subscribe(enabled => {
-          this.autoRefreshManualCodingJobs = enabled;
+          this.autoRefreshManualCodingJobs = this.evaluationMode ?
+            false :
+            enabled;
         });
       this.workspaceSettingsService
         .getIncludeDeriveErrorInManualCoding(workspaceId)
@@ -203,12 +236,28 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
 
   isTokenDurationValid(): boolean {
     const duration = Number(this.duration);
+    return this.isDurationWithinReplayTokenPolicy(duration);
+  }
+
+  isReplayUrlExportTokenDurationValid(): boolean {
+    const duration = Number(this.replayUrlExportTokenDurationDays);
+    return this.isDurationWithinReplayTokenPolicy(duration);
+  }
+
+  isAuthSessionIdleTimeoutValid(): boolean {
+    const duration = Number(this.authSessionIdleTimeoutMinutes);
+    return Number.isInteger(duration) &&
+      duration >= this.minAuthSessionIdleTimeoutMinutes &&
+      duration <= this.maxAuthSessionIdleTimeoutMinutes;
+  }
+
+  private isDurationWithinReplayTokenPolicy(duration: number): boolean {
     return Number.isInteger(duration) &&
       duration >= this.minTokenDurationDays &&
       duration <= this.maxTokenDurationDays;
   }
 
-  private loadWorkspaceTokenPolicy(): void {
+  private loadWorkspaceTokenPolicy(workspaceId?: number): void {
     this.appService.getWorkspaceTokenPolicy().subscribe({
       next: policy => {
         this.maxTokenDurationDays = this.getMaxTokenDurationDaysForScopes(
@@ -218,8 +267,22 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         if (Number(this.duration) > this.maxTokenDurationDays) {
           this.duration = this.maxTokenDurationDays;
         }
+        if (workspaceId) {
+          this.loadReplayUrlExportTokenDuration(workspaceId);
+        }
       }
     });
+  }
+
+  private loadReplayUrlExportTokenDuration(workspaceId: number): void {
+    this.workspaceSettingsService
+      .getReplayUrlExportTokenDurationDays(
+        workspaceId,
+        this.maxTokenDurationDays
+      )
+      .subscribe(durationDays => {
+        this.replayUrlExportTokenDurationDays = durationDays;
+      });
   }
 
   private getMaxTokenDurationDaysForScopes(
@@ -228,7 +291,10 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   ): number {
     const maxDurations = scopes
       .map(scope => policy.scopes[scope]?.maxDurationDays)
-      .filter((duration): duration is number => Number.isInteger(duration) && duration >= this.minTokenDurationDays);
+      .filter((duration): duration is number => (
+        Number.isInteger(duration) &&
+        duration >= this.minTokenDurationDays
+      ));
 
     return maxDurations.length ? Math.min(...maxDurations) : this.maxTokenDurationDays;
   }
@@ -242,6 +308,129 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         { duration: 3000 }
       );
     }
+  }
+
+  toggleReplayUrlExportMode(toggleEvent: { checked: boolean }): void {
+    const previousMode = this.replayUrlExportMode;
+    const mode: ReplayUrlExportMode = toggleEvent.checked ?
+      'auth' :
+      'workspaceId';
+    this.replayUrlExportMode = mode;
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (workspaceId) {
+      this.workspaceSettingsService
+        .setReplayUrlExportMode(workspaceId, mode)
+        .subscribe({
+          next: () => {
+            this.snackBar.open(
+              this.translateService.instant(
+                'ws-settings.replay-url-export-mode-saved'
+              ),
+              this.translateService.instant('close'),
+              { duration: 3000 }
+            );
+          },
+          error: () => {
+            this.replayUrlExportMode = previousMode;
+            this.snackBar.open(
+              this.translateService.instant('ws-settings.error-saving-setting'),
+              this.translateService.instant('close'),
+              {
+                duration: 3000,
+                panelClass: ['error-snackbar']
+              }
+            );
+          }
+        });
+    }
+  }
+
+  saveReplayUrlExportTokenDuration(): void {
+    if (!this.isReplayUrlExportTokenDurationValid()) {
+      this.snackBar.open(
+        this.translateService.instant('ws-settings.token-duration-invalid'),
+        this.translateService.instant('close'),
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.workspaceSettingsService
+      .setReplayUrlExportTokenDurationDays(
+        workspaceId,
+        Number(this.replayUrlExportTokenDurationDays),
+        this.maxTokenDurationDays
+      )
+      .subscribe({
+        next: () => {
+          this.snackBar.open(
+            this.translateService.instant(
+              'ws-settings.replay-url-export-token-duration-saved'
+            ),
+            this.translateService.instant('close'),
+            { duration: 3000 }
+          );
+        },
+        error: () => {
+          this.snackBar.open(
+            this.translateService.instant('ws-settings.error-saving-setting'),
+            this.translateService.instant('close'),
+            {
+              duration: 3000,
+              panelClass: ['error-snackbar']
+            }
+          );
+        }
+      });
+  }
+
+  saveAuthSessionIdleTimeout(): void {
+    if (!this.isAuthSessionIdleTimeoutValid()) {
+      this.snackBar.open(
+        this.translateService.instant('ws-settings.auth-session-idle-timeout-invalid'),
+        this.translateService.instant('close'),
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.workspaceSettingsService
+      .setAuthSessionIdleTimeoutMinutes(
+        workspaceId,
+        Number(this.authSessionIdleTimeoutMinutes)
+      )
+      .subscribe({
+        next: () => {
+          this.snackBar.open(
+            this.translateService.instant(
+              'ws-settings.auth-session-idle-timeout-saved'
+            ),
+            this.translateService.instant('close'),
+            { duration: 3000 }
+          );
+        },
+        error: () => {
+          this.snackBar.open(
+            this.translateService.instant('ws-settings.error-saving-setting'),
+            this.translateService.instant('close'),
+            {
+              duration: 3000,
+              panelClass: ['error-snackbar']
+            }
+          );
+        }
+      });
   }
 
   editMissingsProfiles(): void {
@@ -261,7 +450,57 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     });
   }
 
+  toggleEvaluationMode(toggleEvent: { checked: boolean }): void {
+    const previousState = {
+      evaluationMode: this.evaluationMode,
+      autoFetchCodingStatistics: this.autoFetchCodingStatistics,
+      autoRefreshManualCodingJobs: this.autoRefreshManualCodingJobs
+    };
+    const enabled = toggleEvent.checked;
+    this.applyEvaluationModeLocalPreset(enabled);
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    if (workspaceId) {
+      this.workspaceSettingsService
+        .setEvaluationMode(workspaceId, enabled)
+        .subscribe({
+          next: () => {
+            this.snackBar.open(
+              enabled ?
+                this.translateService.instant(
+                  'ws-settings.evaluation-mode-enabled'
+                ) :
+                this.translateService.instant(
+                  'ws-settings.evaluation-mode-disabled'
+                ),
+              this.translateService.instant('close'),
+              { duration: 3000 }
+            );
+          },
+          error: () => {
+            this.evaluationMode = previousState.evaluationMode;
+            this.autoFetchCodingStatistics =
+              previousState.autoFetchCodingStatistics;
+            this.autoRefreshManualCodingJobs =
+              previousState.autoRefreshManualCodingJobs;
+            this.snackBar.open(
+              this.translateService.instant('ws-settings.error-saving-setting'),
+              this.translateService.instant('close'),
+              {
+                duration: 3000,
+                panelClass: ['error-snackbar']
+              }
+            );
+          }
+        });
+    }
+  }
+
   toggleAutoFetchCodingStatistics(toggleEvent: { checked: boolean }): void {
+    if (this.evaluationMode) {
+      return;
+    }
+
     this.autoFetchCodingStatistics = toggleEvent.checked;
     const workspaceId = this.appService.selectedWorkspaceId;
 
@@ -301,6 +540,10 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   }
 
   toggleAutoRefreshManualCodingJobs(toggleEvent: { checked: boolean }): void {
+    if (this.evaluationMode) {
+      return;
+    }
+
     this.autoRefreshManualCodingJobs = toggleEvent.checked;
     const workspaceId = this.appService.selectedWorkspaceId;
 
@@ -337,6 +580,12 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
           }
         });
     }
+  }
+
+  private applyEvaluationModeLocalPreset(enabled: boolean): void {
+    this.evaluationMode = enabled;
+    this.autoFetchCodingStatistics = false;
+    this.autoRefreshManualCodingJobs = !enabled;
   }
 
   toggleIncludeDeriveErrorInManualCoding(toggleEvent: { checked: boolean }): void {

@@ -994,7 +994,7 @@ describe('VariableAnalysisService', () => {
 
     const xlsx = await service.exportAnalysisResultsAsXlsx('job-1', 1);
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(xlsx);
+    await workbook.xlsx.load(xlsx as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     const worksheet = workbook.getWorksheet('Antwortwerte');
 
     expect(worksheet).toBeDefined();

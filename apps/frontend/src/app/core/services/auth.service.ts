@@ -1,4 +1,5 @@
 import { inject, Injectable } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, firstValueFrom, Observable } from 'rxjs';
 import { jwtDecode } from 'jwt-decode';
@@ -10,6 +11,7 @@ import { AuthExchangeResponse, DecodedToken, UserProfile } from './auth.models';
 })
 export class AuthService {
   private readonly http = inject(HttpClient);
+  private readonly document = inject(DOCUMENT);
   private readonly appService = inject(AppService);
   private readonly tokenKey = 'auth_token';
   private readonly idTokenKey = 'id_token';
@@ -82,7 +84,7 @@ export class AuthService {
 
   login(returnUrl?: string): void {
     const redirectUri = this.appService.createLoginRedirectUri(returnUrl || this.appService.reAuthenticationReturnUrl);
-    window.location.href = `${this.appService.serverUrl}auth/login?redirect_uri=${encodeURIComponent(redirectUri)}`;
+    this.document.location.href = `${this.appService.serverUrl}auth/login?redirect_uri=${encodeURIComponent(redirectUri)}`;
   }
 
   exchangeLoginCode(code: string): Observable<AuthExchangeResponse> {
@@ -102,20 +104,20 @@ export class AuthService {
     if (refreshToken) {
       this.http.post(`${this.appService.serverUrl}auth/logout`, { refresh_token: refreshToken }).subscribe({
         next: () => {
-          window.location.href = window.location.origin;
+          this.document.location.href = this.document.location.origin;
         },
         error: () => {
-          window.location.href = window.location.origin;
+          this.document.location.href = this.document.location.origin;
         }
       });
     } else {
-      window.location.href = window.location.origin;
+      this.document.location.href = this.document.location.origin;
     }
   }
 
   redirectToProfile(): void {
-    const redirectUri = encodeURIComponent(window.location.origin);
-    window.location.href = `${this.appService.serverUrl}auth/profile?redirect_uri=${redirectUri}`;
+    const redirectUri = encodeURIComponent(this.document.location.origin);
+    this.document.location.href = `${this.appService.serverUrl}auth/profile?redirect_uri=${redirectUri}`;
   }
 
   getRoles(): string[] {

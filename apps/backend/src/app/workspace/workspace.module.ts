@@ -33,6 +33,7 @@ import { CodingJobUnit } from '../database/entities/coding-job-unit.entity';
 import { CodingJobVariable } from '../database/entities/coding-job-variable.entity';
 import { JobDefinition } from '../database/entities/job-definition.entity';
 import { CodingUnitFreshness } from '../database/entities/coding-unit-freshness.entity';
+import { DoubleCodingReviewDecision } from '../database/entities/double-coding-review-decision.entity';
 import {
   WorkspaceCoreService,
   WorkspaceFilesService,
@@ -73,7 +74,8 @@ import {
   CodingListExportService,
   CodingExportOrchestratorService,
   CodingValidationService,
-  CodingReviewService,
+  DoubleCodingReviewDecisionService,
+  DoubleCodingReviewQueryService,
   CodingAnalysisService,
   CodingProgressService,
   CodingReplayService,
@@ -82,7 +84,8 @@ import {
   CodebookGenerationService,
   CodingResponseQueryService,
   CodingFreshnessService,
-  CodingItemMatrixExportService
+  CodingItemMatrixExportService,
+  ExportArtifactService
 } from '../database/services/coding';
 import {
   JobService,
@@ -129,7 +132,8 @@ import { CodingModule } from '../coding/coding.module';
       CodingJobUnit,
       CodingJobVariable,
       JobDefinition,
-      CodingUnitFreshness
+      CodingUnitFreshness,
+      DoubleCodingReviewDecision
     ]),
     HttpModule,
     JobQueueClientModule,
@@ -171,7 +175,8 @@ import { CodingModule } from '../coding/coding.module';
     CodingListExportService,
     CodingExportOrchestratorService,
     CodingValidationService,
-    CodingReviewService,
+    DoubleCodingReviewDecisionService,
+    DoubleCodingReviewQueryService,
     CodingAnalysisService,
     CodingProgressService,
     CodingReplayService,
@@ -181,6 +186,7 @@ import { CodingModule } from '../coding/coding.module';
     CodingResponseQueryService,
     CodingFreshnessService,
     CodingItemMatrixExportService,
+    ExportArtifactService,
     UnitInfoService,
     BookletInfoService,
     WorkspaceExclusionService
@@ -214,7 +220,8 @@ import { CodingModule } from '../coding/coding.module';
     CodingListExportService,
     CodingExportOrchestratorService,
     CodingValidationService,
-    CodingReviewService,
+    DoubleCodingReviewDecisionService,
+    DoubleCodingReviewQueryService,
     CodingAnalysisService,
     CodingProgressService,
     CodingReplayService,
@@ -224,6 +231,7 @@ import { CodingModule } from '../coding/coding.module';
     CodingResponseQueryService,
     CodingFreshnessService,
     CodingItemMatrixExportService,
+    ExportArtifactService,
     UnitInfoService,
     BookletInfoService,
     WorkspaceExclusionService

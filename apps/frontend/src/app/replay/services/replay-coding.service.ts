@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
@@ -8,8 +8,9 @@ import {
 } from '../../models/coding-interfaces';
 import { findVariableCodingByPublicId } from '../../coding/utils/coding-scheme.util';
 import { UnitsReplay, UnitsReplayUnit } from './units-replay.service';
+import type { ReplayCodingSessionDto } from '../../../../../../api-dto/coding/replay-coding-session.dto';
 
-interface SavedCode {
+export interface SavedCode {
   id: number;
   code?: string;
   label: string;
@@ -17,6 +18,17 @@ interface SavedCode {
   description?: string;
   codingIssueOption?: number;
   [key: string]: unknown;
+}
+
+export interface ReplayCodingRecoverySnapshot {
+  codingJobId: number | null;
+  currentVariableId: string;
+  selectedCodes: Array<[string, SavedCode]>;
+  pendingSelections: Array<[string, SavedCode | null]>;
+  openUnitKeys: string[];
+  notes: Array<[string, string]>;
+  codingJobComment: string;
+  codingJobCommentChanged?: boolean;
 }
 
 interface CodingContextSnapshot {
@@ -34,6 +46,9 @@ export class ReplayCodingService {
   private snackBar = inject(MatSnackBar);
   private authToken?: string;
   private readonly newCodeNeededOptionId = -2;
+  // Track in-place collection changes without copying large coding jobs on every save.
+  private readonly codingStateVersion = signal(0);
+  private readonly saveError = signal(false);
 
   codingScheme: CodingScheme | null = null;
   currentVariableId: string = '';
@@ -51,7 +66,15 @@ export class ReplayCodingService {
   isCompletedJobReview: boolean = false;
   isReviewMode: boolean = false;
   isCodingIssueReviewMode: boolean = false;
-  hasSaveError: boolean = false;
+
+  get hasSaveError(): boolean {
+    return this.saveError();
+  }
+
+  set hasSaveError(value: boolean) {
+    this.saveError.set(value);
+  }
+
   lastSaveError: string | null = null;
   private failedSaveKeys = new Set<string>();
   private rowMutationChains = new Map<string, Promise<void>>();
@@ -60,14 +83,19 @@ export class ReplayCodingService {
   private latestRequestedSelectionByKey = new Map<string, SavedCode | null>();
   private selectionRevision = 0;
   private codingDataRunId = 0;
+  private codingSchemeSource: string | null = null;
   currentCodingJobStatus: string | null = null;
   showScore = false;
   allowComments = true;
   suppressGeneralInstructions = false;
+  private codingJobCommentRevision = 0;
+  private savedCodingJobCommentRevision = 0;
+  private recoveredCodingJobCommentChanged = false;
 
   resetCodingData() {
     this.codingDataRunId += 1;
     this.codingScheme = null;
+    this.codingSchemeSource = null;
     this.currentVariableId = '';
     this.codingJobId = null;
     this.authToken = undefined;
@@ -96,10 +124,131 @@ export class ReplayCodingService {
     this.showScore = false;
     this.allowComments = true;
     this.suppressGeneralInstructions = false;
+    this.codingJobCommentRevision = 0;
+    this.savedCodingJobCommentRevision = 0;
+    this.recoveredCodingJobCommentChanged = false;
+    this.codingStateVersion.update(version => version + 1);
   }
 
   setAuthToken(authToken?: string): void {
     this.authToken = authToken || undefined;
+  }
+
+  createRecoverySnapshot(): ReplayCodingRecoverySnapshot | null {
+    const selectedCodes = new Map(this.selectedCodes);
+    this.latestRequestedSelectionByKey.forEach((selectedCode, compositeKey) => {
+      if (selectedCode === null) {
+        selectedCodes.delete(compositeKey);
+      } else {
+        selectedCodes.set(compositeKey, selectedCode);
+      }
+    });
+
+    const hasRecoverableState = !!this.codingJobId ||
+      selectedCodes.size > 0 ||
+      this.latestRequestedSelectionByKey.size > 0 ||
+      this.notes.size > 0 ||
+      this.openUnitKeys.size > 0 ||
+      !!this.codingJobComment.trim();
+    if (!hasRecoverableState) {
+      return null;
+    }
+
+    return {
+      codingJobId: this.codingJobId,
+      currentVariableId: this.currentVariableId,
+      selectedCodes: Array.from(selectedCodes.entries()),
+      pendingSelections: Array.from(this.latestRequestedSelectionByKey.entries()),
+      openUnitKeys: Array.from(this.openUnitKeys),
+      notes: Array.from(this.notes.entries()),
+      codingJobComment: this.codingJobComment,
+      codingJobCommentChanged: this.hasUnsavedCodingJobComment()
+    };
+  }
+
+  restoreRecoverySnapshot(snapshot: ReplayCodingRecoverySnapshot): boolean {
+    if (snapshot.codingJobId && this.codingJobId && snapshot.codingJobId !== this.codingJobId) {
+      return false;
+    }
+
+    this.codingJobId = this.codingJobId || snapshot.codingJobId;
+    this.currentVariableId = snapshot.currentVariableId || this.currentVariableId;
+    this.selectedCodes = new Map(snapshot.selectedCodes || []);
+    this.latestRequestedSelectionByKey = new Map(snapshot.pendingSelections || []);
+    this.openUnitKeys = new Set(snapshot.openUnitKeys || []);
+    this.notes = new Map(snapshot.notes || []);
+    this.codingStateVersion.update(version => version + 1);
+    this.codingJobComment = snapshot.codingJobComment ?? this.codingJobComment;
+    this.recoveredCodingJobCommentChanged = snapshot.codingJobCommentChanged === true ||
+      (
+        snapshot.codingJobCommentChanged === undefined &&
+        typeof snapshot.codingJobComment === 'string' &&
+        snapshot.codingJobComment.trim().length > 0
+      );
+    return true;
+  }
+
+  async saveRecoveredCodingState(workspaceId: number, unitsData: UnitsReplay | null): Promise<boolean> {
+    const jobId = this.codingJobId;
+    if (!jobId || !workspaceId || this.isReviewMode) {
+      return false;
+    }
+
+    const progressSaves = Array.from(this.latestRequestedSelectionByKey.entries())
+      .map(([compositeKey, selectedCode]) => {
+        const keyParts = this.parseCompositeKey(compositeKey);
+        if (!keyParts) {
+          return Promise.resolve();
+        }
+        if (selectedCode !== null && !this.isSelectedCodePersistable(compositeKey, selectedCode)) {
+          return Promise.resolve();
+        }
+        return this.saveCodingProgress(
+          workspaceId,
+          jobId,
+          keyParts.testPerson,
+          keyParts.unitId,
+          keyParts.variableId,
+          selectedCode
+        );
+      });
+
+    const noteSaves = Array.from(this.notes.entries())
+      .map(([compositeKey, notes]) => {
+        const keyParts = this.parseCompositeKey(compositeKey);
+        if (!keyParts) {
+          return Promise.resolve();
+        }
+        return this.saveNotes(
+          workspaceId,
+          keyParts.testPerson,
+          keyParts.unitId,
+          keyParts.variableId,
+          notes,
+          unitsData
+        );
+      });
+
+    await Promise.all([...progressSaves, ...noteSaves]);
+    if (this.recoveredCodingJobCommentChanged) {
+      await this.saveCodingJobComment(workspaceId, this.codingJobComment, { throwOnError: true });
+      this.recoveredCodingJobCommentChanged = false;
+    }
+    this.checkCodingJobCompletion(unitsData);
+    return true;
+  }
+
+  private hasUnsavedCodingJobComment(): boolean {
+    return this.codingJobCommentRevision > this.savedCodingJobCommentRevision;
+  }
+
+  private nextCodingJobCommentRevision(): number {
+    this.codingJobCommentRevision += 1;
+    return this.codingJobCommentRevision;
+  }
+
+  private markCodingJobCommentRevisionSaved(revision: number): void {
+    this.savedCodingJobCommentRevision = Math.max(this.savedCodingJobCommentRevision, revision);
   }
 
   private get authTokenArg(): [string] | [] {
@@ -125,11 +274,20 @@ export class ReplayCodingService {
   }
 
   setCodingSchemeFromVocsData(vocsData: string) {
+    if (this.codingSchemeSource === vocsData) {
+      return;
+    }
+    this.codingSchemeSource = vocsData;
     try {
       this.codingScheme = JSON.parse(vocsData);
     } catch (error) {
       this.codingScheme = null;
     }
+  }
+
+  setParsedCodingScheme(codingScheme: CodingScheme | null, source?: string): void {
+    this.codingScheme = codingScheme;
+    this.codingSchemeSource = source ?? null;
   }
 
   setCodingJobMetadata(codingJob: {
@@ -152,41 +310,18 @@ export class ReplayCodingService {
   async loadSavedCodingProgress(workspaceId: number, jobId: number): Promise<void> {
     if (!jobId || !workspaceId) return;
 
-    this.selectedCodes.clear();
-    this.openUnitKeys.clear();
-    this.notes.clear();
-    this.latestRequestedSelectionByKey.clear();
+    this.resetLoadedCodingState();
 
     try {
       const savedProgress = await firstValueFrom(
         this.codingJobBackendService.getCodingProgress(workspaceId, jobId, ...this.authTokenArg)
       ) as { [key: string]: SavedCode };
-
-      Object.keys(savedProgress).forEach(compositeKey => {
-        const partialCode = savedProgress[compositeKey];
-        if (compositeKey.endsWith(':open')) {
-          this.openUnitKeys.add(compositeKey.slice(0, -':open'.length));
-          return;
-        }
-        if (partialCode?.id !== null && partialCode?.id !== undefined) {
-          const fullCode = this.findCodeById(partialCode.id);
-          const toStore: SavedCode = fullCode ? this.convertCodeToSavedCode(fullCode) : partialCode;
-          if (partialCode.codingIssueOption !== undefined && partialCode.codingIssueOption !== null) {
-            toStore.codingIssueOption = partialCode.codingIssueOption;
-          }
-          this.selectedCodes.set(compositeKey, toStore);
-          this.openUnitKeys.delete(compositeKey);
-        }
-      });
+      this.applySavedProgress(savedProgress);
 
       const savedNotes = await firstValueFrom(
         this.codingJobBackendService.getCodingNotes(workspaceId, jobId, ...this.authTokenArg)
       );
-      if (savedNotes) {
-        Object.keys(savedNotes).forEach(key => {
-          this.notes.set(key, savedNotes[key]);
-        });
-      }
+      this.applySavedNotes(savedNotes ?? {});
 
       const codingJob = await firstValueFrom(
         this.codingJobBackendService.getCodingJob(workspaceId, jobId, ...this.authTokenArg)
@@ -195,6 +330,59 @@ export class ReplayCodingService {
     } catch (error) {
       // Ignore errors when loading saved coding progress
     }
+  }
+
+  applyReplayCodingSession(session: ReplayCodingSessionDto): void {
+    this.resetLoadedCodingState();
+    const progress = Object.fromEntries(
+      Object.entries(session.progress)
+        .filter((entry): entry is [string, NonNullable<typeof entry[1]>] => entry[1] !== null)
+        .map(([key, entry]) => [
+          key,
+          {
+            ...entry,
+            label: entry.label ?? ''
+          } satisfies SavedCode
+        ])
+    );
+    this.applySavedProgress(progress);
+    this.applySavedNotes(session.notes);
+    this.setCodingJobMetadata(session.job);
+  }
+
+  private resetLoadedCodingState(): void {
+    this.selectedCodes.clear();
+    this.openUnitKeys.clear();
+    this.notes.clear();
+    this.latestRequestedSelectionByKey.clear();
+    this.codingStateVersion.update(version => version + 1);
+  }
+
+  private applySavedProgress(savedProgress: Record<string, SavedCode>): void {
+    Object.keys(savedProgress).forEach(compositeKey => {
+      const partialCode = savedProgress[compositeKey];
+      if (compositeKey.endsWith(':open')) {
+        this.openUnitKeys.add(compositeKey.slice(0, -':open'.length));
+        return;
+      }
+      if (partialCode?.id !== null && partialCode?.id !== undefined) {
+        const fullCode = this.findCodeById(partialCode.id);
+        const toStore: SavedCode = fullCode ? this.convertCodeToSavedCode(fullCode) : partialCode;
+        if (partialCode.codingIssueOption !== undefined && partialCode.codingIssueOption !== null) {
+          toStore.codingIssueOption = partialCode.codingIssueOption;
+        }
+        this.selectedCodes.set(compositeKey, toStore);
+        this.openUnitKeys.delete(compositeKey);
+      }
+    });
+    this.codingStateVersion.update(version => version + 1);
+  }
+
+  private applySavedNotes(savedNotes: Record<string, string>): void {
+    Object.keys(savedNotes).forEach(key => {
+      this.notes.set(key, savedNotes[key]);
+    });
+    this.codingStateVersion.update(version => version + 1);
   }
 
   findCodeById(codeId: number): Code | null {
@@ -360,6 +548,7 @@ export class ReplayCodingService {
       }
       if (this.shouldApplySelectionMutation(compositeKey, revision, contextSnapshot)) {
         this.selectedCodes.delete(compositeKey);
+        this.codingStateVersion.update(version => version + 1);
         this.openUnitKeys.delete(compositeKey);
       }
       return null;
@@ -398,6 +587,7 @@ export class ReplayCodingService {
         return null;
       }
       this.selectedCodes.set(compositeKey, normalizedCode);
+      this.codingStateVersion.update(version => version + 1);
       this.openUnitKeys.delete(compositeKey);
     } else if (event.codingIssueOption) {
       // Handle coding issue option-only case (legacy support)
@@ -426,6 +616,7 @@ export class ReplayCodingService {
         return null;
       }
       this.selectedCodes.set(compositeKey, normalizedCode);
+      this.codingStateVersion.update(version => version + 1);
       this.openUnitKeys.delete(compositeKey);
     }
 
@@ -444,6 +635,19 @@ export class ReplayCodingService {
     }
 
     return `${normalizedTestPerson}::${bookletId}::${unitId}::${variableId}`;
+  }
+
+  private parseCompositeKey(compositeKey: string): { testPerson: string; unitId: string; variableId: string } | null {
+    const parts = compositeKey.split('::');
+    if (parts.length < 4) {
+      return null;
+    }
+
+    return {
+      testPerson: parts[0],
+      unitId: parts[2],
+      variableId: parts[3]
+    };
   }
 
   private normalizeCodingTestPerson(testPerson: string): string {
@@ -522,6 +726,7 @@ export class ReplayCodingService {
     } else {
       this.notes.delete(compositeKey);
     }
+    this.codingStateVersion.update(version => version + 1);
   }
 
   async saveNotes(
@@ -598,16 +803,25 @@ export class ReplayCodingService {
     }
   }
 
-  async saveCodingJobComment(workspaceId: number, comment: string): Promise<void> {
+  async saveCodingJobComment(
+    workspaceId: number,
+    comment: string,
+    options: { throwOnError?: boolean } = {}
+  ): Promise<void> {
     if (!this.codingJobId || !workspaceId) return;
     if (this.isReviewMode) return;
 
     try {
       this.codingJobComment = comment;
+      const commentRevision = this.nextCodingJobCommentRevision();
       await firstValueFrom(
         this.codingJobBackendService.updateCodingJobComment(workspaceId, this.codingJobId, comment, ...this.authTokenArg)
       );
+      this.markCodingJobCommentRevisionSaved(commentRevision);
     } catch (error) {
+      if (options.throwOnError) {
+        throw error;
+      }
       // Ignore errors when saving comment
     }
   }
@@ -731,7 +945,21 @@ export class ReplayCodingService {
     return this.isUnitCodedByCompositeKey(compositeKey);
   }
 
+  isUnitSavePending(unit: UnitsReplayUnit): boolean {
+    this.codingStateVersion();
+    if (!unit.variableId) return false;
+
+    const compositeKey = this.generateCompositeKey(
+      unit.testPerson || '',
+      unit.name,
+      unit.variableId
+    );
+
+    return this.rowMutationChains.has(compositeKey);
+  }
+
   private isUnitCodedByCompositeKey(compositeKey: string): boolean {
+    this.codingStateVersion();
     return this.isCompletedSelection(compositeKey, this.selectedCodes.get(compositeKey));
   }
 
@@ -800,6 +1028,7 @@ export class ReplayCodingService {
     this.openUnitKeys.delete(compositeKey);
     if (selectedCodeToSave !== null) {
       this.selectedCodes.set(compositeKey, selectedCodeToSave);
+      this.codingStateVersion.update(version => version + 1);
       this.latestRequestedSelectionByKey.set(compositeKey, selectedCodeToSave);
     }
     await this.saveCodingProgress(
@@ -857,9 +1086,11 @@ export class ReplayCodingService {
       this.pendingRowMutations.delete(next);
       if (this.rowMutationChains.get(key) === tracked) {
         this.rowMutationChains.delete(key);
+        this.codingStateVersion.update(version => version + 1);
       }
     });
     this.rowMutationChains.set(key, tracked);
+    this.codingStateVersion.update(version => version + 1);
     return next;
   }
 

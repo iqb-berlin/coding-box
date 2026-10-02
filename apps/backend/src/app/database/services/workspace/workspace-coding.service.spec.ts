@@ -17,7 +17,7 @@ import {
   CodingReplayService,
   CodingResponseQueryService,
   CodingResultsService,
-  CodingReviewService,
+  DoubleCodingReviewQueryService,
   CodingStatisticsService,
   CodingValidationService,
   CodingVersionService,
@@ -26,7 +26,8 @@ import {
 } from '../coding';
 import {
   ResponseManagementService,
-  VariableAnalysisReplayService
+  VariableAnalysisReplayService,
+  WorkspaceTestResultsService
 } from '../test-results';
 import { ExportValidationResultsService } from '../validation';
 import { BullJobManagementService } from '../jobs';
@@ -85,7 +86,7 @@ describe('WorkspaceCodingService', () => {
 
   const mockCodingStatisticsService = {
     getCodingStatistics: jest.fn(),
-    invalidateCache: jest.fn(),
+    invalidateCache: jest.fn().mockResolvedValue(true),
     refreshStatistics: jest.fn()
   };
 
@@ -151,30 +152,34 @@ describe('WorkspaceCodingService', () => {
     deleteResponse: jest.fn()
   };
 
+  const mockWorkspaceTestResultsService = {
+    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(true)
+  };
+
   const mockCodingValidationService = {
     validateCodingCompleteness: jest.fn(),
     getCodingIncompleteVariables: jest.fn(),
-    invalidateIncompleteVariablesCache: jest.fn(),
+    invalidateIncompleteVariablesCache: jest.fn().mockResolvedValue(true),
     getVariableCasesInJobs: jest.fn()
   };
 
-  const mockCodingReviewService = {
+  const mockDoubleCodingReviewQueryService = {
     getCohensKappaStatistics: jest.fn(),
     getWorkspaceCohensKappaSummary: jest.fn(),
-    getDoubleCodedVariablesForReview: jest.fn(),
-    applyDoubleCodedResolutions: jest.fn()
+    getDoubleCodedVariablesForReview: jest.fn()
   };
 
   const mockCodingAnalysisService = {
     getVariableAnalysis: jest.fn(),
     getResponseAnalysis: jest.fn(),
-    invalidateCache: jest.fn()
+    invalidateCache: jest.fn().mockResolvedValue(true)
   };
 
   const mockCodingProgressService = {
     getCodingProgressOverview: jest.fn(),
     getVariableCoverageOverview: jest.fn(),
-    getCaseCoverageOverview: jest.fn()
+    getCaseCoverageOverview: jest.fn(),
+    invalidateAppliedResultsOverviewCache: jest.fn().mockResolvedValue(true)
   };
 
   const mockCodingReplayService = {
@@ -257,6 +262,10 @@ describe('WorkspaceCodingService', () => {
           provide: ResponseManagementService,
           useValue: mockResponseManagementService
         },
+        {
+          provide: WorkspaceTestResultsService,
+          useValue: mockWorkspaceTestResultsService
+        },
         { provide: CodingResultsService, useValue: mockCodingResultsService },
         { provide: CodingJobService, useValue: mockCodingJobService },
         { provide: CodingExportService, useValue: mockCodingExportService },
@@ -269,7 +278,10 @@ describe('WorkspaceCodingService', () => {
           provide: CodingValidationService,
           useValue: mockCodingValidationService
         },
-        { provide: CodingReviewService, useValue: mockCodingReviewService },
+        {
+          provide: DoubleCodingReviewQueryService,
+          useValue: mockDoubleCodingReviewQueryService
+        },
         { provide: CodingAnalysisService, useValue: mockCodingAnalysisService },
         { provide: CodingProgressService, useValue: mockCodingProgressService },
         { provide: CodingReplayService, useValue: mockCodingReplayService },
@@ -373,6 +385,43 @@ describe('WorkspaceCodingService', () => {
 
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(mockCodingStatisticsService.refreshStatistics).toHaveBeenCalledWith(workspaceId, 'v3');
+    });
+  });
+
+  describe('finalizeAutocoderPersistence', () => {
+    it('invalidates workspace result caches after the external commit', async () => {
+      await service.finalizeAutocoderPersistence(7);
+
+      expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache)
+        .toHaveBeenCalledWith(7);
+      expect(mockCodingStatisticsService.invalidateCache)
+        .toHaveBeenCalledWith(7);
+    });
+
+    it('attempts every finalization step when one cache invalidation fails', async () => {
+      mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache
+        .mockRejectedValueOnce(new Error('workspace cache unavailable'));
+
+      await expect(service.finalizeAutocoderPersistence(7))
+        .rejects.toThrow(
+          /workspace statistics cache invalidation.*workspace cache unavailable/
+        );
+
+      expect(mockCodingValidationService.invalidateIncompleteVariablesCache)
+        .toHaveBeenCalledWith(7);
+      expect(mockCodingProgressService.invalidateAppliedResultsOverviewCache)
+        .toHaveBeenCalledWith(7);
+      expect(mockCodingAnalysisService.invalidateCache).toHaveBeenCalledWith(7);
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(7);
+    });
+
+    it('reports cache operations that return false', async () => {
+      mockCodingStatisticsService.invalidateCache.mockResolvedValueOnce(false);
+
+      await expect(service.finalizeAutocoderPersistence(7))
+        .rejects.toThrow(
+          /coding statistics cache invalidation: cache operation failed/
+        );
     });
   });
 
@@ -786,7 +835,7 @@ describe('WorkspaceCodingService', () => {
     describe('invalidateIncompleteVariablesCache', () => {
       it('should delegate cache invalidation to CodingValidationService', async () => {
         const privateService = service as unknown as {
-          invalidateIncompleteVariablesCache: (id: number) => Promise<void>;
+          invalidateIncompleteVariablesCache: (id: number) => Promise<boolean>;
         };
         await privateService.invalidateIncompleteVariablesCache(1);
 
@@ -1011,7 +1060,7 @@ describe('WorkspaceCodingService', () => {
   describe('Cohens Kappa Statistics', () => {
     const workspaceId = 1;
 
-    it('should delegate to CodingReviewService for workspace summary', async () => {
+    it('should delegate to DoubleCodingReviewQueryService for workspace summary', async () => {
       const expectedResult = {
         coderPairs: [
           {
@@ -1034,14 +1083,14 @@ describe('WorkspaceCodingService', () => {
           codersIncluded: 4
         }
       };
-      mockCodingReviewService.getWorkspaceCohensKappaSummary.mockResolvedValue(
+      mockDoubleCodingReviewQueryService.getWorkspaceCohensKappaSummary.mockResolvedValue(
         expectedResult
       );
 
       const result = await service.getWorkspaceCohensKappaSummary(workspaceId);
 
       expect(
-        mockCodingReviewService.getWorkspaceCohensKappaSummary
+        mockDoubleCodingReviewQueryService.getWorkspaceCohensKappaSummary
       ).toHaveBeenCalledWith(workspaceId, true);
       expect(result).toEqual(expectedResult);
     });
@@ -1057,7 +1106,7 @@ describe('WorkspaceCodingService', () => {
           codersIncluded: 0
         }
       };
-      mockCodingReviewService.getWorkspaceCohensKappaSummary.mockResolvedValue(
+      mockDoubleCodingReviewQueryService.getWorkspaceCohensKappaSummary.mockResolvedValue(
         expectedResult
       );
 
@@ -1407,7 +1456,7 @@ describe('WorkspaceCodingService', () => {
     });
 
     describe('getDoubleCodedVariablesForReview', () => {
-      it('should delegate to CodingReviewService', async () => {
+      it('should delegate to DoubleCodingReviewQueryService', async () => {
         const expectedResult = {
           data: [
             {
@@ -1444,7 +1493,7 @@ describe('WorkspaceCodingService', () => {
           page: 1,
           limit: 50
         };
-        mockCodingReviewService.getDoubleCodedVariablesForReview.mockResolvedValue(
+        mockDoubleCodingReviewQueryService.getDoubleCodedVariablesForReview.mockResolvedValue(
           expectedResult
         );
 
@@ -1455,40 +1504,13 @@ describe('WorkspaceCodingService', () => {
         );
 
         expect(
-          mockCodingReviewService.getDoubleCodedVariablesForReview
-        ).toHaveBeenCalledWith(workspaceId, 1, 50, false, false);
-        expect(result).toEqual(expectedResult);
-      });
-    });
-
-    describe('applyDoubleCodedResolutions', () => {
-      it('should delegate to CodingReviewService', async () => {
-        const decisions = [
-          {
-            responseId: 1,
-            selectedJobId: 1,
-            resolutionComment: 'Resolution note'
-          }
-        ];
-        const expectedResult = {
-          success: true,
-          appliedCount: 1,
-          failedCount: 0,
-          skippedCount: 0,
-          message: 'Successfully applied 1 resolution(s)'
-        };
-        mockCodingReviewService.applyDoubleCodedResolutions.mockResolvedValue(
-          expectedResult
-        );
-
-        const result = await service.applyDoubleCodedResolutions(
-          workspaceId,
-          decisions
-        );
-
-        expect(
-          mockCodingReviewService.applyDoubleCodedResolutions
-        ).toHaveBeenCalledWith(workspaceId, decisions);
+          mockDoubleCodingReviewQueryService.getDoubleCodedVariablesForReview
+        ).toHaveBeenCalledWith(workspaceId, {
+          page: 1,
+          limit: 50,
+          onlyConflicts: false,
+          excludeTrainings: false
+        });
         expect(result).toEqual(expectedResult);
       });
     });
@@ -1662,7 +1684,7 @@ describe('WorkspaceCodingService', () => {
     });
 
     it('should handle Kappa statistics errors', async () => {
-      mockCodingReviewService.getWorkspaceCohensKappaSummary.mockRejectedValue(
+      mockDoubleCodingReviewQueryService.getWorkspaceCohensKappaSummary.mockRejectedValue(
         new Error('Kappa calculation failed')
       );
 

@@ -456,6 +456,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   overview: TestResultsOverviewResponse | null = null;
   isLoadingOverview: boolean = false;
   showTestResultsLogAnomalies: boolean = false;
+  enableRegexSearch: boolean = false;
   logAnomalySummary: LogAnomalyDashboardSummary | null = null;
   isLoadingLogAnomalySummary: boolean = false;
   logAnomalySummaryLoadFailed: boolean = false;
@@ -536,6 +537,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
 
     this.loadTestResultsLogAnomalySetting();
+    this.loadRegexSearchSetting();
     this.loadCodingStatusAutoRefreshSetting();
     this.createTestResultsList(0, this.pageSize);
     this.loadWorkspaceOverview();
@@ -1271,6 +1273,20 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
+  private loadRegexSearchSetting(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.enableRegexSearch = false;
+      return;
+    }
+
+    this.workspaceSettingsService
+      .getEnableRegexSearch(workspaceId)
+      .subscribe(enabled => {
+        this.enableRegexSearch = enabled;
+      });
+  }
+
   private loadCodingStatusAutoRefreshSetting(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
@@ -1540,10 +1556,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
-  refreshCodingFreshnessStatusManually(): void {
-    this.loadCodingFreshnessStatus({ force: true });
-  }
-
   private refreshCodingFreshnessStatusAfterChange(): void {
     if (this.autoRefreshCodingStatus) {
       this.loadCodingFreshnessStatus({ force: true });
@@ -1630,10 +1642,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   get hasCodingFreshnessWarning(): boolean {
     return this.codingFreshnessWarnings.length > 0 ||
       this.shouldShowSecondAutocodingWaitingState;
-  }
-
-  get shouldShowCodingFreshnessManualNotice(): boolean {
-    return !this.autoRefreshCodingStatus;
   }
 
   get codingFreshnessDisplayWarnings(): CodingFreshnessSummaryItemDto[] {

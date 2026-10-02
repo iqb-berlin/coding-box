@@ -57,62 +57,61 @@ interface DialogData {
           </p>
         </div>
 
-        <table mat-table [dataSource]="data.jobs" class="jobs-table" *ngIf="data.jobs.length > 0">
-          <ng-container matColumnDef="name">
-            <th mat-header-cell *matHeaderCellDef>{{ 'coding.jobs.table.name' | translate }}</th>
-            <td mat-cell *matCellDef="let job">
-              <div class="job-name">
-                <mat-icon class="job-icon">work</mat-icon>
-                <span>{{ job.name }}</span>
-              </div>
-            </td>
-          </ng-container>
+        @if (data.jobs.length > 0) {
+          <table mat-table [dataSource]="data.jobs" class="jobs-table">
+            <ng-container matColumnDef="name">
+              <th mat-header-cell *matHeaderCellDef>{{ 'coding.jobs.table.name' | translate }}</th>
+              <td mat-cell *matCellDef="let job">
+                <div class="job-name">
+                  <mat-icon class="job-icon">work</mat-icon>
+                  <span>{{ job.name }}</span>
+                </div>
+              </td>
+            </ng-container>
+            <ng-container matColumnDef="coder">
+              <th mat-header-cell *matHeaderCellDef>{{ 'coding.jobs.table.coder' | translate }}</th>
+              <td mat-cell *matCellDef="let job">
+                <mat-chip-listbox>
+                  <mat-chip>{{ job.coder.username }}</mat-chip>
+                </mat-chip-listbox>
+              </td>
+            </ng-container>
+            <ng-container matColumnDef="status">
+              <th mat-header-cell *matHeaderCellDef>{{ 'coding.jobs.table.status' | translate }}</th>
+              <td mat-cell *matCellDef="let job">
+                <span [ngClass]="getStatusClass(job.status)">{{getStatusText(job.status)}}</span>
+              </td>
+            </ng-container>
+            <ng-container matColumnDef="unitsCount">
+              <th mat-header-cell *matHeaderCellDef>{{ 'coding.jobs.table.units' | translate }}</th>
+              <td mat-cell *matCellDef="let job">
+                <mat-chip-listbox>
+                  <mat-chip>{{ job.unitsCount }}</mat-chip>
+                </mat-chip-listbox>
+              </td>
+            </ng-container>
+            <ng-container matColumnDef="created_at">
+              <th mat-header-cell *matHeaderCellDef>{{ 'common.created' | translate }}</th>
+              <td mat-cell *matCellDef="let job">{{ formatDate(job.created_at) }}</td>
+            </ng-container>
+            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+          </table>
+        }
 
-          <ng-container matColumnDef="coder">
-            <th mat-header-cell *matHeaderCellDef>{{ 'coding.jobs.table.coder' | translate }}</th>
-            <td mat-cell *matCellDef="let job">
-              <mat-chip-listbox>
-                <mat-chip>{{ job.coder.username }}</mat-chip>
-              </mat-chip-listbox>
-            </td>
-          </ng-container>
-
-          <ng-container matColumnDef="status">
-            <th mat-header-cell *matHeaderCellDef>{{ 'coding.jobs.table.status' | translate }}</th>
-            <td mat-cell *matCellDef="let job">
-              <span [ngClass]="getStatusClass(job.status)">{{getStatusText(job.status)}}</span>
-            </td>
-          </ng-container>
-
-          <ng-container matColumnDef="unitsCount">
-            <th mat-header-cell *matHeaderCellDef>{{ 'coding.jobs.table.units' | translate }}</th>
-            <td mat-cell *matCellDef="let job">
-              <mat-chip-listbox>
-                <mat-chip>{{ job.unitsCount }}</mat-chip>
-              </mat-chip-listbox>
-            </td>
-          </ng-container>
-
-          <ng-container matColumnDef="created_at">
-            <th mat-header-cell *matHeaderCellDef>{{ 'common.created' | translate }}</th>
-            <td mat-cell *matCellDef="let job">{{ formatDate(job.created_at) }}</td>
-          </ng-container>
-
-          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-        </table>
-
-        <div class="no-jobs" *ngIf="data.jobs.length === 0">
-          <mat-icon>info</mat-icon>
-          <p>{{ 'coding.trainings.jobs.empty' | translate }}</p>
-        </div>
+        @if (data.jobs.length === 0) {
+          <div class="no-jobs">
+            <mat-icon>info</mat-icon>
+            <p>{{ 'coding.trainings.jobs.empty' | translate }}</p>
+          </div>
+        }
       </mat-dialog-content>
 
       <mat-dialog-actions align="end">
         <button mat-button (click)="close()">{{ 'common.close' | translate }}</button>
       </mat-dialog-actions>
     </div>
-  `,
+    `,
   styles: [`
     .training-jobs-dialog {
       .dialog-content {

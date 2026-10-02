@@ -119,8 +119,8 @@ export class WorkspaceBackendService {
         params
       })
       .pipe(
-        catchError(() => of(false)),
-        map(() => true)
+        map(() => true),
+        catchError(() => of(false))
       );
   }
 
@@ -128,8 +128,8 @@ export class WorkspaceBackendService {
     return this.http
       .patch<boolean>(`${this.serverUrl}admin/workspace`, workspaceData, {})
       .pipe(
-        catchError(() => of(false)),
-        map(() => true)
+        map(() => true),
+        catchError(() => of(false))
       );
   }
 
@@ -137,6 +137,7 @@ export class WorkspaceBackendService {
     return this.http.post<boolean>(
       `${this.serverUrl}admin/workspace/${workspaceId}/users/`,
       userIds,
-      {});
+      {})
+      .pipe(catchError(() => of(false)));
   }
 }

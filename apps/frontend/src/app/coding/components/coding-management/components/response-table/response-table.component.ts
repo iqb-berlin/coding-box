@@ -7,7 +7,7 @@ import {
   OnChanges,
   SimpleChanges
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import {
   MatCell,
   MatCellDef,
@@ -46,7 +46,6 @@ import { CodingResponseSortBy } from '../../../../../models/coding-interfaces';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    CommonModule,
     MatTable,
     MatColumnDef,
     MatHeaderCell,

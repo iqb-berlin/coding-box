@@ -1,4 +1,8 @@
 import { statusStringToNumber } from './response-status-converter';
+import {
+  getCoveredSourceKeysForManualDerivedVariables,
+  getManualCodingScopeKey
+} from './manual-coding-scope.util';
 
 function requireStatusNumber(status: string): number {
   const statusNumber = statusStringToNumber(status);
@@ -9,6 +13,7 @@ function requireStatusNumber(status: string): number {
 }
 
 export const CODING_INCOMPLETE_STATUS = requireStatusNumber('CODING_INCOMPLETE');
+export const CODING_COMPLETE_STATUS = requireStatusNumber('CODING_COMPLETE');
 export const INTENDED_INCOMPLETE_STATUS = requireStatusNumber('INTENDED_INCOMPLETE');
 export const DERIVE_ERROR_STATUS = requireStatusNumber('DERIVE_ERROR');
 
@@ -70,8 +75,35 @@ export function getDeriveErrorManualCodingPairKeys(
     variables
       .filter(variable => variable.includeDeriveError === true)
       .map(variable => toManualCodingVariablePairKey(
-        variable.unitName,
+        variable.unitName.toUpperCase(),
         variable.variableId
       ))
   ));
+}
+
+export function getDeriveErrorCodingListPairKeys(
+  unitVariableMap: Map<string, Set<string>>,
+  manualInstructionMap: Map<string, Set<string>>,
+  derivedVariablesBySourceMap: Map<string, Set<string>>
+): string[] {
+  const manualInstructionVariables = Array.from(
+    manualInstructionMap.entries()
+  ).flatMap(([unitName, variableIds]) => (
+    Array.from(variableIds).map(variableId => ({ unitName, variableId }))
+  ));
+  const coveredSourceKeys = getCoveredSourceKeysForManualDerivedVariables(
+    manualInstructionVariables,
+    derivedVariablesBySourceMap
+  );
+
+  return Array.from(unitVariableMap.entries()).flatMap(
+    ([unitName, variableIds]) => Array.from(variableIds)
+      .filter(variableId => !coveredSourceKeys.has(
+        getManualCodingScopeKey(unitName, variableId)
+      ))
+      .map(variableId => toManualCodingVariablePairKey(
+        unitName.toUpperCase(),
+        variableId
+      ))
+  );
 }

@@ -21,6 +21,8 @@ import { ExportToastComponent } from './components/export-toast/export-toast.com
 import { ErrorMessageDisplayComponent } from './shared/components/error-message-display/error-message-display.component';
 import { hasAdminBypass } from './core/guards/admin-access';
 import { AuthSessionActivityService } from './core/services/auth-session-activity.service';
+import { SystemNotificationBannerComponent } from './components/system-notification-banner/system-notification-banner.component';
+import { SystemNotificationService } from './core/services/system-notification.service';
 
 @Component({
   selector: 'app-root',
@@ -35,7 +37,8 @@ import { AuthSessionActivityService } from './core/services/auth-session-activit
     UserMenuComponent,
     WrappedIconComponent,
     ExportToastComponent,
-    ErrorMessageDisplayComponent
+    ErrorMessageDisplayComponent,
+    SystemNotificationBannerComponent
   ],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss'
@@ -47,6 +50,7 @@ export class AppComponent implements OnInit, OnDestroy {
   url = inject(LocationStrategy);
   private router = inject(Router);
   private authSessionActivity = inject(AuthSessionActivityService);
+  private systemNotifications = inject(SystemNotificationService);
 
   title = 'IQB-Kodierbox';
   isLoggedIn = false;
@@ -70,12 +74,13 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
+    this.systemNotifications.startPolling();
     const postLoginReturnUrl = await this.handleAuthCallback();
     const activeToken = await this.authService.getValidToken(0);
 
     if (activeToken) {
       this.setAuthState();
-      this.appService.refreshAuthData();
+      await firstValueFrom(this.appService.loadAuthenticatedUser(this.appService.loggedUser?.sub || ''));
       this.authSessionActivity.start();
       if (postLoginReturnUrl) {
         this.router.navigateByUrl(postLoginReturnUrl).catch(() => undefined);
@@ -93,6 +98,7 @@ export class AppComponent implements OnInit, OnDestroy {
     this.routerSubscription?.unsubscribe();
     this.authDataSubscription?.unsubscribe();
     this.authSessionActivity.stop();
+    this.systemNotifications.stopPolling();
   }
 
   private updateCurrentWorkspaceName(): void {
