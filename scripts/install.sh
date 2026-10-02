@@ -17,6 +17,21 @@ declare TRAEFIK_REPO_URL="https://raw.githubusercontent.com/iqb-berlin/traefik"
 declare TRAEFIK_REPO_API="https://api.github.com/repos/iqb-berlin/traefik"
 declare ARE_KEYCLOAK_SERVICES_UP=false
 
+set_env_value() {
+  local env_file="$1"
+  local env_key="$2"
+  local env_value="$3"
+  sed -i.bak "s|^${env_key}=.*|${env_key}=${env_value}|" "${env_file}" && rm "${env_file}.bak"
+}
+
+uppercase_env_key() {
+  printf %s "$1" | tr '[:lower:]' '[:upper:]'
+}
+
+generate_jwt_secret() {
+  openssl rand -hex 32
+}
+
 get_release_version() {
   declare latest_release
   latest_release=$(curl --silent "${REPO_API}/releases/latest" |
@@ -410,6 +425,14 @@ customize_settings() {
   # shellcheck source=.env.coding-box
   source ".env.${APP_NAME}"
 
+  local jwt_secret
+  jwt_secret=$(generate_jwt_secret)
+  if [[ ! "${jwt_secret}" =~ ^[a-f0-9]{64}$ ]]; then
+    printf >&2 "Failed to generate a secure JWT secret.\n"
+    return 1
+  fi
+  set_env_value ".env.${APP_NAME}" JWT_SECRET "${jwt_secret}"
+
   if [ "${EXPORT_WORKER_PGOPTIONS:-}" = "-c" ]; then
     printf >&2 "Invalid EXPORT_WORKER_PGOPTIONS in '.env.%s': the '-c' option requires a value.\n" "${APP_NAME}"
     printf >&2 'Quote values containing spaces, for example: EXPORT_WORKER_PGOPTIONS="-c jit=off"\n'
@@ -448,12 +471,11 @@ customize_settings() {
   declare env_var_postgres
   for env_var_postgres in "${env_vars_order_postgres[@]}"; do
     declare postgres_env_var_name postgres_env_var_value
-    postgres_env_var_name=$(printf %s "${env_var_postgres}" | tr '[:upper:]' '[:lower:]')
+    postgres_env_var_name=$(uppercase_env_key "${env_var_postgres}")
     postgres_env_var_value="${env_vars_postgres[${env_var_postgres}]}"
 
     read -p "${postgres_env_var_name}: " -er -i "${postgres_env_var_value}" postgres_env_var_value
-    sed -i.bak "s|^${postgres_env_var_name}=.*|${postgres_env_var_name}=${postgres_env_var_value}|" \
-      ".env.${APP_NAME}" && rm ".env.${APP_NAME}.bak"
+    set_env_value ".env.${APP_NAME}" "${postgres_env_var_name}" "${postgres_env_var_value}"
   done
 
   ## OpenID Connect
@@ -508,13 +530,13 @@ customize_settings() {
     printf "\nOpenID Connect Configuration\n"
 
     env_vars_oidc[oidc_provider_url]=https://keycloak.${server_name}
-    env_vars_oidc[oidc_issuer]=https://keycloak.${server_name}/auth/realms/coding-box
-    env_vars_oidc[oidc_account_endpoint]=https://keycloak.${server_name}/auth/realms/iqb/account
-    env_vars_oidc[oidc_authorization_endpoint]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/auth
-    env_vars_oidc[oidc_token_endpoint]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/token
-    env_vars_oidc[oidc_userinfo_endpoint]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/userinfo
-    env_vars_oidc[oidc_end_session_endpoint]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/logout
-    env_vars_oidc[oidc_jwks_uri]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/certs
+    env_vars_oidc[oidc_issuer]=https://keycloak.${server_name}/realms/coding-box
+    env_vars_oidc[oidc_account_endpoint]=https://keycloak.${server_name}/realms/coding-box/account
+    env_vars_oidc[oidc_authorization_endpoint]=https://keycloak.${server_name}/realms/coding-box/protocol/openid-connect/auth
+    env_vars_oidc[oidc_token_endpoint]=https://keycloak.${server_name}/realms/coding-box/protocol/openid-connect/token
+    env_vars_oidc[oidc_userinfo_endpoint]=https://keycloak.${server_name}/realms/coding-box/protocol/openid-connect/userinfo
+    env_vars_oidc[oidc_end_session_endpoint]=https://keycloak.${server_name}/realms/coding-box/protocol/openid-connect/logout
+    env_vars_oidc[oidc_jwks_uri]=https://keycloak.${server_name}/realms/coding-box/protocol/openid-connect/certs
 
     declare env_var_oidc
     for env_var_oidc in "${env_vars_order_oidc[@]}"; do
@@ -642,4 +664,6 @@ main() {
   fi
 }
 
-main
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

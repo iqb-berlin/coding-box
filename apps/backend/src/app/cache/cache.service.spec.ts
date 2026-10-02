@@ -98,6 +98,30 @@ describe('CacheService', () => {
     await expect(service.getAndDelete('error')).resolves.toBeNull();
   });
 
+  it('deletes a cached value only when the requested field matches', async () => {
+    redis.eval
+      .mockResolvedValueOnce(JSON.stringify({ browserChallenge: 'expected' }))
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      service.getAndDeleteIfFieldMatches('login-code', 'browserChallenge', 'expected')
+    ).resolves.toEqual({ browserChallenge: 'expected' });
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('decoded[ARGV[1]] ~= ARGV[2]'),
+      1,
+      'login-code',
+      'browserChallenge',
+      'expected'
+    );
+    await expect(
+      service.getAndDeleteIfFieldMatches('login-code', 'browserChallenge', 'wrong')
+    ).resolves.toBeNull();
+    await expect(
+      service.getAndDeleteIfFieldMatches('missing-code', 'browserChallenge', 'expected')
+    ).resolves.toBeNull();
+  });
+
   it('stores and pages validation results', async () => {
     const results = [{ unitName: 'U1' }, { unitName: 'U2' }, { unitName: 'U3' }] as never;
     const metadata = { total: 3, missing: 1, timestamp: 100 };

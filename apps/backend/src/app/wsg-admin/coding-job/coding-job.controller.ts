@@ -819,6 +819,46 @@ export class WsgCodingJobController {
     return CodingJobDto.fromEntity(codingJob);
   }
 
+  @Post(':id/submit-review')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Submit a coding job for review',
+    description: 'Moves an assigned coding job to review after the coder finishes their work'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiOkResponse({
+    description: 'The coding job has been submitted for review.',
+    type: CodingJobDto
+  })
+  @ApiBadRequestResponse({
+    description: 'The coding job cannot be submitted for review.'
+  })
+  async submitCodingJobForReview(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number,
+      @Req() req: Request
+  ): Promise<CodingJobDto> {
+    await this.assertCodingJobCodingAccess(workspaceId, id, req);
+    const codingJob = await this.codingJobService.updateCodingJob(
+      id,
+      workspaceId,
+      { status: 'review' }
+    );
+    return CodingJobDto.fromEntity(codingJob);
+  }
+
   @Get(':id/review')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()

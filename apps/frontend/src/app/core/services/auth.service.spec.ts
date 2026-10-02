@@ -15,6 +15,12 @@ describe('AuthService', () => {
     setItem: jest.Mock;
     removeItem: jest.Mock;
   };
+  let sessionStorageMock: {
+    getItem: jest.Mock;
+    setItem: jest.Mock;
+    removeItem: jest.Mock;
+  };
+  let originalCryptoDescriptor: PropertyDescriptor | undefined;
 
   const createToken = (expiresInSeconds: number): string => {
     const payload = {
@@ -36,6 +42,27 @@ describe('AuthService', () => {
     Object.defineProperty(window, 'localStorage', {
       value: storageMock,
       writable: true
+    });
+
+    sessionStorageMock = {
+      getItem: jest.fn().mockReturnValue(null),
+      setItem: jest.fn(),
+      removeItem: jest.fn()
+    };
+    Object.defineProperty(window, 'sessionStorage', {
+      value: sessionStorageMock,
+      configurable: true
+    });
+
+    originalCryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+    Object.defineProperty(globalThis, 'crypto', {
+      configurable: true,
+      value: {
+        getRandomValues: jest.fn((bytes: Uint8Array) => bytes.fill(1)),
+        subtle: {
+          digest: jest.fn().mockResolvedValue(new Uint8Array(32).fill(2).buffer)
+        }
+      }
     });
 
     appService = {
@@ -62,23 +89,35 @@ describe('AuthService', () => {
 
   afterEach(() => {
     httpMock.verify();
+    if (originalCryptoDescriptor) {
+      Object.defineProperty(globalThis, 'crypto', originalCryptoDescriptor);
+    }
   });
 
   it('should be created', () => {
     expect(service).toBeTruthy();
   });
 
-  it('should redirect to the backend login endpoint with a sanitized return URL', () => {
-    service.login('/workspace-admin/1');
+  it('should redirect with a browser-bound challenge and sanitized return URL', async () => {
+    await service.login('/workspace-admin/1');
 
     expect(appService.createLoginRedirectUri).toHaveBeenCalledWith('/workspace-admin/1');
-    expect(locationMock.href).toBe(
-      'http://localhost:3333/api/auth/login?redirect_uri=http%3A%2F%2Flocalhost%2F%23%2Fcoding'
+    const loginUrl = new URL(locationMock.href);
+    expect(loginUrl.origin).toBe('http://localhost:3333');
+    expect(loginUrl.pathname).toBe('/api/auth/login');
+    expect(loginUrl.searchParams.get('redirect_uri')).toBe('http://localhost/#/coding');
+    expect(loginUrl.searchParams.get('browser_challenge')).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(sessionStorageMock.setItem).toHaveBeenCalledWith(
+      'oidc_login_verifier',
+      expect.stringMatching(/^[A-Za-z0-9_-]{43}$/)
+    );
+    expect(loginUrl.searchParams.get('browser_challenge')).not.toBe(
+      sessionStorageMock.setItem.mock.calls[0][1]
     );
   });
 
-  it('should fall back to the stored reauthentication return URL during login', () => {
-    service.login();
+  it('should fall back to the stored reauthentication return URL during login', async () => {
+    await service.login();
 
     expect(appService.createLoginRedirectUri).toHaveBeenCalledWith('/coding');
   });
@@ -91,18 +130,23 @@ describe('AuthService', () => {
   });
 
   it('should exchange one-time login codes through the backend', () => {
+    sessionStorageMock.getItem.mockReturnValue('V'.repeat(43));
     service.exchangeLoginCode('exchange-code').subscribe(response => {
       expect(response.access_token).toBe('access-token');
     });
 
     const req = httpMock.expectOne('http://localhost:3333/api/auth/exchange');
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ code: 'exchange-code' });
+    expect(req.request.body).toEqual({
+      code: 'exchange-code',
+      browser_verifier: 'V'.repeat(43)
+    });
     req.flush({
       access_token: 'access-token',
       token_type: 'Bearer',
       expires_in: 3600
     });
+    expect(sessionStorageMock.removeItem).toHaveBeenCalledWith('oidc_login_verifier');
   });
 
   it('should refresh expired access tokens with the stored refresh token', async () => {
