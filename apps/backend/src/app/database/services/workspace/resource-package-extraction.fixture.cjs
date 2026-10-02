@@ -27,12 +27,20 @@ while ((offset = buffer.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]), offset)) 
   offset += 4;
 }
 const malformedZip = new AdmZip(buffer);
+const fixtureEntries = ['a.txt', 'b.txt'].map(entryName => {
+  const entry = malformedZip.getEntry(entryName);
+  if (!entry) throw new Error(`Missing fixture entry: ${entryName}`);
+  return { entry, entryName };
+});
 const service = new ResourcePackageService({}, {}, {});
 service.resourcePackagesPath = directory;
-service.extractAndStorePackage('Broken', { buffer },
-  malformedZip.getEntries().map(entry => ({ entry, entryName: entry.entryName })), null)
+service.extractAndStorePackage('Broken', { buffer }, fixtureEntries, null)
   .then(() => { console.error('Malformed ZIP was accepted'); process.exitCode = 1; })
-  .catch(() => {
+  .catch(error => {
+    if (!/CRC/.test(error.message)) {
+      console.error(error.message);
+      process.exitCode = 1;
+    }
     const leftovers = fs.readdirSync(directory);
     console.log(JSON.stringify({ rejected: true, leftovers }));
     if (leftovers.length) process.exitCode = 1;
