@@ -1,6 +1,6 @@
 import 'reflect-metadata';
-import { BadRequestException } from '@nestjs/common';
-import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { BadRequestException, RequestMethod } from '@nestjs/common';
+import { GUARDS_METADATA, METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { JwtOrWorkspaceTokenAuthGuard } from '../../auth/jwt-or-workspace-token-auth.guard';
 import { WORKSPACE_TOKEN_SCOPE_CODING_JOB_OPERATE } from '../../auth/workspace-token';
@@ -114,6 +114,27 @@ describe('WsgCodingJobController', () => {
       AccessLevelGuard
     ]);
     expect(Reflect.getMetadata('accessLevel', handler)).toBe(2);
+  });
+
+  it('restores the human-authenticated submit-review route for assigned coders', async () => {
+    const handler = WsgCodingJobController.prototype.submitCodingJobForReview;
+    codingJobService.updateCodingJob.mockResolvedValue({
+      id: 123,
+      workspace_id: 47,
+      status: 'review'
+    } as never);
+
+    const result = await controller.submitCodingJobForReview(47, 123, req);
+
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe(':id/submit-review');
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(RequestMethod.POST);
+    expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toEqual([
+      JwtAuthGuard,
+      WorkspaceGuard
+    ]);
+    expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(123, 47, 5);
+    expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(123, 47, { status: 'review' });
+    expect(result.status).toBe('review');
   });
 
   it('allows operate workspace tokens for updateCodingJob while keeping coding-manager access', () => {

@@ -4,8 +4,73 @@ declare TARGET_VERSION="2.0.0"
 declare APP_NAME='coding-box'
 declare REPO_URL="https://raw.githubusercontent.com/iqb-berlin/${APP_NAME}"
 
+is_weak_jwt_secret() {
+  local value="$1"
+
+  # Normalize whitespace and dotenv quoting to recognize the shipped placeholder.
+  value="${value%%[[:space:]]#*}"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  case "${value}" in
+    \"*\") value="${value:1:${#value}-2}" ;;
+    \'*\') value="${value:1:${#value}-2}" ;;
+  esac
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+
+  if [[ "${value}" == *'${'*'random_string'*'}'* ]]; then
+    return 0
+  fi
+  [[ -z "${value}" || "${value}" == 'random_string' ]]
+}
+
+ensure_secure_jwt_secret() {
+  local env_file="$1"
+  local has_jwt_secret=false
+  local rotate_jwt_secret=false
+  local current_secret
+
+  if [[ $# -ge 2 ]] && is_weak_jwt_secret "$2"; then
+    rotate_jwt_secret=true
+  fi
+
+  while IFS= read -r current_secret; do
+    has_jwt_secret=true
+    if is_weak_jwt_secret "${current_secret}"; then
+      rotate_jwt_secret=true
+    fi
+  done < <(sed -nE 's/^[[:space:]]*JWT_SECRET[[:space:]]*=[[:space:]]*//p' "${env_file}")
+
+  if [[ "${has_jwt_secret}" == true && "${rotate_jwt_secret}" == false ]]; then
+    return 0
+  fi
+
+  local jwt_secret
+  jwt_secret=$(openssl rand -hex 32) || return 1
+  if [[ ! "${jwt_secret}" =~ ^[a-f0-9]{64}$ ]]; then
+    printf >&2 "Failed to generate a secure JWT secret for '%s'.\n" "${env_file}"
+    return 1
+  fi
+
+  if [[ "${has_jwt_secret}" == true ]]; then
+    sed -E -i.bak "s|^[[:space:]]*JWT_SECRET[[:space:]]*=.*|JWT_SECRET=${jwt_secret}|" "${env_file}" || return 1
+    rm -f "${env_file}.bak"
+    printf "    Replaced an insecure JWT_SECRET; reissue any workspace tokens signed with the old key.\n"
+  else
+    printf '\nJWT_SECRET=%s\n' "${jwt_secret}" >>"${env_file}" || return 1
+    printf "    Generated a missing JWT_SECRET.\n"
+  fi
+  JWT_SECRET="${jwt_secret}"
+  export JWT_SECRET
+}
+
 update_environment_file() {
   printf "    Upgrading docker environment file '%s' ...\n" .env.${APP_NAME}
+
+  if ! ensure_secure_jwt_secret ".env.${APP_NAME}" "${JWT_SECRET-}"; then
+    printf >&2 "Failed to secure JWT_SECRET in '.env.%s'.\n" "${APP_NAME}"
+    return 1
+  fi
 
   # Rename 'Version' comment
   sed -i.bak 's|^## Version.*|# Version|' .env.${APP_NAME} && rm .env.${APP_NAME}.bak
@@ -53,9 +118,8 @@ update_environment_file() {
   sed -i.bak "/^TRAEFIK_DIR=.*/a \\${tls_certificates_resolvers_comment}" .env.${APP_NAME} && rm .env.${APP_NAME}.bak
   sed -i.bak "s|TLS_CERTIFICATE_RESOLVER=.*|TLS_CERTIFICATE_RESOLVER=${tls_cert_resolver}|" .env.${APP_NAME} && rm .env.${APP_NAME}.bak
 
-  # Delete 'JWT_SECRET' lines
-  sed -i.bak '/^## Backend.*/d' .env.${APP_NAME} && rm .env.${APP_NAME}.bak
-  sed -i.bak '/^JWT_SECRET=.*/d' .env.${APP_NAME} && rm .env.${APP_NAME}.bak
+  # Preserve configured signing keys after rejecting the known insecure placeholder.
+  sed -i.bak 's|^## Backend.*|# Backend|' .env.${APP_NAME} && rm .env.${APP_NAME}.bak
 
   # Rename 'Database' comment
   sed -i.bak 's|^## Database|# Database|' .env.${APP_NAME} && rm .env.${APP_NAME}.bak
@@ -66,13 +130,13 @@ update_environment_file() {
   # Add OpenId Connect configuration
   oidc_configuration="# OpenID Connect (OIDC)\n"
   oidc_configuration+="OIDC_PROVIDER_URL=https://keycloak.${SERVER_NAME}\n"
-  oidc_configuration+="OIDC_ISSUER=https://keycloak.${SERVER_NAME}/auth/realms/iqb\n"
-  oidc_configuration+="OIDC_ACCOUNT_ENDPOINT=https://keycloak.${SERVER_NAME}/auth/realms/iqb/account\n"
-  oidc_configuration+="OIDC_AUTHORIZATION_ENDPOINT=https://keycloak.${SERVER_NAME}/auth/realms/iqb/protocol/openid-connect/auth\n"
-  oidc_configuration+="OIDC_TOKEN_ENDPOINT=https://keycloak.${SERVER_NAME}/auth/realms/iqb/protocol/openid-connect/token\n"
-  oidc_configuration+="OIDC_USERINFO_ENDPOINT=https://keycloak.${SERVER_NAME}/auth/realms/iqb/protocol/openid-connect/userinfo\n"
-  oidc_configuration+="OIDC_END_SESSION_ENDPOINT=https://keycloak.${SERVER_NAME}/auth/realms/iqb/protocol/openid-connect/logout\n"
-  oidc_configuration+="OIDC_JWKS_URI=https://keycloak.${SERVER_NAME}/auth/realms/iqb/protocol/openid-connect/certs\n"
+  oidc_configuration+="OIDC_ISSUER=https://keycloak.${SERVER_NAME}/realms/coding-box\n"
+  oidc_configuration+="OIDC_ACCOUNT_ENDPOINT=https://keycloak.${SERVER_NAME}/realms/coding-box/account\n"
+  oidc_configuration+="OIDC_AUTHORIZATION_ENDPOINT=https://keycloak.${SERVER_NAME}/realms/coding-box/protocol/openid-connect/auth\n"
+  oidc_configuration+="OIDC_TOKEN_ENDPOINT=https://keycloak.${SERVER_NAME}/realms/coding-box/protocol/openid-connect/token\n"
+  oidc_configuration+="OIDC_USERINFO_ENDPOINT=https://keycloak.${SERVER_NAME}/realms/coding-box/protocol/openid-connect/userinfo\n"
+  oidc_configuration+="OIDC_END_SESSION_ENDPOINT=https://keycloak.${SERVER_NAME}/realms/coding-box/protocol/openid-connect/logout\n"
+  oidc_configuration+="OIDC_JWKS_URI=https://keycloak.${SERVER_NAME}/realms/coding-box/protocol/openid-connect/certs\n"
   oidc_configuration+="OAUTH2_CLIENT_ID=coding-box\n"
   oidc_configuration+="OAUTH2_CLIENT_SECRET=change_me\n"
   printf "%b" "${oidc_configuration}" >>.env.${APP_NAME}
@@ -265,13 +329,13 @@ configure_oidc() {
     printf "\n    OpenID Connect Configuration\n"
 
     env_vars_oidc[oidc_provider_url]=https://keycloak.${SERVER_NAME}
-    env_vars_oidc[oidc_issuer]=https://keycloak.${SERVER_NAME}/auth/realms/coding-box
-    env_vars_oidc[oidc_account_endpoint]=https://keycloak.${SERVER_NAME}/auth/realms/iqb/account
-    env_vars_oidc[oidc_authorization_endpoint]=https://keycloak.${SERVER_NAME}/auth/realms/iqb/protocol/openid-connect/auth
-    env_vars_oidc[oidc_token_endpoint]=https://keycloak.${SERVER_NAME}/auth/realms/iqb/protocol/openid-connect/token
-    env_vars_oidc[oidc_userinfo_endpoint]=https://keycloak.${SERVER_NAME}/auth/realms/iqb/protocol/openid-connect/userinfo
-    env_vars_oidc[oidc_end_session_endpoint]=https://keycloak.${SERVER_NAME}/auth/realms/iqb/protocol/openid-connect/logout
-    env_vars_oidc[oidc_jwks_uri]=https://keycloak.${SERVER_NAME}/auth/realms/iqb/protocol/openid-connect/certs
+    env_vars_oidc[oidc_issuer]=https://keycloak.${SERVER_NAME}/realms/coding-box
+    env_vars_oidc[oidc_account_endpoint]=https://keycloak.${SERVER_NAME}/realms/coding-box/account
+    env_vars_oidc[oidc_authorization_endpoint]=https://keycloak.${SERVER_NAME}/realms/coding-box/protocol/openid-connect/auth
+    env_vars_oidc[oidc_token_endpoint]=https://keycloak.${SERVER_NAME}/realms/coding-box/protocol/openid-connect/token
+    env_vars_oidc[oidc_userinfo_endpoint]=https://keycloak.${SERVER_NAME}/realms/coding-box/protocol/openid-connect/userinfo
+    env_vars_oidc[oidc_end_session_endpoint]=https://keycloak.${SERVER_NAME}/realms/coding-box/protocol/openid-connect/logout
+    env_vars_oidc[oidc_jwks_uri]=https://keycloak.${SERVER_NAME}/realms/coding-box/protocol/openid-connect/certs
 
     declare env_var_oidc
     for env_var_oidc in "${env_vars_order_oidc[@]}"; do
@@ -323,10 +387,14 @@ main() {
   # shellcheck source=.env.coding-box
   source .env.${APP_NAME}
 
-  update_environment_file
+  if ! update_environment_file; then
+    exit 1
+  fi
   configure_oidc
 
   printf "    Patch %s applied.\n" ${TARGET_VERSION}
 }
 
-main
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

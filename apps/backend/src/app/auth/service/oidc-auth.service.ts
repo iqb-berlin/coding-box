@@ -287,39 +287,65 @@ export class OidcAuthService {
     return { codeVerifier, codeChallenge };
   }
 
-  async storePkceVerifier(state: string, codeVerifier: string): Promise<boolean> {
+  async storePkceVerifier(
+    state: string,
+    codeVerifier: string,
+    browserChallenge: string
+  ): Promise<boolean> {
     return this.cacheService.set(
       this.pkceCacheKey(state),
-      { codeVerifier },
+      { codeVerifier, browserChallenge },
       this.pkceTtlSeconds
     );
   }
 
-  async consumePkceVerifier(state: string): Promise<string | null> {
-    const cached = await this.cacheService.getAndDelete<{ codeVerifier: string }>(
+  async consumePkceVerifier(
+    state: string
+  ): Promise<{ codeVerifier: string; browserChallenge: string } | null> {
+    return this.cacheService.getAndDelete<{
+      codeVerifier: string;
+      browserChallenge: string;
+    }>(
       this.pkceCacheKey(state)
     );
-    return cached?.codeVerifier ?? null;
   }
 
-  async storeTokenExchange(tokenResponse: OidcTokenResponse): Promise<string | null> {
+  async storeTokenExchange(
+    tokenResponse: OidcTokenResponse,
+    browserChallenge: string
+  ): Promise<string | null> {
     const code = randomBytes(32).toString('base64url');
     const stored = await this.cacheService.set(
       this.tokenExchangeCacheKey(code),
-      tokenResponse,
+      { tokenResponse, browserChallenge },
       this.tokenExchangeTtlSeconds
     );
 
     return stored ? code : null;
   }
 
-  async consumeTokenExchange(code: string): Promise<OidcTokenResponse | null> {
-    if (!code || typeof code !== 'string') {
+  async consumeTokenExchange(
+    code: string,
+    browserVerifier: string
+  ): Promise<OidcTokenResponse | null> {
+    if (
+      !code ||
+      typeof code !== 'string' ||
+      typeof browserVerifier !== 'string' ||
+      !/^[A-Za-z0-9_-]{43}$/.test(browserVerifier)
+    ) {
       return null;
     }
 
     const cacheKey = this.tokenExchangeCacheKey(code);
-    return this.cacheService.getAndDelete<OidcTokenResponse>(cacheKey);
+    const browserChallenge = createHash('sha256')
+      .update(browserVerifier)
+      .digest('base64url');
+    const cached = await this.cacheService.getAndDeleteIfFieldMatches<{
+      tokenResponse: OidcTokenResponse;
+      browserChallenge: string;
+    }>(cacheKey, 'browserChallenge', browserChallenge);
+    return cached?.tokenResponse ?? null;
   }
 
   private pkceCacheKey(state: string): string {

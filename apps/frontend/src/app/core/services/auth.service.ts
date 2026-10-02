@@ -1,7 +1,12 @@
 import { inject, Injectable } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, firstValueFrom, Observable } from 'rxjs';
+import {
+  BehaviorSubject,
+  firstValueFrom,
+  Observable,
+  tap
+} from 'rxjs';
 import { jwtDecode } from 'jwt-decode';
 import { AppService } from './app.service';
 import { AuthExchangeResponse, DecodedToken, UserProfile } from './auth.models';
@@ -16,6 +21,7 @@ export class AuthService {
   private readonly tokenKey = 'auth_token';
   private readonly idTokenKey = 'id_token';
   private readonly refreshTokenKey = 'refresh_token';
+  private readonly loginVerifierKey = 'oidc_login_verifier';
   private refreshInFlight?: Promise<string | undefined>;
   private isAuthenticatedSubject = new BehaviorSubject<boolean>(this.hasStoredSession());
 
@@ -82,13 +88,31 @@ export class AuthService {
     return Promise.reject(new Error('No valid token found'));
   }
 
-  login(returnUrl?: string): void {
+  async login(returnUrl?: string): Promise<void> {
     const redirectUri = this.appService.createLoginRedirectUri(returnUrl || this.appService.reAuthenticationReturnUrl);
-    this.document.location.href = `${this.appService.serverUrl}auth/login?redirect_uri=${encodeURIComponent(redirectUri)}`;
+    const browserVerifier = this.encodeBase64Url(globalThis.crypto.getRandomValues(new Uint8Array(32)));
+    const challengeDigest = await globalThis.crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(browserVerifier)
+    );
+    const browserChallenge = this.encodeBase64Url(new Uint8Array(challengeDigest));
+    globalThis.sessionStorage.setItem(this.loginVerifierKey, browserVerifier);
+
+    const params = new URLSearchParams({
+      redirect_uri: redirectUri,
+      browser_challenge: browserChallenge
+    });
+    this.document.location.href = `${this.appService.serverUrl}auth/login?${params.toString()}`;
   }
 
   exchangeLoginCode(code: string): Observable<AuthExchangeResponse> {
-    return this.http.post<AuthExchangeResponse>(`${this.appService.serverUrl}auth/exchange`, { code });
+    const browserVerifier = globalThis.sessionStorage.getItem(this.loginVerifierKey);
+    return this.http.post<AuthExchangeResponse>(`${this.appService.serverUrl}auth/exchange`, {
+      code,
+      browser_verifier: browserVerifier
+    }).pipe(
+      tap(() => globalThis.sessionStorage.removeItem(this.loginVerifierKey))
+    );
   }
 
   refreshToken(refreshToken: string): Observable<AuthExchangeResponse> {
@@ -214,5 +238,13 @@ export class AuthService {
     if (!this.hasStoredSession()) {
       this.clearStoredTokens();
     }
+  }
+
+  private encodeBase64Url(bytes: Uint8Array): string {
+    const binary = Array.from(bytes, byte => String.fromCharCode(byte)).join('');
+    return globalThis.btoa(binary)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
   }
 }

@@ -6,6 +6,7 @@ import {
   ApiTags, ApiOkResponse, ApiBadRequestResponse, ApiUnauthorizedResponse, ApiBody, ApiQuery, ApiOperation
 } from '@nestjs/swagger';
 import { Response } from 'express';
+import { randomBytes } from 'crypto';
 import { OAuth2ClientCredentialsService, ClientCredentialsRequest, ClientCredentialsTokenResponse } from './service/oauth2-client-credentials.service';
 import { OidcAuthService, OidcTokenResponse, OidcUserInfo } from './service/oidc-auth.service';
 import { AuthService } from './service/auth.service';
@@ -237,20 +238,35 @@ export class AuthController {
     required: false,
     description: 'URL to redirect to after successful authentication'
   })
+  @ApiQuery({
+    name: 'browser_challenge',
+    required: true,
+    description: 'Base64url-encoded SHA-256 challenge for the initiating browser session'
+  })
   async login(
     @Res() res: Response,
-      @Query('redirect_uri') redirectUri?: string
+      @Query('redirect_uri') redirectUri?: string,
+      @Query('browser_challenge') browserChallenge?: string
   ): Promise<void> {
     this.logger.log('Initiating OpenID Connect Provider login');
 
+    if (!browserChallenge || !/^[A-Za-z0-9_-]{43}$/.test(browserChallenge)) {
+      res.status(HttpStatus.BAD_REQUEST).json({ error: 'A valid browser challenge is required' });
+      return;
+    }
+
     // Encode redirect URI in state parameter to avoid duplicate redirect_uri parameters
-    const baseState = Math.random().toString(36).substring(2, 15);
+    const baseState = randomBytes(32).toString('base64url');
     const allowedRedirectUrl = this.resolveAllowedRedirectUrl(redirectUri);
     const state = allowedRedirectUrl ? `${baseState}:${encodeURIComponent(allowedRedirectUrl.toString())}` : baseState;
     const oAuth2Endpoint = this.getOAuth2Endpoint();
 
     const { codeVerifier, codeChallenge } = this.oidcAuthService.generatePkcePair();
-    const stored = await this.oidcAuthService.storePkceVerifier(state, codeVerifier);
+    const stored = await this.oidcAuthService.storePkceVerifier(
+      state,
+      codeVerifier,
+      browserChallenge
+    );
     if (!stored) {
       this.logger.error('Failed to store PKCE verifier');
       res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ error: 'Failed to initiate login' });
@@ -316,14 +332,18 @@ export class AuthController {
       }
 
       const oAuth2Endpoint = this.getOAuth2Endpoint();
-      const codeVerifier = await this.oidcAuthService.consumePkceVerifier(state);
-      if (!codeVerifier) {
+      const pkceSession = await this.oidcAuthService.consumePkceVerifier(state);
+      if (!pkceSession) {
         this.logger.error('PKCE verifier missing or expired');
         res.redirect(this.buildErrorRedirectUrl(finalRedirectUri));
         return;
       }
 
-      const tokenResponse = await this.oidcAuthService.exchangeCodeForToken(code, oAuth2Endpoint, codeVerifier);
+      const tokenResponse = await this.oidcAuthService.exchangeCodeForToken(
+        code,
+        oAuth2Endpoint,
+        pkceSession.codeVerifier
+      );
 
       const userInfo = await this.oidcAuthService.getUserInfo(tokenResponse.access_token);
 
@@ -347,7 +367,10 @@ export class AuthController {
         return;
       }
 
-      const exchangeCode = await this.oidcAuthService.storeTokenExchange(tokenResponse);
+      const exchangeCode = await this.oidcAuthService.storeTokenExchange(
+        tokenResponse,
+        pkceSession.browserChallenge
+      );
       if (!exchangeCode) {
         this.logger.error('Failed to store token exchange data');
         res.redirect(this.buildErrorRedirectUrl(finalRedirectUri));
@@ -386,9 +409,13 @@ export class AuthController {
         code: {
           type: 'string',
           description: 'Short-lived one-time login code from the frontend redirect'
+        },
+        browser_verifier: {
+          type: 'string',
+          description: 'Browser-session verifier paired with the challenge sent to the login endpoint'
         }
       },
-      required: ['code']
+      required: ['code', 'browser_verifier']
     }
   })
   @ApiOkResponse({
@@ -398,9 +425,12 @@ export class AuthController {
     description: 'Invalid or expired login code'
   })
   async exchangeLoginCode(
-    @Body() exchangeData: { code: string }
+    @Body() exchangeData: { code: string; browser_verifier: string }
   ): Promise<OidcTokenResponse> {
-    const tokenResponse = await this.oidcAuthService.consumeTokenExchange(exchangeData?.code);
+    const tokenResponse = await this.oidcAuthService.consumeTokenExchange(
+      exchangeData?.code,
+      exchangeData?.browser_verifier
+    );
     if (!tokenResponse) {
       throw new UnauthorizedException('Invalid or expired login code');
     }

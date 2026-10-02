@@ -17,6 +17,8 @@ describe('AuthController', () => {
   let originalNodeEnv: string | undefined;
   let originalHttpPort: string | undefined;
   let originalFrontendUrl: string | undefined;
+  const browserChallenge = 'B'.repeat(43);
+  const browserVerifier = 'V'.repeat(43);
 
   const encodedState = (redirectUri: string): string => `state:${encodeURIComponent(redirectUri)}`;
 
@@ -37,7 +39,10 @@ describe('AuthController', () => {
       }),
       storePkceVerifier: jest.fn().mockResolvedValue(true),
       getAuthorizationUrl: jest.fn().mockReturnValue('https://oidc.example.test/auth'),
-      consumePkceVerifier: jest.fn().mockResolvedValue('code-verifier'),
+      consumePkceVerifier: jest.fn().mockResolvedValue({
+        codeVerifier: 'code-verifier',
+        browserChallenge
+      }),
       storeTokenExchange: jest.fn().mockResolvedValue('exchange-code'),
       consumeTokenExchange: jest.fn().mockResolvedValue({
         access_token: 'access-token',
@@ -137,7 +142,7 @@ describe('AuthController', () => {
     expect(oidcAuthService.storeTokenExchange).toHaveBeenCalledWith(expect.objectContaining({
       access_token: 'access-token',
       refresh_token: 'refresh-token'
-    }));
+    }), browserChallenge);
     expect(json).not.toHaveBeenCalled();
   });
 
@@ -147,11 +152,12 @@ describe('AuthController', () => {
     process.env.HTTP_PORT = '4200';
     const frontendRedirectUri = 'http://localhost:4200/#/workspace-admin/1/test-results';
 
-    await controller.login(response, frontendRedirectUri);
+    await controller.login(response, frontendRedirectUri, browserChallenge);
 
     expect(oidcAuthService.storePkceVerifier).toHaveBeenCalledWith(
       expect.stringContaining(encodeURIComponent(frontendRedirectUri)),
-      'code-verifier'
+      'code-verifier',
+      browserChallenge
     );
 
     await controller.callback('auth-code', encodedState(frontendRedirectUri), response);
@@ -170,14 +176,17 @@ describe('AuthController', () => {
   });
 
   it('exchanges a one-time login code for stored tokens', async () => {
-    await expect(controller.exchangeLoginCode({ code: 'exchange-code' })).resolves.toEqual(
+    await expect(controller.exchangeLoginCode({
+      code: 'exchange-code',
+      browser_verifier: browserVerifier
+    })).resolves.toEqual(
       expect.objectContaining({
         access_token: 'access-token',
         refresh_token: 'refresh-token'
       })
     );
 
-    expect(oidcAuthService.consumeTokenExchange).toHaveBeenCalledWith('exchange-code');
+    expect(oidcAuthService.consumeTokenExchange).toHaveBeenCalledWith('exchange-code', browserVerifier);
   });
 
   it('refreshes OIDC tokens through the backend refresh endpoint', async () => {
@@ -194,13 +203,20 @@ describe('AuthController', () => {
   it('rejects expired one-time login codes', async () => {
     oidcAuthService.consumeTokenExchange?.mockResolvedValue(null);
 
-    await expect(controller.exchangeLoginCode({ code: 'expired-code' })).rejects.toThrow('Invalid or expired login code');
+    await expect(controller.exchangeLoginCode({
+      code: 'expired-code',
+      browser_verifier: browserVerifier
+    })).rejects.toThrow('Invalid or expired login code');
   });
 
   it('does not store disallowed login redirect URLs in the state parameter', async () => {
-    await controller.login(response, 'https://evil.example.test/phish');
+    await controller.login(response, 'https://evil.example.test/phish', browserChallenge);
 
-    expect(oidcAuthService.storePkceVerifier).toHaveBeenCalledWith(expect.not.stringContaining('evil.example.test'), 'code-verifier');
+    expect(oidcAuthService.storePkceVerifier).toHaveBeenCalledWith(
+      expect.not.stringContaining('evil.example.test'),
+      'code-verifier',
+      browserChallenge
+    );
     expect(oidcAuthService.getAuthorizationUrl).toHaveBeenCalledWith(
       expect.not.stringContaining('evil.example.test'),
       'https://app.example.test/api/auth/callback',
@@ -212,10 +228,18 @@ describe('AuthController', () => {
   it('returns an error when login cannot store the PKCE verifier', async () => {
     oidcAuthService.storePkceVerifier?.mockResolvedValue(false);
 
-    await controller.login(response, '/workspace/1');
+    await controller.login(response, '/workspace/1', browserChallenge);
 
     expect(status).toHaveBeenCalledWith(HttpStatus.INTERNAL_SERVER_ERROR);
     expect(json).toHaveBeenCalledWith({ error: 'Failed to initiate login' });
+  });
+
+  it('requires a browser challenge before starting login', async () => {
+    await controller.login(response, '/workspace/1');
+
+    expect(status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
+    expect(json).toHaveBeenCalledWith({ error: 'A valid browser challenge is required' });
+    expect(oidcAuthService.storePkceVerifier).not.toHaveBeenCalled();
   });
 
   it('allows only same-origin profile return redirects', async () => {
