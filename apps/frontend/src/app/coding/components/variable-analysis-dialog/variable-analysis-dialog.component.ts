@@ -1,6 +1,8 @@
 import {
+  ChangeDetectorRef,
   Component,
   Inject,
+  inject,
   OnInit,
   ViewChild
 } from '@angular/core';
@@ -89,6 +91,8 @@ function createVariableAnalysisPaginatorIntl(): MatPaginatorIntl {
   ]
 })
 export class VariableAnalysisDialogComponent implements OnInit {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   readonly distributionRowsTooltip =
     'Eine Verteilungszeile entspricht einer Kombination aus Aufgaben-ID, Variablen-ID und Code.';
 
@@ -135,6 +139,7 @@ export class VariableAnalysisDialogComponent implements OnInit {
   ngOnInit(): void {
     this.workspaceSettingsService.getEnableRegexSearch(this.data.workspaceId).subscribe(enabled => {
       this.enableRegexSearch = enabled;
+      this.changeDetectorRef.markForCheck();
     });
 
     this.variableAnalysisFilterChanged.pipe(
@@ -162,6 +167,7 @@ export class VariableAnalysisDialogComponent implements OnInit {
 
     const workspaceId = this.data.workspaceId;
     this.isLoadingVariableAnalysis = true;
+    this.changeDetectorRef.markForCheck();
 
     const unitId = this.unitIdFilter.trim() || undefined;
     const variableId = this.variableIdFilter.trim() || undefined;
@@ -190,9 +196,11 @@ export class VariableAnalysisDialogComponent implements OnInit {
           });
 
           this.isLoadingVariableAnalysis = false;
+          this.changeDetectorRef.markForCheck();
         },
         error: () => {
           this.isLoadingVariableAnalysis = false;
+          this.changeDetectorRef.markForCheck();
           this.snackBar.open('Fehler beim Abrufen der Code-/Score-Verteilung', 'Schließen', {
             duration: 5000,
             panelClass: ['error-snackbar']

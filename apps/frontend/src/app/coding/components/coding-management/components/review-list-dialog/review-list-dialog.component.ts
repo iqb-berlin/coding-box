@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, inject, ViewChildren, QueryList, ElementRef, AfterViewInit, OnDestroy
+  ChangeDetectorRef, Component, Inject, OnInit, inject, ViewChildren, QueryList, ElementRef, AfterViewInit, OnDestroy
 } from '@angular/core';
 
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -38,6 +38,7 @@ interface ReviewItem {
   ]
 })
 export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestroy {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
   private sanitizer = inject(DomSanitizer);
   private uiService = inject(CodingManagementUiService);
 
@@ -155,6 +156,7 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
 
     item.isLoading = true;
     this.isAnyItemLoading = true;
+    this.changeDetectorRef.markForCheck();
 
     this.uiService.openReplayForResponse(item.response).subscribe({
       next: url => {
@@ -166,12 +168,14 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
           item.hasError = true;
         }
         this.isAnyItemLoading = false;
+        this.changeDetectorRef.markForCheck();
         this.processQueue(); // Check if next visible item can start loading
       },
       error: () => {
         item.isLoading = false;
         item.hasError = true;
         this.isAnyItemLoading = false;
+        this.changeDetectorRef.markForCheck();
         this.processQueue();
       }
     });
