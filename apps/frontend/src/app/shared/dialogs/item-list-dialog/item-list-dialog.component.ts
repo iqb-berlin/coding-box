@@ -1,5 +1,5 @@
 import {
-  ChangeDetectorRef, Component, OnInit, inject
+  Component, OnInit, inject, signal
 } from '@angular/core';
 
 import { MatDialogModule, MatDialogRef, MatDialog } from '@angular/material/dialog';
@@ -34,17 +34,20 @@ import { base64ToUtf8 } from '../../utils/common-utils';
   styleUrls: ['./item-list-dialog.component.scss']
 })
 export class ItemListDialogComponent implements OnInit {
-  private readonly changeDetectorRef = inject(ChangeDetectorRef);
-
   private fileService = inject(FileService);
   private appService = inject(AppService);
   private dialog = inject(MatDialog);
   private dialogRef = inject(MatDialogRef<ItemListDialogComponent>);
   private snackBar = inject(MatSnackBar);
 
-  itemGroups: { fileId: string; id: number; items: string[] }[] = [];
-  isLoading = true;
-  error = '';
+  readonly itemGroups = signal<{
+    fileId: string;
+    id: number;
+    items: string[];
+  }[]>([]);
+
+  readonly isLoading = signal(true);
+  readonly error = signal('');
 
   ngOnInit(): void {
     this.loadItemIds();
@@ -53,19 +56,18 @@ export class ItemListDialogComponent implements OnInit {
   loadItemIds(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.error = 'Kein Workspace ausgewählt.';
-      this.isLoading = false;
+      this.error.set('Kein Workspace ausgewählt.');
+      this.isLoading.set(false);
       return;
     }
 
-    this.isLoading = true;
-    this.error = '';
+    this.isLoading.set(true);
+    this.error.set('');
 
     this.fileService.getItemIdsFromMetadata(workspaceId).subscribe({
       next: groups => {
-        this.changeDetectorRef.markForCheck();
-        this.itemGroups = groups;
-        this.isLoading = false;
+        this.itemGroups.set(groups);
+        this.isLoading.set(false);
       }
     });
   }

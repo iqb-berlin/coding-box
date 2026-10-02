@@ -248,8 +248,8 @@ describe('CodingJobsComponent', () => {
     );
     expect(coderServiceMock.getCoders).toHaveBeenCalled();
     expect(component.dataSource.data.length).toBe(2);
-    expect(component.allCoders.length).toBe(2);
-    expect(component.jobsTotal).toBe(2);
+    expect(component.allCoders().length).toBe(2);
+    expect(component.jobsTotal()).toBe(2);
   });
 
   it('should not emit jobsChanged for a plain reload', fakeAsync(() => {
@@ -310,7 +310,7 @@ describe('CodingJobsComponent', () => {
     component.loadCodingJobs();
     await fixture.whenStable();
 
-    const job = component.originalData.find(item => item.id === 1);
+    const job = component.originalData().find(item => item.id === 1);
     expect(job).toBeDefined();
     const loadedJob = job as CodingJob;
     expect(loadedJob.hasIssues).toBe(false);
@@ -350,7 +350,7 @@ describe('CodingJobsComponent', () => {
     component.loadCodingJobs();
     await fixture.whenStable();
 
-    const job = component.originalData.find(item => item.id === 1);
+    const job = component.originalData().find(item => item.id === 1);
     expect(job).toBeDefined();
     const loadedJob = job as CodingJob;
     expect(loadedJob.hasIssues).toBe(true);
@@ -369,7 +369,7 @@ describe('CodingJobsComponent', () => {
     const getCodingJobs =
       codingJobBackendServiceMock.getCodingJobs as jest.Mock;
 
-    component.selectedCoderId = 1;
+    component.selectedCoderId.set(1);
     component.onCoderFilterChange();
     expect(getCodingJobs).toHaveBeenLastCalledWith(
       1,
@@ -378,8 +378,8 @@ describe('CodingJobsComponent', () => {
       expect.objectContaining({ coderId: 1 })
     );
 
-    component.selectedCoderId = null;
-    component.selectedJobName = 'Job 2';
+    component.selectedCoderId.set(null);
+    component.selectedJobName.set('Job 2');
     component.onJobNameFilterChange();
     tick(300);
     expect(getCodingJobs).toHaveBeenLastCalledWith(
@@ -389,8 +389,8 @@ describe('CodingJobsComponent', () => {
       expect.objectContaining({ jobName: 'Job 2' })
     );
 
-    component.selectedJobName = null;
-    component.selectedStatus = 'active';
+    component.selectedJobName.set(null);
+    component.selectedStatus.set('active');
     component.onStatusFilterChange();
     expect(getCodingJobs).toHaveBeenLastCalledWith(
       1,
@@ -418,7 +418,7 @@ describe('CodingJobsComponent', () => {
     component.loadCodingJobs();
     fixture.detectChanges();
 
-    expect(component.isLoading).toBe(true);
+    expect(component.isLoading()).toBe(true);
     expect(fixture.nativeElement.querySelector('.filters-row input')).toBe(
       filterInput
     );
@@ -438,7 +438,7 @@ describe('CodingJobsComponent', () => {
     });
     fixture.detectChanges();
 
-    expect(component.isLoading).toBe(false);
+    expect(component.isLoading()).toBe(false);
     expect(
       fixture.nativeElement.querySelector('.coding-jobs-refresh-indicator')
     ).toBeNull();
@@ -457,7 +457,7 @@ describe('CodingJobsComponent', () => {
 
     initialFixture.detectChanges();
 
-    expect(initialFixture.componentInstance.hasLoadedJobs).toBe(false);
+    expect(initialFixture.componentInstance.hasLoadedJobs()).toBe(false);
     expect(
       initialFixture.nativeElement.querySelector('mat-spinner')
     ).not.toBeNull();
@@ -473,7 +473,7 @@ describe('CodingJobsComponent', () => {
     });
     await initialFixture.whenStable();
 
-    expect(initialFixture.componentInstance.hasLoadedJobs).toBe(true);
+    expect(initialFixture.componentInstance.hasLoadedJobs()).toBe(true);
     expect(
       initialFixture.nativeElement.querySelector('.filters-row')
     ).not.toBeNull();
@@ -610,7 +610,7 @@ describe('CodingJobsComponent', () => {
   });
 
   it('should choose a single primary row action by job state', () => {
-    component.canApplyResults = true;
+    component.canApplyResults.set(true);
 
     expect(component.getPrimaryJobAction(mockCodingJobs[0] as CodingJob)).toBe(
       'start'
@@ -625,7 +625,7 @@ describe('CodingJobsComponent', () => {
     );
 
     component.showApplyActions = true;
-    component.canApplyResults = false;
+    component.canApplyResults.set(false);
     expect(component.getPrimaryJobAction(mockCodingJobs[1] as CodingJob)).toBe(
       'review'
     );
@@ -638,8 +638,8 @@ describe('CodingJobsComponent', () => {
   });
 
   it('does not offer reviews for unassigned jobs without management access', () => {
-    component.canApplyResults = false;
-    component.canReviewCodingJobs = false;
+    component.canApplyResults.set(false);
+    component.canReviewCodingJobs.set(false);
 
     const job = {
       ...mockCodingJobs[0],
@@ -651,8 +651,8 @@ describe('CodingJobsComponent', () => {
   });
 
   it('does not offer review actions to assigned coders without management access', () => {
-    component.canApplyResults = false;
-    component.canReviewCodingJobs = false;
+    component.canApplyResults.set(false);
+    component.canReviewCodingJobs.set(false);
 
     expect(component.getPrimaryJobAction(mockCodingJobs[0] as CodingJob)).toBe(
       'start'
@@ -689,7 +689,7 @@ describe('CodingJobsComponent', () => {
   });
 
   it('should only allow applying results for completed or review non-training jobs', () => {
-    component.canApplyResults = true;
+    component.canApplyResults.set(true);
 
     expect(
       component.canApplyCodingResults(mockCodingJobs[1] as CodingJob)
@@ -732,9 +732,9 @@ describe('CodingJobsComponent', () => {
       component as unknown as { updateCodingJobPermissions: () => void }
     ).updateCodingJobPermissions();
 
-    expect(component.canManageCodingJobs).toBe(true);
-    expect(component.canReviewCodingJobs).toBe(true);
-    expect(component.canApplyResults).toBe(false);
+    expect(component.canManageCodingJobs()).toBe(true);
+    expect(component.canReviewCodingJobs()).toBe(true);
+    expect(component.canApplyResults()).toBe(false);
   });
 
   it('should only show restart for non-training jobs with open units', () => {
@@ -753,7 +753,7 @@ describe('CodingJobsComponent', () => {
   });
 
   it('hides job management actions without coding-manager access', async () => {
-    component.canManageCodingJobs = false;
+    component.canManageCodingJobs.set(false);
     fixture.detectChanges();
     await fixture.whenStable();
 
@@ -820,7 +820,7 @@ describe('CodingJobsComponent', () => {
   });
 
   it('blocks direct management actions without coding-manager access', fakeAsync(() => {
-    component.canManageCodingJobs = false;
+    component.canManageCodingJobs.set(false);
     component.selection.select(component.dataSource.data[0]);
 
     component.deleteCodingJob(mockCodingJobs[0] as CodingJob);

@@ -313,7 +313,7 @@ describe('HomeComponent', () => {
     createComponent();
 
     expect(mockAppService.refreshAuthData).toHaveBeenCalledTimes(1);
-    expect(component.workspaces).toEqual([{ id: 12, name: 'Current' }]);
+    expect(component.workspaces()).toEqual([{ id: 12, name: 'Current' }]);
   });
 
   it('should retry a failed background refresh on the next home visit', () => {

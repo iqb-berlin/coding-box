@@ -57,11 +57,11 @@ describe('JournalComponent', () => {
 
     fixture.detectChanges();
 
-    expect(component.loadError).toBe(true);
-    expect(component.loadErrorMessage).toBe(SERVER_ERROR_MESSAGE);
-    expect(component.loadErrorRequestId).toBe('journal-request-1');
-    expect(component.journalEntries).toEqual([]);
-    expect(component.totalEntries).toBe(0);
+    expect(component.loadError()).toBe(true);
+    expect(component.loadErrorMessage()).toBe(SERVER_ERROR_MESSAGE);
+    expect(component.loadErrorRequestId()).toBe('journal-request-1');
+    expect(component.journalEntries()).toEqual([]);
+    expect(component.totalEntries()).toBe(0);
     expect(fixture.nativeElement.textContent).toContain('journal.load-error-title');
     expect(fixture.nativeElement.textContent).toContain(SERVER_ERROR_MESSAGE);
     expect(fixture.nativeElement.textContent).toContain('journal-request-1');
@@ -98,12 +98,12 @@ describe('JournalComponent', () => {
       }));
 
     fixture.detectChanges();
-    expect(component.loadError).toBe(true);
+    expect(component.loadError()).toBe(true);
 
     component.loadJournalEntries();
 
-    expect(component.loadError).toBe(false);
-    expect(component.totalEntries).toBe(1);
+    expect(component.loadError()).toBe(false);
+    expect(component.totalEntries()).toBe(1);
   });
 
   it('should show a status-specific inline load error message', () => {
@@ -115,8 +115,8 @@ describe('JournalComponent', () => {
 
     fixture.detectChanges();
 
-    expect(component.loadError).toBe(true);
-    expect(component.loadErrorMessage).toBe('Die angeforderten Daten wurden nicht gefunden.');
+    expect(component.loadError()).toBe(true);
+    expect(component.loadErrorMessage()).toBe('Die angeforderten Daten wurden nicht gefunden.');
     expect(fixture.nativeElement.textContent).toContain('Die angeforderten Daten wurden nicht gefunden.');
   });
 });

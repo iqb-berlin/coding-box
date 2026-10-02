@@ -12,8 +12,8 @@
         <mat-form-field class="filter-field">
           <mat-label>Aufgaben Filter</mat-label>
           <input matInput [(ngModel)]="unitNameFilter" placeholder="Filter nach Aufgabe" (input)="applyFilter()">
-          @if (unitNameFilter) {
-            <button matSuffix mat-icon-button aria-label="Clear" (click)="unitNameFilter=''; applyFilter()">
+          @if (unitNameFilter()) {
+            <button matSuffix mat-icon-button aria-label="Clear" (click)="unitNameFilter.set(''); applyFilter()">
               <mat-icon>close</mat-icon>
             </button>
           }
@@ -22,8 +22,8 @@
         <mat-form-field class="filter-field">
           <mat-label>Variablen Filter</mat-label>
           <input matInput [(ngModel)]="variableIdFilter" placeholder="Filter nach Variablen" (input)="applyFilter()">
-          @if (variableIdFilter) {
-            <button matSuffix mat-icon-button aria-label="Clear" (click)="variableIdFilter=''; applyFilter()">
+          @if (variableIdFilter()) {
+            <button matSuffix mat-icon-button aria-label="Clear" (click)="variableIdFilter.set(''); applyFilter()">
               <mat-icon>close</mat-icon>
             </button>
           }
@@ -78,14 +78,14 @@
       </div>
     </div>
 
-    @if (isLoading) {
+    @if (isLoading()) {
       <div class="loading-container">
         <mat-spinner diameter="40"></mat-spinner>
         <p class="loading-text">Lade Kodiervariablen...</p>
       </div>
     }
 
-    @if (!isLoading && hasFilteredVariables) {
+    @if (!isLoading() && hasFilteredVariables) {
       <div class="table-container">
         <table mat-table [dataSource]="dataSource" matSort class="variables-table">
 
@@ -138,20 +138,21 @@
                 <mat-form-field class="replay-anchor-field" subscriptSizing="dynamic">
                   <mat-label>Anchor</mat-label>
                   <input matInput
-                    [(ngModel)]="element.replayAnchor"
+                    [ngModel]="element.replayAnchor()"
+                    (ngModelChange)="element.replayAnchor.set($event)"
                     [placeholder]="element.variableId"
-                    [disabled]="element.isSavingReplayAnchor"
+                    [disabled]="element.isSavingReplayAnchor()"
                     (keyup.enter)="saveReplayAnchor(element)">
                 </mat-form-field>
                 <button mat-icon-button
                   color="primary"
-                  [disabled]="element.isSavingReplayAnchor || !hasReplayAnchorChanges(element)"
+                  [disabled]="element.isSavingReplayAnchor() || !hasReplayAnchorChanges(element)"
                   (click)="saveReplayAnchor(element)"
                   matTooltip="Replay-Anchor speichern">
                   <mat-icon>save</mat-icon>
                 </button>
                 <button mat-icon-button
-                  [disabled]="element.isSavingReplayAnchor || !element.savedReplayAnchor"
+                  [disabled]="element.isSavingReplayAnchor() || !element.savedReplayAnchor()"
                   (click)="clearReplayAnchor(element)"
                   matTooltip="Replay-Anchor zurücksetzen">
                   <mat-icon>restart_alt</mat-icon>
@@ -189,7 +190,7 @@
       </div>
     }
 
-    @if (!isLoading && !hasVariables) {
+    @if (!isLoading() && !hasVariables) {
       <div class="empty-state">
         <mat-icon class="empty-icon">list_alt</mat-icon>
         <h3>Keine Kodiervariablen gefunden</h3>
@@ -197,14 +198,14 @@
       </div>
     }
 
-    @if (!isLoading && hasVariables && !hasFilteredVariables) {
+    @if (!isLoading() && hasVariables && !hasFilteredVariables) {
       <div class="empty-state">
         <mat-icon class="empty-icon">filter_alt_off</mat-icon>
         <h3>Keine Treffer</h3>
         <p class="empty-text">
           Es passen keine Kodiervariablen zu den aktuellen Filtern.
         </p>
-        @if (hasActiveFilters) {
+        @if (hasActiveFilters()) {
           <button mat-raised-button (click)="clearFilters()">
             <mat-icon>clear</mat-icon>
             Filter zurücksetzen

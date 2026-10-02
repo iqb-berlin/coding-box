@@ -1,4 +1,6 @@
-import { ChangeDetectorRef, Component, inject } from '@angular/core';
+import {
+  Component, inject, signal
+} from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 import {
@@ -22,30 +24,27 @@ export class WorkspaceAccessRightsDialogComponent {
   }>(MAT_DIALOG_DATA);
 
   private userBackendService = inject(UserBackendService);
-  private changeDetectorRef = inject(ChangeDetectorRef);
 
-  selectedWorkspacesIds: number[] = [];
-  isLoadingUserWorkspaces = false;
-  workspaceListReady = false;
-  userWorkspacesLoadingFailed = false;
-  result: number[] = [];
+  readonly selectedWorkspacesIds = signal<number[]>([]);
+  readonly isLoadingUserWorkspaces = signal(false);
+  readonly workspaceListReady = signal(false);
+  readonly userWorkspacesLoadingFailed = signal(false);
+  readonly result = signal<number[]>([]);
   constructor() {
     if (this.data && this.data.selectedUser && Array.isArray(this.data.selectedUser) && this.data.selectedUser.length > 0) {
-      this.isLoadingUserWorkspaces = true;
+      this.isLoadingUserWorkspaces.set(true);
       this.userBackendService.getWorkspacesByUserListOrFail(this.data.selectedUser[0].id)
         .subscribe({
           next: workspaces => {
-            this.selectedWorkspacesIds = workspaces || [];
-            this.result = [...this.selectedWorkspacesIds];
-            this.isLoadingUserWorkspaces = false;
-            this.changeDetectorRef.markForCheck();
+            this.selectedWorkspacesIds.set(workspaces || []);
+            this.result.set([...this.selectedWorkspacesIds()]);
+            this.isLoadingUserWorkspaces.set(false);
           },
           error: () => {
-            this.selectedWorkspacesIds = [];
-            this.result = [];
-            this.userWorkspacesLoadingFailed = true;
-            this.isLoadingUserWorkspaces = false;
-            this.changeDetectorRef.markForCheck();
+            this.selectedWorkspacesIds.set([]);
+            this.result.set([]);
+            this.userWorkspacesLoadingFailed.set(true);
+            this.isLoadingUserWorkspaces.set(false);
           }
         });
     }
@@ -53,9 +52,9 @@ export class WorkspaceAccessRightsDialogComponent {
 
   setWorkspacesSelection(result: WorkspaceInListDto[]): void {
     if (result && Array.isArray(result)) {
-      this.result = result.map(workspace => workspace.id);
+      this.result.set(result.map(workspace => workspace.id));
     } else {
-      this.result = [];
+      this.result.set([]);
     }
   }
 }

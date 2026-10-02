@@ -287,8 +287,8 @@ describe('Validation panels inside their real parent dialog', () => {
       panel.componentInstance.onPageChange({ pageIndex: 1, pageSize: 10, length: 20 });
       http.expectOne(() => true).flush(emptyPage(2));
       await fixture.whenStable();
-      expect(panel.componentInstance.isLoadingPage).toBe(false);
-      expect(panel.componentInstance.currentPage).toBe(2);
+      expect(panel.componentInstance.isLoadingPage()).toBe(false);
+      expect(panel.componentInstance.currentPage()).toBe(2);
       expect(panel.nativeElement.querySelector('.table-loading, .loading-fade')).toBeNull();
       expect(panel.nativeElement.textContent).not.toContain('Läuft');
       http.verify();
@@ -303,7 +303,7 @@ describe('Validation panels inside their real parent dialog', () => {
       expect(older.cancelled).toBe(true);
       http.expectOne(() => true).flush(emptyPage(3));
       await fixture.whenStable();
-      expect(panel.componentInstance.currentPage).toBe(3);
+      expect(panel.componentInstance.currentPage()).toBe(3);
       expect(panel.nativeElement.querySelector('.table-loading, .loading-fade')).toBeNull();
       http.verify();
     });
@@ -330,7 +330,7 @@ describe('Validation panels inside their real parent dialog', () => {
       fixture.autoDetectChanges();
       await fixture.whenStable();
       const reopened = fixture.debugElement.query(By.directive(panelType));
-      expect(reopened.componentInstance.isLoadingPage).toBe(false);
+      expect(reopened.componentInstance.isLoadingPage()).toBe(false);
       expect(reopened.nativeElement.querySelector('.table-loading, .loading-fade')).toBeNull();
       state.setValidationResult(5, type, { status: 'failed', timestamp: 2, details: { error: 'Fresh result' } });
       await fixture.whenStable();
@@ -380,7 +380,7 @@ describe('Validation panels inside their real parent dialog', () => {
         http.expectOne(() => true).flush(state.getAllValidationResults(5)[type].details);
         await fixture.whenStable();
         expect(panel.nativeElement.textContent).not.toContain('Export...');
-        expect(panel.componentInstance.isExporting).toBe(false);
+        expect(panel.componentInstance.isExporting()).toBe(false);
         expect(download).toHaveBeenCalledTimes(1);
         http.verify();
       } finally {
@@ -458,7 +458,7 @@ describe('Validation panels inside their real parent dialog', () => {
       expect(button.disabled).toBe(true);
       finishMutationAndRefresh(http);
       await fixture.whenStable();
-      expect(panel.componentInstance.isDeletingResponses).toBe(false);
+      expect(panel.componentInstance.isDeletingResponses()).toBe(false);
       expect(panel.nativeElement.textContent).not.toContain('UNIT');
       expect(state.getAllValidationResults(5)[type].status).toBe('success');
       http.verify();
@@ -510,7 +510,7 @@ describe('Validation panels inside their real parent dialog', () => {
         finishMutationAndRefresh(http);
         await fixture.whenStable();
         const panel = fixture.debugElement.query(By.directive(DuplicateResponsesValidationPanelComponent));
-        expect(panel.componentInstance.isResolvingDuplicates).toBe(false);
+        expect(panel.componentInstance.isResolvingDuplicates()).toBe(false);
         expect(panel.nativeElement.textContent).not.toContain('UNIT');
         expect(state.getAllValidationResults(5).duplicateResponses.status).toBe('success');
         http.verify();

@@ -1,5 +1,5 @@
 import {
-  ChangeDetectorRef, Component, OnInit, inject, ViewChild, AfterViewInit
+  Component, OnInit, inject, ViewChild, AfterViewInit, signal
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -238,20 +238,20 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
-  private changeDetector = inject(ChangeDetectorRef);
+
   data: { workspaceId: number } = inject(MAT_DIALOG_DATA);
 
   workspaceId: number = this.data.workspaceId;
   processes = new MatTableDataSource<ProcessDto>([]);
   displayedColumns: string[] = ['queueName', 'status', 'progress', 'time', 'details', 'actions'];
-  isLoading = false;
-  lastLoadedAt = Date.now();
+  readonly isLoading = signal(false);
+  readonly lastLoadedAt = signal(Date.now());
 
   // Filter properties
-  statusFilter = '';
-  typeFilter = '';
-  searchFilter = '';
-  availableTypes: string[] = [];
+  readonly statusFilter = signal('');
+  readonly typeFilter = signal('');
+  readonly searchFilter = signal('');
+  readonly availableTypes = signal<string[]>([]);
   statusOptions: ProcessStatus[] = ['active', 'waiting', 'delayed', 'completed', 'failed', 'paused', 'cancelled', 'unknown'];
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
@@ -294,9 +294,9 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
 
   applyFilter(): void {
     this.processes.filter = JSON.stringify({
-      status: this.statusFilter,
-      type: this.typeFilter,
-      search: this.searchFilter
+      status: this.statusFilter(),
+      type: this.typeFilter(),
+      search: this.searchFilter()
     });
     if (this.processes.paginator) {
       this.processes.paginator.firstPage();
@@ -304,24 +304,23 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
   }
 
   clearFilters(): void {
-    this.statusFilter = '';
-    this.typeFilter = '';
-    this.searchFilter = '';
+    this.statusFilter.set('');
+    this.typeFilter.set('');
+    this.searchFilter.set('');
     this.applyFilter();
   }
 
   loadProcesses(): void {
     if (!this.workspaceId) return;
-    this.isLoading = true;
+    this.isLoading.set(true);
     this.processesService.getProcesses(this.workspaceId).subscribe({
       next: data => {
         this.processes.data = data;
-        this.availableTypes = [...new Set(data.map(d => d.queueName))]
-          .sort((a, b) => this.getQueueLabel(a).localeCompare(this.getQueueLabel(b), 'de'));
-        this.lastLoadedAt = Date.now();
-        this.isLoading = false;
+        this.availableTypes.set([...new Set(data.map(d => d.queueName))]
+          .sort((a, b) => this.getQueueLabel(a).localeCompare(this.getQueueLabel(b), 'de')));
+        this.lastLoadedAt.set(Date.now());
+        this.isLoading.set(false);
         this.applyFilter();
-        this.changeDetector.markForCheck();
       },
       error: () => {
         this.snackBar.open(
@@ -329,8 +328,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
           this.translateService.instant('close'),
           { duration: 3000 }
         );
-        this.isLoading = false;
-        this.changeDetector.markForCheck();
+        this.isLoading.set(false);
       }
     });
   }
@@ -363,8 +361,8 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
   confirmDeleteProcess(process: ProcessDto, action: ProcessActionKind = this.getProcessAction(process) as ProcessActionKind): void {
     if (!action) return;
 
-    this.isLoading = true;
-    this.changeDetector.markForCheck();
+    this.isLoading.set(true);
+
     this.processesService.deleteProcess(this.workspaceId, process.queueName, process.id.toString()).subscribe({
       next: success => {
         if (success) {
@@ -376,8 +374,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
             this.translateService.instant('close'),
             { duration: 4000 }
           );
-          this.isLoading = false;
-          this.changeDetector.markForCheck();
+          this.isLoading.set(false);
         }
       },
       error: () => {
@@ -386,8 +383,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
           this.translateService.instant('close'),
           { duration: 4000 }
         );
-        this.isLoading = false;
-        this.changeDetector.markForCheck();
+        this.isLoading.set(false);
       }
     });
   }
@@ -523,7 +519,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     }
 
     if (process.status === 'active') {
-      return Math.max(0, this.lastLoadedAt - process.processedOn);
+      return Math.max(0, this.lastLoadedAt() - process.processedOn);
     }
 
     return null;

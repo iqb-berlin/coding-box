@@ -73,10 +73,10 @@ describe('WorkspaceAccessRightsDialogComponent', () => {
     fixture.detectChanges();
 
     expect(userBackendService.getWorkspacesByUserListOrFail).toHaveBeenCalledWith(5);
-    expect(component.selectedWorkspacesIds).toEqual([2, 3]);
-    expect(component.result).toEqual([2, 3]);
-    expect(component.isLoadingUserWorkspaces).toBe(false);
-    expect(component.userWorkspacesLoadingFailed).toBe(false);
+    expect(component.selectedWorkspacesIds()).toEqual([2, 3]);
+    expect(component.result()).toEqual([2, 3]);
+    expect(component.isLoadingUserWorkspaces()).toBe(false);
+    expect(component.userWorkspacesLoadingFailed()).toBe(false);
   });
 
   it('disables save while user workspaces are loading', () => {
@@ -84,7 +84,7 @@ describe('WorkspaceAccessRightsDialogComponent', () => {
 
     const saveButton = fixture.nativeElement.querySelector('mat-dialog-actions button');
 
-    expect(component.isLoadingUserWorkspaces).toBe(true);
+    expect(component.isLoadingUserWorkspaces()).toBe(true);
     expect(saveButton.disabled).toBe(true);
   });
 
@@ -96,10 +96,10 @@ describe('WorkspaceAccessRightsDialogComponent', () => {
 
     const saveButton = fixture.nativeElement.querySelector('mat-dialog-actions button');
 
-    expect(component.selectedWorkspacesIds).toEqual([]);
-    expect(component.result).toEqual([]);
-    expect(component.isLoadingUserWorkspaces).toBe(false);
-    expect(component.userWorkspacesLoadingFailed).toBe(true);
+    expect(component.selectedWorkspacesIds()).toEqual([]);
+    expect(component.result()).toEqual([]);
+    expect(component.isLoadingUserWorkspaces()).toBe(false);
+    expect(component.userWorkspacesLoadingFailed()).toBe(true);
     expect(saveButton.disabled).toBe(true);
   });
   it('preserves rights and blocks saving until the workspace list arrives', () => {
@@ -110,13 +110,13 @@ describe('WorkspaceAccessRightsDialogComponent', () => {
     workspacesByUser$.complete();
     fixture.detectChanges();
     const saveButton = fixture.nativeElement.querySelector('mat-dialog-actions button');
-    expect(component.result).toEqual([2, 3]);
+    expect(component.result()).toEqual([2, 3]);
     expect(saveButton.disabled).toBe(true);
 
     workspaceList$.next({ data: [{ id: 2, name: 'Two' }, { id: 3, name: 'Three' }], total: 2 });
     workspaceList$.complete();
     fixture.detectChanges();
-    expect(component.result).toEqual([2, 3]);
+    expect(component.result()).toEqual([2, 3]);
     expect(saveButton.disabled).toBe(false);
   });
 
@@ -129,7 +129,7 @@ describe('WorkspaceAccessRightsDialogComponent', () => {
     fixture.detectChanges();
     workspaceList$.error(new Error('list unavailable'));
     fixture.detectChanges();
-    expect(component.result).toEqual([2, 3]);
+    expect(component.result()).toEqual([2, 3]);
     expect(fixture.nativeElement.querySelector('mat-dialog-actions button').disabled).toBe(true);
   });
 
@@ -145,21 +145,21 @@ describe('WorkspaceAccessRightsDialogComponent', () => {
 
     checkboxes[2].click();
     await fixture.whenStable();
-    expect(component.result).toEqual([]);
+    expect(component.result()).toEqual([]);
 
     workspacesByUser$.next([2]);
     workspacesByUser$.complete();
     await fixture.whenStable();
     expect(checkboxes.every(checkbox => !checkbox.disabled)).toBe(true);
     expect(checkboxes.slice(1).map(checkbox => checkbox.checked)).toEqual([true, false]);
-    expect(component.result).toEqual([2]);
+    expect(component.result()).toEqual([2]);
     expect(saveButton.disabled).toBe(false);
 
     checkboxes[1].click();
     checkboxes[2].click();
     await fixture.whenStable();
     expect(checkboxes.slice(1).map(checkbox => checkbox.checked)).toEqual([false, true]);
-    expect(component.result).toEqual([3]);
+    expect(component.result()).toEqual([3]);
   });
 
   it('keeps selection disabled after user rights fail to load', async () => {

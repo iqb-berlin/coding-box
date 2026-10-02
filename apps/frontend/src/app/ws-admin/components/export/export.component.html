@@ -61,9 +61,9 @@
               <mat-select
                 data-cy="results-missings-profile"
                 [(ngModel)]="selectedResultsMissingsProfileId"
-                [disabled]="isLoadingResultsOptions"
+                [disabled]="isLoadingResultsOptions()"
                 >
-                @for (profile of resultsMissingsProfiles; track profile) {
+                @for (profile of resultsMissingsProfiles(); track profile) {
                   <mat-option
                     [value]="profile.id"
                     >
@@ -71,12 +71,12 @@
                   </mat-option>
                 }
               </mat-select>
-              @if (isLoadingResultsOptions) {
+              @if (isLoadingResultsOptions()) {
                 <mat-hint>
                   {{ 'ws-admin.export-options.results-missings-profile-loading' | translate }}
                 </mat-hint>
               }
-              @if (!isLoadingResultsOptions && resultsMissingsProfiles.length === 0) {
+              @if (!isLoadingResultsOptions() && resultsMissingsProfiles().length === 0) {
                 <mat-hint>
                   {{ 'ws-admin.export-options.results-no-missings-profile' | translate }}
                 </mat-hint>
@@ -129,7 +129,7 @@
                 data-cy="item-dataset-missings-profile"
                 [(ngModel)]="selectedItemDatasetMissingsProfileId"
                 >
-                @for (profile of itemDatasetMissingsProfiles; track profile) {
+                @for (profile of itemDatasetMissingsProfiles(); track profile) {
                   <mat-option
                     [value]="profile.id"
                     >
@@ -137,7 +137,7 @@
                   </mat-option>
                 }
               </mat-select>
-              @if (itemDatasetMissingsProfiles.length === 0) {
+              @if (itemDatasetMissingsProfiles().length === 0) {
                 <mat-hint>
                   {{
                   'ws-admin.export-options.item-dataset-no-missings-profile'
@@ -173,7 +173,7 @@
                 >
                 {{ 'ws-admin.export-options.item-dataset-clear-all' | translate }}
               </button>
-              @if (itemSearch.trim()) {
+              @if (itemSearch().trim()) {
                 <button
                   mat-stroked-button
                   type="button"
@@ -183,7 +183,7 @@
                   {{ 'ws-admin.export-options.item-dataset-select-filtered' | translate }}
                 </button>
               }
-              @if (itemSearch.trim()) {
+              @if (itemSearch().trim()) {
                 <button
                   mat-stroked-button
                   type="button"
@@ -200,11 +200,11 @@
               }}</mat-label>
               <mat-select
                 data-cy="item-dataset-items"
-                [ngModel]="selectedItemKeys"
+                [ngModel]="selectedItemKeys()"
                 (ngModelChange)="onItemDatasetSelectionChange($event)"
                 multiple
                 >
-                @for (item of filteredItemDatasetOptions; track item) {
+                @for (item of filteredItemDatasetOptions(); track item) {
                   <mat-option
                     [value]="getItemDatasetKey(item)"
                     >
@@ -217,8 +217,8 @@
                 'ws-admin.export-options.item-dataset-items-selected-total'
                 | translate
                 : {
-                selected: selectedItemKeys.length,
-                total: itemDatasetOptions.length
+                selected: selectedItemKeys().length,
+                total: itemDatasetOptions().length
               }
               }}
             </mat-hint>
@@ -246,7 +246,7 @@
               }}</mat-option>
             </mat-select>
           </mat-form-field>
-          @if (notReachedScope !== 'unit') {
+          @if (notReachedScope() !== 'unit') {
             <mat-checkbox
               data-cy="item-dataset-recode-trailing"
               [(ngModel)]="recodeTrailingOmissions"
@@ -258,7 +258,7 @@
               }}
             </mat-checkbox>
           }
-          @if (itemDatasetMappingWarnings.length > 0) {
+          @if (itemDatasetMappingWarnings().length > 0) {
             <div
               data-cy="item-dataset-mapping-warnings"
               class="export-warning export-warning--notice"
@@ -269,7 +269,7 @@
                   {{
                   'ws-admin.export-options.item-dataset-mapping-warning-title'
                   | translate
-                  : { count: itemDatasetMappingWarnings.length }
+                  : { count: itemDatasetMappingWarnings().length }
                   }}
                 </div>
                 <button
@@ -287,7 +287,7 @@
               </div>
             </div>
           }
-          @if (itemDatasetMappingIssues.length > 0) {
+          @if (itemDatasetMappingIssues().length > 0) {
             <div
               data-cy="item-dataset-mapping-errors"
               class="export-warning export-warning--error"
@@ -297,7 +297,7 @@
                 <div class="warning-title">
                   {{
                   'ws-admin.export-options.item-dataset-mapping-title'
-                  | translate: { count: itemDatasetMappingIssues.length }
+                  | translate: { count: itemDatasetMappingIssues().length }
                   }}
                 </div>
                 <button
@@ -331,30 +331,28 @@
             <p class="psychometric-item-count">
               {{
               'ws-admin.export-options.psychometric-items-detected'
-              | translate: { count: psychometricItemCount }
+              | translate: { count: psychometricItemCount() }
               }}
             </p>
             <button
               mat-button
               type="button"
               class="psychometric-info-toggle"
-                (click)="
-                  isPsychometricInfoExpanded = !isPsychometricInfoExpanded
-                "
-              [attr.aria-expanded]="isPsychometricInfoExpanded"
+              (click)="isPsychometricInfoExpanded.set(!isPsychometricInfoExpanded())"
+              [attr.aria-expanded]="isPsychometricInfoExpanded()"
               aria-controls="psychometric-info-details"
               >
               <mat-icon>{{
-                isPsychometricInfoExpanded ? 'expand_less' : 'help_outline'
+                isPsychometricInfoExpanded() ? 'expand_less' : 'help_outline'
               }}</mat-icon>
               {{
-              (isPsychometricInfoExpanded
+              (isPsychometricInfoExpanded()
               ? 'ws-admin.export-options.psychometric-info-hide-details'
               : 'ws-admin.export-options.psychometric-info-show-details'
               ) | translate
               }}
             </button>
-            @if (isPsychometricInfoExpanded) {
+            @if (isPsychometricInfoExpanded()) {
               <div
                 id="psychometric-info-details"
                 class="psychometric-info-grid"
@@ -416,7 +414,7 @@
               | translate
             }}</mat-label>
             <mat-select [(ngModel)]="selectedMissingsProfileId">
-              @for (profile of missingsProfiles; track profile) {
+              @for (profile of missingsProfiles(); track profile) {
                 <mat-option
                   [value]="profile.id"
                   >
@@ -424,7 +422,7 @@
                 </mat-option>
               }
             </mat-select>
-            @if (missingsProfiles.length === 0) {
+            @if (missingsProfiles().length === 0) {
               <mat-hint>
                 {{
                 'ws-admin.export-options.psychometric-no-missings-profile'
@@ -444,7 +442,7 @@
                 | translate
                 }}
               </mat-option>
-              @for (candidate of psychometricDomainCandidates; track candidate) {
+              @for (candidate of psychometricDomainCandidates(); track candidate) {
                 <mat-option
                   [value]="getPsychometricDomainKey(candidate)"
                   [disabled]="!candidate.selectable"
@@ -455,23 +453,23 @@
               }
             </mat-select>
             <mat-hint
-              [matTooltip]="psychometricMappingIssueDetails"
+              [matTooltip]="psychometricMappingIssueDetails()"
               matTooltipClass="psychometric-mapping-tooltip"
               >
               {{
               'ws-admin.export-options.psychometric-domain-hint' | translate
               }}
-              @if (psychometricItemCount === 0) {
+              @if (psychometricItemCount() === 0) {
                 ·
                 {{
                 'ws-admin.export-options.psychometric-no-items' | translate
                 }}
               }
-              @if (psychometricMappingIssueCount > 0) {
+              @if (psychometricMappingIssueCount() > 0) {
                 ·
                 {{
                 'ws-admin.export-options.psychometric-mapping-issues'
-                | translate: { count: psychometricMappingIssueCount }
+                | translate: { count: psychometricMappingIssueCount() }
                 }}
               }
             </mat-hint>
@@ -525,12 +523,12 @@
         }
 
         @if (
-          selectedFormat === 'results-by-version' && hasGeoGebraResponses
+          selectedFormat === 'results-by-version' && hasGeoGebraResponses()
           ) {
           <mat-checkbox
             [(ngModel)]="includeGeoGebraResponseValues"
             color="primary"
-            [disabled]="!includeResponseValues || includeGeoGebraFiles"
+            [disabled]="!includeResponseValues() || includeGeoGebraFiles()"
             [matTooltip]="
               'ws-admin.export-options.include-geogebra-response-values-tooltip'
                 | translate
@@ -544,12 +542,12 @@
         }
 
         @if (
-          selectedFormat === 'results-by-version' && hasGeoGebraResponses
+          selectedFormat === 'results-by-version' && hasGeoGebraResponses()
           ) {
           <mat-checkbox
             [(ngModel)]="includeGeoGebraFiles"
             color="primary"
-            [disabled]="resultsFormat !== 'excel' || !includeResponseValues"
+            [disabled]="resultsFormat !== 'excel' || !includeResponseValues()"
             (ngModelChange)="onIncludeGeoGebraFilesChange()"
             [matTooltip]="
               'ws-admin.export-options.include-geogebra-files-tooltip'
@@ -570,12 +568,12 @@
       (click)="onExport()"
       [disabled]="isExportDisabled"
       >
-      @if (!isStartingExport) {
+      @if (!isStartingExport()) {
         <span>{{
           'ws-admin.export-action-button' | translate
         }}</span>
       }
-      @if (isStartingExport) {
+      @if (isStartingExport()) {
         <span>
           <mat-spinner
             diameter="20"

@@ -3,7 +3,7 @@
     <button mat-raised-button
             [matTooltip]="'save' | translate"
             matTooltipPosition="above"
-            [disabled]="!workspaceUsers.hasChanged"
+            [disabled]="!workspaceUsers().hasChanged"
             (click)="save()">
       <mat-icon>save</mat-icon>
       {{'save' | translate}}
@@ -63,7 +63,7 @@
         </tr>
       </thead>
       <tbody>
-        @for (u of workspaceUsers.entries; track u) {
+        @for (u of workspaceUsers().entries; track u) {
           <tr>
             <td class="user-column" data-cy="access-rights">{{u.name}}</td>
             @for (level of [1,2,3]; track level) {

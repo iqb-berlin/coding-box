@@ -54,8 +54,8 @@ describe('File view settings with real services without Zone', () => {
 
   const render = async (initialRegex = false) => {
     fixture = TestBed.createComponent(TestFilesComponent);
-    fixture.componentInstance.textFilterValue = '[';
-    fixture.componentInstance.enableRegexSearch = initialRegex;
+    fixture.componentInstance.textFilterValue.set('[');
+    fixture.componentInstance.enableRegexSearch.set(initialRegex);
     fixture.autoDetectChanges();
     await fixture.whenStable();
   };
@@ -104,7 +104,7 @@ describe('File view settings with real services without Zone', () => {
     http.expectOne(regexUrl).flush({ value: '{"enabled":false}' });
     http.expectOne(configUrl).flush({}, { status: 500, statusText: 'failed' });
     await fixture.whenStable();
-    expect(fixture.componentInstance.isLoadingContentPoolConfig).toBe(false);
+    expect(fixture.componentInstance.isLoadingContentPoolConfig()).toBe(false);
     expect(fixture.nativeElement.textContent).not.toContain('ACP aus Content Pool');
   });
 
@@ -122,9 +122,9 @@ describe('File view settings with real services without Zone', () => {
     // WorkspaceSettingsService intentionally retains shared requests for its cache.
     expect(regex.cancelled).toBe(false);
     regex.flush({ value: '{"enabled":true}' });
-    expect(fixture.componentInstance.enableRegexSearch).toBe(false);
-    expect(fixture.componentInstance.contentPoolSettings.enabled).toBe(false);
-    expect(fixture.componentInstance.isLoadingContentPoolConfig).toBe(false);
+    expect(fixture.componentInstance.enableRegexSearch()).toBe(false);
+    expect(fixture.componentInstance.contentPoolSettings().enabled).toBe(false);
+    expect(fixture.componentInstance.isLoadingContentPoolConfig()).toBe(false);
     if (action !== 'destroy') {
       await fixture.whenStable();
       expect(fixture.nativeElement.querySelector('.regex-filter-error')).toBeNull();

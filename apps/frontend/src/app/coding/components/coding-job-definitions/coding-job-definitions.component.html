@@ -7,13 +7,13 @@
           mat-icon-button
           type="button"
           class="info-button"
-          (click)="showInfo = !showInfo"
+          (click)="showInfo.set(!showInfo())"
           [matTooltip]="'coding-job-definitions.info-tooltip' | translate"
           [attr.aria-label]="'coding-job-definitions.info-tooltip' | translate">
           <mat-icon>info</mat-icon>
         </button>
       </div>
-      @if (jobDefinitions.length > 0) {
+      @if (jobDefinitions().length > 0) {
         <button
           mat-raised-button
           color="primary"
@@ -26,7 +26,7 @@
     </div>
   }
 
-  @if (showInfo) {
+  @if (showInfo()) {
     <div class="info-alert">
       <mat-icon>description</mat-icon>
       <div>
@@ -37,27 +37,27 @@
   }
 
 
-  @if (isLoading && jobDefinitions.length === 0) {
+  @if (isLoading() && jobDefinitions().length === 0) {
     <div class="loading-container">
       <mat-spinner diameter="30"></mat-spinner>
       <span>{{ 'coding-job-definitions.loading' | translate }}</span>
     </div>
   }
 
-  @if (isBulkCreating) {
+  @if (isBulkCreating()) {
     <div class="bulk-creation-loading-container">
       <mat-spinner diameter="30"></mat-spinner>
       <span>{{ 'coding-job-definitions.bulk-creation-in-progress' | translate }}</span>
     </div>
   }
 
-  @if (jobDefinitions.length > 0) {
+  @if (jobDefinitions().length > 0) {
     <div
       class="definition-summary"
       aria-label="Status der Jobdefinitionen">
       <div class="summary-item">
         <span>{{ 'coding-job-definitions.summary.total' | translate }}</span>
-        <strong>{{ jobDefinitions.length }}</strong>
+        <strong>{{ jobDefinitions().length }}</strong>
       </div>
       <div class="summary-item">
         <span>{{ 'coding-job-definitions.summary.draft' | translate }}</span>
@@ -74,11 +74,11 @@
     </div>
   }
 
-  @if (jobDefinitions.length > 0) {
+  @if (jobDefinitions().length > 0) {
     <div
       class="job-definitions-table-wrapper"
-      [attr.aria-busy]="isLoading">
-      <table mat-table [dataSource]="jobDefinitions" class="job-definitions-table">
+      [attr.aria-busy]="isLoading()">
+      <table mat-table [dataSource]="jobDefinitions()" class="job-definitions-table">
         <!-- Actions Column -->
         <ng-container matColumnDef="actions">
           <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.actions' | translate }}</th>
@@ -296,7 +296,7 @@
     </div>
   }
 
-  @if (!isLoading && jobDefinitions.length === 0) {
+  @if (!isLoading() && jobDefinitions().length === 0) {
     <div class="empty-state">
       <mat-icon class="empty-state-icon">assignment_add</mat-icon>
       <h4>{{ 'coding-job-definitions.empty.title' | translate }}</h4>

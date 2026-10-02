@@ -49,7 +49,7 @@ describe('XML viewer without Zone', () => {
     jest.advanceTimersByTime(500);
     await fixture.whenStable();
     expect(copyButton().textContent).toContain('done');
-    expect(fixture.componentInstance.copySucceeded).toBe(true);
+    expect(fixture.componentInstance.copySucceeded()).toBe(true);
     jest.advanceTimersByTime(1000);
     await fixture.whenStable();
     expect(copyButton().textContent).toContain('content_copy');

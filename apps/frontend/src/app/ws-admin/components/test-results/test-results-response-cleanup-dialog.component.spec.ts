@@ -35,7 +35,7 @@ describe('TestResultsResponseCleanupDialogComponent zoneless rendering', () => {
     await fixture.whenStable();
     expect(fixture.nativeElement.querySelector('.loading-state')).toBeNull();
     expect(fixture.nativeElement.querySelector('mat-select')).toBeTruthy();
-    expect(fixture.componentInstance.availableUnits).toEqual(['UNIT_1']);
+    expect(fixture.componentInstance.availableUnits()).toEqual(['UNIT_1']);
   });
 
   it('renders delayed failures and keeps the preview disabled', async () => {

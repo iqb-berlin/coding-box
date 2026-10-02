@@ -2,9 +2,9 @@
   <h2>Nutzer Zugriffs Rechte für Arbeitsbereich(e) </h2>
   <coding-box-workspaces-selection
     (workspaceSelectionChanged)="setWorkspacesSelection($event)"
-    (workspaceListReady)="workspaceListReady = $event"
-    [selectedWorkspacesIds]="selectedWorkspacesIds"
-    [selectionDisabled]="!workspaceListReady || isLoadingUserWorkspaces || userWorkspacesLoadingFailed"
+    (workspaceListReady)="workspaceListReady.set($event)"
+    [selectedWorkspacesIds]="selectedWorkspacesIds()"
+    [selectionDisabled]="!workspaceListReady() || isLoadingUserWorkspaces() || userWorkspacesLoadingFailed()"
     [workspacesChanged]="true" />
 </mat-dialog-content>
 
@@ -12,8 +12,8 @@
   <button mat-raised-button
           color="primary"
           type="submit"
-          [disabled]="!workspaceListReady || isLoadingUserWorkspaces || userWorkspacesLoadingFailed"
-          [mat-dialog-close]="result">
+          [disabled]="!workspaceListReady() || isLoadingUserWorkspaces() || userWorkspacesLoadingFailed()"
+          [mat-dialog-close]="result()">
     {{ 'save' | translate }}
   </button>
   <button mat-raised-button

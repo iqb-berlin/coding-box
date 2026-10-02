@@ -47,7 +47,7 @@ describe('ContentPoolUploadDialogComponent zoneless rendering', () => {
 
   async function startTransfer(): Promise<void> {
     await loadAcp();
-    fixture.componentInstance.selectedAcpId = 'acp-1';
+    fixture.componentInstance.selectedAcpId.set('acp-1');
     fixture.changeDetectorRef.markForCheck();
     await fixture.whenStable();
     fixture.nativeElement.querySelector('mat-dialog-actions button:last-child').click();
