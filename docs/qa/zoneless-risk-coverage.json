@@ -39,6 +39,7 @@
       "tests": [
         "apps/frontend/src/app/coding/components/code-selector/code-selector-reactivity.component.spec.ts",
         "apps/frontend/src/app/replay/services/replay-coding.service.spec.ts",
+        "apps/frontend/src/app/coding-management/coding-variables-dialog/coding-variables-dialog.component.zoneless.spec.ts",
         "cypress/e2e/replay-live.cy.ts",
         "cypress/e2e/item-matrix-live.cy.ts",
         "cypress/auth/coding-session.cy.ts"
@@ -65,6 +66,7 @@
         "cypress/zoneless/validation-dialog.cy.ts",
         "cypress/zoneless/validation-access.cy.ts",
         "cypress/zoneless/test-results-view.cy.ts",
+        "cypress/zoneless/info-dialogs.cy.ts",
         "cypress/auth/coding-session.cy.ts"
       ]
     },

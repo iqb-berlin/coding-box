@@ -61,6 +61,42 @@ describe('Zoneless information dialogs from the results table', () => {
     cy.then(() => { expect(unexpectedRequests).to.deep.equal([]); });
   });
 
+  it('renders independently delayed frequencies and note indicators after the rows', () => {
+    let releaseFrequencies: () => void;
+    let releaseNotes: () => void;
+    const frequencyGate = new Cypress.Promise<void>(resolve => { releaseFrequencies = resolve; });
+    const notesGate = new Cypress.Promise<void>(resolve => { releaseNotes = resolve; });
+    cy.intercept('POST', '**/api/admin/workspace/5/test-results/flat-responses/frequencies', request =>
+      frequencyGate.then(() => {
+        request.reply({ body: { 'UNIT_ZL:v': {
+          total: 10, values: [{ value: 'synthetic', count: 2, p: 0.2 }]
+        } } });
+      })
+    ).as('frequencies');
+    cy.intercept('POST', '**/api/admin/workspace/5/unit-notes/units/notes', request =>
+      notesGate.then(() => {
+        request.reply({ body: { 10: [{ id: 1, unitId: 10, note: 'Synthetic note' }] } });
+      })
+    ).as('notes');
+    cy.contains('button', 'Ergebnisbrowser').click();
+    cy.get('coding-box-test-results-flat-table').should('not.exist');
+    cy.contains('button', 'Tabellenansicht').click();
+    cy.get('coding-box-test-results-flat-table td.mat-column-unit').should('contain.text', 'UNIT_ZL');
+    cy.get('td.mat-column-frequencies').should($cell => {
+      expect($cell.text().trim()).to.equal('');
+    });
+    cy.get('td.mat-column-actions').should('not.contain.text', 'circle');
+
+    cy.then(() => { releaseFrequencies(); });
+    cy.wait('@frequencies');
+    cy.get('td.mat-column-frequencies').should('contain.text', 'p=.200 (n=2)');
+    cy.get('td.mat-column-actions').should('not.contain.text', 'circle');
+
+    cy.then(() => { releaseNotes(); });
+    cy.wait('@notes');
+    cy.get('td.mat-column-actions').should('contain.text', 'circle');
+  });
+
   for (const info of infoCases) {
     it(`retries ${info.kind} loading and updates its real XML viewer`, () => {
       let attempts = 0;

@@ -15,10 +15,12 @@ import { CodingStatisticsService } from '../../../coding/services/coding-statist
 import { ResponseService } from '../../../shared/services/response/response.service';
 import { AppService } from '../../../core/services/app.service';
 import {
+  FlatResponseFrequenciesResponse,
   FlatTestResultResponsesResponse,
   TestResultService
 } from '../../../shared/services/test-result/test-result.service';
 import { TestResultsFlatTableComponent } from './test-results-flat-table.component';
+import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
 
 describe('TestResultsFlatTableComponent', () => {
   let fixture: ComponentFixture<TestResultsFlatTableComponent>;
@@ -111,6 +113,67 @@ describe('TestResultsFlatTableComponent', () => {
 
   afterEach(() => {
     fixture.destroy();
+  });
+
+  it.each(['notes', 'frequencies'])('renders delayed %s without another user action', async kind => {
+    const notes = new Subject<Record<number, UnitNoteDto[]>>();
+    const frequencies = new Subject<FlatResponseFrequenciesResponse>();
+    jest.spyOn(TestBed.inject(UnitNoteService), 'getNotesForMultipleUnits').mockReturnValue(notes);
+    testResultService.getFlatResponseFrequencies.mockReturnValue(frequencies);
+    const response: FlatTestResultResponsesResponse = {
+      data: [{
+        responseId: 1,
+        unitId: 1,
+        personId: 1,
+        code: 'person',
+        group: 'g',
+        login: 'login',
+        booklet: 'BOOKLET',
+        unit: 'UNIT',
+        response: 'V1',
+        responseStatus: 'VALUE_CHANGED',
+        responseValue: 'answer',
+        tags: [],
+        logAnomalies: []
+      }],
+      total: 1,
+      page: 1,
+      limit: 100
+    };
+    testResultService.getFlatResponses.mockReturnValue(of(response));
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    // Settle initial ngModel notifications before delivering the independent requests.
+    await new Promise<void>(resolve => { setTimeout(resolve, 80); });
+    await fixture.whenStable();
+    const frequencyCell = fixture.nativeElement.querySelector('td.mat-column-frequencies') as HTMLElement;
+    const hasNoteIndicator = () => Array.from(
+      fixture.nativeElement.querySelectorAll('td.mat-column-actions mat-icon') as NodeListOf<HTMLElement>
+    ).some(icon => icon.textContent?.trim() === 'circle');
+    expect(frequencyCell.textContent?.trim()).toBe('');
+    expect(hasNoteIndicator()).toBe(false);
+
+    if (kind === 'notes') {
+      notes.next({
+        1: [{
+          id: 1, unitId: 1, note: 'note', createdAt: new Date(), updatedAt: new Date()
+        }]
+      });
+    } else {
+      frequencies.next({ 'UNIT:V1': { total: 10, values: [{ value: 'answer', count: 2, p: 0.2 }] } });
+    }
+    await fixture.whenStable();
+
+    if (kind === 'notes') {
+      expect(hasNoteIndicator()).toBe(true);
+      notes.error(new Error('Request failed'));
+      await fixture.whenStable();
+      expect(hasNoteIndicator()).toBe(false);
+    } else {
+      expect(frequencyCell.textContent?.trim()).toBe('p=.200 (n=2)');
+    }
+    notes.complete();
+    frequencies.complete();
   });
 
   it('should display response-value frequencies as proportions', () => {
