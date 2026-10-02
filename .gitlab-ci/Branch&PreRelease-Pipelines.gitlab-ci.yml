@@ -620,13 +620,13 @@ lint-app:
 audit-app:
   stage: audit
   interruptible: true
-  allow_failure: true
+  allow_failure: false
   rules:
     - !reference [ .default_rules, rules ]
   needs:
     - install-dependencies
   script:
-    - npm audit --audit-level critical
+    - npm audit --audit-level high
 
 build-develop-commit-db-image:
   stage: build-images
