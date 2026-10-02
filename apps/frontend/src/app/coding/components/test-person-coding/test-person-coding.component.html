@@ -9,13 +9,13 @@
           <mat-form-field appearance="outline" class="full-width">
             <mat-label>{{ 'test-person-coding.select-groups-label' | translate }}</mat-label>
             <mat-select multiple [(ngModel)]="selectedGroups">
-              @if (groupsLoading) {
+              @if (groupsLoading()) {
                 <mat-option disabled>{{ 'test-person-coding.loading-groups' | translate }}</mat-option>
               }
-              @if (!groupsLoading && availableGroups.length === 0) {
+              @if (!groupsLoading() && availableGroups().length === 0) {
                 <mat-option disabled>{{ 'test-person-coding.no-groups' | translate }}</mat-option>
               }
-              @for (group of availableGroups; track group) {
+              @for (group of availableGroups(); track group) {
                 <mat-option [value]="group.groupName">
                   {{ group.groupName }} ({{ group.testPersonCount }} Testpersonen, {{ group.responsesToCode }} Antworten)
                 </mat-option>
@@ -23,7 +23,7 @@
             </mat-select>
             <mat-hint>{{ 'test-person-coding.select-groups-hint' | translate }}</mat-hint>
           </mat-form-field>
-          <button mat-button type="button" [disabled]="availableGroups.length === 0" (click)="selectAllGroups()">
+          <button mat-button type="button" [disabled]="availableGroups().length === 0" (click)="selectAllGroups()">
             <mat-icon>select_all</mat-icon>
             {{ 'test-person-coding.select-all-groups' | translate }}
           </button>
@@ -59,11 +59,11 @@
         </div>
 
         <div class="button-container">
-          <button mat-raised-button color="primary" [disabled]="isLoading || selectedGroups.length === 0" (click)="codeTestPersons(selectedGroups.join(','))">
+          <button mat-raised-button color="primary" [disabled]="isLoading() || selectedGroups.length === 0" (click)="codeTestPersons(selectedGroups.join(','))">
             <mat-icon>code</mat-icon>
             {{ 'test-person-coding.code-selected-groups' | translate }}
           </button>
-          <button mat-button [disabled]="isLoading" (click)="codeAllTestPersons()">
+          <button mat-button [disabled]="isLoading()" (click)="codeAllTestPersons()">
             <mat-icon>group</mat-icon>
             {{ 'test-person-coding.code-all-test-persons' | translate }}
           </button>
@@ -78,22 +78,22 @@
     </mat-card-header>
     <mat-card-content>
       <div class="jobs-actions">
-        <button mat-raised-button color="primary" (click)="loadAllJobs()" [disabled]="jobsLoading">
+        <button mat-raised-button color="primary" (click)="loadAllJobs()" [disabled]="jobsLoading()">
           <mat-icon>refresh</mat-icon>
           {{ 'test-person-coding.jobs.refresh' | translate }}
         </button>
       </div>
 
-      @if (jobsLoading) {
+      @if (jobsLoading()) {
         <div class="loading-indicator">
           <mat-spinner diameter="40"></mat-spinner>
           <span>{{ 'test-person-coding.jobs.loading' | translate }}</span>
         </div>
       }
 
-      @if (allJobs.length > 0) {
+      @if (allJobs().length > 0) {
         <div class="table-container">
-          <table mat-table [dataSource]="allJobs" class="mat-elevation-z8">
+          <table mat-table [dataSource]="allJobs()" class="mat-elevation-z8">
             <ng-container matColumnDef="jobId">
               <th mat-header-cell *matHeaderCellDef>{{ 'test-person-coding.jobs.table.job-id' | translate }}</th>
               <td mat-cell *matCellDef="let job">{{ job.jobId }}</td>
@@ -199,7 +199,7 @@
           </table>
         </div>
       } @else {
-        @if (!jobsLoading) {
+        @if (!jobsLoading()) {
           <div class="no-data">
             <mat-icon>work_off</mat-icon>
             <p>{{ 'test-person-coding.jobs.no-jobs' | translate }}</p>
@@ -211,44 +211,45 @@
   </mat-card>
 
 
-  @if (activeJobId && jobStatus) {
+  @let status = jobStatus();
+  @if (activeJobId() && status) {
     <mat-card class="job-status-card">
       <mat-card-header>
         <mat-card-title>{{ 'test-person-coding.current-job.title' | translate }}</mat-card-title>
-        <mat-card-subtitle>{{ 'test-person-coding.current-job.subtitle' | translate }}: {{ activeJobId }}</mat-card-subtitle>
+        <mat-card-subtitle>{{ 'test-person-coding.current-job.subtitle' | translate }}: {{ activeJobId() }}</mat-card-subtitle>
       </mat-card-header>
       <mat-card-content>
         <div class="job-status-content">
           <div class="status-row">
             <span class="status-label">{{ 'test-person-coding.current-job.status' | translate }}</span>
-            <span class="status-value" [ngClass]="'status-' + jobStatus.status">{{ 'status-' + jobStatus.status | translate }}</span>
+            <span class="status-value" [ngClass]="'status-' + status.status">{{ 'status-' + status.status | translate }}</span>
           </div>
           <div class="status-row">
             <span class="status-label">{{ 'test-person-coding.current-job.progress' | translate }}</span>
-            <span class="status-value">{{ jobStatus.progress }}%</span>
+            <span class="status-value">{{ status.progress }}%</span>
           </div>
-          <mat-progress-bar mode="determinate" [value]="jobStatus.progress"></mat-progress-bar>
-          @if (jobStatus.groupNames) {
+          <mat-progress-bar mode="determinate" [value]="status.progress"></mat-progress-bar>
+          @if (status.groupNames) {
             <div class="status-row">
               <span class="status-label">{{ 'test-person-coding.current-job.groups' | translate }}</span>
-              <span class="status-value truncated-text" [matTooltip]="jobStatus.groupNames">
-                {{ truncateText(jobStatus.groupNames, 50) }}
+              <span class="status-value truncated-text" [matTooltip]="status.groupNames">
+                {{ truncateText(status.groupNames, 50) }}
               </span>
             </div>
           }
-          @if (jobStatus.durationMs) {
+          @if (status.durationMs) {
             <div class="status-row">
               <span class="status-label">{{ 'test-person-coding.current-job.duration' | translate }}</span>
-              <span class="status-value">{{ formatDuration(jobStatus.durationMs) }}</span>
+              <span class="status-value">{{ formatDuration(status.durationMs) }}</span>
             </div>
           }
-          @if (jobStatus.error) {
+          @if (status.error) {
             <div class="status-row">
               <span class="status-label">{{ 'test-person-coding.current-job.error' | translate }}</span>
-              <span class="status-value error">{{ jobStatus.error }}</span>
+              <span class="status-value error">{{ status.error }}</span>
             </div>
           }
-          @if (jobStatus.status === 'pending' || jobStatus.status === 'processing') {
+          @if (status.status === 'pending' || status.status === 'processing') {
             <div class="button-container">
               <button mat-raised-button color="warn" (click)="cancelJob()">
                 <mat-icon>cancel</mat-icon>

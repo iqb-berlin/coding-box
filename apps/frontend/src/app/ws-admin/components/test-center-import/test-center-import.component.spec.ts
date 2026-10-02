@@ -97,7 +97,7 @@ describe('TestCenterImportComponent', () => {
 
   it('should complete the whole user flow for testResults import', async () => {
     // 1. Initial state: authenticated = false
-    expect(component.authenticated).toBe(false);
+    expect(component.authenticated()).toBe(false);
 
     // 2. Authenticate
     component.loginForm.patchValue({
@@ -121,9 +121,9 @@ describe('TestCenterImportComponent', () => {
     component.authenticate();
     fixture.detectChanges();
 
-    expect(component.authenticated).toBe(true);
+    expect(component.authenticated()).toBe(true);
     expect(component.authToken).toBe('fake-token');
-    expect(component.workspaces.length).toBe(1);
+    expect(component.workspaces().length).toBe(1);
 
     // 3. Select workspace and options, then get groups
     component.importFilesForm.patchValue({
@@ -150,8 +150,8 @@ describe('TestCenterImportComponent', () => {
     component.getTestGroups();
     fixture.detectChanges();
 
-    expect(component.showTestGroups).toBe(true);
-    expect(component.testGroups).toEqual(mockGroups);
+    expect(component.showTestGroups()).toBe(true);
+    expect(component.testGroups()).toEqual(mockGroups);
     expect(importService.importTestcenterGroups).toHaveBeenCalledWith(
       1,
       'tc-ws-1',
@@ -205,7 +205,7 @@ describe('TestCenterImportComponent', () => {
   });
 
   it('should pass the selected response overwrite mode for testResults import', async () => {
-    component.authenticated = true;
+    component.authenticated.set(true);
     component.authToken = 'fake-token';
     component.importFilesForm.patchValue({
       workspace: 'tc-ws-1',
@@ -259,7 +259,7 @@ describe('TestCenterImportComponent', () => {
   });
 
   it('should not start import when log overwrite confirmation is cancelled', async () => {
-    component.authenticated = true;
+    component.authenticated.set(true);
     component.authToken = 'fake-token';
     component.importFilesForm.patchValue({
       workspace: 'tc-ws-1',
@@ -267,7 +267,7 @@ describe('TestCenterImportComponent', () => {
       logs: true
     });
     component.loginForm.patchValue({ testCenter: 1 });
-    component.showTestGroups = true;
+    component.showTestGroups.set(true);
     component.selectedRows = [{
       groupName: 'group1',
       groupLabel: 'Group 1',
@@ -291,8 +291,8 @@ describe('TestCenterImportComponent', () => {
     await fixture.whenStable();
 
     expect(importService.importWorkspaceFiles).not.toHaveBeenCalled();
-    expect(component.isUploadingTestResults).toBe(false);
-    expect(component.showTestGroups).toBe(true);
+    expect(component.isUploadingTestResults()).toBe(false);
+    expect(component.showTestGroups()).toBe(true);
   });
 
   it('should handle authentication error', () => {
@@ -306,8 +306,8 @@ describe('TestCenterImportComponent', () => {
     component.authenticate();
     fixture.detectChanges();
 
-    expect(component.authenticated).toBe(false);
-    expect(component.authenticationError).toBe(true);
+    expect(component.authenticated()).toBe(false);
+    expect(component.authenticationError()).toBe(true);
   });
 
   it('should show progress while loading test groups', () => {
@@ -334,7 +334,7 @@ describe('TestCenterImportComponent', () => {
 
     component.getTestGroups();
 
-    expect(component.isLoadingTestGroups).toBe(true);
+    expect(component.isLoadingTestGroups()).toBe(true);
     expect(component.testGroupsLoadPercent).toBe(25);
     expect(component.testGroupsLoadMessage).toBe(
       '250/1000 Testgruppen vorbereitet.'
@@ -360,18 +360,18 @@ describe('TestCenterImportComponent', () => {
     groups$.next(mockGroups);
     groups$.complete();
 
-    expect(component.isLoadingTestGroups).toBe(false);
-    expect(component.showTestGroups).toBe(true);
-    expect(component.testGroups).toEqual(mockGroups);
+    expect(component.isLoadingTestGroups()).toBe(false);
+    expect(component.showTestGroups()).toBe(true);
+    expect(component.testGroups()).toEqual(mockGroups);
   });
 
   it('should logout correctly', () => {
-    component.authenticated = true;
+    component.authenticated.set(true);
     component.authToken = 'some-token';
 
     component.logout();
 
-    expect(component.authenticated).toBe(false);
+    expect(component.authenticated()).toBe(false);
     expect(component.authToken).toBe('');
     expect(workspaceAdminService.setLastAuthToken).toHaveBeenCalledWith('');
   });
@@ -380,15 +380,15 @@ describe('TestCenterImportComponent', () => {
     // Change importType to testFiles
     // eslint-disable-next-line @typescript-eslint/dot-notation
     component['data'] = { importType: 'testFiles' };
-    component.authenticated = true;
+    component.authenticated.set(true);
     component.authToken = 'fake-token';
-    component.workspaces = [{
+    component.workspaces.set([{
       id: 'tc-ws-1',
       label: 'TC Workspace 1',
       type: 'tc',
       flags: { mode: 'full' }
-    }];
-    component.testCenterInstance = [{ id: 1, label: 'Testcenter 1' }];
+    }]);
+    component.testCenterInstance.set([{ id: 1, label: 'Testcenter 1' }]);
 
     fixture.detectChanges();
 
@@ -486,7 +486,7 @@ describe('TestCenterImportComponent', () => {
 
   it('should render correctly when using individual URL (reproduction of crash)', async () => {
     // 1. Initial state
-    expect(component.authenticated).toBe(false);
+    expect(component.authenticated()).toBe(false);
 
     // 2. Authenticate with "Individual URL" (ID 6)
     component.loginForm.patchValue({
@@ -512,10 +512,10 @@ describe('TestCenterImportComponent', () => {
     component.authenticate();
     fixture.detectChanges();
 
-    expect(component.authenticated).toBe(true);
+    expect(component.authenticated()).toBe(true);
     // The component sets testCenterInstance based on the ID 6, which doesn't exist in the hardcoded list.
     // So component.testCenterInstance[0] will be undefined.
-    expect(component.testCenterInstance[0]).toBeUndefined();
+    expect(component.testCenterInstance()[0]).toBeUndefined();
 
     // Verify that the UI renders the individual URL in the "Angemeldet in" section
     const compiled = fixture.nativeElement as HTMLElement;

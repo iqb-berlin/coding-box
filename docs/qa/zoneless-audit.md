@@ -1374,3 +1374,94 @@ und die elf neuen Regressionen im nativen Zoneless-Target bestehen anschließend
 Das Inventar umfasst weiterhin 8.777 Einträge aus 325 Produktionsdateien.
 Diese lokalen Ergebnisse bestätigen keinen Push oder erfolgreichen CI-Lauf
 am veröffentlichten Commit; die Veröffentlichung ist gesondert zu prüfen.
+
+
+### ZL-029: Testcenter-Import aktualisiert nach verzögerten Antworten nicht
+
+Ausgangspunkt ist PR #1039, Commit `b639e193942de93b60c1f8f8008015ac5a42d4a0`.
+Nach einer verzögerten Testcenter-Anmeldung war intern `authenticated` gesetzt,
+das echte Template zeigte jedoch weiterhin das Anmeldeformular. Auch Gruppen,
+Importfortschritt, Fehlermeldungen und die Ladezustände wurden asynchron in
+gewöhnliche Felder geschrieben. Diese angezeigten Zustände verwenden jetzt
+Signals. Uploadfehler werden zusätzlich in den Dateiimport-Optionen angezeigt.
+Veraltete Anmeldeantworten nach Abmeldung oder einer neueren Anfrage werden
+verworfen. Offene Anfragen werden beim Schließen abbestellt; der sequenzielle
+Ergebnisimport startet danach keinen weiteren Gruppenimport.
+
+Elf native Regressionen prüfen Anmeldung, Fehler und Wiederholung, Gruppenlisten
+mit Daten und Leerzustand, Gruppenfortschritt und Ladefehler, Dateiimport mit
+Fortschritt und Fehler/Wiederholung sowie den sequenziellen Ergebnisimport und
+Schließen während offener Anfragen. `cypress/zoneless/testcenter-import.cy.ts`
+öffnet den echten Dialog über die Testdateien-Ansicht und prüft Anmeldung,
+Dateifortschritt, HTTP-Fehler und Wiederholung mit verzögerten API-Fixtures.
+
+### ZL-030: Testpersonenkodierung zeigt verspätete Jobdaten nicht zuverlässig
+
+Jobliste, Gruppen, laufender Job, Fortschritt und Ladezustände verwenden jetzt
+Signals. Anfragekennungen verhindern, dass ältere Listen neuere Ergebnisse
+überschreiben. Statusantworten werden nur für den aktuellen Job, Workspace und
+Pollinglauf angewendet. Offene Anfragen werden beim Zerstören abbestellt.
+Ein reproduzierter Fehler im zweistufigen Ablauf »Alle Testpersonen kodieren«
+ist korrigiert: Der Abschluss der Personensuche darf den Button nicht freigeben,
+während die anschließend gestartete Kodieranfrage noch läuft.
+
+Zwölf native Regressionen prüfen verspätete Listen, leere Service-Fallbacks,
+Wiederholung, Jobstart, Fortschritt, Abschluss und Fehler, Job-/Workspace-Wechsel,
+vertauschte Listenantworten, erneutes Polling desselben Jobs sowie Erfolg,
+Leerzustand und Fehler der verzögerten Personensuche und das Zerstören der Ansicht.
+
+### ZL-031: Auth-Daten erneut laden lässt den Button gesperrt
+
+`UserWorkspacesComponent` verwendet für `authDataReloadRunning` ein Signal.
+Vier native Regressionen klicken den gebundenen Wiederholen-Button und prüfen
+dessen automatische Freigabe nach verzögertem Erfolg, Fehlerergebnis und
+Observable-Fehler sowie das Abbestellen beim Zerstören. Mehrfachklicks während
+der laufenden Anfrage starten keinen zusätzlichen Ladevorgang.
+
+### ZL-032: Auth-Zustände besitzen jeweils eine führende Quelle
+
+Die zuvor parallel beschriebenen Signals und `BehaviorSubject`s für Auth-Daten
+und Bootstrapstatus sind vereinheitlicht: Jeweils ein `BehaviorSubject` führt
+den Zustand; `toSignal(..., { requireSync: true })` liefert dessen schreibgeschützte
+Signalansicht. Die bestehenden Observable-APIs benachrichtigen Auth-Guards
+weiterhin synchron und geben späten Abonnenten den aktuellen Zustand.
+`selectedWorkspaceId` bleibt ein Signal mit einem zustandslosen, ausschließlich
+Änderungen meldenden Eventstream; dessen bestehende Semantik bleibt erhalten.
+
+Fünf native Regressionen prüfen Signalzugriffe innerhalb synchroner
+Observable-Benachrichtigungen, rasche Statuswechsel, späte Abonnenten sowie die
+automatische Darstellung verzögerter HTTP-Auth-Daten und der Abmeldung.
+Der globale Auth-Retry läuft auch nach dem Abbestellen durch eine Ansicht weiter;
+Antworten aus einer nach Abmeldung oder erneutem Anmeldelauf veralteten Sitzung
+werden verworfen. Zwei HTTP-Regressionen sichern die Verantwortung des AppService und
+das Verwerfen einer Antwort nach Abmeldung ab.
+
+Die neuen Tests verwenden echte Templates, liefern Antworten erst nach der
+initialen Darstellung und warten danach mit `whenStable()` auf Angular.
+Beim sequenziellen Promise-Import wird zuvor die Promise-Microtask abgewartet.
+Kein neuer Test erzwingt die Darstellung nach einer Antwort mit
+`detectChanges()` oder `markForCheck()`. Die Browser-Anmeldung und API-Daten
+sind synthetisch; Produktionslast und reale Testcenter-Verbindungen werden
+damit nicht nachgewiesen.
+
+
+### Lokale Abschlussläufe für ZL-029 bis ZL-032 am 02.10.2026
+
+App- und Testquellen blieben während dieser abschließenden Läufe unverändert.
+Anschließend wurden ausschließlich Inventar und Dokumentation aktualisiert.
+
+| Nx-Prüfung | Ergebnis | Exit |
+|---|---|---|
+| `frontend:test --maxWorkers=2` | 2.570 Tests / 232 Suites bestanden | 0 |
+| `frontend:test-zoneless --maxWorkers=2` | 808 Tests / 37 Suites bestanden, darunter 32 neue Regressionen | 0 |
+| `frontend:e2e --configuration=zoneless` mit `testcenter-import.cy.ts` und `test-files-upload.cy.ts` | Beide Browserfälle in Electron bestanden; `window.Zone` fehlt | 0 |
+| `frontend:lint` | bestanden | 0 |
+| `frontend:build --configuration=production` | bestanden | 0 |
+| `frontend:zoneless-approval` | Inventar ohne Abweichung, sechs Bereiche / sieben Mechanismen / 32 Befunde referenziert | 0 |
+
+Das neue Browser-Szenario läuft bei 1.280 × 900 Pixeln mit synthetischer Anmeldung
+und verzögerten HTTP-Fixtures. Der bestehende Datei-Upload bleibt zusätzlich
+geprüft. Das Inventar enthält 8.780 Einträge aus 325 Produktionsdateien und bleibt
+eine Suchhilfe; diese Ergebnisse bestätigen keine lückenlose Prüfung jedes
+UI-Elements. CI am veröffentlichten Commit und reale Testcenter-Verbindungen
+sind gesondert zu prüfen.
