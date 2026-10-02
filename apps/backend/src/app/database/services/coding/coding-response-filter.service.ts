@@ -1,6 +1,6 @@
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Brackets, Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
 import {
   statusStringToNumber,
@@ -16,9 +16,17 @@ import {
 } from '../workspace/workspace-exclusion.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
-import { MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES } from '../../utils/manual-coding-candidate.util';
-import { isCodingResponseCandidateByPattern } from './coding-response-candidate.util';
+import {
+  DERIVE_ERROR_STATUS,
+  MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+} from '../../utils/manual-coding-candidate.util';
+import {
+  getCodingResponseValueCandidateSql,
+  getCodingVariableIdCandidateSql,
+  isCodingResponseCandidateByPattern
+} from './coding-response-candidate.util';
 import type { CodingItemVersionRow } from './coding-item-builder.service';
+import { getBaseCodingSourceKeys, getCodingDependencyVariables, mergeCodingVariableMaps } from './coding-dependency-variables.util';
 
 type RawNumericValue = number | string | null;
 
@@ -52,8 +60,21 @@ export interface ResponseFilterOptions {
   considerOnly?: boolean;
   validCodingVariablesOnly?: boolean;
   givenResponsesOnly?: boolean;
+  includePartlyDisplayed?: boolean;
   manualCodingCandidatesOnly?: boolean;
+  deriveErrorManualCodingPairKeys?: string[];
 }
+
+const VERSIONED_EXPORT_MISSING_STATUSES = [
+  statusStringToNumber('UNSET') ?? 0,
+  statusStringToNumber('NOT_REACHED') ?? 1,
+  statusStringToNumber('DISPLAYED') ?? 2,
+  statusStringToNumber('INVALID') ?? 7,
+  statusStringToNumber('CODING_ERROR') ?? 9,
+  statusStringToNumber('PARTLY_DISPLAYED') ?? 10
+];
+
+const DERIVE_PENDING_STATUS = statusStringToNumber('DERIVE_PENDING') ?? 11;
 
 /**
  * Service responsible for filtering and validating responses for coding eligibility.
@@ -149,14 +170,70 @@ export class CodingResponseFilterService {
     // Establish base conditions
     if (version) {
       const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
-      queryBuilder.where(
-        `${effectiveStatusExpression} NOT IN (:...statisticsIgnoredStatuses)`,
-        { statisticsIgnoredStatuses: STATISTICS_IGNORED_STATUSES }
-      );
+      const defaultIgnoredStatuses = version === 'v1' ?
+        [3, 10] :
+        STATISTICS_IGNORED_STATUSES;
+      const statisticsCondition =
+        `${effectiveStatusExpression} NOT IN (:...statisticsIgnoredStatuses)`;
+      if (options.includePartlyDisplayed) {
+        queryBuilder.where(new Brackets(qb => {
+          qb.where(statisticsCondition, {
+            statisticsIgnoredStatuses: defaultIgnoredStatuses
+          }).orWhere(
+            'response.status_v1 IN (:...versionedExportVisibleStatuses)',
+            {
+              versionedExportVisibleStatuses: [
+                ...VERSIONED_EXPORT_MISSING_STATUSES,
+                DERIVE_PENDING_STATUS
+              ]
+            }
+          );
+          if (version === 'v2' || version === 'v3') {
+            qb.orWhere('response.status_v2 = :derivePendingStatus', {
+              derivePendingStatus: DERIVE_PENDING_STATUS
+            });
+          }
+          if (version === 'v3') {
+            qb.orWhere(
+              'response.status_v3 IN (:...versionedExportVisibleStatuses)',
+              {
+                versionedExportVisibleStatuses: [
+                  ...VERSIONED_EXPORT_MISSING_STATUSES,
+                  DERIVE_PENDING_STATUS
+                ]
+              }
+            );
+          }
+        }));
+      } else {
+        queryBuilder.where(statisticsCondition, {
+          statisticsIgnoredStatuses: defaultIgnoredStatuses
+        });
+      }
     } else if (options.manualCodingCandidatesOnly) {
-      queryBuilder.where('response.status_v1 IN (:...statuses)', {
-        statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
-      });
+      const deriveErrorManualCodingPairKeys =
+        options.deriveErrorManualCodingPairKeys || [];
+      if (deriveErrorManualCodingPairKeys.length === 0) {
+        queryBuilder.where('response.status_v1 IN (:...statuses)', {
+          statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+        });
+      } else {
+        queryBuilder.where(new Brackets(qb => {
+          qb.where('response.status_v1 IN (:...statuses)', {
+            statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
+          }).orWhere(
+            `response.status_v1 = :deriveErrorStatus
+              AND ${getCodingResponseValueCandidateSql('response')}
+              AND ${getCodingVariableIdCandidateSql('response')}
+              AND CONCAT(UPPER(unit.name), CHR(31), response.variableid)
+                IN (:...deriveErrorManualCodingPairKeys)`,
+            {
+              deriveErrorStatus: DERIVE_ERROR_STATUS,
+              deriveErrorManualCodingPairKeys
+            }
+          );
+        }));
+      }
     } else if (options.statuses?.length) {
       queryBuilder.where('response.status_v1 IN (:...statuses)', {
         statuses: options.statuses
@@ -176,30 +253,86 @@ export class CodingResponseFilterService {
     }
 
     if (options.givenResponsesOnly) {
+      const partlyDisplayedStatuses = options.includePartlyDisplayed ?
+        [statusStringToNumber('PARTLY_DISPLAYED') ?? 10] :
+        [];
       const givenStatuses = [
-        statusStringToNumber('NOT_REACHED') || 1,
-        statusStringToNumber('DISPLAYED') || 2,
-        statusStringToNumber('VALUE_CHANGED') || 3
+        statusStringToNumber('UNSET') ?? 0,
+        statusStringToNumber('NOT_REACHED') ?? 1,
+        statusStringToNumber('DISPLAYED') ?? 2,
+        statusStringToNumber('VALUE_CHANGED') ?? 3,
+        statusStringToNumber('INVALID') ?? 7,
+        statusStringToNumber('CODING_ERROR') ?? 9,
+        ...partlyDisplayedStatuses
       ];
-      queryBuilder.andWhere('response.status IN (:...givenStatuses)', { givenStatuses });
+      queryBuilder.andWhere(new Brackets(qb => {
+        qb.where('response.status IN (:...givenStatuses)', { givenStatuses });
+        if (version) {
+          qb.orWhere('response.status_v1 = :derivePendingStatus', {
+            derivePendingStatus: DERIVE_PENDING_STATUS
+          });
+        }
+        if (version === 'v2' || version === 'v3') {
+          qb.orWhere('response.status_v2 = :derivePendingStatus', {
+            derivePendingStatus: DERIVE_PENDING_STATUS
+          });
+        }
+        if (version === 'v3') {
+          qb.orWhere('response.status_v3 = :derivePendingStatus', {
+            derivePendingStatus: DERIVE_PENDING_STATUS
+          });
+        }
+      }));
     }
 
     const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     applyResolvedExclusionsToQuery(queryBuilder, { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits });
 
     if (options.validCodingVariablesOnly) {
-      const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+      const unitVariables = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+      const derivedVariablesBySource = version ?
+        await this.workspaceFilesService.getDerivedVariablesBySourceMap(workspaceId) :
+        new Map<string, Set<string>>();
+      const unitVariableMap = version ? mergeCodingVariableMaps(
+        unitVariables,
+        getCodingDependencyVariables(derivedVariablesBySource)
+      ) : unitVariables;
       const validVariablePairKeys = Array.from(unitVariableMap.entries()).flatMap(([unitName, variableIds]) => (
-        Array.from(variableIds).map(variableId => this.toVariablePairKey(unitName, variableId))
+        Array.from(variableIds).map(variableId => this.toVariablePairKey(unitName.toUpperCase(), variableId))
       ));
 
       if (validVariablePairKeys.length === 0) {
         queryBuilder.andWhere('1 = 0');
       } else {
         queryBuilder.andWhere(
-          'CONCAT(unit.name, CHR(31), response.variableid) IN (:...validVariablePairKeys)',
+          'CONCAT(UPPER(unit.name), CHR(31), response.variableid) IN (:...validVariablePairKeys)',
           { validVariablePairKeys }
         );
+      }
+      const baseSourceKeys = getBaseCodingSourceKeys(derivedVariablesBySource);
+      if (baseSourceKeys.length > 0) {
+        // Mirror the calculation's placeholder exclusion, including placeholders
+        // whose v3 UNSET status was cleared by the regular run-2 cleanup.
+        queryBuilder.andWhere(`NOT (
+          response.is_autocoder_generated IS TRUE
+          AND COALESCE(response.subform, '') = ''
+          AND response.autocoder_invalidated_version IS NULL
+          AND (response.value IS NULL OR response.value !~ '[^[:space:]]')
+          AND response.status_v1 IS NOT DISTINCT FROM 0
+          AND COALESCE(response.status_v2, 0) = 0
+          AND COALESCE(response.status_v3, 0) = 0
+          AND response.code_v1 IS NULL AND response.score_v1 IS NULL
+          AND response.code_v2 IS NULL AND response.score_v2 IS NULL
+          AND response.code_v3 IS NULL AND response.score_v3 IS NULL
+          AND CONCAT(UPPER(unit.name), CHR(31), UPPER(response.variableid)) IN (:...baseSourceKeys)
+          AND EXISTS (
+            SELECT 1 FROM response imported_source
+            WHERE imported_source.unitid = response.unitid
+              AND UPPER(imported_source.variableid) = UPPER(response.variableid)
+              AND imported_source.is_autocoder_generated IS NOT TRUE
+              AND imported_source.status IN (1, 2, 3)
+          )
+        )`, { baseSourceKeys });
       }
     }
 

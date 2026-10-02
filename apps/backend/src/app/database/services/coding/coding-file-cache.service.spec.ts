@@ -219,4 +219,43 @@ describe('CodingFileCacheService', () => {
     expect(pageMap.get('TEXT_FIELD_1')).toBe('0');
     expect(pageMap.get('VAR_ALIAS')).toBe('0');
   });
+
+  it('deduplicates concurrent VOUD and VOCS reads for the same unit', async () => {
+    const repository = createRepository({
+      'UNIT.VOUD': createFile('UNIT.VOUD', {
+        pages: [{ sections: [{ elements: [{ id: 'VAR' }] }] }]
+      }),
+      'UNIT.VOCS': createFile('UNIT.VOCS', {
+        variableCodings: [{ id: 'VAR', page: '1' }]
+      })
+    });
+    const service = new CodingFileCacheService(repository);
+
+    const [first, second, third] = await Promise.all([
+      service.loadVoudData('UNIT', 1),
+      service.loadVoudData('UNIT', 1),
+      service.loadVoudData('UNIT', 1)
+    ]);
+
+    expect(first).toBe(second);
+    expect(second).toBe(third);
+    expect(repository.findOne).toHaveBeenCalledTimes(2);
+  });
+
+  it('deduplicates concurrent VOCS exclusion reads for the same unit', async () => {
+    const repository = createRepository({
+      'UNIT.VOCS': createFile('UNIT.VOCS', {
+        variableCodings: [{ id: 'VAR', sourceType: 'BASE_NO_VALUE' }]
+      })
+    });
+    const service = new CodingFileCacheService(repository);
+
+    const [first, second] = await Promise.all([
+      service.loadVocsExclusions('UNIT', 1),
+      service.loadVocsExclusions('UNIT', 1)
+    ]);
+
+    expect(first).toBe(second);
+    expect(repository.findOne).toHaveBeenCalledTimes(1);
+  });
 });

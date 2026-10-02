@@ -161,14 +161,87 @@ describe('CodingManagementService', () => {
       expect(executionServiceMock.createCodingStatisticsJob).not.toHaveBeenCalled();
     });
 
-    it('should handle failure to create job', () => {
-      executionServiceMock.createCodingStatisticsJob.mockReturnValue(throwError(() => new Error('Failed')));
-      // Expect it to call handleNoJobIdStatistics -> getCodingStatistics
-      statisticsServiceMock.getCodingStatistics.mockReturnValue(of(mockCodingStatistics));
+    it('should not start duplicate statistics jobs for the same workspace and version while one is active', () => {
+      const jobStart$ = new Subject<{ jobId: string; message: string }>();
+      executionServiceMock.createCodingStatisticsJob.mockReturnValue(jobStart$);
+
+      service.fetchCodingStatistics('v1');
+      service.fetchCodingStatistics('v1');
+
+      expect(executionServiceMock.createCodingStatisticsJob).toHaveBeenCalledTimes(1);
+    });
+
+    it('should cancel view-bound statistics polling without cancelling other background operations', fakeAsync(() => {
+      const jobId = 'statistics-job-1';
+      const setJobRunningSpy = jest.spyOn(codingBackgroundJobsService, 'setJobRunning');
+      executionServiceMock.createCodingStatisticsJob.mockReturnValue(of({ jobId, message: 'test' }));
+      executionServiceMock.getCodingStatisticsJobStatus.mockReturnValue(of({
+        status: 'processing',
+        progress: 50,
+        result: undefined
+      } as CodingJobStatus));
+      let isLoading: boolean | undefined;
+      service.isLoadingStatistics$.subscribe(value => {
+        isLoading = value;
+      });
 
       service.fetchCodingStatistics('v1');
 
-      expect(statisticsServiceMock.getCodingStatistics).toHaveBeenCalledWith(1, 'v1');
+      tick(0);
+      expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(1);
+      expect(isLoading).toBe(true);
+
+      service.cancelViewBoundStatisticsFetches(1);
+      tick(2000);
+
+      expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(1);
+      expect(isLoading).toBe(false);
+      expect(setJobRunningSpy).not.toHaveBeenCalled();
+    }));
+
+    it('should allow statistics to be fetched again after a view-bound polling cancellation', fakeAsync(() => {
+      const jobId = 'statistics-job-1';
+      executionServiceMock.createCodingStatisticsJob.mockReturnValue(of({ jobId, message: 'test' }));
+      executionServiceMock.getCodingStatisticsJobStatus
+        .mockReturnValueOnce(of({
+          status: 'processing',
+          progress: 50,
+          result: undefined
+        } as CodingJobStatus))
+        .mockReturnValueOnce(of({
+          status: 'completed',
+          progress: 100,
+          result: mockCodingStatistics
+        } as CodingJobStatus));
+
+      service.fetchCodingStatistics('v1');
+      tick(0);
+
+      service.cancelViewBoundStatisticsFetches(1);
+      service.fetchCodingStatistics('v1');
+      tick(0);
+
+      expect(executionServiceMock.createCodingStatisticsJob).toHaveBeenCalledTimes(2);
+      expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(2);
+    }));
+
+    it('should not synchronously fetch statistics when job creation fails', () => {
+      executionServiceMock.createCodingStatisticsJob.mockReturnValue(throwError(() => new Error('Failed')));
+      statisticsServiceMock.getCodingStatistics.mockReturnValue(of(mockCodingStatistics));
+      let isLoading: boolean | undefined;
+      service.isLoadingStatistics$.subscribe(value => {
+        isLoading = value;
+      });
+
+      service.fetchCodingStatistics('v1');
+
+      expect(statisticsServiceMock.getCodingStatistics).not.toHaveBeenCalled();
+      expect(snackBarMock.open).toHaveBeenCalledWith(
+        'coding-management.loading.creating-coding-statistics',
+        'close',
+        { duration: 5000, panelClass: ['error-snackbar'] }
+      );
+      expect(isLoading).toBe(false);
     });
   });
 
@@ -307,7 +380,7 @@ describe('CodingManagementService', () => {
       global.URL.createObjectURL = jest.fn();
       global.URL.revokeObjectURL = jest.fn();
 
-      await service.downloadCodingResults('v1', 'csv', true, false);
+      await service.downloadCodingResults('v1', 'csv', 7, true, false);
 
       expect(exportServiceMock.startExportJob).toHaveBeenCalledWith(
         1,
@@ -318,8 +391,39 @@ describe('CodingManagementService', () => {
         undefined,
         false,
         false,
+        false,
+        7
+      );
+    });
+
+    it('should show the profile validation reason when a v1 export job fails', async () => {
+      const validationError = "Missing profile 7 must define 'mnr'";
+      exportServiceMock.startExportJob.mockReturnValue(of({
+        jobId: 'job-1',
+        message: 'started'
+      }));
+      exportServiceMock.getExportJobStatus.mockReturnValue(of({
+        status: 'failed',
+        progress: 0,
+        error: validationError
+      }) as never);
+
+      await service.downloadCodingResults(
+        'v1',
+        'csv',
+        7,
+        false,
+        true,
+        false,
         false
       );
+
+      expect(snackBarMock.open).toHaveBeenCalledWith(
+        `coding-management.download-dialog.download-failed: ${validationError}`,
+        'close',
+        { duration: 5000, panelClass: ['error-snackbar'] }
+      );
+      expect(exportServiceMock.downloadExportFile).not.toHaveBeenCalled();
     });
 
     it('should pass GeoGebra package option to background export job', async () => {
@@ -331,7 +435,7 @@ describe('CodingManagementService', () => {
       global.URL.createObjectURL = jest.fn();
       global.URL.revokeObjectURL = jest.fn();
 
-      await service.downloadCodingResults('v2', 'excel', false, true, true);
+      await service.downloadCodingResults('v2', 'excel', 7, false, true, true);
 
       expect(exportServiceMock.startExportJob).toHaveBeenCalledWith(
         1,
@@ -342,7 +446,8 @@ describe('CodingManagementService', () => {
         undefined,
         true,
         true,
-        false
+        false,
+        7
       );
     });
 
@@ -355,7 +460,7 @@ describe('CodingManagementService', () => {
       global.URL.createObjectURL = jest.fn();
       global.URL.revokeObjectURL = jest.fn();
 
-      await service.downloadCodingResults('v2', 'csv', false, true, false, true);
+      await service.downloadCodingResults('v2', 'csv', 7, false, true, false, true);
 
       expect(exportServiceMock.startExportJob).toHaveBeenCalledWith(
         1,
@@ -366,7 +471,8 @@ describe('CodingManagementService', () => {
         undefined,
         true,
         false,
-        true
+        true,
+        7
       );
     });
 
@@ -375,7 +481,7 @@ describe('CodingManagementService', () => {
       exportServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'processing', progress: 50 }) as never);
       exportServiceMock.cancelExportJob.mockReturnValue(of({ success: true, message: 'cancelled' }));
 
-      const downloadPromise = service.downloadCodingResults('v2', 'csv', false, true);
+      const downloadPromise = service.downloadCodingResults('v2', 'csv', 7, false, true);
       await new Promise(resolve => { setTimeout(resolve, 20); });
 
       service.cancelCodingResultsDownload();
@@ -390,7 +496,7 @@ describe('CodingManagementService', () => {
       exportServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'processing', progress: 50 }) as never);
       exportServiceMock.cancelExportJob.mockReturnValue(throwError(() => new Error('cancel failed')));
 
-      const downloadPromise = service.downloadCodingResults('v2', 'csv', false, true);
+      const downloadPromise = service.downloadCodingResults('v2', 'csv', 7, false, true);
       await new Promise(resolve => { setTimeout(resolve, 20); });
 
       service.cancelCodingResultsDownload();
@@ -420,7 +526,7 @@ describe('CodingManagementService', () => {
       exportServiceMock.startExportJob.mockReturnValue(of({ jobId: 'job-1', message: 'started' }));
       exportServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'cancelled', progress: 50 }) as never);
 
-      await service.downloadCodingResults('v2', 'csv', false, true);
+      await service.downloadCodingResults('v2', 'csv', 7, false, true);
 
       expect(snackBarMock.open).toHaveBeenCalledWith(
         'coding-management.download-dialog.download-cancelled',
@@ -446,7 +552,7 @@ describe('CodingManagementService', () => {
       global.URL.createObjectURL = jest.fn();
       global.URL.revokeObjectURL = jest.fn();
 
-      const downloadPromise = service.downloadCodingResults('v2', 'csv', false, true);
+      const downloadPromise = service.downloadCodingResults('v2', 'csv', 7, false, true);
       await new Promise(resolve => { setTimeout(resolve, 20); });
 
       expect(exportServiceMock.cancelExportJob).toHaveBeenCalledWith(1, 'job-1');

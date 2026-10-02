@@ -1,0 +1,29 @@
+{
+  "datasetId": "two-person-multipage",
+  "description": "Synthetic live replay dataset with two people, two pages and an aliased unit.",
+  "files": {
+    "booklet": "BOOKLET-REPLAY.xml",
+    "unit": "UNIT-REPLAY.xml",
+    "unitDefinition": "UNIT-REPLAY.VOUD",
+    "itemMetadata": "UNIT-REPLAY-ALIAS.VOMD",
+    "responses": "responses.csv"
+  },
+  "personA": {
+    "group": "REPLAY-GROUP",
+    "login": "replay-login-a",
+    "code": "replay-code-a",
+    "booklet": "BOOKLET-REPLAY",
+    "connector": "replay-login-a@replay-code-a@REPLAY-GROUP@BOOKLET-REPLAY"
+  },
+  "personB": {
+    "group": "REPLAY-GROUP",
+    "login": "replay-login-b",
+    "code": "replay-code-b",
+    "booklet": "BOOKLET-REPLAY",
+    "connector": "replay-login-b@replay-code-b@REPLAY-GROUP@BOOKLET-REPLAY"
+  },
+  "unit": {
+    "name": "UNIT-REPLAY",
+    "alias": "UNIT-REPLAY-ALIAS"
+  }
+}

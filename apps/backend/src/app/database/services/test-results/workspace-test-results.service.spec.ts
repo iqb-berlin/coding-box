@@ -26,6 +26,7 @@ import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
+import { ReplayResourceNotFoundError } from './replay-resource-not-found.error';
 
 const mockQueryBuilder = () => ({
   select: jest.fn().mockReturnThis(),
@@ -41,6 +42,7 @@ const mockQueryBuilder = () => ({
   getRawMany: jest.fn().mockResolvedValue([]),
   getCount: jest.fn().mockResolvedValue(0),
   getMany: jest.fn().mockResolvedValue([]),
+  getRawAndEntities: jest.fn().mockResolvedValue({ entities: [], raw: [] }),
   orderBy: jest.fn().mockReturnThis(),
   skip: jest.fn().mockReturnThis(),
   take: jest.fn().mockReturnThis(),
@@ -80,6 +82,7 @@ describe('WorkspaceTestResultsService', () => {
   let personsRepository: Repository<Persons>;
   let unitRepository: Repository<Unit>;
   let bookletRepository: Repository<Booklet>;
+  let bookletInfoRepository: Repository<BookletInfo>;
   let responseRepository: Repository<ResponseEntity>;
   let sessionRepository: Repository<Session>;
   let bookletLogRepository: Repository<BookletLog>;
@@ -97,6 +100,7 @@ describe('WorkspaceTestResultsService', () => {
     set: jest.Mock;
     delete: jest.Mock;
     deleteByPattern: jest.Mock;
+    incr: jest.Mock;
   };
   let dataSource: DataSource;
 
@@ -147,11 +151,13 @@ describe('WorkspaceTestResultsService', () => {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue(undefined),
       delete: jest.fn().mockResolvedValue(undefined),
-      deleteByPattern: jest.fn().mockResolvedValue(undefined)
+      deleteByPattern: jest.fn().mockResolvedValue(undefined),
+      incr: jest.fn().mockResolvedValue(1)
     };
 
     personsRepository = {
       count: jest.fn(),
+      findOne: jest.fn().mockResolvedValue({ id: 11 }),
       createQueryBuilder: jest.fn(() => mockQueryBuilder())
     } as unknown as Repository<Persons>;
 
@@ -160,8 +166,13 @@ describe('WorkspaceTestResultsService', () => {
     } as unknown as Repository<Unit>;
 
     bookletRepository = {
+      findOne: jest.fn().mockResolvedValue({ id: 31 }),
       createQueryBuilder: jest.fn(() => mockQueryBuilder())
     } as unknown as Repository<Booklet>;
+
+    bookletInfoRepository = {
+      findOne: jest.fn().mockResolvedValue({ id: 21 })
+    } as unknown as Repository<BookletInfo>;
 
     responseRepository = {
       createQueryBuilder: jest.fn(() => mockQueryBuilder()),
@@ -212,7 +223,7 @@ describe('WorkspaceTestResultsService', () => {
       unitRepository,
       bookletRepository,
       responseRepository,
-      {} as unknown as Repository<BookletInfo>,
+      bookletInfoRepository,
       bookletLogRepository,
       sessionRepository,
       unitLogRepository,
@@ -716,7 +727,9 @@ describe('WorkspaceTestResultsService', () => {
         .mockResolvedValueOnce([{ v: 'Kurz' }, { v: 'Lang' }])
         .mockResolvedValueOnce([{ v: 'complete' }, { v: 'incomplete' }]);
 
-      const result = await service.findFlatResponseFilterOptions(1, {});
+      const result = await service.findFlatResponseFilterOptions(1, {
+        responseValue: 'needle'
+      });
 
       expect(qb.where).toHaveBeenCalledWith(
         'person.workspace_id = :workspaceId',
@@ -732,6 +745,10 @@ describe('WorkspaceTestResultsService', () => {
       expect(qb.andWhere).toHaveBeenCalledWith('session.os IS NOT NULL');
       expect(qb.andWhere).toHaveBeenCalledWith('session.screen IS NOT NULL');
       expect(qb.andWhere).toHaveBeenCalledWith('session.id IS NOT NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'LEFT(response.value, 2000) ILIKE :responseValue',
+        { responseValue: '%needle%' }
+      );
 
       expect(dataSource.query).toHaveBeenCalledTimes(2);
       expect((dataSource.query as jest.Mock).mock.calls[0][0]).toContain(
@@ -1120,6 +1137,61 @@ describe('WorkspaceTestResultsService', () => {
       );
     });
 
+    it('should return the effective v2 status while preserving raw version statuses', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(1);
+      qb.getRawAndEntities.mockResolvedValue({
+        entities: [{
+          id: 1,
+          variableid: '01',
+          value: 'answer',
+          status: 5,
+          status_v1: 8,
+          status_v2: null,
+          status_v3: null,
+          code_v1: null,
+          code_v2: null,
+          code_v3: null,
+          score_v1: null,
+          score_v2: null,
+          score_v3: null,
+          unit: {
+            id: 2,
+            name: 'Unit1',
+            alias: null,
+            booklet: {
+              id: 3,
+              bookletinfo: { name: 'Booklet1' },
+              person: {
+                id: 4,
+                login: 'login',
+                code: 'code',
+                group: 'group'
+              }
+            }
+          }
+        }],
+        raw: [{ effective_coding_status_output: '8' }]
+      });
+
+      const result = await service.searchResponses(
+        1,
+        { version: 'v2', responseSource: 'all' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.addSelect).toHaveBeenCalledWith(
+        getEffectiveCodingStatusExpression('v2'),
+        'effective_coding_status_output'
+      );
+      expect(result.data[0]).toMatchObject({
+        codedStatus: 'CODING_INCOMPLETE',
+        status_v1: 'CODING_INCOMPLETE',
+        status_v2: 'UNSET'
+      });
+    });
+
     it('should apply DERIVE_ERROR codedStatus filters numerically', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
@@ -1443,6 +1515,269 @@ describe('WorkspaceTestResultsService', () => {
       expect(qb.andWhere).toHaveBeenCalledWith('person.code ILIKE :code', { code: '%abc%' });
     });
 
+    it('should filter variable IDs exactly when wrapped in double quotes', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        response: ' "01_unique" '
+      });
+
+      [dataQb, countQb].forEach(qb => {
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'LOWER(response.variableid) = LOWER(:responseExact)',
+          { responseExact: '01_unique' }
+        );
+        expect(qb.andWhere).not.toHaveBeenCalledWith(
+          'response.variableid ILIKE :response',
+          expect.anything()
+        );
+      });
+    });
+
+    it('should keep the default variable ID contains search', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        response: '01'
+      });
+
+      [dataQb, countQb].forEach(qb => {
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'response.variableid ILIKE :response',
+          { response: '%01%' }
+        );
+      });
+    });
+
+    it('should apply regex filters identically to data and count queries', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        code: '^P-',
+        group: '^G[12]$',
+        login: 'user-[0-9]+',
+        booklet: 'Booklet-[AB]',
+        unit: '^Unit',
+        response: '^VAR_\\d+$',
+        regexSearch: true
+      });
+
+      [dataQb, countQb].forEach(qb => {
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'person.code ~ :codeRegex',
+          { codeRegex: '^P-' }
+        );
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'person.group ~ :groupRegex',
+          { groupRegex: '^G[12]$' }
+        );
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'person.login ~ :loginRegex',
+          { loginRegex: 'user-[0-9]+' }
+        );
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'bookletinfo.name ~ :bookletRegex',
+          { bookletRegex: 'Booklet-[AB]' }
+        );
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          '(unit.alias ~ :unitRegex OR unit.name ~ :unitRegex)',
+          { unitRegex: '^Unit' }
+        );
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'response.variableid ~ :responseRegex',
+          { responseRegex: '^VAR_\\d+$' }
+        );
+      });
+
+      const queryRunner = (dataSource.createQueryRunner as jest.Mock).mock.results[0].value;
+      expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
+        1,
+        'response',
+        queryRunner
+      );
+      expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
+        2,
+        'response',
+        queryRunner
+      );
+      expect(queryRunner.query).toHaveBeenCalledWith(
+        "SET LOCAL statement_timeout = '3000ms'"
+      );
+      expect(queryRunner.query).toHaveBeenCalledWith(
+        'SELECT \'\'::text ~ $1::text AS "isValid"',
+        ['^P-']
+      );
+      expect(queryRunner.query).toHaveBeenCalledWith(
+        'SELECT \'\'::text ~ $1::text AS "isValid"',
+        ['^VAR_\\d+$']
+      );
+    });
+
+    it('rejects a PostgreSQL-invalid pattern during preflight', async () => {
+      const queryRunner = (dataSource.createQueryRunner as jest.Mock)();
+      queryRunner.query.mockImplementation((sql: string) => {
+        if (sql.startsWith('SELECT')) {
+          return Promise.reject(Object.assign(
+            new Error('invalid regular expression: quantifier operand invalid'),
+            { code: '2201B' }
+          ));
+        }
+        return Promise.resolve([]);
+      });
+      (dataSource.createQueryRunner as jest.Mock).mockReturnValue(queryRunner);
+
+      await expect(service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        response: '(?<name>a)',
+        regexSearch: true
+      })).rejects.toMatchObject({
+        response: expect.objectContaining({
+          code: 'INVALID_REGEX',
+          field: 'response'
+        })
+      });
+
+      expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
+      expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
+    });
+
+    it('should not apply the regex timeout without a regex text filter', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        regexSearch: true,
+        responseStatus: 'VALUE_CHANGED'
+      });
+
+      expect(dataSource.createQueryRunner).not.toHaveBeenCalled();
+      expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
+        1,
+        'response',
+        undefined
+      );
+      expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
+        2,
+        'response',
+        undefined
+      );
+    });
+
+    it('should apply a timeout and search the displayed response value prefix', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        responseValue: 'needle'
+      });
+
+      const queryRunner = (dataSource.createQueryRunner as jest.Mock)
+        .mock.results[0].value;
+      expect(queryRunner.query).toHaveBeenCalledWith(
+        "SET LOCAL statement_timeout = '15000ms'"
+      );
+      expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
+        1,
+        'response',
+        queryRunner
+      );
+      [dataQb, countQb].forEach(qb => {
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          'LEFT(response.value, 2000) ILIKE :responseValue',
+          { responseValue: '%needle%' }
+        );
+        expect(qb.andWhere).not.toHaveBeenCalledWith(
+          expect.stringContaining('LENGTH(response.value)'),
+          expect.anything()
+        );
+      });
+      expect(countQb.select).toHaveBeenCalledWith(
+        'COUNT(response.id)',
+        'cnt'
+      );
+    });
+
+    it('should filter tags in the count query without multiplying rows', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        tags: 'review'
+      });
+
+      expect(countQb.leftJoin).not.toHaveBeenCalledWith('unit.tags', 'unitTag');
+      expect(countQb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('FROM unit_tag count_unit_tag'),
+        { tags: '%review%' }
+      );
+      expect(countQb.select).toHaveBeenCalledWith(
+        'COUNT(response.id)',
+        'cnt'
+      );
+    });
+
+    it('should reject overlong regex filters as bad requests', async () => {
+      await expect(service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        response: 'a'.repeat(257),
+        regexSearch: true
+      })).rejects.toThrow('pattern must not exceed 256 characters');
+    });
+
+    it('should convert PostgreSQL regex timeouts into bad request errors', async () => {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      countQb.getRawOne.mockRejectedValue({
+        code: '57014',
+        message: 'canceling statement due to statement timeout'
+      });
+      (responseRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(dataQb)
+        .mockReturnValueOnce(countQb);
+
+      await expect(service.findFlatResponses(1, {
+        page: 1,
+        limit: 10,
+        response: '(a+)+$',
+        regexSearch: true
+      })).rejects.toThrow('Regular expression search timed out');
+    });
+
     it('should not calculate log anomaly summaries for rows by default', async () => {
       const workspaceId = 1;
       const qb = mockQueryBuilder();
@@ -1484,6 +1819,40 @@ describe('WorkspaceTestResultsService', () => {
     });
   });
 
+  describe('findFlatResponseFrequencies', () => {
+    it('should return response-value frequencies as proportions', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getRawMany
+        .mockResolvedValueOnce([{
+          unitKey: 'Unit A',
+          variableId: 'variable-1',
+          total: '10'
+        }])
+        .mockResolvedValueOnce([{
+          unitKey: 'Unit A',
+          variableId: 'variable-1',
+          value: 'answer-a',
+          count: '2'
+        }]);
+
+      const result = await service.findFlatResponseFrequencies(1, [{
+        unitKey: 'Unit A',
+        variableId: 'variable-1',
+        values: ['answer-a']
+      }]);
+
+      expect(result['Unit%20A:variable-1']).toEqual({
+        total: 10,
+        values: [{
+          value: 'answer-a',
+          count: 2,
+          p: 0.2
+        }]
+      });
+    });
+  });
+
   describe('findLogAnomaliesForBooklets', () => {
     const thresholds = {
       longLoadingThresholdMs: 5000,
@@ -1491,6 +1860,239 @@ describe('WorkspaceTestResultsService', () => {
       sessionSpanThresholdMs: 86400000,
       repeatedStartThreshold: 2
     };
+
+    it('should split booklet-scoped log anomaly lookups into batches', async () => {
+      const bookletIds = Array.from({ length: 1001 }, (_, index) => index + 1);
+      const bookletLogQbs: Array<ReturnType<typeof mockQueryBuilder>> = [];
+      const sessionQbs: Array<ReturnType<typeof mockQueryBuilder>> = [];
+      const unitQbs: Array<ReturnType<typeof mockQueryBuilder>> = [];
+      (bookletLogRepository.createQueryBuilder as jest.Mock)
+        .mockImplementation(() => {
+          const qb = mockQueryBuilder();
+          bookletLogQbs.push(qb);
+          return qb;
+        });
+      (sessionRepository.createQueryBuilder as jest.Mock)
+        .mockImplementation(() => {
+          const qb = mockQueryBuilder();
+          sessionQbs.push(qb);
+          return qb;
+        });
+      (unitRepository.createQueryBuilder as jest.Mock)
+        .mockImplementation(() => {
+          const qb = mockQueryBuilder();
+          unitQbs.push(qb);
+          return qb;
+        });
+
+      const serviceWithLogAnomalyLookup =
+        service as unknown as WorkspaceTestResultsServiceWithLogAnomalyLookup;
+      await serviceWithLogAnomalyLookup.findLogAnomaliesForBooklets(
+        bookletIds,
+        thresholds
+      );
+
+      expect(bookletLogQbs).toHaveLength(2);
+      expect(sessionQbs).toHaveLength(2);
+      expect(unitQbs).toHaveLength(2);
+      expect(bookletLogQbs[0].where.mock.calls[0][1].bookletIds)
+        .toHaveLength(1000);
+      expect(bookletLogQbs[1].where.mock.calls[0][1].bookletIds)
+        .toEqual([1001]);
+    });
+
+    it('should fully process each booklet batch before starting the next', async () => {
+      const bookletIds = Array.from({ length: 2001 }, (_, index) => index + 1);
+      let resolveFirstBookletBatch: ((rows: BookletLog[]) => void) | undefined;
+      const firstBookletBatch = new Promise<BookletLog[]>(resolve => {
+        resolveFirstBookletBatch = resolve;
+      });
+      const bookletLogQbs: Array<ReturnType<typeof mockQueryBuilder>> = [];
+      const sessionQbs: Array<ReturnType<typeof mockQueryBuilder>> = [];
+      const unitQbs: Array<ReturnType<typeof mockQueryBuilder>> = [];
+
+      (bookletLogRepository.createQueryBuilder as jest.Mock)
+        .mockImplementation(() => {
+          const qb = mockQueryBuilder();
+          if (bookletLogQbs.length === 0) {
+            qb.getMany.mockReturnValue(firstBookletBatch);
+          }
+          bookletLogQbs.push(qb);
+          return qb;
+        });
+      (sessionRepository.createQueryBuilder as jest.Mock)
+        .mockImplementation(() => {
+          const qb = mockQueryBuilder();
+          sessionQbs.push(qb);
+          return qb;
+        });
+      (unitRepository.createQueryBuilder as jest.Mock)
+        .mockImplementation(() => {
+          const qb = mockQueryBuilder();
+          unitQbs.push(qb);
+          return qb;
+        });
+
+      const serviceWithLogAnomalyLookup =
+        service as unknown as WorkspaceTestResultsServiceWithLogAnomalyLookup;
+      const resultPromise =
+        serviceWithLogAnomalyLookup.findLogAnomaliesForBooklets(
+          bookletIds,
+          thresholds
+        );
+      await Promise.resolve();
+
+      expect(bookletLogQbs).toHaveLength(1);
+      expect(sessionQbs).toHaveLength(1);
+      expect(unitQbs).toHaveLength(1);
+
+      resolveFirstBookletBatch?.([]);
+      await resultPromise;
+
+      expect(bookletLogQbs).toHaveLength(3);
+      expect(sessionQbs).toHaveLength(3);
+      expect(unitQbs).toHaveLength(3);
+      expect(bookletLogQbs[2].where.mock.calls[0][1].bookletIds)
+        .toEqual([2001]);
+    });
+
+    it('should stop after a failed batch and log its context', async () => {
+      const bookletIds = Array.from({ length: 2001 }, (_, index) => index + 1);
+      const failure = new Error('database unavailable');
+      const bookletLogQbs: Array<ReturnType<typeof mockQueryBuilder>> = [];
+      const loggerError = jest.mocked(Logger.prototype.error);
+      loggerError.mockClear();
+
+      (bookletLogRepository.createQueryBuilder as jest.Mock)
+        .mockImplementation(() => {
+          const qb = mockQueryBuilder();
+          if (bookletLogQbs.length === 1) {
+            qb.getMany.mockRejectedValue(failure);
+          }
+          bookletLogQbs.push(qb);
+          return qb;
+        });
+
+      const serviceWithLogAnomalyLookup =
+        service as unknown as WorkspaceTestResultsServiceWithLogAnomalyLookup;
+      await expect(
+        serviceWithLogAnomalyLookup.findLogAnomaliesForBooklets(
+          bookletIds,
+          thresholds
+        )
+      ).rejects.toBe(failure);
+
+      expect(bookletLogQbs).toHaveLength(2);
+      expect(loggerError).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'Log anomaly batch 2/3 failed for 1000 booklet(s) during load-and-analysis'
+        ),
+        expect.any(String)
+      );
+    });
+
+    it('should aggregate the summary from completed batches', async () => {
+      const bookletQb = mockQueryBuilder();
+      const bookletRows = Array.from({ length: 2001 }, (_, index) => ({
+        id: index + 1
+      }));
+      (bookletRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValue(bookletQb);
+      bookletQb.getRawMany.mockResolvedValue(bookletRows);
+
+      const batchService = service as unknown as {
+        findLogAnomaliesForBookletBatch: (
+          bookletIds: number[],
+          logThresholds: typeof thresholds,
+          exclusions?: unknown
+        ) => Promise<Map<number, Array<{
+          code: string;
+          severity: 'critical' | 'warning' | 'info';
+          label: string;
+          evidence: string;
+          count: number;
+        }>>>;
+      };
+      jest.spyOn(batchService, 'findLogAnomaliesForBookletBatch')
+        .mockResolvedValueOnce(new Map([[1, [{
+          code: 'controller_error',
+          severity: 'critical',
+          label: 'Controller-Fehler',
+          evidence: 'error',
+          count: 1
+        }]]]))
+        .mockResolvedValueOnce(new Map([[1001, [{
+          code: 'connection_lost',
+          severity: 'critical',
+          label: 'Verbindung verloren',
+          evidence: 'lost',
+          count: 3
+        }]]]))
+        .mockResolvedValueOnce(new Map([[2001, [{
+          code: 'orphan_logs',
+          severity: 'info',
+          label: 'Logs ohne Start',
+          evidence: 'orphan',
+          count: 1
+        }]]]));
+
+      await expect(service.getLogAnomalySummary(1)).resolves.toEqual({
+        totalBooklets: 2001,
+        affectedBooklets: 3,
+        criticalBooklets: 2,
+        warningBooklets: 0,
+        infoBooklets: 1,
+        totalAnomalyRules: 3,
+        totalAnomalyEvents: 5,
+        byCode: {
+          controller_error: 1,
+          connection_lost: 1,
+          orphan_logs: 1
+        }
+      });
+      expect(batchService.findLogAnomaliesForBookletBatch)
+        .toHaveBeenCalledTimes(3);
+    });
+
+    it('should split unit log lookups into batches', async () => {
+      const bookletLogQb = mockQueryBuilder();
+      const sessionQb = mockQueryBuilder();
+      const unitQb = mockQueryBuilder();
+      const unitLogQbs: Array<ReturnType<typeof mockQueryBuilder>> = [];
+      (bookletLogRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValue(bookletLogQb);
+      (sessionRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValue(sessionQb);
+      (unitRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValue(unitQb);
+      (unitLogRepository.createQueryBuilder as jest.Mock)
+        .mockImplementation(() => {
+          const qb = mockQueryBuilder();
+          unitLogQbs.push(qb);
+          return qb;
+        });
+      unitQb.getMany.mockResolvedValue(
+        Array.from({ length: 1001 }, (_, index) => ({
+          id: index + 1,
+          bookletid: 1,
+          name: `unit-${index + 1}.xml`,
+          alias: `unit-${index + 1}`
+        }))
+      );
+
+      const serviceWithLogAnomalyLookup =
+        service as unknown as WorkspaceTestResultsServiceWithLogAnomalyLookup;
+      await serviceWithLogAnomalyLookup.findLogAnomaliesForBooklets(
+        [1],
+        thresholds
+      );
+
+      expect(unitLogQbs).toHaveLength(2);
+      expect(unitLogQbs[0].where.mock.calls[0][1].unitIds)
+        .toHaveLength(1000);
+      expect(unitLogQbs[1].where.mock.calls[0][1].unitIds)
+        .toEqual([1001]);
+    });
 
     it('should report long loading from unit STARTED/ENDED logs', async () => {
       const bookletLogQb = mockQueryBuilder();
@@ -1734,6 +2336,19 @@ describe('WorkspaceTestResultsService', () => {
   });
 
   describe('findUnitResponse', () => {
+    const expectReplayError = async (
+      promise: Promise<unknown>,
+      code: string
+    ): Promise<void> => {
+      try {
+        await promise;
+        throw new Error('Expected ReplayResourceNotFoundError');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ReplayResourceNotFoundError);
+        expect((error as ReplayResourceNotFoundError).code).toBe(code);
+      }
+    };
+
     it('returns no replay responses for an ignored booklet without looking up the unit', async () => {
       (workspaceExclusionService.resolveExclusionsForQueries as jest.Mock).mockResolvedValue({
         globalIgnoredUnits: [],
@@ -1751,7 +2366,7 @@ describe('WorkspaceTestResultsService', () => {
       expect(unitRepository.createQueryBuilder).not.toHaveBeenCalled();
     });
 
-    it('should look up replay units by alias first', async () => {
+    it('should look up replay units by alias or name in one query and prefer aliases', async () => {
       const unitQb = mockQueryBuilder();
       (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
       unitQb.getRawOne.mockResolvedValue({ unitId: 77 });
@@ -1767,9 +2382,17 @@ describe('WorkspaceTestResultsService', () => {
       );
 
       expect(result).toEqual({ responses: [] });
-      expect(unitQb.andWhere).toHaveBeenCalledWith('unit.alias = :unitId', {
-        unitId: 'unit-original-id'
-      });
+      expect(unitQb.andWhere).toHaveBeenCalledWith(
+        '(unit.alias = :unitId OR unit.name = :unitId)',
+        {
+          unitId: 'unit-original-id'
+        }
+      );
+      expect(unitQb.orderBy).toHaveBeenCalledWith(
+        'CASE WHEN unit.alias = :unitId THEN 0 ELSE 1 END',
+        'ASC'
+      );
+      expect(unitQb.limit).toHaveBeenCalledWith(1);
       expect(unitRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
     });
 
@@ -1799,14 +2422,10 @@ describe('WorkspaceTestResultsService', () => {
       });
     });
 
-    it('should fall back to visible unit name when alias lookup misses', async () => {
-      const aliasQb = mockQueryBuilder();
-      const nameQb = mockQueryBuilder();
-      (unitRepository.createQueryBuilder as jest.Mock)
-        .mockReturnValueOnce(aliasQb)
-        .mockReturnValueOnce(nameQb);
-      aliasQb.getRawOne.mockResolvedValue(null);
-      nameQb.getRawOne.mockResolvedValue({ unitId: 77 });
+    it('should accept a visible unit name when no alias matches', async () => {
+      const unitQb = mockQueryBuilder();
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      unitQb.getRawOne.mockResolvedValue({ unitId: 77 });
 
       const responseQb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseQb);
@@ -1819,12 +2438,63 @@ describe('WorkspaceTestResultsService', () => {
       );
 
       expect(result).toEqual({ responses: [] });
-      expect(aliasQb.andWhere).toHaveBeenCalledWith('unit.alias = :unitId', {
-        unitId: 'unit-visible-id'
-      });
-      expect(nameQb.andWhere).toHaveBeenCalledWith('unit.name = :unitId', {
-        unitId: 'unit-visible-id'
-      });
+      expect(unitQb.andWhere).toHaveBeenCalledWith(
+        '(unit.alias = :unitId OR unit.name = :unitId)',
+        {
+          unitId: 'unit-visible-id'
+        }
+      );
+      expect(unitRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
+    });
+
+    it('should type a missing replay person', async () => {
+      (personsRepository.findOne as jest.Mock).mockResolvedValueOnce(null);
+
+      await expectReplayError(
+        service.findUnitResponse(
+          1,
+          'login-a@code-a@group-a@booklet-a',
+          'missing-unit'
+        ),
+        'REPLAY_PERSON_NOT_FOUND'
+      );
+    });
+
+    it('should type a missing replay booklet definition', async () => {
+      (bookletInfoRepository.findOne as jest.Mock).mockResolvedValueOnce(null);
+
+      await expectReplayError(
+        service.findUnitResponse(
+          1,
+          'login-a@code-a@group-a@booklet-a',
+          'missing-unit'
+        ),
+        'REPLAY_BOOKLET_NOT_FOUND'
+      );
+    });
+
+    it('should type a missing person-booklet assignment', async () => {
+      (bookletRepository.findOne as jest.Mock).mockResolvedValueOnce(null);
+
+      await expectReplayError(
+        service.findUnitResponse(
+          1,
+          'login-a@code-a@group-a@booklet-a',
+          'missing-unit'
+        ),
+        'REPLAY_BOOKLET_NOT_FOUND'
+      );
+    });
+
+    it('should type a missing replay unit', async () => {
+      await expectReplayError(
+        service.findUnitResponse(
+          1,
+          'login-a@code-a@group-a@booklet-a',
+          'missing-unit'
+        ),
+        'REPLAY_UNIT_NOT_FOUND'
+      );
     });
   });
 
@@ -2048,6 +2718,8 @@ describe('WorkspaceTestResultsService', () => {
       expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
       expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`flat-frequencies-${workspaceId}-*`);
+      expect(cacheService.incr).toHaveBeenCalledWith(`coding_readiness:v2:version:${workspaceId}`);
+      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`coding_readiness:v2:${workspaceId}:*`);
     });
 
     it('deleteUnit should invalidate cache', async () => {
@@ -2073,6 +2745,8 @@ describe('WorkspaceTestResultsService', () => {
       expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
       expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`flat-frequencies-${workspaceId}-*`);
+      expect(cacheService.incr).toHaveBeenCalledWith(`coding_readiness:v2:version:${workspaceId}`);
+      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`coding_readiness:v2:${workspaceId}:*`);
     });
 
     it('deleteResponse should invalidate cache', async () => {
@@ -2111,6 +2785,8 @@ describe('WorkspaceTestResultsService', () => {
       expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
       expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`flat-frequencies-${workspaceId}-*`);
+      expect(cacheService.incr).toHaveBeenCalledWith(`coding_readiness:v2:version:${workspaceId}`);
+      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`coding_readiness:v2:${workspaceId}:*`);
     });
   });
 

@@ -10,22 +10,24 @@
 
 <!-- Start all button -->
 <div class="actions-container" style="margin-top: 8px;">
-  <button mat-button color="primary" 
-          (click)="startAllValidations()" 
-          [disabled]="isAnyValidationRunning()">
+  <button mat-button color="primary"
+    (click)="startAllValidations()"
+    [disabled]="isAnyValidationRunning()">
     Alle Prüfungen starten
   </button>
 </div>
 
 <!-- Info banner when validations are running -->
-<div class="info-banner" *ngIf="isAnyValidationRunning()">
-  <mat-icon>info</mat-icon>
-  <span>Validierungen laufen im Hintergrund weiter, auch wenn Sie diesen Dialog schließen.</span>
-</div>
+@if (isAnyValidationRunning()) {
+  <div class="info-banner">
+    <mat-icon>info</mat-icon>
+    <span>Validierungen laufen im Hintergrund weiter, auch wenn Sie diesen Dialog schließen.</span>
+  </div>
+}
 
 <mat-dialog-content>
   <mat-accordion multi="true">
-    
+
     <!-- Test Takers Validation -->
     <coding-box-test-takers-validation-panel
       [disabled]="isAnyValidationRunning()">

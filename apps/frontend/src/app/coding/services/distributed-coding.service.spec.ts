@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { DistributedCodingService } from './distributed-coding.service';
 import { SERVER_URL } from '../../injection-tokens';
+import { SUPPRESS_GLOBAL_HTTP_ERROR } from '../../core/interceptors/http-error-context';
 
 describe('DistributedCodingService', () => {
   let service: DistributedCodingService;
@@ -46,6 +47,7 @@ describe('DistributedCodingService', () => {
 
     const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/calculate-distribution`);
     expect(req.request.method).toBe('POST');
+    expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
     req.flush(mockRes);
   });
 
@@ -98,6 +100,7 @@ describe('DistributedCodingService', () => {
 
     const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/create-distributed-jobs`);
     expect(req.request.method).toBe('POST');
+    expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(false);
     expect(req.request.body).not.toHaveProperty('jobDefinitionId');
     req.flush(mockRes);
   });

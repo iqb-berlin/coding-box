@@ -1,5 +1,5 @@
 import { Component, Inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -16,7 +16,6 @@ export type SessionDistributionsDialogData = {
   selector: 'coding-box-session-distributions-dialog',
   standalone: true,
   imports: [
-    CommonModule,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
@@ -29,91 +28,97 @@ export type SessionDistributionsDialogData = {
       <div class="dist-grid">
         <div class="dist-card">
           <div class="dist-title">Browser</div>
-          <ng-container *ngIf="browserItems.length > 0; else emptyState">
-            <div
-              *ngFor="let it of browserItems"
-              class="dist-row"
-              [matTooltip]="getTooltip(it.key, it.count, browserTotal)"
-            >
-              <div class="dist-label">{{ it.key }}</div>
-              <div class="dist-bar">
-                <div
-                  class="dist-bar-fill"
-                  [style.width.%]="getPercent(it.count, browserTotal)"
-                ></div>
-              </div>
-              <div class="dist-value">
-                {{ it.count }}
-                <span class="dist-percent"
-                  >({{ getPercent(it.count, browserTotal) }}%)</span
+          @if (browserItems.length > 0) {
+            @for (it of browserItems; track it) {
+              <div
+                class="dist-row"
+                [matTooltip]="getTooltip(it.key, it.count, browserTotal)"
                 >
+                <div class="dist-label">{{ it.key }}</div>
+                <div class="dist-bar">
+                  <div
+                    class="dist-bar-fill"
+                    [style.width.%]="getPercent(it.count, browserTotal)"
+                  ></div>
+                </div>
+                <div class="dist-value">
+                  {{ it.count }}
+                  <span class="dist-percent"
+                    >({{ getPercent(it.count, browserTotal) }}%)</span
+                    >
+                  </div>
+                </div>
+              }
+            } @else {
+              <div class="dist-empty">Keine Sitzungsdaten</div>
+            }
+          </div>
+
+          <div class="dist-card">
+            <div class="dist-title">OS</div>
+            @if (osItems.length > 0) {
+              @for (it of osItems; track it) {
+                <div
+                  class="dist-row"
+                  [matTooltip]="getTooltip(it.key, it.count, osTotal)"
+                  >
+                  <div class="dist-label">{{ it.key }}</div>
+                  <div class="dist-bar">
+                    <div
+                      class="dist-bar-fill"
+                      [style.width.%]="getPercent(it.count, osTotal)"
+                    ></div>
+                  </div>
+                  <div class="dist-value">
+                    {{ it.count }}
+                    <span class="dist-percent"
+                      >({{ getPercent(it.count, osTotal) }}%)</span
+                      >
+                    </div>
+                  </div>
+                }
+              } @else {
+                <div class="dist-empty">Keine Sitzungsdaten</div>
+              }
+            </div>
+
+            <div class="dist-card">
+              <div class="dist-title">Screen</div>
+              @if (screenItems.length > 0) {
+                @for (it of screenItems; track it) {
+                  <div
+                    class="dist-row"
+                    [matTooltip]="getTooltip(it.key, it.count, screenTotal)"
+                    >
+                    <div class="dist-label">{{ it.key }}</div>
+                    <div class="dist-bar">
+                      <div
+                        class="dist-bar-fill"
+                        [style.width.%]="getPercent(it.count, screenTotal)"
+                      ></div>
+                    </div>
+                    <div class="dist-value">
+                      {{ it.count }}
+                      <span class="dist-percent"
+                        >({{ getPercent(it.count, screenTotal) }}%)</span
+                        >
+                      </div>
+                    </div>
+                  }
+                } @else {
+                  <div class="dist-empty">Keine Sitzungsdaten</div>
+                }
               </div>
             </div>
-          </ng-container>
-        </div>
 
-        <div class="dist-card">
-          <div class="dist-title">OS</div>
-          <ng-container *ngIf="osItems.length > 0; else emptyState">
-            <div
-              *ngFor="let it of osItems"
-              class="dist-row"
-              [matTooltip]="getTooltip(it.key, it.count, osTotal)"
-            >
-              <div class="dist-label">{{ it.key }}</div>
-              <div class="dist-bar">
-                <div
-                  class="dist-bar-fill"
-                  [style.width.%]="getPercent(it.count, osTotal)"
-                ></div>
-              </div>
-              <div class="dist-value">
-                {{ it.count }}
-                <span class="dist-percent"
-                  >({{ getPercent(it.count, osTotal) }}%)</span
-                >
-              </div>
-            </div>
-          </ng-container>
-        </div>
+          </mat-dialog-content>
 
-        <div class="dist-card">
-          <div class="dist-title">Screen</div>
-          <ng-container *ngIf="screenItems.length > 0; else emptyState">
-            <div
-              *ngFor="let it of screenItems"
-              class="dist-row"
-              [matTooltip]="getTooltip(it.key, it.count, screenTotal)"
-            >
-              <div class="dist-label">{{ it.key }}</div>
-              <div class="dist-bar">
-                <div
-                  class="dist-bar-fill"
-                  [style.width.%]="getPercent(it.count, screenTotal)"
-                ></div>
-              </div>
-              <div class="dist-value">
-                {{ it.count }}
-                <span class="dist-percent"
-                  >({{ getPercent(it.count, screenTotal) }}%)</span
-                >
-              </div>
-            </div>
-          </ng-container>
-        </div>
-      </div>
+          <mat-divider></mat-divider>
 
-      <ng-template #emptyState>
-        <div class="dist-empty">Keine Sitzungsdaten</div>
-      </ng-template>
-    </mat-dialog-content>
-
-    <mat-divider></mat-divider>
-
-    <mat-dialog-actions align="end">
-      <button mat-button type="button" mat-dialog-close>Schließen</button>
-    </mat-dialog-actions>
-  `,
+          <mat-dialog-actions align="end">
+            <button mat-button type="button" mat-dialog-close>Schließen</button>
+          </mat-dialog-actions>
+    `,
   styles: [
     `
       .dist-grid {

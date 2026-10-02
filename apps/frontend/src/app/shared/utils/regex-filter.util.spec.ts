@@ -1,4 +1,5 @@
 import {
+  hasInvalidPostgresRegexFilter,
   isRegexPatternValid,
   matchesTextFilter,
   REGEX_FILTER_PATTERN_MAX_LENGTH
@@ -21,5 +22,15 @@ describe('regex-filter.util', () => {
     const pattern = 'a'.repeat(REGEX_FILTER_PATTERN_MAX_LENGTH + 1);
 
     expect(matchesTextFilter(pattern, pattern, true)).toBe(false);
+  });
+
+  it('allows PostgreSQL ARE syntax that JavaScript cannot parse', () => {
+    expect(hasInvalidPostgresRegexFilter('(?i)^abc$', true)).toBe(false);
+  });
+
+  it('rejects oversized PostgreSQL regex filters locally', () => {
+    const pattern = 'a'.repeat(REGEX_FILTER_PATTERN_MAX_LENGTH + 1);
+
+    expect(hasInvalidPostgresRegexFilter(pattern, true)).toBe(true);
   });
 });

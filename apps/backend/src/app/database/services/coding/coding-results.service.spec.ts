@@ -8,54 +8,69 @@ import { CodingFreshnessService } from './coding-freshness.service';
 import { CodingValidationService } from './coding-validation.service';
 import { MissingsProfilesService } from './missings-profiles.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
-
-jest.mock('../workspace/workspace-files.service', () => ({
-  WorkspaceFilesService: jest.fn()
-}));
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import { EmptyResponseSelectionService } from './empty-response-selection.service';
 
 describe('CodingResultsService', () => {
   let service: CodingResultsService;
   let responseRepository: jest.Mocked<Repository<ResponseEntity>>;
   let queryRunner: {
     connect: jest.Mock;
+    query: jest.Mock;
     startTransaction: jest.Mock;
     commitTransaction: jest.Mock;
     rollbackTransaction: jest.Mock;
     release: jest.Mock;
+    isTransactionActive: boolean;
     manager: {
       query: jest.Mock;
       update: jest.Mock;
+      getRepository: jest.Mock;
     };
   };
   let codingJobService: jest.Mocked<CodingJobService>;
   let codingStatisticsService: jest.Mocked<CodingStatisticsService>;
   let codingValidationService: jest.Mocked<Pick<CodingValidationService, 'invalidateIncompleteVariablesCache'>>;
   let codingAnalysisService: jest.Mocked<Pick<CodingAnalysisService, 'invalidateCache'>>;
+  let emptyResponseSelectionService: jest.Mocked<Pick<
+  EmptyResponseSelectionService,
+  'createContext' | 'filterEffectivelyEmptyResponses'
+  >>;
   let missingsProfilesService: jest.Mocked<Pick<
   MissingsProfilesService,
   'getMissingByIdForProfileOrDefault' | 'getMissingByCodeForProfileOrDefault'
   >>;
   let codingFreshnessService: jest.Mocked<Pick<CodingFreshnessService, 'markManualCodingCurrent'>>;
+  let workspaceExclusionService: jest.Mocked<Pick<
+  WorkspaceExclusionService,
+  'resolveExclusionsForQueries'
+  >>;
 
   const createQueryBuilderMock = (rows: unknown[]) => ({
     leftJoinAndSelect: jest.fn().mockReturnThis(),
     leftJoin: jest.fn().mockReturnThis(),
+    distinct: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
-    getMany: jest.fn().mockResolvedValue(rows)
+    getMany: jest.fn().mockResolvedValue(rows),
+    getRawMany: jest.fn().mockResolvedValue(rows)
   });
 
   beforeEach(() => {
     queryRunner = {
       connect: jest.fn().mockResolvedValue(undefined),
+      query: jest.fn().mockResolvedValue([]),
       startTransaction: jest.fn().mockResolvedValue(undefined),
       commitTransaction: jest.fn().mockResolvedValue(undefined),
       rollbackTransaction: jest.fn().mockResolvedValue(undefined),
       release: jest.fn().mockResolvedValue(undefined),
+      isTransactionActive: true,
       manager: {
         query: jest.fn().mockResolvedValue([]),
-        update: jest.fn().mockResolvedValue({ affected: 1 })
+        update: jest.fn().mockResolvedValue({ affected: 1 }),
+        getRepository: jest.fn(() => responseRepository)
       }
     };
 
@@ -113,6 +128,23 @@ describe('CodingResultsService', () => {
       invalidateCache: jest.fn().mockResolvedValue(undefined)
     };
 
+    emptyResponseSelectionService = {
+      createContext: jest.fn().mockResolvedValue({
+        metadataAvailable: true,
+        derivedVariableMap: new Map(),
+        sourceVariablesByDerivedKey: new Map()
+      }),
+      filterEffectivelyEmptyResponses: jest.fn(async (
+        responses,
+        context
+      ) => {
+        if (!context.metadataAvailable) {
+          return [];
+        }
+        return responses;
+      })
+    };
+
     missingsProfilesService = {
       getMissingByIdForProfileOrDefault: jest.fn(async (_workspaceId, _profileId, missingId) => {
         if (missingId === 'mci') {
@@ -138,6 +170,14 @@ describe('CodingResultsService', () => {
       markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
     };
 
+    workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
+
     service = new CodingResultsService(
       responseRepository,
       codingStatisticsService,
@@ -145,6 +185,8 @@ describe('CodingResultsService', () => {
       codingValidationService as unknown as CodingValidationService,
       codingAnalysisService as unknown as CodingAnalysisService,
       missingsProfilesService as unknown as MissingsProfilesService,
+      emptyResponseSelectionService as unknown as EmptyResponseSelectionService,
+      workspaceExclusionService as unknown as WorkspaceExclusionService,
       codingFreshnessService as unknown as CodingFreshnessService
     );
   });
@@ -164,7 +206,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
     const updateData = queryRunner.manager.update.mock.calls[0][2] as Partial<ResponseEntity>;
@@ -204,7 +247,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
     expect(codingJobService.markCodingJobResultsApplied).toHaveBeenCalledWith(
@@ -240,7 +284,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: -98,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
   });
@@ -271,7 +316,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: -97,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
   });
@@ -302,7 +348,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: -99,
         score_v2: 4,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
   });
@@ -441,7 +488,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
     expect(codingFreshnessService.markManualCodingCurrent).toHaveBeenCalledWith(
@@ -487,7 +535,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
     expect(codingJobService.markCodingJobResultsApplied).toHaveBeenCalled();
@@ -602,7 +651,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
     expect(codingFreshnessService.markManualCodingCurrent).toHaveBeenCalledWith(
@@ -696,7 +746,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
   });
@@ -722,7 +773,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
   });
@@ -739,6 +791,33 @@ describe('CodingResultsService', () => {
       fromJobSnapshot: true
     });
 
+    const unitNameQuery = createQueryBuilderMock([
+      { unitName: 'UNIT', variableId: 'VAR' },
+      { unitName: 'unit', variableId: 'VAR' }
+    ]);
+    const candidateQuery = createQueryBuilderMock([
+      {
+        id: 99,
+        value: ' A ',
+        variableid: 'VAR',
+        status_v2: 3,
+        unit: { id: 1, name: 'UNIT' }
+      },
+      {
+        id: 100,
+        value: 'a',
+        variableid: 'VAR',
+        status_v2: null,
+        unit: { id: 2, name: 'unit' }
+      },
+      {
+        id: 101,
+        value: 'A',
+        variableid: 'VAR',
+        status_v2: 5,
+        unit: { id: 3, name: 'UNIT' }
+      }
+    ]);
     (responseRepository.createQueryBuilder as jest.Mock)
       .mockReturnValueOnce(createQueryBuilderMock([
         {
@@ -749,10 +828,117 @@ describe('CodingResultsService', () => {
           unit: { id: 1, name: 'UNIT' }
         }
       ]))
+      .mockReturnValueOnce(unitNameQuery)
+      .mockReturnValueOnce(candidateQuery);
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.success).toBe(true);
+    expect(result.updatedResponsesCount).toBe(2);
+    expect(result.skippedAlreadyCodedCount).toBe(1);
+    expect(result.overwrittenExistingCount).toBe(0);
+    expect(candidateQuery.andWhere).toHaveBeenCalledWith(
+      'unit.name IN (:...unitNames)',
+      { unitNames: ['UNIT', 'unit'] }
+    );
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      expect.objectContaining({
+        id: 100,
+        status_v2: expect.anything(),
+        code_v2: expect.anything(),
+        score_v2: expect.anything()
+      }),
+      {
+        code_v2: 0,
+        score_v2: 0,
+        status_v2: 5,
+        autocoder_invalidated_version: null
+      }
+    );
+    expect(queryRunner.manager.update).not.toHaveBeenCalledWith(
+      ResponseEntity,
+      101,
+      expect.any(Object)
+    );
+  });
+
+  it('does not propagate over a sibling with partial existing v2 data', async () => {
+    codingJobService.getAggregationSettingsForCodingJob.mockResolvedValue({
+      aggregationEnabled: true,
+      aggregationThreshold: 2,
+      responseMatchingFlags: [ResponseMatchingFlag.IGNORE_CASE],
+      aggregationSettingsVersion: 1,
+      fromJobSnapshot: true
+    });
+
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(createQueryBuilderMock([{
+        id: 99,
+        value: 'A',
+        variableid: 'VAR',
+        status_v2: 3,
+        unit: { id: 1, name: 'UNIT' }
+      }]))
+      .mockReturnValueOnce(createQueryBuilderMock([{
+        unitName: 'UNIT', variableId: 'VAR'
+      }]))
       .mockReturnValueOnce(createQueryBuilderMock([
         {
           id: 99,
-          value: ' A ',
+          value: 'A',
+          variableid: 'VAR',
+          status_v2: 3,
+          code_v2: null,
+          score_v2: null,
+          unit: { id: 1, name: 'UNIT' }
+        },
+        {
+          id: 100,
+          value: 'a',
+          variableid: 'VAR',
+          status_v2: null,
+          code_v2: 7,
+          score_v2: null,
+          unit: { id: 2, name: 'UNIT' }
+        }
+      ]));
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.updatedResponsesCount).toBe(1);
+    expect(result.skippedAlreadyCodedCount).toBe(1);
+    expect(queryRunner.manager.update).not.toHaveBeenCalledWith(
+      ResponseEntity,
+      expect.objectContaining({ id: 100 }),
+      expect.any(Object)
+    );
+  });
+
+  it('atomically skips a sibling coded after candidate discovery', async () => {
+    codingJobService.getAggregationSettingsForCodingJob.mockResolvedValue({
+      aggregationEnabled: true,
+      aggregationThreshold: 2,
+      responseMatchingFlags: [ResponseMatchingFlag.IGNORE_CASE],
+      aggregationSettingsVersion: 1,
+      fromJobSnapshot: true
+    });
+
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(createQueryBuilderMock([{
+        id: 99,
+        value: 'A',
+        variableid: 'VAR',
+        status_v2: 3,
+        unit: { id: 1, name: 'UNIT' }
+      }]))
+      .mockReturnValueOnce(createQueryBuilderMock([{
+        unitName: 'UNIT', variableId: 'VAR'
+      }]))
+      .mockReturnValueOnce(createQueryBuilderMock([
+        {
+          id: 99,
+          value: 'A',
           variableid: 'VAR',
           status_v2: 3,
           unit: { id: 1, name: 'UNIT' }
@@ -762,36 +948,108 @@ describe('CodingResultsService', () => {
           value: 'a',
           variableid: 'VAR',
           status_v2: null,
+          code_v2: null,
+          score_v2: null,
           unit: { id: 2, name: 'UNIT' }
-        },
-        {
-          id: 101,
-          value: 'A',
-          variableid: 'VAR',
-          status_v2: 5,
-          unit: { id: 3, name: 'UNIT' }
         }
       ]));
+    queryRunner.manager.update.mockImplementation(
+      async (_entity, criteria) => ({
+        affected: typeof criteria === 'object' && criteria.id === 100 ? 0 : 1
+      })
+    );
 
     const result = await service.applyCodingResults(17, 10);
 
-    expect(result.success).toBe(true);
-    expect(result.updatedResponsesCount).toBe(2);
+    expect(result.updatedResponsesCount).toBe(1);
     expect(result.skippedAlreadyCodedCount).toBe(1);
-    expect(result.overwrittenExistingCount).toBe(0);
     expect(queryRunner.manager.update).toHaveBeenCalledWith(
       ResponseEntity,
-      100,
+      expect.objectContaining({
+        id: 100,
+        status_v2: expect.anything(),
+        code_v2: expect.anything(),
+        score_v2: expect.anything()
+      }),
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
-    expect(queryRunner.manager.update).not.toHaveBeenCalledWith(
-      ResponseEntity,
-      101,
-      expect.any(Object)
+  });
+
+  it('applies workspace exclusions to aggregation sibling discovery and candidates', async () => {
+    codingJobService.getAggregationSettingsForCodingJob.mockResolvedValue({
+      aggregationEnabled: true,
+      aggregationThreshold: 2,
+      responseMatchingFlags: [ResponseMatchingFlag.IGNORE_CASE],
+      aggregationSettingsVersion: 1,
+      fromJobSnapshot: true
+    });
+    workspaceExclusionService.resolveExclusionsForQueries.mockResolvedValue({
+      globalIgnoredUnits: [],
+      ignoredBooklets: ['blocked_booklet'],
+      testletIgnoredUnits: [{ bookletId: 'booklet_a', unitId: 'unit.xml' }]
+    });
+
+    const unitNameQuery = createQueryBuilderMock([
+      { unitName: 'UNIT', variableId: 'VAR' }
+    ]);
+    const candidateQuery = createQueryBuilderMock([
+      {
+        id: 99,
+        value: 'A',
+        variableid: 'VAR',
+        status_v2: 3,
+        unit: { id: 1, name: 'UNIT' }
+      }
+    ]);
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(createQueryBuilderMock([
+        {
+          id: 99,
+          value: 'A',
+          variableid: 'VAR',
+          status_v2: 3,
+          unit: { id: 1, name: 'UNIT' }
+        }
+      ]))
+      .mockReturnValueOnce(unitNameQuery)
+      .mockReturnValueOnce(candidateQuery);
+
+    await service.applyCodingResults(17, 10);
+
+    expect(workspaceExclusionService.resolveExclusionsForQueries)
+      .toHaveBeenCalledWith(17);
+    [unitNameQuery, candidateQuery].forEach(query => {
+      expect(query.leftJoin).toHaveBeenCalledWith(
+        'booklet.bookletinfo',
+        'bookletinfo'
+      );
+    });
+    expect(unitNameQuery.andWhere).toHaveBeenCalledWith(
+      'UPPER(bookletinfo.name) NOT IN (:...aggregationSiblingUnitsIgnoredBooklets)',
+      { aggregationSiblingUnitsIgnoredBooklets: ['BLOCKED_BOOKLET'] }
+    );
+    expect(unitNameQuery.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('aggregationSiblingUnitsBooklet0'),
+      {
+        aggregationSiblingUnitsBooklet0: 'BOOKLET_A',
+        aggregationSiblingUnitsUnit0: 'UNIT'
+      }
+    );
+    expect(candidateQuery.andWhere).toHaveBeenCalledWith(
+      'UPPER(bookletinfo.name) NOT IN (:...aggregationSiblingCandidatesIgnoredBooklets)',
+      { aggregationSiblingCandidatesIgnoredBooklets: ['BLOCKED_BOOKLET'] }
+    );
+    expect(candidateQuery.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('aggregationSiblingCandidatesBooklet0'),
+      {
+        aggregationSiblingCandidatesBooklet0: 'BOOKLET_A',
+        aggregationSiblingCandidatesUnit0: 'UNIT'
+      }
     );
   });
 
@@ -846,6 +1104,9 @@ describe('CodingResultsService', () => {
         }
       ]))
       .mockReturnValueOnce(createQueryBuilderMock([
+        { unitName: 'UNIT', variableId: 'VAR' }
+      ]))
+      .mockReturnValueOnce(createQueryBuilderMock([
         {
           id: 99,
           value: ' A ',
@@ -874,7 +1135,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
     expect(queryRunner.manager.update).not.toHaveBeenCalledWith(
@@ -908,6 +1170,9 @@ describe('CodingResultsService', () => {
         }
       ]))
       .mockReturnValueOnce(createQueryBuilderMock([
+        { unitName: 'UNIT', variableId: 'VAR' }
+      ]))
+      .mockReturnValueOnce(createQueryBuilderMock([
         {
           id: 99,
           value: ' A ',
@@ -936,7 +1201,8 @@ describe('CodingResultsService', () => {
       {
         code_v2: 0,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
   });
@@ -962,6 +1228,9 @@ describe('CodingResultsService', () => {
           status_v2: 3,
           unit: { id: 1, name: 'UNIT' }
         }
+      ]))
+      .mockReturnValueOnce(createQueryBuilderMock([
+        { unitName: 'UNIT', variableId: 'VAR' }
       ]))
       .mockReturnValueOnce(createQueryBuilderMock([
         {
@@ -1018,6 +1287,9 @@ describe('CodingResultsService', () => {
         }
       ]))
       .mockReturnValueOnce(createQueryBuilderMock([
+        { unitName: 'UNIT', variableId: 'VAR' }
+      ]))
+      .mockReturnValueOnce(createQueryBuilderMock([
         {
           id: 99,
           value: ' A ',
@@ -1068,13 +1340,15 @@ describe('CodingResultsService', () => {
       {
         code_v2: -98,
         score_v2: 0,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
     expect(missingsProfilesService.getMissingByIdForProfileOrDefault).toHaveBeenCalledWith(
       17,
       null,
-      'mir'
+      'mir',
+      queryRunner.manager
     );
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       'response.status_v1 IN (:...statuses)',
@@ -1089,8 +1363,108 @@ describe('CodingResultsService', () => {
       call[0] === 'response.status_v1 IN (:...statuses)'
     ));
     expect(statusFilterCall?.[1].statuses).not.toContain(statusStringToNumber('DERIVE_ERROR'));
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'response.status_v2 IS NULL'
+    );
     expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(17);
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
     expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(17);
+    expect(emptyResponseSelectionService.createContext).toHaveBeenCalledWith(
+      17,
+      queryRunner.manager
+    );
+    expect(emptyResponseSelectionService.filterEffectivelyEmptyResponses)
+      .toHaveBeenCalledWith(rows, expect.any(Object), queryRunner.manager);
+    expect(queryRunner.query).toHaveBeenNthCalledWith(
+      1,
+      'SELECT pg_advisory_lock($1::int, $2::int)',
+      expect.any(Array)
+    );
+    expect(queryRunner.query).toHaveBeenNthCalledWith(
+      2,
+      'SELECT pg_advisory_unlock($1::int, $2::int)',
+      expect.any(Array)
+    );
+    expect(queryRunner.query.mock.invocationCallOrder[1]).toBeLessThan(
+      codingValidationService.invalidateIncompleteVariablesCache
+        .mock.invocationCallOrder[0]
+    );
+  });
+
+  it('does not code target-empty derived responses with non-empty sources', async () => {
+    const derivedResponse = { id: 1 } as ResponseEntity;
+    const baseResponse = { id: 2 } as ResponseEntity;
+    const queryBuilder = createQueryBuilderMock([derivedResponse, baseResponse]);
+    responseRepository.createQueryBuilder = jest.fn(() => queryBuilder) as never;
+    emptyResponseSelectionService.filterEffectivelyEmptyResponses
+      .mockResolvedValue([baseResponse]);
+
+    const result = await service.applyEmptyResponseCoding(17);
+
+    expect(result.updatedCount).toBe(1);
+    expect(queryRunner.manager.update).not.toHaveBeenCalledWith(
+      ResponseEntity,
+      1,
+      expect.any(Object)
+    );
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      2,
+      expect.objectContaining({ code_v2: -98 })
+    );
+  });
+
+  it('offers derived responses regardless of their technical target value', async () => {
+    const derivedResponse = {
+      id: 1,
+      value: 'technical solver value',
+      variableid: 'DERIVED',
+      unit: { name: 'UNIT' }
+    } as ResponseEntity;
+    const queryBuilder = createQueryBuilderMock([derivedResponse]);
+    responseRepository.createQueryBuilder = jest.fn(() => queryBuilder) as never;
+    emptyResponseSelectionService.createContext.mockResolvedValue({
+      metadataAvailable: true,
+      derivedVariableMap: new Map([['UNIT', new Set(['DERIVED'])]]),
+      sourceVariablesByDerivedKey: new Map()
+    });
+    emptyResponseSelectionService.filterEffectivelyEmptyResponses
+      .mockResolvedValue([derivedResponse]);
+
+    const result = await service.applyEmptyResponseCoding(17);
+
+    expect(result.updatedCount).toBe(1);
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      1,
+      {
+        code_v2: -98,
+        score_v2: 0,
+        status_v2: statusStringToNumber('CODING_COMPLETE'),
+        autocoder_invalidated_version: null
+      }
+    );
+
+    const candidateBrackets = queryBuilder.andWhere.mock.calls
+      .map(call => call[0])
+      .find(condition => typeof condition !== 'string') as {
+      whereFactory: (builder: {
+        where: jest.Mock;
+        orWhere: jest.Mock;
+      }) => void;
+    };
+    const nestedBuilder = {
+      where: jest.fn(),
+      orWhere: jest.fn()
+    };
+    candidateBrackets.whereFactory(nestedBuilder);
+
+    expect(nestedBuilder.orWhere).toHaveBeenCalledWith(
+      expect.stringContaining('UPPER(unit.name)'),
+      {
+        derivedUnit0: 'UNIT',
+        derivedVariables0: ['DERIVED']
+      }
+    );
   });
 });

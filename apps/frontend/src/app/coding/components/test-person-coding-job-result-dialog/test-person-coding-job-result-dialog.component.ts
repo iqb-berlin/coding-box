@@ -1,5 +1,5 @@
 import { Component, Inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTableModule } from '@angular/material/table';
@@ -15,13 +15,14 @@ interface DialogData {
 @Component({
   selector: 'coding-box-test-person-coding-job-result-dialog',
   standalone: true,
-  imports: [CommonModule, MatDialogModule, MatButtonModule, MatTableModule, TranslateModule],
+  imports: [MatDialogModule, MatButtonModule, MatTableModule, TranslateModule],
   templateUrl: './test-person-coding-job-result-dialog.component.html',
   styleUrls: ['./test-person-coding-job-result-dialog.component.scss']
 })
 export class TestPersonCodingJobResultDialogComponent {
   displayedColumns = ['status', 'count'];
   statusRows: { status: string; count: number }[] = [];
+  warnings: string[] = [];
   effectiveTotal = 0;
 
   constructor(
@@ -29,6 +30,7 @@ export class TestPersonCodingJobResultDialogComponent {
     private dialogRef: MatDialogRef<TestPersonCodingJobResultDialogComponent>
   ) {
     const result = data.job.result;
+    this.warnings = result?.warnings || [];
     if (result?.statusCounts) {
       const ignoredStatuses = [
         '0', '1', '2', '3', '10',

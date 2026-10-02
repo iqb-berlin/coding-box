@@ -351,22 +351,41 @@ export class CacheService {
    * Delete values by pattern
    * @param pattern The pattern to match (e.g. "prefix:*")
    */
-  async deleteByPattern(pattern: string): Promise<void> {
+  async deleteByPattern(pattern: string): Promise<boolean> {
     try {
+      const keyPrefix = this.getKeyPrefix();
+      const scanPattern = keyPrefix ? `${keyPrefix}${pattern}` : pattern;
       let cursor = '0';
       do {
-        const reply = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+        const reply = await this.redis.scan(cursor, 'MATCH', scanPattern, 'COUNT', 100);
         cursor = reply[0];
-        const keys = reply[1];
+        const keys = this.toLogicalKeys(reply[1], keyPrefix);
         if (keys.length > 0) {
           await this.redis.del(...keys);
         }
       } while (cursor !== '0');
+      return true;
     } catch (error) {
       this.logger.error(
         `Error deleting by pattern: ${error.message}`,
         error.stack
       );
+      return false;
     }
+  }
+
+  private getKeyPrefix(): string {
+    const keyPrefix = this.redis.options?.keyPrefix;
+    return typeof keyPrefix === 'string' ? keyPrefix : '';
+  }
+
+  private toLogicalKeys(keys: string[], keyPrefix: string): string[] {
+    if (!keyPrefix) {
+      return keys;
+    }
+
+    return keys
+      .filter(key => key.startsWith(keyPrefix))
+      .map(key => key.slice(keyPrefix.length));
   }
 }

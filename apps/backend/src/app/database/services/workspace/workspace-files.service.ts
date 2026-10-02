@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  FindOperator, In, Like, QueryRunner, Repository
+  EntityManager, FindOperator, In, Like, QueryRunner, Repository
 } from 'typeorm';
 import * as cheerio from 'cheerio';
 import AdmZip = require('adm-zip');
@@ -58,10 +58,6 @@ import {
   CODING_PROCESS_CACHE_INVALIDATOR,
   CodingProcessCacheInvalidator
 } from '../coding/coding-process-cache-invalidator.token';
-import {
-  CODING_READINESS_CACHE_INVALIDATOR,
-  CodingReadinessCacheInvalidator
-} from '../coding/coding-readiness-cache-invalidator.token';
 import { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-validation.service';
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
@@ -84,6 +80,7 @@ import {
 } from '../../../utils/regex-search.util';
 import { hasVisibleManualInstruction } from '../../../utils/manual-instruction.util';
 import { isExportWorkerProcess } from '../../../export-worker/export-worker-role';
+import { withWorkspaceFilesMutationLock } from '../shared/workspace-files-lock.util';
 
 type WorkspaceUnitVisibility = {
   globalIgnoredUnits: Set<string>;
@@ -118,6 +115,11 @@ interface VocsCode {
   [key: string]: unknown;
 }
 
+type WorkspaceFilesMutationContext = {
+  manager: EntityManager;
+  fileUploadRepository: Repository<FileUpload>;
+};
+
 interface VocsVariableCoding {
   id?: unknown;
   alias?: unknown;
@@ -143,6 +145,12 @@ type UploadedFileForCacheInvalidation = {
   filename?: string;
   fileType?: string;
 };
+
+export interface DerivedVariableMetadataSnapshot {
+  metadataAvailable: boolean;
+  derivedVariableMap: Map<string, Set<string>>;
+  derivedVariablesBySourceMap: Map<string, Set<string>>;
+}
 
 @Injectable()
 export class WorkspaceFilesService implements OnModuleInit {
@@ -207,10 +215,7 @@ export class WorkspaceFilesService implements OnModuleInit {
     private readonly codingFileCacheService?: CodingFileCacheService,
     @Optional()
     @Inject(CODING_PROCESS_CACHE_INVALIDATOR)
-    private readonly codingProcessCacheInvalidator?: CodingProcessCacheInvalidator,
-    @Optional()
-    @Inject(CODING_READINESS_CACHE_INVALIDATOR)
-    private readonly codingReadinessCacheInvalidator?: CodingReadinessCacheInvalidator
+    private readonly codingProcessCacheInvalidator?: CodingProcessCacheInvalidator
   ) {}
 
   private normalizeFileUnitId(value: string | null | undefined): string {
@@ -634,7 +639,8 @@ export class WorkspaceFilesService implements OnModuleInit {
     workspaceId: number,
     fileId: unknown,
     previousData: unknown,
-    nextData: unknown
+    nextData: unknown,
+    manager?: EntityManager
   ): Promise<TestResultsUploadIssueDto | undefined> {
     if (!this.codingFreshnessService || !this.isCodingSchemeFileId(fileId)) {
       return undefined;
@@ -651,13 +657,22 @@ export class WorkspaceFilesService implements OnModuleInit {
     }
 
     try {
-      await this.codingFreshnessService.markUnitsStaleAfterCodingSchemeChange(
-        workspaceId,
-        {
-          autoCodingSchemeRefs: impact.autoCodingChanged ? [unitName] : [],
-          manualCodingSchemeRefs: impact.manualCodingChanged ? [unitName] : []
-        }
-      );
+      const scope = {
+        autoCodingSchemeRefs: impact.autoCodingChanged ? [unitName] : [],
+        manualCodingSchemeRefs: impact.manualCodingChanged ? [unitName] : []
+      };
+      if (manager) {
+        await this.codingFreshnessService.markUnitsStaleAfterCodingSchemeChange(
+          workspaceId,
+          scope,
+          manager
+        );
+      } else {
+        await this.codingFreshnessService.markUnitsStaleAfterCodingSchemeChange(
+          workspaceId,
+          scope
+        );
+      }
       return undefined;
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
@@ -850,6 +865,31 @@ export class WorkspaceFilesService implements OnModuleInit {
     workspace_id: number,
     fileIds: string[]
   ): Promise<boolean> {
+    return withWorkspaceFilesMutationLock(
+      this.fileUploadRepository.manager.connection,
+      workspace_id,
+      queryRunner => this.deleteTestFilesUnlocked(
+        workspace_id,
+        fileIds,
+        this.getWorkspaceFilesMutationContext(queryRunner)
+      )
+    );
+  }
+
+  private getWorkspaceFilesMutationContext(
+    queryRunner: QueryRunner
+  ): WorkspaceFilesMutationContext {
+    return {
+      manager: queryRunner.manager,
+      fileUploadRepository: queryRunner.manager.getRepository(FileUpload)
+    };
+  }
+
+  private async deleteTestFilesUnlocked(
+    workspace_id: number,
+    fileIds: string[],
+    mutationContext: WorkspaceFilesMutationContext
+  ): Promise<boolean> {
     this.logger.log(`Delete test files for workspace ${workspace_id}`);
     const numericIds = Array.from(new Set(
       fileIds
@@ -865,7 +905,7 @@ export class WorkspaceFilesService implements OnModuleInit {
       return false;
     }
 
-    const res = await this.fileUploadRepository
+    const res = await mutationContext.fileUploadRepository
       .createQueryBuilder()
       .delete()
       .from(FileUpload)
@@ -917,13 +957,28 @@ export class WorkspaceFilesService implements OnModuleInit {
   }
 
   async createDummyTestTakerFile(workspaceId: number): Promise<boolean> {
+    return withWorkspaceFilesMutationLock(
+      this.fileUploadRepository.manager.connection,
+      workspaceId,
+      queryRunner => this.createDummyTestTakerFileUnlocked(
+        workspaceId,
+        this.getWorkspaceFilesMutationContext(queryRunner)
+      )
+    );
+  }
+
+  private async createDummyTestTakerFileUnlocked(
+    workspaceId: number,
+    mutationContext: WorkspaceFilesMutationContext
+  ): Promise<boolean> {
+    const { fileUploadRepository } = mutationContext;
     try {
-      const booklets = await this.fileUploadRepository.find({
+      const booklets = await fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: 'Booklet' }
       });
 
       if (!booklets || booklets.length === 0) {
-        const units = await this.fileUploadRepository.find({
+        const units = await fileUploadRepository.find({
           where: { workspace_id: workspaceId, file_type: 'Unit' }
         });
 
@@ -951,7 +1006,7 @@ ${unitRefs}
   </Units>
 </Booklet>`;
 
-        const fakeBooklet = this.fileUploadRepository.create({
+        const fakeBooklet = fileUploadRepository.create({
           workspace_id: workspaceId,
           filename: 'auto-generated-booklet.xml',
           file_id: fakeBookletId,
@@ -960,7 +1015,7 @@ ${unitRefs}
           data: fakeBookletXml
         });
 
-        await this.fileUploadRepository.save(fakeBooklet);
+        await fileUploadRepository.save(fakeBooklet);
         this.logger.log(
           `Created fake booklet for workspace ${workspaceId} with ${units.length} units.`
         );
@@ -977,7 +1032,7 @@ ${unitRefs}
   </Group>
 </TestTakers>`;
 
-        const newTestTakerFile = this.fileUploadRepository.create({
+        const newTestTakerFile = fileUploadRepository.create({
           workspace_id: workspaceId,
           filename: 'auto-generated-testtakers.xml',
           file_id: 'AUTO-GENERATED-TESTTAKERS',
@@ -986,7 +1041,7 @@ ${unitRefs}
           data: dummyTestTakerXml
         });
 
-        await this.fileUploadRepository.save(newTestTakerFile);
+        await fileUploadRepository.save(newTestTakerFile);
         this.logger.log(
           `Created dummy TestTakers file for workspace ${workspaceId} with auto-generated booklet.`
         );
@@ -1009,7 +1064,7 @@ ${bookletRefs}
   </Group>
 </TestTakers>`;
 
-      const newTestTakerFile = this.fileUploadRepository.create({
+      const newTestTakerFile = fileUploadRepository.create({
         workspace_id: workspaceId,
         filename: 'auto-generated-testtakers.xml',
         file_id: 'AUTO-GENERATED-TESTTAKERS',
@@ -1018,7 +1073,7 @@ ${bookletRefs}
         data: dummyTestTakerXml
       });
 
-      await this.fileUploadRepository.save(newTestTakerFile);
+      await fileUploadRepository.save(newTestTakerFile);
 
       this.logger.log(
         `Created dummy TestTakers file for workspace ${workspaceId} with ${booklets.length} booklets.`
@@ -1157,6 +1212,26 @@ ${bookletRefs}
     overwriteExisting: boolean,
     overwriteFileIds?: string[]
   ): Promise<TestFilesUploadResultDto> {
+    return withWorkspaceFilesMutationLock(
+      this.fileUploadRepository.manager.connection,
+      workspace_id,
+      queryRunner => this.uploadTestFilesUnlocked(
+        workspace_id,
+        originalFiles,
+        overwriteExisting,
+        overwriteFileIds,
+        this.getWorkspaceFilesMutationContext(queryRunner)
+      )
+    );
+  }
+
+  private async uploadTestFilesUnlocked(
+    workspace_id: number,
+    originalFiles: FileIo[],
+    overwriteExisting: boolean,
+    overwriteFileIds: string[] | undefined,
+    mutationContext: WorkspaceFilesMutationContext
+  ): Promise<TestFilesUploadResultDto> {
     this.logger.log(`Uploading test files for workspace ${workspace_id}`);
 
     if (!Array.isArray(originalFiles)) {
@@ -1270,7 +1345,8 @@ ${bookletRefs}
             workspace_id,
             file,
             overwriteExistingParam,
-            overwriteAllowListParam
+            overwriteAllowListParam,
+            mutationContext
           );
           promises.forEach(p => tasks.push({ filename: file.originalname, promise: p })
           );
@@ -1401,7 +1477,8 @@ ${bookletRefs}
     workspaceId: number,
     file: FileIo,
     overwriteExisting: boolean,
-    overwriteAllowList?: Set<string>
+    overwriteAllowList?: Set<string>,
+    mutationContext?: WorkspaceFilesMutationContext
   ): Array<Promise<unknown>> {
     const filePromises: Array<Promise<unknown>> = [];
     const fileExtension = path.extname(file.originalname || '').toLowerCase();
@@ -1423,7 +1500,8 @@ ${bookletRefs}
           workspaceId,
           file,
           overwriteExisting,
-          overwriteAllowList
+          overwriteAllowList,
+          mutationContext
         ).catch(error => this.toFailedUploadResult(file.originalname, error)
         )
       );
@@ -1439,7 +1517,8 @@ ${bookletRefs}
             workspaceId,
             file,
             overwriteExisting,
-            overwriteAllowList
+            overwriteAllowList,
+            mutationContext
           ).catch(error => this.toFailedUploadResult(file.originalname, error)
           )
         );
@@ -1450,7 +1529,8 @@ ${bookletRefs}
             workspaceId,
             file,
             overwriteExisting,
-            overwriteAllowList
+            overwriteAllowList,
+            mutationContext
           ).catch(error => this.toFailedUploadResult(file.originalname, error)
           )
         );
@@ -1461,7 +1541,8 @@ ${bookletRefs}
             workspaceId,
             file,
             overwriteExisting,
-            overwriteAllowList
+            overwriteAllowList,
+            mutationContext
           ).catch(error => this.toFailedUploadResult(file.originalname, error)
           )
         );
@@ -1474,7 +1555,8 @@ ${bookletRefs}
             workspaceId,
             file,
             overwriteExisting,
-            overwriteAllowList
+            overwriteAllowList,
+            mutationContext
           )
         );
         break;
@@ -1534,8 +1616,11 @@ ${bookletRefs}
     workspaceId: number,
     file: FileIo,
     overwriteExisting: boolean,
-    overwriteAllowList?: Set<string>
+    overwriteAllowList?: Set<string>,
+    mutationContext?: WorkspaceFilesMutationContext
   ): Promise<unknown> {
+    const fileUploadRepository =
+      mutationContext?.fileUploadRepository ?? this.fileUploadRepository;
     try {
       if (!file.buffer || !file.buffer.length) {
         this.logger.warn('Empty file buffer');
@@ -1604,7 +1689,7 @@ ${bookletRefs}
         fileType === 'TestTakers' ? fileId || file.originalname : fileId;
       const resolvedFileIdNormalized = (resolvedFileId || '').toUpperCase();
 
-      const existingFile = await this.fileUploadRepository.findOne({
+      const existingFile = await fileUploadRepository.findOne({
         where: { file_id: resolvedFileId, workspace_id: workspaceId }
       });
       if (existingFile) {
@@ -1659,7 +1744,7 @@ ${bookletRefs}
         extractedInfo
       };
 
-      await this.fileUploadRepository.upsert(
+      await fileUploadRepository.upsert(
         this.withNormalizedFileLookupFields({
           workspace_id: workspaceId,
           filename: file.originalname,
@@ -1688,8 +1773,11 @@ ${bookletRefs}
     workspaceId: number,
     file: FileIo,
     overwriteExisting: boolean,
-    overwriteAllowList?: Set<string>
+    overwriteAllowList?: Set<string>,
+    mutationContext?: WorkspaceFilesMutationContext
   ): Promise<unknown> {
+    const fileUploadRepository =
+      mutationContext?.fileUploadRepository ?? this.fileUploadRepository;
     try {
       const playerCode = file.buffer.toString();
       const playerContent = cheerio.load(playerCode);
@@ -1712,7 +1800,7 @@ ${bookletRefs}
       if (metadata['@type'] === 'schemer') {
         const resourceFileId =
           this.workspaceFileParsingService.getSchemerId(file);
-        const existing = await this.fileUploadRepository.findOne({
+        const existing = await fileUploadRepository.findOne({
           where: { file_id: resourceFileId, workspace_id: workspaceId }
         });
         const resourceFileIdNormalized = (resourceFileId || '').toUpperCase();
@@ -1731,7 +1819,7 @@ ${bookletRefs}
             fileType: 'Schemer'
           };
         }
-        await this.fileUploadRepository.upsert(
+        await fileUploadRepository.upsert(
           this.withNormalizedFileLookupFields({
             filename: file.originalname,
             workspace_id: workspaceId,
@@ -1753,7 +1841,7 @@ ${bookletRefs}
       }
 
       const resourceFileId = this.workspaceFileParsingService.getPlayerId(file);
-      const existing = await this.fileUploadRepository.findOne({
+      const existing = await fileUploadRepository.findOne({
         where: { file_id: resourceFileId, workspace_id: workspaceId }
       });
       const resourceFileIdNormalized = (resourceFileId || '').toUpperCase();
@@ -1772,7 +1860,7 @@ ${bookletRefs}
           fileType: 'Resource'
         };
       }
-      await this.fileUploadRepository.upsert(
+      await fileUploadRepository.upsert(
         this.withNormalizedFileLookupFields({
           filename: file.originalname,
           workspace_id: workspaceId,
@@ -1794,7 +1882,7 @@ ${bookletRefs}
     } catch (error) {
       const resourceFileId =
         this.workspaceFileParsingService.getResourceId(file);
-      await this.fileUploadRepository.upsert(
+      await fileUploadRepository.upsert(
         this.withNormalizedFileLookupFields({
           filename: file.originalname,
           workspace_id: workspaceId,
@@ -1820,8 +1908,11 @@ ${bookletRefs}
     workspaceId: number,
     file: FileIo,
     overwriteExisting: boolean,
-    overwriteAllowList?: Set<string>
+    overwriteAllowList?: Set<string>,
+    mutationContext?: WorkspaceFilesMutationContext
   ): Promise<unknown> {
+    const fileUploadRepository =
+      mutationContext?.fileUploadRepository ?? this.fileUploadRepository;
     this.logger.log(
       `Processing octet-stream file: ${file.originalname} for workspace ${workspaceId}`
     );
@@ -1892,7 +1983,7 @@ ${bookletRefs}
         extractedInfo
       };
 
-      const fileUpload = this.fileUploadRepository.create(
+      const fileUpload = fileUploadRepository.create(
         this.withNormalizedFileLookupFields({
           workspace_id: workspaceId,
           filename: file.originalname,
@@ -1905,7 +1996,7 @@ ${bookletRefs}
         })
       );
 
-      const existing = await this.fileUploadRepository.findOne({
+      const existing = await fileUploadRepository.findOne({
         where: { file_id: fileUpload.file_id, workspace_id: workspaceId }
       });
       const fileIdNormalized = (fileUpload.file_id || '').toUpperCase();
@@ -1947,7 +2038,7 @@ ${bookletRefs}
 
       this.logger.log(`[OctetStream] Proceeding to upsert ${fileIdNormalized}`);
 
-      await this.fileUploadRepository.upsert(fileUpload, [
+      await fileUploadRepository.upsert(fileUpload, [
         'file_id',
         'workspace_id'
       ]);
@@ -1955,7 +2046,8 @@ ${bookletRefs}
         workspaceId,
         fileUpload.file_id,
         existing?.data,
-        fileContent
+        fileContent,
+        mutationContext?.manager
       );
       this.logger.log(
         `Successfully processed octet-stream file: ${file.originalname} as ${fileType}`
@@ -1990,7 +2082,8 @@ ${bookletRefs}
     workspaceId: number,
     file: FileIo,
     overwriteExisting: boolean,
-    overwriteAllowList?: Set<string>
+    overwriteAllowList?: Set<string>,
+    mutationContext?: WorkspaceFilesMutationContext
   ): Promise<unknown[]> {
     this.logger.log(
       `Processing ZIP file: ${file.originalname} for workspace ${workspaceId}`
@@ -2027,7 +2120,8 @@ ${bookletRefs}
               workspaceId,
               nestedFile,
               overwriteExisting,
-              overwriteAllowList
+              overwriteAllowList,
+              mutationContext
             );
             return Promise.all(nestedPromises);
           })
@@ -2071,7 +2165,8 @@ ${bookletRefs}
 
   private async collectCodingSchemeChangesForFreshness(
     workspaceId: number,
-    entries: Record<string, unknown>[]
+    entries: Record<string, unknown>[],
+    fileUploadRepository: Repository<FileUpload>
   ): Promise<Array<{ fileId: string; previousData: unknown; nextData: unknown }>> {
     if (!workspaceId || entries.length === 0) {
       return [];
@@ -2090,7 +2185,7 @@ ${bookletRefs}
     const fileIds = Array.from(new Set(
       codingSchemeEntries.map(entry => entry.fileId)
     ));
-    const existingFiles = await this.fileUploadRepository.find({
+    const existingFiles = await fileUploadRepository.find({
       where: {
         workspace_id: workspaceId,
         file_id: In(fileIds)
@@ -2114,6 +2209,30 @@ ${bookletRefs}
     entries: Record<string, unknown>[],
     overwriteFileIds?: string[]
   ): Promise<TestFilesUploadResultDto> {
+    const workspaceId = Number(
+      (entries[0] as { workspace_id?: unknown } | undefined)?.workspace_id
+    );
+    if (Number.isInteger(workspaceId) && workspaceId > 0) {
+      return withWorkspaceFilesMutationLock(
+        this.fileUploadRepository.manager.connection,
+        workspaceId,
+        queryRunner => this.testCenterImportUnlocked(
+          entries,
+          overwriteFileIds,
+          this.getWorkspaceFilesMutationContext(queryRunner)
+        )
+      );
+    }
+    return this.testCenterImportUnlocked(entries, overwriteFileIds);
+  }
+
+  private async testCenterImportUnlocked(
+    entries: Record<string, unknown>[],
+    overwriteFileIds?: string[],
+    mutationContext?: WorkspaceFilesMutationContext
+  ): Promise<TestFilesUploadResultDto> {
+    const fileUploadRepository =
+      mutationContext?.fileUploadRepository ?? this.fileUploadRepository;
     try {
       const normalized = await this.enrichTestCenterImportEntries(
         Array.isArray(entries) ? entries : []
@@ -2129,7 +2248,7 @@ ${bookletRefs}
       const conflicts: TestFilesUploadConflictDto[] =
         workspaceId && requestedFileIds.length ?
           (
-            await this.fileUploadRepository
+            await fileUploadRepository
               .createQueryBuilder('file')
               .select(['file.file_id', 'file.filename', 'file.file_type'])
               .where('file.workspace_id = :workspaceId', { workspaceId })
@@ -2178,12 +2297,13 @@ ${bookletRefs}
       const changedCodingSchemes =
         await this.collectCodingSchemeChangesForFreshness(
           workspaceId,
-          [...insertableEntries, ...overwriteEntries]
+          [...insertableEntries, ...overwriteEntries],
+          fileUploadRepository
         );
 
-      const registry = this.fileUploadRepository.create(insertableEntries);
+      const registry = fileUploadRepository.create(insertableEntries);
       if (registry.length > 0) {
-        await this.fileUploadRepository
+        await fileUploadRepository
           .createQueryBuilder()
           .insert()
           .into(FileUpload)
@@ -2192,14 +2312,14 @@ ${bookletRefs}
           .execute();
       }
 
-      const overwriteRegistry = this.fileUploadRepository.create(
+      const overwriteRegistry = fileUploadRepository.create(
         overwriteEntries.map(e => ({
           ...(e as Record<string, unknown>),
           created_at: new Date() as unknown as number
         }))
       );
       if (overwriteRegistry.length > 0) {
-        await this.fileUploadRepository.upsert(overwriteRegistry, [
+        await fileUploadRepository.upsert(overwriteRegistry, [
           'file_id',
           'workspace_id'
         ]);
@@ -2209,7 +2329,8 @@ ${bookletRefs}
           workspaceId,
           change.fileId,
           change.previousData,
-          change.nextData
+          change.nextData,
+          mutationContext?.manager
         )
       )))).filter((issue): issue is TestResultsUploadIssueDto => !!issue);
       if (registry.length > 0 || overwriteRegistry.length > 0) {
@@ -2331,14 +2452,20 @@ ${bookletRefs}
 
   async getVariableInfoForScheme(
     workspaceId: number,
-    schemeFileId: string
+    schemeFileId: string,
+    manager?: EntityManager
   ): Promise<VariableInfo[]> {
     try {
-      const unitFiles = await this.fileUploadRepository.find({
+      const expectedUnitId = this.normalizeFileUnitId(schemeFileId);
+      const repository = manager?.getRepository(FileUpload) ||
+        this.fileUploadRepository;
+      const unitFiles = await repository.find({
         where: {
           workspace_id: workspaceId,
-          file_type: 'Unit'
-        }
+          file_type: 'Unit',
+          file_id_normalized: expectedUnitId
+        },
+        select: ['file_id', 'data']
       });
 
       if (!unitFiles || unitFiles.length === 0) {
@@ -2346,9 +2473,8 @@ ${bookletRefs}
         return [];
       }
 
-      const expectedUnitId = schemeFileId.toUpperCase().replace(/\.VOCS$/, '');
       const filteredUnitFiles = unitFiles.filter(
-        file => file.file_id.toUpperCase() === expectedUnitId &&
+        file => this.normalizeFileIdForLookup(file.file_id) === expectedUnitId &&
           !file.file_id.toUpperCase().includes('VOCS')
       );
 
@@ -3058,17 +3184,30 @@ ${bookletRefs}
     }
   }
 
-  private async refreshUnitVariableCacheInternal(workspaceId: number): Promise<void> {
+  private async refreshUnitVariableCacheInternal(
+    workspaceId: number,
+    manager?: EntityManager
+  ): Promise<void> {
     this.logger.log(
       `Refreshing unit variable cache for workspace ${workspaceId}`
     );
 
+    const derivedMetadataCompleteKey = this.getCacheKey(
+      workspaceId,
+      'derived_variable_metadata_complete'
+    );
+    let derivedMetadataComplete = true;
+
     try {
-      const unitFiles = await this.fileUploadRepository.find({
+      await this.cacheService.set(derivedMetadataCompleteKey, false);
+
+      const repository = manager?.getRepository(FileUpload) ||
+        this.fileUploadRepository;
+      const unitFiles = await repository.find({
         where: { workspace_id: workspaceId, file_type: 'Unit' }
       });
 
-      const codingSchemes = await this.fileUploadRepository.find({
+      const codingSchemes = await repository.find({
         where: {
           workspace_id: workspaceId,
           file_type: 'Resource',
@@ -3190,6 +3329,7 @@ ${bookletRefs}
             }
           }
         } catch (error) {
+          derivedMetadataComplete = false;
           this.logger.error(
             `Error parsing coding scheme ${scheme.file_id}: ${error.message}`,
             error.stack
@@ -3450,6 +3590,7 @@ ${bookletRefs}
             }
           }
         } catch (e) {
+          derivedMetadataComplete = false;
           this.logger.warn(
             `Error parsing unit file ${unitFile.file_id}: ${
               (e as Error).message
@@ -3482,6 +3623,10 @@ ${bookletRefs}
         this.getCacheKey(workspaceId, 'manual_instruction_variables'),
         this.toRedisMap(manualInstructionAliasByUnit)
       );
+      await this.cacheService.set(
+        derivedMetadataCompleteKey,
+        derivedMetadataComplete
+      );
 
       this.logger.log(
         `Cached ${unitVariables.size} units with their variables for workspace ${workspaceId} to Redis`
@@ -3507,17 +3652,30 @@ ${bookletRefs}
         `Error refreshing unit variable cache for workspace ${workspaceId}: ${error.message}`,
         error.stack
       );
+      try {
+        await this.cacheService.set(derivedMetadataCompleteKey, false);
+      } catch (cacheError) {
+        this.logger.error(
+          `Could not mark derived-variable metadata as unavailable for workspace ${workspaceId}: ${cacheError.message}`,
+          cacheError.stack
+        );
+      }
     }
   }
 
   async getUnitVariableMap(
-    workspaceId: number
+    workspaceId: number,
+    manager?: EntityManager
   ): Promise<Map<string, Set<string>>> {
     const cacheKey = this.getCacheKey(workspaceId, 'unit_variables');
     const cached =
       await this.cacheService.get<Record<string, string[]>>(cacheKey);
     if (!cached) {
-      await this.refreshUnitVariableCache(workspaceId);
+      if (manager) {
+        await this.refreshUnitVariableCacheInternal(workspaceId, manager);
+      } else {
+        await this.refreshUnitVariableCache(workspaceId);
+      }
       return this.fromRedisMap(
         await this.cacheService.get<Record<string, string[]>>(cacheKey)
       );
@@ -3551,13 +3709,18 @@ ${bookletRefs}
    * Derived variables have their own manual coding tasks (they are not BASE type).
    */
   async getDerivedVariableMap(
-    workspaceId: number
+    workspaceId: number,
+    manager?: EntityManager
   ): Promise<Map<string, Set<string>>> {
     const cacheKey = this.getCacheKey(workspaceId, 'derived_variables');
     const cached =
       await this.cacheService.get<Record<string, string[]>>(cacheKey);
     if (!cached) {
-      await this.refreshUnitVariableCache(workspaceId);
+      if (manager) {
+        await this.refreshUnitVariableCacheInternal(workspaceId, manager);
+      } else {
+        await this.refreshUnitVariableCache(workspaceId);
+      }
       return this.fromRedisMap(
         await this.cacheService.get<Record<string, string[]>>(cacheKey)
       );
@@ -3570,18 +3733,89 @@ ${bookletRefs}
    * derived variable aliases that use this source variable in the same unit.
    */
   async getDerivedVariablesBySourceMap(
-    workspaceId: number
+    workspaceId: number,
+    manager?: EntityManager
   ): Promise<Map<string, Set<string>>> {
     const cacheKey = this.getCacheKey(workspaceId, 'derived_variables_by_source');
     const cached =
       await this.cacheService.get<Record<string, string[]>>(cacheKey);
     if (!cached) {
-      await this.refreshUnitVariableCache(workspaceId);
+      if (manager) {
+        await this.refreshUnitVariableCacheInternal(workspaceId, manager);
+      } else {
+        await this.refreshUnitVariableCache(workspaceId);
+      }
       return this.fromRedisMap(
         await this.cacheService.get<Record<string, string[]>>(cacheKey)
       );
     }
     return this.fromRedisMap(cached);
+  }
+
+  async getDerivedVariableMetadata(
+    workspaceId: number,
+    manager?: EntityManager
+  ): Promise<DerivedVariableMetadataSnapshot> {
+    const metadataCompleteKey = this.getCacheKey(
+      workspaceId,
+      'derived_variable_metadata_complete'
+    );
+    const derivedVariableKey = this.getCacheKey(
+      workspaceId,
+      'derived_variables'
+    );
+    const derivedVariablesBySourceKey = this.getCacheKey(
+      workspaceId,
+      'derived_variables_by_source'
+    );
+
+    const readMetadata = async () => Promise.all([
+      this.cacheService.get<boolean>(metadataCompleteKey),
+      this.cacheService.get<Record<string, string[]>>(derivedVariableKey),
+      this.cacheService.get<Record<string, string[]>>(
+        derivedVariablesBySourceKey
+      )
+    ]);
+
+    let [
+      metadataComplete,
+      derivedVariableData,
+      derivedVariablesBySourceData
+    ] = await readMetadata();
+
+    if (
+      metadataComplete == null ||
+      (
+        metadataComplete === true &&
+        (!derivedVariableData || !derivedVariablesBySourceData)
+      )
+    ) {
+      if (manager) {
+        await this.refreshUnitVariableCacheInternal(workspaceId, manager);
+      } else {
+        await this.refreshUnitVariableCache(workspaceId);
+      }
+      [
+        metadataComplete,
+        derivedVariableData,
+        derivedVariablesBySourceData
+      ] = await readMetadata();
+    }
+
+    const metadataAvailable =
+      metadataComplete === true &&
+      !!derivedVariableData &&
+      !!derivedVariablesBySourceData;
+
+    return {
+      metadataAvailable,
+      derivedVariableMap: metadataAvailable ?
+        this.fromRedisMap(derivedVariableData) :
+        new Map(),
+      derivedVariablesBySourceMap: metadataAvailable ?
+        this.fromRedisMap(derivedVariablesBySourceData) :
+        new Map()
+    };
   }
 
   /**
@@ -3676,6 +3910,10 @@ ${bookletRefs}
       string,
       Map<string, boolean>
       >();
+      const codingSchemeProcessingMap = new Map<
+      string,
+      Map<string, string[]>
+      >();
 
       for (const scheme of codingSchemes) {
         try {
@@ -3719,6 +3957,7 @@ ${bookletRefs}
             const variableManualInstructions = new Map<string, boolean>();
             const variableClosedCoding = new Map<string, boolean>();
             const variableTrainingRequired = new Map<string, boolean>();
+            const variableProcessing = new Map<string, string[]>();
 
             for (const vc of parsedScheme.variableCodings) {
               if (vc.id && vc.sourceType) {
@@ -3732,6 +3971,7 @@ ${bookletRefs}
                 variableTypes.set(vc.id, vc.type);
               }
               if (vc.id && vc.processing && Array.isArray(vc.processing)) {
+                variableProcessing.set(vc.id, [...vc.processing]);
                 if (vc.processing.includes('CODER_TRAINING_REQUIRED')) {
                   variableTrainingRequired.set(vc.id, true);
                 }
@@ -3783,6 +4023,7 @@ ${bookletRefs}
               unitId,
               variableTrainingRequired
             );
+            codingSchemeProcessingMap.set(unitId, variableProcessing);
           }
         } catch (error) {
           this.logger.error(
@@ -3859,6 +4100,8 @@ ${bookletRefs}
                     codingSchemeTrainingRequiredMap.get(unitName);
                   const coderTrainingRequired =
                     unitTrainingRequired?.get(variableId) || false;
+                  const processing =
+                    codingSchemeProcessingMap.get(unitName)?.get(variableId);
                   const isDerived = this.isDerivedSourceType(sourceType);
                   const variableMetadata = this.extractVariableMetadata(
                     variable
@@ -3874,6 +4117,7 @@ ${bookletRefs}
                       codingSchemeMap.get(unitName) :
                       undefined,
                     sourceType,
+                    processing,
                     codes: variableCodes,
                     values: variableMetadata.values,
                     valuesComplete: variableMetadata.valuesComplete,
@@ -3934,6 +4178,8 @@ ${bookletRefs}
                     codingSchemeTrainingRequiredMap.get(unitName);
                   const coderTrainingRequired =
                     unitTrainingRequired?.get(variableId) || false;
+                  const processing =
+                    codingSchemeProcessingMap.get(unitName)?.get(variableId);
                   const variableMetadata = this.extractVariableMetadata(
                     variable
                   );
@@ -3948,6 +4194,7 @@ ${bookletRefs}
                       codingSchemeMap.get(unitName) :
                       undefined,
                     sourceType,
+                    processing,
                     codes: variableCodes,
                     values: variableMetadata.values,
                     valuesComplete: variableMetadata.valuesComplete,
@@ -3994,6 +4241,8 @@ ${bookletRefs}
                   codingSchemeTrainingRequiredMap.get(unitName);
                 const coderTrainingRequired =
                   unitTrainingRequired?.get(schemeId) || false;
+                const processing =
+                  codingSchemeProcessingMap.get(unitName)?.get(schemeId);
 
                 variables.push({
                   id: schemeId,
@@ -4002,6 +4251,7 @@ ${bookletRefs}
                   hasCodingScheme: true,
                   codingSchemeRef: codingSchemeMap.get(unitName),
                   sourceType,
+                  processing,
                   codes: variableCodes,
                   isDerived: true,
                   hasManualInstruction,
@@ -4075,7 +4325,7 @@ ${bookletRefs}
         const rawValue = this.readXmlText(valueRecord?.value);
         const label = this.readXmlText(valueRecord?.label) || rawValue;
 
-        if (rawValue === undefined || rawValue === '') {
+        if (rawValue === undefined) {
           return undefined;
         }
 
@@ -4178,6 +4428,9 @@ ${bookletRefs}
         this.getCacheKey(workspaceId, 'derived_variables_by_source')
       ),
       this.cacheService.delete(
+        this.getCacheKey(workspaceId, 'derived_variable_metadata_complete')
+      ),
+      this.cacheService.delete(
         this.getCacheKey(workspaceId, 'manual_instruction_variables')
       ),
       this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`)
@@ -4187,7 +4440,6 @@ ${bookletRefs}
     );
     this.codingFileCacheService?.clearCaches();
     this.codingProcessCacheInvalidator?.invalidateWorkspaceCaches(workspaceId);
-    this.codingReadinessCacheInvalidator?.invalidateWorkspaceReadinessCache(workspaceId);
     this.logger.log(
       `Invalidated workspace files caches for workspace ${workspaceId} in Redis`
     );

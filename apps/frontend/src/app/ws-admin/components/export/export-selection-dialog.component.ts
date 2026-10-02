@@ -10,6 +10,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { JobDefinition } from '../../../coding/services/coding-job-backend.service';
 import { CoderTraining } from '../../../coding/models/coder-training.model';
 import { Coder } from '../../../coding/models/coder.model';
+import { getJobDefinitionDisplayLabel } from '../../../coding/utils/job-definition-display.util';
 
 export interface ExportSelectionDialogData {
   jobDefinitions: JobDefinition[];
@@ -50,7 +51,7 @@ export interface ExportSelectionDialogResult {
                       [checked]="isSelected(jobValue(def))"
                       (click)="$event.stopPropagation()"
                       (change)="toggle(jobValue(def))">
-                      Definition #{{ def.id }} {{ def.status ? '(' + def.status + ')' : '' }}
+                      {{ getDefinitionLabel(def) }} {{ def.status ? '(' + def.status + ')' : '' }}
                     </mat-checkbox>
                   </mat-panel-title>
                   <mat-panel-description>
@@ -181,6 +182,10 @@ export class ExportSelectionDialogComponent {
 
   jobValue(def: JobDefinition): string {
     return `job_${def.id}`;
+  }
+
+  getDefinitionLabel(definition: JobDefinition): string {
+    return getJobDefinitionDisplayLabel(definition);
   }
 
   trainingValue(training: CoderTraining): string {

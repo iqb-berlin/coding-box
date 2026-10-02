@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { DOCUMENT } from '@angular/common';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { AuthService } from './auth.service';
@@ -8,7 +9,7 @@ describe('AuthService', () => {
   let service: AuthService;
   let httpMock: HttpTestingController;
   let appService: jest.Mocked<Pick<AppService, 'serverUrl' | 'reAuthenticationReturnUrl' | 'createLoginRedirectUri' | 'markExplicitLogoutInProgress' | 'clearAuthState'>>;
-  let originalLocation: Location;
+  let locationMock: Pick<Location, 'href' | 'origin'>;
   let storageMock: {
     getItem: jest.Mock;
     setItem: jest.Mock;
@@ -25,14 +26,7 @@ describe('AuthService', () => {
   };
 
   beforeEach(() => {
-    originalLocation = window.location;
-    Object.defineProperty(window, 'location', {
-      value: {
-        ...originalLocation,
-        href: 'http://localhost/'
-      },
-      writable: true
-    });
+    locationMock = { href: 'http://localhost/', origin: 'http://localhost' };
 
     storageMock = {
       getItem: jest.fn().mockReturnValue(null),
@@ -57,7 +51,8 @@ describe('AuthService', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         AuthService,
-        { provide: AppService, useValue: appService }
+        { provide: AppService, useValue: appService },
+        { provide: DOCUMENT, useValue: { location: locationMock } }
       ]
     });
 
@@ -67,10 +62,6 @@ describe('AuthService', () => {
 
   afterEach(() => {
     httpMock.verify();
-    Object.defineProperty(window, 'location', {
-      value: originalLocation,
-      writable: true
-    });
   });
 
   it('should be created', () => {
@@ -81,7 +72,7 @@ describe('AuthService', () => {
     service.login('/workspace-admin/1');
 
     expect(appService.createLoginRedirectUri).toHaveBeenCalledWith('/workspace-admin/1');
-    expect(window.location.href).toBe(
+    expect(locationMock.href).toBe(
       'http://localhost:3333/api/auth/login?redirect_uri=http%3A%2F%2Flocalhost%2F%23%2Fcoding'
     );
   });

@@ -10,7 +10,9 @@ import {
   Param,
   Delete,
   Logger,
-  BadRequestException
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -21,14 +23,13 @@ import {
   ApiBody
 } from '@nestjs/swagger';
 import { Response, Request } from 'express';
+import * as fs from 'fs';
 import { Readable } from 'stream';
 import {
   JobQueueService,
-  ExportJobData,
   ExportJobProgress,
   ExportJobResult
 } from '../../job-queue/job-queue.service';
-import { CacheService } from '../../cache/cache.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
@@ -36,24 +37,28 @@ import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import {
   CodingExportService,
   CodingExportOrchestratorService,
-  CodingListExportService
+  CodingListExportService,
+  CodingPsychometricExportService,
+  ExportArtifactService
 } from '../../database/services/coding';
+import { PsychometricDomainCandidatesDto } from '../../../../../../api-dto/coding/psychometric-discrimination.dto';
+import {
+  BackgroundExportRequest,
+  ExportJobErrorMetadataDto,
+  ExportJobProgressPhaseDto,
+  ExportJobResultDto,
+  ExportJobStateDto,
+  ExportJobStatusResponseDto,
+  ExportRequestValidationError,
+  ItemDatasetOptionsDto,
+  ItemMatrixExportDiagnosticsDto,
+  ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE,
+  parseExportRequest
+} from '../../../../../../api-dto/coding/export-request.dto';
+import {
+  parseItemMatrixExportIncompleteError
+} from '../../database/services/coding/item-matrix-export-incomplete.error';
 
-type PublicExportJobResult = Omit<ExportJobResult, 'filePath'>;
-type PublicExportJobStatus =
-  | {
-    status: string;
-    progress: number;
-    progressPhase?: string;
-    processedRows?: number;
-    totalRows?: number;
-    progressMessage?: string;
-    result?: PublicExportJobResult;
-    error?: string;
-    errorCode?: string;
-    errorDetails?: Record<string, number | string | boolean>;
-  }
-  | { error: string };
 type RequestUser = { id?: number | string; userId?: number | string };
 type ByVariableExportEstimateResponse = {
   exportType: 'by-variable' | 'by-variable-compact';
@@ -73,29 +78,45 @@ export class WorkspaceCodingExportController {
     private codingExportService: CodingExportService,
     private codingExportOrchestratorService: CodingExportOrchestratorService,
     private jobQueueService: JobQueueService,
-    private cacheService: CacheService
-  ) { }
+    private codingPsychometricExportService: CodingPsychometricExportService,
+    private readonly exportArtifactService: ExportArtifactService
+  ) {}
+
+  private parseVersionedExportMissingsProfileId(
+    _version: 'v1' | 'v2' | 'v3',
+    value?: string
+  ): number {
+    if (value === undefined || value === '') {
+      throw new BadRequestException(
+        'Versioned exports require missingsProfileId to be a positive integer'
+      );
+    }
+    const profileId = Number(value);
+    if (!Number.isSafeInteger(profileId) || profileId <= 0) {
+      throw new BadRequestException(
+        'missingsProfileId must be a positive integer'
+      );
+    }
+    return profileId;
+  }
 
   private mapExportJobState(
     state: string,
     job: { data?: { isCancelled?: boolean }; failedReason?: string }
-  ): string {
+  ): ExportJobStateDto {
     const failedReason = job.failedReason;
-    const failedBecauseCancelled = typeof failedReason === 'string' &&
-      (
-        failedReason.includes('ExportJobCancelledException') ||
-        /^Export job .* was cancelled$/.test(failedReason)
-      );
+    const failedBecauseCancelled =
+      typeof failedReason === 'string' &&
+      (failedReason.includes('ExportJobCancelledException') ||
+        /^Export job .* was cancelled$/.test(failedReason));
 
     if (
       job.data?.isCancelled === true &&
-      (
-        state === 'waiting' ||
+      (state === 'waiting' ||
         state === 'delayed' ||
         state === 'active' ||
         state === 'completed' ||
-        state === 'failed'
-      )
+        state === 'failed')
     ) {
       return 'cancelled';
     }
@@ -107,84 +128,19 @@ export class WorkspaceCodingExportController {
     switch (state) {
       case 'completed':
         return 'completed';
+      case 'failed':
+        return 'failed';
       case 'active':
         return 'processing';
       case 'waiting':
       case 'delayed':
+      case 'stuck':
         return 'pending';
       case 'paused':
         return 'paused';
       default:
-        return state;
-    }
-  }
-
-  private validateBackgroundExportRequest(
-    body: Omit<ExportJobData, 'workspaceId' | 'userId'>
-  ): void {
-    if (
-      body.exportType === 'results-by-version' &&
-      body.format !== undefined &&
-      body.format !== 'csv' &&
-      body.format !== 'excel'
-    ) {
-      throw new BadRequestException(
-        'results-by-version exports support only "csv" or "excel" format'
-      );
-    }
-
-    if (
-      body.exportType === 'results-by-version' &&
-      body.includeGeoGebraFiles &&
-      body.format !== 'excel'
-    ) {
-      throw new BadRequestException(
-        'GeoGebra file packages are supported only for Excel result exports'
-      );
-    }
-
-    if (
-      body.exportType === 'results-by-version' &&
-      body.includeGeoGebraFiles &&
-      body.includeResponseValues === false
-    ) {
-      throw new BadRequestException(
-        'GeoGebra file packages require response values because links are written to the value column'
-      );
-    }
-
-    if (
-      body.exportType === 'item-matrix' &&
-      body.format !== undefined &&
-      body.format !== 'csv' &&
-      body.format !== 'excel'
-    ) {
-      throw new BadRequestException(
-        'item-matrix exports support only "csv" or "excel" format'
-      );
-    }
-
-    if (
-      body.exportType === 'item-matrix' &&
-      body.matrixValue !== undefined &&
-      body.matrixValue !== 'code' &&
-      body.matrixValue !== 'score'
-    ) {
-      throw new BadRequestException(
-        'item-matrix exports support only "code" or "score" matrix values'
-      );
-    }
-
-    if (
-      body.exportType === 'item-matrix' &&
-      body.version !== undefined &&
-      body.version !== 'v1' &&
-      body.version !== 'v2' &&
-      body.version !== 'v3'
-    ) {
-      throw new BadRequestException(
-        'item-matrix exports support only "v1", "v2" or "v3" versions'
-      );
+        this.logger.warn(`Unknown export job state "${state}"; using pending`);
+        return 'pending';
     }
   }
 
@@ -199,11 +155,23 @@ export class WorkspaceCodingExportController {
     return userId;
   }
 
-  private getPublicExportErrorDetails(error?: string): {
-    errorCode?: string;
-    errorDetails?: Record<string, number | string | boolean>;
-  } {
-    const worksheetLimitMatch = error?.match(/enthaelt\s+(\d+)\s+Unit-Variable-Kombinationen[\s\S]*Limit von\s+(\d+)\s+Tabellenblaettern/i);
+  private async getPublicExportErrorDetails(
+    jobId: string,
+    error?: string
+  ): Promise<ExportJobErrorMetadataDto> {
+    const itemMatrixError = parseItemMatrixExportIncompleteError(error);
+    if (itemMatrixError) {
+      return {
+        errorCode: ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE,
+        errorDetails: await this.exportArtifactService.getErrorDetails(
+          jobId,
+          itemMatrixError.total
+        )
+      };
+    }
+    const worksheetLimitMatch = error?.match(
+      /enthaelt\s+(\d+)\s+Unit-Variable-Kombinationen[\s\S]*Limit von\s+(\d+)\s+Tabellenblaettern/i
+    );
     if (!worksheetLimitMatch) {
       return {};
     }
@@ -217,15 +185,13 @@ export class WorkspaceCodingExportController {
     };
   }
 
-  private toPublicExportProgress(
-    progress: unknown
-  ): {
-      progress: number;
-      progressPhase?: string;
-      processedRows?: number;
-      totalRows?: number;
-      progressMessage?: string;
-    } {
+  private toPublicExportProgress(progress: unknown): {
+    progress: number;
+    progressPhase?: ExportJobProgressPhaseDto;
+    processedRows?: number;
+    totalRows?: number;
+    progressMessage?: string;
+  } {
     if (typeof progress === 'number') {
       return {
         progress: Math.max(0, Math.min(100, Math.round(progress)))
@@ -248,7 +214,9 @@ export class WorkspaceCodingExportController {
       ...(progressObject.phase ? { progressPhase: progressObject.phase } : {}),
       ...(Number.isFinite(processedRows) ? { processedRows } : {}),
       ...(Number.isFinite(totalRows) ? { totalRows } : {}),
-      ...(progressObject.message ? { progressMessage: progressObject.message } : {})
+      ...(progressObject.message ?
+        { progressMessage: progressObject.message } :
+        {})
     };
   }
 
@@ -498,8 +466,15 @@ export class WorkspaceCodingExportController {
   @ApiQuery({
     name: 'includeGeoGebraResponseValues',
     required: false,
-    description: 'Include GeoGebra response values as raw strings instead of placeholders',
+    description:
+      'Include GeoGebra response values as raw strings instead of placeholders',
     type: Boolean
+  })
+  @ApiQuery({
+    name: 'missingsProfileId',
+    required: true,
+    description: 'Missing profile used to resolve versioned missing values.',
+    type: Number
   })
   @ApiOkResponse({
     description: 'Coding results for specified version exported as CSV',
@@ -521,20 +496,29 @@ export class WorkspaceCodingExportController {
                    includeReplayUrls: boolean,
       @Query('includeResponseValues', { transform: value => value !== 'false' })
                    includeResponseValues: boolean,
-      @Query('includeGeoGebraResponseValues', { transform: value => value === 'true' })
+      @Query('includeGeoGebraResponseValues', {
+        transform: value => value === 'true'
+      })
                    includeGeoGebraResponseValues: boolean,
-                   @Res() res: Response
+                   @Res() res: Response,
+                   @Query('missingsProfileId') missingsProfileId?: string
   ): Promise<void> {
     try {
-      const csvStream = await this.codingExportOrchestratorService.exportResultsByVersionAsCsv({
-        workspaceId: workspace_id,
+      const resolvedMissingsProfileId = this.parseVersionedExportMissingsProfileId(
         version,
-        authToken: authToken || '',
-        serverUrl,
-        includeReplayUrl: includeReplayUrls,
-        includeResponseValues,
-        includeGeoGebraResponseValues
-      });
+        missingsProfileId
+      );
+      const csvStream =
+        await this.codingExportOrchestratorService.exportResultsByVersionAsCsv({
+          workspaceId: workspace_id,
+          version,
+          authToken: authToken || '',
+          serverUrl,
+          includeReplayUrl: includeReplayUrls,
+          includeResponseValues,
+          includeGeoGebraResponseValues,
+          missingsProfileId: resolvedMissingsProfileId
+        });
 
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader(
@@ -558,7 +542,11 @@ export class WorkspaceCodingExportController {
       );
 
       if (!res.headersSent) {
-        res.status(500).json({ error: 'Export failed' });
+        if (error instanceof BadRequestException) {
+          res.status(error.getStatus()).json(error.getResponse());
+        } else {
+          res.status(500).json({ error: 'Export failed' });
+        }
       } else if (!res.writableEnded) {
         res.end();
       }
@@ -602,17 +590,26 @@ export class WorkspaceCodingExportController {
   @ApiQuery({
     name: 'includeGeoGebraResponseValues',
     required: false,
-    description: 'Include GeoGebra response values as raw strings instead of placeholders',
+    description:
+      'Include GeoGebra response values as raw strings instead of placeholders',
     type: Boolean
   })
   @ApiQuery({
     name: 'includeGeoGebraFiles',
     required: false,
-    description: 'Return a ZIP package with GeoGebra responses as .ggb files and Excel hyperlinks',
+    description:
+      'Return a ZIP package with GeoGebra responses as .ggb files and Excel hyperlinks',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'missingsProfileId',
+    required: true,
+    description: 'Missing profile used to resolve versioned missing values.',
+    type: Number
+  })
   @ApiOkResponse({
-    description: 'Coding results for specified version exported as Excel or as ZIP when GeoGebra files are included',
+    description:
+      'Coding results for specified version exported as Excel or as ZIP when GeoGebra files are included',
     content: {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
         schema: {
@@ -637,11 +634,14 @@ export class WorkspaceCodingExportController {
                    includeReplayUrls: boolean,
       @Query('includeResponseValues', { transform: value => value !== 'false' })
                    includeResponseValues: boolean,
-      @Query('includeGeoGebraResponseValues', { transform: value => value === 'true' })
+      @Query('includeGeoGebraResponseValues', {
+        transform: value => value === 'true'
+      })
                    includeGeoGebraResponseValues: boolean,
       @Query('includeGeoGebraFiles', { transform: value => value === 'true' })
                    includeGeoGebraFiles: boolean,
-                   @Res() res: Response
+                   @Res() res: Response,
+                   @Query('missingsProfileId') missingsProfileId?: string
   ): Promise<void> {
     if (includeGeoGebraFiles && !includeResponseValues) {
       throw new BadRequestException(
@@ -649,16 +649,22 @@ export class WorkspaceCodingExportController {
       );
     }
 
-    const buffer = await this.codingExportOrchestratorService.exportResultsByVersionAsExcel({
-      workspaceId: workspace_id,
+    const resolvedMissingsProfileId = this.parseVersionedExportMissingsProfileId(
       version,
-      authToken: authToken || '',
-      serverUrl,
-      includeReplayUrl: includeReplayUrls,
-      includeResponseValues,
-      includeGeoGebraResponseValues,
-      includeGeoGebraFiles
-    });
+      missingsProfileId
+    );
+    const buffer =
+      await this.codingExportOrchestratorService.exportResultsByVersionAsExcel({
+        workspaceId: workspace_id,
+        version,
+        authToken: authToken || '',
+        serverUrl,
+        includeReplayUrl: includeReplayUrls,
+        includeResponseValues,
+        includeGeoGebraResponseValues,
+        includeGeoGebraFiles,
+        missingsProfileId: resolvedMissingsProfileId
+      });
 
     res.setHeader(
       'Content-Type',
@@ -727,7 +733,8 @@ export class WorkspaceCodingExportController {
     name: 'includeModalValue',
     required: false,
     type: Boolean,
-    description: 'Include modal value, deviation count, modal tie and modal candidate columns'
+    description:
+      'Include modal value, deviation count, modal tie and modal candidate columns'
   })
   @ApiQuery({
     name: 'excludeAutoCoded',
@@ -769,9 +776,8 @@ export class WorkspaceCodingExportController {
       const usePseudoCodersParam = usePseudoCoders === 'true';
       const doubleCodingMethodParam =
         (doubleCodingMethod as
-          | 'new-row-per-variable'
-          | 'new-column-per-coder'
-          | 'most-frequent') || 'most-frequent';
+          'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent') ||
+        'most-frequent';
       const includeCommentsParam = includeComments === 'true';
       const includeModalValueParam = includeModalValue === 'true';
       const excludeAutoCodedParam = excludeAutoCoded === 'true'; // Default false
@@ -913,7 +919,8 @@ export class WorkspaceCodingExportController {
     name: 'includeModalValue',
     required: false,
     type: Boolean,
-    description: 'Include modal value, deviation count, modal tie and modal candidate columns'
+    description:
+      'Include modal value, deviation count, modal tie and modal candidate columns'
   })
   @ApiQuery({
     name: 'includeDoubleCoded',
@@ -1196,9 +1203,12 @@ export class WorkspaceCodingExportController {
   @ApiParam({ name: 'workspace_id', type: Number })
   async estimateExportJob(
     @WorkspaceId() workspace_id: number,
-      @Body() body: Omit<ExportJobData, 'workspaceId' | 'userId'>
+      @Body() body: BackgroundExportRequest
   ): Promise<ByVariableExportEstimateResponse> {
-    if (body.exportType !== 'by-variable' && body.exportType !== 'by-variable-compact') {
+    if (
+      body.exportType !== 'by-variable' &&
+      body.exportType !== 'by-variable-compact'
+    ) {
       throw new BadRequestException(
         'Export estimates are only supported for by-variable exports'
       );
@@ -1236,7 +1246,8 @@ export class WorkspaceCodingExportController {
             'coding-times',
             'coding-list',
             'results-by-version',
-            'item-matrix'
+            'item-matrix',
+            'psychometrics'
           ],
           description: 'Type of export to generate'
         },
@@ -1255,6 +1266,48 @@ export class WorkspaceCodingExportController {
           type: 'string',
           enum: ['code', 'score'],
           description: 'Cell value for item-matrix exports'
+        },
+        partWholeCorrection: {
+          type: 'boolean',
+          description:
+            'Subtract the current item score from its domain score. Defaults to true.'
+        },
+        missingsProfileId: {
+          type: 'number',
+          description:
+            'Missing profile used for codes and missing scores. Required for item-matrix and every results-by-version export.'
+        },
+        notReachedScope: {
+          type: 'string',
+          enum: ['unit', 'testlet', 'booklet'],
+          description: 'Range used to distinguish mnr from omitted items'
+        },
+        recodeTrailingOmissions: {
+          type: 'boolean',
+          description:
+            'Recode trailing omissions as mnr for testlet or booklet scope'
+        },
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['unitId', 'itemId'],
+            properties: {
+              unitId: { type: 'string' },
+              itemId: { type: 'string' }
+            }
+          },
+          description: 'Selected VOMD items; omitted means all items'
+        },
+        domain: {
+          type: 'object',
+          description:
+            'Psychometric domain selection: the whole workspace or one complete, single-valued VOMD field'
+        },
+        maxCategoryCount: {
+          type: 'number',
+          description:
+            'Maximum number of raw categories per item. Defaults to 10.'
         },
         outputCommentsInsteadOfCodes: { type: 'boolean' },
         includeReplayUrl: { type: 'boolean' },
@@ -1296,20 +1349,28 @@ export class WorkspaceCodingExportController {
   async startExportJob(
     @WorkspaceId() workspace_id: number,
       @Req() req: Request,
-      @Body() body: Omit<ExportJobData, 'workspaceId' | 'userId'>
+      @Body() body: unknown
   ): Promise<{ jobId: string; message: string }> {
-    this.validateBackgroundExportRequest(body);
+    let request: BackgroundExportRequest;
+    try {
+      request = parseExportRequest(body);
+    } catch (error) {
+      if (error instanceof ExportRequestValidationError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
 
     try {
       const userId = this.getRequestUserId(req);
       const job = await this.jobQueueService.addExportJob({
-        ...body,
+        ...request,
         workspaceId: workspace_id,
         userId
       });
 
       this.logger.log(
-        `Export job ${job.id} created for workspace ${workspace_id}, type: ${body.exportType}`
+        `Export job ${job.id} created for workspace ${workspace_id}, type: ${request.exportType}`
       );
 
       return {
@@ -1323,6 +1384,38 @@ export class WorkspaceCodingExportController {
       );
       throw error;
     }
+  }
+
+  @Get(':workspace_id/coding/export/psychometric-domain-candidates')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description:
+      'Complete and incomplete VOMD fields that can be considered for psychometric domain grouping'
+  })
+  async getPsychometricDomainCandidates(
+    @WorkspaceId() workspace_id: number
+  ): Promise<PsychometricDomainCandidatesDto> {
+    return this.codingPsychometricExportService.getDomainCandidates(
+      workspace_id
+    );
+  }
+
+  @Get(':workspace_id/coding/export/item-dataset-options')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description:
+      'Selectable VOMD items and mapping issues for the item dataset export'
+  })
+  async getItemDatasetOptions(
+    @WorkspaceId() workspace_id: number
+  ): Promise<ItemDatasetOptionsDto> {
+    return this.codingExportOrchestratorService.getItemDatasetOptions(
+      workspace_id
+    );
   }
 
   @Get(':workspace_id/coding/export/job/:jobId')
@@ -1341,7 +1434,14 @@ export class WorkspaceCodingExportController {
       properties: {
         status: {
           type: 'string',
-          enum: ['pending', 'processing', 'completed', 'failed', 'cancelled'],
+          enum: [
+            'pending',
+            'processing',
+            'completed',
+            'failed',
+            'cancelled',
+            'paused'
+          ],
           description: 'Current status of the export job'
         },
         progress: {
@@ -1380,7 +1480,7 @@ export class WorkspaceCodingExportController {
   async getExportJobStatus(
     @WorkspaceId() workspace_id: number,
       @Param('jobId') jobId: string
-  ): Promise<PublicExportJobStatus> {
+  ): Promise<ExportJobStatusResponseDto> {
     try {
       const job = await this.jobQueueService.getExportJob(jobId);
       if (!job) {
@@ -1399,12 +1499,21 @@ export class WorkspaceCodingExportController {
         status,
         ...progress,
         ...(status === 'completed' && job.returnvalue ?
-          { result: this.toPublicExportJobResult(job.returnvalue as ExportJobResult) } :
+          {
+            result: this.toPublicExportJobResult(
+              job.returnvalue as ExportJobResult
+            )
+          } :
           {}),
-        ...(status === 'failed' && failedReason ? {
-          error: failedReason,
-          ...this.getPublicExportErrorDetails(failedReason)
-        } : {})
+        ...(status === 'failed' && failedReason ?
+          {
+            error: failedReason,
+            ...await this.getPublicExportErrorDetails(
+              job.id?.toString() || jobId,
+              failedReason
+            )
+          } :
+          {})
       };
     } catch (error) {
       this.logger.error(
@@ -1415,7 +1524,9 @@ export class WorkspaceCodingExportController {
     }
   }
 
-  private toPublicExportJobResult(result: ExportJobResult): PublicExportJobResult {
+  private toPublicExportJobResult(
+    result: ExportJobResult
+  ): ExportJobResultDto {
     return {
       fileId: result.fileId,
       fileName: result.fileName,
@@ -1453,9 +1564,7 @@ export class WorkspaceCodingExportController {
       @Res() res: Response
   ): Promise<void> {
     try {
-      const metadata = await this.cacheService.get<ExportJobResult>(
-        `export-result:${jobId}`
-      );
+      const metadata = await this.exportArtifactService.getArtifact(jobId);
 
       if (!metadata) {
         res.status(404).json({ error: 'Export file not found or expired' });
@@ -1468,12 +1577,6 @@ export class WorkspaceCodingExportController {
       }
 
       const filePath = metadata.filePath;
-      const fs = await import('fs');
-
-      if (!fs.existsSync(filePath)) {
-        res.status(404).json({ error: 'Export file not found on disk' });
-        return;
-      }
 
       const normalizedFileName = metadata.fileName.toLowerCase();
       const isCsv =
@@ -1481,7 +1584,8 @@ export class WorkspaceCodingExportController {
         metadata.exportType === 'detailed';
       const isJson = normalizedFileName.endsWith('.json');
       const isZip = normalizedFileName.endsWith('.zip');
-      let contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      let contentType =
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       if (isCsv) {
         contentType = 'text/csv; charset=utf-8';
       } else if (isJson) {
@@ -1511,6 +1615,90 @@ export class WorkspaceCodingExportController {
     }
   }
 
+  @Get(':workspace_id/coding/export/job/:jobId/item-matrix-diagnostics')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: String })
+  @ApiOkResponse({ description: 'Non-personal item matrix diagnostics' })
+  async getItemMatrixExportDiagnostics(
+    @WorkspaceId() workspace_id: number,
+      @Param('jobId') jobId: string
+  ): Promise<ItemMatrixExportDiagnosticsDto> {
+    const job = await this.jobQueueService.getExportJob(jobId);
+    if (!job) {
+      throw new NotFoundException('Export job not found');
+    }
+    if (job.data.workspaceId !== workspace_id) {
+      throw new ForbiddenException('Access denied to this export');
+    }
+    if (job.data.exportType !== 'item-matrix' || await job.getState() !== 'failed') {
+      throw new BadRequestException(
+        'Diagnostics are available only for failed item matrix exports'
+      );
+    }
+    const diagnostics =
+      await this.exportArtifactService.getDiagnostics(jobId);
+    if (!diagnostics) {
+      throw new NotFoundException('Item matrix diagnostics not found or expired');
+    }
+    return diagnostics;
+  }
+
+  @Get(':workspace_id/coding/export/job/:jobId/download-incomplete')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: String })
+  @ApiOkResponse({
+    description: 'Explicitly requested incomplete item matrix package',
+    content: {
+      'application/zip': {
+        schema: { type: 'string', format: 'binary' }
+      }
+    }
+  })
+  async downloadIncompleteItemMatrix(
+    @WorkspaceId() workspace_id: number,
+      @Param('jobId') jobId: string,
+      @Res() res: Response
+  ): Promise<void> {
+    const job = await this.jobQueueService.getExportJob(jobId);
+    if (!job) {
+      res.status(404).json({ error: 'Export job not found' });
+      return;
+    }
+    if (job.data.workspaceId !== workspace_id) {
+      res.status(403).json({ error: 'Access denied to this export' });
+      return;
+    }
+    if (job.data.exportType !== 'item-matrix' || await job.getState() !== 'failed') {
+      res.status(400).json({
+        error: 'Incomplete downloads are available only for failed item matrix exports'
+      });
+      return;
+    }
+    const metadata =
+      await this.exportArtifactService.getIncompleteArtifact(jobId);
+    if (!metadata) {
+      res.status(404).json({
+        error: 'Incomplete item matrix package not found or expired'
+      });
+      return;
+    }
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${metadata.fileName}"`
+    );
+    res.setHeader('Content-Length', metadata.fileSize);
+    await this.pipeExportStream(
+      fs.createReadStream(metadata.filePath),
+      res,
+      `Error streaming incomplete item matrix ${jobId} for workspace ${workspace_id}`
+    );
+  }
+
   @Get(':workspace_id/coding/export/jobs')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
@@ -1523,11 +1711,27 @@ export class WorkspaceCodingExportController {
         type: 'object',
         properties: {
           jobId: { type: 'string' },
-          status: { type: 'string' },
+          status: {
+            type: 'string',
+            enum: [
+              'pending',
+              'processing',
+              'completed',
+              'failed',
+              'cancelled',
+              'paused'
+            ]
+          },
           progress: { type: 'number' },
           progressPhase: {
             type: 'string',
-            enum: ['preparing', 'counting', 'writing', 'finalizing', 'completed']
+            enum: [
+              'preparing',
+              'counting',
+              'writing',
+              'finalizing',
+              'completed'
+            ]
           },
           processedRows: { type: 'number' },
           totalRows: { type: 'number' },
@@ -1541,9 +1745,9 @@ export class WorkspaceCodingExportController {
   async getExportJobs(@WorkspaceId() workspace_id: number): Promise<
   Array<{
     jobId: string;
-    status: string;
+    status: ExportJobStateDto;
     progress: number;
-    progressPhase?: string;
+    progressPhase?: ExportJobProgressPhaseDto;
     processedRows?: number;
     totalRows?: number;
     progressMessage?: string;
@@ -1615,26 +1819,15 @@ export class WorkspaceCodingExportController {
         };
       }
 
+      await this.exportArtifactService.deleteArtifacts(jobId);
+
       const success = await this.jobQueueService.deleteExportJob(jobId);
-
       if (success) {
-        const metadata = await this.cacheService.get<ExportJobResult>(
-          `export-result:${jobId}`
-        );
-        if (metadata && metadata.filePath) {
-          const fs = await import('fs');
-          if (fs.existsSync(metadata.filePath)) {
-            fs.unlinkSync(metadata.filePath);
-          }
-        }
-        await this.cacheService.delete(`export-result:${jobId}`);
-
         return {
           success: true,
           message: 'Export job deleted successfully'
         };
       }
-
       return {
         success: false,
         message: 'Export job not found'
@@ -1718,7 +1911,8 @@ export class WorkspaceCodingExportController {
         if (marked || job.data.isCancelled) {
           return {
             success: true,
-            message: 'Export job cancellation requested (job will stop at next checkpoint)'
+            message:
+              'Export job cancellation requested (job will stop at next checkpoint)'
           };
         }
         return {

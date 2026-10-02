@@ -1,6 +1,8 @@
 import { Response } from 'express';
+import { ForbiddenException, HttpException } from '@nestjs/common';
 import { WorkspaceCodingReplayController } from './workspace-coding-replay.controller';
 import FileUpload from '../../database/entities/file_upload.entity';
+import { ReplayResourceNotFoundError } from '../../database/services/test-results';
 
 jest.mock('libxmljs2', () => ({}));
 
@@ -32,6 +34,23 @@ describe('WorkspaceCodingReplayController', () => {
   const createResponse = (): HeaderResponse => ({
     setHeader: jest.fn()
   } as unknown as HeaderResponse);
+
+  const expectHttpError = async (
+    promise: Promise<unknown>,
+    status: number,
+    body?: unknown
+  ): Promise<void> => {
+    try {
+      await promise;
+      throw new Error('Expected an HttpException');
+    } catch (error) {
+      expect(error).toBeInstanceOf(HttpException);
+      expect((error as HttpException).getStatus()).toBe(status);
+      if (body) {
+        expect((error as HttpException).getResponse()).toEqual(body);
+      }
+    }
+  };
 
   const createController = (
     replayPayloadBrowserCacheSeconds?: string
@@ -150,16 +169,126 @@ describe('WorkspaceCodingReplayController', () => {
     expect(res.setHeader).toHaveBeenCalledWith('Vary', 'Authorization');
   });
 
-  it('should not cache replay errors', async () => {
+  it.each([
+    {
+      prepare: () => workspacePlayerService.findUnitDef.mockResolvedValueOnce([]),
+      code: 'REPLAY_UNIT_DEFINITION_NOT_FOUND',
+      message: 'Replay unit definition was not found.'
+    },
+    {
+      prepare: () => workspacePlayerService.findUnit.mockResolvedValueOnce([]),
+      code: 'REPLAY_UNIT_NOT_FOUND',
+      message: 'Replay unit was not found.'
+    },
+    {
+      prepare: () => workspacePlayerService.findPlayer.mockResolvedValueOnce([]),
+      code: 'REPLAY_PLAYER_NOT_FOUND',
+      message: 'Replay player was not found.'
+    }
+  ])('should map missing replay assets to a typed 404 ($code)', async ({
+    prepare,
+    code,
+    message
+  }) => {
     const controller = createController();
     const res = createResponse();
-    workspacePlayerService.findUnitDef.mockResolvedValueOnce([]);
+    prepare();
 
-    await expect(controller.getReplayAssets(12, 'unit-1', res)).rejects.toThrow(
-      'Error retrieving replay assets: Unit definition not found for unit-1'
+    await expectHttpError(
+      controller.getReplayAssets(12, 'unit-1', res),
+      404,
+      { statusCode: 404, code, message }
     );
 
     expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
     expect(res.setHeader).toHaveBeenCalledWith('Vary', 'Authorization');
+  });
+
+  it('should use the same typed error contract on the legacy payload route', async () => {
+    const controller = createController();
+    const res = createResponse();
+    workspacePlayerService.findUnitDef.mockResolvedValueOnce([]);
+
+    await expectHttpError(
+      controller.getReplayPayload(12, 'person@code@booklet', 'unit-1', res),
+      404,
+      {
+        statusCode: 404,
+        code: 'REPLAY_UNIT_DEFINITION_NOT_FOUND',
+        message: 'Replay unit definition was not found.'
+      }
+    );
+  });
+
+  it.each([
+    {
+      run: (
+        controller: WorkspaceCodingReplayController,
+        res: HeaderResponse
+      ) => controller.getReplayResponse(12, 'person@code@booklet', 'unit-1', res)
+    },
+    {
+      run: (
+        controller: WorkspaceCodingReplayController,
+        res: HeaderResponse
+      ) => controller.getReplayPayload(12, 'person@code@booklet', 'unit-1', res)
+    }
+  ])('should map response-domain errors consistently', async ({ run }) => {
+    const controller = createController();
+    const res = createResponse();
+    workspaceTestResultsService.findUnitResponse.mockRejectedValueOnce(
+      new ReplayResourceNotFoundError('REPLAY_PERSON_NOT_FOUND')
+    );
+
+    await expectHttpError(run(controller, res), 404, {
+      statusCode: 404,
+      code: 'REPLAY_PERSON_NOT_FOUND',
+      message: 'Replay person was not found.'
+    });
+  });
+
+  it('should preserve existing HTTP exceptions', async () => {
+    const controller = createController();
+    const res = createResponse();
+    workspaceTestResultsService.findUnitResponse.mockRejectedValueOnce(
+      new ForbiddenException()
+    );
+
+    await expectHttpError(
+      controller.getReplayResponse(12, 'person@code@booklet', 'unit-1', res),
+      403
+    );
+  });
+
+  it.each([
+    {
+      prepare: () => workspacePlayerService.findUnit.mockResolvedValueOnce([
+        { data: '<Unit>' } as FileUpload
+      ])
+    },
+    {
+      prepare: () => workspacePlayerService.findUnit.mockResolvedValueOnce([
+        {
+          data: '<Unit><DefinitionRef player="123" /></Unit>'
+        } as FileUpload
+      ])
+    },
+    {
+      prepare: () => workspaceTestResultsService.findUnitResponse
+        .mockRejectedValueOnce(new Error('database unavailable')),
+      responseOnly: true
+    }
+  ])('should keep unexpected replay failures as HTTP 500', async ({
+    prepare,
+    responseOnly
+  }) => {
+    const controller = createController();
+    const res = createResponse();
+    prepare();
+
+    const request = responseOnly ?
+      controller.getReplayResponse(12, 'person@code@booklet', 'unit-1', res) :
+      controller.getReplayAssets(12, 'unit-1', res);
+    await expectHttpError(request, 500);
   });
 });

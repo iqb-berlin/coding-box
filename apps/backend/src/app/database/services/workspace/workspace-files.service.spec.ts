@@ -233,7 +233,19 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     createQueryBuilder: jest.fn(),
     find: jest.fn(),
     findOne: jest.fn(),
-    upsert: jest.fn().mockResolvedValue(undefined)
+    upsert: jest.fn().mockResolvedValue(undefined),
+    manager: {
+      connection: {
+        createQueryRunner: jest.fn(() => ({
+          connect: jest.fn().mockResolvedValue(undefined),
+          query: jest.fn().mockResolvedValue([{ locked: true }]),
+          manager: {
+            getRepository: jest.fn(() => mockFileUploadRepository)
+          },
+          release: jest.fn().mockResolvedValue(undefined)
+        }))
+      }
+    }
   };
   const mockCodingStatisticsService = {
     invalidateCache: jest.fn().mockResolvedValue(undefined),
@@ -242,8 +254,8 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
   const mockCodingFreshnessService = {
     markUnitsStaleAfterCodingSchemeChange: jest.fn().mockResolvedValue(undefined)
   };
-  const mockCodingReadinessCacheInvalidator = {
-    invalidateWorkspaceReadinessCache: jest.fn()
+  const mockWorkspaceTestResultsService = {
+    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
   };
   const mockWorkspaceFileParsingService = {
     extractUnitInfo: jest.fn().mockResolvedValue({
@@ -266,12 +278,11 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
       {} as unknown as CtorParams[8],
       {} as unknown as CtorParams[9],
       { delete: jest.fn() } as unknown as CtorParams[10],
-      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11],
+      mockWorkspaceTestResultsService as unknown as CtorParams[11],
       undefined,
       mockCodingFreshnessService as unknown as CtorParams[13],
       undefined,
-      undefined,
-      mockCodingReadinessCacheInvalidator as unknown as CtorParams[16]
+      undefined
     );
   }
 
@@ -289,6 +300,34 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('loads only the matching Unit file for coding-scheme validation', async () => {
+    const service = makeService();
+    mockFileUploadRepository.find.mockResolvedValueOnce([{
+      file_id: 'UNIT_A.XML',
+      data: Buffer.from(
+        '<Unit><BaseVariables><Variable id="v1" alias="v1" type="string"/></BaseVariables></Unit>'
+      )
+    }]);
+
+    const result = await service.getVariableInfoForScheme(
+      7,
+      'unit_a.vocs.xml'
+    );
+
+    const findOptions = mockFileUploadRepository.find.mock.calls[0][0];
+    expect(findOptions.where).toEqual(expect.objectContaining({
+      workspace_id: 7,
+      file_type: 'Unit',
+      file_id_normalized: 'UNIT_A'
+    }));
+    expect(findOptions.select).toEqual(['file_id', 'data']);
+    expect(result).toEqual([expect.objectContaining({
+      id: 'v1',
+      alias: 'v1',
+      type: 'string'
+    })]);
   });
 
   it('marks auto-coding and manual coding stale after coding scheme rule changes', async () => {
@@ -441,7 +480,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     expect(mockCodingStatisticsService.invalidateCache).not.toHaveBeenCalled();
     expect(mockCodingStatisticsService.invalidateIncompleteVariablesCache)
       .toHaveBeenCalledWith(1);
-    expect(mockCodingReadinessCacheInvalidator.invalidateWorkspaceReadinessCache)
+    expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache)
       .toHaveBeenCalledWith(1);
   });
 
@@ -614,12 +653,12 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     ]);
   });
 
-  it('invalidates auto-coding readiness cache when workspace file caches are invalidated', async () => {
+  it('invalidates workspace stats caches when workspace file caches are invalidated', async () => {
     const service = makeService();
 
     await service.invalidateWorkspaceFileCaches(1);
 
-    expect(mockCodingReadinessCacheInvalidator.invalidateWorkspaceReadinessCache)
+    expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache)
       .toHaveBeenCalledWith(1);
   });
 });
@@ -733,7 +772,19 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
   };
 
   const mockFileUploadRepository = {
-    createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder)
+    createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+    manager: {
+      connection: {
+        createQueryRunner: jest.fn(() => ({
+          connect: jest.fn().mockResolvedValue(undefined),
+          query: jest.fn().mockResolvedValue([{ locked: true }]),
+          manager: {
+            getRepository: jest.fn(() => mockFileUploadRepository)
+          },
+          release: jest.fn().mockResolvedValue(undefined)
+        }))
+      }
+    }
   };
 
   const mockCodingStatisticsService = {
@@ -781,6 +832,9 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
       'id IN (:...ids)',
       { ids: [1, 2, 3] }
     );
+    const queryRunner = mockFileUploadRepository.manager.connection
+      .createQueryRunner.mock.results[0].value;
+    expect(queryRunner.manager.getRepository).toHaveBeenCalledTimes(1);
     expect(mockQueryBuilder.execute).toHaveBeenCalled();
     expect(result).toBe(true);
   });
@@ -1157,6 +1211,7 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
         alias: 'base_alias',
         sourceType: 'BASE',
         type: 'string',
+        processing: ['TAKE_EMPTY_AS_VALID'],
         codes: []
       },
       {
@@ -1308,6 +1363,7 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
       isDerived: false,
       multiple: true,
       nullable: false,
+      processing: ['TAKE_EMPTY_AS_VALID'],
       valuesComplete: true,
       values: [
         { value: 'A', label: 'Alpha' },
@@ -1380,6 +1436,55 @@ describe('WorkspaceFilesService.getUnitVariableDetails', () => {
         ]
       }
     );
+  });
+
+  it('should expose derived metadata only after a complete refresh', async () => {
+    const service = makeService();
+
+    const metadata = await service.getDerivedVariableMetadata(1);
+
+    expect(metadata.metadataAvailable).toBe(true);
+    expect(metadata.derivedVariableMap.get('UnitA')).toEqual(new Set([
+      'derived_alias',
+      'xml_derived_alias',
+      'scheme_only_alias',
+      'general_instruction_only'
+    ]));
+    expect(
+      metadata.derivedVariablesBySourceMap.get(
+        getManualCodingScopeKey('UnitA', 'base_alias')
+      )
+    ).toEqual(new Set(['derived_alias', 'xml_derived_alias']));
+    expect(cacheStore.get(
+      'workspace_files:v2:derived_variable_metadata_complete:1'
+    )).toBe(true);
+  });
+
+  it('should mark derived metadata unavailable after a parsing error', async () => {
+    mockFileUploadRepository.find.mockImplementation(({ where }) => {
+      if (where.file_type === 'Unit') {
+        return Promise.resolve(unitFiles);
+      }
+      if (where.file_type === 'Resource') {
+        return Promise.resolve([{
+          ...codingSchemes[0],
+          data: '{invalid json'
+        }]);
+      }
+      return Promise.resolve([]);
+    });
+    const service = makeService();
+
+    const metadata = await service.getDerivedVariableMetadata(1);
+
+    expect(metadata).toEqual({
+      metadataAvailable: false,
+      derivedVariableMap: new Map(),
+      derivedVariablesBySourceMap: new Map()
+    });
+    expect(cacheStore.get(
+      'workspace_files:v2:derived_variable_metadata_complete:1'
+    )).toBe(false);
   });
 
   it('should cache variables with manual instructions by response alias', async () => {

@@ -1,5 +1,5 @@
 import { Component, inject, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTableModule } from '@angular/material/table';
@@ -24,7 +24,6 @@ interface MatrixRow {
   templateUrl: './access-rights-matrix-dialog.component.html',
   styleUrls: ['./access-rights-matrix-dialog.component.scss'],
   imports: [
-    CommonModule,
     MatDialogModule,
     MatButtonModule,
     MatTableModule,

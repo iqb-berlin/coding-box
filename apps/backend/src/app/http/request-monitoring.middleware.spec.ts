@@ -2,19 +2,22 @@ import { EventEmitter } from 'events';
 import { Response } from 'express';
 import {
   DEFAULT_SLOW_REQUEST_THRESHOLD_MS,
+  DEFAULT_IN_FLIGHT_REQUEST_THRESHOLD_MS,
   createRequestMonitoringMiddleware,
+  parseBooleanFlag,
+  parseInFlightRequestThresholdMs,
   parseSlowRequestThresholdMs
 } from './request-monitoring.middleware';
 import { RequestWithRequestId } from './request-id';
 
 describe('requestMonitoringMiddleware', () => {
-  const createRequest = (request: Partial<RequestWithRequestId> = {}) => ({
+  const createRequest = (request: Partial<RequestWithRequestId> = {}) => Object.assign(new EventEmitter(), {
     method: 'GET',
     url: '/api/admin/workspace/3/coding/incomplete-variables/scope-summary?_t=123',
     originalUrl: '/api/admin/workspace/3/coding/incomplete-variables/scope-summary?_t=123',
     requestId: 'request-1',
     ...request
-  } as RequestWithRequestId);
+  }) as unknown as RequestWithRequestId;
 
   const createResponse = (statusCode: number) => {
     const response = new EventEmitter() as Response & EventEmitter;
@@ -46,7 +49,7 @@ describe('requestMonitoringMiddleware', () => {
 
     expect(next).toHaveBeenCalled();
     expect(logger.warn).toHaveBeenCalledWith(
-      '[request-1] GET /api/admin/workspace/3/coding/incomplete-variables/scope-summary ' +
+      '[request-1] GET /api/admin/workspace/:id/coding/incomplete-variables/scope-summary ' +
       'completed with 200 in 1500 ms (slow request; threshold 1000 ms)'
     );
     expect(logger.error).not.toHaveBeenCalled();
@@ -89,7 +92,7 @@ describe('requestMonitoringMiddleware', () => {
     response.emit('finish');
 
     expect(logger.error).toHaveBeenCalledWith(
-      '[request-1] GET /api/admin/workspace/3/coding/incomplete-variables/scope-summary failed with 500 in 100 ms'
+      '[request-1] GET /api/admin/workspace/:id/coding/incomplete-variables/scope-summary failed with 500 in 100 ms'
     );
     expect(logger.warn).not.toHaveBeenCalled();
   });
@@ -114,10 +117,96 @@ describe('requestMonitoringMiddleware', () => {
     response.emit('finish');
 
     expect(logger.warn).toHaveBeenCalledWith(
-      '[request-1] GET /api/admin/workspace/3/coding ' +
+      '[request-1] GET /api/admin/workspace/:id/coding ' +
       'completed with 200 in 1500 ms (slow request; threshold 1000 ms)'
     );
   });
+
+  it('should remove replay identifiers from monitored paths', () => {
+    const logger = {
+      error: jest.fn(),
+      warn: jest.fn()
+    };
+    const now = createClock(BigInt(0), BigInt(1500000000));
+    const middleware = createRequestMonitoringMiddleware({
+      logger,
+      now,
+      slowRequestThresholdMs: 1000
+    });
+    const response = createResponse(200);
+
+    middleware(createRequest({
+      headers: {
+        'x-replay-attempt-id': 'attempt-1'
+      },
+      originalUrl: '/api/admin/workspace/47/replay-response/login%40code%40booklet/UNIT-1',
+      url: '/api/admin/workspace/47/replay-response/login%40code%40booklet/UNIT-1'
+    }), response, jest.fn());
+    response.emit('finish');
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      '[request-1] GET /api/admin/workspace/:id/replay-response/:testPerson/:unitId attempt=attempt-1 ' +
+      'completed with 200 in 1500 ms (slow request; threshold 1000 ms)'
+    );
+  });
+
+  it('should report requests that remain in flight with pool counters', () => {
+    jest.useFakeTimers();
+    const logger = {
+      error: jest.fn(),
+      warn: jest.fn()
+    };
+    const middleware = createRequestMonitoringMiddleware({
+      getPoolSnapshot: () => ({
+        totalCount: 10,
+        idleCount: 0,
+        waitingCount: 4
+      }),
+      inFlightRequestThresholdMs: 5000,
+      logger
+    });
+
+    middleware(createRequest(), createResponse(200), jest.fn());
+    jest.advanceTimersByTime(5000);
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      '[request-1] GET /api/admin/workspace/:id/coding/incomplete-variables/scope-summary ' +
+      'still running after 5000 ms (postgres pool: total=10, idle=0, waiting=4)'
+    );
+    jest.useRealTimers();
+  });
+
+  it.each(['aborted', 'close'] as const)(
+    'should record a single %s terminal state',
+    eventName => {
+      const logger = {
+        error: jest.fn(),
+        warn: jest.fn()
+      };
+      const now = createClock(BigInt(0), BigInt(250000000));
+      const middleware = createRequestMonitoringMiddleware({
+        logger,
+        now
+      });
+      const request = createRequest();
+      const response = createResponse(200);
+
+      middleware(request, response, jest.fn());
+      if (eventName === 'aborted') {
+        request.emit('aborted');
+      } else {
+        response.emit('close');
+      }
+      response.emit('finish');
+
+      expect(logger.warn).toHaveBeenCalledTimes(1);
+      expect(logger.warn).toHaveBeenCalledWith(
+        '[request-1] GET /api/admin/workspace/:id/coding/incomplete-variables/scope-summary ' +
+        `${eventName === 'close' ? 'closed' : 'aborted'} after 250 ms`
+      );
+      expect(logger.error).not.toHaveBeenCalled();
+    }
+  );
 });
 
 describe('parseSlowRequestThresholdMs', () => {
@@ -130,5 +219,26 @@ describe('parseSlowRequestThresholdMs', () => {
     expect(parseSlowRequestThresholdMs('not-a-number')).toBe(DEFAULT_SLOW_REQUEST_THRESHOLD_MS);
     expect(parseSlowRequestThresholdMs(0)).toBe(DEFAULT_SLOW_REQUEST_THRESHOLD_MS);
     expect(parseSlowRequestThresholdMs(undefined)).toBe(DEFAULT_SLOW_REQUEST_THRESHOLD_MS);
+  });
+});
+
+describe('parseInFlightRequestThresholdMs', () => {
+  it('should parse positive millisecond values', () => {
+    expect(parseInFlightRequestThresholdMs('12000')).toBe(12_000);
+  });
+
+  it('should fall back for invalid values', () => {
+    expect(parseInFlightRequestThresholdMs('invalid'))
+      .toBe(DEFAULT_IN_FLIGHT_REQUEST_THRESHOLD_MS);
+  });
+});
+
+describe('parseBooleanFlag', () => {
+  it.each(['1', 'true', 'YES', 'on'])('should accept %s', value => {
+    expect(parseBooleanFlag(value)).toBe(true);
+  });
+
+  it.each([undefined, '', 'false', '0'])('should reject %s', value => {
+    expect(parseBooleanFlag(value)).toBe(false);
   });
 });

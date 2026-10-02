@@ -1,6 +1,13 @@
 import { TestBed } from '@angular/core/testing';
-import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import {
+  HttpTestingController,
+  provideHttpClientTesting
+} from '@angular/common/http/testing';
+import {
+  provideHttpClient,
+  withInterceptorsFromDi
+} from '@angular/common/http';
+import { of } from 'rxjs';
 import {
   TestPersonCodingService,
   CodingStatistics,
@@ -10,15 +17,22 @@ import {
   AppliedResultsOverview
 } from './test-person-coding.service';
 import { SERVER_URL } from '../../injection-tokens';
-import { ResponseMatchingFlag } from '../../ws-admin/services/workspace-settings.service';
+import { AppService } from '../../core/services/app.service';
+import {
+  ResponseMatchingFlag,
+  WorkspaceSettingsService
+} from '../../ws-admin/services/workspace-settings.service';
 import { CodingBackgroundJobsService } from './coding-background-jobs.service';
 import { AuthService } from '../../core/services/auth.service';
+import type { ManualCodingPlanningSnapshot } from './manual-coding-planning-snapshot.model';
 
 describe('TestPersonCodingService', () => {
   let service: TestPersonCodingService;
   let httpMock: HttpTestingController;
   let codingBackgroundJobsService: CodingBackgroundJobsService;
   let authService: { getValidToken: jest.Mock };
+  let appServiceMock: jest.Mocked<AppService>;
+  let workspaceSettingsServiceMock: jest.Mocked<WorkspaceSettingsService>;
   let fetchMock: jest.Mock;
   let originalFetch: typeof globalThis.fetch | undefined;
   const mockServerUrl = 'http://localhost:3000/';
@@ -27,6 +41,24 @@ describe('TestPersonCodingService', () => {
 
   beforeEach(() => {
     originalFetch = globalThis.fetch;
+    appServiceMock = {
+      createOwnToken: jest.fn().mockReturnValue(of('replay-auth-token')),
+      getWorkspaceTokenPolicy: jest.fn().mockReturnValue(
+        of({
+          scopes: {
+            'replay:read': { maxDurationDays: 90 },
+            'replay-statistics:write': { maxDurationDays: 1 },
+            'coding-job:operate': { maxDurationDays: 1 }
+          }
+        })
+      )
+    } as unknown as jest.Mocked<AppService>;
+    workspaceSettingsServiceMock = {
+      getReplayUrlExportMode: jest.fn().mockReturnValue(of('auth')),
+      getReplayUrlExportTokenDurationDays: jest.fn(
+        (_: number, maxDurationDays: number) => of(maxDurationDays)
+      )
+    } as unknown as jest.Mocked<WorkspaceSettingsService>;
 
     // Mock localStorage using Object.defineProperty
     Object.defineProperty(window, 'localStorage', {
@@ -45,6 +77,11 @@ describe('TestPersonCodingService', () => {
         provideHttpClientTesting(),
         TestPersonCodingService,
         { provide: AuthService, useValue: authService },
+        { provide: AppService, useValue: appServiceMock },
+        {
+          provide: WorkspaceSettingsService,
+          useValue: workspaceSettingsServiceMock
+        },
         { provide: SERVER_URL, useValue: mockServerUrl }
       ]
     });
@@ -79,11 +116,18 @@ describe('TestPersonCodingService', () => {
         statusCounts: { coded: 3 }
       };
 
-      service.codeTestPersons(mockWorkspaceId, mockTestPersonIds).subscribe(response => {
-        expect(response).toEqual(mockResponse);
-      });
+      service
+        .codeTestPersons(mockWorkspaceId, mockTestPersonIds, 1)
+        .subscribe(response => {
+          expect(response).toEqual(mockResponse);
+        });
 
-      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding` && request.params.get('testPersons') === mockTestPersonIds && request.params.get('autoCoderRun') === '1');
+      const req = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding` &&
+          request.params.get('testPersons') === mockTestPersonIds &&
+          request.params.get('autoCoderRun') === '1'
+      );
       expect(req.request.method).toBe('GET');
       expect(req.request.headers.get('Authorization')).toBe(`Bearer ${mockAuthToken}`);
       req.flush(mockResponse);
@@ -92,28 +136,42 @@ describe('TestPersonCodingService', () => {
     it('should handle errors and return empty statistics with an error message', () => {
       const mockTestPersonIds = '1,2,3';
 
-      service.codeTestPersons(mockWorkspaceId, mockTestPersonIds).subscribe(response => {
-        expect(response.totalResponses).toBe(0);
-        expect(response.statusCounts).toEqual({});
-        expect(response.message).toContain('Http failure response');
-      });
+      service
+        .codeTestPersons(mockWorkspaceId, mockTestPersonIds, 1)
+        .subscribe(response => {
+          expect(response.totalResponses).toBe(0);
+          expect(response.statusCounts).toEqual({});
+          expect(response.message).toContain('Http failure response');
+        });
 
-      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding` && request.params.get('testPersons') === mockTestPersonIds && request.params.get('autoCoderRun') === '1');
+      const req = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding` &&
+          request.params.get('testPersons') === mockTestPersonIds &&
+          request.params.get('autoCoderRun') === '1'
+      );
       req.error(new ProgressEvent('error'));
     });
 
     it('should surface backend error messages when coding is blocked', () => {
       const mockTestPersonIds = '1,2,3';
 
-      service.codeTestPersons(mockWorkspaceId, mockTestPersonIds, 2).subscribe(response => {
-        expect(response).toEqual({
-          totalResponses: 0,
-          statusCounts: {},
-          message: 'Der 2. Autocoder-Lauf kann nicht gestartet werden.'
+      service
+        .codeTestPersons(mockWorkspaceId, mockTestPersonIds, 2)
+        .subscribe(response => {
+          expect(response).toEqual({
+            totalResponses: 0,
+            statusCounts: {},
+            message: 'Der 2. Autocoder-Lauf kann nicht gestartet werden.'
+          });
         });
-      });
 
-      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding` && request.params.get('testPersons') === mockTestPersonIds && request.params.get('autoCoderRun') === '2');
+      const req = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding` &&
+          request.params.get('testPersons') === mockTestPersonIds &&
+          request.params.get('autoCoderRun') === '2'
+      );
       req.flush(
         { message: 'Der 2. Autocoder-Lauf kann nicht gestartet werden.' },
         { status: 400, statusText: 'Bad Request' }
@@ -162,7 +220,9 @@ describe('TestPersonCodingService', () => {
         expect(response).toEqual(mockResponse);
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/manual`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/manual`
+      );
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
     });
@@ -171,11 +231,15 @@ describe('TestPersonCodingService', () => {
       const mockTestPersonIds = '1,2,3';
       const mockResponse = [{ id: 1, name: 'Test Person 1' }];
 
-      service.getManualTestPersons(mockWorkspaceId, mockTestPersonIds).subscribe(response => {
-        expect(response).toEqual(mockResponse);
-      });
+      service
+        .getManualTestPersons(mockWorkspaceId, mockTestPersonIds)
+        .subscribe(response => {
+          expect(response).toEqual(mockResponse);
+        });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/manual?testPersons=${mockTestPersonIds}`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/manual?testPersons=${mockTestPersonIds}`
+      );
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
     });
@@ -183,14 +247,17 @@ describe('TestPersonCodingService', () => {
     it('should include codedStatus parameter when provided', () => {
       const mockResponse = [{ id: 1, name: 'Test Person 1' }];
 
-      service.getManualTestPersons(mockWorkspaceId, undefined, 'DERIVE_ERROR').subscribe(response => {
-        expect(response).toEqual(mockResponse);
-      });
+      service
+        .getManualTestPersons(mockWorkspaceId, undefined, 'DERIVE_ERROR')
+        .subscribe(response => {
+          expect(response).toEqual(mockResponse);
+        });
 
-      const req = httpMock.expectOne(request => (
-        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/manual` &&
-        request.params.get('codedStatus') === 'DERIVE_ERROR'
-      ));
+      const req = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/manual` &&
+          request.params.get('codedStatus') === 'DERIVE_ERROR'
+      );
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
     });
@@ -200,7 +267,9 @@ describe('TestPersonCodingService', () => {
         expect(response).toEqual([]);
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/manual`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/manual`
+      );
       req.error(new ProgressEvent('error'));
     });
   });
@@ -211,47 +280,63 @@ describe('TestPersonCodingService', () => {
       const mockPage = 2;
       const mockLimit = 10;
       const mockResponse: PaginatedCodingList = {
-        data: [{
-          unit_key: 'key1',
-          unit_alias: 'alias1',
-          login_name: 'user1',
-          login_code: 'code1',
-          booklet_id: 'book1',
-          variable_id: 'var1',
-          variable_page: 'page1',
-          variable_anchor: 'anchor1',
-          url: 'url1'
-        }],
+        data: [
+          {
+            unit_key: 'key1',
+            unit_alias: 'alias1',
+            login_name: 'user1',
+            login_code: 'code1',
+            booklet_id: 'book1',
+            variable_id: 'var1',
+            variable_page: 'page1',
+            variable_anchor: 'anchor1',
+            url: 'url1'
+          }
+        ],
         total: 1,
         page: mockPage,
         limit: mockLimit
       };
 
-      service.getCodingList(mockWorkspaceId, mockAuthToken, mockServerUrlParam, mockPage, mockLimit).subscribe(response => {
-        expect(response).toEqual(mockResponse);
-      });
+      service
+        .getCodingList(
+          mockWorkspaceId,
+          mockAuthToken,
+          mockServerUrlParam,
+          mockPage,
+          mockLimit
+        )
+        .subscribe(response => {
+          expect(response).toEqual(mockResponse);
+        });
 
-      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/coding-list` &&
-        request.params.get('authToken') === mockAuthToken &&
-        request.params.get('serverUrl') === mockServerUrlParam &&
-        request.params.get('page') === mockPage.toString() &&
-        request.params.get('limit') === mockLimit.toString()
+      const req = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/coding-list` &&
+          request.params.get('authToken') === mockAuthToken &&
+          request.params.get('serverUrl') === mockServerUrlParam &&
+          request.params.get('page') === mockPage.toString() &&
+          request.params.get('limit') === mockLimit.toString()
       );
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
     });
 
     it('should handle errors and return empty paginated list', () => {
-      service.getCodingList(mockWorkspaceId, mockAuthToken).subscribe(response => {
-        expect(response).toEqual({
-          data: [],
-          total: 0,
-          page: 1,
-          limit: 20
+      service
+        .getCodingList(mockWorkspaceId, mockAuthToken)
+        .subscribe(response => {
+          expect(response).toEqual({
+            data: [],
+            total: 0,
+            page: 1,
+            limit: 20
+          });
         });
-      });
 
-      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/coding-list`
+      const req = httpMock.expectOne(
+        request => request.url ===
+          `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/coding-list`
       );
       req.error(new ProgressEvent('error'));
     });
@@ -268,7 +353,9 @@ describe('TestPersonCodingService', () => {
         expect(response).toEqual(mockResponse);
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/statistics`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/statistics`
+      );
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
     });
@@ -278,7 +365,9 @@ describe('TestPersonCodingService', () => {
         expect(response).toEqual({ totalResponses: 0, statusCounts: {} });
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/statistics`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/statistics`
+      );
       req.error(new ProgressEvent('error'));
     });
   });
@@ -298,21 +387,29 @@ describe('TestPersonCodingService', () => {
         aggregatedDuplicateCases: 0
       };
 
-      service.getAppliedResultsOverview(mockWorkspaceId).subscribe(response => {
-        expect(response).toEqual(mockResponse);
-      });
+      service
+        .getAppliedResultsOverview(mockWorkspaceId)
+        .subscribe(response => {
+          expect(response).toEqual(mockResponse);
+        });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/applied-results-overview`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/applied-results-overview`
+      );
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
     });
 
     it('should return null when applied results overview cannot be loaded', () => {
-      service.getAppliedResultsOverview(mockWorkspaceId).subscribe(response => {
-        expect(response).toBeNull();
-      });
+      service
+        .getAppliedResultsOverview(mockWorkspaceId)
+        .subscribe(response => {
+          expect(response).toBeNull();
+        });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/applied-results-overview`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/applied-results-overview`
+      );
       req.error(new ProgressEvent('error'));
     });
 
@@ -335,9 +432,11 @@ describe('TestPersonCodingService', () => {
       service.getAppliedResultsOverview(mockWorkspaceId).subscribe();
       httpMock.expectOne(url).flush(mockResponse);
 
-      service.getAppliedResultsOverview(mockWorkspaceId).subscribe(response => {
-        cachedResponse = response;
-      });
+      service
+        .getAppliedResultsOverview(mockWorkspaceId)
+        .subscribe(response => {
+          cachedResponse = response;
+        });
       httpMock.expectNone(url);
       expect(cachedResponse).toEqual(mockResponse);
 
@@ -363,15 +462,19 @@ describe('TestPersonCodingService', () => {
       let firstResponse: AppliedResultsOverview | null | undefined;
       let secondResponse: AppliedResultsOverview | null | undefined;
 
-      service.getAppliedResultsOverview(mockWorkspaceId).subscribe(response => {
-        firstResponse = response;
-      });
+      service
+        .getAppliedResultsOverview(mockWorkspaceId)
+        .subscribe(response => {
+          firstResponse = response;
+        });
       httpMock.expectOne(url).error(new ProgressEvent('error'));
       expect(firstResponse).toBeNull();
 
-      service.getAppliedResultsOverview(mockWorkspaceId).subscribe(response => {
-        secondResponse = response;
-      });
+      service
+        .getAppliedResultsOverview(mockWorkspaceId)
+        .subscribe(response => {
+          secondResponse = response;
+        });
       httpMock.expectOne(url).flush(mockResponse);
       expect(secondResponse).toEqual(mockResponse);
     });
@@ -412,16 +515,20 @@ describe('TestPersonCodingService', () => {
         analysisTimestamp: '2026-05-14T00:00:00.000Z'
       };
 
-      service.getResponseAnalysis(mockWorkspaceId, 7, 2, 25, 3, 50).subscribe(response => {
-        expect(response).toEqual(mockResponse);
-      });
+      service
+        .getResponseAnalysis(mockWorkspaceId, 7, 2, 25, 3, 50)
+        .subscribe(response => {
+          expect(response).toEqual(mockResponse);
+        });
 
-      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/response-analysis` &&
-        request.params.get('threshold') === '7' &&
-        request.params.get('emptyPage') === '2' &&
-        request.params.get('emptyLimit') === '25' &&
-        request.params.get('duplicatePage') === '3' &&
-        request.params.get('duplicateLimit') === '50'
+      const req = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/response-analysis` &&
+          request.params.get('threshold') === '7' &&
+          request.params.get('emptyPage') === '2' &&
+          request.params.get('emptyLimit') === '25' &&
+          request.params.get('duplicatePage') === '3' &&
+          request.params.get('duplicateLimit') === '50'
       );
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
@@ -436,7 +543,9 @@ describe('TestPersonCodingService', () => {
         }
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/response-analysis`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/response-analysis`
+      );
       req.flush(
         { message: 'analysis failed' },
         { status: 500, statusText: 'Server Error' }
@@ -445,8 +554,14 @@ describe('TestPersonCodingService', () => {
 
     it('should keep the response-analysis guard after transient polling errors', () => {
       jest.useFakeTimers();
-      const setJobRunningSpy = jest.spyOn(codingBackgroundJobsService, 'setJobRunning');
-      const invalidateCacheSpy = jest.spyOn(service, 'invalidateCodingStatusCache');
+      const setJobRunningSpy = jest.spyOn(
+        codingBackgroundJobsService,
+        'setJobRunning'
+      );
+      const invalidateCacheSpy = jest.spyOn(
+        service,
+        'invalidateCodingStatusCache'
+      );
       const url = `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/response-analysis`;
 
       try {
@@ -460,13 +575,14 @@ describe('TestPersonCodingService', () => {
         );
 
         jest.advanceTimersByTime(5000);
-        httpMock.expectOne(request => (
-          request.url === url &&
-          request.params.get('threshold') === '2'
-        )).flush(
-          { message: 'temporary error' },
-          { status: 500, statusText: 'Server Error' }
-        );
+        httpMock
+          .expectOne(
+            request => request.url === url && request.params.get('threshold') === '2'
+          )
+          .flush(
+            { message: 'temporary error' },
+            { status: 500, statusText: 'Server Error' }
+          );
         expect(setJobRunningSpy).not.toHaveBeenCalledWith(
           mockWorkspaceId,
           'response-analysis',
@@ -475,16 +591,17 @@ describe('TestPersonCodingService', () => {
         );
 
         jest.advanceTimersByTime(5000);
-        httpMock.expectOne(request => (
-          request.url === url &&
-          request.params.get('threshold') === '2'
-        )).flush({
-          emptyResponses: { total: 0, totalUncoded: 0, items: [] },
-          duplicateValues: { total: 0, totalResponses: 0, groups: [] },
-          matchingFlags: [],
-          analysisTimestamp: '2026-05-14T00:00:00.000Z',
-          isCalculating: false
-        });
+        httpMock
+          .expectOne(
+            request => request.url === url && request.params.get('threshold') === '2'
+          )
+          .flush({
+            emptyResponses: { total: 0, totalUncoded: 0, items: [] },
+            duplicateValues: { total: 0, totalResponses: 0, groups: [] },
+            matchingFlags: [],
+            analysisTimestamp: '2026-05-14T00:00:00.000Z',
+            isCalculating: false
+          });
 
         expect(invalidateCacheSpy).toHaveBeenCalledWith(mockWorkspaceId);
         expect(setJobRunningSpy).toHaveBeenLastCalledWith(
@@ -513,9 +630,11 @@ describe('TestPersonCodingService', () => {
         aggregatedDuplicateCases: 2
       };
 
-      service.getCodingProgressOverview(mockWorkspaceId).subscribe(response => {
-        expect(response).toEqual(mockResponse);
-      });
+      service
+        .getCodingProgressOverview(mockWorkspaceId)
+        .subscribe(response => {
+          expect(response).toEqual(mockResponse);
+        });
 
       const req = httpMock.expectOne(
         `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/progress-overview`
@@ -526,9 +645,11 @@ describe('TestPersonCodingService', () => {
     });
 
     it('should return null when coding progress overview is unavailable', () => {
-      service.getCodingProgressOverview(mockWorkspaceId).subscribe(response => {
-        expect(response).toBeNull();
-      });
+      service
+        .getCodingProgressOverview(mockWorkspaceId)
+        .subscribe(response => {
+          expect(response).toBeNull();
+        });
 
       const req = httpMock.expectOne(
         `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/progress-overview`
@@ -552,7 +673,9 @@ describe('TestPersonCodingService', () => {
         expect(response).toEqual(mockResponse);
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/aggregation-settings`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/aggregation-settings`
+      );
       expect(req.request.method).toBe('GET');
       expect(req.request.headers.get('Authorization')).toBe(`Bearer ${mockAuthToken}`);
       req.flush(mockResponse);
@@ -569,12 +692,16 @@ describe('TestPersonCodingService', () => {
       };
 
       service
-        .saveAggregationSettings(mockWorkspaceId, 9, [ResponseMatchingFlag.NO_AGGREGATION])
+        .saveAggregationSettings(mockWorkspaceId, 9, [
+          ResponseMatchingFlag.NO_AGGREGATION
+        ])
         .subscribe(response => {
           expect(response).toEqual(mockResponse);
         });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/aggregation-settings`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/aggregation-settings`
+      );
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual({
         threshold: 9,
@@ -597,7 +724,9 @@ describe('TestPersonCodingService', () => {
         expect(response).toEqual(mockResponse);
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/job/${mockJobId}`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/job/${mockJobId}`
+      );
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
     });
@@ -606,32 +735,45 @@ describe('TestPersonCodingService', () => {
       const mockJobId = 'job-123';
 
       service.getJobStatus(mockWorkspaceId, mockJobId).subscribe(response => {
-        expect(response).toEqual({ error: `Failed to get status for job ${mockJobId}` });
+        expect(response).toEqual({
+          error: `Failed to get status for job ${mockJobId}`
+        });
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/job/${mockJobId}`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/job/${mockJobId}`
+      );
       req.error(new ProgressEvent('error'));
     });
 
     it('should not request job status when job id is missing', () => {
       service.getJobStatus(mockWorkspaceId, '').subscribe(response => {
-        expect(response).toEqual({ error: 'Fehlende Job-ID für Statusabfrage' });
+        expect(response).toEqual({
+          error: 'Fehlende Job-ID für Statusabfrage'
+        });
       });
 
-      httpMock.expectNone(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/job/`);
+      httpMock.expectNone(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/job/`
+      );
     });
   });
 
   describe('cancelJob', () => {
     it('should send a GET request to cancel job', () => {
       const mockJobId = 'job-123';
-      const mockResponse = { success: true, message: 'Job cancelled successfully' };
+      const mockResponse = {
+        success: true,
+        message: 'Job cancelled successfully'
+      };
 
       service.cancelJob(mockWorkspaceId, mockJobId).subscribe(response => {
         expect(response).toEqual(mockResponse);
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/job/${mockJobId}/cancel`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/job/${mockJobId}/cancel`
+      );
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
     });
@@ -640,19 +782,29 @@ describe('TestPersonCodingService', () => {
       const mockJobId = 'job-123';
 
       service.cancelJob(mockWorkspaceId, mockJobId).subscribe(response => {
-        expect(response).toEqual({ success: false, message: `Failed to cancel job ${mockJobId}` });
+        expect(response).toEqual({
+          success: false,
+          message: `Failed to cancel job ${mockJobId}`
+        });
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/job/${mockJobId}/cancel`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/job/${mockJobId}/cancel`
+      );
       req.error(new ProgressEvent('error'));
     });
 
     it('should not request cancellation when job id is missing', () => {
       service.cancelJob(mockWorkspaceId, ' ').subscribe(response => {
-        expect(response).toEqual({ success: false, message: 'Fehlende Job-ID für Abbruch' });
+        expect(response).toEqual({
+          success: false,
+          message: 'Fehlende Job-ID für Abbruch'
+        });
       });
 
-      httpMock.expectNone(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/job/ /cancel`);
+      httpMock.expectNone(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/job/ /cancel`
+      );
     });
   });
 
@@ -671,7 +823,9 @@ describe('TestPersonCodingService', () => {
         expect(response).toEqual(mockResponse);
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/jobs`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/jobs`
+      );
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
     });
@@ -681,7 +835,9 @@ describe('TestPersonCodingService', () => {
         expect(response).toEqual([]);
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/jobs`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/jobs`
+      );
       req.error(new ProgressEvent('error'));
     });
   });
@@ -697,7 +853,9 @@ describe('TestPersonCodingService', () => {
         expect(response).toEqual(mockResponse);
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/groups/stats`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/groups/stats`
+      );
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
     });
@@ -707,121 +865,10 @@ describe('TestPersonCodingService', () => {
         expect(response).toEqual([]);
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/groups/stats`);
-      req.error(new ProgressEvent('error'));
-    });
-  });
-
-  describe('getDoubleCodedVariablesForReview', () => {
-    it('should request double-coded review data with agreement and scope filters', () => {
-      const mockResponse = {
-        data: [{
-          responseId: 10,
-          unitName: 'UNIT_1',
-          variableId: 'VAR_1',
-          personLogin: 'person-1',
-          personCode: 'P001',
-          bookletName: 'BOOKLET_1',
-          givenAnswer: 'answer',
-          isResolved: false,
-          appliedCode: null,
-          appliedScore: null,
-          appliedComment: null,
-          coderResults: [{
-            coderId: 1,
-            coderName: 'Coder 1',
-            jobId: 100,
-            jobName: 'Job A',
-            code: 1,
-            score: 1,
-            notes: null,
-            supervisorComment: null,
-            codedAt: '2026-05-18T00:00:00.000Z'
-          }]
-        }],
-        total: 1,
-        page: 2,
-        limit: 25
-      };
-
-      service.getDoubleCodedVariablesForReview(
-        mockWorkspaceId,
-        2,
-        25,
-        true,
-        false,
-        'VAR_1',
-        9,
-        'done',
-        'unresolved',
-        'differ',
-        [11, 12],
-        [21]
-      ).subscribe(response => {
-        expect(response).toEqual(mockResponse);
-      });
-
-      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/double-coded-review`);
-      expect(req.request.method).toBe('GET');
-      expect(req.request.params.get('page')).toBe('2');
-      expect(req.request.params.get('limit')).toBe('25');
-      expect(req.request.params.get('onlyConflicts')).toBe('true');
-      expect(req.request.params.get('excludeTrainings')).toBe('false');
-      expect(req.request.params.get('search')).toBe('VAR_1');
-      expect(req.request.params.get('coderId')).toBe('9');
-      expect(req.request.params.get('statusFilter')).toBe('done');
-      expect(req.request.params.get('resolvedFilter')).toBe('unresolved');
-      expect(req.request.params.get('agreementFilter')).toBe('differ');
-      expect(req.request.params.get('jobDefinitionIds')).toBe('11,12');
-      expect(req.request.params.get('coderTrainingIds')).toBe('21');
-      req.flush(mockResponse);
-    });
-
-    it('should propagate double-coded review errors to the component', done => {
-      service.getDoubleCodedVariablesForReview(mockWorkspaceId).subscribe({
-        next: () => done.fail('expected double-coded review request to fail'),
-        error: error => {
-          expect(error.status).toBe(500);
-          done();
-        }
-      });
-
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/double-coded-review?page=1&limit=50&onlyConflicts=false&excludeTrainings=false`);
-      req.flush(
-        { message: 'review query failed' },
-        { status: 500, statusText: 'Server Error' }
-      );
-    });
-  });
-
-  describe('applyDoubleCodedResolutions', () => {
-    it('should post explicit replay code decisions for double-coded review resolutions', () => {
-      const mockResponse = {
-        success: true,
-        appliedCount: 1,
-        failedCount: 0,
-        skippedCount: 0,
-        message: 'ok'
-      };
-      const body = {
-        decisions: [{
-          responseId: 10,
-          code: 3,
-          score: 2,
-          resolutionComment: 'Replay checked'
-        }]
-      };
-
-      service.applyDoubleCodedResolutions(mockWorkspaceId, body).subscribe(response => {
-        expect(response).toEqual(mockResponse);
-      });
-
       const req = httpMock.expectOne(
-        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/double-coded-review/apply-resolutions`
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/groups/stats`
       );
-      expect(req.request.method).toBe('POST');
-      expect(req.request.body).toEqual(body);
-      req.flush(mockResponse);
+      req.error(new ProgressEvent('error'));
     });
   });
 
@@ -867,27 +914,36 @@ describe('TestPersonCodingService', () => {
       };
 
       service
-        .getCohensKappaStatistics(mockWorkspaceId, true, false, 'UNIT', 'VAR', {
-          jobDefinitionIds: [11, 12],
-          coderTrainingIds: [21],
-          coderIds: [31, 32]
-        }, 'score')
+        .getCohensKappaStatistics(
+          mockWorkspaceId,
+          true,
+          false,
+          'UNIT',
+          'VAR',
+          {
+            jobDefinitionIds: [11, 12],
+            coderTrainingIds: [21],
+            coderIds: [31, 32]
+          },
+          'score'
+        )
         .subscribe(response => {
           expect(response).toEqual(mockResponse);
           expect(response.variables[0].meanKappa).toBe(0.667);
         });
 
-      const req = httpMock.expectOne(request => (
-        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa` &&
-        request.params.get('weightedMean') === 'true' &&
-        request.params.get('excludeTrainings') === 'false' &&
-        request.params.get('level') === 'score' &&
-        request.params.get('unitName') === 'UNIT' &&
-        request.params.get('variableId') === 'VAR' &&
-        request.params.get('jobDefinitionIds') === '11,12' &&
-        request.params.get('coderTrainingIds') === '21' &&
-        request.params.get('coderIds') === '31,32'
-      ));
+      const req = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa` &&
+          request.params.get('weightedMean') === 'true' &&
+          request.params.get('excludeTrainings') === 'false' &&
+          request.params.get('level') === 'score' &&
+          request.params.get('unitName') === 'UNIT' &&
+          request.params.get('variableId') === 'VAR' &&
+          request.params.get('jobDefinitionIds') === '11,12' &&
+          request.params.get('coderTrainingIds') === '21' &&
+          request.params.get('coderIds') === '31,32'
+      );
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
     });
@@ -898,26 +954,34 @@ describe('TestPersonCodingService', () => {
       const mockBlob = new Blob(['subunit;nCases'], { type: 'text/csv' });
 
       service
-        .exportCohensKappaSummaryAsCsv(mockWorkspaceId, false, false, 'UNIT', 'VAR', {
-          jobDefinitionIds: [11],
-          coderTrainingIds: [21],
-          coderIds: [31]
-        })
+        .exportCohensKappaSummaryAsCsv(
+          mockWorkspaceId,
+          false,
+          false,
+          'UNIT',
+          'VAR',
+          {
+            jobDefinitionIds: [11],
+            coderTrainingIds: [21],
+            coderIds: [31]
+          }
+        )
         .subscribe(response => {
           expect(response).toEqual(mockBlob);
         });
 
-      const req = httpMock.expectOne(request => (
-        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/summary/csv` &&
-        request.params.get('weightedMean') === 'false' &&
-        request.params.get('excludeTrainings') === 'false' &&
-        request.params.get('level') === 'code' &&
-        request.params.get('unitName') === 'UNIT' &&
-        request.params.get('variableId') === 'VAR' &&
-        request.params.get('jobDefinitionIds') === '11' &&
-        request.params.get('coderTrainingIds') === '21' &&
-        request.params.get('coderIds') === '31'
-      ));
+      const req = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/summary/csv` &&
+          request.params.get('weightedMean') === 'false' &&
+          request.params.get('excludeTrainings') === 'false' &&
+          request.params.get('level') === 'code' &&
+          request.params.get('unitName') === 'UNIT' &&
+          request.params.get('variableId') === 'VAR' &&
+          request.params.get('jobDefinitionIds') === '11' &&
+          request.params.get('coderTrainingIds') === '21' &&
+          request.params.get('coderIds') === '31'
+      );
       expect(req.request.method).toBe('GET');
       expect(req.request.responseType).toBe('blob');
       req.flush(mockBlob);
@@ -929,24 +993,88 @@ describe('TestPersonCodingService', () => {
       });
 
       service
-        .exportCohensKappaStatisticsAsXlsx(mockWorkspaceId, true, true, undefined, undefined, {
-          jobDefinitionIds: [11, 12],
-          coderIds: [31]
-        }, 'score')
+        .exportCohensKappaStatisticsAsXlsx(
+          mockWorkspaceId,
+          true,
+          true,
+          undefined,
+          undefined,
+          {
+            jobDefinitionIds: [11, 12],
+            coderIds: [31]
+          },
+          'score'
+        )
         .subscribe(response => {
           expect(response).toEqual(mockBlob);
         });
 
-      const req = httpMock.expectOne(request => (
-        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/xlsx` &&
-        request.params.get('weightedMean') === 'true' &&
-        request.params.get('excludeTrainings') === 'true' &&
-        request.params.get('level') === 'score' &&
-        request.params.get('jobDefinitionIds') === '11,12' &&
-        request.params.get('coderIds') === '31'
-      ));
+      const req = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/xlsx` &&
+          request.params.get('weightedMean') === 'true' &&
+          request.params.get('excludeTrainings') === 'true' &&
+          request.params.get('level') === 'score' &&
+          request.params.get('jobDefinitionIds') === '11,12' &&
+          request.params.get('coderIds') === '31' &&
+          request.params.get('authToken') === 'replay-auth-token'
+      );
+      expect(
+        workspaceSettingsServiceMock.getReplayUrlExportTokenDurationDays
+      ).toHaveBeenCalledWith(123, 90);
+      expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(123, 90, [
+        'replay:read'
+      ]);
       expect(req.request.method).toBe('GET');
       expect(req.request.responseType).toBe('blob');
+      req.flush(mockBlob);
+    });
+
+    it('should use the configured replay token duration for kappa XLSX export links', () => {
+      const mockBlob = new Blob(['xlsx'], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      workspaceSettingsServiceMock.getReplayUrlExportTokenDurationDays.mockReturnValueOnce(
+        of(30)
+      );
+
+      service
+        .exportCohensKappaStatisticsAsXlsx(mockWorkspaceId)
+        .subscribe(response => {
+          expect(response).toEqual(mockBlob);
+        });
+
+      expect(appServiceMock.createOwnToken).toHaveBeenCalledWith(123, 30, [
+        'replay:read'
+      ]);
+      const req = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/xlsx` &&
+          request.params.get('authToken') === 'replay-auth-token'
+      );
+      req.flush(mockBlob);
+    });
+
+    it('should request kappa XLSX with workspace login links in workspaceId mode', () => {
+      const mockBlob = new Blob(['xlsx'], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      workspaceSettingsServiceMock.getReplayUrlExportMode.mockReturnValueOnce(
+        of('workspaceId')
+      );
+
+      service
+        .exportCohensKappaStatisticsAsXlsx(mockWorkspaceId)
+        .subscribe(response => {
+          expect(response).toEqual(mockBlob);
+        });
+
+      expect(appServiceMock.createOwnToken).not.toHaveBeenCalled();
+      const req = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/xlsx` &&
+          request.params.get('authToken') === ''
+      );
       req.flush(mockBlob);
     });
 
@@ -954,22 +1082,30 @@ describe('TestPersonCodingService', () => {
       const mockBlob = new Blob(['Variable;Kappa-Wert'], { type: 'text/csv' });
 
       service
-        .exportCohensKappaStatisticsAsCsv(mockWorkspaceId, false, false, 'UNIT', 'VAR', {
-          coderTrainingIds: [21, 22]
-        })
+        .exportCohensKappaStatisticsAsCsv(
+          mockWorkspaceId,
+          false,
+          false,
+          'UNIT',
+          'VAR',
+          {
+            coderTrainingIds: [21, 22]
+          }
+        )
         .subscribe(response => {
           expect(response).toEqual(mockBlob);
         });
 
-      const req = httpMock.expectOne(request => (
-        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/csv` &&
-        request.params.get('weightedMean') === 'false' &&
-        request.params.get('excludeTrainings') === 'false' &&
-        request.params.get('level') === 'code' &&
-        request.params.get('unitName') === 'UNIT' &&
-        request.params.get('variableId') === 'VAR' &&
-        request.params.get('coderTrainingIds') === '21,22'
-      ));
+      const req = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/csv` &&
+          request.params.get('weightedMean') === 'false' &&
+          request.params.get('excludeTrainings') === 'false' &&
+          request.params.get('level') === 'code' &&
+          request.params.get('unitName') === 'UNIT' &&
+          request.params.get('variableId') === 'VAR' &&
+          request.params.get('coderTrainingIds') === '21,22'
+      );
       expect(req.request.method).toBe('GET');
       expect(req.request.responseType).toBe('blob');
       req.flush(mockBlob);
@@ -987,12 +1123,13 @@ describe('TestPersonCodingService', () => {
         }
       });
 
-      const req = httpMock.expectOne(request => (
-        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/csv` &&
-        request.params.get('weightedMean') === 'true' &&
-        request.params.get('excludeTrainings') === 'true' &&
-        request.params.get('level') === 'code'
-      ));
+      const req = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/cohens-kappa/export/csv` &&
+          request.params.get('weightedMean') === 'true' &&
+          request.params.get('excludeTrainings') === 'true' &&
+          request.params.get('level') === 'code'
+      );
       req.error(new ProgressEvent('error'));
 
       expect(receivedError).toBeTruthy();
@@ -1000,6 +1137,60 @@ describe('TestPersonCodingService', () => {
   });
 
   describe('coding freshness', () => {
+    const createPlanningSnapshot = (): ManualCodingPlanningSnapshot => ({
+      responseAnalysis: null,
+      codingProgressOverview: null,
+      variableCoverageOverview: null,
+      caseCoverageOverview: null,
+      codingIncompleteVariables: [],
+      manualCodingScopeSummary: null,
+      manualCodeAvailabilityWarnings: [],
+      appliedResultsOverview: null,
+      manualFreshnessJobSummary: null,
+      openDoubleCodingConflictCount: 0,
+      codingFreshnessSummary: {
+        workspaceId: mockWorkspaceId,
+        currentRevision: 0,
+        items: []
+      }
+    });
+
+    it('should keep a planning snapshot until its workspace is invalidated', () => {
+      const snapshot = createPlanningSnapshot();
+      const generation = service.beginManualCodingPlanningSnapshot();
+
+      service.saveManualCodingPlanningSnapshot(
+        mockWorkspaceId,
+        snapshot,
+        generation
+      );
+
+      expect(service.getManualCodingPlanningSnapshot(mockWorkspaceId)).toBe(
+        snapshot
+      );
+
+      service.invalidateCodingStatusCache(mockWorkspaceId);
+
+      expect(
+        service.getManualCodingPlanningSnapshot(mockWorkspaceId)
+      ).toBeNull();
+    });
+
+    it('should ignore a planning snapshot completed after invalidation', () => {
+      const generation = service.beginManualCodingPlanningSnapshot();
+
+      service.invalidateCodingStatusCache(mockWorkspaceId);
+      service.saveManualCodingPlanningSnapshot(
+        mockWorkspaceId,
+        createPlanningSnapshot(),
+        generation
+      );
+
+      expect(
+        service.getManualCodingPlanningSnapshot(mockWorkspaceId)
+      ).toBeNull();
+    });
+
     it('should reuse cached coding freshness until coding status is invalidated', () => {
       const mockResponse = {
         workspaceId: mockWorkspaceId,
@@ -1164,16 +1355,18 @@ describe('TestPersonCodingService', () => {
         invalidVariableSamples: []
       };
 
-      service.getAutocodingReadiness(mockWorkspaceId, 1, true)
+      service
+        .getAutocodingReadiness(mockWorkspaceId, 1, true)
         .subscribe(response => {
           expect(response).toEqual(mockResponse);
         });
 
-      const req = httpMock.expectOne(request => (
-        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
-        request.params.get('autoCoderRun') === '1' &&
-        request.params.get('forceRefresh') === 'true'
-      ));
+      const req = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+          request.params.get('autoCoderRun') === '1' &&
+          request.params.get('forceRefresh') === 'true'
+      );
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
     });
@@ -1201,28 +1394,259 @@ describe('TestPersonCodingService', () => {
       let cachedResponse: unknown;
 
       service.getAutocodingReadiness(mockWorkspaceId, 1).subscribe();
-      httpMock.expectOne(request => (
-        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
-        request.params.get('autoCoderRun') === '1' &&
-        !request.params.has('forceRefresh')
-      )).flush(mockResponse);
+      httpMock
+        .expectOne(
+          request => request.url ===
+              `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+            request.params.get('autoCoderRun') === '1' &&
+            !request.params.has('forceRefresh')
+        )
+        .flush(mockResponse);
 
-      service.getAutocodingReadiness(mockWorkspaceId, 1).subscribe(response => {
-        cachedResponse = response;
-      });
-      httpMock.expectNone(request => (
-        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
-        request.params.get('autoCoderRun') === '1' &&
-        !request.params.has('forceRefresh')
-      ));
+      service
+        .getAutocodingReadiness(mockWorkspaceId, 1)
+        .subscribe(response => {
+          cachedResponse = response;
+        });
+      httpMock.expectNone(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+          request.params.get('autoCoderRun') === '1' &&
+          !request.params.has('forceRefresh')
+      );
       expect(cachedResponse).toEqual(mockResponse);
 
       service.getAutocodingReadiness(mockWorkspaceId, 1, true).subscribe();
-      httpMock.expectOne(request => (
-        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
-        request.params.get('autoCoderRun') === '1' &&
-        request.params.get('forceRefresh') === 'true'
-      )).flush(mockResponse);
+      httpMock
+        .expectOne(
+          request => request.url ===
+              `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+            request.params.get('autoCoderRun') === '1' &&
+            request.params.get('forceRefresh') === 'true'
+        )
+        .flush(mockResponse);
+    });
+
+    it('should request cached autocoding readiness with cache-only params', () => {
+      const mockResponse = {
+        workspaceId: mockWorkspaceId,
+        autoCoderRun: 1,
+        readiness: 'READY',
+        blockers: [],
+        rawResponsesTotal: 10,
+        rawResponsesWithRelevantStatus: 10,
+        resultUnitsTotal: 2,
+        resultUnitKeysTotal: 2,
+        matchedUnitFiles: 2,
+        missingUnitFiles: [],
+        matchedCodingSchemes: 1,
+        missingCodingSchemes: [],
+        invalidCodingSchemes: [],
+        validVariablePairs: 1,
+        validResponses: 10,
+        codeableResponses: 10,
+        invalidVariableSamples: [],
+        fromCache: true
+      };
+      let cachedResponse: unknown;
+
+      service
+        .getCachedAutocodingReadiness(mockWorkspaceId, 1)
+        .subscribe(response => {
+          expect(response).toEqual(mockResponse);
+        });
+
+      const req = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+          request.params.get('autoCoderRun') === '1' &&
+          request.params.get('cacheOnly') === 'true' &&
+          !request.params.has('forceRefresh')
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush(mockResponse);
+
+      service
+        .getCachedAutocodingReadiness(mockWorkspaceId, 1)
+        .subscribe(response => {
+          cachedResponse = response;
+        });
+      httpMock.expectNone(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+          request.params.get('autoCoderRun') === '1'
+      );
+      expect(cachedResponse).toEqual(mockResponse);
+    });
+
+    it('should expose a cached coding status overview only when all parts exist', () => {
+      const codingFreshness = {
+        workspaceId: mockWorkspaceId,
+        currentRevision: 0,
+        items: []
+      };
+      const autocodingReadiness = {
+        workspaceId: mockWorkspaceId,
+        autoCoderRun: 1 as const,
+        readiness: 'READY' as const,
+        blockers: [],
+        rawResponsesTotal: 10,
+        rawResponsesWithRelevantStatus: 10,
+        resultUnitsTotal: 2,
+        resultUnitKeysTotal: 2,
+        matchedUnitFiles: 2,
+        missingUnitFiles: [],
+        matchedCodingSchemes: 1,
+        missingCodingSchemes: [],
+        invalidCodingSchemes: [],
+        validVariablePairs: 1,
+        validResponses: 10,
+        codeableResponses: 10,
+        invalidVariableSamples: []
+      };
+      const appliedResultsOverview: AppliedResultsOverview = {
+        totalIncompleteResponses: 0,
+        appliedResponses: 0,
+        remainingResponses: 0,
+        completionPercentage: 100,
+        rawTotalIncompleteResponses: 0,
+        rawAppliedResponses: 0,
+        rawCompletionPercentage: 100,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
+      };
+
+      service.getCodingFreshness(mockWorkspaceId).subscribe();
+      httpMock
+        .expectOne(
+          `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness`
+        )
+        .flush(codingFreshness);
+      service.getAutocodingReadiness(mockWorkspaceId, 1).subscribe();
+      httpMock
+        .expectOne(
+          request => request.url ===
+              `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+            request.params.get('autoCoderRun') === '1'
+        )
+        .flush(autocodingReadiness);
+
+      expect(
+        service.getCachedCodingStatusOverview(mockWorkspaceId, 1)
+      ).toBeNull();
+
+      service.getAppliedResultsOverview(mockWorkspaceId).subscribe();
+      httpMock
+        .expectOne(
+          `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/applied-results-overview`
+        )
+        .flush(appliedResultsOverview);
+
+      expect(service.getCachedCodingStatusOverview(mockWorkspaceId, 1)).toEqual(
+        {
+          codingFreshness,
+          autocodingReadiness,
+          appliedResultsOverview
+        }
+      );
+    });
+
+    it('should ignore stale cache-only autocoding readiness responses after invalidation', () => {
+      const mockResponse = {
+        workspaceId: mockWorkspaceId,
+        autoCoderRun: 1,
+        readiness: 'READY',
+        blockers: [],
+        rawResponsesTotal: 10,
+        rawResponsesWithRelevantStatus: 10,
+        resultUnitsTotal: 2,
+        resultUnitKeysTotal: 2,
+        matchedUnitFiles: 2,
+        missingUnitFiles: [],
+        matchedCodingSchemes: 1,
+        missingCodingSchemes: [],
+        invalidCodingSchemes: [],
+        validVariablePairs: 1,
+        validResponses: 10,
+        codeableResponses: 10,
+        invalidVariableSamples: [],
+        fromCache: true
+      };
+      let staleResponse: unknown = 'unset';
+
+      service
+        .getCachedAutocodingReadiness(mockWorkspaceId, 1)
+        .subscribe(response => {
+          staleResponse = response;
+        });
+      const req = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+          request.params.get('autoCoderRun') === '1' &&
+          request.params.get('cacheOnly') === 'true'
+      );
+
+      service.invalidateCodingStatusCache(mockWorkspaceId);
+      req.flush(mockResponse);
+
+      expect(staleResponse).toBeNull();
+    });
+
+    it('should not let cache-only autocoding readiness misses block full readiness requests', () => {
+      const mockResponse = {
+        workspaceId: mockWorkspaceId,
+        autoCoderRun: 1,
+        readiness: 'READY',
+        blockers: [],
+        rawResponsesTotal: 10,
+        rawResponsesWithRelevantStatus: 10,
+        resultUnitsTotal: 2,
+        resultUnitKeysTotal: 2,
+        matchedUnitFiles: 2,
+        missingUnitFiles: [],
+        matchedCodingSchemes: 1,
+        missingCodingSchemes: [],
+        invalidCodingSchemes: [],
+        validVariablePairs: 1,
+        validResponses: 10,
+        codeableResponses: 10,
+        invalidVariableSamples: []
+      };
+      let cacheOnlyResponse: unknown = 'unset';
+      let fullResponse: unknown;
+
+      service
+        .getCachedAutocodingReadiness(mockWorkspaceId, 1)
+        .subscribe(response => {
+          cacheOnlyResponse = response;
+        });
+      httpMock
+        .expectOne(
+          request => request.url ===
+              `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+            request.params.get('autoCoderRun') === '1' &&
+            request.params.get('cacheOnly') === 'true'
+        )
+        .flush(null);
+
+      service
+        .getAutocodingReadiness(mockWorkspaceId, 1)
+        .subscribe(response => {
+          fullResponse = response;
+        });
+      httpMock
+        .expectOne(
+          request => request.url ===
+              `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+            request.params.get('autoCoderRun') === '1' &&
+            !request.params.has('cacheOnly') &&
+            !request.params.has('forceRefresh')
+        )
+        .flush(mockResponse);
+
+      expect(cacheOnlyResponse).toBeNull();
+      expect(fullResponse).toEqual(mockResponse);
     });
 
     it('should keep force-refreshed autocoding readiness cached when stale requests finish later', () => {
@@ -1268,34 +1692,43 @@ describe('TestPersonCodingService', () => {
       let forceSubscriberResponse: unknown;
       let cachedResponse: unknown;
 
-      service.getAutocodingReadiness(mockWorkspaceId, 1).subscribe(response => {
-        staleSubscriberResponse = response;
-      });
-      const staleRequest = httpMock.expectOne(request => (
-        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
-        request.params.get('autoCoderRun') === '1' &&
-        !request.params.has('forceRefresh')
-      ));
+      service
+        .getAutocodingReadiness(mockWorkspaceId, 1)
+        .subscribe(response => {
+          staleSubscriberResponse = response;
+        });
+      const staleRequest = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+          request.params.get('autoCoderRun') === '1' &&
+          !request.params.has('forceRefresh')
+      );
 
-      service.getAutocodingReadiness(mockWorkspaceId, 1, true).subscribe(response => {
-        forceSubscriberResponse = response;
-      });
-      const forceRequest = httpMock.expectOne(request => (
-        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
-        request.params.get('autoCoderRun') === '1' &&
-        request.params.get('forceRefresh') === 'true'
-      ));
+      service
+        .getAutocodingReadiness(mockWorkspaceId, 1, true)
+        .subscribe(response => {
+          forceSubscriberResponse = response;
+        });
+      const forceRequest = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+          request.params.get('autoCoderRun') === '1' &&
+          request.params.get('forceRefresh') === 'true'
+      );
 
       forceRequest.flush(forceResponse);
       staleRequest.flush(staleResponse);
 
-      service.getAutocodingReadiness(mockWorkspaceId, 1).subscribe(response => {
-        cachedResponse = response;
-      });
-      httpMock.expectNone(request => (
-        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
-        request.params.get('autoCoderRun') === '1'
-      ));
+      service
+        .getAutocodingReadiness(mockWorkspaceId, 1)
+        .subscribe(response => {
+          cachedResponse = response;
+        });
+      httpMock.expectNone(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+          request.params.get('autoCoderRun') === '1'
+      );
 
       expect(staleSubscriberResponse).toEqual(staleResponse);
       expect(forceSubscriberResponse).toEqual(forceResponse);
@@ -1318,16 +1751,18 @@ describe('TestPersonCodingService', () => {
         groups: []
       };
 
-      service.getCodingFreshnessScope(mockWorkspaceId, 'v1', ['PENDING', 'STALE'])
+      service
+        .getCodingFreshnessScope(mockWorkspaceId, 'v1', ['PENDING', 'STALE'])
         .subscribe(response => {
           expect(response).toEqual(mockResponse);
         });
 
-      const req = httpMock.expectOne(request => (
-        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/scope` &&
-        request.params.get('version') === 'v1' &&
-        request.params.get('state') === 'PENDING,STALE'
-      ));
+      const req = httpMock.expectOne(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/scope` &&
+          request.params.get('version') === 'v1' &&
+          request.params.get('state') === 'PENDING,STALE'
+      );
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
     });
@@ -1349,33 +1784,43 @@ describe('TestPersonCodingService', () => {
       };
       let cachedResponse: unknown;
 
-      service.getCodingFreshnessScope(mockWorkspaceId, 'v1', ['PENDING', 'STALE'])
+      service
+        .getCodingFreshnessScope(mockWorkspaceId, 'v1', ['PENDING', 'STALE'])
         .subscribe();
-      httpMock.expectOne(request => (
-        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/scope` &&
-        request.params.get('version') === 'v1' &&
-        request.params.get('state') === 'PENDING,STALE'
-      )).flush(mockResponse);
+      httpMock
+        .expectOne(
+          request => request.url ===
+              `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/scope` &&
+            request.params.get('version') === 'v1' &&
+            request.params.get('state') === 'PENDING,STALE'
+        )
+        .flush(mockResponse);
 
-      service.getCodingFreshnessScope(mockWorkspaceId, 'v1', ['PENDING', 'STALE'])
+      service
+        .getCodingFreshnessScope(mockWorkspaceId, 'v1', ['PENDING', 'STALE'])
         .subscribe(response => {
           cachedResponse = response;
         });
-      httpMock.expectNone(request => (
-        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/scope` &&
-        request.params.get('version') === 'v1' &&
-        request.params.get('state') === 'PENDING,STALE'
-      ));
+      httpMock.expectNone(
+        request => request.url ===
+            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/scope` &&
+          request.params.get('version') === 'v1' &&
+          request.params.get('state') === 'PENDING,STALE'
+      );
       expect(cachedResponse).toEqual(mockResponse);
 
       service.invalidateCodingStatusCache(mockWorkspaceId);
-      service.getCodingFreshnessScope(mockWorkspaceId, 'v1', ['PENDING', 'STALE'])
+      service
+        .getCodingFreshnessScope(mockWorkspaceId, 'v1', ['PENDING', 'STALE'])
         .subscribe();
-      httpMock.expectOne(request => (
-        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/scope` &&
-        request.params.get('version') === 'v1' &&
-        request.params.get('state') === 'PENDING,STALE'
-      )).flush(mockResponse);
+      httpMock
+        .expectOne(
+          request => request.url ===
+              `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/scope` &&
+            request.params.get('version') === 'v1' &&
+            request.params.get('state') === 'PENDING,STALE'
+        )
+        .flush(mockResponse);
     });
 
     it('should not cache failed freshness scope fallbacks', () => {
@@ -1396,15 +1841,19 @@ describe('TestPersonCodingService', () => {
       let firstResponse: unknown;
       let secondResponse: unknown;
 
-      service.getCodingFreshnessScope(mockWorkspaceId, 'v1', ['PENDING', 'STALE'])
+      service
+        .getCodingFreshnessScope(mockWorkspaceId, 'v1', ['PENDING', 'STALE'])
         .subscribe(response => {
           firstResponse = response;
         });
-      httpMock.expectOne(request => (
-        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/scope` &&
-        request.params.get('version') === 'v1' &&
-        request.params.get('state') === 'PENDING,STALE'
-      )).error(new ProgressEvent('error'));
+      httpMock
+        .expectOne(
+          request => request.url ===
+              `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/scope` &&
+            request.params.get('version') === 'v1' &&
+            request.params.get('state') === 'PENDING,STALE'
+        )
+        .error(new ProgressEvent('error'));
       expect(firstResponse).toEqual({
         workspaceId: mockWorkspaceId,
         currentRevision: 0,
@@ -1420,15 +1869,19 @@ describe('TestPersonCodingService', () => {
         groups: []
       });
 
-      service.getCodingFreshnessScope(mockWorkspaceId, 'v1', ['PENDING', 'STALE'])
+      service
+        .getCodingFreshnessScope(mockWorkspaceId, 'v1', ['PENDING', 'STALE'])
         .subscribe(response => {
           secondResponse = response;
         });
-      httpMock.expectOne(request => (
-        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/scope` &&
-        request.params.get('version') === 'v1' &&
-        request.params.get('state') === 'PENDING,STALE'
-      )).flush(mockResponse);
+      httpMock
+        .expectOne(
+          request => request.url ===
+              `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/scope` &&
+            request.params.get('version') === 'v1' &&
+            request.params.get('state') === 'PENDING,STALE'
+        )
+        .flush(mockResponse);
       expect(secondResponse).toEqual(mockResponse);
     });
 
@@ -1443,12 +1896,14 @@ describe('TestPersonCodingService', () => {
         groupNames: ['Group1']
       };
 
-      service.startFreshnessCoding(mockWorkspaceId, {
-        version: 'v1',
-        states: ['PENDING', 'STALE']
-      }).subscribe(response => {
-        expect(response).toEqual(mockResponse);
-      });
+      service
+        .startFreshnessCoding(mockWorkspaceId, {
+          version: 'v1',
+          states: ['PENDING', 'STALE']
+        })
+        .subscribe(response => {
+          expect(response).toEqual(mockResponse);
+        });
 
       const req = httpMock.expectOne(
         `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/code`
@@ -1463,8 +1918,14 @@ describe('TestPersonCodingService', () => {
 
     it('should keep the freshness-coding guard until the job reaches a terminal status', () => {
       jest.useFakeTimers();
-      const setJobRunningSpy = jest.spyOn(codingBackgroundJobsService, 'setJobRunning');
-      const invalidateCacheSpy = jest.spyOn(service, 'invalidateCodingStatusCache');
+      const setJobRunningSpy = jest.spyOn(
+        codingBackgroundJobsService,
+        'setJobRunning'
+      );
+      const invalidateCacheSpy = jest.spyOn(
+        service,
+        'invalidateCodingStatusCache'
+      );
       const jobId = 'freshness-job-1';
       const url = `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/job/${jobId}`;
 
@@ -1479,10 +1940,12 @@ describe('TestPersonCodingService', () => {
         );
 
         jest.advanceTimersByTime(5000);
-        httpMock.expectOne(url).flush(
-          { message: 'temporary error' },
-          { status: 500, statusText: 'Server Error' }
-        );
+        httpMock
+          .expectOne(url)
+          .flush(
+            { message: 'temporary error' },
+            { status: 500, statusText: 'Server Error' }
+          );
         expect(setJobRunningSpy).not.toHaveBeenCalledWith(
           mockWorkspaceId,
           'freshness-coding',
@@ -1523,7 +1986,9 @@ describe('TestPersonCodingService', () => {
         expect(response).toEqual(mockBlob);
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/coding-list/csv`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/coding-list/csv`
+      );
       expect(req.request.method).toBe('GET');
       expect(req.request.responseType).toBe('blob');
       req.flush(mockBlob);
@@ -1535,20 +2000,26 @@ describe('TestPersonCodingService', () => {
         expect(response.type).toBe('text/csv');
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/coding-list/csv`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/coding-list/csv`
+      );
       req.error(new ProgressEvent('error'));
     });
   });
 
   describe('exportCodingListAsExcel', () => {
     it('should send a GET request to export coding list as Excel', () => {
-      const mockBlob = new Blob(['test data'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const mockBlob = new Blob(['test data'], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
 
       service.exportCodingListAsExcel(mockWorkspaceId).subscribe(response => {
         expect(response).toEqual(mockBlob);
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/coding-list/excel`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/coding-list/excel`
+      );
       expect(req.request.method).toBe('GET');
       expect(req.request.responseType).toBe('blob');
       req.flush(mockBlob);
@@ -1557,10 +2028,14 @@ describe('TestPersonCodingService', () => {
     it('should handle errors and return empty blob', () => {
       service.exportCodingListAsExcel(mockWorkspaceId).subscribe(response => {
         expect(response).toBeInstanceOf(Blob);
-        expect(response.type).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        expect(response.type).toBe(
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        );
       });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/coding-list/excel`);
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/coding-list/excel`
+      );
       req.error(new ProgressEvent('error'));
     });
   });

@@ -20,6 +20,11 @@ import { JobDefinitionRefreshDialogComponent } from './job-definition-refresh-di
 import {
   JobDefinitionDistributionSummaryDialogComponent
 } from './job-definition-distribution-summary-dialog.component';
+import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
+import {
+  CODING_JOB_DEFINITION_RECOVERY_KEY,
+  CodingJobDefinitionDialogComponent
+} from '../coding-job-definition-dialog/coding-job-definition-dialog.component';
 
 describe('CodingJobDefinitionsComponent', () => {
   let component: CodingJobDefinitionsComponent;
@@ -27,6 +32,8 @@ describe('CodingJobDefinitionsComponent', () => {
   let overlayContainer: OverlayContainer;
 
   beforeEach(async () => {
+    sessionStorage.clear();
+
     await TestBed.configureTestingModule({
       providers: [
         provideNoopAnimations(),
@@ -97,6 +104,7 @@ describe('CodingJobDefinitionsComponent', () => {
   });
 
   afterEach(() => {
+    TestBed.inject(SessionRecoveryService).clearAllDrafts();
     overlayContainer.ngOnDestroy();
   });
 
@@ -115,6 +123,44 @@ describe('CodingJobDefinitionsComponent', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('.empty-state')).toBeTruthy();
+  });
+
+  it('keeps existing definitions visible while refreshing', () => {
+    component.isLoading = true;
+    component.jobDefinitions = [
+      {
+        id: 1,
+        status: 'approved',
+        assignedVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
+        assignedVariableBundles: [],
+        assignedCoders: [],
+        createdJobsCount: 0
+      }
+    ];
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.loading-container')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.definition-summary')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.job-definitions-table-wrapper')).toBeTruthy();
+  });
+
+  it('renders a definition name with its id and description', () => {
+    component.isLoading = false;
+    component.jobDefinitions = [{
+      id: 42,
+      name: 'Lesen Klasse 4',
+      description: 'Erste Erhebung',
+      status: 'draft',
+      assignedVariables: [],
+      assignedVariableBundles: [],
+      assignedCoders: []
+    }];
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.definition-name').textContent.trim())
+      .toBe('Lesen Klasse 4 (#42)');
+    expect(fixture.nativeElement.querySelector('.definition-description').textContent.trim())
+      .toBe('Erste Erhebung');
   });
 
   it('keeps the create action only in the empty state when no definitions exist', () => {
@@ -334,6 +380,7 @@ describe('CodingJobDefinitionsComponent', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           definitionId: 42,
+          definitionLabel: 'Definition #42',
           snapshot: latestSnapshot,
           coders: component.coders,
           createdJobsCount: 2
@@ -486,6 +533,7 @@ describe('CodingJobDefinitionsComponent', () => {
       expect.objectContaining({
         data: {
           definitionId: 42,
+          definitionLabel: 'Definition #42',
           preview
         }
       })
@@ -531,6 +579,7 @@ describe('CodingJobDefinitionsComponent', () => {
       expect.objectContaining({
         data: {
           definitionId: 42,
+          definitionLabel: 'Definition #42',
           preview
         }
       })
@@ -726,6 +775,8 @@ describe('CodingJobDefinitionsComponent', () => {
 
     component.editDefinition({
       id: 24,
+      name: 'Lesen Klasse 4',
+      description: 'Erste Erhebung',
       status: 'draft',
       assignedVariables: [{ unitName: 'Unit', variableId: 'Var' }],
       assignedCoders: [1],
@@ -740,12 +791,50 @@ describe('CodingJobDefinitionsComponent', () => {
     expect(matDialog.open).toHaveBeenCalledWith(expect.any(Function), expect.objectContaining({
       data: expect.objectContaining({
         codingJob: expect.objectContaining({
+          name: 'Lesen Klasse 4',
+          description: 'Erste Erhebung',
           showScore: false,
           allowComments: false,
           suppressGeneralInstructions: true,
           assignedCoderConfigs: [{ coderId: 1, capacityPercent: 75 }]
         })
       })
+    }));
+  });
+
+  it('reopens a recovered job definition draft after reauthentication', () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    const matDialog = TestBed.inject(MatDialog);
+    const dialogRefMock = { afterClosed: () => of(false) };
+    const dialogOpenSpy = jest.spyOn(matDialog, 'open').mockReturnValue(dialogRefMock as never);
+
+    sessionRecoveryService.saveDraft(CODING_JOB_DEFINITION_RECOVERY_KEY, {
+      workspaceId: 1,
+      mode: 'definition',
+      isEdit: false,
+      formValue: {},
+      doubleCodingMode: 'absolute',
+      selectedVariables: [],
+      selectedVariableBundles: [],
+      selectedCoderConfigs: [],
+      unitNameFilter: '',
+      variableIdFilter: '',
+      bundleNameFilter: '',
+      availabilityFilter: 'all',
+      trainingRequiredFilter: 'all'
+    });
+
+    sessionRecoveryService.notifyRestoredAuthentication();
+
+    expect(dialogOpenSpy).toHaveBeenCalledWith(CodingJobDefinitionDialogComponent, expect.objectContaining({
+      data: {
+        isEdit: false,
+        mode: 'definition',
+        jobDefinitionId: undefined,
+        codingJob: undefined,
+        readOnly: undefined,
+        createdJobsCount: undefined
+      }
     }));
   });
 });

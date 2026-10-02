@@ -320,7 +320,8 @@ describe('CoderTrainingResultsApplyService', () => {
       {
         code_v2: 7,
         score_v2: 2,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
     expect(codingFreshnessService.markManualCodingCurrent).toHaveBeenCalledWith(
@@ -362,7 +363,8 @@ describe('CoderTrainingResultsApplyService', () => {
       {
         code_v2: -97,
         score_v2: null,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
     expect(codingFreshnessService.markManualCodingCurrent).toHaveBeenCalledWith(
@@ -497,7 +499,8 @@ describe('CoderTrainingResultsApplyService', () => {
       {
         code_v2: 7,
         score_v2: 2,
-        status_v2: 5
+        status_v2: 5,
+        autocoder_invalidated_version: null
       }
     );
     expect(queryRunner.commitTransaction).toHaveBeenCalled();

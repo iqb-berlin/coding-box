@@ -6,6 +6,7 @@ import { AppComponent } from './app.component';
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
 import { AuthSessionActivityService } from './core/services/auth-session-activity.service';
+import { SystemNotificationService } from './core/services/system-notification.service';
 import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
 
 describe('AppComponent', () => {
@@ -24,7 +25,7 @@ describe('AppComponent', () => {
     dataLoading: boolean;
     authData$: Observable<AuthDataDto>;
     processMessagePost: jest.Mock;
-    refreshAuthData: jest.Mock;
+    loadAuthenticatedUser: jest.Mock;
     setAuthBootstrapStatus: jest.Mock;
     normalizeInternalRoute: jest.Mock;
     isLoggedIn: boolean;
@@ -62,7 +63,7 @@ describe('AppComponent', () => {
       dataLoading: false,
       authData$: of(AppService.defaultAuthData),
       processMessagePost: jest.fn(),
-      refreshAuthData: jest.fn(),
+      loadAuthenticatedUser: jest.fn().mockReturnValue(of(true)),
       setAuthBootstrapStatus: jest.fn(),
       normalizeInternalRoute: jest.fn((returnUrl?: string) => (
         returnUrl &&
@@ -91,6 +92,7 @@ describe('AppComponent', () => {
         { provide: AppService, useValue: appService },
         { provide: AuthService, useValue: authService },
         { provide: AuthSessionActivityService, useValue: authSessionActivity },
+        { provide: SystemNotificationService, useValue: { startPolling: jest.fn(), stopPolling: jest.fn() } },
         { provide: Router, useValue: router },
         { provide: LocationStrategy, useValue: { path: jest.fn().mockReturnValue('/') } }
       ]
@@ -119,8 +121,9 @@ describe('AppComponent', () => {
     expect(authService.setToken).toHaveBeenCalledWith('access-token');
     expect(authService.setIdToken).toHaveBeenCalledWith('id-token');
     expect(authService.setRefreshToken).toHaveBeenCalledWith('refresh-token');
-    expect(appService.refreshAuthData).toHaveBeenCalled();
+    expect(appService.loadAuthenticatedUser).toHaveBeenCalledWith('oidc-user-id');
     expect(authSessionActivity.start).toHaveBeenCalled();
+    expect(TestBed.inject(SystemNotificationService).startPolling).toHaveBeenCalled();
     expect(router.navigateByUrl).toHaveBeenCalledWith('/workspace-admin/1/test-results');
     expect(window.location.href).toBe('http://localhost/#/workspace-admin/1/test-results');
     expect(window.location.href).not.toContain('auth_code=');
@@ -134,5 +137,6 @@ describe('AppComponent', () => {
     fixture.destroy();
 
     expect(authSessionActivity.stop).toHaveBeenCalled();
+    expect(TestBed.inject(SystemNotificationService).stopPolling).toHaveBeenCalled();
   });
 });

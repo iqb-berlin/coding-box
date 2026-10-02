@@ -11,6 +11,14 @@ import {
 } from 'class-validator';
 
 export class StoreReplayStatisticsDto {
+  @ApiPropertyOptional({
+    description: 'Opaque identifier shared by requests belonging to one replay attempt.'
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+    replayAttemptId?: string;
+
   @ApiProperty()
   @IsString()
   @MaxLength(255)

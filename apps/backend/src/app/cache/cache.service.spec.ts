@@ -1,7 +1,13 @@
 import { CacheService } from './cache.service';
 
+type RedisMock = Record<string, jest.Mock> & {
+  options?: {
+    keyPrefix?: string;
+  };
+};
+
 describe('CacheService', () => {
-  let redis: Record<string, jest.Mock>;
+  let redis: RedisMock;
   let service: CacheService;
 
   beforeEach(() => {
@@ -150,12 +156,42 @@ describe('CacheService', () => {
       .mockResolvedValueOnce(['5', ['a', 'b']])
       .mockResolvedValueOnce(['0', []]);
 
-    await service.deleteByPattern('prefix:*');
+    await expect(service.deleteByPattern('prefix:*')).resolves.toBe(true);
 
     expect(redis.scan).toHaveBeenCalledWith('0', 'MATCH', 'prefix:*', 'COUNT', 100);
     expect(redis.del).toHaveBeenCalledWith('a', 'b');
 
     redis.scan.mockRejectedValueOnce(new Error('redis down'));
-    await expect(service.deleteByPattern('prefix:*')).resolves.toBeUndefined();
+    await expect(service.deleteByPattern('prefix:*')).resolves.toBe(false);
+  });
+
+  it('deletes matching keys by scan pattern with redis key prefixing enabled', async () => {
+    redis.options = {
+      keyPrefix: 'coding-box:cache:'
+    };
+    redis.scan
+      .mockResolvedValueOnce([
+        '0',
+        [
+          'coding-box:cache:coding_readiness:v2:1:1:abc',
+          'coding-box:cache:coding_readiness:v2:1:2:def'
+        ]
+      ]);
+
+    await service.deleteByPattern('coding_readiness:v2:1:*');
+
+    expect(redis.scan)
+      .toHaveBeenCalledWith(
+        '0',
+        'MATCH',
+        'coding-box:cache:coding_readiness:v2:1:*',
+        'COUNT',
+        100
+      );
+    expect(redis.del)
+      .toHaveBeenCalledWith(
+        'coding_readiness:v2:1:1:abc',
+        'coding_readiness:v2:1:2:def'
+      );
   });
 });

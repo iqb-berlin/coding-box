@@ -16,11 +16,15 @@ export type OverallValidationStatus = 'not-run' | 'running' | 'success' | 'faile
       <mat-icon>{{ getStatusIcon() }}</mat-icon>
       <div class="result-content">
         <div class="headline"><strong>{{ headline }}</strong></div>
-        <div class="subline" *ngIf="subline">{{ subline }}</div>
-        <div class="recommendation" *ngIf="recommendation">{{ recommendation }}</div>
+        @if (subline) {
+          <div class="subline">{{ subline }}</div>
+        }
+        @if (recommendation) {
+          <div class="recommendation">{{ recommendation }}</div>
+        }
       </div>
     </div>
-  `,
+    `,
   styles: [`
     .validation-result {
       display: flex;

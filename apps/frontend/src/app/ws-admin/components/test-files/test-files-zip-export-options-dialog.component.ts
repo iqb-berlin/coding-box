@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import {
   Component, Inject, ViewChild, AfterViewInit
 } from '@angular/core';
@@ -25,7 +24,6 @@ export type TestFilesZipExportOptionsDialogData = {
   selector: 'coding-box-test-files-zip-export-options-dialog',
   standalone: true,
   imports: [
-    CommonModule,
     MatDialogModule,
     MatButtonModule,
     MatListModule,

@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, Inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -27,7 +26,6 @@ export interface TestResultsLogAnomalyDetailsDialogResult {
   selector: 'coding-box-test-results-log-anomaly-details-dialog',
   standalone: true,
   imports: [
-    CommonModule,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,

@@ -6,6 +6,10 @@ export interface CodingStatistics {
    */
   totalResponses: number;
   /**
+   * Non-fatal post-processing problems persisted with a completed job result.
+   */
+  warnings?: string[];
+  /**
    * Non-generated responses within totalResponses.
    */
   baseResponseCount?: number;

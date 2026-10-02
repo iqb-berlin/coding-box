@@ -71,9 +71,9 @@
     </table>
   </div>
 
-  <ng-container *ngIf="dataSource.data.length === 0">
+  @if (dataSource.data.length === 0) {
     <p class="no-units-message">{{ 'replay.navigate-dialog.no-coded-units' | translate }}</p>
-  </ng-container>
+  }
 </div>
 
 <div mat-dialog-actions align="end">

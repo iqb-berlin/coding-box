@@ -2,12 +2,14 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
   BehaviorSubject,
+  defer,
   Observable,
   Subject,
   catchError,
   map,
   of,
   retry,
+  shareReplay,
   throwError,
   timer
 } from 'rxjs';
@@ -24,6 +26,7 @@ import { LogoService } from './logo.service';
 import { SERVER_URL } from '../../injection-tokens';
 import { suppressGlobalHttpErrorContext } from '../interceptors/http-error-context';
 import { WorkspaceTokenScope } from './auth-session.config';
+import { SessionRecoveryService } from './session-recovery.service';
 
 export interface WorkspaceTokenPolicy {
   scopes: Record<WorkspaceTokenScope, {
@@ -38,6 +41,12 @@ export type AuthBootstrapStatus =
   | 'session-expired'
   | 'auth-data-failed';
 
+export type AuthDataRefreshOutcome =
+  'updated'
+  | 'superseded'
+  | 'failed'
+  | 'invalidated';
+
 const AUTH_BOOTSTRAP_RETRY_DELAYS_MS = [500, 1000, 2000];
 const RETRYABLE_AUTH_BOOTSTRAP_ERROR_STATUSES = new Set([0, 408, 429, 500, 502, 503, 504]);
 
@@ -48,6 +57,7 @@ export class AppService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
   private logoService = inject(LogoService);
+  private sessionRecoveryService = inject(SessionRecoveryService);
 
   static defaultAuthData = <AuthDataDto>{
     userId: 0,
@@ -62,7 +72,6 @@ export class AppService {
   userProfile: Partial<CreateUserDto> = {};
   isLoggedIn = false;
   errorMessagesDisabled = false;
-  selectedWorkspaceId = 0;
   dataLoading: boolean | number = false;
   appLogo: AppLogoDto = standardLogo;
   postMessage$ = new Subject<MessageEvent>();
@@ -73,12 +82,35 @@ export class AppService {
   needsReAuthentication = false;
   sessionExpiryWarning = false;
   reAuthenticationReturnUrl?: string;
+  private selectedWorkspaceIdValue = 0;
+  private readonly selectedWorkspaceIdSubject = new Subject<number>();
+  readonly selectedWorkspaceId$ = this.selectedWorkspaceIdSubject.asObservable();
   private explicitLogoutInProgress = false;
   private authBootstrapStatusSubject = new BehaviorSubject<AuthBootstrapStatus>('checking');
   private authDataSubject = new BehaviorSubject<AuthDataDto>(AppService.defaultAuthData);
+  private authDataSessionGeneration = 0;
+  private authDataRefreshRequestId = 0;
+  private latestAppliedAuthDataRefreshRequestId = 0;
 
   constructor() {
     this.loadLogoSettings();
+  }
+
+  get selectedWorkspaceId(): number {
+    return this.selectedWorkspaceIdValue;
+  }
+
+  set selectedWorkspaceId(workspaceId: number | null | undefined) {
+    const numericWorkspaceId = Number(workspaceId);
+    const nextWorkspaceId = Number.isFinite(numericWorkspaceId) ?
+      numericWorkspaceId :
+      0;
+    if (nextWorkspaceId === this.selectedWorkspaceIdValue) {
+      return;
+    }
+
+    this.selectedWorkspaceIdValue = nextWorkspaceId;
+    this.selectedWorkspaceIdSubject.next(nextWorkspaceId);
   }
 
   createOwnToken(
@@ -111,6 +143,29 @@ export class AppService {
     );
   }
 
+  loadAuthenticatedUser(identity: string): Observable<boolean> {
+    this.invalidatePendingAuthDataRefreshes();
+    this.setAuthBootstrapStatus('backend-login-running');
+    this.sessionRecoveryService.setOwnerId(identity);
+
+    return this.getAuthDataWithRetry(identity)
+      .pipe(
+        map(authData => {
+          this.updateAuthData(authData);
+          return true;
+        }),
+        catchError(() => of(false)),
+        map(success => {
+          if (success) {
+            this.completeBackendLogin();
+          } else {
+            this.markAuthDataFailed();
+          }
+          return success;
+        })
+      );
+  }
+
   getAuthData(identity: string): Observable<AuthDataDto> {
     return this.http.get<AuthDataDto>(
       `${this.serverUrl}auth-data?identity=${encodeURIComponent(identity)}`
@@ -124,34 +179,44 @@ export class AppService {
       return of(false);
     }
 
-    return this.loadAuthData(identity);
+    return this.loadAuthenticatedUser(identity);
   }
 
-  refreshAuthData(): void {
-    const identity = this.loggedUser?.sub;
-    if (!identity) {
-      this.markAuthDataFailed();
-      return;
-    }
+  refreshAuthData(): Observable<AuthDataRefreshOutcome> {
+    return defer(() => {
+      if (this.authBootstrapStatus !== 'ready') {
+        return of<AuthDataRefreshOutcome>('invalidated');
+      }
 
-    this.loadAuthData(identity).subscribe();
-  }
+      const identity = this.loggedUser?.sub;
+      if (!identity) {
+        return of<AuthDataRefreshOutcome>('invalidated');
+      }
 
-  private loadAuthData(identity: string): Observable<boolean> {
-    this.setAuthBootstrapStatus('backend-login-running');
-
-    return this.getAuthDataWithRetry(identity)
-      .pipe(
-        map(authData => {
-          this.updateAuthData(authData);
-          this.completeBackendLogin();
-          return true;
-        }),
-        catchError(() => {
-          this.markAuthDataFailed();
-          return of(false);
-        })
-      );
+      this.authDataRefreshRequestId += 1;
+      const requestId = this.authDataRefreshRequestId;
+      const sessionGeneration = this.authDataSessionGeneration;
+      return this.getAuthDataWithRetry(identity)
+        .pipe(
+          map((authData): AuthDataRefreshOutcome => {
+            const currentIdentity = this.loggedUser?.sub;
+            if (sessionGeneration !== this.authDataSessionGeneration ||
+              identity !== currentIdentity) {
+              return 'invalidated';
+            }
+            if (requestId < this.latestAppliedAuthDataRefreshRequestId) {
+              return 'superseded';
+            }
+            this.latestAppliedAuthDataRefreshRequestId = requestId;
+            this.updateAuthData(authData);
+            return 'updated';
+          }),
+          catchError(() => of<AuthDataRefreshOutcome>('failed'))
+        );
+    }).pipe(
+      // Auth data is global state, so an in-flight refresh must outlive a view subscription.
+      shareReplay({ bufferSize: 1, refCount: false })
+    );
   }
 
   private getAuthDataWithRetry(identity: string): Observable<AuthDataDto> {
@@ -287,6 +352,7 @@ export class AppService {
     this.setSessionExpiryWarning(false);
     this.setNeedsReAuthentication(false);
     this.setAuthBootstrapStatus('ready');
+    this.sessionRecoveryService.notifyRestoredAuthentication();
   }
 
   markAuthDataFailed(): void {
@@ -324,7 +390,12 @@ export class AppService {
     return logoutInProgress;
   }
 
-  clearAuthState(options: { clearReAuthentication?: boolean; clearReturnUrl?: boolean } = {}): void {
+  clearAuthState(options: {
+    clearReAuthentication?: boolean;
+    clearReturnUrl?: boolean;
+    clearRecoveryDrafts?: boolean;
+  } = {}): void {
+    this.invalidatePendingAuthDataRefreshes();
     localStorage.removeItem('auth_token');
     localStorage.removeItem('id_token');
     localStorage.removeItem('refresh_token');
@@ -333,6 +404,10 @@ export class AppService {
     this.isLoggedIn = false;
     this.loggedUser = undefined;
     this.updateAuthData(AppService.defaultAuthData);
+    if (options.clearRecoveryDrafts ?? true) {
+      this.sessionRecoveryService.clearAllDrafts();
+      this.sessionRecoveryService.setOwnerId(undefined);
+    }
 
     if (options.clearReAuthentication ?? true) {
       this.needsReAuthentication = false;
@@ -350,7 +425,16 @@ export class AppService {
 
   requireReAuthentication(returnUrl?: string): void {
     const normalizedReturnUrl = this.normalizeInternalRoute(returnUrl) || this.reAuthenticationReturnUrl;
-    this.clearAuthState({ clearReAuthentication: false, clearReturnUrl: false });
+    const recoveryOwnerId = this.loggedUser?.sub;
+    if (recoveryOwnerId) {
+      this.sessionRecoveryService.setOwnerId(recoveryOwnerId);
+    }
+    this.sessionRecoveryService.captureRegisteredDrafts();
+    this.clearAuthState({
+      clearReAuthentication: false,
+      clearReturnUrl: false,
+      clearRecoveryDrafts: false
+    });
     this.reAuthenticationReturnUrl = normalizedReturnUrl;
     this.setSessionExpiryWarning(false);
     this.setNeedsReAuthentication(true);
@@ -405,6 +489,10 @@ export class AppService {
 
   private createAuthDataUrl(identity: string): string {
     return `${this.serverUrl}auth-data?identity=${encodeURIComponent(identity)}`;
+  }
+
+  private invalidatePendingAuthDataRefreshes(): void {
+    this.authDataSessionGeneration += 1;
   }
 
   private createTokenScopeParams(scopes: WorkspaceTokenScope[]): HttpParams {

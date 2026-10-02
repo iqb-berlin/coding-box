@@ -24,6 +24,7 @@ export function getEffectiveCodingStatusExpression(
     const statusV3Expression = getNumericStatusExpression(responseAlias, 'v3');
     const manualStatusExpression = getEffectiveManualCodingStatusExpression(responseAlias);
     return `CASE
+      WHEN ${responseAlias}.autocoder_invalidated_version IS NOT NULL THEN ${statusV3Expression}
       WHEN ${statusV3Expression} IN (${STATISTICS_IGNORED_STATUS_LIST}) THEN ${manualStatusExpression}
       ELSE COALESCE(${statusV3Expression}, ${manualStatusExpression})
     END`;
@@ -40,7 +41,7 @@ function getEffectiveManualCodingStatusExpression(responseAlias: string): string
     END`;
 }
 
-function getOpenManualCodingPlaceholderCondition(responseAlias: string): string {
+export function getOpenManualCodingPlaceholderCondition(responseAlias: string): string {
   return `${responseAlias}.status_v2 = ${CODING_INCOMPLETE_STATUS}
         AND ${responseAlias}.code_v2 IS NULL
         AND ${responseAlias}.score_v2 IS NULL

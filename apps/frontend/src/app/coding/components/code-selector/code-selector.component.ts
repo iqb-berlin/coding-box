@@ -1,8 +1,8 @@
 import {
-  Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, SecurityContext, SimpleChanges,
-  ViewChild
+  afterNextRender, ChangeDetectionStrategy, ChangeDetectorRef, Component, computed, ElementRef, inject, Injector,
+  input, Input, OnChanges, output, SecurityContext, signal, SimpleChanges, viewChild
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { MatListModule } from '@angular/material/list';
 import { MatButtonModule } from '@angular/material/button';
@@ -55,16 +55,33 @@ interface BundleVariableNavigationItem {
   progress: { coded: number; total: number; percentage: number };
 }
 
+interface IndexedReplayUnit {
+  unit: UnitsReplayUnit;
+  index: number;
+}
+
 @Component({
   selector: 'app-code-selector',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
-  imports: [CommonModule, FormsModule, MatListModule, MatButtonModule, MatDividerModule, MatFormFieldModule, MatInputModule, MatIconModule, MatTooltipModule, MatProgressBarModule, TranslateModule],
+  imports: [FormsModule, MatListModule, MatButtonModule, MatDividerModule, MatFormFieldModule, MatInputModule, MatIconModule, MatTooltipModule, MatProgressBarModule, TranslateModule],
   templateUrl: './code-selector.component.html',
-  styleUrls: ['./code-selector.component.css']
+  styleUrls: ['./code-selector.component.css'],
+  host: {
+    '(document:click)': 'onDocumentClick($event)',
+    '(window:keydown)': 'handleKeyboardEvent($event)'
+  }
 })
 export class CodeSelectorComponent implements OnChanges {
+  private readonly injector = inject(Injector);
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+  private readonly sanitizer = inject(DomSanitizer);
+  private readonly translateService = inject(TranslateService);
+  private readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
+
   @Input() codingScheme!: string | CodingScheme;
   @Input() variableId!: string;
+  @Input() codingCaseKey: string = '';
   @Input() preSelectedCodeId: number | null = null;
   @Input() preSelectedCodingIssueOptionId: number | null = null;
   @Input() coderNotes: string = '';
@@ -81,7 +98,7 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() unitsData: UnitsReplay | null = null;
   @Input() codingService!: ReplayCodingService;
   @Input() showScore: boolean = true;
-  @Input() allowComments: boolean = true;
+  readonly allowComments = input(true);
   @Input() suppressGeneralInstructions: boolean = false;
   @Input() isReadOnly: boolean = false;
   @Input() isNavigationDisabled: boolean = false;
@@ -89,19 +106,29 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() clearCodingIssueOnRegularSelection: boolean = false;
   @Input() reviewCodeSelections: ReviewCodeSelection[] = [];
 
-  @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
-  @Output() notesChanged = new EventEmitter<string>();
-  @Output() notesCommitted = new EventEmitter<string>();
-  @Output() openNavigateDialog = new EventEmitter<void>();
-  @Output() openCommentDialog = new EventEmitter<void>();
-  @Output() openCodingJobs = new EventEmitter<void>();
-  @Output() pauseCodingJob = new EventEmitter<void>();
-  @Output() unitChanged = new EventEmitter<UnitsReplayUnit>();
-  @ViewChild('variablePanel') variablePanel?: ElementRef<HTMLElement>;
-  @ViewChild('bundleVariablePanel') bundleVariablePanel?: ElementRef<HTMLElement>;
-  @ViewChild('notesTextarea') notesTextarea?: ElementRef<HTMLTextAreaElement>;
+  readonly codeSelected = output<CodeSelectedEvent>();
+  readonly notesChanged = output<string>();
+  readonly notesCommitted = output<string>();
+  readonly openNavigateDialog = output<void>();
+  readonly openCommentDialog = output<void>();
+  readonly openCodingJobs = output<void>();
+  readonly pauseCodingJob = output<void>();
+  readonly unitChanged = output<UnitsReplayUnit>();
+  private readonly variablePanel = viewChild<ElementRef<HTMLElement>>('variablePanel');
+  private readonly bundleVariablePanel = viewChild<ElementRef<HTMLElement>>('bundleVariablePanel');
+  private readonly notesTextarea = viewChild<ElementRef<HTMLTextAreaElement>>('notesTextarea');
 
-  selectableItems: SelectableItem[] = [];
+  private readonly selectableItems = signal<SelectableItem[]>([]);
+  readonly regularCodes = computed(() => (
+    this.selectableItems().filter(item => item.type !== 'codingIssueOption')
+  ));
+
+  readonly codingIssueOptionCodes = computed(() => (
+    this.selectableItems().filter(
+      item => item.type === 'codingIssueOption' && this.isCodingIssueOptionAvailable(item)
+    )
+  ));
+
   selectedCode: number | null = null;
   selectedCodingIssueOption: number | null = null;
   newCodeCommentValidationError = false;
@@ -118,14 +145,19 @@ export class CodeSelectorComponent implements OnChanges {
   ]);
 
   private readonly safeHtmlCache = new Map<string, SafeHtml>();
+  private indexedUnitsSource: UnitsReplayUnit[] | null = null;
+  private readonly indexedUnitsByVariable =
+    new Map<string, IndexedReplayUnit[]>();
 
-  constructor(
-    private sanitizer: DomSanitizer,
-    private translateService: TranslateService,
-    private elementRef: ElementRef<HTMLElement>
-  ) { }
+  private readonly indexedUnitsByDefinitionVariable =
+    new Map<string, IndexedReplayUnit[]>();
 
-  @HostListener('document:click', ['$event'])
+  private readonly indexedUnitsByBundle =
+    new Map<number, IndexedReplayUnit[]>();
+
+  private readonly indexedUnitsByResponseId =
+    new Map<number, IndexedReplayUnit>();
+
   onDocumentClick(event: MouseEvent): void {
     if (
       (this.isVariablePanelOpen || this.isBundleVariablePanelOpen) &&
@@ -136,17 +168,24 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes.codingScheme || changes.variableId || changes.missings) {
+    const codesChanged = changes.codingScheme || changes.variableId || changes.missings;
+    if (codesChanged) {
       this.loadCodes();
     }
-    if (changes.preSelectedCodeId || changes.preSelectedCodingIssueOptionId || changes.allowComments) {
+    if (
+      codesChanged ||
+      changes.codingCaseKey ||
+      changes.preSelectedCodeId ||
+      changes.preSelectedCodingIssueOptionId ||
+      changes.allowComments
+    ) {
       this.selectPreSelectedCode();
     }
   }
 
   private loadCodes(): void {
     if (!this.codingScheme || !this.variableId) {
-      this.selectableItems = [];
+      this.selectableItems.set([]);
       this.allRegularCodeItems = [];
       this.hasResolvedCodingScheme = false;
       this.variableManualInstruction = null;
@@ -159,7 +198,7 @@ export class CodeSelectorComponent implements OnChanges {
       try {
         scheme = JSON.parse(this.codingScheme);
       } catch (e) {
-        this.selectableItems = [];
+        this.selectableItems.set([]);
         this.allRegularCodeItems = [];
         this.hasResolvedCodingScheme = false;
         this.variableManualInstruction = null;
@@ -209,14 +248,12 @@ export class CodeSelectorComponent implements OnChanges {
         }
       ];
 
-      this.selectableItems = [...codeItems, ...codingIssueOptions];
-      setTimeout(() => this.selectPreSelectedCode(), 0);
+      this.selectableItems.set([...codeItems, ...codingIssueOptions]);
     } else {
-      this.selectableItems = [];
+      this.selectableItems.set([]);
       this.allRegularCodeItems = [];
       this.variableManualInstruction = null;
       this.legacySelectedCode = null;
-      setTimeout(() => this.selectPreSelectedCode(), 0);
     }
   }
 
@@ -225,12 +262,12 @@ export class CodeSelectorComponent implements OnChanges {
     this.selectedCodingIssueOption = null;
     this.legacySelectedCode = null;
 
-    if (this.selectableItems.length === 0 && !this.hasResolvedCodingScheme) {
+    if (this.selectableItems().length === 0 && !this.hasResolvedCodingScheme) {
       return;
     }
 
     if (this.preSelectedCodeId !== null) {
-      const preSelectedItem = this.selectableItems.find(item => item.id === this.preSelectedCodeId);
+      const preSelectedItem = this.selectableItems().find(item => item.id === this.preSelectedCodeId);
       if (preSelectedItem) {
         if (preSelectedItem.type === 'codingIssueOption') {
           if (this.isCodingIssueOptionAvailable(preSelectedItem)) {
@@ -248,7 +285,7 @@ export class CodeSelectorComponent implements OnChanges {
     }
 
     if (this.preSelectedCodingIssueOptionId !== null) {
-      const codingIssueItem = this.selectableItems.find(item => item.id === this.preSelectedCodingIssueOptionId);
+      const codingIssueItem = this.selectableItems().find(item => item.id === this.preSelectedCodingIssueOptionId);
       if (
         codingIssueItem &&
         codingIssueItem.type === 'codingIssueOption' &&
@@ -306,7 +343,7 @@ export class CodeSelectorComponent implements OnChanges {
 
   onSelect(codeId: number): void {
     if (this.isReadOnly) return;
-    const selectedItem = this.selectableItems.find(item => item.id === codeId);
+    const selectedItem = this.selectableItems().find(item => item.id === codeId);
     if (!selectedItem) return;
 
     // Prevent selection of regular codes when isRegularSelectionDisabled is true
@@ -329,20 +366,16 @@ export class CodeSelectorComponent implements OnChanges {
     }
     this.updateNewCodeCommentValidationState();
     const codeDto = this.selectedCode !== null ? this.createCodeOrCodingIssueOption(
-      this.selectableItems.find(item => item.id === this.selectedCode)!
+      this.selectableItems().find(item => item.id === this.selectedCode)!
     ) : null;
     const codingIssueOption = this.selectedCodingIssueOption !== null ? this.createCodeOrCodingIssueOption(
-      this.selectableItems.find(item => item.id === this.selectedCodingIssueOption)!
+      this.selectableItems().find(item => item.id === this.selectedCodingIssueOption)!
     ) as CodingIssueDto : null;
     this.codeSelected.emit({
       variableId: this.variableId,
       code: codeDto,
       codingIssueOption: codingIssueOption
     });
-  }
-
-  get regularCodes(): SelectableItem[] {
-    return this.selectableItems.filter(item => item.type !== 'codingIssueOption');
   }
 
   hasReviewCodeSelection(codeId: number): boolean {
@@ -369,12 +402,6 @@ export class CodeSelectorComponent implements OnChanges {
       selection.code === codeId &&
       selection.coderNames.length > 0
     ));
-  }
-
-  get codingIssueOptionCodes(): SelectableItem[] {
-    return this.selectableItems.filter(
-      item => item.type === 'codingIssueOption' && this.isCodingIssueOptionAvailable(item)
-    );
   }
 
   get hasVariableManualInstruction(): boolean {
@@ -406,13 +433,24 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   private isCodingIssueOptionAvailable(item: SelectableItem): boolean {
-    return this.allowComments || !this.commentBoundCodingIssueOptionIds.has(item.id);
+    return this.allowComments() || !this.commentBoundCodingIssueOptionIds.has(item.id);
   }
 
   private hasCurrentSelection(): boolean {
     return this.selectedCode !== null ||
       this.selectedCodingIssueOption !== null ||
       this.legacySelectedCode !== null;
+  }
+
+  private hasSavedCurrentSelection(): boolean {
+    const data = this.unitsData;
+    const currentUnit = data?.units[data.currentUnitIndex];
+    if (!currentUnit || !this.codingService) {
+      return this.hasCurrentSelection();
+    }
+
+    return this.codingService.isUnitCoded(currentUnit) &&
+      !this.codingService.isUnitSavePending?.(currentUnit);
   }
 
   deselectAll(): void {
@@ -459,6 +497,7 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   canLeaveCurrentUnit(showValidationMessage = true): boolean {
+    this.changeDetectorRef.markForCheck();
     if (!this.requiresNewCodeComment() || this.hasNewCodeComment()) {
       this.newCodeCommentValidationError = false;
       return true;
@@ -467,13 +506,17 @@ export class CodeSelectorComponent implements OnChanges {
     if (showValidationMessage) {
       this.newCodeCommentValidationError = true;
       this.isSupportSectionExpanded = true;
-      setTimeout(() => this.notesTextarea?.nativeElement.focus(), 0);
+      afterNextRender({
+        write: () => {
+          if (this.newCodeCommentValidationError) this.notesTextarea()?.nativeElement.focus();
+        }
+      }, { injector: this.injector });
     }
     return false;
   }
 
   private requiresNewCodeComment(): boolean {
-    return this.allowComments && this.selectedCodingIssueOption === this.newCodeNeededOptionId;
+    return this.allowComments() && this.selectedCodingIssueOption === this.newCodeNeededOptionId;
   }
 
   private hasNewCodeComment(): boolean {
@@ -492,7 +535,7 @@ export class CodeSelectorComponent implements OnChanges {
 
     if (this.isNavigationDisabled) return;
     if (this.hasSaveError) return;
-    if (!this.isReadOnly && !this.hasCurrentSelection()) return;
+    if (!this.isReadOnly && !this.hasSavedCurrentSelection()) return;
     if (!this.isReadOnly && !this.canLeaveCurrentUnit()) return;
 
     const currentIndex = data.currentUnitIndex;
@@ -523,7 +566,7 @@ export class CodeSelectorComponent implements OnChanges {
     const nextIndex = currentIndex + 1;
     const hasNext = nextIndex < data.units.length;
     if (this.isReadOnly) return hasNext;
-    return hasNext && this.hasCurrentSelection() && !this.hasSaveError;
+    return hasNext && this.hasSavedCurrentSelection() && !this.hasSaveError;
   }
 
   hasPreviousUnit(): boolean {
@@ -534,9 +577,8 @@ export class CodeSelectorComponent implements OnChanges {
     return data.currentUnitIndex > 0;
   }
 
-  @HostListener('window:keydown', ['$event'])
   handleKeyboardEvent(event: KeyboardEvent): void {
-    if (this.isReadOnly || this.selectableItems.length === 0) {
+    if (this.isReadOnly || this.selectableItems().length === 0) {
       return;
     }
 
@@ -569,7 +611,7 @@ export class CodeSelectorComponent implements OnChanges {
     }
 
     if (targetId !== null) {
-      const option = this.selectableItems.find(item => item.id === targetId);
+      const option = this.selectableItems().find(item => item.id === targetId);
       if (option && this.isCodingIssueOptionAvailable(option) && !this.isCodingIssueOptionDisabled(option)) {
         event.preventDefault(); // Prevent default browser action (e.g. quick find with '/')
         this.onSelect(targetId);
@@ -602,7 +644,7 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   get supportSectionTitle(): string {
-    if (!this.allowComments) {
+    if (!this.allowComments()) {
       return this.translateService.instant('code-selector.general-codes');
     }
 
@@ -614,18 +656,21 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   scrollToCode(codeId: number): void {
+    this.changeDetectorRef.markForCheck();
     if (this.isSupportCode(codeId)) {
       this.isSupportSectionExpanded = true;
     }
 
-    setTimeout(() => {
-      const target = this.elementRef.nativeElement.querySelector<HTMLElement>(`[data-code-id="${codeId}"]`);
-      target?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    }, 0);
+    afterNextRender({
+      write: () => {
+        const target = this.elementRef.nativeElement.querySelector<HTMLElement>(`[data-code-id="${codeId}"]`);
+        target?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      }
+    }, { injector: this.injector });
   }
 
   private isSupportCode(codeId: number): boolean {
-    return this.codingIssueOptionCodes.some(item => item.id === codeId);
+    return this.codingIssueOptionCodes().some(item => item.id === codeId);
   }
 
   get totalNavigationUnits(): number {
@@ -646,7 +691,9 @@ export class CodeSelectorComponent implements OnChanges {
       this.isBundleVariablePanelOpen = false;
     }
     if (this.isVariablePanelOpen) {
-      setTimeout(() => this.focusCurrentVariableInPanel(this.variablePanel?.nativeElement), 0);
+      afterNextRender({
+        write: () => this.focusCurrentVariableInPanel(this.variablePanel()?.nativeElement)
+      }, { injector: this.injector });
     }
   }
 
@@ -655,7 +702,9 @@ export class CodeSelectorComponent implements OnChanges {
     this.isBundleVariablePanelOpen = !this.isBundleVariablePanelOpen;
     if (this.isBundleVariablePanelOpen) {
       this.isVariablePanelOpen = false;
-      setTimeout(() => this.focusCurrentVariableInPanel(this.bundleVariablePanel?.nativeElement), 0);
+      afterNextRender({
+        write: () => this.focusCurrentVariableInPanel(this.bundleVariablePanel()?.nativeElement)
+      }, { injector: this.injector });
     }
   }
 
@@ -690,17 +739,20 @@ export class CodeSelectorComponent implements OnChanges {
   /** Returns coded/total/percentage for any unit+variable key. */
   getProgressForKey(key: string): { coded: number; total: number; percentage: number } {
     if (!this.unitsData?.units || !this.codingService) return { coded: 0, total: 0, percentage: 0 };
-    const [unitName, variableId] = key.split('::');
-    const units = this.unitsData.units.filter(
-      u => (u.alias || u.name) === unitName && u.variableId === variableId
-    );
+    this.ensureUnitIndexes();
+    const units = (this.indexedUnitsByVariable.get(key) || [])
+      .map(entry => entry.unit);
     return this.getProgressForUnits(units);
   }
 
   getProgressForNavigationItem(item: NavigationItem): { coded: number; total: number; percentage: number } {
     if (!this.unitsData?.units || !this.codingService) return { coded: 0, total: 0, percentage: 0 };
     if (item.type === 'bundle') {
-      const units = this.unitsData.units.filter(unit => unit.variableBundleId === item.bundleId);
+      this.ensureUnitIndexes();
+      const units = item.bundleId === undefined ?
+        [] :
+        (this.indexedUnitsByBundle.get(item.bundleId) || [])
+          .map(entry => entry.unit);
       return this.getProgressForUnits(units);
     }
 
@@ -827,14 +879,20 @@ export class CodeSelectorComponent implements OnChanges {
     variable: BundleVariableContext
   ): UnitsReplayUnit | undefined {
     if (!this.unitsData?.units) return undefined;
+    this.ensureUnitIndexes();
     const currentUnit = this.unitsData.units[this.unitsData.currentUnitIndex];
+    const candidates = variable.responseId !== null ?
+      [this.indexedUnitsByResponseId.get(variable.responseId)]
+        .filter((entry): entry is IndexedReplayUnit => !!entry) :
+      this.getIndexedUnitsForDefinitionVariable(
+        variable.unitName,
+        variable.variableId
+      );
 
-    return this.unitsData.units.find(unit => (
+    return candidates.find(({ unit }) => (
       this.isUnitInBundle(unit, context.bundleId) &&
-      unit.variableId === variable.variableId &&
-      unit.name === variable.unitName &&
       this.isUnitInCurrentBundleCase(unit, currentUnit, context)
-    ));
+    ))?.unit;
   }
 
   private isUnitInBundle(unit: UnitsReplayUnit, bundleId: number): boolean {
@@ -916,14 +974,7 @@ export class CodeSelectorComponent implements OnChanges {
     if (!currentUnit?.variableId) return null;
     const unitName = currentUnit.alias || currentUnit.name;
     const varId = currentUnit.variableId;
-    // Count all units with the same unitName+variableId combo
-    const variableUnits = this.unitsData.units.filter(
-      u => (u.alias || u.name) === unitName && u.variableId === varId
-    );
-    const total = variableUnits.length;
-    const coded = variableUnits.filter(u => this.codingService.isUnitCoded(u)).length;
-    const percentage = total > 0 ? Math.round((coded / total) * 100) : 0;
-    return { coded, total, percentage };
+    return this.getProgressForKey(`${unitName}::${varId}`);
   }
 
   /**
@@ -933,10 +984,8 @@ export class CodeSelectorComponent implements OnChanges {
   jumpToVariable(key: string): void {
     if (this.isNavigationDisabled) return;
     if (!this.unitsData?.units) return;
-    const [unitName, variableId] = key.split('::');
-    const variableUnits = this.unitsData.units
-      .map((unit, index) => ({ unit, index }))
-      .filter(({ unit }) => (unit.alias || unit.name) === unitName && unit.variableId === variableId);
+    this.ensureUnitIndexes();
+    const variableUnits = this.indexedUnitsByVariable.get(key) || [];
     if (variableUnits.length === 0) return;
 
     // Prefer first uncoded unit
@@ -958,7 +1007,9 @@ export class CodeSelectorComponent implements OnChanges {
     }
 
     if (!this.unitsData?.units || item.bundleId === undefined) return;
-    const bundleUnits = this.unitsData.units.filter(unit => unit.variableBundleId === item.bundleId);
+    this.ensureUnitIndexes();
+    const bundleUnits = (this.indexedUnitsByBundle.get(item.bundleId) || [])
+      .map(entry => entry.unit);
     if (bundleUnits.length === 0) return;
 
     const firstUncoded = bundleUnits.find(unit => !this.codingService.isUnitCoded(unit));
@@ -985,5 +1036,70 @@ export class CodeSelectorComponent implements OnChanges {
 
   private getBundleNavigationKey(bundleId: number): string {
     return `bundle:${bundleId}`;
+  }
+
+  private ensureUnitIndexes(): void {
+    const units = this.unitsData?.units || null;
+    if (units === this.indexedUnitsSource) {
+      return;
+    }
+
+    this.indexedUnitsSource = units;
+    this.indexedUnitsByVariable.clear();
+    this.indexedUnitsByDefinitionVariable.clear();
+    this.indexedUnitsByBundle.clear();
+    this.indexedUnitsByResponseId.clear();
+    if (!units) {
+      return;
+    }
+
+    units.forEach((unit, index) => {
+      const entry = { unit, index };
+      this.indexedUnitsByResponseId.set(unit.id, entry);
+
+      if (unit.variableId) {
+        const variableKey = `${unit.alias || unit.name}::${unit.variableId}`;
+        this.addIndexedUnit(
+          this.indexedUnitsByVariable,
+          variableKey,
+          entry
+        );
+        this.addIndexedUnit(
+          this.indexedUnitsByDefinitionVariable,
+          `${unit.name.toUpperCase()}::${unit.variableId}`,
+          entry
+        );
+      }
+      if (unit.variableBundleId !== null &&
+        unit.variableBundleId !== undefined) {
+        this.addIndexedUnit(
+          this.indexedUnitsByBundle,
+          unit.variableBundleId,
+          entry
+        );
+      }
+    });
+  }
+
+  private getIndexedUnitsForDefinitionVariable(
+    unitName: string,
+    variableId: string
+  ): IndexedReplayUnit[] {
+    return this.indexedUnitsByDefinitionVariable.get(
+      `${unitName.toUpperCase()}::${variableId}`
+    ) || [];
+  }
+
+  private addIndexedUnit<TKey>(
+    index: Map<TKey, IndexedReplayUnit[]>,
+    key: TKey,
+    entry: IndexedReplayUnit
+  ): void {
+    const indexedUnits = index.get(key);
+    if (indexedUnits) {
+      indexedUnits.push(entry);
+    } else {
+      index.set(key, [entry]);
+    }
   }
 }

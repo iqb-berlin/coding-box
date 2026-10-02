@@ -7,7 +7,7 @@ import { FormsModule } from '@angular/forms';
 import { MatListModule } from '@angular/material/list';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { CommonModule } from '@angular/common';
+
 import { TestResultBackendService } from '../../../shared/services/test-result/test-result-backend.service';
 
 export interface ExportOptions {
@@ -22,7 +22,6 @@ export interface ExportOptions {
   selector: 'coding-box-export-options-dialog',
   standalone: true,
   imports: [
-    CommonModule,
     MatDialogModule,
     MatFormFieldModule,
     MatInputModule,

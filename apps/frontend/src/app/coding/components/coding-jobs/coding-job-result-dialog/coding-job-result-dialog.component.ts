@@ -194,7 +194,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     ).subscribe(() => this.loadCodingResults());
   }
 
-  @HostListener('window:focus', ['$event'])
+  @HostListener('window:focus')
   onWindowFocus(): void {
     this.refreshSubject.next();
   }

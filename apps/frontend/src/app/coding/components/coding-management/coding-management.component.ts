@@ -5,7 +5,7 @@ import {
   Input,
   inject
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import {
   concatMap,
   finalize,
@@ -105,7 +105,6 @@ import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
   templateUrl: './coding-management.component.html',
   standalone: true,
   imports: [
-    CommonModule,
     MatSnackBarModule,
     MatIcon,
     MatAnchor,
@@ -186,9 +185,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   manualAppliedResultsOverview: AppliedResultsOverview | null = null;
   isLoadingManualAppliedResultsOverview = false;
   manualAppliedResultsOverviewLoadFailed = false;
+  evaluationMode = false;
   enableRegexSearch = false;
   autoRefreshManualCodingJobs = true;
-  hasRequestedCodingStatusOverview = false;
+  hasLoadedFullCodingStatusOverview = false;
   isStartingFreshnessCoding = false;
   activeFreshnessJobId: string | null = null;
   activeFreshnessJobProgress: number | null = null;
@@ -216,9 +216,13 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private hasLoadedManualCodingJobRefreshSetting = false;
   private pendingAutomaticCodingStatusRefreshAfterBackgroundJob = false;
   private pendingForcedCodingStatusRefreshAfterBackgroundJob = false;
+  private scheduledAutomaticCodingStatusRefresh: number | null = null;
   private freshnessJobCompletionRefreshHandledIds = new Set<string>();
   private resetCompletionRefreshHandledAfterGuardClear = false;
   private hasShownFreshnessJobStatusPollingError = false;
+  private readonly responseTableRequestCancel$ = new Subject<void>();
+  private responseTableRequestId = 0;
+  private readonly automaticCodingStatusRefreshDebounceMs = 250;
 
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -231,21 +235,28 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       }
 
       combineLatest([
+        this.workspaceSettingsService.getEvaluationMode(workspaceId),
         this.workspaceSettingsService.getAutoFetchCodingStatistics(workspaceId),
         this.workspaceSettingsService.getAutoRefreshManualCodingJobs(workspaceId)
       ])
         .pipe(takeUntil(this.destroy$))
-        .subscribe(([autoFetch, autoRefresh]) => {
-          this.hasLoadedManualCodingJobRefreshSetting = true;
-          this.autoRefreshManualCodingJobs = autoRefresh;
-          if (!autoRefresh) {
-            return;
-          }
+        .subscribe(([evaluationMode, autoFetch, autoRefresh]) => {
+          const effectiveAutoRefresh = !evaluationMode && autoRefresh;
+          const shouldFetchInitialStatistics =
+            !evaluationMode && (autoFetch || pendingStatisticsVersion);
 
-          if (autoFetch || pendingStatisticsVersion) {
+          this.evaluationMode = evaluationMode;
+          this.hasLoadedManualCodingJobRefreshSetting = true;
+          this.autoRefreshManualCodingJobs = effectiveAutoRefresh;
+
+          if (shouldFetchInitialStatistics) {
             this.fetchCodingStatistics();
           }
-          this.loadCodingStatusOverview();
+          if (effectiveAutoRefresh) {
+            this.loadInitialCodingStatusOverview();
+          } else if (!evaluationMode) {
+            this.loadCachedAutocodingReadiness();
+          }
         });
       this.workspaceSettingsService
         .getEnableRegexSearch(workspaceId)
@@ -306,6 +317,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         if (previousProgress !== undefined &&
           previousProgress !== null &&
           progress === null) {
+          this.invalidateCodingStatusOverviewCache();
           if (this.resetCompletionRefreshHandledAfterGuardClear) {
             this.resetCompletionRefreshHandledAfterGuardClear = false;
             return;
@@ -375,6 +387,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       );
     }
     this.stopFreshnessJobPolling();
+    this.clearScheduledAutomaticCodingStatusRefresh();
+    this.codingManagementService.cancelViewBoundStatisticsFetches(this.appService.selectedWorkspaceId);
+    this.responseTableRequestCancel$.next();
+    this.responseTableRequestCancel$.complete();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -424,7 +440,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.codingManagementService.fetchCodingStatistics(this.selectedStatisticsVersion);
   }
 
-  loadCodingFreshness(): void {
+  loadCodingFreshness(loadScopeOnWarnings = true): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return;
@@ -444,10 +460,13 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       )
       .subscribe(summary => {
         this.codingFreshnessSummary = summary;
-        if (this.hasCodingFreshnessWarnings) {
+        if (loadScopeOnWarnings && this.hasCodingFreshnessWarnings) {
           this.loadCodingFreshnessScope();
         } else {
           this.codingFreshnessScope = null;
+        }
+        if (!loadScopeOnWarnings && this.hasSecondAutocodingFreshnessWarnings) {
+          this.loadManualAppliedResultsOverview();
         }
       });
   }
@@ -514,11 +533,46 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       .subscribe({
         next: readiness => {
           this.autocodingReadiness = readiness;
+          this.hasLoadedFullCodingStatusOverview = true;
         },
         error: () => {
           this.autocodingReadiness = null;
           this.autocodingReadinessLoadFailed = true;
         }
+      });
+  }
+
+  private loadCachedAutocodingReadiness(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    if (this.codingBackgroundJobsService.isStatusCheckGuardActive(workspaceId)) {
+      return;
+    }
+
+    const cachedOverview =
+      this.testPersonCodingService.getCachedCodingStatusOverview(workspaceId, 1);
+    if (cachedOverview) {
+      this.codingFreshnessSummary = cachedOverview.codingFreshness;
+      this.autocodingReadiness = cachedOverview.autocodingReadiness;
+      this.manualAppliedResultsOverview = cachedOverview.appliedResultsOverview;
+      this.autocodingReadinessLoadFailed = false;
+      this.manualAppliedResultsOverviewLoadFailed = false;
+      this.hasLoadedFullCodingStatusOverview = true;
+      return;
+    }
+
+    this.testPersonCodingService.getCachedAutocodingReadiness(workspaceId, 1)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(readiness => {
+        if (!readiness) {
+          return;
+        }
+
+        this.autocodingReadiness = readiness;
+        this.autocodingReadinessLoadFailed = false;
       });
   }
 
@@ -534,14 +588,15 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.performCodingStatusOverviewRefresh(true);
   }
 
-  private performCodingStatusOverviewRefresh(forceAutocodingReadiness = false): void {
+  private performCodingStatusOverviewRefresh(includeAutocodingReadiness = false): void {
     this.invalidateCodingStatusOverviewCache();
     this.fetchCodingStatistics();
-    this.loadCodingStatusOverview(forceAutocodingReadiness);
+    this.loadCodingStatusOverview(includeAutocodingReadiness);
     this.refreshTableData();
   }
 
   private refreshCodingStatusOverviewAfterChange(): void {
+    this.hasLoadedFullCodingStatusOverview = false;
     if (!this.hasLoadedManualCodingJobRefreshSetting ||
       !this.autoRefreshManualCodingJobs) {
       return;
@@ -551,25 +606,61 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.performCodingStatusOverviewRefresh();
+    this.scheduleAutomaticCodingStatusOverviewRefresh();
   }
 
   private invalidateCodingStatusOverviewCache(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
+      this.hasLoadedFullCodingStatusOverview = false;
       this.testPersonCodingService.invalidateCodingStatusCache(workspaceId);
     }
   }
 
-  loadCodingStatusOverview(forceAutocodingReadiness = false): void {
-    if (this.deferCodingStatusRefreshIfBackgroundJobIsRunning(forceAutocodingReadiness)) {
+  loadCodingStatusOverview(includeAutocodingReadiness = false): void {
+    if (this.deferCodingStatusRefreshIfBackgroundJobIsRunning(includeAutocodingReadiness)) {
       return;
     }
 
-    this.hasRequestedCodingStatusOverview = true;
+    if (includeAutocodingReadiness) {
+      this.hasLoadedFullCodingStatusOverview = false;
+    }
     this.loadCodingFreshness();
     this.loadManualAppliedResultsOverview();
-    this.loadAutocodingReadiness(forceAutocodingReadiness);
+    if (includeAutocodingReadiness) {
+      this.loadAutocodingReadiness(true);
+    }
+  }
+
+  private loadInitialCodingStatusOverview(): void {
+    if (this.deferCodingStatusRefreshIfBackgroundJobIsRunning(false)) {
+      return;
+    }
+
+    this.hasLoadedFullCodingStatusOverview = false;
+    this.loadCodingFreshness(false);
+    this.loadCachedAutocodingReadiness();
+  }
+
+  private scheduleAutomaticCodingStatusOverviewRefresh(): void {
+    if (this.scheduledAutomaticCodingStatusRefresh !== null) {
+      return;
+    }
+
+    this.scheduledAutomaticCodingStatusRefresh = window.setTimeout(() => {
+      this.scheduledAutomaticCodingStatusRefresh = null;
+      if (this.deferCodingStatusRefreshIfBackgroundJobIsRunning(false)) {
+        return;
+      }
+      this.performCodingStatusOverviewRefresh();
+    }, this.automaticCodingStatusRefreshDebounceMs);
+  }
+
+  private clearScheduledAutomaticCodingStatusRefresh(): void {
+    if (this.scheduledAutomaticCodingStatusRefresh !== null) {
+      clearTimeout(this.scheduledAutomaticCodingStatusRefresh);
+      this.scheduledAutomaticCodingStatusRefresh = null;
+    }
   }
 
   private deferCodingStatusRefreshIfBackgroundJobIsRunning(forceRefresh: boolean): boolean {
@@ -631,7 +722,12 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   shouldShowManualCodingStatusRefresh(): boolean {
-    return !this.autoRefreshManualCodingJobs;
+    if (this.isStartingFreshnessCoding || this.activeFreshnessJobId) {
+      return false;
+    }
+
+    return !this.autoRefreshManualCodingJobs ||
+      !this.hasLoadedFullCodingStatusOverview;
   }
 
   startFreshnessCoding(version: 'v1' | 'v3'): void {
@@ -815,19 +911,23 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   onReplayClick(response: Success): void {
-    this.uiService.openReplayForResponse(response).subscribe(replayUrl => {
-      if (replayUrl) {
-        window.open(replayUrl, '_blank');
-      }
-    });
+    this.uiService.openReplayForResponse(response)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(replayUrl => {
+        if (replayUrl) {
+          window.open(replayUrl, '_blank');
+        }
+      });
   }
 
   onShowCodingScheme(unitId: number): void {
-    this.uiService.getCodingSchemeFromUnit(unitId).subscribe(codingSchemeRef => {
-      if (codingSchemeRef) {
-        this.uiService.showCodingSchemeDialog(codingSchemeRef);
-      }
-    });
+    this.uiService.getCodingSchemeFromUnit(unitId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(codingSchemeRef => {
+        if (codingSchemeRef) {
+          this.uiService.showCodingSchemeDialog(codingSchemeRef);
+        }
+      });
   }
 
   onShowUnitXml(unitId: number): void {
@@ -962,7 +1062,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   get hasImportedResultsWithoutCoding(): boolean {
-    return !this.hasCodingFreshnessWarnings &&
+    return this.statisticsLoaded &&
+      !this.hasCodingFreshnessWarnings &&
       (this.codingFreshnessSummary?.currentRevision || 0) > 0 &&
       (this.codingFreshnessSummary?.items || []).length === 0 &&
       (this.codingStatistics.totalResponses || 0) === 0;
@@ -984,9 +1085,17 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       this.hasImportedResultsWithoutCoding;
   }
 
+  get isFullCodingStatusCheckLoading(): boolean {
+    return this.isLoadingAutocodingReadiness;
+  }
+
   get isCodingStatusOverviewPendingManualRefresh(): boolean {
-    return !this.hasRequestedCodingStatusOverview &&
-      this.shouldShowManualCodingStatusRefresh();
+    return !this.hasLoadedFullCodingStatusOverview &&
+      this.shouldShowManualCodingStatusRefresh() &&
+      !this.hasAutocodingReadinessLoadFailed &&
+      !this.isAutocodingReadinessBlocked &&
+      !this.hasCodingFreshnessWarnings &&
+      !this.hasImportedResultsWithoutCoding;
   }
 
   get autoCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
@@ -1269,6 +1378,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     return getSecondAutocodingFreshnessWarnings(this.allCodingFreshnessWarnings);
   }
 
+  private get hasSecondAutocodingFreshnessWarnings(): boolean {
+    return this.secondAutocodingFreshnessWarnings.length > 0;
+  }
+
   private get isSecondAutocodingWaitingForManualCoding(): boolean {
     return isSecondAutocodingWaitingForManualCoding(
       this.allCodingFreshnessWarnings,
@@ -1292,12 +1405,23 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.activeFreshnessJobProgress = null;
   }
 
+  private startResponseTableRequest(): number {
+    this.responseTableRequestCancel$.next();
+    this.responseTableRequestId += 1;
+    return this.responseTableRequestId;
+  }
+
+  private isCurrentResponseTableRequest(requestId: number): boolean {
+    return requestId === this.responseTableRequestId;
+  }
+
   // Data Fetching Methods
   private fetchResponsesByStatus(
     status: string,
     page: number = 1,
     limit: number = this.pageSize
   ): void {
+    const requestId = this.startResponseTableRequest();
     this.isLoading = true;
     this.currentStatusFilter = status;
 
@@ -1308,8 +1432,14 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       limit,
       this.sortBy || undefined,
       this.sortDirection || undefined
+    ).pipe(
+      takeUntil(this.responseTableRequestCancel$),
+      takeUntil(this.destroy$)
     ).subscribe({
       next: response => {
+        if (!this.isCurrentResponseTableRequest(requestId)) {
+          return;
+        }
         this.data = response.data.map((item: ResponseEntity) => {
           const codeKey = `code_${this.selectedStatisticsVersion}` as keyof ResponseEntity;
           const scoreKey = `score_${this.selectedStatisticsVersion}` as keyof ResponseEntity;
@@ -1346,12 +1476,16 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         }
       },
       error: () => {
+        if (!this.isCurrentResponseTableRequest(requestId)) {
+          return;
+        }
         this.isLoading = false;
       }
     });
   }
 
   private fetchResponsesWithFilters(): void {
+    const requestId = this.startResponseTableRequest();
     this.isLoading = true;
 
     if (!this.hasActiveFilters()) {
@@ -1370,8 +1504,14 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       this.pageSize,
       this.sortBy || undefined,
       this.sortDirection || undefined
+    ).pipe(
+      takeUntil(this.responseTableRequestCancel$),
+      takeUntil(this.destroy$)
     ).subscribe({
       next: (response: { data: SearchResponseItem[]; total: number }) => {
+        if (!this.isCurrentResponseTableRequest(requestId)) {
+          return;
+        }
         this.data = this.mapSearchResponseItemsToSuccess(response.data);
         this.totalRecords = response.total;
         this.isLoading = false;
@@ -1385,6 +1525,9 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         }
       },
       error: () => {
+        if (!this.isCurrentResponseTableRequest(requestId)) {
+          return;
+        }
         this.isLoading = false;
       }
     });
@@ -1459,8 +1602,13 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
     dialogRef.afterClosed()
       .pipe(takeUntil(this.destroy$))
-      .subscribe(() => {
-        this.fetchCodingStatistics();
+      .subscribe(dialogResult => {
+        if (data?.initialJobId) {
+          return;
+        }
+        if (this.isTerminalJobStatus(dialogResult?.jobStatus)) {
+          this.refreshCodingStatusOverviewAfterChange();
+        }
       });
 
     return dialogRef;
@@ -1595,6 +1743,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     const dialogRef = this.dialog.open(DownloadCodingResultsDialogComponent, {
       width: '550px',
       data: {
+        workspaceId,
         currentVersion: this.selectedStatisticsVersion,
         hasGeoGebraResponses: this.isGeogebraAvailable
       }
@@ -1607,6 +1756,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       includeResponseValues: boolean;
       includeGeoGebraFiles: boolean;
       includeGeoGebraResponseValues: boolean;
+      missingsProfileId: number;
     } | undefined) => {
       if (result) {
         const {
@@ -1615,11 +1765,13 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
           includeReplayUrls,
           includeResponseValues,
           includeGeoGebraFiles,
-          includeGeoGebraResponseValues
+          includeGeoGebraResponseValues,
+          missingsProfileId
         } = result;
         this.codingManagementService.downloadCodingResults(
           version,
           format,
+          missingsProfileId,
           includeReplayUrls,
           includeResponseValues,
           includeGeoGebraFiles,

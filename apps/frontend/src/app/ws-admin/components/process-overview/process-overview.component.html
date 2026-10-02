@@ -9,9 +9,11 @@
         <mat-label>{{ 'process-overview.filters.status' | translate }}</mat-label>
         <mat-select [(ngModel)]="statusFilter" (selectionChange)="applyFilter()">
           <mat-option value="">{{ 'process-overview.filters.all-status' | translate }}</mat-option>
-          <mat-option *ngFor="let status of statusOptions" [value]="status">
-            {{ getStatusLabel(status) }}
-          </mat-option>
+          @for (status of statusOptions; track status) {
+            <mat-option [value]="status">
+              {{ getStatusLabel(status) }}
+            </mat-option>
+          }
         </mat-select>
       </mat-form-field>
 
@@ -19,9 +21,11 @@
         <mat-label>{{ 'process-overview.filters.type' | translate }}</mat-label>
         <mat-select [(ngModel)]="typeFilter" (selectionChange)="applyFilter()">
           <mat-option value="">{{ 'process-overview.filters.all-types' | translate }}</mat-option>
-          <mat-option *ngFor="let type of availableTypes" [value]="type">
-            {{ getQueueLabel(type) }}
-          </mat-option>
+          @for (type of availableTypes; track type) {
+            <mat-option [value]="type">
+              {{ getQueueLabel(type) }}
+            </mat-option>
+          }
         </mat-select>
       </mat-form-field>
 
@@ -49,13 +53,15 @@
     </div>
 
     <div class="table-container">
-      <div class="loading-overlay" *ngIf="isLoading">
-        <mat-spinner diameter="40"></mat-spinner>
-      </div>
+      @if (isLoading) {
+        <div class="loading-overlay">
+          <mat-spinner diameter="40"></mat-spinner>
+        </div>
+      }
 
       <div class="mat-elevation-z2 table-wrapper">
         <table mat-table [dataSource]="processes" class="mat-table" [class.loading-table]="isLoading">
-          
+
           <ng-container matColumnDef="queueName">
             <th mat-header-cell *matHeaderCellDef>{{ 'process-overview.columns.type' | translate }}</th>
             <td mat-cell *matCellDef="let element">
@@ -82,15 +88,14 @@
           <ng-container matColumnDef="progress">
             <th mat-header-cell *matHeaderCellDef>{{ 'process-overview.columns.progress' | translate }}</th>
             <td mat-cell *matCellDef="let element">
-              <ng-container *ngIf="hasProgressPercent(element); else progressTextOnly">
+              @if (hasProgressPercent(element)) {
                 <div class="progress-cell">
                   <mat-progress-bar mode="determinate" [value]="getProgressPercent(element) || 0"></mat-progress-bar>
                   <span>{{ getProgressLabel(element) }}</span>
                 </div>
-              </ng-container>
-              <ng-template #progressTextOnly>
+              } @else {
                 <span class="muted-text">{{ getProgressLabel(element) }}</span>
-              </ng-template>
+              }
             </td>
           </ng-container>
 
@@ -102,18 +107,24 @@
                   <span>{{ 'process-overview.time.created' | translate }}</span>
                   <strong>{{ element.timestamp | date:'short' }}</strong>
                 </div>
-                <div *ngIf="element.processedOn">
-                  <span>{{ 'process-overview.time.started' | translate }}</span>
-                  <strong>{{ element.processedOn | date:'short' }}</strong>
-                </div>
-                <div *ngIf="element.finishedOn">
-                  <span>{{ 'process-overview.time.finished' | translate }}</span>
-                  <strong>{{ element.finishedOn | date:'short' }}</strong>
-                </div>
-                <div *ngIf="getDurationLabel(element) as duration">
-                  <span>{{ 'process-overview.time.duration' | translate }}</span>
-                  <strong>{{ duration }}</strong>
-                </div>
+                @if (element.processedOn) {
+                  <div>
+                    <span>{{ 'process-overview.time.started' | translate }}</span>
+                    <strong>{{ element.processedOn | date:'short' }}</strong>
+                  </div>
+                }
+                @if (element.finishedOn) {
+                  <div>
+                    <span>{{ 'process-overview.time.finished' | translate }}</span>
+                    <strong>{{ element.finishedOn | date:'short' }}</strong>
+                  </div>
+                }
+                @if (getDurationLabel(element); as duration) {
+                  <div>
+                    <span>{{ 'process-overview.time.duration' | translate }}</span>
+                    <strong>{{ duration }}</strong>
+                  </div>
+                }
               </div>
             </td>
           </ng-container>
@@ -122,21 +133,28 @@
             <th mat-header-cell *matHeaderCellDef>{{ 'process-overview.columns.details' | translate }}</th>
             <td mat-cell *matCellDef="let element">
               <div class="details-cell">
-                <div *ngIf="element.failedReason" class="failed-reason">
-                  <mat-icon>error</mat-icon>
-                  <span>{{ element.failedReason }}</span>
-                </div>
-                <div *ngIf="getProcessDetailItems(element).length > 0; else noDetails" class="detail-list">
-                  <span class="detail-item" *ngFor="let detail of getProcessDetailItems(element)">
-                    <span class="detail-label">{{ detail.label }}</span>
-                    <span class="detail-value">{{ detail.value }}</span>
-                  </span>
-                </div>
-                <ng-template #noDetails>
-                  <span *ngIf="!element.failedReason" class="muted-text">
-                    {{ 'process-overview.details.none' | translate }}
-                  </span>
-                </ng-template>
+                @if (element.failedReason) {
+                  <div class="failed-reason">
+                    <mat-icon>error</mat-icon>
+                    <span>{{ element.failedReason }}</span>
+                  </div>
+                }
+                @if (getProcessDetailItems(element).length > 0) {
+                  <div class="detail-list">
+                    @for (detail of getProcessDetailItems(element); track detail.label) {
+                      <span class="detail-item">
+                        <span class="detail-label">{{ detail.label }}</span>
+                        <span class="detail-value">{{ detail.value }}</span>
+                      </span>
+                    }
+                  </div>
+                } @else {
+                  @if (!element.failedReason) {
+                    <span class="muted-text">
+                      {{ 'process-overview.details.none' | translate }}
+                    </span>
+                  }
+                }
               </div>
             </td>
           </ng-container>
@@ -146,9 +164,9 @@
             <td mat-cell *matCellDef="let element">
               <span class="action-tooltip-wrapper" [matTooltip]="getActionTooltip(element)">
                 <button mat-icon-button
-                        color="warn"
-                        (click)="deleteProcess(element)"
-                        [disabled]="!canRemoveProcess(element)">
+                  color="warn"
+                  (click)="deleteProcess(element)"
+                  [disabled]="!canRemoveProcess(element)">
                   <mat-icon>{{ getActionIcon(element) }}</mat-icon>
                 </button>
               </span>
@@ -158,19 +176,21 @@
           <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
           <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
         </table>
-        
+
         <mat-paginator [pageSizeOptions]="[5, 10, 20]"
-                       showFirstLastButtons
-                       aria-label="Seite der Prozesse auswählen">
+          showFirstLastButtons
+          aria-label="Seite der Prozesse auswählen">
         </mat-paginator>
 
-        <div *ngIf="processes.filteredData.length === 0 && !isLoading" class="no-data">
-          {{
+        @if (processes.filteredData.length === 0 && !isLoading) {
+          <div class="no-data">
+            {{
             processes.data.length === 0 ?
-              ('process-overview.no-data' | translate) :
-              ('process-overview.no-filter-data' | translate)
-          }}
-        </div>
+            ('process-overview.no-data' | translate) :
+            ('process-overview.no-filter-data' | translate)
+            }}
+          </div>
+        }
       </div>
     </div>
   </div>

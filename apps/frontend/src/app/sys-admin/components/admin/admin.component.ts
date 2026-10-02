@@ -14,6 +14,7 @@ export class AdminComponent {
   navLinks = [
     'users',
     'workspaces',
+    'notifications',
     'settings'
   ];
 }

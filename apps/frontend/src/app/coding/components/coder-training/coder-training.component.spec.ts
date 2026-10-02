@@ -1,10 +1,13 @@
+import { ChangeDetectorRef } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { FormGroup } from '@angular/forms';
-import { of, throwError } from 'rxjs';
+import {
+  finalize, of, Subject, throwError
+} from 'rxjs';
 import { CoderTrainingComponent } from './coder-training.component';
 import { CoderService } from '../../services/coder.service';
 import { VariableBundleService } from '../../services/variable-bundle.service';
@@ -12,6 +15,7 @@ import { CodingJobBackendService } from '../../services/coding-job-backend.servi
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { AppService } from '../../../core/services/app.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
+import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 
 const createDependencyMock = (): Record<string, jest.Mock> => new Proxy({} as Record<string, jest.Mock>, {
   get(target, property: string) {
@@ -154,7 +158,30 @@ describe('CoderTrainingComponent', () => {
     ] as never;
   });
 
+  afterEach(() => {
+    TestBed.inject(SessionRecoveryService).clearAllDrafts();
+  });
+
+  it('preserves validation rows while updating their status', () => {
+    fixture.detectChanges();
+    const rows = Array.from(fixture.nativeElement.querySelectorAll('.validation-item')) as HTMLElement[];
+    expect(rows).toHaveLength(5);
+    expect(rows[0].classList.contains('invalid')).toBe(true);
+
+    component.trainingForm.get('trainingLabel')?.setValue('Training');
+    fixture.componentRef.injector.get(ChangeDetectorRef).detectChanges();
+
+    const updatedRows = fixture.nativeElement.querySelectorAll('.validation-item');
+    rows.forEach((row, index) => expect(updatedRows[index]).toBe(row));
+    expect(rows[0].classList.contains('valid')).toBe(true);
+    expect(rows[0].classList.contains('invalid')).toBe(false);
+  });
+
   it('covers the common training selection workflow', () => {
+    const trainingStarted = jest.fn();
+    const closed = jest.fn();
+    component.startTraining.subscribe(trainingStarted);
+    component.close.subscribe(closed);
     component.ngOnInit();
     component.addVariable('VAR', 'UNIT', 3);
     component.onVariableChange('VAR2', 0);
@@ -184,6 +211,86 @@ describe('CoderTrainingComponent', () => {
     component.onStartTraining();
 
     expect(codingTrainingBackendService.createCoderTrainingJobs).toHaveBeenCalled();
+    expect(trainingStarted).toHaveBeenCalledWith(expect.objectContaining({
+      selectedCoders: component.coders
+    }));
+    expect(closed).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases pending training requests when the component is destroyed', () => {
+    const pendingResult = new Subject<{ success: boolean; message: string; jobsCreated: number }>();
+    const releaseRequest = jest.fn();
+    codingTrainingBackendService.createCoderTrainingJobs.mockReturnValue(
+      pendingResult.pipe(finalize(releaseRequest))
+    );
+    fixture.detectChanges();
+    component.selectAllCoders();
+    component.addVariable('VAR', 'UNIT', 2);
+    component.trainingForm.get('trainingLabel')?.setValue('Training');
+    component.onStartTraining();
+    expect(codingTrainingBackendService.createCoderTrainingJobs).toHaveBeenCalledTimes(1);
+    expect(releaseRequest).not.toHaveBeenCalled();
+
+    fixture.destroy();
+
+    expect(releaseRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the coder subscription when the component is destroyed', () => {
+    const pendingCoders = new Subject<never[]>();
+    const releaseRequest = jest.fn();
+    coderService.getCoders.mockReturnValue(pendingCoders.pipe(finalize(releaseRequest)));
+    fixture.detectChanges();
+    expect(releaseRequest).not.toHaveBeenCalled();
+
+    fixture.destroy();
+
+    expect(releaseRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the bundle sample input mounted while updating its value', () => {
+    component.onBundleSelectionChange([5]);
+    fixture.detectChanges();
+    const bundleGroup = component.groupedVariables.bundles[0];
+    const sampleInput = fixture.nativeElement.querySelector(
+      '.bundle-sample-field input'
+    ) as HTMLInputElement;
+    sampleInput.focus();
+    sampleInput.value = '3';
+
+    sampleInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(component.groupedVariables.bundles[0]).toBe(bundleGroup);
+    expect(
+      fixture.nativeElement.querySelector('.bundle-sample-field input')
+    ).toBe(sampleInput);
+    expect(document.activeElement).toBe(sampleInput);
+    expect(
+      component.variablesFormArray.controls
+        .filter(control => control.get('bundleId')?.value === 5)
+        .map(control => control.get('sampleCount')?.value)
+    ).toEqual([3, 3]);
+  });
+
+  it('keeps a remaining variable input focused after removing another variable', () => {
+    component.addVariable('VAR', 'UNIT', 2);
+    component.addVariable('VAR2', 'UNIT2', 3);
+    fixture.detectChanges();
+    const sampleInput = fixture.nativeElement.querySelectorAll(
+      '.variable-item .sample-count-field input'
+    )[1] as HTMLInputElement;
+    sampleInput.focus();
+
+    component.removeVariable(0);
+    fixture.componentRef.injector.get(ChangeDetectorRef).detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.variable-item .sample-count-field input')).toBe(sampleInput);
+    expect(document.activeElement).toBe(sampleInput);
+    sampleInput.value = '4';
+    sampleInput.dispatchEvent(new Event('input'));
+    expect(component.variablesFormArray.at(0).get('sampleCount')?.value).toBe(4);
+    expect(component.variablesFormArray.at(0).get('variableId')?.value).toBe('VAR2');
   });
 
   it('renders coder selection as toggle cards without checkboxes', () => {
@@ -223,7 +330,7 @@ describe('CoderTrainingComponent', () => {
     component.removeBundle(5);
     component.onBundleRemoved(5);
     component.onClose();
-    component.ngOnDestroy();
+    fixture.destroy();
 
     expect(component.canStartTraining()).toBe(false);
   });
@@ -403,7 +510,7 @@ describe('CoderTrainingComponent', () => {
   });
 
   it('shows edit action labels and consistent summary counts', () => {
-    component.editTraining = { id: 1, label: 'Existing training' } as never;
+    fixture.componentRef.setInput('editTraining', { id: 1, label: 'Existing training' } as never);
     component.addVariable('VAR', 'UNIT', 2);
     component.onBundleSelectionChange([5]);
 
@@ -428,7 +535,7 @@ describe('CoderTrainingComponent', () => {
   it('populates saved edit settings even when no variables or bundles are available', () => {
     codingJobBackendService.getCodingIncompleteVariables.mockReturnValueOnce(of([]));
     variableBundleService.getBundles.mockReturnValueOnce(of({ bundles: [], total: 0 }));
-    component.editTraining = {
+    fixture.componentRef.setInput('editTraining', {
       id: 80,
       workspace_id: 1,
       label: 'Saved empty training',
@@ -443,7 +550,7 @@ describe('CoderTrainingComponent', () => {
       jobsCount: 1,
       created_at: new Date(),
       updated_at: new Date()
-    };
+    });
 
     component.ngOnInit();
 
@@ -458,7 +565,7 @@ describe('CoderTrainingComponent', () => {
 
   it('keeps saved manual variables when bundle loading fails while editing', () => {
     variableBundleService.getBundles.mockReturnValueOnce(throwError(() => new Error('bundle load failed')));
-    component.editTraining = {
+    fixture.componentRef.setInput('editTraining', {
       id: 81,
       workspace_id: 1,
       label: 'Manual variables only',
@@ -475,7 +582,7 @@ describe('CoderTrainingComponent', () => {
       jobsCount: 1,
       created_at: new Date(),
       updated_at: new Date()
-    };
+    });
 
     component.ngOnInit();
 
@@ -487,7 +594,7 @@ describe('CoderTrainingComponent', () => {
   });
 
   it('preserves saved bundle ordering when editing and updating a training', () => {
-    component.editTraining = {
+    fixture.componentRef.setInput('editTraining', {
       id: 77,
       workspace_id: 1,
       label: 'Existing training',
@@ -505,7 +612,7 @@ describe('CoderTrainingComponent', () => {
       jobsCount: 1,
       created_at: new Date(),
       updated_at: new Date()
-    } as never;
+    } as never);
 
     (component as unknown as { populateFormFromTraining: () => void }).populateFormFromTraining();
 
@@ -536,7 +643,7 @@ describe('CoderTrainingComponent', () => {
   });
 
   it('preserves saved case selection and reference options when editing a training', () => {
-    component.editTraining = {
+    fixture.componentRef.setInput('editTraining', {
       id: 78,
       workspace_id: 1,
       label: 'Reference training',
@@ -556,7 +663,7 @@ describe('CoderTrainingComponent', () => {
       jobsCount: 1,
       created_at: new Date(),
       updated_at: new Date()
-    } as never;
+    } as never);
 
     (component as unknown as { populateFormFromTraining: () => void }).populateFormFromTraining();
 
@@ -574,7 +681,7 @@ describe('CoderTrainingComponent', () => {
   });
 
   it('submits an empty reference list when references are cleared while editing', () => {
-    component.editTraining = {
+    fixture.componentRef.setInput('editTraining', {
       id: 79,
       workspace_id: 1,
       label: 'Clear references',
@@ -594,7 +701,7 @@ describe('CoderTrainingComponent', () => {
       jobsCount: 1,
       created_at: new Date(),
       updated_at: new Date()
-    } as never;
+    } as never);
 
     (component as unknown as { populateFormFromTraining: () => void }).populateFormFromTraining();
 
@@ -776,5 +883,86 @@ describe('CoderTrainingComponent', () => {
     ]);
     expect(component.variablesFormArray.at(0).get('bundleCaseOrderingMode')?.value).toBe('alternating');
     expect(component.variablesFormArray.at(0).get('includeDeriveError')?.value).toBe(true);
+  });
+
+  it('restores an active training draft after reauthentication', () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    sessionRecoveryService.clearAllDrafts();
+
+    component.ngOnInit();
+    component.trainingForm.patchValue({
+      trainingLabel: 'Recovered training',
+      caseOrderingMode: 'alternating',
+      caseSelectionMode: 'random',
+      showScore: true,
+      allowComments: false,
+      suppressGeneralInstructions: true,
+      includeDerivedVariables: true,
+      referenceTrainingIds: [99],
+      referenceMode: 'same'
+    });
+    component.toggleCoderSelection(component.coders[1]);
+    component.onVariablesSelectionChange(['UNIT::VAR']);
+    component.setDeriveErrorIncludedForControl(component.variablesFormArray.at(0) as FormGroup, true);
+    component.onBundleSelectionChange([5]);
+    component.updateBundleSampleCount(5, 3);
+    component.updateBundleCaseOrderingMode(5, 'continuous');
+    component.variableFilterCtrl.setValue('VAR', { emitEvent: false });
+    component.bundleFilterCtrl.setValue('Derived', { emitEvent: false });
+
+    sessionRecoveryService.captureRegisteredDrafts();
+    expect(sessionRecoveryService.peekDraft('coder-training-active-state')).toEqual(expect.objectContaining({
+      workspaceId: 1,
+      mode: 'create',
+      selectedCoderIds: [2],
+      selectedBundleIds: [5],
+      variableFilter: 'VAR',
+      bundleFilter: 'Derived'
+    }));
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(CoderTrainingComponent);
+    component = fixture.componentInstance;
+    let restoredFilteredVariableKeys: string[] = [];
+    let restoredFilteredBundleNames: string[] = [];
+    component.filteredVariables$.subscribe(variables => {
+      restoredFilteredVariableKeys = variables.map(variable => `${variable.unitName}::${variable.variableId}`);
+    });
+    component.filteredBundles$.subscribe(bundles => {
+      restoredFilteredBundleNames = bundles.map(bundle => bundle.name);
+    });
+    component.ngOnInit();
+
+    expect(component.trainingForm.get('trainingLabel')?.value).toBe('Recovered training');
+    expect(component.trainingForm.get('caseOrderingMode')?.value).toBe('alternating');
+    expect(component.trainingForm.get('caseSelectionMode')?.value).toBe('random');
+    expect(component.trainingForm.get('showScore')?.value).toBe(true);
+    expect(component.trainingForm.get('allowComments')?.value).toBe(false);
+    expect(component.trainingForm.get('suppressGeneralInstructions')?.value).toBe(true);
+    expect(component.trainingForm.get('referenceTrainingIds')?.value).toEqual([99]);
+    expect(component.trainingForm.get('referenceMode')?.value).toBe('same');
+    expect(component.selectedCoders.has(2)).toBe(true);
+    expect(component.selectedBundleArray).toEqual([5]);
+    expect(component.manualVariablesSelectControl.value).toEqual(['UNIT::VAR']);
+    expect(component.variableFilterCtrl.value).toBe('VAR');
+    expect(component.bundleFilterCtrl.value).toBe('Derived');
+    expect(restoredFilteredVariableKeys).toEqual(['UNIT::VAR']);
+    expect(restoredFilteredBundleNames).toEqual(['Derived Bundle']);
+    expect(component.variablesFormArray.controls).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        value: expect.objectContaining({
+          unitId: 'UNIT',
+          variableId: 'VAR',
+          includeDeriveError: true
+        })
+      }),
+      expect.objectContaining({
+        value: expect.objectContaining({
+          bundleId: 5,
+          sampleCount: 3,
+          bundleCaseOrderingMode: 'continuous'
+        })
+      })
+    ]));
   });
 });

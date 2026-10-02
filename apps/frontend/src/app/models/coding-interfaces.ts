@@ -1,3 +1,7 @@
+import type {
+  ExportJobStatusResponseDto
+} from '../../../../../api-dto/coding/export-request.dto';
+
 export interface CodingScheme {
   variableCodings: VariableCoding[];
   version: string;
@@ -94,20 +98,7 @@ export interface BulkApplyCodingResultsResponse {
   results: BulkApplyResultItem[];
 }
 
-export interface ExportJobStatus {
-  status: string;
-  progress: number;
-  result?: {
-    fileId: string;
-    fileName: string;
-    fileSize: number;
-    workspaceId: number;
-    userId: number;
-    exportType: string;
-    createdAt: number;
-  };
-  error?: string;
-}
+export type ExportJobStatus = ExportJobStatusResponseDto;
 
 export interface SearchResponsesParams {
   value?: string;

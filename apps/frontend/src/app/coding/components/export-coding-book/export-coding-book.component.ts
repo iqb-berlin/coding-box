@@ -1,7 +1,7 @@
 import {
   Component, OnInit, OnDestroy
 } from '@angular/core';
-import { CommonModule, DatePipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -38,6 +38,7 @@ import { MissingsProfileService } from '../../services/missings-profile.service'
 import { FileService } from '../../../shared/services/file/file.service';
 import { AppService } from '../../../core/services/app.service';
 import { ValidationStateService, ValidationProgress } from '../../services/validation-state.service';
+import { getJobDefinitionDisplayLabel } from '../../utils/job-definition-display.util';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import {
   CodebookJobDefinitionOption,
@@ -59,7 +60,6 @@ interface CodebookUnitOption {
   styleUrls: ['./export-coding-book.component.scss'],
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     MatDialogModule,
     MatCheckboxModule,
@@ -298,7 +298,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   }
 
   private getJobDefinitionLabel(jobDefinition: JobDefinition): string {
-    return `${this.translateService.instant('coding.job-definition-label', { id: jobDefinition.id })} · ${this.getJobDefinitionStatusLabel(jobDefinition)}`;
+    return `${getJobDefinitionDisplayLabel(jobDefinition)} · ${this.getJobDefinitionStatusLabel(jobDefinition)}`;
   }
 
   private getJobDefinitionMeta(jobDefinition: JobDefinition): string {

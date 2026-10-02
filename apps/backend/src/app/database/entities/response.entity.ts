@@ -10,6 +10,8 @@ import { Unit } from './unit.entity';
 @Index(['unitid', 'status']) // Composite index for filtering by status
 @Index(['status']) // Index for filtering by status distribution
 @Index(['status_v1']) // Index for filtering by coded status
+@Index(['status_v2']) // Index for filtering by second coding status
+@Index(['status_v3']) // Index for filtering by third coding status
 @Index(['is_autocoder_generated'])
 export class ResponseEntity {
   @PrimaryGeneratedColumn()
@@ -34,6 +36,13 @@ export class ResponseEntity {
 
   @Column({ type: 'boolean', default: false })
     is_autocoder_generated?: boolean;
+
+  @Column({ type: 'varchar', length: 2, nullable: true })
+    autocoder_invalidated_version?: 'v1' | 'v2' | null;
+
+  // Transient query result used to apply the effective V2 -> V1 inheritance
+  // rules without persisting another response attribute.
+  inherits_v1_for_v2?: boolean;
 
   @Column({ type: 'smallint', nullable: true })
     status_v1: number | null;

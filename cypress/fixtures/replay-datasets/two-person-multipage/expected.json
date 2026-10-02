@@ -1,0 +1,27 @@
+{
+  "unitName": "UNIT-REPLAY",
+  "unitAlias": "UNIT-REPLAY-ALIAS",
+  "pages": ["0", "1"],
+  "pageAliases": ["answer_1", "answer_2"],
+  "anchor": "answer_1",
+  "anchorPage": "0",
+  "personA": {
+    "connector": "replay-login-a@replay-code-a@REPLAY-GROUP@BOOKLET-REPLAY",
+    "responseChunkId": "elementCodes",
+    "responseVariable": "answer_1",
+    "responseStatus": 3,
+    "responseValue": "PERSON-A-RESPONSE"
+  },
+  "personB": {
+    "connector": "replay-login-b@replay-code-b@REPLAY-GROUP@BOOKLET-REPLAY",
+    "responseChunkId": "elementCodes",
+    "responseVariable": "answer_1",
+    "responseStatus": 3,
+    "responseValue": "PERSON-B-RESPONSE"
+  },
+  "missingUnitError": {
+    "statusCode": 404,
+    "code": "REPLAY_UNIT_NOT_FOUND",
+    "message": "Replay unit was not found."
+  }
+}

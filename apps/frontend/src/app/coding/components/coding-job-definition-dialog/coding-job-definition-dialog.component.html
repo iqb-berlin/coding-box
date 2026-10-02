@@ -31,6 +31,27 @@
       <div class="form-section">
         <h3>{{ 'coding-job-definition-dialog.sections.general-info' | translate }}</h3>
 
+        @if (data.mode === 'definition') {
+        <mat-form-field appearance="fill" class="full-width">
+          <mat-label>{{ 'coding-job-definition-dialog.form-fields.name-label' | translate }}</mat-label>
+          <input matInput formControlName="name" maxlength="255"
+            [placeholder]="'coding-job-definition-dialog.form-fields.name-placeholder' | translate">
+          @if ((codingJobForm.get('name')?.hasError('required') || codingJobForm.get('name')?.hasError('pattern')) &&
+          codingJobForm.get('name')?.touched) {
+          <mat-error>{{ 'coding-job-definition-dialog.form-fields.name-required' | translate }}</mat-error>
+          }
+          @if (codingJobForm.get('name')?.hasError('maxlength') && codingJobForm.get('name')?.touched) {
+          <mat-error>{{ 'coding-job-definition-dialog.form-fields.name-maxlength' | translate }}</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="fill" class="full-width">
+          <mat-label>{{ 'coding-job-definition-dialog.form-fields.description-label' | translate }}</mat-label>
+          <textarea matInput formControlName="description" rows="3"
+            [placeholder]="'coding-job-definition-dialog.form-fields.description-placeholder' | translate"></textarea>
+        </mat-form-field>
+        }
+
         <mat-form-field appearance="fill" class="full-width">
           <mat-label>{{ 'coding-job-definition-dialog.form-fields.duration-label' | translate }}</mat-label>
           <input matInput type="number" formControlName="durationSeconds"

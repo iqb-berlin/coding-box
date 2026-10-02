@@ -63,4 +63,28 @@ describe('UserService', () => {
       req.flush(true);
     });
   });
+
+  describe('workspace access mutations', () => {
+    it('should save detailed workspace access rights', () => {
+      const users = [{ id: 7, accessLevel: 3, canCode: false }];
+
+      service.saveUsers(3, users).subscribe(res => {
+        expect(res).toBe(true);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/users/access/3`);
+      expect(req.request.method).toBe('PATCH');
+      expect(req.request.body).toEqual(users);
+      req.flush(true);
+    });
+
+    it('should return false when changing workspace assignments fails', () => {
+      service.setUserWorkspaceAccessRight(7, [3]).subscribe(res => {
+        expect(res).toBe(false);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/users/7/workspaces/`);
+      req.flush('failed', { status: 500, statusText: 'Server Error' });
+    });
+  });
 });

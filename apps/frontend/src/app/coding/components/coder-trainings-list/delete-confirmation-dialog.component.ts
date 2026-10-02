@@ -1,5 +1,5 @@
 import { Component, Inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { MatButtonModule } from '@angular/material/button';
 import {
   MatDialogActions, MatDialogContent, MatDialogTitle, MatDialogRef, MAT_DIALOG_DATA
@@ -10,7 +10,7 @@ import { CoderTraining } from '../../models/coder-training.model';
 @Component({
   selector: 'delete-confirmation-dialog',
   standalone: true,
-  imports: [CommonModule, MatButtonModule, MatDialogTitle, MatDialogContent, MatDialogActions, TranslateModule],
+  imports: [MatButtonModule, MatDialogTitle, MatDialogContent, MatDialogActions, TranslateModule],
   template: `
     <h2 mat-dialog-title>{{ 'coding.trainings.delete.confirm.title' | translate }}</h2>
     <mat-dialog-content>

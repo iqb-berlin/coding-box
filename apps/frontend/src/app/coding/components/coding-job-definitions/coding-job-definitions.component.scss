@@ -103,6 +103,32 @@
     margin-bottom: 12px;
   }
 
+  .identity-cell {
+    min-width: 220px;
+    max-width: 320px;
+  }
+
+  .definition-name,
+  .definition-description {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .definition-name {
+    white-space: nowrap;
+  }
+
+  .definition-description {
+    margin-top: 4px;
+    color: rgba(0, 0, 0, 0.64);
+    font-size: 12px;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
   .summary-item {
     display: flex;
     align-items: center;

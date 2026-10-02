@@ -518,6 +518,32 @@ export class WorkspaceCodingAnalysisController {
     return this.missingsProfilesService.getMissingsProfiles(workspace_id);
   }
 
+  @Get(':workspace_id/coding/export-missings-profiles')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Read-only list of missings profiles available for exports.',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'number' },
+          label: { type: 'string' }
+        }
+      }
+    }
+  })
+  async getExportMissingsProfiles(
+    @WorkspaceId() workspaceId: number
+  ): Promise<{ label: string; id: number }[]> {
+    return this.missingsProfilesService.getMissingsProfilesForExport(
+      workspaceId
+    );
+  }
+
   @Get(':workspace_id/coding/response-analysis')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)

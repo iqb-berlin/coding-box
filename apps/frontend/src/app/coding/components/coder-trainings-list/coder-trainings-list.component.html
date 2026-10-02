@@ -1,149 +1,151 @@
 <div class="coder-trainings-container">
   <div class="header-row">
     <div class="header-actions">
-      <button mat-stroked-button color="primary" (click)="createTraining()" *ngIf="showCreateButton">
-        <mat-icon>add</mat-icon>
-        {{ 'coding.trainings.create.button' | translate }}
-      </button>
+      @if (showCreateButton) {
+        <button mat-stroked-button color="primary" (click)="createTraining()">
+          <mat-icon>add</mat-icon>
+          {{ 'coding.trainings.create.button' | translate }}
+        </button>
+      }
 
       <mat-form-field appearance="outline" class="filter-field">
         <mat-label>Name filtern</mat-label>
         <mat-select [(value)]="selectedTrainingName" (selectionChange)="onTrainingNameFilterChange()">
           <mat-option [value]="null">Alle Namen</mat-option>
-          <mat-option *ngFor="let option of trainingNameFilterOptions" [value]="option.label">
-            {{ getTrainingNameFilterLabel(option) }}
-          </mat-option>
+          @for (option of trainingNameFilterOptions; track option) {
+            <mat-option [value]="option.label">
+              {{ getTrainingNameFilterLabel(option) }}
+            </mat-option>
+          }
         </mat-select>
       </mat-form-field>
     </div>
   </div>
 
-  <div class="loading-container" *ngIf="isLoading">
-    <mat-progress-spinner mode="indeterminate" diameter="50"></mat-progress-spinner>
-    <p>{{ 'coding.trainings.loading' | translate }}</p>
-  </div>
+  @if (isLoading) {
+    <div class="loading-container">
+      <mat-progress-spinner mode="indeterminate" diameter="50"></mat-progress-spinner>
+      <p>{{ 'coding.trainings.loading' | translate }}</p>
+    </div>
+  }
 
-  <div class="no-trainings-message" *ngIf="!isLoading && coderTrainings.length === 0">
-    <mat-icon>school</mat-icon>
-    <h4>{{ 'coding.trainings.empty.title' | translate }}</h4>
-  </div>
+  @if (!isLoading && coderTrainings.length === 0) {
+    <div class="no-trainings-message">
+      <mat-icon>school</mat-icon>
+      <h4>{{ 'coding.trainings.empty.title' | translate }}</h4>
+    </div>
+  }
 
-  <div class="trainings-list" *ngIf="!isLoading && coderTrainings.length > 0">
-    <table mat-table [dataSource]="coderTrainings" class="trainings-table">
-
-      <ng-container matColumnDef="label">
-        <th mat-header-cell *matHeaderCellDef>{{ 'coding.trainings.table.label' | translate }}</th>
-        <td mat-cell *matCellDef="let training">
-          <div class="training-label">
-            <mat-icon>school</mat-icon>
-            <div class="training-label-text">
-              <span class="training-title">
-                {{ training.label }}
-                <span
-                  *ngIf="isDuplicateTrainingLabel(training)"
-                  class="duplicate-label-badge"
-                  matTooltip="Diese Bezeichnung wird von mehreren Schulungen verwendet. ID und Erstellzeit unterscheiden die Einträge.">
-                  doppelt
+  @if (!isLoading && coderTrainings.length > 0) {
+    <div class="trainings-list">
+      <table mat-table [dataSource]="coderTrainings" class="trainings-table">
+        <ng-container matColumnDef="label">
+          <th mat-header-cell *matHeaderCellDef>{{ 'coding.trainings.table.label' | translate }}</th>
+          <td mat-cell *matCellDef="let training">
+            <div class="training-label">
+              <mat-icon>school</mat-icon>
+              <div class="training-label-text">
+                <span class="training-title">
+                  {{ training.label }}
+                  @if (isDuplicateTrainingLabel(training)) {
+                    <span
+                      class="duplicate-label-badge"
+                      matTooltip="Diese Bezeichnung wird von mehreren Schulungen verwendet. ID und Erstellzeit unterscheiden die Einträge.">
+                      doppelt
+                    </span>
+                  }
                 </span>
-              </span>
-              <span class="training-meta">{{ getTrainingTableMeta(training) }}</span>
+                <span class="training-meta">{{ getTrainingTableMeta(training) }}</span>
+              </div>
             </div>
-          </div>
-        </td>
-      </ng-container>
-
-      <ng-container matColumnDef="jobsCount">
-        <th mat-header-cell *matHeaderCellDef>{{ 'coding.trainings.table.jobs' | translate }}</th>
-        <td mat-cell *matCellDef="let training">
-          <mat-chip-listbox>
-            <mat-chip>{{ training.jobsCount }} {{ training.jobsCount === 1 ? 'Job' : 'Jobs' }}</mat-chip>
-          </mat-chip-listbox>
-        </td>
-      </ng-container>
-
-      <ng-container matColumnDef="selectionStrategy">
-        <th mat-header-cell *matHeaderCellDef>Fallauswahl</th>
-        <td mat-cell *matCellDef="let training">
-          <div class="strategy-cell">
-            <span
-              class="strategy-label"
-              [matTooltip]="getCaseSelectionModeDescription(training.case_selection_mode)">
-              {{ getCaseSelectionModeLabel(training.case_selection_mode) }}
-            </span>
-            <span class="strategy-subline">
-              {{ getCaseOrderingModeLabel(training.case_ordering_mode) }}
-            </span>
-          </div>
-        </td>
-      </ng-container>
-
-      <ng-container matColumnDef="created_at">
-        <th mat-header-cell *matHeaderCellDef>{{ 'coding.trainings.table.created' | translate }}</th>
-        <td mat-cell *matCellDef="let training">
-          {{ training.created_at | date: 'dd.MM.yyyy HH:mm' }}
-        </td>
-      </ng-container>
-
-      <ng-container matColumnDef="actions">
-        <th mat-header-cell *matHeaderCellDef>{{ 'common.actions' | translate }}</th>
-        <td mat-cell *matCellDef="let training">
-          <div class="training-row-actions">
-            <button
-              mat-stroked-button
-              type="button"
-              class="primary-row-action"
-              color="primary"
-              (click)="showTrainingJobs(training)"
-              [attr.aria-label]="getTrainingActionAriaLabel('details', training)">
-              <mat-icon>visibility</mat-icon>
-              <span>Details</span>
-            </button>
-
-            <button
-              mat-stroked-button
-              type="button"
-              class="primary-row-action"
-              (click)="requestFullEdit(training)"
-              [attr.aria-label]="getTrainingActionAriaLabel('edit', training)">
-              <mat-icon>edit</mat-icon>
-              <span>{{ 'common.edit' | translate }}</span>
-            </button>
-
-            <button
-              mat-icon-button
-              type="button"
-              class="more-actions-button"
-              [matMenuTriggerFor]="trainingActionsMenu"
-              [attr.aria-label]="getTrainingActionAriaLabel('more', training)">
-              <mat-icon>more_vert</mat-icon>
-            </button>
-
-            <mat-menu #trainingActionsMenu="matMenu">
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="jobsCount">
+          <th mat-header-cell *matHeaderCellDef>{{ 'coding.trainings.table.jobs' | translate }}</th>
+          <td mat-cell *matCellDef="let training">
+            <mat-chip-listbox>
+              <mat-chip>{{ training.jobsCount }} {{ training.jobsCount === 1 ? 'Job' : 'Jobs' }}</mat-chip>
+            </mat-chip-listbox>
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="selectionStrategy">
+          <th mat-header-cell *matHeaderCellDef>Fallauswahl</th>
+          <td mat-cell *matCellDef="let training">
+            <div class="strategy-cell">
+              <span
+                class="strategy-label"
+                [matTooltip]="getCaseSelectionModeDescription(training.case_selection_mode)">
+                {{ getCaseSelectionModeLabel(training.case_selection_mode) }}
+              </span>
+              <span class="strategy-subline">
+                {{ getCaseOrderingModeLabel(training.case_ordering_mode) }}
+              </span>
+            </div>
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="created_at">
+          <th mat-header-cell *matHeaderCellDef>{{ 'coding.trainings.table.created' | translate }}</th>
+          <td mat-cell *matCellDef="let training">
+            {{ training.created_at | date: 'dd.MM.yyyy HH:mm' }}
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef>{{ 'common.actions' | translate }}</th>
+          <td mat-cell *matCellDef="let training">
+            <div class="training-row-actions">
               <button
-                mat-menu-item
+                mat-stroked-button
                 type="button"
-                (click)="openResultsComparison(training)"
-                [attr.aria-label]="getTrainingActionAriaLabel('compare', training)">
-                <mat-icon>compare</mat-icon>
-                <span>{{ 'coding.trainings.compare.button' | translate }}</span>
+                class="primary-row-action"
+                color="primary"
+                (click)="showTrainingJobs(training)"
+                [attr.aria-label]="getTrainingActionAriaLabel('details', training)">
+                <mat-icon>visibility</mat-icon>
+                <span>Details</span>
               </button>
-              <mat-divider class="menu-section-divider"></mat-divider>
               <button
-                mat-menu-item
+                mat-stroked-button
                 type="button"
-                class="danger-menu-item"
-                (click)="deleteTraining(training)"
-                [attr.aria-label]="getTrainingActionAriaLabel('delete', training)">
-                <mat-icon>delete</mat-icon>
-                <span>{{ 'common.delete' | translate }}</span>
+                class="primary-row-action"
+                (click)="requestFullEdit(training)"
+                [attr.aria-label]="getTrainingActionAriaLabel('edit', training)">
+                <mat-icon>edit</mat-icon>
+                <span>{{ 'common.edit' | translate }}</span>
               </button>
-            </mat-menu>
-          </div>
-        </td>
-      </ng-container>
-
-      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-    </table>
-  </div>
+              <button
+                mat-icon-button
+                type="button"
+                class="more-actions-button"
+                [matMenuTriggerFor]="trainingActionsMenu"
+                [attr.aria-label]="getTrainingActionAriaLabel('more', training)">
+                <mat-icon>more_vert</mat-icon>
+              </button>
+              <mat-menu #trainingActionsMenu="matMenu">
+                <button
+                  mat-menu-item
+                  type="button"
+                  (click)="openResultsComparison(training)"
+                  [attr.aria-label]="getTrainingActionAriaLabel('compare', training)">
+                  <mat-icon>compare</mat-icon>
+                  <span>{{ 'coding.trainings.compare.button' | translate }}</span>
+                </button>
+                <mat-divider class="menu-section-divider"></mat-divider>
+                <button
+                  mat-menu-item
+                  type="button"
+                  class="danger-menu-item"
+                  (click)="deleteTraining(training)"
+                  [attr.aria-label]="getTrainingActionAriaLabel('delete', training)">
+                  <mat-icon>delete</mat-icon>
+                  <span>{{ 'common.delete' | translate }}</span>
+                </button>
+              </mat-menu>
+            </div>
+          </td>
+        </ng-container>
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+      </table>
+    </div>
+  }
 </div>

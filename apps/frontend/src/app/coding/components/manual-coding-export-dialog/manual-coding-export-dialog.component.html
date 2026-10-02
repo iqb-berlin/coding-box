@@ -51,7 +51,18 @@
   <section class="manual-export-section">
     <mat-form-field appearance="outline" class="manual-export-field">
       <mat-label>{{ 'manual-coding-export.job-definition-filter' | translate }}</mat-label>
-      <mat-select multiple [(ngModel)]="selectedJobDefinitionIds">
+      <mat-select
+        multiple
+        [(ngModel)]="selectedJobDefinitionIds"
+        (selectionChange)="removeJobDefinitionToggleOption()"
+      >
+        <mat-option [value]="selectAllOptionId" (click)="toggleAllJobDefinitions()">
+          {{
+            (areAllJobDefinitionsSelected ?
+              'manual-coding-export.deselect-all' :
+              'manual-coding-export.select-all') | translate
+          }}
+        </mat-option>
         @for (jobDefinition of data.jobDefinitions; track jobDefinition.id) {
         <mat-option [value]="jobDefinition.id">{{ jobDefinition.label }}</mat-option>
         }
@@ -64,7 +75,18 @@
   <section class="manual-export-section">
     <mat-form-field appearance="outline" class="manual-export-field">
       <mat-label>{{ 'manual-coding-export.training-filter' | translate }}</mat-label>
-      <mat-select multiple [(ngModel)]="selectedCoderTrainingIds">
+      <mat-select
+        multiple
+        [(ngModel)]="selectedCoderTrainingIds"
+        (selectionChange)="removeCoderTrainingToggleOption()"
+      >
+        <mat-option [value]="selectAllOptionId" (click)="toggleAllCoderTrainings()">
+          {{
+            (areAllCoderTrainingsSelected ?
+              'manual-coding-export.deselect-all' :
+              'manual-coding-export.select-all') | translate
+          }}
+        </mat-option>
         @for (training of data.coderTrainings; track training.id) {
         <mat-option [value]="training.id">{{ training.label }}</mat-option>
         }
@@ -98,7 +120,10 @@
     <mat-checkbox [(ngModel)]="outputCommentsInsteadOfCodes">
       {{ 'ws-admin.export-options.output-comments-instead-of-codes' | translate }}
     </mat-checkbox>
-    @if (canIncludeReplayUrl) {
+    @if (canIncludeResponseData) {
+    <mat-checkbox [(ngModel)]="includeResponseValues">
+      {{ 'manual-coding-export.include-response-value' | translate }}
+    </mat-checkbox>
     <mat-checkbox [(ngModel)]="includeReplayUrl">
       {{ 'ws-admin.export-options.include-replay-url' | translate }}
     </mat-checkbox>

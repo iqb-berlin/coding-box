@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, Inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
@@ -52,7 +51,6 @@ export interface CodingImportFormatDialogResult {
   selector: 'coding-box-coding-import-format-dialog',
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     MatButtonModule,
     MatDialogModule,
@@ -82,65 +80,82 @@ export interface CodingImportFormatDialogResult {
         </div>
       </div>
 
-      <div *ngIf="data.canImport" class="target-box">
-        <mat-icon>input</mat-icon>
-        <span>Importziel: manuelle Kodierung (v2) mit Status, Code und Score aus der Datei.</span>
-      </div>
+      @if (data.canImport) {
+        <div class="target-box">
+          <mat-icon>input</mat-icon>
+          <span>Importziel: manuelle Kodierung (v2) mit Status, Code und Score aus der Datei.</span>
+        </div>
+      }
 
-      <mat-form-field
-        *ngIf="data.detectedFormat === 'coding-results' && data.availableVersions?.length"
-        appearance="outline"
-        class="version-field"
-      >
-        <mat-label>Version aus Datei</mat-label>
-        <mat-select [(ngModel)]="selectedVersion">
-          <mat-option *ngFor="let version of data.availableVersions" [value]="version">
-            {{ getVersionLabel(version) }}
-          </mat-option>
-        </mat-select>
-      </mat-form-field>
+      @if (data.detectedFormat === 'coding-results' && data.availableVersions?.length) {
+        <mat-form-field
+          appearance="outline"
+          class="version-field"
+          >
+          <mat-label>Version aus Datei</mat-label>
+          <mat-select [(ngModel)]="selectedVersion">
+            @for (version of data.availableVersions; track version) {
+              <mat-option [value]="version">
+                {{ getVersionLabel(version) }}
+              </mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      }
 
-      <section *ngIf="data.canImport" class="mode-section">
-        <h3>Vorhandene Kodierungen</h3>
-        <mat-radio-group class="mode-options" [(ngModel)]="existingCodingMode">
-          <mat-radio-button value="skip-conflicts">
-            <span class="mode-title">Konflikte überspringen</span>
-            <span class="mode-description">
-              Leere Kodierungen werden gefüllt, abweichende vorhandene manuelle Kodierungen bleiben unverändert.
-            </span>
-          </mat-radio-button>
-          <mat-radio-button value="fill-empty">
-            <span class="mode-title">Nur leere Kodierungen füllen</span>
-            <span class="mode-description">
-              Sobald in v2 bereits Status, Code oder Score vorhanden ist, wird der Fall übersprungen.
-            </span>
-          </mat-radio-button>
-          <mat-radio-button value="overwrite">
-            <span class="mode-title">Bestehende Kodierungen überschreiben</span>
-            <span class="mode-description">
-              Vorhandene manuelle Kodierungen in v2 werden durch die Werte aus der Datei ersetzt.
-            </span>
-          </mat-radio-button>
-        </mat-radio-group>
-      </section>
+      @if (data.canImport) {
+        <section class="mode-section">
+          <h3>Vorhandene Kodierungen</h3>
+          <mat-radio-group class="mode-options" [(ngModel)]="existingCodingMode">
+            <mat-radio-button value="skip-conflicts">
+              <span class="mode-title">Konflikte überspringen</span>
+              <span class="mode-description">
+                Leere Kodierungen werden gefüllt, abweichende vorhandene manuelle Kodierungen bleiben unverändert.
+              </span>
+            </mat-radio-button>
+            <mat-radio-button value="fill-empty">
+              <span class="mode-title">Nur leere Kodierungen füllen</span>
+              <span class="mode-description">
+                Sobald in v2 bereits Status, Code oder Score vorhanden ist, wird der Fall übersprungen.
+              </span>
+            </mat-radio-button>
+            <mat-radio-button value="overwrite">
+              <span class="mode-title">Bestehende Kodierungen überschreiben</span>
+              <span class="mode-description">
+                Vorhandene manuelle Kodierungen in v2 werden durch die Werte aus der Datei ersetzt.
+              </span>
+            </mat-radio-button>
+          </mat-radio-group>
+        </section>
+      }
 
-      <section class="help-section" *ngIf="data.helpItems.length > 0">
-        <h3>{{ data.canImport ? 'Hinweise' : 'Was ist zu tun?' }}</h3>
-        <ul>
-          <li *ngFor="let item of data.helpItems">{{ item }}</li>
-        </ul>
-      </section>
+      @if (data.helpItems.length > 0) {
+        <section class="help-section">
+          <h3>{{ data.canImport ? 'Hinweise' : 'Was ist zu tun?' }}</h3>
+          <ul>
+            @for (item of data.helpItems; track item) {
+              <li>{{ item }}</li>
+            }
+          </ul>
+        </section>
+      }
 
       <mat-divider></mat-divider>
 
       <section class="headers-section">
         <h3>Erkannte Spalten</h3>
-        <p *ngIf="data.headers.length === 0" class="muted">
-          Keine Spaltenüberschriften gefunden.
-        </p>
-        <div *ngIf="data.headers.length > 0" class="header-list">
-          <span *ngFor="let header of data.headers">{{ header }}</span>
-        </div>
+        @if (data.headers.length === 0) {
+          <p class="muted">
+            Keine Spaltenüberschriften gefunden.
+          </p>
+        }
+        @if (data.headers.length > 0) {
+          <div class="header-list">
+            @for (header of data.headers; track header) {
+              <span>{{ header }}</span>
+            }
+          </div>
+        }
       </section>
     </mat-dialog-content>
 
@@ -148,12 +163,14 @@ export interface CodingImportFormatDialogResult {
       <button mat-button (click)="cancel()">
         {{ data.canImport ? 'Abbrechen' : 'Schließen' }}
       </button>
-      <button *ngIf="data.canImport" mat-raised-button color="primary" (click)="confirm()">
-        <mat-icon>preview</mat-icon>
-        Vorschau starten
-      </button>
+      @if (data.canImport) {
+        <button mat-raised-button color="primary" (click)="confirm()">
+          <mat-icon>preview</mat-icon>
+          Vorschau starten
+        </button>
+      }
     </mat-dialog-actions>
-  `,
+    `,
   styles: [`
     .dialog-title {
       display: flex;

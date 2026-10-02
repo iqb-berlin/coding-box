@@ -1,4 +1,5 @@
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
   EventEmitter,
@@ -24,6 +25,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatSelectModule } from '@angular/material/select';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   Observable,
   Subject,
@@ -61,6 +63,7 @@ import {
   TestResultsFlatTableSettingsDialogComponent,
   TestResultsFlatTableSettingsDialogResult
 } from './test-results-flat-table-settings-dialog.component';
+import { hasInvalidPostgresRegexFilter } from '../../../shared/utils/regex-filter.util';
 
 interface FlatResponseRow {
   bookletId: number;
@@ -157,6 +160,23 @@ type FlatTableMediaFilter =
   | 'logDebug'
   | 'logReloads';
 
+type RegexFlatResponseFilterField =
+  | 'code'
+  | 'group'
+  | 'login'
+  | 'booklet'
+  | 'unit'
+  | 'response';
+
+const REGEX_FLAT_RESPONSE_FILTER_FIELDS: RegexFlatResponseFilterField[] = [
+  'code',
+  'group',
+  'login',
+  'booklet',
+  'unit',
+  'response'
+];
+
 const SPECIFIC_LOG_MEDIA_FILTERS: FlatTableMediaFilter[] = [
   'logCritical',
   'logTechnical',
@@ -184,7 +204,8 @@ const SPECIFIC_LOG_MEDIA_FILTERS: FlatTableMediaFilter[] = [
     MatProgressSpinnerModule,
     MatTooltipModule,
     MatAutocompleteModule,
-    MatSelectModule
+    MatSelectModule,
+    TranslateModule
   ],
   templateUrl: './test-results-flat-table.component.html',
   styleUrls: ['./test-results-flat-table.component.scss']
@@ -198,6 +219,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   private testResultService = inject(TestResultService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
+  private translateService = inject(TranslateService);
 
   private readonly AUDIO_LOW_THRESHOLD_STORAGE_KEY =
     'coding-box-test-results-audio-low-threshold';
@@ -324,6 +346,8 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   private flatResponsesSubscription?: Subscription;
   private workspaceCacheInvalidatedSubscription: Subscription;
   private readonly FLAT_FILTER_DEBOUNCE_TIME = 400;
+  private readonly backendInvalidRegexFields =
+    new Set<RegexFlatResponseFilterField>();
 
   private refreshFilterOptionsTimeoutIds: number[] = [];
 
@@ -332,6 +356,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   @Input() initialFilters: Partial<FlatResponseFilters> | null = null;
   @Input() showWorkspaceLogAnomalies = false;
   @Input() forceShowLogAnomalies = false;
+  @Input() enableRegexSearch = false;
   @Output() responseDeleted = new EventEmitter<void>();
 
   constructor() {
@@ -453,7 +478,9 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     this.flatSearchSubscription = this.flatSearchSubject
       .pipe(debounceTime(this.FLAT_FILTER_DEBOUNCE_TIME))
       .subscribe(() => {
-        this.fetchFlatResponses(0, this.flatPageSize);
+        if (!this.hasInvalidRegexFilters()) {
+          this.fetchFlatResponses(0, this.flatPageSize);
+        }
       });
 
     this.workspaceCacheInvalidatedSubscription =
@@ -489,7 +516,14 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       shouldFetch = this.updateLogAnomalyTableVisibility() || shouldFetch;
     }
 
+    if (changes.enableRegexSearch) {
+      this.backendInvalidRegexFields.clear();
+      this.flatPageIndex = 0;
+      shouldFetch = true;
+    }
+
     if (changes.initialFilters) {
+      this.backendInvalidRegexFields.clear();
       this.flatFilters = {
         ...this.createDefaultFlatFilters(),
         ...(this.initialFilters || {})
@@ -502,7 +536,10 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       shouldFetch = true;
     }
 
-    if (shouldFetch && this.tableInitialized && this.logAnomalyTableSettingLoaded) {
+    if (shouldFetch &&
+      this.tableInitialized &&
+      this.logAnomalyTableSettingLoaded &&
+      !this.hasInvalidRegexFilters()) {
       this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
     }
   }
@@ -783,7 +820,14 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     this.fetchFlatResponses(0, this.flatPageSize);
   }
 
-  private filterOptions(options: string[], value: string): string[] {
+  private filterOptions(
+    options: string[],
+    value: string,
+    disableForRegex = false
+  ): string[] {
+    if (disableForRegex && this.enableRegexSearch) {
+      return [];
+    }
     const v = (value || '').trim().toLowerCase();
     if (!v) {
       return options || [];
@@ -794,42 +838,48 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   filteredCodes(): string[] {
     return this.filterOptions(
       this.flatFilterOptions.codes,
-      this.flatFilters.code
+      this.flatFilters.code,
+      true
     );
   }
 
   filteredGroups(): string[] {
     return this.filterOptions(
       this.flatFilterOptions.groups,
-      this.flatFilters.group
+      this.flatFilters.group,
+      true
     );
   }
 
   filteredLogins(): string[] {
     return this.filterOptions(
       this.flatFilterOptions.logins,
-      this.flatFilters.login
+      this.flatFilters.login,
+      true
     );
   }
 
   filteredBooklets(): string[] {
     return this.filterOptions(
       this.flatFilterOptions.booklets,
-      this.flatFilters.booklet
+      this.flatFilters.booklet,
+      true
     );
   }
 
   filteredUnits(): string[] {
     return this.filterOptions(
       this.flatFilterOptions.units,
-      this.flatFilters.unit
+      this.flatFilters.unit,
+      true
     );
   }
 
   filteredResponses(): string[] {
     return this.filterOptions(
       this.flatFilterOptions.responses,
-      this.flatFilters.response
+      this.flatFilters.response,
+      true
     );
   }
 
@@ -844,6 +894,22 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     return this.filterOptions(
       this.flatFilterOptions.tags,
       this.flatFilters.tags
+    );
+  }
+
+  isRegexFilterInvalid(field: RegexFlatResponseFilterField): boolean {
+    return this.enableRegexSearch && (
+      this.backendInvalidRegexFields.has(field) ||
+      hasInvalidPostgresRegexFilter(
+        this.flatFilters[field],
+        this.enableRegexSearch
+      )
+    );
+  }
+
+  private hasInvalidRegexFilters(): boolean {
+    return REGEX_FLAT_RESPONSE_FILTER_FIELDS.some(
+      field => this.isRegexFilterInvalid(field)
     );
   }
 
@@ -1128,11 +1194,17 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       this.suppressNextFlatFilterChange = false;
       return;
     }
+    this.backendInvalidRegexFields.clear();
+    this.flatResponsesRequestSequence += 1;
+    this.flatResponsesSubscription?.unsubscribe();
+    this.flatResponsesSubscription = undefined;
+    this.isLoadingFlat = false;
     this.flatPageIndex = 0;
     this.flatSearchSubject.next();
   }
 
   clearFlatFilters(): void {
+    this.backendInvalidRegexFields.clear();
     this.flatFilters = this.createDefaultFlatFilters();
     this.syncMediaFiltersFromFlatFilters();
 
@@ -1421,6 +1493,10 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     if (!this.logAnomalyTableSettingLoaded) {
       return;
     }
+    if (this.hasInvalidRegexFilters()) {
+      this.isLoadingFlat = false;
+      return;
+    }
     const validPage = Math.max(0, page);
     this.flatResponsesRequestSequence += 1;
     const requestSequence = this.flatResponsesRequestSequence;
@@ -1441,6 +1517,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         responseStatus: this.flatFilters.responseStatus,
         responseValue: this.flatFilters.responseValue,
         tags: this.flatFilters.tags,
+        regexSearch: this.enableRegexSearch,
         geogebra: this.flatFilters.geogebra ? 'true' : '',
         audioLow: this.flatFilters.audioLow ? 'true' : '',
         hasValue: this.flatFilters.nonEmptyResponse ? 'true' : '',
@@ -1475,6 +1552,8 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
           '',
         logAnomalies: this.flatFilters.logAnomalies,
         includeLogAnomalies: this.showLogAnomaliesInTable ? 'true' : ''
+      }, {
+        suppressGlobalHttpError: true
       })
       .subscribe({
         next: resp => {
@@ -1503,12 +1582,57 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
           this.loadFrequenciesForCurrentPage();
           this.loadNotesPresenceForCurrentPage();
         },
-        error: () => {
+        error: (error: HttpErrorResponse) => {
           if (requestSequence === this.flatResponsesRequestSequence) {
             this.isLoadingFlat = false;
+            this.showFlatResponseLoadError(error);
           }
         }
       });
+  }
+
+  private showFlatResponseLoadError(error: HttpErrorResponse): void {
+    const backendMessage = typeof error.error?.message === 'string' ?
+      error.error.message :
+      '';
+    const errorCode = typeof error.error?.code === 'string' ?
+      error.error.code :
+      '';
+    const errorField = typeof error.error?.field === 'string' ?
+      error.error.field :
+      '';
+    let messageKey = 'search-filter.test-results-load-error';
+
+    if (error.status === 400 && errorCode === 'SEARCH_TIMEOUT') {
+      messageKey = 'search-filter.response-value-timeout';
+    } else if (error.status === 400 && errorCode === 'REGEX_TIMEOUT') {
+      messageKey = 'search-filter.regex-timeout';
+    } else if (error.status === 400 && errorCode === 'INVALID_REGEX') {
+      messageKey = 'search-filter.invalid-postgres-regex';
+      if (this.isRegexFilterField(errorField)) {
+        this.backendInvalidRegexFields.add(errorField);
+      }
+    } else if (error.status === 400 && /timed out/i.test(backendMessage)) {
+      messageKey = this.flatFilters.responseValue.trim() ?
+        'search-filter.response-value-timeout' :
+        'search-filter.regex-timeout';
+    } else if (error.status === 400 && this.enableRegexSearch) {
+      messageKey = 'search-filter.invalid-postgres-regex';
+    }
+
+    this.snackBar.open(
+      this.translateService.instant(messageKey),
+      this.translateService.instant('close'),
+      { duration: 5000, panelClass: ['error-snackbar'] }
+    );
+  }
+
+  private isRegexFilterField(
+    field: string
+  ): field is RegexFlatResponseFilterField {
+    return REGEX_FLAT_RESPONSE_FILTER_FIELDS.includes(
+      field as RegexFlatResponseFilterField
+    );
   }
 
   hasNotesForRow(row: FlatResponseRow): boolean {

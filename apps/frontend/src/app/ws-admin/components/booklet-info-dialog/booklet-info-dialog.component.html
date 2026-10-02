@@ -10,141 +10,178 @@
 
   <div class="dialog-content">
     <!-- Loading spinner -->
-    <div *ngIf="isLoading" class="loading-container">
-      <mat-spinner diameter="40"></mat-spinner>
-      <p>Testheft-Informationen werden geladen...</p>
-    </div>
+    @if (isLoading) {
+      <div class="loading-container">
+        <mat-spinner diameter="40"></mat-spinner>
+        <p>Testheft-Informationen werden geladen...</p>
+      </div>
+    }
 
     <!-- Error message -->
-    <div *ngIf="errorMessage" class="error-container">
-      <mat-icon color="warn">error</mat-icon>
-      <p>{{ errorMessage }}</p>
-    </div>
+    @if (errorMessage) {
+      <div class="error-container">
+        <mat-icon color="warn">error</mat-icon>
+        <p>{{ errorMessage }}</p>
+      </div>
+    }
 
     <!-- Booklet info content -->
-    <div *ngIf="!isLoading && !errorMessage && data.bookletInfo" class="booklet-info">
-      <mat-tab-group>
-        <!-- XML tab -->
-        <mat-tab label="XML">
-          <div class="tab-content xml-tab-content">
-            <div class="info-section xml-section">
-              <coding-box-xml-viewer [xml]="data.bookletInfo.rawXml"></coding-box-xml-viewer>
-            </div>
-          </div>
-        </mat-tab>
-
-        <!-- Metadata tab -->
-        <mat-tab label="Metadaten">
-          <div class="tab-content">
-            <div class="info-section">
-              <h3>Testheft-Metadaten</h3>
-              <div class="info-item">
-                <span class="info-label">ID:</span>
-                <span class="info-value">{{ data.bookletInfo.metadata.id }}</span>
-              </div>
-              <div *ngIf="data.bookletInfo.metadata.label" class="info-item">
-                <span class="info-label">Bezeichnung:</span>
-                <span class="info-value">{{ data.bookletInfo.metadata.label }}</span>
-              </div>
-              <div *ngIf="data.bookletInfo.metadata.description" class="info-item">
-                <span class="info-label">Beschreibung:</span>
-                <span class="info-value">{{ data.bookletInfo.metadata.description }}</span>
+    @if (!isLoading && !errorMessage && data.bookletInfo) {
+      <div class="booklet-info">
+        <mat-tab-group>
+          <!-- XML tab -->
+          <mat-tab label="XML">
+            <div class="tab-content xml-tab-content">
+              <div class="info-section xml-section">
+                <coding-box-xml-viewer [xml]="data.bookletInfo.rawXml"></coding-box-xml-viewer>
               </div>
             </div>
-
-            <div *ngIf="data.bookletInfo.restrictions && data.bookletInfo.restrictions.length > 0" class="info-section">
-              <h3>Einschränkungen</h3>
-              <div *ngFor="let restriction of data.bookletInfo.restrictions" class="info-item">
-                <span class="info-label">{{ restriction.type }}:</span>
-                <span class="info-value">{{ restriction.value }}</span>
+          </mat-tab>
+          <!-- Metadata tab -->
+          <mat-tab label="Metadaten">
+            <div class="tab-content">
+              <div class="info-section">
+                <h3>Testheft-Metadaten</h3>
+                <div class="info-item">
+                  <span class="info-label">ID:</span>
+                  <span class="info-value">{{ data.bookletInfo.metadata.id }}</span>
+                </div>
+                @if (data.bookletInfo.metadata.label) {
+                  <div class="info-item">
+                    <span class="info-label">Bezeichnung:</span>
+                    <span class="info-value">{{ data.bookletInfo.metadata.label }}</span>
+                  </div>
+                }
+                @if (data.bookletInfo.metadata.description) {
+                  <div class="info-item">
+                    <span class="info-label">Beschreibung:</span>
+                    <span class="info-value">{{ data.bookletInfo.metadata.description }}</span>
+                  </div>
+                }
               </div>
+              @if (data.bookletInfo.restrictions && data.bookletInfo.restrictions.length > 0) {
+                <div class="info-section">
+                  <h3>Einschränkungen</h3>
+                  @for (restriction of data.bookletInfo.restrictions; track restriction) {
+                    <div class="info-item">
+                      <span class="info-label">{{ restriction.type }}:</span>
+                      <span class="info-value">{{ restriction.value }}</span>
+                    </div>
+                  }
+                </div>
+              }
             </div>
-          </div>
-        </mat-tab>
-
-        <!-- Config tab -->
-        <mat-tab *ngIf="data.bookletInfo.config && data.bookletInfo.config.items && data.bookletInfo.config.items.length > 0"
-                label="Konfiguration ({{ data.bookletInfo.config.items.length }})">
-          <div class="tab-content">
-            <div class="info-section">
-              <h3>Testheft-Konfiguration</h3>
-              <div class="config-list">
-                <div *ngFor="let configItem of data.bookletInfo.config.items" class="config-item">
-                  <span class="config-key">{{ configItem.key }}</span>
-                  <span class="config-value">{{ configItem.value }}</span>
+          </mat-tab>
+          <!-- Config tab -->
+          @if (data.bookletInfo.config && data.bookletInfo.config.items && data.bookletInfo.config.items.length > 0) {
+            <mat-tab
+              label="Konfiguration ({{ data.bookletInfo.config.items.length }})">
+              <div class="tab-content">
+                <div class="info-section">
+                  <h3>Testheft-Konfiguration</h3>
+                  <div class="config-list">
+                    @for (configItem of data.bookletInfo.config.items; track configItem) {
+                      <div class="config-item">
+                        <span class="config-key">{{ configItem.key }}</span>
+                        <span class="config-value">{{ configItem.value }}</span>
+                      </div>
+                    }
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </mat-tab>
-
-        <!-- Testlets tab -->
-        <mat-tab *ngIf="data.bookletInfo.testlets && data.bookletInfo.testlets.length > 0"
-                label="Testlets ({{ data.bookletInfo.testlets.length }})">
-          <div class="tab-content">
-            <div class="info-section">
-              <h3>Testlets im Booklet</h3>
-              <div class="testlets-list">
-                <div *ngFor="let testlet of data.bookletInfo.testlets" class="testlet-item">
-                  <div class="testlet-header">
-                    <span class="testlet-id">{{ testlet.id }}</span>
-                    <span *ngIf="testlet.label" class="testlet-label">{{ testlet.label }}</span>
+            </mat-tab>
+          }
+          <!-- Testlets tab -->
+          @if (data.bookletInfo.testlets && data.bookletInfo.testlets.length > 0) {
+            <mat-tab
+              label="Testlets ({{ data.bookletInfo.testlets.length }})">
+              <div class="tab-content">
+                <div class="info-section">
+                  <h3>Testlets im Booklet</h3>
+                  <div class="testlets-list">
+                    @for (testlet of data.bookletInfo.testlets; track testlet) {
+                      <div class="testlet-item">
+                        <div class="testlet-header">
+                          <span class="testlet-id">{{ testlet.id }}</span>
+                          @if (testlet.label) {
+                            <span class="testlet-label">{{ testlet.label }}</span>
+                          }
+                        </div>
+                        <!-- Testlet restrictions -->
+                        @if (testlet.restrictions && testlet.restrictions.length > 0) {
+                          <div class="testlet-restrictions">
+                            <h4>Einschränkungen</h4>
+                            @for (restriction of testlet.restrictions; track restriction) {
+                              <div class="testlet-restriction">
+                                <span class="restriction-type">{{ restriction.type }}:</span>
+                                <span class="restriction-value">{{ restriction.value }}</span>
+                              </div>
+                            }
+                          </div>
+                        }
+                        <!-- Testlet units -->
+                        @if (testlet.units && testlet.units.length > 0) {
+                          <div class="testlet-units">
+                            <h4>Aufgaben ({{ testlet.units.length }})</h4>
+                            <div class="units-list">
+                              @for (unit of testlet.units; track unit) {
+                                <div class="unit-item">
+                                  <div class="unit-header">
+                                    <span class="unit-position">#{{ unit.position }}</span>
+                                    <span class="unit-id">{{ unit.id }}</span>
+                                    @if (unit.alias) {
+                                      <span class="unit-alias">({{ unit.alias }})</span>
+                                    }
+                                  </div>
+                                  @if (unit.label) {
+                                    <div class="unit-label">
+                                      {{ unit.label }}
+                                    </div>
+                                  }
+                                </div>
+                              }
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    }
                   </div>
-
-                  <!-- Testlet restrictions -->
-                  <div *ngIf="testlet.restrictions && testlet.restrictions.length > 0" class="testlet-restrictions">
-                    <h4>Einschränkungen</h4>
-                    <div *ngFor="let restriction of testlet.restrictions" class="testlet-restriction">
-                      <span class="restriction-type">{{ restriction.type }}:</span>
-                      <span class="restriction-value">{{ restriction.value }}</span>
-                    </div>
-                  </div>
-
-                  <!-- Testlet units -->
-                  <div *ngIf="testlet.units && testlet.units.length > 0" class="testlet-units">
-                    <h4>Aufgaben ({{ testlet.units.length }})</h4>
-                    <div class="units-list">
-                      <div *ngFor="let unit of testlet.units" class="unit-item">
+                </div>
+              </div>
+            </mat-tab>
+          }
+          <!-- Units tab - shows units that are not in any testlet (or all units if there are no testlets) -->
+          @if (hasUnitsTab) {
+            <mat-tab
+              label="Aufgaben ({{ unitsOutsideTestlets.length }})">
+              <div class="tab-content">
+                <div class="info-section">
+                  <h3>Aufgaben im Testheft</h3>
+                  <div class="units-list">
+                    @for (unit of unitsOutsideTestlets; track unit) {
+                      <div class="unit-item">
                         <div class="unit-header">
                           <span class="unit-position">#{{ unit.position }}</span>
                           <span class="unit-id">{{ unit.id }}</span>
-                          <span *ngIf="unit.alias" class="unit-alias">({{ unit.alias }})</span>
+                          @if (unit.alias) {
+                            <span class="unit-alias">({{ unit.alias }})</span>
+                          }
                         </div>
-                        <div *ngIf="unit.label" class="unit-label">
-                          {{ unit.label }}
-                        </div>
+                        @if (unit.label) {
+                          <div class="unit-label">
+                            {{ unit.label }}
+                          </div>
+                        }
                       </div>
-                    </div>
+                    }
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </mat-tab>
-
-        <!-- Units tab - shows units that are not in any testlet (or all units if there are no testlets) -->
-        <mat-tab *ngIf="hasUnitsTab"
-                label="Aufgaben ({{ unitsOutsideTestlets.length }})">
-          <div class="tab-content">
-            <div class="info-section">
-              <h3>Aufgaben im Testheft</h3>
-              <div class="units-list">
-                <div *ngFor="let unit of unitsOutsideTestlets" class="unit-item">
-                  <div class="unit-header">
-                    <span class="unit-position">#{{ unit.position }}</span>
-                    <span class="unit-id">{{ unit.id }}</span>
-                    <span *ngIf="unit.alias" class="unit-alias">({{ unit.alias }})</span>
-                  </div>
-                  <div *ngIf="unit.label" class="unit-label">
-                    {{ unit.label }}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </mat-tab>
-      </mat-tab-group>
-    </div>
+            </mat-tab>
+          }
+        </mat-tab-group>
+      </div>
+    }
   </div>
 
   <mat-divider></mat-divider>

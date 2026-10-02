@@ -121,6 +121,10 @@ interface PreparedJobDefinitionUpdate {
   changedExistingJobBoundFields: ExistingJobBoundUpdateField[];
 }
 
+interface PrepareJobDefinitionUpdateOptions {
+  ignoreMissingValidationAvailabilityForExistingVariables?: boolean;
+}
+
 interface VariableConflictCheckRequest {
   jobDefinitionId?: number;
   assignedVariables: JobDefinitionVariable[];
@@ -130,6 +134,7 @@ interface VariableConflictCheckRequest {
   distributionSeed?: string;
   excludeJobDefinitionId?: number;
   requireAssignedBundles?: boolean;
+  ignoreMissingValidationAvailabilityForVariableKeys?: Set<string>;
 }
 
 type PlannedVariableUsageBatchRequest = {
@@ -206,6 +211,7 @@ const MIN_CODER_CAPACITY_PERCENT = 10;
 const MAX_CODER_CAPACITY_PERCENT = 300;
 const JOB_DEFINITION_DISTRIBUTION_CSV_HEADERS = [
   'Job-Definition-ID',
+  'Job-Definition-Name',
   'Snapshot-Zeitpunkt',
   'Quelle',
   'Typ',
@@ -332,18 +338,22 @@ export class JobDefinitionService {
       workspaceId,
       usageRequests
     );
-    const requestedUsage =
+    const requestedUsage = this.normalizeVariableUsageByKey(
       usageByRequestKey.get(requestedUsageKey) ||
-      new Map<string, DistributionVariableUsageByStatus>();
+        new Map<string, DistributionVariableUsageByStatus>()
+    );
     const plannerAvailableUsage = availableUsageRequest ?
-      usageByRequestKey.get(availableUsageKey) ||
-        new Map<string, DistributionVariableUsageByStatus>() :
+      this.normalizeVariableUsageByKey(
+        usageByRequestKey.get(availableUsageKey) ||
+          new Map<string, DistributionVariableUsageByStatus>()
+      ) :
       requestedUsage;
 
     existingUsageRequests.forEach(usageRequest => {
-      const usage =
+      const usage = this.normalizeVariableUsageByKey(
         usageByRequestKey.get(usageRequest.key) ||
-        new Map<string, DistributionVariableUsageByStatus>();
+          new Map<string, DistributionVariableUsageByStatus>()
+      );
       usage.forEach((usageCount, variableKey) => {
         this.addVariableUsageByStatus(reservedCasesByVariable, variableKey, usageCount);
       });
@@ -368,7 +378,11 @@ export class JobDefinitionService {
       );
       const remainingCases = plannerAvailableCases - reservedCases;
 
-      if (availableCases === undefined || remainingCases <= 0 || requestedCases > remainingCases) {
+      const missingValidationAvailability =
+        availableCases === undefined &&
+        !request.ignoreMissingValidationAvailabilityForVariableKeys?.has(variableKey);
+
+      if (missingValidationAvailability || remainingCases <= 0 || requestedCases > remainingCases) {
         unavailableVariables.push(variableKey.replace('::', ':'));
       }
     });
@@ -438,6 +452,28 @@ export class JobDefinitionService {
     usageByVariable.set(variableKey, currentUsage);
   }
 
+  private normalizeVariableUsageByKey(
+    usageByVariable: Map<string, DistributionVariableUsageByStatus>
+  ): Map<string, DistributionVariableUsageByStatus> {
+    const normalizedUsage = new Map<
+    string,
+    DistributionVariableUsageByStatus
+    >();
+
+    usageByVariable.forEach((usage, variableKey) => {
+      const separatorIndex = variableKey.indexOf('::');
+      const normalizedKey = separatorIndex < 0 ?
+        variableKey :
+        this.makeVariableKey(
+          variableKey.slice(0, separatorIndex),
+          variableKey.slice(separatorIndex + 2)
+        );
+      this.addVariableUsageByStatus(normalizedUsage, normalizedKey, usage);
+    });
+
+    return normalizedUsage;
+  }
+
   private getVariableUsageCountForConflict(
     usage: DistributionVariableUsageByStatus | undefined,
     includeDeriveError: boolean
@@ -450,7 +486,30 @@ export class JobDefinitionService {
   }
 
   private makeVariableKey(unitName: string, variableId: string): string {
-    return `${unitName}::${variableId}`;
+    return `${unitName.toUpperCase()}::${variableId}`;
+  }
+
+  private async getDistributionVariableKeysForDefinition(
+    jobDefinition: JobDefinition
+  ): Promise<Set<string>> {
+    const hydratedBundles = await this.hydrateVariableBundles(
+      jobDefinition.assigned_variable_bundles || []
+    );
+    const variableSelection = this.buildDistributionVariableSelection(
+      jobDefinition.assigned_variables || [],
+      hydratedBundles
+    );
+
+    return new Set([
+      ...variableSelection.selectedVariables.map(
+        variable => this.makeVariableKey(variable.unitName, variable.variableId)
+      ),
+      ...variableSelection.selectedVariableBundles.flatMap(bundle => (
+        bundle.variables.map(
+          variable => this.makeVariableKey(variable.unitName, variable.variableId)
+        )
+      ))
+    ]);
   }
 
   private buildDistributionVariableSelection(
@@ -573,6 +632,12 @@ export class JobDefinitionService {
         bundle.variables || []
       )
     }));
+  }
+
+  private async assertAssignedVariableBundlesExist(
+    assignedVariableBundles?: JobDefinitionVariableBundle[]
+  ): Promise<void> {
+    await this.hydrateVariableBundles(assignedVariableBundles, true);
   }
 
   private mergeSavedBundleVariableOptions(
@@ -1000,6 +1065,8 @@ export class JobDefinitionService {
 
     const jobDefinition = this.jobDefinitionRepository.create({
       workspace_id: workspaceId,
+      name: createDto.name,
+      description: createDto.description ?? null,
       status: createDto.status ?? 'draft',
       assigned_variables: createDto.assignedVariables,
       assigned_variable_bundles: this.toStoredAssignedVariableBundles(
@@ -1059,6 +1126,7 @@ export class JobDefinitionService {
     const coderNamesById = await this.getCoderNamesById(coderIds);
     const rows = this.createDistributionCsvRows(
       jobDefinition.id,
+      jobDefinition.name,
       snapshot,
       coderIds,
       coderNamesById
@@ -1102,6 +1170,7 @@ export class JobDefinitionService {
 
   private createDistributionCsvRows(
     jobDefinitionId: number,
+    jobDefinitionName: string,
     snapshot: JobDefinitionDistributionSnapshot,
     coderIds: number[],
     coderNamesById: Map<number, string>
@@ -1122,6 +1191,7 @@ export class JobDefinitionService {
 
         return coderIds.map(coderId => ({
           'Job-Definition-ID': jobDefinitionId,
+          'Job-Definition-Name': sanitizeCsvText(jobDefinitionName),
           'Snapshot-Zeitpunkt': sanitizeCsvText(snapshot.createdAt),
           Quelle: sanitizeCsvText(this.getSnapshotSourceLabel(snapshot.source)),
           Typ: sanitizeCsvText(this.getSnapshotItemType(itemKey)),
@@ -1631,6 +1701,13 @@ export class JobDefinitionService {
       )
     } as JobDefinition;
 
+    if (updateDto.name !== undefined) {
+      updatedDefinition.name = updateDto.name;
+    }
+    if (updateDto.description !== undefined) {
+      updatedDefinition.description = updateDto.description;
+    }
+
     if (updateDto.status !== undefined) {
       updatedDefinition.status = updateDto.status;
     }
@@ -1684,7 +1761,8 @@ export class JobDefinitionService {
   private async prepareJobDefinitionUpdate(
     id: number,
     workspaceId: number,
-    updateDto: UpdateJobDefinitionDto
+    updateDto: UpdateJobDefinitionDto,
+    options: PrepareJobDefinitionUpdateOptions = {}
   ): Promise<PreparedJobDefinitionUpdate> {
     const jobDefinition = await this.getJobDefinition(id, workspaceId);
     const existingCoderAssignments = this.getStoredCoderAssignments(jobDefinition);
@@ -1729,6 +1807,9 @@ export class JobDefinitionService {
 
     this.validateStatusTransition(jobDefinition.status, updateDto.status);
     this.validateDefinitionState(nextState);
+    if (updateDto.assignedVariableBundles !== undefined) {
+      await this.assertAssignedVariableBundlesExist(nextState.assignedVariableBundles);
+    }
 
     if (
       updateDto.assignedVariables !== undefined ||
@@ -1761,6 +1842,10 @@ export class JobDefinitionService {
       currentMissingsProfileId,
       nextMissingsProfileId
     );
+    const ignoreMissingValidationAvailabilityForVariableKeys =
+      options.ignoreMissingValidationAvailabilityForExistingVariables ?
+        await this.getDistributionVariableKeysForDefinition(jobDefinition) :
+        undefined;
 
     if (this.hasDistributionRelevantChanges(changedExistingJobBoundFields)) {
       const conflicts = await this.checkVariableConflicts(
@@ -1773,7 +1858,8 @@ export class JobDefinitionService {
           caseOrderingMode: nextState.caseOrderingMode,
           distributionSeed,
           excludeJobDefinitionId: id,
-          requireAssignedBundles: updateDto.assignedVariableBundles !== undefined
+          requireAssignedBundles: updateDto.assignedVariableBundles !== undefined,
+          ignoreMissingValidationAvailabilityForVariableKeys
         }
       );
 
@@ -1837,8 +1923,9 @@ export class JobDefinitionService {
   }
 
   async updateJobDefinition(id: number, workspaceId: number, updateDto: UpdateJobDefinitionDto): Promise<JobDefinition> {
+    const normalizedId = Number(id);
     const preparedUpdate = await this.prepareJobDefinitionUpdate(
-      id,
+      normalizedId,
       workspaceId,
       updateDto
     );
@@ -1847,7 +1934,7 @@ export class JobDefinitionService {
       preparedUpdate.changedExistingJobBoundFields.length > 0
     ) {
       throw new BadRequestException(
-        `Cannot update job definition ${id} because existing coding jobs must be refreshed for changes to: ${preparedUpdate.changedExistingJobBoundFields.join(', ')}`
+        `Cannot update job definition ${normalizedId} because existing coding jobs must be refreshed for changes to: ${preparedUpdate.changedExistingJobBoundFields.join(', ')}`
       );
     }
 
@@ -1866,7 +1953,7 @@ export class JobDefinitionService {
 
         await this.codingJobService.updateCodingJobDisplayOptionsByDefinitionId(
           workspaceId,
-          id,
+          normalizedId,
           {
             showScore: updateDto.showScore,
             allowComments: updateDto.allowComments,
@@ -2127,7 +2214,8 @@ export class JobDefinitionService {
     const preparedUpdate = await this.prepareJobDefinitionUpdate(
       jobDefinitionId,
       workspaceId,
-      updateDto
+      updateDto,
+      { ignoreMissingValidationAvailabilityForExistingVariables: true }
     );
 
     this.assertUpdateRefreshIsRequired(jobDefinitionId, preparedUpdate);
@@ -2182,7 +2270,8 @@ export class JobDefinitionService {
     const preparedUpdate = await this.prepareJobDefinitionUpdate(
       jobDefinitionId,
       workspaceId,
-      updateDto
+      updateDto,
+      { ignoreMissingValidationAvailabilityForExistingVariables: true }
     );
 
     this.assertUpdateRefreshIsRequired(jobDefinitionId, preparedUpdate);

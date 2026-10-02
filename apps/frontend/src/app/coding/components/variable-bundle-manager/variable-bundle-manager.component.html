@@ -15,9 +15,11 @@
         <mat-label>Name filtern</mat-label>
         <mat-select [(value)]="selectedName" (selectionChange)="onNameFilterChange()">
           <mat-option [value]="null">Alle Namen</mat-option>
-          <mat-option *ngFor="let bundle of originalData" [value]="bundle.name">
-            {{bundle.name}}
-          </mat-option>
+          @for (bundle of originalData; track bundle) {
+            <mat-option [value]="bundle.name">
+              {{bundle.name}}
+            </mat-option>
+          }
         </mat-select>
       </mat-form-field>
     </div>

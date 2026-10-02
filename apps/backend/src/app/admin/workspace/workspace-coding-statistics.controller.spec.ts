@@ -2,20 +2,31 @@ import 'reflect-metadata';
 import { BadRequestException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import * as ExcelJS from 'exceljs';
+import { EventEmitter } from 'events';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceCodingStatisticsController } from './workspace-coding-statistics.controller';
 
 describe('WorkspaceCodingStatisticsController', () => {
-  let codingStatisticsService: { calculateCohensKappa: jest.Mock };
-  let codingJobService: { createDistributedCodingJobs: jest.Mock };
+  let codingStatisticsService: {
+    calculateCohensKappa: jest.Mock;
+    roundKappaCalculationResult: jest.Mock;
+  };
+  let codingJobService: {
+    calculateDistribution: jest.Mock;
+    createDistributedCodingJobs: jest.Mock;
+  };
   let codingReviewService: {
     getDoubleCodedVariablesForReview: jest.Mock;
     getCodedVariablesForKappa: jest.Mock;
   };
   let codingReplayService: { generateReplayUrlsForItemsBulk: jest.Mock };
-  let codingReadinessService: { getReadiness: jest.Mock };
+  let codingReadinessService: {
+    getReadiness: jest.Mock;
+    getReadinessFromCache: jest.Mock;
+  };
+  let distributionPreviewLimiterService: { run: jest.Mock };
   let controller: WorkspaceCodingStatisticsController;
   const request = {
     protocol: 'http',
@@ -24,9 +35,25 @@ describe('WorkspaceCodingStatisticsController', () => {
 
   beforeEach(() => {
     codingStatisticsService = {
-      calculateCohensKappa: jest.fn()
+      calculateCohensKappa: jest.fn(),
+      roundKappaCalculationResult: jest.fn(result => ({
+        ...result,
+        kappa: result.kappa === null ? null : Math.round(result.kappa * 1000) / 1000,
+        agreement: Math.round(result.agreement * 1000) / 1000
+      }))
     };
     codingJobService = {
+      calculateDistribution: jest.fn().mockResolvedValue({
+        distribution: {},
+        distributionByCoderId: {},
+        doubleCodingInfo: {},
+        aggregationInfo: {},
+        matchingFlags: [],
+        warnings: [],
+        pairDistribution: {},
+        tasksPerCoder: {},
+        coderWeights: {}
+      }),
       createDistributedCodingJobs: jest.fn().mockResolvedValue({
         success: true,
         jobsCreated: 0,
@@ -71,7 +98,11 @@ describe('WorkspaceCodingStatisticsController', () => {
         validResponses: 0,
         codeableResponses: 0,
         invalidVariableSamples: []
-      })
+      }),
+      getReadinessFromCache: jest.fn().mockResolvedValue(null)
+    };
+    distributionPreviewLimiterService = {
+      run: jest.fn().mockImplementation(execute => execute())
     };
 
     controller = new WorkspaceCodingStatisticsController(
@@ -82,9 +113,11 @@ describe('WorkspaceCodingStatisticsController', () => {
       codingReviewService as never,
       {} as never,
       {} as never,
+      {} as never,
       codingReadinessService as never,
       codingReplayService as never,
-      {} as never
+      {} as never,
+      distributionPreviewLimiterService as never
     );
     request.get.mockImplementation((name: string) => {
       if (name === 'host') {
@@ -147,6 +180,55 @@ describe('WorkspaceCodingStatisticsController', () => {
     expect(codingJobService.createDistributedCodingJobs).toHaveBeenCalledWith(5, body);
   });
 
+  it('runs distribution previews through the concurrency limiter', async () => {
+    const body = {
+      selectedVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
+      selectedCoders: [{ id: 1, name: 'Coder', username: 'coder' }]
+    };
+    const response = Object.assign(new EventEmitter(), { writableEnded: false });
+
+    await controller.calculateDistribution(5, body, response as never);
+
+    expect(distributionPreviewLimiterService.run).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.any(AbortSignal)
+    );
+    expect(codingJobService.calculateDistribution).toHaveBeenCalledWith(5, body);
+    expect(response.listenerCount('close')).toBe(0);
+  });
+
+  it('cancels a queued distribution preview when the response connection closes', async () => {
+    const body = {
+      selectedVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
+      selectedCoders: [{ id: 1, name: 'Coder', username: 'coder' }]
+    };
+    const response = Object.assign(new EventEmitter(), { writableEnded: false });
+    let receivedSignal: AbortSignal | undefined;
+    distributionPreviewLimiterService.run.mockImplementation((
+      _execute: () => Promise<unknown>,
+      signal: AbortSignal
+    ) => {
+      receivedSignal = signal;
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener(
+          'abort',
+          () => reject(new Error('preview cancelled')),
+          { once: true }
+        );
+      });
+    });
+
+    const calculation = controller.calculateDistribution(5, body, response as never);
+    expect(response.listenerCount('close')).toBe(1);
+
+    response.emit('close');
+
+    await expect(calculation).rejects.toThrow('preview cancelled');
+    expect(receivedSignal?.aborted).toBe(true);
+    expect(codingJobService.calculateDistribution).not.toHaveBeenCalled();
+    expect(response.listenerCount('close')).toBe(0);
+  });
+
   it('delegates autocoding readiness requests with parsed options', async () => {
     await controller.getAutocodingReadiness(5, '2', 'true');
 
@@ -154,6 +236,16 @@ describe('WorkspaceCodingStatisticsController', () => {
       autoCoderRun: 2,
       forceRefresh: true
     });
+  });
+
+  it('delegates cache-only autocoding readiness requests without recalculating', async () => {
+    await controller.getAutocodingReadiness(5, '1', undefined, 'true');
+
+    expect(codingReadinessService.getReadinessFromCache).toHaveBeenCalledWith(5, {
+      autoCoderRun: 1,
+      forceRefresh: false
+    });
+    expect(codingReadinessService.getReadiness).not.toHaveBeenCalled();
   });
 
   it('adds weighted mean kappa per variable to detailed kappa statistics', async () => {
@@ -220,6 +312,7 @@ describe('WorkspaceCodingStatisticsController', () => {
         coder2Id: 2,
         coder2Name: 'Coder 2',
         kappa: 0.5,
+        brennanPredigerKappa: 0.6,
         agreement: 0.75,
         totalItems: 10,
         validPairs: 10,
@@ -267,6 +360,7 @@ describe('WorkspaceCodingStatisticsController', () => {
     expect(result.variables[0].doubleCodedRate).toBe(0.5);
     expect(result.variables[0].validPairCount).toBe(15);
     expect(result.variables[0].coderPairCount).toBe(2);
+    expect(result.variables[0].coderPairs[0]).not.toHaveProperty('brennanPredigerKappa');
     expect(result.workspaceSummary.averageKappa).toBe(0.667);
     expect(result.workspaceSummary.meanAgreement).toBe(0.833);
     expect(result.workspaceSummary.totalCodedResponses).toBe(2);
@@ -813,6 +907,7 @@ describe('WorkspaceCodingStatisticsController', () => {
       undefined,
       undefined,
       undefined,
+      'xlsx-auth-token',
       undefined,
       request as never,
       response as never
@@ -831,10 +926,11 @@ describe('WorkspaceCodingStatisticsController', () => {
           variableAnchor: 'ANCHOR_VAR'
         })
       ]),
-      'http://localhost'
+      'http://localhost',
+      'xlsx-auth-token'
     );
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(response.send.mock.calls[0][0] as Buffer);
+    await workbook.xlsx.load(response.send.mock.calls[0][0] as unknown as Parameters<typeof workbook.xlsx.load>[0]);
 
     const summarySheet = workbook.getWorksheet('Übereinstimmung_gesamt');
     const pairwiseSheet = workbook.getWorksheet('Übereinstimmung_paarweise');
@@ -938,6 +1034,7 @@ describe('WorkspaceCodingStatisticsController', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       request as never,
       response as never
     );
@@ -945,7 +1042,8 @@ describe('WorkspaceCodingStatisticsController', () => {
     expect(codingReplayService.generateReplayUrlsForItemsBulk).toHaveBeenCalledWith(
       5,
       expect.any(Array),
-      'https://localhost'
+      'https://localhost',
+      ''
     );
   });
 
@@ -1010,12 +1108,13 @@ describe('WorkspaceCodingStatisticsController', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       request as never,
       response as never
     );
 
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(response.send.mock.calls[0][0] as Buffer);
+    await workbook.xlsx.load(response.send.mock.calls[0][0] as unknown as Parameters<typeof workbook.xlsx.load>[0]);
 
     const codingResultsSheet = workbook.getWorksheet('Kodierergebnisse');
 
@@ -1119,12 +1218,13 @@ describe('WorkspaceCodingStatisticsController', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       request as never,
       response as never
     );
 
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(response.send.mock.calls[0][0] as Buffer);
+    await workbook.xlsx.load(response.send.mock.calls[0][0] as unknown as Parameters<typeof workbook.xlsx.load>[0]);
 
     const codingResultsSheet = workbook.getWorksheet('Kodierergebnisse');
 

@@ -214,7 +214,8 @@ export class CoderTrainingResultsApplyService {
           {
             code_v2: update.code,
             score_v2: update.score,
-            status_v2: this.getCompletedStatus()
+            status_v2: this.getCompletedStatus(),
+            autocoder_invalidated_version: null
           }
         );
       }

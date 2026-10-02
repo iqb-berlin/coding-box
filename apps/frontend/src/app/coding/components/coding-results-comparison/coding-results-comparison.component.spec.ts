@@ -9,7 +9,9 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { HttpErrorResponse } from '@angular/common/http';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, Subject, throwError } from 'rxjs';
+import {
+  Observable, of, Subject, throwError
+} from 'rxjs';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CodingResultsComparisonComponent } from './coding-results-comparison.component';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -18,8 +20,58 @@ import { AppService } from '../../../core/services/app.service';
 import { CoderTraining } from '../../models/coder-training.model';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
+import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 
 describe('CodingResultsComparisonComponent', () => {
+  const comparisonSummary = (visibleRows: number) => ({
+    visibleRows,
+    comparableRows: visibleRows,
+    matchingRows: visibleRows,
+    matchingPercentage: visibleRows > 0 ? 100 : 0,
+    incompleteRows: 0,
+    notComparableRows: 0,
+    deviationRows: 0,
+    completionRate: visibleRows > 0 ? 100 : 0
+  });
+  const withinComparisonPage = (
+    data: unknown[],
+    availableCoders = [{ jobId: 1, coderName: 'Coder 1' }]
+  ) => ({
+    data,
+    total: data.length,
+    page: 1,
+    limit: 50,
+    totalPages: data.length > 0 ? 1 : 0,
+    summary: comparisonSummary(data.length),
+    availableCoders
+  });
+  const betweenComparisonPage = (
+    data: unknown[],
+    summary = comparisonSummary(data.length),
+    availableCoders = [
+      {
+        trainingId: 1,
+        trainingLabel: 'Training 1',
+        coderId: 101,
+        coderName: 'Coder 101'
+      },
+      {
+        trainingId: 2,
+        trainingLabel: 'Training 2',
+        coderId: 201,
+        coderName: 'Coder 201'
+      }
+    ]
+  ) => ({
+    data,
+    total: data.length,
+    page: 1,
+    limit: 50,
+    totalPages: data.length > 0 ? 1 : 0,
+    summary,
+    availableCoders
+  });
+
   let component: CodingResultsComparisonComponent;
   let fixture: ComponentFixture<CodingResultsComparisonComponent>;
   let codingTrainingBackendService: {
@@ -31,6 +83,7 @@ describe('CodingResultsComparisonComponent', () => {
     previewApplyDiscussionResults: jest.Mock;
     applyDiscussionResults: jest.Mock;
     getTrainingCohensKappa: jest.Mock;
+    exportTrainingReliabilityAsCsv: jest.Mock;
   };
   let codingStatisticsService: {
     getReplayUrl: jest.Mock;
@@ -42,6 +95,7 @@ describe('CodingResultsComparisonComponent', () => {
     authData: { userName: string };
     loggedUser: { preferred_username?: string } | undefined;
     createOwnToken: jest.Mock;
+    needsReAuthentication: boolean;
   };
   let snackBar: {
     open: jest.Mock;
@@ -70,7 +124,8 @@ describe('CodingResultsComparisonComponent', () => {
       })),
       previewApplyDiscussionResults: jest.fn(),
       applyDiscussionResults: jest.fn(),
-      getTrainingCohensKappa: jest.fn()
+      getTrainingCohensKappa: jest.fn(),
+      exportTrainingReliabilityAsCsv: jest.fn().mockReturnValue(of(new Blob(['csv'])))
     };
     codingStatisticsService = {
       getReplayUrl: jest.fn()
@@ -81,7 +136,8 @@ describe('CodingResultsComparisonComponent', () => {
     appService = {
       authData: { userName: 'Test User' },
       loggedUser: undefined,
-      createOwnToken: jest.fn()
+      createOwnToken: jest.fn(),
+      needsReAuthentication: false
     };
     snackBar = {
       open: jest.fn()
@@ -151,7 +207,9 @@ describe('CodingResultsComparisonComponent', () => {
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
+    sessionStorage.clear();
   });
 
   it('should create', () => {
@@ -167,7 +225,7 @@ describe('CodingResultsComparisonComponent', () => {
   });
 
   it('should load within-training comparison without requesting kappa while kappa section is collapsed', () => {
-    codingTrainingBackendService.getCachedWithinTrainingCodingResults.mockReturnValue(of([
+    codingTrainingBackendService.getCachedWithinTrainingCodingResults.mockReturnValue(of(withinComparisonPage([
       {
         responseId: 1,
         unitName: 'Unit1',
@@ -197,25 +255,151 @@ describe('CodingResultsComparisonComponent', () => {
           }
         ]
       }
-    ]));
+    ])));
     component.comparisonMode = 'within-training';
     component.selectedTrainingForWithin = 5;
     component.showKappaStatistics = false;
 
     component.loadComparison();
 
-    expect(codingTrainingBackendService.getCachedWithinTrainingCodingResults).toHaveBeenCalledWith(1, 5);
+    expect(codingTrainingBackendService.getCachedWithinTrainingCodingResults).toHaveBeenCalledWith(1, 5, expect.objectContaining({
+      page: 1,
+      limit: 50
+    }));
     expect(codingTrainingBackendService.getTrainingCohensKappa).not.toHaveBeenCalled();
     expect(component.withinTrainingData).toHaveLength(1);
     expect(component.isLoading).toBe(false);
   });
 
+  it('should export training reliability with the selected cohort and calculation options', () => {
+    Object.defineProperty(window.URL, 'createObjectURL', {
+      configurable: true,
+      value: jest.fn().mockReturnValue('blob:reliability')
+    });
+    Object.defineProperty(window.URL, 'revokeObjectURL', {
+      configurable: true,
+      value: jest.fn()
+    });
+    jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation();
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.useWeightedMean = false;
+    component.useCodeLevel = false;
+    component.codersFormControl.setValue([11, 12, 13]);
+    component.kappaStatistics = {
+      variables: [],
+      workspaceSummary: {
+        totalDoubleCodedResponses: 0,
+        totalCoderPairs: 0,
+        averageKappa: null,
+        averageBrennanPredigerKappa: null,
+        variablesIncluded: 0,
+        codersIncluded: 3,
+        weightingMethod: 'unweighted',
+        calculationLevel: 'score'
+      }
+    };
+
+    component.exportTrainingReliability();
+
+    expect(codingTrainingBackendService.exportTrainingReliabilityAsCsv).toHaveBeenCalledWith(
+      1,
+      5,
+      false,
+      'score',
+      [11, 12, 13]
+    );
+    expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
+    expect(component.isExportingReliability).toBe(false);
+  });
+
+  it('should keep filter controls visible while comparison data reloads', () => {
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.availableCoders = [
+      { jobId: 1, coderName: 'Coder 1' },
+      { jobId: 2, coderName: 'Coder 2' }
+    ];
+    component.codersFormControl.setValue([1, 2]);
+    component.totalItems = 1;
+    component.withinTrainingData = [
+      {
+        responseId: 1,
+        unitName: 'Unit1',
+        variableId: 'Var1',
+        testperson: 'Test1',
+        personLogin: 'login',
+        personCode: 'code',
+        personGroup: 'group',
+        bookletName: 'booklet',
+        givenAnswer: 'answer',
+        replayCode: null,
+        replayScore: null,
+        discussionCode: null,
+        discussionScore: null,
+        discussionNotes: null,
+        discussionManagerUserId: null,
+        discussionManagerName: null,
+        discussionSource: null,
+        coders: [
+          {
+            jobId: 1,
+            coderName: 'Coder 1',
+            code: '7',
+            score: 2,
+            notes: null,
+            codingIssueOption: null
+          },
+          {
+            jobId: 2,
+            coderName: 'Coder 2',
+            code: '7',
+            score: 2,
+            notes: null,
+            codingIssueOption: null
+          }
+        ]
+      }
+    ];
+    component.dataSource.data = component.withinTrainingData;
+    component.isLoading = true;
+
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.table-filters input')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.comparison-refresh-indicator')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.comparison-container > .loading-container')).toBeNull();
+  });
+
+  it('should show refresh indicator while reloading from an empty filter state', () => {
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.codersFormControl.setValue([1, 2]);
+    component.tableFilters.unitName = 'MDV001';
+    component.totalItems = 0;
+    component.isLoading = true;
+
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.comparison-refresh-indicator')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.comparison-empty-state')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.comparison-container > .loading-container')).toBeNull();
+  });
+
   it('should ignore stale within-training comparison responses after a training switch', () => {
-    const firstTrainingResponse$ = new Subject<unknown[]>();
-    const secondTrainingResponse$ = new Subject<unknown[]>();
+    const firstTrainingResponse$ = new Subject<unknown>();
+    const secondTrainingResponse$ = new Subject<unknown>();
+    let firstTrainingUnsubscribed = false;
+    const firstTrainingResponse = new Observable<unknown>(subscriber => {
+      const subscription = firstTrainingResponse$.subscribe(subscriber);
+      return () => {
+        firstTrainingUnsubscribed = true;
+        subscription.unsubscribe();
+      };
+    });
     codingTrainingBackendService.getCachedWithinTrainingCodingResults.mockImplementation(
       (_workspaceId: number, trainingId: number) => (
-        trainingId === 5 ? firstTrainingResponse$.asObservable() : secondTrainingResponse$.asObservable()
+        trainingId === 5 ? firstTrainingResponse : secondTrainingResponse$.asObservable()
       )
     );
     component.comparisonMode = 'within-training';
@@ -224,7 +408,8 @@ describe('CodingResultsComparisonComponent', () => {
 
     component.selectedTrainingForWithin = 6;
     component.loadComparison();
-    secondTrainingResponse$.next([
+    expect(firstTrainingUnsubscribed).toBe(true);
+    secondTrainingResponse$.next(withinComparisonPage([
       {
         responseId: 2,
         unitName: 'Unit2',
@@ -254,9 +439,9 @@ describe('CodingResultsComparisonComponent', () => {
           }
         ]
       }
-    ]);
+    ]));
 
-    firstTrainingResponse$.next([
+    firstTrainingResponse$.next(withinComparisonPage([
       {
         responseId: 1,
         unitName: 'Unit1',
@@ -286,7 +471,7 @@ describe('CodingResultsComparisonComponent', () => {
           }
         ]
       }
-    ]);
+    ]));
 
     expect(component.selectedTrainingForWithin).toBe(6);
     expect(component.withinTrainingData).toHaveLength(1);
@@ -580,6 +765,7 @@ describe('CodingResultsComparisonComponent', () => {
       }
     ];
     component.dataSource.data = component.withinTrainingData;
+    component.calculateStatistics();
 
     (component as unknown as { updateDisplayedColumns: () => void }).updateDisplayedColumns();
     fixture.detectChanges();
@@ -739,12 +925,62 @@ describe('CodingResultsComparisonComponent', () => {
       match: 'differ',
       notesMode: 'with-notes'
     };
+    component.selectedTrainings.select(1, 2);
+    (component as unknown as { hasInitializedBetweenCoderSelection: boolean }).hasInitializedBetweenCoderSelection = true;
+    codingTrainingBackendService.compareTrainingCodingResults.mockReturnValue(of(betweenComparisonPage(
+      [component.comparisonData[1]],
+      {
+        visibleRows: 1,
+        comparableRows: 1,
+        matchingRows: 0,
+        matchingPercentage: 0,
+        incompleteRows: 0,
+        notComparableRows: 0,
+        deviationRows: 1,
+        completionRate: 100
+      }
+    )));
     component.applyTableFilters();
 
     expect(component.getFilteredRowsCount()).toBe(1);
-    expect(component.dataSource.filteredData.map(row => row.responseId)).toEqual([2]);
+    expect(component.dataSource.data.map(row => row.responseId)).toEqual([2]);
+    expect(codingTrainingBackendService.compareTrainingCodingResults).toHaveBeenCalledWith(1, '1,2', expect.objectContaining({
+      selectedCoderKeys: ['1_101', '2_201'],
+      filters: expect.objectContaining(component.tableFilters)
+    }));
     expect(component.totalComparisons).toBe(1);
     expect(component.matchingComparisons).toBe(0);
+  });
+
+  it('should debounce text table filter changes before reloading comparison data', () => {
+    jest.useFakeTimers();
+    component.comparisonMode = 'between-trainings';
+    component.selectedTrainings.select(1, 2);
+    component.codersFromTrainingsFormControl.setValue(['1_101', '2_201']);
+    component.selectedCodersFromTrainings = new Set(['1_101', '2_201']);
+    (component as unknown as { hasInitializedBetweenCoderSelection: boolean }).hasInitializedBetweenCoderSelection = true;
+    codingTrainingBackendService.compareTrainingCodingResults.mockReturnValue(of(betweenComparisonPage([])));
+
+    component.tableFilters.unitName = 'M';
+    component.onTextTableFilterChange();
+    component.tableFilters.unitName = 'MD';
+    component.onTextTableFilterChange();
+
+    jest.advanceTimersByTime(399);
+    expect(codingTrainingBackendService.compareTrainingCodingResults).not.toHaveBeenCalled();
+
+    jest.advanceTimersByTime(1);
+
+    expect(codingTrainingBackendService.compareTrainingCodingResults).toHaveBeenCalledTimes(1);
+    expect(codingTrainingBackendService.compareTrainingCodingResults).toHaveBeenCalledWith(
+      1,
+      '1,2',
+      expect.objectContaining({
+        filters: expect.objectContaining({
+          unitName: 'MD'
+        })
+      })
+    );
   });
 
   it('should apply regex filters when workspace regex search is enabled', () => {
@@ -817,10 +1053,32 @@ describe('CodingResultsComparisonComponent', () => {
     component.dataSource.data = component.comparisonData;
     component.tableFilters.variableId = '^VAR_1';
     component.tableFilters.bookletName = 'Booklet-\\d+$';
+    component.selectedTrainings.select(1, 2);
+    (component as unknown as { hasInitializedBetweenCoderSelection: boolean }).hasInitializedBetweenCoderSelection = true;
+    codingTrainingBackendService.compareTrainingCodingResults.mockReturnValue(of(betweenComparisonPage([
+      component.comparisonData[0]
+    ])));
 
     component.applyTableFilters();
 
-    expect(component.dataSource.filteredData.map(row => row.responseId)).toEqual([1]);
+    expect(component.dataSource.data.map(row => row.responseId)).toEqual([1]);
+    expect(codingTrainingBackendService.compareTrainingCodingResults).toHaveBeenCalledWith(1, '1,2', expect.objectContaining({
+      filters: expect.objectContaining({
+        variableId: '^VAR_1',
+        bookletName: 'Booklet-\\d+$',
+        regexSearch: true
+      })
+    }));
+  });
+
+  it('should reject invalid regex filters before reloading comparison data', () => {
+    component.enableRegexSearch = true;
+    component.tableFilters.variableId = '[';
+
+    component.applyTableFilters();
+
+    expect(component.isTableRegexFilterInvalid('variableId')).toBe(true);
+    expect(codingTrainingBackendService.compareTrainingCodingResults).not.toHaveBeenCalled();
   });
 
   it('should distinguish rows without visible coder notes from rows with visible coder notes', () => {
@@ -897,16 +1155,31 @@ describe('CodingResultsComparisonComponent', () => {
       }
     ];
     component.dataSource.data = component.comparisonData;
+    component.selectedTrainings.select(1, 2);
+    (component as unknown as { hasInitializedBetweenCoderSelection: boolean }).hasInitializedBetweenCoderSelection = true;
+    const originalRows = [...component.comparisonData];
 
     component.tableFilters.notesMode = 'with-notes';
+    codingTrainingBackendService.compareTrainingCodingResults.mockReturnValueOnce(of(betweenComparisonPage([
+      originalRows[1]
+    ])));
     component.applyTableFilters();
 
-    expect(component.dataSource.filteredData.map(row => row.responseId)).toEqual([11]);
+    expect(component.dataSource.data.map(row => row.responseId)).toEqual([11]);
+    expect(codingTrainingBackendService.compareTrainingCodingResults).toHaveBeenLastCalledWith(1, '1,2', expect.objectContaining({
+      filters: expect.objectContaining({ notesMode: 'with-notes' })
+    }));
 
     component.tableFilters.notesMode = 'none';
+    codingTrainingBackendService.compareTrainingCodingResults.mockReturnValueOnce(of(betweenComparisonPage([
+      originalRows[0]
+    ])));
     component.applyTableFilters();
 
-    expect(component.dataSource.filteredData.map(row => row.responseId)).toEqual([10]);
+    expect(component.dataSource.data.map(row => row.responseId)).toEqual([10]);
+    expect(codingTrainingBackendService.compareTrainingCodingResults).toHaveBeenLastCalledWith(1, '1,2', expect.objectContaining({
+      filters: expect.objectContaining({ notesMode: 'none' })
+    }));
   });
 
   it('should render compact coding issue badges and only real note icons in coder cells', () => {
@@ -960,7 +1233,25 @@ describe('CodingResultsComparisonComponent', () => {
         ]
       }
     ];
+    component.selectedTrainings.select(1, 2);
+    component.availableCodersFromTrainings = [
+      {
+        trainingId: 1,
+        trainingLabel: 'Training A',
+        coderId: 101,
+        coderName: 'Ada'
+      },
+      {
+        trainingId: 2,
+        trainingLabel: 'Training B',
+        coderId: 201,
+        coderName: 'Ben'
+      }
+    ];
+    component.codersFromTrainingsFormControl.setValue(['1_101', '2_201']);
+    component.selectedCodersFromTrainings = new Set(['1_101', '2_201']);
     component.dataSource.data = component.comparisonData;
+    component.calculateStatistics();
 
     (component as unknown as { updateDisplayedColumns: () => void }).updateDisplayedColumns();
     fixture.detectChanges();
@@ -1075,6 +1366,7 @@ describe('CodingResultsComparisonComponent', () => {
       }
     ];
     component.dataSource.data = component.withinTrainingData;
+    component.calculateStatistics();
     component.discussionCodeByResponseId[1] = '7';
     component.discussionScoreByResponseId[1] = 2;
 
@@ -1552,6 +1844,128 @@ describe('CodingResultsComparisonComponent', () => {
     );
   });
 
+  it('should keep a discussion result as recovery draft when saving fails because authentication expired', () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    const row = {
+      responseId: 1,
+      unitName: 'Unit1',
+      variableId: 'Var1',
+      testperson: 'Test1',
+      discussionCode: null,
+      discussionScore: null,
+      discussionNotes: null,
+      discussionSource: null as 'manual' | 'auto_agreement' | null,
+      coders: []
+    };
+    codingTrainingBackendService.saveDiscussionResult.mockReturnValue(throwError(() => new HttpErrorResponse({
+      status: 401
+    })));
+    appService.needsReAuthentication = true;
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.withinTrainingData = [row];
+    component.discussionCodeByResponseId[1] = '7';
+    component.discussionScoreByResponseId[1] = 2;
+    component.discussionNotesByResponseId[1] = 'Replay note';
+
+    component.onDiscussionCodeBlur(row, 2);
+
+    expect(component.discussionErrorByResponseId[1]).toBe('Diskussionsergebnis wird nach erneuter Anmeldung gespeichert.');
+    expect(sessionRecoveryService.peekDraft('training-discussion-active-state')).toEqual({
+      workspaceId: 1,
+      trainingId: 5,
+      entries: [
+        {
+          responseId: 1,
+          codeValue: '7',
+          score: 2,
+          notes: 'Replay note'
+        }
+      ]
+    });
+  });
+
+  it('should restore a discussion recovery draft after authentication is ready again', () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    const row = {
+      responseId: 1,
+      unitName: 'Unit1',
+      variableId: 'Var1',
+      testperson: 'Test1',
+      discussionCode: null,
+      discussionScore: null,
+      discussionNotes: null,
+      discussionSource: null as 'manual' | 'auto_agreement' | null,
+      coders: []
+    };
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.withinTrainingData = [row];
+    sessionRecoveryService.saveDraft('training-discussion-active-state', {
+      workspaceId: 1,
+      trainingId: 5,
+      entries: [
+        {
+          responseId: 1,
+          codeValue: '7',
+          score: 2,
+          notes: 'Replay note'
+        }
+      ]
+    });
+
+    sessionRecoveryService.notifyRestoredAuthentication();
+
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, 7, 2, 'Replay note');
+    expect(sessionRecoveryService.peekDraft('training-discussion-active-state')).toBeNull();
+  });
+
+  it('should keep discussion recovery entries that are not loaded on the current page', () => {
+    const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
+    const row = {
+      responseId: 1,
+      unitName: 'Unit1',
+      variableId: 'Var1',
+      testperson: 'Test1',
+      discussionCode: null,
+      discussionScore: null,
+      discussionNotes: null,
+      discussionSource: null as 'manual' | 'auto_agreement' | null,
+      coders: []
+    };
+    const missingPageEntry = {
+      responseId: 2,
+      codeValue: '9',
+      score: 1,
+      notes: 'Still pending'
+    };
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.withinTrainingData = [row];
+    sessionRecoveryService.saveDraft('training-discussion-active-state', {
+      workspaceId: 1,
+      trainingId: 5,
+      entries: [
+        {
+          responseId: 1,
+          codeValue: '7',
+          score: 2,
+          notes: 'Replay note'
+        },
+        missingPageEntry
+      ]
+    });
+
+    sessionRecoveryService.notifyRestoredAuthentication();
+
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, 7, 2, 'Replay note');
+    expect(sessionRecoveryService.peekDraft('training-discussion-active-state')).toEqual({
+      workspaceId: 1,
+      trainingId: 5,
+      entries: [missingPageEntry]
+    });
+  });
+
   describe('calculateStatistics', () => {
     it('should calculate statistics correctly for between trainings mode', () => {
       component.comparisonMode = 'between-trainings';
@@ -1929,9 +2343,11 @@ describe('CodingResultsComparisonComponent', () => {
         totalDoubleCodedResponses: 10,
         totalCoderPairs: 1,
         averageKappa: 1,
+        averageBrennanPredigerKappa: null,
         variablesIncluded: 1,
         codersIncluded: 2,
-        weightingMethod: 'weighted'
+        weightingMethod: 'weighted',
+        calculationLevel: 'code'
       }
     };
     component.originalKappaStatistics = component.kappaStatistics;
@@ -1970,11 +2386,22 @@ describe('CodingResultsComparisonComponent', () => {
         ]
       }
     ];
+    component.dataSource.data = component.withinTrainingData;
+    component.calculateStatistics();
     component.originalKappaStatistics = {
       variables: [
         {
           unitName: 'U1',
           variableId: 'V1',
+          meanKappa: 0.84,
+          meanBrennanPredigerKappa: 0.9,
+          fleissKappa: 0.75,
+          fleissCaseCount: 8,
+          fleissPossibleCaseCount: 10,
+          meanAgreement: 0.866666,
+          caseCount: 1,
+          validPairCount: 15,
+          coderPairCount: 2,
           coderPairs: [
             {
               coder1Id: 1,
@@ -1982,6 +2409,7 @@ describe('CodingResultsComparisonComponent', () => {
               coder2Id: 2,
               coder2Name: 'C2',
               kappa: 0.82,
+              brennanPredigerKappa: 0.88,
               agreement: 0.9,
               totalItems: 10,
               validPairs: 10,
@@ -1993,6 +2421,7 @@ describe('CodingResultsComparisonComponent', () => {
               coder2Id: 3,
               coder2Name: 'C3',
               kappa: 0.88,
+              brennanPredigerKappa: 0.94,
               agreement: 0.8,
               totalItems: 5,
               validPairs: 5,
@@ -2005,9 +2434,11 @@ describe('CodingResultsComparisonComponent', () => {
         totalDoubleCodedResponses: 1,
         totalCoderPairs: 2,
         averageKappa: 0.84,
+        averageBrennanPredigerKappa: 0.9,
         variablesIncluded: 1,
         codersIncluded: 3,
-        weightingMethod: 'weighted'
+        weightingMethod: 'weighted',
+        calculationLevel: 'code'
       }
     };
 
@@ -2029,18 +2460,52 @@ describe('CodingResultsComparisonComponent', () => {
       validPairCount: 15
     });
     expect(component.variableKappaSummaries[0].meanKappa).toBeCloseTo(0.84, 10);
+    expect(component.variableKappaSummaries[0].meanBrennanPredigerKappa).toBeCloseTo(0.9, 10);
+    expect(component.variableKappaSummaries[0].fleissKappa).toBeCloseTo(0.75, 10);
     expect(component.variableKappaSummaries[0].meanAgreement).toBeCloseTo(0.866666, 5);
     expect(tableText).toContain('Mittelwerte je Variable');
     expect(tableText).toContain('Gültige Paarwerte');
     expect(tableText).toContain('U1 - V1');
     expect(tableText).toContain('0.840');
+    expect(tableText).toContain('0.900');
+    expect(tableText).toContain('0.750');
+    expect(tableText).toContain('(8 / 10)');
     expect(tableText).toContain('86.7%');
     expect(tableText).toContain('15');
     expect(inlineSummaryText).toContain('Mittelwert U1 - V1');
     expect(inlineSummaryText).toContain('Kappa 0.840');
+    expect(inlineSummaryText).toContain('coding.trainings.compare.metric-brennan-prediger-kappa 0.900');
+    expect(inlineSummaryText).toContain('coding.trainings.compare.metric-fleiss-kappa 0.750');
+    expect(inlineSummaryText).toContain('coding.trainings.compare.complete-of-possible-cases');
     expect(inlineSummaryText).toContain('Übereinstimmung 86.7%');
     expect(inlineSummaryText).toContain('Fälle 1');
     expect(inlineSummaryText).toContain('Gültige Paarwerte 15');
+  });
+
+  it('should explain that Fleiss kappa requires at least three selected coders', () => {
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.showKappaStatistics = true;
+    component.codersFormControl.setValue([1, 2]);
+    component.totalItems = 1;
+    component.kappaStatistics = {
+      variables: [],
+      workspaceSummary: {
+        totalDoubleCodedResponses: 1,
+        totalCoderPairs: 1,
+        averageKappa: 0.5,
+        averageBrennanPredigerKappa: 0.5,
+        variablesIncluded: 1,
+        codersIncluded: 2,
+        weightingMethod: 'weighted',
+        calculationLevel: 'code'
+      }
+    };
+
+    fixture.detectChanges();
+
+    const hint = fixture.nativeElement.querySelector('.fleiss-minimum-hint') as HTMLElement;
+    expect(hint.textContent).toContain('coding.trainings.compare.fleiss-minimum-raters');
   });
 
   it('should render unweighted mean kappa summaries when weighting is disabled', () => {
@@ -2082,6 +2547,15 @@ describe('CodingResultsComparisonComponent', () => {
       variables: [{
         unitName: 'U1',
         variableId: 'V1',
+        meanKappa: 0.85,
+        meanBrennanPredigerKappa: null,
+        fleissKappa: null,
+        fleissCaseCount: 0,
+        fleissPossibleCaseCount: 0,
+        meanAgreement: 0.85,
+        caseCount: 1,
+        validPairCount: 15,
+        coderPairCount: 2,
         coderPairs: [
           {
             coder1Id: 1,
@@ -2089,6 +2563,7 @@ describe('CodingResultsComparisonComponent', () => {
             coder2Id: 2,
             coder2Name: 'C2',
             kappa: 0.82,
+            brennanPredigerKappa: null,
             agreement: 0.9,
             totalItems: 10,
             validPairs: 10,
@@ -2100,6 +2575,7 @@ describe('CodingResultsComparisonComponent', () => {
             coder2Id: 3,
             coder2Name: 'C3',
             kappa: 0.88,
+            brennanPredigerKappa: null,
             agreement: 0.8,
             totalItems: 5,
             validPairs: 5,
@@ -2111,9 +2587,11 @@ describe('CodingResultsComparisonComponent', () => {
         totalDoubleCodedResponses: 1,
         totalCoderPairs: 2,
         averageKappa: 0.85,
+        averageBrennanPredigerKappa: null,
         variablesIncluded: 1,
         codersIncluded: 3,
-        weightingMethod: 'unweighted'
+        weightingMethod: 'unweighted',
+        calculationLevel: 'code'
       }
     };
 
@@ -2132,6 +2610,15 @@ describe('CodingResultsComparisonComponent', () => {
       variables: [{
         unitName: 'U1',
         variableId: 'V1',
+        meanKappa: null,
+        meanBrennanPredigerKappa: null,
+        fleissKappa: null,
+        fleissCaseCount: 0,
+        fleissPossibleCaseCount: 0,
+        meanAgreement: null,
+        caseCount: 0,
+        validPairCount: 0,
+        coderPairCount: 2,
         coderPairs: [
           {
             coder1Id: 1,
@@ -2139,6 +2626,7 @@ describe('CodingResultsComparisonComponent', () => {
             coder2Id: 2,
             coder2Name: 'C2',
             kappa: 0.8,
+            brennanPredigerKappa: null,
             agreement: 0.9,
             totalItems: 10,
             validPairs: 10,
@@ -2150,6 +2638,7 @@ describe('CodingResultsComparisonComponent', () => {
             coder2Id: 3,
             coder2Name: 'C3',
             kappa: null,
+            brennanPredigerKappa: null,
             agreement: 0.5,
             totalItems: 100,
             validPairs: 100,
@@ -2161,9 +2650,11 @@ describe('CodingResultsComparisonComponent', () => {
         totalDoubleCodedResponses: 0,
         totalCoderPairs: 2,
         averageKappa: 0.8,
+        averageBrennanPredigerKappa: null,
         variablesIncluded: 1,
         codersIncluded: 3,
-        weightingMethod: 'weighted'
+        weightingMethod: 'weighted',
+        calculationLevel: 'code'
       }
     };
 
@@ -2173,6 +2664,69 @@ describe('CodingResultsComparisonComponent', () => {
     expect(component.kappaStatistics?.workspaceSummary.totalCoderPairs).toBe(2);
   });
 
+  it('should preserve precise workspace kappa averages returned by the backend', () => {
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.useWeightedMean = true;
+    component.codersFormControl.setValue([1, 2, 3]);
+    component.originalKappaStatistics = {
+      variables: [{
+        unitName: 'U1',
+        variableId: 'V1',
+        meanKappa: 0.300502,
+        meanBrennanPredigerKappa: 0.400502,
+        fleissKappa: 0.5,
+        fleissCaseCount: 100,
+        fleissPossibleCaseCount: 100,
+        meanAgreement: 0.8,
+        caseCount: 100,
+        validPairCount: 100,
+        coderPairCount: 2,
+        coderPairs: [
+          {
+            coder1Id: 1,
+            coder1Name: 'C1',
+            coder2Id: 2,
+            coder2Name: 'C2',
+            kappa: 0.3,
+            brennanPredigerKappa: 0.4,
+            agreement: 0.8,
+            totalItems: 97,
+            validPairs: 97,
+            interpretation: 'kappa.fair'
+          },
+          {
+            coder1Id: 1,
+            coder1Name: 'C1',
+            coder2Id: 3,
+            coder2Name: 'C3',
+            kappa: 0.302,
+            brennanPredigerKappa: 0.402,
+            agreement: 0.8,
+            totalItems: 3,
+            validPairs: 3,
+            interpretation: 'kappa.fair'
+          }
+        ]
+      }],
+      workspaceSummary: {
+        totalDoubleCodedResponses: 100,
+        totalCoderPairs: 2,
+        averageKappa: 0.300502,
+        averageBrennanPredigerKappa: 0.400502,
+        variablesIncluded: 1,
+        codersIncluded: 3,
+        weightingMethod: 'weighted',
+        calculationLevel: 'code'
+      }
+    };
+
+    component.filterKappaStatistics();
+
+    expect(component.kappaStatistics?.workspaceSummary.averageKappa).toBe(0.300502);
+    expect(component.kappaStatistics?.workspaceSummary.averageBrennanPredigerKappa).toBe(0.400502);
+  });
+
   describe('calculateMeanAgreement', () => {
     it('should calculate weighted mean agreement correctly', () => {
       component.kappaStatistics = {
@@ -2180,6 +2734,15 @@ describe('CodingResultsComparisonComponent', () => {
           {
             unitName: 'U1',
             variableId: 'V1',
+            meanKappa: null,
+            meanBrennanPredigerKappa: null,
+            fleissKappa: null,
+            fleissCaseCount: 0,
+            fleissPossibleCaseCount: 0,
+            meanAgreement: null,
+            caseCount: 0,
+            validPairCount: 0,
+            coderPairCount: 2,
             coderPairs: [
               {
                 coder1Id: 1,
@@ -2187,6 +2750,7 @@ describe('CodingResultsComparisonComponent', () => {
                 coder2Id: 2,
                 coder2Name: 'C2',
                 kappa: 0.5,
+                brennanPredigerKappa: null,
                 agreement: 0.8,
                 totalItems: 10,
                 validPairs: 10,
@@ -2198,6 +2762,7 @@ describe('CodingResultsComparisonComponent', () => {
                 coder2Id: 3,
                 coder2Name: 'C3',
                 kappa: 0.6,
+                brennanPredigerKappa: null,
                 agreement: 0.9,
                 totalItems: 10,
                 validPairs: 5,
@@ -2210,9 +2775,11 @@ describe('CodingResultsComparisonComponent', () => {
           totalDoubleCodedResponses: 0,
           totalCoderPairs: 0,
           averageKappa: 0,
+          averageBrennanPredigerKappa: null,
           variablesIncluded: 0,
           codersIncluded: 0,
-          weightingMethod: 'weighted'
+          weightingMethod: 'weighted',
+          calculationLevel: 'code'
         }
       };
       component.useWeightedMean = true;
@@ -2228,6 +2795,15 @@ describe('CodingResultsComparisonComponent', () => {
           {
             unitName: 'U1',
             variableId: 'V1',
+            meanKappa: null,
+            meanBrennanPredigerKappa: null,
+            fleissKappa: null,
+            fleissCaseCount: 0,
+            fleissPossibleCaseCount: 0,
+            meanAgreement: null,
+            caseCount: 0,
+            validPairCount: 0,
+            coderPairCount: 2,
             coderPairs: [
               {
                 coder1Id: 1,
@@ -2235,6 +2811,7 @@ describe('CodingResultsComparisonComponent', () => {
                 coder2Id: 2,
                 coder2Name: 'C2',
                 kappa: 0.5,
+                brennanPredigerKappa: null,
                 agreement: 0.8,
                 totalItems: 10,
                 validPairs: 10,
@@ -2246,6 +2823,7 @@ describe('CodingResultsComparisonComponent', () => {
                 coder2Id: 3,
                 coder2Name: 'C3',
                 kappa: 0.6,
+                brennanPredigerKappa: null,
                 agreement: 0.9,
                 totalItems: 10,
                 validPairs: 5,
@@ -2258,9 +2836,11 @@ describe('CodingResultsComparisonComponent', () => {
           totalDoubleCodedResponses: 0,
           totalCoderPairs: 0,
           averageKappa: 0,
+          averageBrennanPredigerKappa: null,
           variablesIncluded: 0,
           codersIncluded: 0,
-          weightingMethod: 'unweighted'
+          weightingMethod: 'unweighted',
+          calculationLevel: 'code'
         }
       };
       component.useWeightedMean = false;

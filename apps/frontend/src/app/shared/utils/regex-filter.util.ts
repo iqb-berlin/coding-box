@@ -25,6 +25,19 @@ export function hasInvalidRegexFilter(
   return regexSearch && !isRegexPatternValid(pattern || '');
 }
 
+export function hasInvalidPostgresRegexFilter(
+  pattern: string | null | undefined,
+  regexSearch: boolean
+): boolean {
+  if (!regexSearch) {
+    return false;
+  }
+
+  // PostgreSQL uses ARE syntax, which is not fully compatible with
+  // JavaScript's RegExp parser. Syntax is validated by the backend preflight.
+  return (pattern || '').trim().length > REGEX_FILTER_PATTERN_MAX_LENGTH;
+}
+
 export function matchesTextFilter(
   value: string | number | null | undefined,
   filter: string | null | undefined,

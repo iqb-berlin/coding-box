@@ -70,7 +70,7 @@ export class WorkspaceFacadeService {
     return this.userBackendService.getUsers(workspaceId);
   }
 
-  saveUsers(workspaceId: number, users: UserWorkspaceAccessDto[]): Observable<UserWorkspaceAccessDto[]> {
+  saveUsers(workspaceId: number, users: UserWorkspaceAccessDto[]): Observable<boolean> {
     return this.userBackendService.saveUsers(workspaceId, users);
   }
 

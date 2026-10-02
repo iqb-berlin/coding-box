@@ -29,6 +29,7 @@ export interface VariableDetailDto {
   hasCodingScheme: boolean;
   codingSchemeRef?: string;
   sourceType?: string;
+  processing?: string[];
   codes?: CodeInfo[];
   values?: VariableValueInfo[];
   valuesComplete?: boolean;

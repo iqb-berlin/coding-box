@@ -1,0 +1,8 @@
+@if (notificationService.visibleNotifications$ | async; as notifications) {
+  @for (notification of notifications; track notification.id + notification.updatedAt) {
+    <coding-box-system-notification-item
+      [notification]="notification"
+      (dismissed)="dismiss($event)">
+    </coding-box-system-notification-item>
+  }
+}

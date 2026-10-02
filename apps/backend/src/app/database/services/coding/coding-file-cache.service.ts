@@ -27,6 +27,9 @@ export class CodingFileCacheService {
   private readonly logger = new Logger(CodingFileCacheService.name);
   private voudCache = new LRUCache<Map<string, string>>(50);
   private vocsCache = new LRUCache<Set<string>>(50);
+  private readonly voudInFlight = new Map<string, Promise<Map<string, string>>>();
+  private readonly vocsInFlight = new Map<string, Promise<Set<string>>>();
+  private cacheGeneration = 0;
 
   constructor(
     @InjectRepository(FileUpload)
@@ -43,11 +46,37 @@ export class CodingFileCacheService {
     workspaceId: number
   ): Promise<Map<string, string>> {
     const cacheKey = `${workspaceId}:${unitName}`;
-    let variablePageMap = this.voudCache.get(cacheKey);
+    const variablePageMap = this.voudCache.get(cacheKey);
     if (variablePageMap) {
       return variablePageMap;
     }
 
+    const inFlight = this.voudInFlight.get(cacheKey);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const generation = this.cacheGeneration;
+    const request = this.loadVoudDataUncached(unitName, workspaceId)
+      .then(result => {
+        if (generation === this.cacheGeneration) {
+          this.voudCache.set(cacheKey, result);
+        }
+        return result;
+      })
+      .finally(() => {
+        if (this.voudInFlight.get(cacheKey) === request) {
+          this.voudInFlight.delete(cacheKey);
+        }
+      });
+    this.voudInFlight.set(cacheKey, request);
+    return request;
+  }
+
+  private async loadVoudDataUncached(
+    unitName: string,
+    workspaceId: number
+  ): Promise<Map<string, string>> {
     const voudFile = await this.fileUploadRepository.findOne({
       where: {
         workspace_id: workspaceId,
@@ -56,7 +85,7 @@ export class CodingFileCacheService {
       }
     });
 
-    variablePageMap = new Map<string, string>();
+    let variablePageMap = new Map<string, string>();
 
     if (voudFile) {
       try {
@@ -76,7 +105,6 @@ export class CodingFileCacheService {
       variablePageMap.set(variableId, page);
     });
 
-    this.voudCache.set(cacheKey, variablePageMap);
     return variablePageMap;
   }
 
@@ -174,13 +202,38 @@ export class CodingFileCacheService {
   ): Promise<Set<string>> {
     const cacheKey = `${workspaceId}:${unitName}`;
 
-    let exclusions = this.vocsCache.get(cacheKey);
+    const exclusions = this.vocsCache.get(cacheKey);
     if (exclusions) {
       return exclusions;
     }
 
-    exclusions = new Set<string>();
+    const inFlight = this.vocsInFlight.get(cacheKey);
+    if (inFlight) {
+      return inFlight;
+    }
 
+    const generation = this.cacheGeneration;
+    const request = this.loadVocsExclusionsUncached(unitName, workspaceId)
+      .then(result => {
+        if (generation === this.cacheGeneration) {
+          this.vocsCache.set(cacheKey, result);
+        }
+        return result;
+      })
+      .finally(() => {
+        if (this.vocsInFlight.get(cacheKey) === request) {
+          this.vocsInFlight.delete(cacheKey);
+        }
+      });
+    this.vocsInFlight.set(cacheKey, request);
+    return request;
+  }
+
+  private async loadVocsExclusionsUncached(
+    unitName: string,
+    workspaceId: number
+  ): Promise<Set<string>> {
+    const exclusions = new Set<string>();
     const vocsFile = await this.fileUploadRepository.findOne({
       where: {
         workspace_id: workspaceId,
@@ -209,7 +262,6 @@ export class CodingFileCacheService {
       }
     }
 
-    this.vocsCache.set(cacheKey, exclusions);
     return exclusions;
   }
 
@@ -217,8 +269,11 @@ export class CodingFileCacheService {
    * Clear all caches. Useful for freeing memory after large export operations.
    */
   clearCaches(): void {
+    this.cacheGeneration += 1;
     this.voudCache.clear();
     this.vocsCache.clear();
+    this.voudInFlight.clear();
+    this.vocsInFlight.clear();
   }
 
   /**

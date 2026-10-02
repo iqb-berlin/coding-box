@@ -1,5 +1,5 @@
 import { Component, Inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -22,7 +22,6 @@ export interface ApplyCodingResultsDialogResult {
   selector: 'coding-box-apply-coding-results-dialog',
   standalone: true,
   imports: [
-    CommonModule,
     FormsModule,
     MatDialogModule,
     MatButtonModule,
@@ -48,39 +47,45 @@ export interface ApplyCodingResultsDialogResult {
         </span>
       </div>
 
-      <div class="summary-grid" *ngIf="hasSummary()">
-        <div>
-          <strong>{{ data.totalResults ?? '-' }}</strong>
-          <span>Ergebnisse</span>
+      @if (hasSummary()) {
+        <div class="summary-grid">
+          <div>
+            <strong>{{ data.totalResults ?? '-' }}</strong>
+            <span>Ergebnisse</span>
+          </div>
+          <div>
+            <strong>{{ data.codedResults ?? '-' }}</strong>
+            <span>kodiert</span>
+          </div>
+          <div>
+            <strong>{{ data.reviewIssues ?? (data.hasReviewIssues ? 'vorhanden' : 0) }}</strong>
+            <span>mit Prüfung</span>
+          </div>
         </div>
-        <div>
-          <strong>{{ data.codedResults ?? '-' }}</strong>
-          <span>kodiert</span>
-        </div>
-        <div>
-          <strong>{{ data.reviewIssues ?? (data.hasReviewIssues ? 'vorhanden' : 0) }}</strong>
-          <span>mit Prüfung</span>
-        </div>
-      </div>
+      }
 
-      <div class="warning-box" *ngIf="hasReviewIssues()">
-        <mat-icon>rule</mat-icon>
-        <span>
-          Ergebnisse mit Kodierungshinweis werden beim Anwenden übersprungen, bis sie manuell geprüft wurden.
-        </span>
-      </div>
+      @if (hasReviewIssues()) {
+        <div class="warning-box">
+          <mat-icon>rule</mat-icon>
+          <span>
+            Ergebnisse mit Kodierungshinweis werden beim Anwenden übersprungen, bis sie manuell geprüft wurden.
+          </span>
+        </div>
+      }
 
       <mat-checkbox [(ngModel)]="overwriteExisting" color="warn">
         Bestehende v2-Kodierungen überschreiben
       </mat-checkbox>
 
-      <div class="warning-box" *ngIf="overwriteExisting">
-        <mat-icon>warning</mat-icon>
-        <span>
-          Vorhandene v2-Kodierungen für direkte Ergebnisse und passende Aggregationsgruppen werden ersetzt.
-          Diese Option sollte nur für bewusst neu zu berechnende Ergebnisse genutzt werden.
-        </span>
-      </div>
+      @if (overwriteExisting) {
+        <div class="warning-box">
+          <mat-icon>warning</mat-icon>
+          <span>
+            Vorhandene v2-Kodierungen für direkte Ergebnisse und passende Aggregationsgruppen werden ersetzt.
+            Diese Option sollte nur für bewusst neu zu berechnende Ergebnisse genutzt werden.
+          </span>
+        </div>
+      }
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
@@ -89,7 +94,7 @@ export interface ApplyCodingResultsDialogResult {
         Anwenden
       </button>
     </mat-dialog-actions>
-  `,
+    `,
   styles: [`
     h2 {
       display: flex;

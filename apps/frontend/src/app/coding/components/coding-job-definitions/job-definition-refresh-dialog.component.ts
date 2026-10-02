@@ -16,6 +16,7 @@ import {
 
 export interface JobDefinitionRefreshDialogData {
   definitionId: number;
+  definitionLabel?: string;
   preview: JobDefinitionRefreshPreviewDto;
   mode?: 'refresh' | 'update';
 }

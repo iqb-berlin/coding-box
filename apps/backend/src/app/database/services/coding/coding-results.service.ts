@@ -1,21 +1,39 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
+import {
+  Brackets,
+  EntityManager,
+  IsNull,
+  QueryRunner,
+  Repository,
+  SelectQueryBuilder
+} from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { CodingAnalysisService } from './coding-analysis.service';
-import { buildAggregationGroups } from './aggregation-metrics.util';
+import {
+  buildAggregationGroups,
+  getAggregationVariableKey
+} from './aggregation-metrics.util';
 import {
   formatCodingTestPerson,
   generateCodingProgressKey
 } from './coding-progress-key.util';
 import { CodingFreshnessService } from './coding-freshness.service';
-import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import {
+  lockWorkspaceTestResultsMutationInTransaction,
+  withWorkspaceTestResultsMutationLock
+} from '../shared/workspace-test-results-lock.util';
 import { CodingValidationService } from './coding-validation.service';
 import { MissingsProfilesService } from './missings-profiles.service';
 import { getNonCodingIssueReviewJobSqlCondition } from './coding-job-type.util';
+import { EmptyResponseSelectionService } from './empty-response-selection.service';
+import {
+  applyResolvedExclusionsToQuery,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 
 export interface ApplyCodingResultsOptions {
   overwriteExisting?: boolean;
@@ -37,6 +55,39 @@ interface ExistingV2State {
   score: number | null;
 }
 
+interface PendingResponseUpdate {
+  responseId: number;
+  code_v2: number | null;
+  score_v2: number | null;
+  status_v2: number;
+  protectExistingV2?: boolean;
+}
+
+export const buildAggregationUnitNameQuery = (
+  responseRepository: Repository<ResponseEntity>,
+  workspaceId: number,
+  codedVariableIds: string[]
+): SelectQueryBuilder<ResponseEntity> => responseRepository
+  .createQueryBuilder('response')
+  .distinct(true)
+  .select('unit.name', 'unitName')
+  .addSelect('response.variableid', 'variableId')
+  .leftJoin('response.unit', 'unit')
+  .leftJoin('unit.booklet', 'booklet')
+  .leftJoin('booklet.bookletinfo', 'bookletinfo')
+  .leftJoin('booklet.person', 'person')
+  .where('person.workspace_id = :workspaceId', { workspaceId })
+  .andWhere('person.consider = :consider', { consider: true })
+  .andWhere('response.status_v1 IN (:...statuses)', {
+    statuses: [
+      statusStringToNumber('CODING_INCOMPLETE'),
+      statusStringToNumber('INTENDED_INCOMPLETE')
+    ]
+  })
+  .andWhere('response.variableid IN (:...codedVariableIds)', {
+    codedVariableIds
+  });
+
 @Injectable()
 export class CodingResultsService {
   private readonly logger = new Logger(CodingResultsService.name);
@@ -53,6 +104,8 @@ export class CodingResultsService {
     private codingValidationService: CodingValidationService,
     private codingAnalysisService: CodingAnalysisService,
     private missingsProfilesService: MissingsProfilesService,
+    private emptyResponseSelectionService: EmptyResponseSelectionService,
+    private workspaceExclusionService: WorkspaceExclusionService,
     @Optional()
     private codingFreshnessService?: CodingFreshnessService
   ) { }
@@ -97,12 +150,7 @@ export class CodingResultsService {
       };
     }
 
-    const responsesToUpdate: {
-      responseId: number;
-      code_v2: number | null;
-      score_v2: number | null;
-      status_v2: number;
-    }[] = [];
+    const responsesToUpdate: PendingResponseUpdate[] = [];
 
     try {
       const codingJobUnits = await this.codingJobService.getCodingJobUnits(codingJobId);
@@ -272,6 +320,52 @@ export class CodingResultsService {
               .where('response.id IN (:...ids)', { ids: codedResponseIds })
               .getMany();
 
+            const codedVariableIds = Array.from(new Set(
+              codedResponses
+                .map(response => response.variableid)
+                .filter((variableId): variableId is string => Boolean(variableId))
+            ));
+            const unitNamesByVariable = new Map<string, Set<string>>();
+            codedResponses.forEach(response => {
+              if (!response.unit?.name || !response.variableid) {
+                return;
+              }
+              const variableKey = getAggregationVariableKey(
+                response.unit.name,
+                response.variableid
+              );
+              const unitNames = unitNamesByVariable.get(variableKey) || new Set<string>();
+              unitNames.add(response.unit.name);
+              unitNamesByVariable.set(variableKey, unitNames);
+            });
+
+            const exclusions = await this.workspaceExclusionService
+              .resolveExclusionsForQueries(workspaceId);
+            if (codedVariableIds.length > 0) {
+              const unitNameQuery = buildAggregationUnitNameQuery(
+                this.responseRepository,
+                workspaceId,
+                codedVariableIds
+              );
+              applyResolvedExclusionsToQuery(unitNameQuery, exclusions, {
+                parameterPrefix: 'aggregationSiblingUnits'
+              });
+              const unitNameRows: Array<{
+                unitName: string;
+                variableId: string;
+              }> = await unitNameQuery.getRawMany();
+              unitNameRows.forEach(row => {
+                const variableKey = getAggregationVariableKey(
+                  row.unitName,
+                  row.variableId
+                );
+                if (!unitNamesByVariable.has(variableKey)) {
+                  return;
+                }
+                unitNamesByVariable.get(variableKey)?.add(row.unitName);
+              });
+            }
+
             for (const codedResponse of codedResponses) {
               const update = completedUpdates.find(u => u.responseId === codedResponse.id);
               if (!update) continue;
@@ -281,18 +375,28 @@ export class CodingResultsService {
 
               if (!unitName || !variableId) continue;
 
+              const unitNames = Array.from(
+                unitNamesByVariable.get(getAggregationVariableKey(
+                  unitName,
+                  variableId
+                )) || [unitName]
+              );
+
               // Find all sibling responses for the same workspace + unit + variable.
               // Existing v2 codings are either reported as skipped or overwritten only when explicitly requested.
-              const candidates = await this.responseRepository
+              const candidateQuery = this.responseRepository
                 .createQueryBuilder('response')
                 .leftJoinAndSelect('response.unit', 'unit')
                 .leftJoin('unit.booklet', 'booklet')
+                .leftJoin('booklet.bookletinfo', 'bookletinfo')
                 .leftJoin('booklet.person', 'person')
                 .select([
                   'response.id',
                   'response.value',
                   'response.variableid',
                   'response.status_v2',
+                  'response.code_v2',
+                  'response.score_v2',
                   'unit.id',
                   'unit.name'
                 ])
@@ -304,9 +408,12 @@ export class CodingResultsService {
                     statusStringToNumber('INTENDED_INCOMPLETE')
                   ]
                 })
-                .andWhere('unit.name = :unitName', { unitName })
-                .andWhere('response.variableid = :variableId', { variableId })
-                .getMany();
+                .andWhere('unit.name IN (:...unitNames)', { unitNames })
+                .andWhere('response.variableid = :variableId', { variableId });
+              applyResolvedExclusionsToQuery(candidateQuery, exclusions, {
+                parameterPrefix: 'aggregationSiblingCandidates'
+              });
+              const candidates = await candidateQuery.getMany();
 
               const groups = buildAggregationGroups(
                 candidates.map(candidate => ({
@@ -314,7 +421,9 @@ export class CodingResultsService {
                   unitName: candidate.unit?.name || unitName,
                   variableId: candidate.variableid,
                   value: candidate.value,
-                  statusV2: candidate.status_v2
+                  statusV2: candidate.status_v2,
+                  codeV2: candidate.code_v2,
+                  scoreV2: candidate.score_v2
                 })),
                 matchingFlags,
                 aggregationThreshold,
@@ -331,7 +440,11 @@ export class CodingResultsService {
               for (const candidate of aggregationGroup.responses) {
                 if (candidate.responseId === codedResponse.id || alreadyUpdatedIds.has(candidate.responseId)) continue;
 
-                if (candidate.statusV2 !== null && candidate.statusV2 !== undefined) {
+                if (this.hasExistingV2Value({
+                  status: candidate.statusV2 ?? null,
+                  code: candidate.codeV2 ?? null,
+                  score: candidate.scoreV2 ?? null
+                })) {
                   if (!overwriteExisting) {
                     skippedAlreadyCodedCount += 1;
                     alreadyUpdatedIds.add(candidate.responseId);
@@ -344,7 +457,8 @@ export class CodingResultsService {
                   responseId: candidate.responseId,
                   code_v2: update.code_v2,
                   score_v2: update.score_v2,
-                  status_v2: update.status_v2
+                  status_v2: update.status_v2,
+                  protectExistingV2: !overwriteExisting
                 });
                 alreadyUpdatedIds.add(candidate.responseId);
               }
@@ -424,28 +538,48 @@ export class CodingResultsService {
 
         const batchSize = 500;
         let totalUpdated = 0;
+        const updatedResponseIds: number[] = [];
 
         for (let i = 0; i < responsesToUpdate.length; i += batchSize) {
           const batch = responsesToUpdate.slice(i, i + batchSize);
 
-          const updatePromises = batch.map(responseUpdate => queryRunner.manager.update(
-            ResponseEntity,
-            responseUpdate.responseId,
-            {
-              code_v2: responseUpdate.code_v2,
-              score_v2: responseUpdate.score_v2,
-              status_v2: responseUpdate.status_v2
-            }
-          )
-          );
+          const updateResults = await Promise.all(batch.map(async responseUpdate => ({
+            responseUpdate,
+            result: await queryRunner.manager.update(
+              ResponseEntity,
+              responseUpdate.protectExistingV2 ?
+                {
+                  id: responseUpdate.responseId,
+                  status_v2: IsNull(),
+                  code_v2: IsNull(),
+                  score_v2: IsNull()
+                } :
+                responseUpdate.responseId,
+              {
+                code_v2: responseUpdate.code_v2,
+                score_v2: responseUpdate.score_v2,
+                status_v2: responseUpdate.status_v2,
+                autocoder_invalidated_version: null
+              }
+            )
+          })));
 
-          await Promise.all(updatePromises);
-          totalUpdated += batch.length;
+          const protectedUpdatesSkipped = updateResults.filter(({ responseUpdate, result }) => (
+            responseUpdate.protectExistingV2 && result.affected === 0
+          )).length;
+          skippedAlreadyCodedCount += protectedUpdatesSkipped;
 
-          this.logger.log(`Updated batch of ${batch.length} responses (${totalUpdated}/${responsesToUpdate.length})`);
+          const updatedBatch = updateResults.filter(({ responseUpdate, result }) => (
+            !responseUpdate.protectExistingV2 || result.affected !== 0
+          ));
+          updatedResponseIds.push(...updatedBatch.map(({ responseUpdate }) => (
+            responseUpdate.responseId
+          )));
+          totalUpdated += updatedBatch.length;
+
+          this.logger.log(`Updated batch of ${updatedBatch.length} responses (${totalUpdated}/${responsesToUpdate.length})`);
         }
 
-        const updatedResponseIds = responsesToUpdate.map(response => response.responseId);
         const freshnessResponseIds = skippedReviewCount === 0 ?
           Array.from(new Set([
             ...directResponseIds,
@@ -476,13 +610,13 @@ export class CodingResultsService {
 
         return {
           success: true,
-          updatedResponsesCount: responsesToUpdate.length,
+          updatedResponsesCount: totalUpdated,
           skippedReviewCount,
           skippedAlreadyCodedCount,
           overwrittenExistingCount,
           messageKey: 'coding-results.apply.success.bulk',
           messageParams: {
-            count: responsesToUpdate.length,
+            count: totalUpdated,
             skipped: skippedReviewCount,
             skippedAlreadyCoded: skippedAlreadyCodedCount,
             overwrittenExisting: overwrittenExistingCount
@@ -675,11 +809,59 @@ export class CodingResultsService {
     this.logger.log(`Applying empty response coding for workspace ${workspaceId}`);
 
     try {
+      const result = await withWorkspaceTestResultsMutationLock(
+        this.responseRepository.manager.connection,
+        workspaceId,
+        queryRunner => this.applyEmptyResponseCodingLocked(
+          workspaceId,
+          queryRunner
+        )
+      );
+
+      if (result.updatedCount > 0) {
+        await this.invalidateIncompleteVariablesCache(workspaceId);
+        await this.codingStatisticsService.invalidateCache(workspaceId);
+        await this.codingAnalysisService.invalidateCache(workspaceId);
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Error applying empty response coding: ${error.message}`,
+        error.stack
+      );
+      return {
+        success: false,
+        updatedCount: 0,
+        message: `Fehler: ${error.message}`
+      };
+    }
+  }
+
+  private async applyEmptyResponseCodingLocked(
+    workspaceId: number,
+    queryRunner: QueryRunner
+  ): Promise<{
+      success: boolean;
+      updatedCount: number;
+      message: string;
+    }> {
+    await queryRunner.startTransaction('READ COMMITTED');
+
+    try {
+      const responseRepository =
+        queryRunner.manager.getRepository(ResponseEntity);
+      const emptyResponseContext =
+        await this.emptyResponseSelectionService.createContext(
+          workspaceId,
+          queryRunner.manager
+        );
+
       // Find all empty responses that don't have v2 coding yet
       // Only target unit responses (status_v1 = CODING_INCOMPLETE)
-      const emptyResponses = await this.responseRepository
+      const emptyResponseCandidateQuery = responseRepository
         .createQueryBuilder('response')
-        .leftJoin('response.unit', 'unit')
+        .leftJoinAndSelect('response.unit', 'unit')
         .leftJoin('unit.booklet', 'booklet')
         .leftJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
@@ -690,15 +872,46 @@ export class CodingResultsService {
             statusStringToNumber('INTENDED_INCOMPLETE')
           ]
         })
-        .andWhere('(response.value IS NULL OR TRIM(BOTH :whitespaces FROM response.value) = :emptyString OR response.value = :emptyArrayString)', {
-          whitespaces: ' \r\n\t',
-          emptyString: '',
-          emptyArrayString: '[]'
-        })
-        .andWhere('response.status_v2 IS NULL')
-        .getMany();
+        .andWhere('response.status_v2 IS NULL');
+
+      emptyResponseCandidateQuery.andWhere(new Brackets(candidateQuery => {
+        candidateQuery.where(
+          '(response.value IS NULL OR TRIM(BOTH :whitespaces FROM response.value) = :emptyString OR response.value = :emptyArrayString)',
+          {
+            whitespaces: ' \r\n\t',
+            emptyString: '',
+            emptyArrayString: '[]'
+          }
+        );
+
+        let derivedUnitIndex = 0;
+        emptyResponseContext.derivedVariableMap.forEach((variableIds, unitName) => {
+          if (variableIds.size === 0) {
+            return;
+          }
+
+          candidateQuery.orWhere(
+            `(UPPER(unit.name) = :derivedUnit${derivedUnitIndex} AND response.variableid IN (:...derivedVariables${derivedUnitIndex}))`,
+            {
+              [`derivedUnit${derivedUnitIndex}`]: unitName.toUpperCase(),
+              [`derivedVariables${derivedUnitIndex}`]: Array.from(variableIds)
+            }
+          );
+          derivedUnitIndex += 1;
+        });
+      }));
+
+      const emptyResponseCandidates =
+        await emptyResponseCandidateQuery.getMany();
+      const emptyResponses =
+        await this.emptyResponseSelectionService.filterEffectivelyEmptyResponses(
+          emptyResponseCandidates,
+          emptyResponseContext,
+          queryRunner.manager
+        );
 
       if (emptyResponses.length === 0) {
+        await queryRunner.commitTransaction();
         return {
           success: true,
           updatedCount: 0,
@@ -710,73 +923,55 @@ export class CodingResultsService {
       const emptyResponseMissing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
         workspaceId,
         null,
-        'mir'
+        'mir',
+        queryRunner.manager
       );
-      const queryRunner = this.responseRepository.manager.connection.createQueryRunner();
-      await queryRunner.connect();
-      await queryRunner.startTransaction('READ COMMITTED');
 
-      try {
-        const batchSize = 500;
-        let totalUpdated = 0;
+      const batchSize = 500;
+      let totalUpdated = 0;
 
-        for (let i = 0; i < emptyResponses.length; i += batchSize) {
-          const batch = emptyResponses.slice(i, i + batchSize);
+      for (let i = 0; i < emptyResponses.length; i += batchSize) {
+        const batch = emptyResponses.slice(i, i + batchSize);
 
-          const updatePromises = batch.map(response => queryRunner.manager.update(
-            ResponseEntity,
-            response.id,
-            {
-              code_v2: emptyResponseMissing.code,
-              score_v2: emptyResponseMissing.score,
-              status_v2: statusStringToNumber('CODING_COMPLETE') // 5
-            }
-          )
-          );
+        const updatePromises = batch.map(response => queryRunner.manager.update(
+          ResponseEntity,
+          response.id,
+          {
+            code_v2: emptyResponseMissing.code,
+            score_v2: emptyResponseMissing.score,
+            status_v2: statusStringToNumber('CODING_COMPLETE'), // 5
+            autocoder_invalidated_version: null
+          }
+        ));
 
-          await Promise.all(updatePromises);
-          totalUpdated += batch.length;
+        await Promise.all(updatePromises);
+        totalUpdated += batch.length;
 
-          this.logger.log(
-            `Updated batch of ${batch.length} empty responses (${totalUpdated}/${emptyResponses.length})`
-          );
-        }
-
-        await queryRunner.commitTransaction();
-
-        await this.invalidateIncompleteVariablesCache(workspaceId);
-        await this.codingStatisticsService.invalidateCache(workspaceId);
-        await this.codingAnalysisService.invalidateCache(workspaceId);
-
-        this.logger.log(`Successfully applied coding to ${totalUpdated} empty responses`);
-
-        return {
-          success: true,
-          updatedCount: totalUpdated,
-          message: `${totalUpdated} leere Antworten erfolgreich kodiert`
-        };
-      } catch (error) {
-        await queryRunner.rollbackTransaction();
-        this.logger.error(
-          `Error updating empty responses: ${error.message}`,
-          error.stack
+        this.logger.log(
+          `Updated batch of ${batch.length} empty responses (${totalUpdated}/${emptyResponses.length})`
         );
-        throw new Error(
-          `Fehler beim Kodieren der leeren Antworten: ${error.message}`
-        );
-      } finally {
-        await queryRunner.release();
       }
+
+      await queryRunner.commitTransaction();
+
+      this.logger.log(`Successfully applied coding to ${totalUpdated} empty responses`);
+
+      return {
+        success: true,
+        updatedCount: totalUpdated,
+        message: `${totalUpdated} leere Antworten erfolgreich kodiert`
+      };
     } catch (error) {
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
       this.logger.error(
-        `Error applying empty response coding: ${error.message}`,
+        `Error updating empty responses: ${error.message}`,
         error.stack
       );
-      return {
-        success: false,
-        updatedCount: 0,
-        message: `Fehler: ${error.message}`
-      };
+      throw new Error(
+        `Fehler beim Kodieren der leeren Antworten: ${error.message}`
+      );
     }
   }
 }

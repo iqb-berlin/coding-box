@@ -71,7 +71,8 @@ describe('CodingManagementComponent', () => {
       downloadCodingResults: jest.fn().mockReturnValue(Promise.resolve()),
       hasGeogebraResponses: jest.fn().mockReturnValue(of(false)),
       downloadCodingList: jest.fn(),
-      checkActiveResetJob: jest.fn()
+      checkActiveResetJob: jest.fn(),
+      cancelViewBoundStatisticsFetches: jest.fn()
     };
 
     mockUiService = {
@@ -101,7 +102,8 @@ describe('CodingManagementComponent', () => {
     mockWorkspaceSettingsService = {
       getAutoFetchCodingStatistics: jest.fn().mockReturnValue(of(false)),
       getEnableRegexSearch: jest.fn().mockReturnValue(of(false)),
-      getAutoRefreshManualCodingJobs: jest.fn().mockReturnValue(of(true))
+      getAutoRefreshManualCodingJobs: jest.fn().mockReturnValue(of(true)),
+      getEvaluationMode: jest.fn().mockReturnValue(of(false))
     };
     autoCodingCompletedSubject = new Subject<{ jobId?: string }>();
     testResultsChangedSubject = new Subject<TestResultsChangedEvent>();
@@ -123,6 +125,8 @@ describe('CodingManagementComponent', () => {
         currentRevision: 0,
         items: []
       })),
+      getCachedCodingStatusOverview: jest.fn().mockReturnValue(null),
+      getCachedAutocodingReadiness: jest.fn().mockReturnValue(of(null)),
       getAutocodingReadiness: jest.fn().mockReturnValue(of({
         workspaceId: 1,
         autoCoderRun: 1,
@@ -270,7 +274,8 @@ describe('CodingManagementComponent', () => {
           'title-not-started': 'Kodierung noch nicht gestartet',
           'title-manual-coding-open': 'Manuelle Kodierung abschließen',
           'title-not-checked': 'Kodierstand nicht automatisch geprüft',
-          'manual-refresh-required': 'Die automatische Aktualisierung ist deaktiviert. Aktualisieren Sie den Status bei Bedarf manuell.',
+          checking: 'Zustand wird geprüft...',
+          'manual-refresh-required': 'Der vollständige Kodierstand wurde noch nicht geprüft. Aktualisieren Sie den Status bei Bedarf manuell.',
           summary: '{{rawResponsesTotal}} Rohantworten vorhanden, {{rawResponsesWithRelevantStatus}} mit relevantem Antwortstatus, aber {{codeableResponses}} kodierbare Antworten.',
           'details-result-units': '{{count}} Ergebnis-Units',
           'details-unit-files': '{{count}} passende Unit-Dateien',
@@ -313,6 +318,10 @@ describe('CodingManagementComponent', () => {
       expect(mockWorkspaceSettingsService.getAutoFetchCodingStatistics).toHaveBeenCalledWith(1);
     });
 
+    it('should check evaluation mode setting on init', () => {
+      expect(mockWorkspaceSettingsService.getEvaluationMode).toHaveBeenCalledWith(1);
+    });
+
     it('should check regex search setting on init', () => {
       expect(mockWorkspaceSettingsService.getEnableRegexSearch).toHaveBeenCalledWith(1);
     });
@@ -321,9 +330,208 @@ describe('CodingManagementComponent', () => {
       expect(mockWorkspaceSettingsService.getAutoRefreshManualCodingJobs).toHaveBeenCalledWith(1);
     });
 
-    it('should load autocoding readiness for the first autocoder run', () => {
+    it('should cancel view-bound statistics fetches on destroy', () => {
+      component.ngOnDestroy();
+
+      expect(mockCodingManagementService.cancelViewBoundStatisticsFetches).toHaveBeenCalledWith(1);
+    });
+
+    it('should only load lightweight coding freshness on init when auto-refresh is enabled', () => {
+      expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledWith(1);
+      expect(mockTestPersonCodingService.getCachedAutocodingReadiness).toHaveBeenCalledWith(1, 1);
+      expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+    });
+
+    it('should not show full-check loading copy during the lightweight initial refresh', () => {
+      fixture.destroy();
+      const codingFreshnessSubject = new Subject<{
+        workspaceId: number;
+        currentRevision: number;
+        items: never[];
+      }>();
+      (mockTestPersonCodingService.getCodingFreshness as jest.Mock)
+        .mockReturnValueOnce(codingFreshnessSubject.asObservable());
+
+      const isolatedFixture = TestBed.createComponent(CodingManagementComponent);
+      const isolatedComponent = isolatedFixture.componentInstance;
+      isolatedFixture.detectChanges();
+
+      const text = isolatedFixture.nativeElement.textContent;
+      expect(isolatedComponent.isLoadingCodingFreshness).toBe(true);
+      expect(isolatedComponent.isFullCodingStatusCheckLoading).toBe(false);
+      expect(text).toContain('Der vollständige Kodierstand wurde noch nicht geprüft');
+      expect(text).not.toContain('Zustand wird geprüft');
+      expect(isolatedFixture.nativeElement.querySelector('.coding-freshness-state-spinner')).toBeNull();
+
+      codingFreshnessSubject.next({
+        workspaceId: 1,
+        currentRevision: 0,
+        items: []
+      });
+      codingFreshnessSubject.complete();
+      isolatedFixture.destroy();
+    });
+
+    it('should restore a complete cached coding status overview on init', () => {
+      fixture.destroy();
+      (mockTestPersonCodingService.getCachedCodingStatusOverview as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getCachedAutocodingReadiness as jest.Mock).mockClear();
+      (mockWorkspaceSettingsService.getAutoRefreshManualCodingJobs as jest.Mock)
+        .mockReturnValueOnce(of(false));
+      (mockTestPersonCodingService.getCachedCodingStatusOverview as jest.Mock)
+        .mockReturnValueOnce({
+          codingFreshness: {
+            workspaceId: 1,
+            currentRevision: 0,
+            items: []
+          },
+          autocodingReadiness: {
+            workspaceId: 1,
+            autoCoderRun: 1,
+            readiness: 'READY',
+            blockers: [],
+            rawResponsesTotal: 10,
+            rawResponsesWithRelevantStatus: 10,
+            resultUnitsTotal: 2,
+            resultUnitKeysTotal: 2,
+            matchedUnitFiles: 2,
+            missingUnitFiles: [],
+            matchedCodingSchemes: 1,
+            missingCodingSchemes: [],
+            invalidCodingSchemes: [],
+            validVariablePairs: 1,
+            validResponses: 10,
+            codeableResponses: 10,
+            invalidVariableSamples: [],
+            fromCache: true
+          },
+          appliedResultsOverview: {
+            totalIncompleteResponses: 0,
+            appliedResponses: 0,
+            remainingResponses: 0,
+            completionPercentage: 100,
+            rawTotalIncompleteResponses: 0,
+            rawAppliedResponses: 0,
+            rawCompletionPercentage: 100,
+            aggregationActive: false,
+            aggregationThreshold: null,
+            aggregatedDuplicateCases: 0
+          }
+        });
+
+      const isolatedFixture = TestBed.createComponent(CodingManagementComponent);
+      const isolatedComponent = isolatedFixture.componentInstance;
+      isolatedFixture.detectChanges();
+
+      expect(isolatedComponent.autoRefreshManualCodingJobs).toBe(false);
+      expect(mockTestPersonCodingService.getCachedCodingStatusOverview).toHaveBeenCalledWith(1, 1);
+      expect(mockTestPersonCodingService.getCachedAutocodingReadiness).not.toHaveBeenCalled();
+      expect(isolatedComponent.autocodingReadiness?.readiness).toBe('READY');
+      expect(isolatedComponent.hasLoadedFullCodingStatusOverview).toBe(true);
+      expect(isolatedComponent.isCodingStatusOverviewPendingManualRefresh).toBe(false);
+
+      isolatedFixture.destroy();
+    });
+
+    it('should keep the full status pending when only cached readiness is available', () => {
+      fixture.destroy();
+      (mockTestPersonCodingService.getCachedAutocodingReadiness as jest.Mock)
+        .mockReturnValueOnce(of({
+          workspaceId: 1,
+          autoCoderRun: 1,
+          readiness: 'READY',
+          blockers: [],
+          rawResponsesTotal: 10,
+          rawResponsesWithRelevantStatus: 10,
+          resultUnitsTotal: 2,
+          resultUnitKeysTotal: 2,
+          matchedUnitFiles: 2,
+          missingUnitFiles: [],
+          matchedCodingSchemes: 1,
+          missingCodingSchemes: [],
+          invalidCodingSchemes: [],
+          validVariablePairs: 1,
+          validResponses: 10,
+          codeableResponses: 10,
+          invalidVariableSamples: [],
+          fromCache: true
+        }));
+
+      const isolatedFixture = TestBed.createComponent(CodingManagementComponent);
+      const isolatedComponent = isolatedFixture.componentInstance;
+      isolatedFixture.detectChanges();
+
+      expect(mockTestPersonCodingService.getCachedCodingStatusOverview).toHaveBeenCalledWith(1, 1);
+      expect(mockTestPersonCodingService.getCachedAutocodingReadiness).toHaveBeenCalledWith(1, 1);
+      expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+      expect(isolatedComponent.autocodingReadiness?.readiness).toBe('READY');
+      expect(isolatedComponent.shouldShowManualCodingStatusRefresh()).toBe(true);
+      expect(isolatedComponent.isCodingStatusOverviewPendingManualRefresh).toBe(true);
+
+      isolatedFixture.destroy();
+    });
+
+    it('should keep the manual full status refresh available after the initial light load', () => {
+      expect(component.shouldShowManualCodingStatusRefresh()).toBe(true);
+      expect(component.isCodingStatusOverviewPendingManualRefresh).toBe(true);
+
+      component.refreshCodingStatusOverview();
+
+      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, true);
+      expect(component.shouldShowManualCodingStatusRefresh()).toBe(false);
+      expect(component.isCodingStatusOverviewPendingManualRefresh).toBe(false);
+    });
+
+    it('should load manual applied results on init when second auto-coding freshness is open', () => {
+      fixture.destroy();
+      (mockTestPersonCodingService.getCodingFreshness as jest.Mock)
+        .mockReturnValueOnce(of({
+          workspaceId: 1,
+          currentRevision: 2,
+          items: [{
+            version: 'v3',
+            state: 'PENDING',
+            unitCount: 12,
+            affectedResponseCount: 34
+          }]
+        }));
+      (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getCodingFreshnessScope as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+
+      const isolatedFixture = TestBed.createComponent(CodingManagementComponent);
+      isolatedFixture.detectChanges();
+
+      expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledWith(1);
+      expect(mockTestPersonCodingService.getCodingFreshnessScope).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+
+      isolatedFixture.destroy();
+    });
+
+    it('should defer autocoding readiness until a forced coding status refresh', () => {
+      expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+
+      component.refreshCodingStatusOverview();
+
       expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledTimes(1);
-      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, false);
+      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, true);
+    });
+
+    it('should show full-check loading copy during a manual status refresh', () => {
+      const autocodingReadinessSubject = new Subject<never>();
+      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock)
+        .mockReturnValueOnce(autocodingReadinessSubject.asObservable());
+
+      component.refreshCodingStatusOverview();
+      fixture.detectChanges();
+
+      expect(component.isFullCodingStatusCheckLoading).toBe(true);
+      expect(fixture.nativeElement.textContent).toContain('Zustand wird geprüft');
+      expect(fixture.nativeElement.querySelector('.coding-freshness-state-spinner')).not.toBeNull();
+
+      autocodingReadinessSubject.complete();
     });
 
     it('should refresh coding status overview when requested by query param', () => {
@@ -368,28 +576,34 @@ describe('CodingManagementComponent', () => {
     });
 
     it('should defer automatic coding status refresh while a guarded background job is running', () => {
-      (mockCodingBackgroundJobsService.isStatusCheckGuardActive as jest.Mock)
-        .mockReturnValue(true);
-      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
-      (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
-      (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
-      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+      jest.useFakeTimers();
+      try {
+        (mockCodingBackgroundJobsService.isStatusCheckGuardActive as jest.Mock)
+          .mockReturnValue(true);
+        (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+        (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
+        (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
+        (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
 
-      autoCodingCompletedSubject.next({});
+        autoCodingCompletedSubject.next({});
 
-      expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
-      expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
-      expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
-      expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+        expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
+        expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
+        expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
+        expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
 
-      (mockCodingBackgroundJobsService.isStatusCheckGuardActive as jest.Mock)
-        .mockReturnValue(false);
-      statusGuardClearedSubject.next({ workspaceId: 1 });
+        (mockCodingBackgroundJobsService.isStatusCheckGuardActive as jest.Mock)
+          .mockReturnValue(false);
+        statusGuardClearedSubject.next({ workspaceId: 1 });
+        jest.advanceTimersByTime(250);
 
-      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledTimes(1);
-      expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledWith(1);
-      expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledWith(1);
-      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, false);
+        expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledTimes(1);
+        expect(mockTestPersonCodingService.getCodingFreshness).toHaveBeenCalledWith(1);
+        expect(mockTestPersonCodingService.getAppliedResultsOverview).toHaveBeenCalledWith(1);
+        expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('should not refresh twice when freshness completion clears a pending guarded refresh', () => {
@@ -481,7 +695,7 @@ describe('CodingManagementComponent', () => {
       expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledTimes(1);
     });
 
-    it('should not auto-fetch coding overview statistics when global auto-refresh is disabled', () => {
+    it('should still auto-fetch coding statistics when status auto-refresh is disabled', () => {
       fixture.destroy();
       (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
       (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
@@ -497,10 +711,61 @@ describe('CodingManagementComponent', () => {
       isolatedFixture.detectChanges();
 
       expect(isolatedComponent.autoRefreshManualCodingJobs).toBe(false);
-      expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
+      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v1');
       expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+
+      isolatedFixture.destroy();
+    });
+
+    it('should suppress automatic coding status loads when evaluation mode is active', () => {
+      fixture.destroy();
+      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getCachedAutocodingReadiness as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
+      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+      (mockWorkspaceSettingsService.getEvaluationMode as jest.Mock)
+        .mockReturnValueOnce(of(true));
+      (mockWorkspaceSettingsService.getAutoFetchCodingStatistics as jest.Mock)
+        .mockReturnValueOnce(of(true));
+      (mockWorkspaceSettingsService.getAutoRefreshManualCodingJobs as jest.Mock)
+        .mockReturnValueOnce(of(true));
+
+      const isolatedFixture = TestBed.createComponent(CodingManagementComponent);
+      const isolatedComponent = isolatedFixture.componentInstance;
+      isolatedFixture.detectChanges();
+
+      expect(isolatedComponent.evaluationMode).toBe(true);
+      expect(isolatedComponent.autoRefreshManualCodingJobs).toBe(false);
+      expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getCachedAutocodingReadiness).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+
+      isolatedFixture.destroy();
+    });
+
+    it('should suppress pending statistics auto-fetch when evaluation mode is active', () => {
+      fixture.destroy();
+      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+      (mockTestPersonCodingService.consumePendingStatisticsVersion as jest.Mock)
+        .mockReturnValueOnce('v2');
+      (mockWorkspaceSettingsService.getEvaluationMode as jest.Mock)
+        .mockReturnValueOnce(of(true));
+      (mockWorkspaceSettingsService.getAutoFetchCodingStatistics as jest.Mock)
+        .mockReturnValueOnce(of(false));
+      (mockWorkspaceSettingsService.getAutoRefreshManualCodingJobs as jest.Mock)
+        .mockReturnValueOnce(of(false));
+
+      const isolatedFixture = TestBed.createComponent(CodingManagementComponent);
+      const isolatedComponent = isolatedFixture.componentInstance;
+      isolatedFixture.detectChanges();
+
+      expect(isolatedComponent.selectedStatisticsVersion).toBe('v2');
+      expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
 
       isolatedFixture.destroy();
     });
@@ -536,7 +801,7 @@ describe('CodingManagementComponent', () => {
 
       manualRefreshSetting$.next(false);
 
-      expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
+      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v2');
       expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
@@ -602,7 +867,7 @@ describe('CodingManagementComponent', () => {
   describe('Coding Freshness', () => {
     it('should show pending manual status refresh as an attention state', () => {
       component.autoRefreshManualCodingJobs = false;
-      component.hasRequestedCodingStatusOverview = false;
+      component.hasLoadedFullCodingStatusOverview = false;
 
       expect(component.isCodingStatusOverviewPendingManualRefresh).toBe(true);
       expect(component.hasCodingFreshnessAttention).toBe(true);
@@ -655,8 +920,11 @@ describe('CodingManagementComponent', () => {
       );
 
       fixture.detectChanges();
-      const actionPanel = fixture.nativeElement.querySelector('.coding-freshness-actions') as HTMLElement | null;
-      const manualActionButton = Array.from(actionPanel?.querySelectorAll('button') || [])
+      const manualActionButton = Array.from(
+        fixture.nativeElement.querySelectorAll(
+          '.coding-freshness-actions button'
+        ) as NodeListOf<HTMLButtonElement>
+      )
         .find(button => button.textContent?.includes('Manuelle Kodierung öffnen')) as HTMLButtonElement | undefined;
       expect(manualActionButton).toBeTruthy();
 
@@ -1175,13 +1443,22 @@ describe('CodingManagementComponent', () => {
     });
 
     it('should switch to changed statistics version when test results change', () => {
-      (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
+      jest.useFakeTimers();
+      try {
+        (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
 
-      testResultsChangedSubject.next({ workspaceId: 1, statisticsVersion: 'v2' });
+        testResultsChangedSubject.next({ workspaceId: 1, statisticsVersion: 'v2' });
 
-      expect(component.selectedStatisticsVersion).toBe('v2');
-      expect(component.filterParams.version).toBe('v2');
-      expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v2');
+        expect(component.selectedStatisticsVersion).toBe('v2');
+        expect(component.filterParams.version).toBe('v2');
+        expect(mockCodingManagementService.fetchCodingStatistics).not.toHaveBeenCalled();
+
+        jest.advanceTimersByTime(250);
+
+        expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v2');
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('should ignore changed test results from a different workspace', () => {
@@ -1196,10 +1473,13 @@ describe('CodingManagementComponent', () => {
 
     it('should not refresh coding status after a reset completes when auto-refresh is disabled', () => {
       component.autoRefreshManualCodingJobs = false;
+      component.hasLoadedFullCodingStatusOverview = true;
       (mockCodingManagementService.fetchCodingStatistics as jest.Mock).mockClear();
       (mockTestPersonCodingService.getCodingFreshness as jest.Mock).mockClear();
       (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockClear();
       (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock).mockClear();
+      (mockTestPersonCodingService.invalidateCodingStatusCache as jest.Mock)
+        .mockClear();
 
       resetProgressSubject.next(50);
       resetProgressSubject.next(null);
@@ -1208,6 +1488,9 @@ describe('CodingManagementComponent', () => {
       expect(mockTestPersonCodingService.getCodingFreshness).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getAppliedResultsOverview).not.toHaveBeenCalled();
       expect(mockTestPersonCodingService.getAutocodingReadiness).not.toHaveBeenCalled();
+      expect(mockTestPersonCodingService.invalidateCodingStatusCache)
+        .toHaveBeenCalledWith(1);
+      expect(component.hasLoadedFullCodingStatusOverview).toBe(false);
     });
 
     it('should consume a pending statistics version when opened after results changed', () => {

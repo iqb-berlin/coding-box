@@ -1,3 +1,10 @@
+import {
+  DoubleCodedResolutionDecisionDto,
+  DoubleCodedResolutionResponseDto,
+  DoubleCodedReviewItemDto,
+  DoubleCodedReviewResponseDto
+} from '../../../../../../../api-dto/coding/double-coded-review.dto';
+
 export interface CohensKappaSummary {
   coderPairs: Array<{
     coder1Id: number;
@@ -19,54 +26,10 @@ export interface CohensKappaSummary {
   };
 }
 
-export interface DoubleCodedReviewItem {
-  responseId: number;
-  unitName: string;
-  variableId: string;
-  personLogin: string;
-  personCode: string;
-  bookletName: string;
-  givenAnswer: string;
-  isResolved: boolean;
-  appliedCode: number | null;
-  appliedScore: number | null;
-  appliedComment: string | null;
-  coderResults: Array<{
-    coderId: number;
-    coderName: string;
-    jobId: number;
-    jobName: string;
-    jobDefinitionId: number | null;
-    trainingId: number | null;
-    trainingLabel: string | null;
-    code: number | null;
-    codingIssueOption: number | null;
-    score: number | null;
-    notes: string | null;
-    supervisorComment: string | null;
-    codedAt: Date;
-  }>;
-}
+export type DoubleCodedReviewItem = DoubleCodedReviewItemDto;
 
-export interface DoubleCodedReviewResponse {
-  data: DoubleCodedReviewItem[];
-  total: number;
-  page: number;
-  limit: number;
-}
+export type DoubleCodedReviewResponse = DoubleCodedReviewResponseDto;
 
-export interface DoubleCodedResolutionDecision {
-  responseId: number;
-  selectedJobId?: number | null;
-  code?: number | null;
-  score?: number | null;
-  resolutionComment?: string;
-}
+export type DoubleCodedResolutionDecision = DoubleCodedResolutionDecisionDto;
 
-export interface DoubleCodedResolutionResponse {
-  success: boolean;
-  appliedCount: number;
-  failedCount: number;
-  skippedCount: number;
-  message: string;
-}
+export type DoubleCodedResolutionResponse = DoubleCodedResolutionResponseDto;

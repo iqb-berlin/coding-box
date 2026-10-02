@@ -22,6 +22,8 @@ describe('ReplayStatisticsService', () => {
       await service.storeReplayStatistics({
         workspaceId: 1,
         unitId: 'UNIT-1',
+        replayAttemptId: 'attempt-1',
+        requestId: 'request-1',
         durationMilliseconds: 1234,
         clientTimings: {
           routeToVisibleMs: 100,
@@ -40,6 +42,8 @@ describe('ReplayStatisticsService', () => {
       expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({
         workspace_id: 1,
         unit_id: 'UNIT-1',
+        replay_attempt_id: 'attempt-1',
+        request_id: 'request-1',
         replay_source: 'internal',
         duration_milliseconds: 1234,
         client_timings: {
@@ -51,6 +55,47 @@ describe('ReplayStatisticsService', () => {
           assetsTotalMs: 20,
           responseFindUnitResponseMs: 4.56,
           payloadTotalMs: null
+        }
+      }));
+    });
+
+    it('should store coding session timings', async () => {
+      await service.storeReplayStatistics({
+        workspaceId: 1,
+        unitId: 'UNIT-1',
+        durationMilliseconds: 1234,
+        clientTimings: {
+          codingSessionMs: 100.123,
+          routeToCodingSessionRequestMs: 12.345,
+          codingSessionResponseToPayloadRequestMs: 23.456
+        },
+        serverTimings: {
+          codingSessionLoadJobMs: 1,
+          codingSessionLoadContextMs: 2,
+          codingSessionReviewOverlaysMs: 3,
+          codingSessionBuildUnitsMs: 4,
+          codingSessionBuildProgressMs: 5,
+          codingSessionBuildNotesMs: 6,
+          codingSessionFinalizeResponseMs: 7,
+          codingSessionTotalMs: 28.456
+        }
+      });
+
+      expect(repository.create).toHaveBeenCalledWith(expect.objectContaining({
+        client_timings: {
+          codingSessionMs: 100.12,
+          routeToCodingSessionRequestMs: 12.35,
+          codingSessionResponseToPayloadRequestMs: 23.46
+        },
+        server_timings: {
+          codingSessionLoadJobMs: 1,
+          codingSessionLoadContextMs: 2,
+          codingSessionReviewOverlaysMs: 3,
+          codingSessionBuildUnitsMs: 4,
+          codingSessionBuildProgressMs: 5,
+          codingSessionBuildNotesMs: 6,
+          codingSessionFinalizeResponseMs: 7,
+          codingSessionTotalMs: 28.46
         }
       }));
     });

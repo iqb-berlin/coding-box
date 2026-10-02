@@ -2,6 +2,7 @@ import { Request } from 'express';
 import { randomUUID } from 'crypto';
 
 export const REQUEST_ID_HEADER = 'X-Request-Id';
+export const REPLAY_ATTEMPT_ID_HEADER = 'X-Replay-Attempt-Id';
 
 export interface RequestWithRequestId extends Request {
   requestId?: string;
@@ -29,4 +30,8 @@ export function normalizeRequestId(value: unknown): string | undefined {
   }
 
   return trimmedRequestId;
+}
+
+export function normalizeReplayAttemptId(value: unknown): string | undefined {
+  return normalizeRequestId(value);
 }

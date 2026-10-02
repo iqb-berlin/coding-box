@@ -9,7 +9,7 @@ import {
   provideHttpClient,
   withInterceptors
 } from '@angular/common/http';
-import { TranslateHttpLoader } from '@ngx-translate/http-loader';
+import { Observable } from 'rxjs';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { HashLocationStrategy, LocationStrategy, registerLocaleData } from '@angular/common';
 import localeDeAt from '@angular/common/locales/de-AT';
@@ -21,8 +21,20 @@ import { SERVER_URL } from './injection-tokens';
 
 registerLocaleData(localeDeAt);
 
-export function createTranslateLoader(http: HttpClient): TranslateHttpLoader {
-  return new TranslateHttpLoader(http, './assets/i18n/', '.json');
+const translationCacheBust = Date.now().toString();
+
+export class CacheBustingTranslateLoader implements TranslateLoader {
+  constructor(private http: HttpClient) {}
+
+  getTranslation(lang: string): Observable<Record<string, unknown>> {
+    return this.http.get<Record<string, unknown>>(
+      `./assets/i18n/${lang}.json?v=${translationCacheBust}`
+    );
+  }
+}
+
+export function createTranslateLoader(http: HttpClient): CacheBustingTranslateLoader {
+  return new CacheBustingTranslateLoader(http);
 }
 
 export const appConfig: ApplicationConfig = {

@@ -4,6 +4,7 @@ import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
 import { WorkspaceService } from './workspace.service';
 import { SERVER_URL } from '../../injection-tokens';
 import { AccessRightsMatrixDto } from '../../../../../../api-dto/workspaces/access-rights-matrix-dto';
+import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
 
 describe('WorkspaceService', () => {
   let service: WorkspaceService;
@@ -79,6 +80,34 @@ describe('WorkspaceService', () => {
       });
 
       httpMock.expectNone(`${mockServerUrl}admin/workspace/access-rights-matrix`);
+    });
+  });
+
+  describe('workspace mutations', () => {
+    it('should return the created workspace id', () => {
+      service.addWorkspace({ name: 'New' } as CreateWorkspaceDto).subscribe(res => {
+        expect(res).toBe(17);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace`);
+      req.flush(17);
+    });
+
+    it.each([
+      { method: 'deleteWorkspace', httpMethod: 'DELETE' },
+      { method: 'changeWorkspace', httpMethod: 'PATCH' }
+    ] as const)('should return false when $method fails', ({ method, httpMethod }) => {
+      const request$ = method === 'deleteWorkspace' ?
+        service.deleteWorkspace([3]) :
+        service.changeWorkspace({ id: 3, name: 'Renamed' });
+
+      request$.subscribe(res => {
+        expect(res).toBe(false);
+      });
+
+      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace`);
+      expect(req.request.method).toBe(httpMethod);
+      req.flush('failed', { status: 500, statusText: 'Server Error' });
     });
   });
 });

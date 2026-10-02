@@ -23,6 +23,7 @@ import { WorkspaceCodingResultsController } from '../workspace/workspace-coding-
 import { WorkspaceTestCenterController } from '../workspace/workspace-test-center.controller';
 import { WorkspacePlayerController } from '../workspace/workspace-player.controller';
 import { Setting } from '../../database/entities/setting.entity';
+import { DistributionPreviewLimiterService } from './distribution-preview-limiter.service';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { Setting } from '../../database/entities/setting.entity';
     WorkspaceCodingResultsController,
     WorkspaceTestCenterController,
     WorkspacePlayerController
-  ]
+  ],
+  providers: [DistributionPreviewLimiterService]
 })
 export class WorkspaceCodingAdminModule { }

@@ -1,0 +1,117 @@
+<div class="notifications-admin">
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>{{ 'system-notifications.manage-title' | translate }}</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <form [formGroup]="form" (ngSubmit)="save()">
+        <div class="form-grid">
+          <mat-form-field>
+            <mat-label>{{ 'system-notifications.type' | translate }}</mat-label>
+            <mat-select formControlName="type">
+              @for (type of types; track type) {
+                <mat-option [value]="type">{{ 'system-notifications.types.' + type | translate }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field>
+            <mat-label>{{ 'system-notifications.severity' | translate }}</mat-label>
+            <mat-select formControlName="severity">
+              @for (severity of severities; track severity) {
+                <mat-option [value]="severity">{{ 'system-notifications.severities.' + severity | translate }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field class="wide">
+            <mat-label>{{ 'system-notifications.title' | translate }}</mat-label>
+            <input matInput formControlName="title" maxlength="160">
+          </mat-form-field>
+          <mat-form-field class="wide">
+            <mat-label>{{ 'system-notifications.message' | translate }}</mat-label>
+            <textarea matInput formControlName="message" maxlength="2000" rows="4"></textarea>
+          </mat-form-field>
+          <mat-form-field>
+            <mat-label>{{ 'system-notifications.starts-at' | translate }}</mat-label>
+            <input matInput type="datetime-local" formControlName="startsAt">
+          </mat-form-field>
+          <mat-form-field>
+            <mat-label>{{ 'system-notifications.ends-at' | translate }}</mat-label>
+            <input matInput type="datetime-local" formControlName="endsAt">
+          </mat-form-field>
+          <mat-form-field>
+            <mat-label>{{ 'system-notifications.visible-from' | translate }}</mat-label>
+            <input matInput type="datetime-local" formControlName="visibleFrom">
+          </mat-form-field>
+          <mat-form-field>
+            <mat-label>{{ 'system-notifications.visible-until' | translate }}</mat-label>
+            <input matInput type="datetime-local" formControlName="visibleUntil">
+          </mat-form-field>
+        </div>
+        @if (form.hasError('eventWindow')) {
+          <p class="form-error">{{ 'system-notifications.invalid-event-window' | translate }}</p>
+        }
+        @if (form.hasError('visibilityWindow')) {
+          <p class="form-error">{{ 'system-notifications.invalid-visibility-window' | translate }}</p>
+        }
+        <div class="options">
+          <mat-checkbox formControlName="enabled">{{ 'system-notifications.enabled' | translate }}</mat-checkbox>
+          <mat-checkbox formControlName="dismissible">{{ 'system-notifications.dismissible' | translate }}</mat-checkbox>
+        </div>
+        <h3>{{ 'system-notifications.preview' | translate }}</h3>
+        <coding-box-system-notification-item [notification]="preview()" [preview]="true">
+        </coding-box-system-notification-item>
+        <div class="actions">
+          <button mat-flat-button color="primary" type="submit">
+            {{ (editingId === null ? 'system-notifications.create' : 'system-notifications.update') | translate }}
+          </button>
+          @if (editingId !== null) {
+            <button mat-button type="button" (click)="cancelEdit()">{{ 'cancel' | translate }}</button>
+          }
+        </div>
+      </form>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-content>
+      <table mat-table [dataSource]="notifications">
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>{{ 'system-notifications.status-label' | translate }}</th>
+          <td mat-cell *matCellDef="let notification">
+            {{ 'system-notifications.status.' + status(notification) | translate }}
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="type">
+          <th mat-header-cell *matHeaderCellDef>{{ 'system-notifications.type' | translate }}</th>
+          <td mat-cell *matCellDef="let notification">{{ 'system-notifications.types.' + notification.type | translate }}</td>
+        </ng-container>
+        <ng-container matColumnDef="title">
+          <th mat-header-cell *matHeaderCellDef>{{ 'system-notifications.title' | translate }}</th>
+          <td mat-cell *matCellDef="let notification">{{ notification.title }}</td>
+        </ng-container>
+        <ng-container matColumnDef="window">
+          <th mat-header-cell *matHeaderCellDef>{{ 'system-notifications.window' | translate }}</th>
+          <td mat-cell *matCellDef="let notification">
+            {{ notification.startsAt | date:'short' }} – {{ notification.endsAt | date:'short' }}
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef>{{ 'system-notifications.actions' | translate }}</th>
+          <td mat-cell *matCellDef="let notification">
+            <button mat-icon-button type="button" (click)="edit(notification)" [attr.aria-label]="'system-notifications.edit' | translate">
+              <mat-icon>edit</mat-icon>
+            </button>
+            <button mat-icon-button type="button" (click)="delete(notification)" [attr.aria-label]="'system-notifications.delete' | translate">
+              <mat-icon>delete</mat-icon>
+            </button>
+          </td>
+        </ng-container>
+        <tr mat-header-row *matHeaderRowDef="columns"></tr>
+        <tr mat-row *matRowDef="let row; columns: columns"></tr>
+      </table>
+      @if (!loading && notifications.length === 0) {
+        <p>{{ 'system-notifications.empty' | translate }}</p>
+      }
+    </mat-card-content>
+  </mat-card>
+</div>

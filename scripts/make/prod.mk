@@ -3,6 +3,10 @@ CMD ?= status
 
 include $(CODING_BOX_BASE_DIR)/.env.coding-box
 
+# Docker Compose strips dotenv quotes, while GNU Make preserves them when it
+# includes the same file. Normalize this value before exporting it to Compose.
+EXPORT_WORKER_PGOPTIONS := $(subst ",,$(EXPORT_WORKER_PGOPTIONS))
+
 # exports all variables (especially those of the included .env.coding-box file!)
 .EXPORT_ALL_VARIABLES:
 

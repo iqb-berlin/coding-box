@@ -51,6 +51,11 @@ interface ScopeProbeOptions {
   acceptsFallbackAcpNotFound?: boolean;
 }
 
+interface ContentPoolCapabilities {
+  scopes: unknown;
+  capabilities: unknown;
+}
+
 interface ContentPoolRuntimeSettings extends ContentPoolSettings {
   applicationToken: string;
 }
@@ -295,15 +300,22 @@ export class ContentPoolIntegrationService {
 
     try {
       const apiBaseUrl = this.normalizeApiBaseUrl(baseUrl);
+      const capabilitiesAvailable =
+        await this.validateRequiredScopesFromCapabilities(
+          apiBaseUrl,
+          applicationToken
+        );
       const acps = await this.fetchAcps(
         apiBaseUrl,
         applicationToken
       );
-      await this.validateRequiredCodingBoxScopes(
-        apiBaseUrl,
-        applicationToken,
-        acps
-      );
+      if (!capabilitiesAvailable) {
+        await this.validateRequiredScopesWithLegacyProbe(
+          apiBaseUrl,
+          applicationToken,
+          acps
+        );
+      }
 
       return {
         success: true,
@@ -977,7 +989,68 @@ export class ContentPoolIntegrationService {
     return { 'X-Server-Token': token };
   }
 
-  private async validateRequiredCodingBoxScopes(
+  private async validateRequiredScopesFromCapabilities(
+    apiBaseUrl: string,
+    token: string
+  ): Promise<boolean> {
+    let response: { data?: unknown };
+
+    try {
+      response = await this.httpService.axiosRef.get(
+        `${apiBaseUrl}/server/capabilities`,
+        {
+          headers: this.getApplicationTokenHeaders(token)
+        }
+      );
+    } catch (error) {
+      if (this.getErrorHttpStatus(error) === 404) {
+        return false;
+      }
+
+      return this.throwHttpError(
+        error,
+        'Content-Pool-Capabilities konnten nicht geladen werden.'
+      );
+    }
+
+    const payload = response.data as Partial<ContentPoolCapabilities> | null;
+    if (
+      !payload ||
+      !Array.isArray(payload.scopes) ||
+      !this.isCapabilitiesMap(payload.capabilities)
+    ) {
+      throw new InternalServerErrorException(
+        'Content Pool hat eine ungültige Capabilities-Antwort geliefert.'
+      );
+    }
+
+    const grantedScopes = new Set(
+      payload.scopes.filter((scope): scope is string => typeof scope === 'string')
+    );
+    const missingScopes = this.requiredCodingBoxScopes.filter(
+      scope => !grantedScopes.has(scope) ||
+        payload.capabilities[scope] !== true
+    );
+    if (missingScopes.length > 0) {
+      throw new ForbiddenException(
+        `Content-Pool-Token fehlen benötigte Scopes: ${missingScopes.join(', ')}.`
+      );
+    }
+
+    return true;
+  }
+
+  private isCapabilitiesMap(value: unknown): value is Record<string, boolean> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return false;
+    }
+
+    return this.requiredCodingBoxScopes.every(
+      scope => typeof (value as Record<string, unknown>)[scope] === 'boolean'
+    );
+  }
+
+  private async validateRequiredScopesWithLegacyProbe(
     apiBaseUrl: string,
     token: string,
     acps: ContentPoolAcpSummary[]

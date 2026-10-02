@@ -30,6 +30,7 @@ interface DistributionSummaryRow {
 
 export interface JobDefinitionDistributionSummaryDialogData {
   definitionId: number;
+  definitionLabel?: string;
   snapshot?: JobDefinitionDistributionSnapshot;
   snapshots?: JobDefinitionDistributionSnapshot[];
   coders: DialogCoder[];

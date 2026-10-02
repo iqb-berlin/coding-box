@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import {
   Component, Inject
 } from '@angular/core';
@@ -34,7 +33,6 @@ export interface TransferCodingCasesDialogResult {
   templateUrl: './transfer-coding-cases-dialog.component.html',
   styleUrls: ['./transfer-coding-cases-dialog.component.scss'],
   imports: [
-    CommonModule,
     MatDialogTitle,
     MatDialogContent,
     MatDialogActions,

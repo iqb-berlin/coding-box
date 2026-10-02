@@ -93,4 +93,45 @@ describe('UserBackendService', () => {
       req.flush(true);
     });
   });
+
+  describe('workspace access mutations', () => {
+    it('should save detailed workspace access rights', () => {
+      const users = [{ id: 7, accessLevel: 3, canCode: false }];
+
+      service.saveUsers(3, users).subscribe(res => {
+        expect(res).toBe(true);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/users/access/3`);
+      expect(req.request.method).toBe('PATCH');
+      expect(req.request.body).toEqual(users);
+      req.flush(true);
+    });
+
+    it('should allow removing all workspace assignments', () => {
+      service.setUserWorkspaceAccessRight(7, []).subscribe(res => {
+        expect(res).toBe(true);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/users/7/workspaces/`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual([]);
+      req.flush(true);
+    });
+
+    it.each([
+      { operation: 'saveUsers', url: `${mockServerUrl}admin/users/access/3` },
+      { operation: 'setUserWorkspaceAccessRight', url: `${mockServerUrl}admin/users/7/workspaces/` }
+    ] as const)('should return false when $operation fails', ({ operation, url }) => {
+      const request$ = operation === 'saveUsers' ?
+        service.saveUsers(3, [{ id: 7, accessLevel: 3, canCode: false }]) :
+        service.setUserWorkspaceAccessRight(7, [3]);
+
+      request$.subscribe(res => {
+        expect(res).toBe(false);
+      });
+
+      httpMock.expectOne(url).flush('failed', { status: 500, statusText: 'Server Error' });
+    });
+  });
 });

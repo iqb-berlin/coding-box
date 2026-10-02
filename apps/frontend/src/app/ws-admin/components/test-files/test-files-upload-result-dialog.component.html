@@ -10,8 +10,8 @@
     <span class="sep">|</span>
     Nicht überschrieben: {{ remainingConflictsCount }}
     @if (overwriteSelectedCount && overwriteSelectedCount > 0) {
-    <span class="sep">|</span>
-    Ausgewählt zum Überschreiben: {{ overwriteSelectedCount }}
+      <span class="sep">|</span>
+      Ausgewählt zum Überschreiben: {{ overwriteSelectedCount }}
     }
   </p>
 
@@ -21,7 +21,7 @@
       matInput
       [(ngModel)]="filterText"
       placeholder="Dateiname, ID, Typ oder Grund..."
-    />
+      />
     <mat-icon matSuffix>search</mat-icon>
   </mat-form-field>
 
@@ -34,7 +34,7 @@
             trackBy: trackByUploaded
           "
           class="row"
-        >
+          >
           <div class="main">
             <div class="title">{{ f.filename }}</div>
             <div class="meta">
@@ -48,36 +48,37 @@
 
     <mat-tab label="Fehlgeschlagen ({{ failedCount }})">
       <div class="viewport failed-viewport">
-        <div
-          *ngFor="let f of filteredFailedFiles; trackBy: trackByFailed"
-          class="row"
-        >
-          <div class="main">
-            <div class="title">{{ f.filename }}</div>
-            @if (f.reason) {
-            <div class="sub">{{ f.reason }}</div>
-            }
-            @if (f.details && f.details.length > 0) {
-            <ul class="details">
-              @for (detail of f.details; track $index) {
-              <li>{{ detail }}</li>
+        @for (f of filteredFailedFiles; track trackByFailed($index, f)) {
+          <div
+            class="row"
+            >
+            <div class="main">
+              <div class="title">{{ f.filename }}</div>
+              @if (f.reason) {
+                <div class="sub">{{ f.reason }}</div>
               }
-            </ul>
-            }
-            @if (getFailureSuggestions(f); as suggestions) {
-              @if (suggestions.length > 0) {
-              <div class="suggestions">
-                <div class="suggestions-title">{{ 'file-upload.failure-suggestions.title' | translate }}</div>
-                <ul>
-                  @for (suggestion of suggestions; track suggestion.key + (suggestion.params?.value || '')) {
-                  <li>{{ suggestion.key | translate: suggestion.params }}</li>
+              @if (f.details && f.details.length > 0) {
+                <ul class="details">
+                  @for (detail of f.details; track $index) {
+                    <li>{{ detail }}</li>
                   }
                 </ul>
-              </div>
               }
-            }
+              @if (getFailureSuggestions(f); as suggestions) {
+                @if (suggestions.length > 0) {
+                  <div class="suggestions">
+                    <div class="suggestions-title">{{ 'file-upload.failure-suggestions.title' | translate }}</div>
+                    <ul>
+                      @for (suggestion of suggestions; track suggestion.key + (suggestion.params?.value || '')) {
+                        <li>{{ suggestion.key | translate: suggestion.params }}</li>
+                      }
+                    </ul>
+                  </div>
+                }
+              }
+            </div>
           </div>
-        </div>
+        }
       </div>
     </mat-tab>
 
@@ -89,7 +90,7 @@
             trackBy: trackByConflict
           "
           class="row"
-        >
+          >
           <div class="main">
             <div class="title">{{ f.filename }}</div>
             <div class="meta">

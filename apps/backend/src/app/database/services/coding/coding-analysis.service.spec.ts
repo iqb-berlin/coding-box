@@ -25,6 +25,16 @@ jest.mock('./coding-statistics.service', () => ({
 
 describe('CodingAnalysisService aggregation settings', () => {
   function createService() {
+    const queryRunner = {
+      connect: jest.fn().mockResolvedValue(undefined),
+      query: jest.fn()
+        .mockResolvedValueOnce([{ locked: true }])
+        .mockResolvedValueOnce([{ pg_advisory_unlock: true }]),
+      release: jest.fn().mockResolvedValue(undefined),
+      manager: {
+        getRepository: jest.fn()
+      }
+    };
     const queryBuilder = {
       select: jest.fn().mockReturnThis(),
       innerJoin: jest.fn().mockReturnThis(),
@@ -34,8 +44,14 @@ describe('CodingAnalysisService aggregation settings', () => {
     };
     const responseRepository = {
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
-      update: jest.fn().mockResolvedValue(undefined)
+      update: jest.fn().mockResolvedValue(undefined),
+      manager: {
+        connection: {
+          createQueryRunner: jest.fn().mockReturnValue(queryRunner)
+        }
+      }
     } as unknown as Repository<ResponseEntity>;
+    queryRunner.manager.getRepository.mockReturnValue(responseRepository);
     const codingJobService = {
       getAggregationThreshold: jest.fn().mockResolvedValue(2),
       getResponseMatchingMode: jest.fn().mockResolvedValue([]),
@@ -77,6 +93,7 @@ describe('CodingAnalysisService aggregation settings', () => {
 
     return {
       service,
+      queryRunner,
       responseRepository,
       codingJobService,
       codingValidationService,
@@ -93,7 +110,8 @@ describe('CodingAnalysisService aggregation settings', () => {
       codingJobService,
       codingValidationService,
       codingStatisticsService,
-      cacheService
+      cacheService,
+      queryRunner
     } = createService();
 
     const result = await service.saveAggregationSettings(7, 101, [
@@ -108,8 +126,16 @@ describe('CodingAnalysisService aggregation settings', () => {
       aggregationActive: true,
       revertedResponses: 2
     });
-    expect(codingJobService.setAggregationThreshold).toHaveBeenCalledWith(7, 100);
-    expect(codingJobService.setResponseMatchingMode).toHaveBeenCalledWith(7, [ResponseMatchingFlag.IGNORE_CASE]);
+    expect(codingJobService.setAggregationThreshold).toHaveBeenCalledWith(
+      7,
+      100,
+      queryRunner.manager
+    );
+    expect(codingJobService.setResponseMatchingMode).toHaveBeenCalledWith(
+      7,
+      [ResponseMatchingFlag.IGNORE_CASE],
+      queryRunner.manager
+    );
     expect(responseRepository.update).toHaveBeenCalledWith(
       { id: expect.anything() },
       { code_v2: null, score_v2: null, status_v2: null }
@@ -117,10 +143,57 @@ describe('CodingAnalysisService aggregation settings', () => {
     expect(cacheService.deleteByPattern).toHaveBeenCalledWith('response-analysis:7_*');
     expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(7);
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(7);
+    expect(queryRunner.query).toHaveBeenNthCalledWith(
+      1,
+      'SELECT pg_try_advisory_lock($1::int, $2::int) AS locked',
+      [774020251, 7]
+    );
+    expect(queryRunner.query).toHaveBeenNthCalledWith(
+      2,
+      'SELECT pg_advisory_unlock($1::int, $2::int)',
+      [774020251, 7]
+    );
+    expect(queryRunner.release).toHaveBeenCalledTimes(1);
+    expect(queryRunner.query.mock.invocationCallOrder[1])
+      .toBeLessThan(cacheService.deleteByPattern.mock.invocationCallOrder[0]);
+  });
+
+  it('fails without mutating data when the workspace lock is occupied', async () => {
+    const {
+      service,
+      queryRunner,
+      responseRepository,
+      codingJobService,
+      codingValidationService,
+      codingStatisticsService,
+      cacheService
+    } = createService();
+    queryRunner.query.mockReset().mockResolvedValue([{ locked: false }]);
+
+    const result = await service.saveAggregationSettings(7, 4, [
+      ResponseMatchingFlag.IGNORE_CASE
+    ]);
+
+    expect(result).toMatchObject({
+      success: false,
+      threshold: 4,
+      flags: [ResponseMatchingFlag.IGNORE_CASE],
+      revertedResponses: 0
+    });
+    expect(result.message).toContain('while test results are being modified');
+    expect(codingJobService.setAggregationThreshold).not.toHaveBeenCalled();
+    expect(codingJobService.setResponseMatchingMode).not.toHaveBeenCalled();
+    expect(responseRepository.update).not.toHaveBeenCalled();
+    expect(cacheService.deleteByPattern).not.toHaveBeenCalled();
+    expect(codingValidationService.invalidateIncompleteVariablesCache)
+      .not.toHaveBeenCalled();
+    expect(codingStatisticsService.invalidateCache).not.toHaveBeenCalled();
+    expect(queryRunner.query).toHaveBeenCalledTimes(1);
+    expect(queryRunner.release).toHaveBeenCalledTimes(1);
   });
 
   it('keeps no aggregation exclusive when saving settings', async () => {
-    const { service, codingJobService } = createService();
+    const { service, codingJobService, queryRunner } = createService();
 
     const result = await service.saveAggregationSettings(7, 2, [
       ResponseMatchingFlag.NO_AGGREGATION,
@@ -131,7 +204,7 @@ describe('CodingAnalysisService aggregation settings', () => {
     expect(result.aggregationActive).toBe(false);
     expect(codingJobService.setResponseMatchingMode).toHaveBeenCalledWith(7, [
       ResponseMatchingFlag.NO_AGGREGATION
-    ]);
+    ], queryRunner.manager);
   });
 
   it('clears the selected analysis cache before a forced restart', async () => {
