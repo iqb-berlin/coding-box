@@ -13,7 +13,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, OnInit, SimpleChanges, DestroyRef, inject, input, output, signal
+  ViewChild, Component, OnInit, SimpleChanges, DestroyRef, ChangeDetectorRef, inject, input, output, signal
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
@@ -41,6 +41,7 @@ export class UsersSelectionComponent implements OnInit {
   private workspaceBackendService = inject(WorkspaceBackendService);
 
   private destroyRef = inject(DestroyRef);
+  private changeDetectorRef = inject(ChangeDetectorRef);
 
   userObjectsDatasource = new MatTableDataSource<UserFullDto>();
   displayedUserColumns = ['selectCheckbox', 'username', 'displayName'];
@@ -87,6 +88,7 @@ export class UsersSelectionComponent implements OnInit {
             this.tableSelectionCheckboxes.clear();
             this.tableSelectionRow.clear();
           }
+          this.changeDetectorRef.markForCheck();
         }
       );
   }

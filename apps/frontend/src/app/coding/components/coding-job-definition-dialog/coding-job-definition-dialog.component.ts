@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy, inject, signal
+  ChangeDetectorRef, Component, Inject, OnInit, OnDestroy, inject, signal
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import {
@@ -201,6 +201,7 @@ interface DistributionPreviewSummary {
   ]
 })
 export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
+  private changeDetectorRef = inject(ChangeDetectorRef);
   private fb = inject(FormBuilder);
   private codingJobBackendService = inject(CodingJobBackendService);
   private distributedCodingService = inject(DistributedCodingService);
@@ -333,6 +334,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         this.distributionPreviewSummary = preview ?
           this.buildDistributionPreviewSummary(preview) :
           null;
+        this.changeDetectorRef.markForCheck();
       });
     this.loadIncludeDeriveErrorSetting();
     this.loadVariableBundles();
