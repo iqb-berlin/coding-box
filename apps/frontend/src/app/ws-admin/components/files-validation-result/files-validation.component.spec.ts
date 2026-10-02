@@ -13,7 +13,9 @@ import { WorkspaceService } from '../../../workspace/services/workspace.service'
 import { FileService } from '../../../shared/services/file/file.service';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
-import { UnusedTestFile } from '../../../../../../../api-dto/files/file-validation-result.dto';
+import {
+  DuplicateTestTaker, FileValidationResultDto, UnusedTestFile
+} from '../../../../../../../api-dto/files/file-validation-result.dto';
 
 describe('FilesValidationComponent', () => {
   let closing: Subject<void>;
@@ -120,6 +122,81 @@ describe('FilesValidationComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it.each(['constructor', 'refresh'])('initializes a large duplicate selection in linear work during %s', path => {
+    const duplicates: DuplicateTestTaker[] = Array.from({ length: 2000 }, (_, index) => ({
+      login: `login-${index}`,
+      occurrences: [
+        { testTaker: 'FIRST_FILE', mode: 'run-hot-return' },
+        { testTaker: 'SECOND_FILE', mode: 'run-hot-return' }
+      ]
+    }));
+    duplicates.push({ login: 'empty', occurrences: [] });
+    const previousSelection = new Map([['obsolete', 'OLD_FILE']]);
+    component.duplicateSelection.set(previousSelection);
+    let copiedSelectionEntries = 0;
+    const originalIterator = Map.prototype[Symbol.iterator];
+    const iteratorSpy = jest.spyOn(Map.prototype, Symbol.iterator).mockImplementation(function countSelectionCopies(this: Map<unknown, unknown>) {
+      // Count entries copied from selection maps, including intermediate snapshots.
+      if (this.get('login-0') === 'FIRST_FILE') copiedSelectionEntries += this.size;
+      return originalIterator.call(this);
+    });
+    try {
+      if (path === 'constructor') {
+        fixture.destroy();
+        const data = TestBed.inject(MAT_DIALOG_DATA) as FilesValidationDialogComponent['data'];
+        data.duplicateTestTakers = duplicates;
+        fixture = TestBed.createComponent(FilesValidationDialogComponent);
+        component = fixture.componentInstance;
+      } else {
+        (component as unknown as {
+          applyValidationResultData: (result: FileValidationResultDto) => void;
+        }).applyValidationResultData({
+          testTakersFound: true,
+          validationResults: [],
+          duplicateTestTakers: duplicates
+        });
+      }
+    } finally {
+      iteratorSpy.mockClear();
+      iteratorSpy.mockRestore();
+    }
+
+    expect(component.duplicateSelection().size).toBe(2000);
+    expect(component.duplicateSelection().get('login-0')).toBe('FIRST_FILE');
+    expect(component.duplicateSelection().get('login-1999')).toBe('FIRST_FILE');
+    expect(component.duplicateSelection().has('empty')).toBe(false);
+    expect(component.duplicateSelection().has('obsolete')).toBe(false);
+    expect(previousSelection).toEqual(new Map([['obsolete', 'OLD_FILE']]));
+    expect(copiedSelectionEntries).toBeLessThanOrEqual(2 * duplicates.length);
+  });
+
+  it('preserves expansion states for retained files and drops obsolete files on refresh', () => {
+    const expanded = {
+      booklets: true,
+      units: false,
+      schemes: false,
+      schemer: false,
+      definitions: false,
+      player: false,
+      metadata: true
+    };
+    const previous = new Map([['KEEP', expanded], ['OBSOLETE', expanded]]);
+    component.expandedFilesLists.set(previous);
+    (component as unknown as {
+      applyValidationResultData: (result: FileValidationResultDto) => void;
+    }).applyValidationResultData({
+      testTakersFound: true,
+      validationResults: [createValidationResult('KEEP', []), createValidationResult('NEW', [])]
+    });
+
+    expect(component.expandedFilesLists().get('KEEP')).toEqual(expanded);
+    expect(component.expandedFilesLists().get('NEW')).toEqual({
+      ...expanded, booklets: false, metadata: false
+    });
+    expect(component.expandedFilesLists().has('OBSOLETE')).toBe(false);
+    expect(previous.has('OBSOLETE')).toBe(true);
   });
 
   it('should calculate summary correctly', () => {
