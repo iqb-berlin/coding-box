@@ -1,5 +1,5 @@
 import { provideZonelessChangeDetection } from '@angular/core';
-import { delay } from 'rxjs/operators';
+import { delay, map } from 'rxjs/operators';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialog } from '@angular/material/dialog';
 import { MatPaginator } from '@angular/material/paginator';
@@ -19,6 +19,9 @@ import { DoubleCodedReviewComponent } from './double-coded-review.component';
 import { DoubleCodedDecisionCellComponent } from './double-coded-decision-cell.component';
 import { DoubleCodedReviewFacade } from './double-coded-review.facade';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
+import {
+  DoubleCodedManagerDecisionDto, DoubleCodedReviewResponseDto
+} from '../../../../../../../api-dto/coding/double-coded-review.dto';
 
 describe('DoubleCodedReviewComponent', () => {
   let component: DoubleCodedReviewComponent;
@@ -1584,6 +1587,160 @@ describe('DoubleCodedReviewComponent', () => {
     expect(getDecisionCell(interCoderConflictItem.responseId).statusLabel).toBe(
       'double-coded-review.decision.status-inter-coder-conflict'
     );
+  });
+
+  describe('manager draft notifications with zoneless change detection', () => {
+    const ownDraft: DoubleCodedManagerDecisionDto = {
+      id: 43,
+      responseId: 502,
+      managerUserId: 99,
+      managerKey: '99',
+      managerName: 'Reviewer',
+      state: 'draft',
+      effectiveCode: 1,
+      selectedCode: 1,
+      score: 0,
+      comment: 'Saved draft',
+      createdAt: '2026-05-20T13:00:00.000Z',
+      updatedAt: '2026-05-20T13:00:00.000Z',
+      finalizedAt: null,
+      legacy: false
+    };
+
+    const renderMixedReviewPage = async (withOwnDraft = false) => {
+      const api = TestBed.inject(DoubleCodedReviewApiService) as unknown as {
+        getDoubleCodedVariablesForReview: jest.Mock;
+        saveDoubleCodedReviewDraft: jest.Mock;
+        deleteDoubleCodedReviewDraft: jest.Mock;
+      };
+      const getResponse = api.getDoubleCodedVariablesForReview.getMockImplementation()!;
+      api.getDoubleCodedVariablesForReview.mockImplementation(() => (
+        (getResponse() as Observable<DoubleCodedReviewResponseDto>).pipe(map(response => ({
+          ...response,
+          data: response.data.map(item => {
+            if (item.responseId === 504) {
+              return {
+                ...item,
+                managerHistory: [{
+                  ...ownDraft,
+                  id: 42,
+                  responseId: 504,
+                  state: 'applied' as const,
+                  finalizedAt: '2026-05-20T12:00:00.000Z'
+                }]
+              };
+            }
+            return item.responseId === 502 && withOwnDraft ?
+              { ...item, managerDrafts: [...item.managerDrafts, ownDraft] } : item;
+          })
+        })))
+      ));
+      fixture.autoDetectChanges();
+      await fixture.whenStable();
+      expect(component.dynamicManagerColumns()).toContain('manager_99');
+      return api;
+    };
+
+    const getOwnManagerCell = (): HTMLElement => {
+      const rows = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr'));
+      const row = rows.find(candidate => candidate.textContent?.includes('Unit B'))!;
+      return row.querySelector('td.mat-column-manager_99') as HTMLElement;
+    };
+
+    it('renders a delayed saved draft without replacing newer row selections or previous snapshots', async () => {
+      const api = await renderMixedReviewPage();
+      const pendingSave = new Subject<DoubleCodedManagerDecisionDto>();
+      api.saveDoubleCodedReviewDraft.mockReturnValueOnce(pendingSave);
+      expect(getOwnManagerCell().textContent?.trim()).toBe('-');
+      const item = component.allData().find(candidate => candidate.responseId === 502)!;
+      const previousDrafts = item.managerDrafts;
+      component.getItemControl(item).setValue('code:1');
+      component.onSelectionChange(item, 'code:1');
+      await fixture.whenStable();
+
+      const newerItem = component.allData().find(candidate => candidate.responseId === 502)!;
+      component.getItemControl(newerItem).setValue('2002');
+      component.onSelectionChange(newerItem, '2002');
+      await fixture.whenStable();
+      expect(api.saveDoubleCodedReviewDraft).toHaveBeenCalledTimes(1);
+      const previousRow = component.allData().find(candidate => candidate.responseId === 502)!;
+
+      pendingSave.next(ownDraft);
+      pendingSave.complete();
+      await fixture.whenStable();
+
+      const savedItem = component.allData().find(candidate => candidate.responseId === 502)!;
+      expect(getOwnManagerCell().textContent).toContain('Entwurf');
+      expect(savedItem.selectedCoderResult?.jobId).toBe(2002);
+      expect(savedItem.managerDrafts.map(draft => draft.managerUserId)).toEqual([88, 99]);
+      expect(savedItem).not.toBe(previousRow);
+      expect(item.managerDrafts).toBe(previousDrafts);
+      expect(previousRow.managerDrafts).toBe(previousDrafts);
+      expect(previousDrafts.map(draft => draft.managerUserId)).toEqual([88]);
+    });
+
+    it('renders a delayed draft deletion while keeping other managers and previous snapshots', async () => {
+      const api = await renderMixedReviewPage(true);
+      const pendingDelete = new Subject<{ success: boolean }>();
+      api.deleteDoubleCodedReviewDraft.mockReturnValueOnce(pendingDelete);
+      expect(getOwnManagerCell().textContent).toContain('Entwurf');
+      const item = component.allData().find(candidate => candidate.responseId === 502)!;
+      const previousDrafts = item.managerDrafts;
+      component.getItemControl(item).setValue('');
+      component.onSelectionChange(item, '');
+      await fixture.whenStable();
+      expect(getOwnManagerCell().textContent).toContain('Entwurf');
+
+      pendingDelete.next({ success: true });
+      pendingDelete.complete();
+      await fixture.whenStable();
+
+      expect(getOwnManagerCell().textContent?.trim()).toBe('-');
+      expect(component.allData().find(candidate => candidate.responseId === 502)!
+        .managerDrafts.map(draft => draft.managerUserId)).toEqual([88]);
+      expect(item.managerDrafts).toBe(previousDrafts);
+      expect(previousDrafts.map(draft => draft.managerUserId)).toEqual([88, 99]);
+    });
+
+    it.each(['workspace', 'user'])('ignores a delayed draft from the previous %s context', async context => {
+      const api = await renderMixedReviewPage();
+      const pendingSave = new Subject<DoubleCodedManagerDecisionDto>();
+      api.saveDoubleCodedReviewDraft.mockReturnValueOnce(pendingSave);
+      const item = component.allData().find(candidate => candidate.responseId === 502)!;
+      component.onSelectionChange(item, 'code:1');
+      await fixture.whenStable();
+      const previousRows = component.allData();
+      const appService = TestBed.inject(AppService);
+      if (context === 'workspace') appService.selectedWorkspaceId = 2;
+      else Object.assign(appService, { userId: 100 });
+
+      pendingSave.next(ownDraft);
+      pendingSave.complete();
+      await fixture.whenStable();
+
+      expect(component.allData()).toBe(previousRows);
+      expect(getOwnManagerCell().textContent?.trim()).toBe('-');
+    });
+
+    it('finishes a delayed save after destruction without updating the previous view state', async () => {
+      const api = await renderMixedReviewPage();
+      const pendingSave = new Subject<DoubleCodedManagerDecisionDto>();
+      api.saveDoubleCodedReviewDraft.mockReturnValueOnce(pendingSave);
+      const item = component.allData().find(candidate => candidate.responseId === 502)!;
+      component.onSelectionChange(item, 'code:1');
+      await fixture.whenStable();
+      const previousRows = component.allData();
+      fixture.destroy();
+      expect(pendingSave.observed).toBe(true);
+
+      pendingSave.next(ownDraft);
+      pendingSave.complete();
+
+      expect(pendingSave.observed).toBe(false);
+      expect(component.allData()).toBe(previousRows);
+      expect(previousRows.find(candidate => candidate.responseId === 502)!
+        .managerDrafts.map(draft => draft.managerUserId)).toEqual([88]);
+    });
   });
   it('renders a delayed server response without another user action', async () => {
     const backend = TestBed.inject(TestPersonCodingService);

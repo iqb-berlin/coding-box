@@ -11,7 +11,8 @@
         "ZL-002",
         "ZL-003",
         "ZL-004",
-        "ZL-028"
+        "ZL-028",
+        "ZL-039"
       ],
       "tests": [
         "apps/frontend/src/app/coding/components/cohens-kappa-statistics/cohens-kappa-statistics.component.zoneless.spec.ts",
@@ -19,7 +20,9 @@
         "apps/frontend/src/app/coding/components/coding-management/coding-management.component.spec.ts",
         "apps/frontend/src/app/coding/components/coding-management-manual/coding-management-manual.component.spec.ts",
         "apps/frontend/src/app/coding/components/my-coding-jobs/my-coding-jobs.component.spec.ts",
-        "cypress/auth/coding-session.cy.ts"
+        "cypress/auth/coding-session.cy.ts",
+        "apps/frontend/src/app/coding/components/import-comparison-dialog/import-comparison-dialog.component.zoneless.spec.ts",
+        "cypress/zoneless/review-notifications.cy.ts"
       ]
     },
     {
@@ -31,7 +34,8 @@
         "ZL-033",
         "ZL-034",
         "ZL-035",
-        "ZL-037"
+        "ZL-037",
+        "ZL-040"
       ],
       "tests": [
         "apps/frontend/src/app/coding/components/coding-job-definitions/coding-job-definitions.zoneless.spec.ts",
@@ -42,7 +46,8 @@
         "cypress/zoneless/test-person-coding-feedback.cy.ts",
         "apps/frontend/src/app/coding/components/coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component.zoneless.spec.ts",
         "apps/frontend/src/app/coding/components/coding-results-comparison/coding-results-comparison.zoneless.spec.ts",
-        "apps/frontend/src/app/coding/components/variable-bundle-dialog/variable-bundle-dialog.component.zoneless.spec.ts"
+        "apps/frontend/src/app/coding/components/variable-bundle-dialog/variable-bundle-dialog.component.zoneless.spec.ts",
+        "cypress/zoneless/review-notifications.cy.ts"
       ]
     },
     {

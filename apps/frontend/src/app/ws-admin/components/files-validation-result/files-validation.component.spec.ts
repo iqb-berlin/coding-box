@@ -1,5 +1,5 @@
 import { MetadataResolver } from '@iqb/metadata-resolver';
-import { provideZonelessChangeDetection } from '@angular/core';
+import { computed, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatDialog, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -197,6 +197,30 @@ describe('FilesValidationComponent', () => {
     });
     expect(component.expandedFilesLists().has('OBSOLETE')).toBe(false);
     expect(previous.has('OBSOLETE')).toBe(true);
+  });
+
+  it('updates reactive expansion readers without changing previous snapshots', () => {
+    const sections = {
+      booklets: false,
+      units: false,
+      schemes: false,
+      schemer: false,
+      definitions: false,
+      player: false,
+      metadata: false
+    };
+    const previous = new Map([['FILE', sections], ['OTHER', sections]]);
+    component.expandedFilesLists.set(previous);
+    const expanded = computed(() => component.isFilesListExpanded('FILE', 'booklets'));
+    expect(expanded()).toBe(false);
+
+    component.toggleFilesList('FILE', 'booklets');
+
+    expect(expanded()).toBe(true);
+    expect(previous.get('FILE')?.booklets).toBe(false);
+    expect(component.isFilesListExpanded('OTHER', 'booklets')).toBe(false);
+    component.toggleFilesList('FILE', 'booklets');
+    expect(expanded()).toBe(false);
   });
 
   it('should calculate summary correctly', () => {
