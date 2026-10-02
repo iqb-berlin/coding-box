@@ -1,7 +1,10 @@
 import {
-  ActivatedRouteSnapshot, Router, RouterStateSnapshot, CanActivateFn, UrlTree
+  ActivatedRouteSnapshot,
+  CanActivateFn,
+  Router,
+  RouterStateSnapshot,
+  UrlTree
 } from '@angular/router';
-import { createAuthGuard, AuthGuardData } from 'keycloak-angular';
 import { inject } from '@angular/core';
 import { AppService } from '../services/app.service';
 import { AuthService } from '../services/auth.service';
@@ -15,17 +18,16 @@ import { hasAdminBypass } from './admin-access';
 
 const isAdminAccessAllowed = async (
   _route: ActivatedRouteSnapshot,
-  state: RouterStateSnapshot,
-  authData: AuthGuardData
+  state: RouterStateSnapshot
 ): Promise<boolean | UrlTree> => {
   const appService = inject(AppService);
+  const authService = inject(AuthService);
   const router = inject(Router);
-  const { authenticated } = authData;
-  if (!authenticated) {
+
+  if (!authService.isLoggedIn()) {
     return createReAuthenticationUrlTree(router, state.url);
   }
 
-  const authService = inject(AuthService);
   const userRoles = authService.getRoles() || [];
 
   try {
@@ -43,4 +45,4 @@ const isAdminAccessAllowed = async (
   }
 };
 
-export const canActivateAdmin = createAuthGuard<CanActivateFn>(isAdminAccessAllowed);
+export const canActivateAdmin: CanActivateFn = isAdminAccessAllowed;

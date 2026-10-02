@@ -13,9 +13,10 @@ import {
   throwError,
   timer
 } from 'rxjs';
-import { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
+import { DecodedToken } from './auth.models';
 import { AppLogoDto } from '../../../../../../api-dto/app-logo-dto';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
+import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import {
   AppHttpError,
   BACKEND_CONNECTIVITY_ERROR_MESSAGE,
@@ -67,14 +68,14 @@ export class AppService {
     workspaces: []
   };
 
-  keycloakIdentity?: string;
-  userProfile: KeycloakProfile = {};
-  isLoggedInKeycloak = false;
+  user?: CreateUserDto;
+  userProfile: Partial<CreateUserDto> = {};
+  isLoggedIn = false;
   errorMessagesDisabled = false;
   dataLoading: boolean | number = false;
   appLogo: AppLogoDto = standardLogo;
   postMessage$ = new Subject<MessageEvent>();
-  loggedUser: KeycloakTokenParsed | undefined;
+  loggedUser: DecodedToken | undefined;
   errorMessages: AppHttpError[] = [];
   errorMessageCounter = 0;
   backendUnavailable = false;
@@ -86,6 +87,7 @@ export class AppService {
   readonly selectedWorkspaceId$ = this.selectedWorkspaceIdSubject.asObservable();
   private explicitLogoutInProgress = false;
   private authBootstrapStatusSubject = new BehaviorSubject<AuthBootstrapStatus>('checking');
+  private authDataSubject = new BehaviorSubject<AuthDataDto>(AppService.defaultAuthData);
   private authDataSessionGeneration = 0;
   private authDataRefreshRequestId = 0;
   private latestAppliedAuthDataRefreshRequestId = 0;
@@ -112,25 +114,25 @@ export class AppService {
   }
 
   createOwnToken(
-    workspace_id: number,
+    workspaceId: number,
     duration: number,
     scopes: WorkspaceTokenScope[]
   ): Observable<string> {
     return this.http.get<string>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/token/${duration}`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/token/${duration}`,
       { params: this.createTokenScopeParams(scopes) }
     );
   }
 
   createTokenForIdentity(
-    workspace_id: number,
+    workspaceId: number,
     identity: string,
     duration: number,
     scopes: WorkspaceTokenScope[]
   ): Observable<string> {
     const encodedIdentity = encodeURIComponent(identity);
     return this.http.get<string>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/${encodedIdentity}/token/${duration}`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/${encodedIdentity}/token/${duration}`,
       { params: this.createTokenScopeParams(scopes) }
     );
   }
@@ -144,7 +146,6 @@ export class AppService {
   loadAuthenticatedUser(identity: string): Observable<boolean> {
     this.invalidatePendingAuthDataRefreshes();
     this.setAuthBootstrapStatus('backend-login-running');
-    this.keycloakIdentity = identity;
     this.sessionRecoveryService.setOwnerId(identity);
 
     return this.getAuthDataWithRetry(identity)
@@ -165,34 +166,20 @@ export class AppService {
       );
   }
 
-  getAuthData(id: string): Observable<AuthDataDto> {
+  getAuthData(identity: string): Observable<AuthDataDto> {
     return this.http.get<AuthDataDto>(
-      this.createAuthDataUrl(id)
+      `${this.serverUrl}auth-data?identity=${encodeURIComponent(identity)}`
     );
   }
 
   retryAuthDataLoad(): Observable<boolean> {
-    this.invalidatePendingAuthDataRefreshes();
-    const identity = this.loggedUser?.sub || this.keycloakIdentity || '';
-    if (!identity) {
+    const identity = this.loggedUser?.sub || '';
+    if (!identity || !this.hasStoredAuthToken()) {
       this.markAuthDataFailed();
       return of(false);
     }
 
-    this.setAuthBootstrapStatus('backend-login-running');
-    this.sessionRecoveryService.setOwnerId(identity);
-    return this.getAuthDataWithRetry(identity)
-      .pipe(
-        map(authData => {
-          this.updateAuthData(authData);
-          this.completeBackendLogin();
-          return true;
-        }),
-        catchError(() => {
-          this.markAuthDataFailed();
-          return of(false);
-        })
-      );
+    return this.loadAuthenticatedUser(identity);
   }
 
   refreshAuthData(): Observable<AuthDataRefreshOutcome> {
@@ -201,7 +188,7 @@ export class AppService {
         return of<AuthDataRefreshOutcome>('invalidated');
       }
 
-      const identity = this.loggedUser?.sub || this.keycloakIdentity;
+      const identity = this.loggedUser?.sub;
       if (!identity) {
         return of<AuthDataRefreshOutcome>('invalidated');
       }
@@ -212,7 +199,7 @@ export class AppService {
       return this.getAuthDataWithRetry(identity)
         .pipe(
           map((authData): AuthDataRefreshOutcome => {
-            const currentIdentity = this.loggedUser?.sub || this.keycloakIdentity;
+            const currentIdentity = this.loggedUser?.sub;
             if (sessionGeneration !== this.authDataSessionGeneration ||
               identity !== currentIdentity) {
               return 'invalidated';
@@ -232,10 +219,10 @@ export class AppService {
     );
   }
 
-  private getAuthDataWithRetry(id: string): Observable<AuthDataDto> {
+  private getAuthDataWithRetry(identity: string): Observable<AuthDataDto> {
     return this.withAuthBootstrapRetry(
       this.http.get<AuthDataDto>(
-        this.createAuthDataUrl(id),
+        `${this.serverUrl}auth-data?identity=${encodeURIComponent(identity)}`,
         { context: suppressGlobalHttpErrorContext() }
       )
     );
@@ -271,8 +258,6 @@ export class AppService {
       }
     });
   }
-
-  private authDataSubject = new BehaviorSubject<AuthDataDto>(AppService.defaultAuthData);
 
   get authData$() {
     return this.authDataSubject.asObservable();
@@ -351,7 +336,7 @@ export class AppService {
   }
 
   hasStoredAuthToken(): boolean {
-    return !!(this.loggedUser?.sub || this.keycloakIdentity || this.isLoggedInKeycloak);
+    return !!localStorage.getItem('auth_token');
   }
 
   isBackendLoginRunning(): boolean {
@@ -386,10 +371,10 @@ export class AppService {
     return returnUrl;
   }
 
-  createLoginRedirectUri(returnUrl?: string): string | undefined {
+  createLoginRedirectUri(returnUrl?: string): string {
     const normalizedReturnUrl = this.normalizeInternalRoute(returnUrl);
     if (!normalizedReturnUrl) {
-      return undefined;
+      return `${window.location.origin}${window.location.pathname}${window.location.search}`;
     }
 
     return `${window.location.origin}${window.location.pathname}${window.location.search}#${normalizedReturnUrl}`;
@@ -411,10 +396,12 @@ export class AppService {
     clearRecoveryDrafts?: boolean;
   } = {}): void {
     this.invalidatePendingAuthDataRefreshes();
+    localStorage.removeItem('auth_token');
     localStorage.removeItem('id_token');
-    this.keycloakIdentity = undefined;
+    localStorage.removeItem('refresh_token');
+    this.user = undefined;
     this.userProfile = {};
-    this.isLoggedInKeycloak = false;
+    this.isLoggedIn = false;
     this.loggedUser = undefined;
     this.updateAuthData(AppService.defaultAuthData);
     if (options.clearRecoveryDrafts ?? true) {
@@ -438,7 +425,7 @@ export class AppService {
 
   requireReAuthentication(returnUrl?: string): void {
     const normalizedReturnUrl = this.normalizeInternalRoute(returnUrl) || this.reAuthenticationReturnUrl;
-    const recoveryOwnerId = this.loggedUser?.sub || this.keycloakIdentity;
+    const recoveryOwnerId = this.loggedUser?.sub;
     if (recoveryOwnerId) {
       this.sessionRecoveryService.setOwnerId(recoveryOwnerId);
     }

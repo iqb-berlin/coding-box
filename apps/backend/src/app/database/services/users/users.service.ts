@@ -451,6 +451,42 @@ export class UsersService {
     });
   }
 
+  async createOidcProviderUser(oidcPdUser: CreateUserDto): Promise<number> {
+    const {
+      username, identity, issuer, isAdmin
+    } = oidcPdUser;
+    const existingUser = await this.usersRepository.findOne({
+      where: [
+        { identity, issuer },
+        { username }
+      ],
+      select: {
+        id: true, username: true, identity: true, issuer: true, isAdmin: true
+      }
+    });
+
+    if (existingUser) {
+      const updatedFields: Partial<User> = {};
+      const nextIsAdmin = existingUser.isAdmin || !!isAdmin;
+      if (identity && existingUser.identity !== identity) updatedFields.identity = identity;
+      if (issuer && existingUser.issuer !== issuer) updatedFields.issuer = issuer;
+      if (username && existingUser.username !== username) updatedFields.username = username;
+      if (existingUser.isAdmin !== nextIsAdmin) updatedFields.isAdmin = nextIsAdmin;
+
+      if (Object.keys(updatedFields).length > 0) {
+        await this.usersRepository.update({ id: existingUser.id }, updatedFields);
+        this.logger.log(`Updating existing user: ${JSON.stringify({ ...existingUser, ...updatedFields })}`);
+      }
+
+      return existingUser.id;
+    }
+    this.logger.log(`Creating new OIDC Provider user: ${JSON.stringify(oidcPdUser)}`);
+    const newUser = this.usersRepository.create(oidcPdUser);
+    await this.usersRepository.save(newUser);
+
+    return newUser.id;
+  }
+
   async syncKeycloakUser(keycloakUser: CreateUserDto): Promise<number> {
     const {
       username, identity, issuer, isAdmin = false

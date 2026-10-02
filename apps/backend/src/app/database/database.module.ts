@@ -40,6 +40,7 @@ import { CoderTrainingBundle } from './entities/coder-training-bundle.entity';
 import { CoderTrainingCoder } from './entities/coder-training-coder.entity';
 import { CoderTrainingDiscussionResult } from './entities/coder-training-discussion-result.entity';
 import { CodingUnitFreshness } from './entities/coding-unit-freshness.entity';
+import { TestPersonCodingJob } from './entities/test-person-coding-job.entity';
 import { SystemNotification } from './entities/system-notification.entity';
 import { DoubleCodingReviewDecision } from './entities/double-coding-review-decision.entity';
 import { RuntimeConfigModule } from '../config/runtime-config.module';
@@ -131,6 +132,7 @@ export function buildPostgresConnectionOptions(
           CoderTrainingDiscussionResult,
           CodingUnitFreshness,
           MissingsProfile,
+          TestPersonCodingJob,
           SystemNotification,
           DoubleCodingReviewDecision
         ],

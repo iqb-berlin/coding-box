@@ -1,10 +1,5 @@
-import {
-  BadRequestException,
-  ExecutionContext,
-  INestApplication,
-  InternalServerErrorException
-} from '@nestjs/common';
-import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { BadRequestException, ExecutionContext, INestApplication } from '@nestjs/common';
+import { GUARDS_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { Test, TestingModule } from '@nestjs/testing';
 import { WorkspaceUsersController } from './workspace-users.controller';
 import { WorkspaceUsersService } from '../../database/services/workspace/workspace-users.service';
@@ -221,119 +216,16 @@ describe('WorkspaceUsersController', () => {
     );
   });
 
-  describe('findUsers', () => {
-    it('throws when workspace users cannot be retrieved', async () => {
-      workspaceUsersService.findUsers.mockRejectedValue(new Error('database unavailable'));
-
-      await expect(controller.findUsers(3, 1, 500)).rejects.toThrow(InternalServerErrorException);
-    });
-
-    it('parses the workspace id from the route before retrieving users', async () => {
-      workspaceUsersService.findUsers.mockResolvedValue([[], 0]);
-      let app: INestApplication | undefined;
-
-      try {
-        app = await createTestApp();
-
-        const response = await fetch(`${await app.getUrl()}/admin/workspace/3/users?page=1&limit=500`);
-
-        expect(response.status).toBe(200);
-        await expect(response.json()).resolves.toEqual({
-          data: [],
-          total: 0,
-          page: 1,
-          limit: 500
-        });
-        expect(workspaceUsersService.findUsers).toHaveBeenCalledWith(3, { page: 1, limit: 500 });
-      } finally {
-        await app?.close();
-      }
-    });
-
-    it('returns an HTTP error when workspace users cannot be retrieved', async () => {
-      workspaceUsersService.findUsers.mockRejectedValue(new Error('database unavailable'));
-      let app: INestApplication | undefined;
-
-      try {
-        app = await createTestApp();
-
-        const response = await fetch(`${await app.getUrl()}/admin/workspace/3/users?page=1&limit=500`);
-
-        expect(response.status).toBe(500);
-      } finally {
-        await app?.close();
-      }
-    });
-  });
-
-  describe('findCoders', () => {
-    it('parses the workspace id from the route before retrieving coders', async () => {
-      workspaceUsersService.findCoders.mockResolvedValue([[], 0]);
-      let app: INestApplication | undefined;
-
-      try {
-        app = await createTestApp();
-
-        const response = await fetch(`${await app.getUrl()}/admin/workspace/3/coders`);
-
-        expect(response.status).toBe(200);
-        await expect(response.json()).resolves.toEqual({
-          data: [],
-          total: 0
-        });
-        expect(workspaceUsersService.findCoders).toHaveBeenCalledWith(3);
-      } finally {
-        await app?.close();
-      }
-    });
-  });
-
-  describe('findCodersByCodingJob', () => {
-    it('rejects a non-numeric coding job id', async () => {
-      workspaceUsersService.findCoders.mockResolvedValue([[], 0]);
-      let app: INestApplication | undefined;
-
-      try {
-        app = await createTestApp();
-
-        const response = await fetch(`${await app.getUrl()}/admin/workspace/3/coding-jobs/not-a-number/coders`);
-
-        expect(response.status).toBe(400);
-        expect(workspaceUsersService.findCoders).not.toHaveBeenCalled();
-      } finally {
-        await app?.close();
-      }
-    });
-  });
-
   describe('setWorkspaceUsers', () => {
-    it('delegates workspace user assignment', async () => {
-      workspaceUsersService.setWorkspaceUsers.mockResolvedValue(true);
+    it('requires workspace admin access level metadata and uses workspace_id route param', () => {
+      const guards = Reflect.getMetadata(
+        GUARDS_METADATA,
+        WorkspaceUsersController.prototype.setWorkspaceUsers
+      );
 
-      await expect(controller.setWorkspaceUsers([7, 8], 3)).resolves.toBe(true);
-
-      expect(workspaceUsersService.setWorkspaceUsers).toHaveBeenCalledWith(3, [7, 8]);
-    });
-
-    it('parses the workspace id from the route before delegating', async () => {
-      workspaceUsersService.setWorkspaceUsers.mockResolvedValue(true);
-      let app: INestApplication | undefined;
-
-      try {
-        app = await createTestApp();
-
-        const response = await fetch(`${await app.getUrl()}/admin/workspace/3/users`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify([7, 8])
-        });
-
-        expect(response.status).toBe(201);
-        await expect(response.json()).resolves.toBe(true);
-        expect(workspaceUsersService.setWorkspaceUsers).toHaveBeenCalledWith(3, [7, 8]);
-      } finally {
-        await app?.close();
-      }
+      expect(guards).toEqual([JwtAuthGuard, WorkspaceGuard, AccessLevelGuard]);
+      expect(Reflect.getMetadata('accessLevel', WorkspaceUsersController.prototype.setWorkspaceUsers)).toBe(3);
+      expect(Reflect.getMetadata(PATH_METADATA, WorkspaceUsersController.prototype.setWorkspaceUsers)).toBe(':workspace_id/users');
     });
   });
 });

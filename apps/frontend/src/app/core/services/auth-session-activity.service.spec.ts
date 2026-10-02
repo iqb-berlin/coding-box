@@ -1,9 +1,9 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import Keycloak from 'keycloak-js';
 import { Observable, Subject, of } from 'rxjs';
 import { AuthSessionActivityService } from './auth-session-activity.service';
 import { AppService } from './app.service';
+import { AuthService } from './auth.service';
 import {
   AUTH_SESSION_IDLE_TIMEOUT_MS,
   AUTH_SESSION_WARNING_DELAY_MS
@@ -12,7 +12,7 @@ import { WorkspaceSettingsService } from '../../ws-admin/services/workspace-sett
 
 describe('AuthSessionActivityService', () => {
   let service: AuthSessionActivityService;
-  let keycloak: { authenticated: boolean; updateToken: jest.Mock };
+  let authService: { isLoggedIn: jest.Mock; getValidToken: jest.Mock };
   let appService: {
     selectedWorkspaceId: number;
     selectedWorkspaceId$: Observable<number>;
@@ -35,9 +35,9 @@ describe('AuthSessionActivityService', () => {
   let selectedWorkspaceIdSubject: Subject<number>;
 
   beforeEach(() => {
-    keycloak = {
-      authenticated: true,
-      updateToken: jest.fn().mockResolvedValue(true)
+    authService = {
+      isLoggedIn: jest.fn().mockReturnValue(true),
+      getValidToken: jest.fn().mockResolvedValue('token')
     };
     selectedWorkspaceIdSubject = new Subject();
     appService = {
@@ -59,7 +59,7 @@ describe('AuthSessionActivityService', () => {
     TestBed.configureTestingModule({
       providers: [
         AuthSessionActivityService,
-        { provide: Keycloak, useValue: keycloak },
+        { provide: AuthService, useValue: authService },
         { provide: AppService, useValue: appService },
         { provide: WorkspaceSettingsService, useValue: workspaceSettingsService },
         { provide: Router, useValue: { url: '/coding' } }
@@ -70,7 +70,7 @@ describe('AuthSessionActivityService', () => {
   });
 
   afterEach(() => {
-    service.stop();
+    service?.stop();
   });
 
   it('should show an idle warning before the session expires', fakeAsync(() => {
@@ -168,13 +168,44 @@ describe('AuthSessionActivityService', () => {
     service.stop();
   }));
 
-  it('should force a token refresh when the user returns after the warning', fakeAsync(() => {
+  it('should validate the OIDC session on activity from another tab after the warning', fakeAsync(() => {
+    service.start();
+    tick(AUTH_SESSION_WARNING_DELAY_MS);
+
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'coding-box-auth-session-activity',
+      newValue: JSON.stringify({ source: 'other-tab', timestamp: Date.now() })
+    }));
+    tick();
+
+    expect(authService.getValidToken).toHaveBeenCalledWith(0);
+    expect(appService.sessionExpiryWarning).toBe(false);
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+    service.stop();
+  }));
+
+  it('should expire an invalid OIDC session after activity from another tab', fakeAsync(() => {
+    authService.getValidToken.mockResolvedValue(undefined);
+    service.start();
+    tick(AUTH_SESSION_WARNING_DELAY_MS);
+
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'coding-box-auth-session-activity',
+      newValue: JSON.stringify({ source: 'other-tab', timestamp: Date.now() })
+    }));
+    tick();
+
+    expect(appService.requireReAuthentication).toHaveBeenCalledWith('/coding');
+    service.stop();
+  }));
+
+  it('should keep the session active when the user returns with a valid token after the warning', fakeAsync(() => {
     service.start();
     tick(AUTH_SESSION_WARNING_DELAY_MS);
 
     window.dispatchEvent(new Event('mousemove'));
 
-    expect(keycloak.updateToken).toHaveBeenCalledWith(-1);
+    expect(authService.getValidToken).toHaveBeenCalledWith(0);
     expect(appService.sessionExpiryWarning).toBe(false);
     service.stop();
   }));

@@ -2,8 +2,8 @@ import {
   Injectable, NgZone, OnDestroy, inject
 } from '@angular/core';
 import { Router } from '@angular/router';
-import Keycloak from 'keycloak-js';
 import { AppService } from './app.service';
+import { AuthService } from './auth.service';
 import {
   DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
   AUTH_SESSION_IDLE_TIMEOUT_MS,
@@ -15,7 +15,7 @@ import { WorkspaceSettingsService } from '../../ws-admin/services/workspace-sett
   providedIn: 'root'
 })
 export class AuthSessionActivityService implements OnDestroy {
-  private readonly keycloak = inject(Keycloak);
+  private readonly authService = inject(AuthService);
   private readonly appService = inject(AppService);
   private readonly workspaceSettingsService = inject(WorkspaceSettingsService);
   private readonly router = inject(Router);
@@ -109,7 +109,13 @@ export class AuthSessionActivityService implements OnDestroy {
     this.restart();
 
     if (warningWasVisible) {
-      this.keycloak.updateToken(-1).catch(() => this.expireSession());
+      this.authService.getValidToken(0)
+        .then(token => {
+          if (!token) {
+            this.expireSession();
+          }
+        })
+        .catch(() => this.expireSession());
     }
   }
 
@@ -209,7 +215,13 @@ export class AuthSessionActivityService implements OnDestroy {
     this.restart();
 
     if (warningWasVisible) {
-      this.keycloak.updateToken(-1).catch(() => this.expireSession());
+      this.authService.getValidToken(0)
+        .then(token => {
+          if (!token) {
+            this.expireSession();
+          }
+        })
+        .catch(() => this.expireSession());
     }
   }
 
@@ -243,7 +255,7 @@ export class AuthSessionActivityService implements OnDestroy {
   }
 
   private isAuthenticatedSession(): boolean {
-    return !!this.keycloak.authenticated && !this.appService.needsReAuthentication;
+    return this.authService.isLoggedIn() && !this.appService.needsReAuthentication;
   }
 
   private refreshTimeoutSettingsForCurrentWorkspace(): void {

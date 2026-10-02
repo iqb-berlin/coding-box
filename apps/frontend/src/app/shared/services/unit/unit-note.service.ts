@@ -16,7 +16,7 @@ export class UnitNoteService {
   private http = inject(HttpClient);
 
   get authHeader() {
-    return {};
+    return { Authorization: `Bearer ${localStorage.getItem('auth_token')}` };
   }
 
   createUnitNote(workspaceId: number, createUnitNoteDto: CreateUnitNoteDto): Observable<UnitNoteDto> {

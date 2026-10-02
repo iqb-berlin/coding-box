@@ -9,7 +9,7 @@ import {
   Patch,
   Post,
   Query,
-  Req,
+  Request,
   UseGuards
 } from '@nestjs/common';
 import {
@@ -34,10 +34,12 @@ import { WorkspaceGuard } from './workspace.guard';
 import { AdminGuard } from '../admin.guard';
 import { AccessRightsMatrixService } from './access-rights-matrix.service';
 import { AccessRightsMatrixDto } from '../../../../../../api-dto/workspaces/access-rights-matrix-dto';
+import { UsersService } from '../../database/services/users';
 
 interface RequestWithUser {
-  user: {
-    id: string | number;
+  user?: {
+    id?: string | number;
+    identity?: string;
   };
 }
 
@@ -48,7 +50,8 @@ export class WorkspaceController {
 
   constructor(
     private workspaceCoreService: WorkspaceCoreService,
-    private accessRightsMatrixService: AccessRightsMatrixService
+    private accessRightsMatrixService: AccessRightsMatrixService,
+    private usersService: UsersService
   ) {}
 
   @Get()
@@ -204,7 +207,18 @@ export class WorkspaceController {
   })
   @ApiBadRequestResponse({ description: 'Invalid workspace data' })
   @ApiTags('admin workspaces')
-  async create(@Body() createWorkspaceDto: CreateWorkspaceDto, @Req() request: RequestWithUser) {
-    return this.workspaceCoreService.create(createWorkspaceDto, Number(request.user.id));
+  async create(@Body() createWorkspaceDto: CreateWorkspaceDto, @Request() req: RequestWithUser): Promise<number> {
+    const userIdentity = req.user?.identity ?? req.user?.id;
+
+    if (!userIdentity) {
+      throw new BadRequestException('Missing user identity');
+    }
+
+    const user = await this.usersService.findUserByIdentity(String(userIdentity));
+    if (!user) {
+      throw new BadRequestException('Creating user not found');
+    }
+
+    return this.workspaceCoreService.create(createWorkspaceDto, user.id);
   }
 }
