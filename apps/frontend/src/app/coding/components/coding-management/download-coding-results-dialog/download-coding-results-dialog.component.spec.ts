@@ -20,7 +20,8 @@ describe('DownloadCodingResultsDialogComponent', () => {
     const component = new DownloadCodingResultsDialogComponent(
       dialogRef as never,
       data,
-      missingsProfileService as never
+      missingsProfileService as never,
+      { markForCheck: jest.fn() } as never
     );
 
     return { component, dialogRef, missingsProfileService };

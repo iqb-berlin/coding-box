@@ -1,4 +1,6 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import {
+  ChangeDetectorRef, Component, Inject, OnInit
+} from '@angular/core';
 
 import { MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -406,7 +408,8 @@ export class DownloadCodingResultsDialogComponent implements OnInit {
   constructor(
     public dialogRef: MatDialogRef<DownloadCodingResultsDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: DownloadCodingResultsDialogData,
-    private readonly missingsProfileService: MissingsProfileService
+    private readonly missingsProfileService: MissingsProfileService,
+    private readonly changeDetectorRef: ChangeDetectorRef
   ) {
     this.selectedVersion = data.currentVersion;
   }
@@ -437,6 +440,7 @@ export class DownloadCodingResultsDialogComponent implements OnInit {
 
     this.missingsProfilesError = false;
     this.isLoadingMissingsProfiles = true;
+    this.changeDetectorRef.markForCheck();
     this.missingsProfileService
       .getExportMissingsProfilesOrThrow(this.data.workspaceId)
       .subscribe({
@@ -451,10 +455,12 @@ export class DownloadCodingResultsDialogComponent implements OnInit {
             this.missingsProfiles[0]?.id ?? null;
           this.hasLoadedMissingsProfiles = true;
           this.isLoadingMissingsProfiles = false;
+          this.changeDetectorRef.markForCheck();
         },
         error: () => {
           this.missingsProfilesError = true;
           this.isLoadingMissingsProfiles = false;
+          this.changeDetectorRef.markForCheck();
         }
       });
   }
