@@ -1,8 +1,5 @@
 import {
-  ChangeDetectorRef, Component, Inject, OnInit, OnDestroy, AfterViewInit,
-  ViewChild,
-  inject,
-  HostListener
+  Component, Inject, OnInit, OnDestroy, AfterViewInit, ViewChild, inject, HostListener, signal
 } from '@angular/core';
 import {
   Subject, debounceTime, forkJoin, of, catchError, finalize, takeUntil, map, Observable, switchMap
@@ -131,11 +128,10 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   private translateService = inject(TranslateService);
   private router = inject(Router);
   private dialog = inject(MatDialog);
-  private changeDetector = inject(ChangeDetectorRef);
 
-  isLoading = true;
-  isNotesUnavailable = false;
-  isMissingProfileUnavailable = false;
+  readonly isLoading = signal(true);
+  readonly isNotesUnavailable = signal(false);
+  readonly isMissingProfileUnavailable = signal(false);
   dataSource = new MatTableDataSource<CodingResult>([]);
   displayedColumns: string[] = [
     'unitName',
@@ -161,10 +157,10 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   readonly pageSize = 50;
   readonly pageSizeOptions = [25, 50, 100];
 
-  unitNameFilter = '';
-  variableFilter = '';
-  codingIssueFilter = '';
-  testPersonFilter = '';
+  readonly unitNameFilter = signal('');
+  readonly variableFilter = signal('');
+  readonly codingIssueFilter = signal('');
+  readonly testPersonFilter = signal('');
 
   constructor(
     public dialogRef: MatDialogRef<CodingJobResultDialogComponent>,
@@ -209,9 +205,9 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   }
 
   loadCodingResults(): void {
-    this.isLoading = true;
-    this.isNotesUnavailable = false;
-    this.isMissingProfileUnavailable = false;
+    this.isLoading.set(true);
+    this.isNotesUnavailable.set(false);
+    this.isMissingProfileUnavailable.set(false);
 
     forkJoin({
       units: this.codingJobBackendService.getCodingJobUnits(this.data.workspaceId, this.data.codingJob.id),
@@ -219,7 +215,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       missingProfile: this.getMissingProfileForJob(),
       notes: this.codingJobBackendService.getCodingNotes(this.data.workspaceId, this.data.codingJob.id).pipe(
         catchError(() => {
-          this.isNotesUnavailable = true;
+          this.isNotesUnavailable.set(true);
           this.snackBar.open('Notizen konnten nicht geladen werden. Ergebnisse werden trotzdem angezeigt.', 'Schließen', { duration: 4000 });
           return of({});
         })
@@ -227,8 +223,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     }).pipe(
       takeUntil(this.destroy$),
       finalize(() => {
-        this.isLoading = false;
-        this.changeDetector.markForCheck();
+        this.isLoading.set(false);
       })
     ).subscribe({
       next: ({
@@ -241,7 +236,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
           notes as Record<string, string>,
           missingPreviewLookup
         ));
-        this.isMissingProfileUnavailable = this.getUnresolvedMissingCount() > 0;
+        this.isMissingProfileUnavailable.set(this.getUnresolvedMissingCount() > 0);
         this.applyFilters();
         this.paginator?.firstPage();
       },
@@ -491,10 +486,10 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
   applyFilters(): void {
     const filterObj = {
-      unitName: this.unitNameFilter,
-      variable: this.variableFilter,
-      codingIssue: this.codingIssueFilter,
-      testPerson: this.testPersonFilter
+      unitName: this.unitNameFilter(),
+      variable: this.variableFilter(),
+      codingIssue: this.codingIssueFilter(),
+      testPerson: this.testPersonFilter()
     };
     this.dataSource.filter = JSON.stringify(filterObj);
     this.paginator?.firstPage();
@@ -517,39 +512,39 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   }
 
   clearUnitNameFilter(): void {
-    this.unitNameFilter = '';
+    this.unitNameFilter.set('');
     this.applyFilters();
   }
 
   clearVariableFilter(): void {
-    this.variableFilter = '';
+    this.variableFilter.set('');
     this.applyFilters();
   }
 
   clearCodingIssueFilter(): void {
-    this.codingIssueFilter = '';
+    this.codingIssueFilter.set('');
     this.applyFilters();
   }
 
   clearTestPersonFilter(): void {
-    this.testPersonFilter = '';
+    this.testPersonFilter.set('');
     this.applyFilters();
   }
 
   clearAllFilters(): void {
-    this.unitNameFilter = '';
-    this.variableFilter = '';
-    this.codingIssueFilter = '';
-    this.testPersonFilter = '';
+    this.unitNameFilter.set('');
+    this.variableFilter.set('');
+    this.codingIssueFilter.set('');
+    this.testPersonFilter.set('');
     this.applyFilters();
   }
 
   hasActiveFilters(): boolean {
     return [
-      this.unitNameFilter,
-      this.variableFilter,
-      this.codingIssueFilter,
-      this.testPersonFilter
+      this.unitNameFilter(),
+      this.variableFilter(),
+      this.codingIssueFilter(),
+      this.testPersonFilter()
     ].some(value => value.trim().length > 0);
   }
 
@@ -574,7 +569,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   }
 
   canApplyCodingResults(): boolean {
-    return !this.isLoading &&
+    return !this.isLoading() &&
       this.data.codingJob.status !== 'results_applied' &&
       this.isCodingJobFreshnessApplyable() &&
       !this.data.codingJob.training?.id &&
@@ -636,14 +631,14 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
         return;
       }
 
-      this.isLoading = true;
-      this.changeDetector.markForCheck();
+      this.isLoading.set(true);
+
       this.codingJobBackendService.applyCodingResults(this.data.workspaceId, this.data.codingJob.id, {
         overwriteExisting: dialogResult.overwriteExisting
       }).subscribe({
         next: result => {
-          this.isLoading = false;
-          this.changeDetector.markForCheck();
+          this.isLoading.set(false);
+
           let message = this.translateService.instant(result.messageKey, result.messageParams || {});
           if (result.success) {
             this.hasAppliedResults = true;
@@ -676,8 +671,8 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
           }
         },
         error: error => {
-          this.isLoading = false;
-          this.changeDetector.markForCheck();
+          this.isLoading.set(false);
+
           this.snackBar.open(`Fehler beim Anwenden der Kodierergebnisse: ${error.message || error}`, 'Schließen', { duration: 5000 });
         }
       });

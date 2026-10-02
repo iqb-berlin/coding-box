@@ -137,19 +137,19 @@ describe('SysAdminSettingsComponent', () => {
   describe('legal notice settings', () => {
     it('loads the current legal notice on init', () => {
       expect(systemSettingsService.getLegalNotice).toHaveBeenCalled();
-      expect(component.legalNoticeHtml).toBe('<p>Legal</p>');
-      expect(component.isLegalNoticeDefault).toBe(false);
+      expect(component.legalNoticeHtml()).toBe('<p>Legal</p>');
+      expect(component.isLegalNoticeDefault()).toBe(false);
     });
 
     it('saves the edited legal notice', () => {
-      component.legalNoticeHtml = ' <p>Edited legal</p> ';
+      component.legalNoticeHtml.set(' <p>Edited legal</p> ');
 
       component.saveLegalNotice();
 
       expect(systemSettingsService.updateLegalNotice).toHaveBeenCalledWith({
         html: '<p>Edited legal</p>'
       });
-      expect(component.legalNoticeHtml).toBe('<p>Updated legal</p>');
+      expect(component.legalNoticeHtml()).toBe('<p>Updated legal</p>');
       expect(snackBar.open).toHaveBeenCalledWith(
         'Impressum/Datenschutz-Text wurde gespeichert.',
         'Schließen',
@@ -158,7 +158,7 @@ describe('SysAdminSettingsComponent', () => {
     });
 
     it('requires legal notice text before saving', () => {
-      component.legalNoticeHtml = '   ';
+      component.legalNoticeHtml.set('   ');
 
       component.saveLegalNotice();
 
@@ -174,19 +174,19 @@ describe('SysAdminSettingsComponent', () => {
       component.resetLegalNoticeToDefault();
 
       expect(systemSettingsService.resetLegalNotice).toHaveBeenCalled();
-      expect(component.legalNoticeHtml).toBe('<p>Default legal</p>');
-      expect(component.isLegalNoticeDefault).toBe(true);
+      expect(component.legalNoticeHtml()).toBe('<p>Default legal</p>');
+      expect(component.isLegalNoticeDefault()).toBe(true);
     });
   });
 
   describe('testContentPoolConnection', () => {
     it('tests the current URL with an unsaved token and shows the result', () => {
-      component.contentPoolSettings = {
+      component.contentPoolSettings.set({
         enabled: true,
         baseUrl: ' http://content-pool.test ',
         hasApplicationToken: false
-      };
-      component.contentPoolApplicationToken = ' cp_unsaved_token ';
+      });
+      component.contentPoolApplicationToken.set(' cp_unsaved_token ');
 
       component.testContentPoolConnection();
 
@@ -201,16 +201,16 @@ describe('SysAdminSettingsComponent', () => {
         'Schließen',
         { duration: 4000 }
       );
-      expect(component.isTestingContentPoolConnection).toBe(false);
+      expect(component.isTestingContentPoolConnection()).toBe(false);
     });
 
     it('requires a token when no stored token is available', () => {
-      component.contentPoolSettings = {
+      component.contentPoolSettings.set({
         enabled: true,
         baseUrl: 'http://content-pool.test',
         hasApplicationToken: false
-      };
-      component.contentPoolApplicationToken = '';
+      });
+      component.contentPoolApplicationToken.set('');
 
       component.testContentPoolConnection();
 
@@ -259,8 +259,8 @@ describe('SysAdminSettingsComponent', () => {
       downloadRequest.flush(new Blob(['sqlite']));
 
       expect(clickSpy).toHaveBeenCalled();
-      expect(component.isExporting).toBe(false);
-      expect(component.databaseExportStatus).toBe('completed');
+      expect(component.isExporting()).toBe(false);
+      expect(component.databaseExportStatus()).toBe('completed');
 
       appendChildSpy.mockRestore();
       removeChildSpy.mockRestore();
@@ -278,9 +278,9 @@ describe('SysAdminSettingsComponent', () => {
       const statusRequest = httpMock.expectOne('http://test-url/admin/database/export/sqlite/job/job-1');
       statusRequest.flush({ status: 'failed', progress: 42, error: 'Export failed' });
 
-      expect(component.isExporting).toBe(false);
-      expect(component.databaseExportStatus).toBe('failed');
-      expect(component.databaseExportError).toBe('Export failed');
+      expect(component.isExporting()).toBe(false);
+      expect(component.databaseExportStatus()).toBe('failed');
+      expect(component.databaseExportError()).toBe('Export failed');
       expect(snackBar.open).toHaveBeenCalledWith('Export failed', 'Schließen', { duration: 5000 });
     }));
 
@@ -315,7 +315,7 @@ describe('SysAdminSettingsComponent', () => {
       );
 
       expect(snackBar.open).toHaveBeenCalled();
-      expect(component.isExporting).toBe(false);
+      expect(component.isExporting()).toBe(false);
     });
   });
 });

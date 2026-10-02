@@ -1,10 +1,12 @@
+@let errorMessageValue = errorMessage();
+@let activeTaskValue = activeTask();
 <mat-expansion-panel>
   <mat-expansion-panel-header>
     <coding-box-validation-panel-header
       title="Duplikate-Prüfung"
       [status]="status"
       [badgeText]="
-        totalDuplicates > 0 ? totalDuplicates + ' Duplikate' : undefined
+        totalDuplicates() > 0 ? totalDuplicates() + ' Duplikate' : undefined
       "
     >
     </coding-box-validation-panel-header>
@@ -21,54 +23,54 @@
     <button
       mat-button
       (click)="onValidate()"
-      [disabled]="isRunning || disabled"
+      [disabled]="isRunning() || disabled"
     >
       Duplikate prüfen
     </button>
   </div>
 
-  <div class="validation-panel-content" [class.loading-fade]="isLoadingPage">
-    @if (isLoadingPage) {
+  <div class="validation-panel-content" [class.loading-fade]="isLoadingPage()">
+    @if (isLoadingPage()) {
       <mat-progress-bar
         mode="indeterminate"
         class="loading-progress"
       ></mat-progress-bar>
     }
 
-    @if (isRunning) {
+    @if (isRunning()) {
       <div class="loading-container">
         <mat-spinner
           class="mat-spinner"
           diameter="30"
-          [mode]="activeTask?.progress ? 'determinate' : 'indeterminate'"
-          [value]="activeTask?.progress"
+          [mode]="activeTaskValue?.progress ? 'determinate' : 'indeterminate'"
+          [value]="activeTaskValue?.progress"
         ></mat-spinner>
         <p class="loading-text">
           Doppelte Antworten werden geprüft...
-          @if (activeTask?.progress) {
-            ({{ activeTask?.progress }}%)
+          @if (activeTaskValue?.progress) {
+            ({{ activeTaskValue?.progress }}%)
           }
         </p>
       </div>
     }
 
-    @if (errorMessage) {
+    @if (errorMessageValue) {
       <div class="validation-result validation-error">
         <mat-icon>error</mat-icon>
-        <span>Fehler bei der Validierung: {{ errorMessage }}</span>
+        <span>Fehler bei der Validierung: {{ errorMessageValue }}</span>
       </div>
     }
 
-    @if (duplicateResponses.length > 0 || totalDuplicates > 0) {
+    @if (duplicateResponses().length > 0 || totalDuplicates() > 0) {
       <div class="validation-result validation-error">
         <mat-icon>error</mat-icon>
         <span
-          >Prüfung fehlgeschlagen: {{ totalDuplicates }} doppelte Antworten
+          >Prüfung fehlgeschlagen: {{ totalDuplicates() }} doppelte Antworten
           gefunden.</span
         >
       </div>
 
-      @if (duplicateResponses.length > 0) {
+      @if (duplicateResponses().length > 0) {
         <div class="auto-resolve-info">
           <p class="auto-resolve-info-title">Was macht „Alle automatisch auflösen“?</p>
           <ul>
@@ -81,14 +83,14 @@
 
         <div class="actions-container">
           <button mat-button (click)="toggleExpansion()">
-            {{ expandedPanel ? 'Details ausblenden' : 'Details anzeigen' }}
+            {{ expandedPanel() ? 'Details ausblenden' : 'Details anzeigen' }}
           </button>
           <button
             mat-button
             (click)="exportCsv()"
-            [disabled]="isExporting || isLoadingPage"
+            [disabled]="isExporting() || isLoadingPage()"
           >
-            @if (isExporting) {
+            @if (isExporting()) {
               <mat-spinner diameter="20"></mat-spinner> Export...
             } @else {
               CSV exportieren
@@ -99,10 +101,10 @@
             color="primary"
             (click)="resolveSelectedDuplicates()"
             [disabled]="
-              isResolvingDuplicates || !hasSelectedDuplicateResponses()
+              isResolvingDuplicates() || !hasSelectedDuplicateResponses()
             "
           >
-            @if (isResolvingDuplicates) {
+            @if (isResolvingDuplicates()) {
               <mat-spinner diameter="20"></mat-spinner> Wird bearbeitet...
             } @else {
               Ausgewählte behalten ({{ getSelectedDuplicateResponsesCount() }})
@@ -113,20 +115,20 @@
             color="warn"
             (click)="resolveAllDuplicates()"
             [disabled]="
-              isResolvingDuplicates || duplicateResponses.length === 0
+              isResolvingDuplicates() || duplicateResponses().length === 0
             "
           >
-            @if (isResolvingDuplicates) {
+            @if (isResolvingDuplicates()) {
               <mat-spinner diameter="20"></mat-spinner> Wird bearbeitet...
             } @else {
-              Alle automatisch auflösen ({{ totalDuplicates }})
+              Alle automatisch auflösen ({{ totalDuplicates() }})
             }
           </button>
         </div>
 
-        <mat-expansion-panel [expanded]="expandedPanel">
+        <mat-expansion-panel [expanded]="expandedPanel()">
           <div class="duplicate-responses-container">
-            @for (duplicate of duplicateResponses; track duplicate.key) {
+            @for (duplicate of duplicateResponses(); track duplicate.key) {
               <div class="duplicate-response-item">
                 <div class="duplicate-response-header">
                   <div class="duplicate-response-info">
@@ -159,7 +161,7 @@
                   <button
                     mat-button
                     (click)="selectSuggestedDuplicateResponse(duplicate)"
-                    [disabled]="isResolvingDuplicates"
+                    [disabled]="isResolvingDuplicates()"
                   >
                     Vorschlag übernehmen
                   </button>
@@ -168,7 +170,7 @@
                     color="primary"
                     (click)="resolveDuplicateGroup(duplicate)"
                     [disabled]="
-                      isResolvingDuplicates ||
+                      isResolvingDuplicates() ||
                       !isDuplicateGroupTouched(duplicate)
                     "
                   >
@@ -258,11 +260,11 @@
             }
 
             <mat-paginator
-              [length]="totalDuplicates"
-              [pageSize]="pageSize"
+              [length]="totalDuplicates()"
+              [pageSize]="pageSize()"
               [pageSizeOptions]="[5, 10, 25, 100]"
-              [pageIndex]="currentPage - 1"
-              [disabled]="isLoadingPage"
+              [pageIndex]="currentPage() - 1"
+              [disabled]="isLoadingPage()"
               (page)="onPageChange($event)"
               aria-label="Seite auswählen"
             >
@@ -274,10 +276,10 @@
   </div>
 
   @if (
-    !isRunning &&
-    duplicateResponses.length === 0 &&
-    totalDuplicates === 0 &&
-    wasRun
+    !isRunning() &&
+    duplicateResponses().length === 0 &&
+    totalDuplicates() === 0 &&
+    wasRun()
   ) {
     <div class="validation-result validation-success">
       <mat-icon>check_circle</mat-icon>

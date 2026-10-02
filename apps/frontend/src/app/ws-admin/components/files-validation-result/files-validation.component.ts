@@ -1,10 +1,5 @@
 import {
-  ChangeDetectionStrategy,
-  ChangeDetectorRef,
-  Component,
-  DestroyRef,
-  inject,
-  OnInit
+  ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, signal, computed
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
@@ -188,7 +183,6 @@ export class FilesValidationDialogComponent implements OnInit {
   dialogRef = inject<MatDialogRef<FilesValidationDialogComponent>>(MatDialogRef);
   private dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
-  private cdr = inject(ChangeDetectorRef);
 
   data = inject<{
     validationResults: FilesValidation[];
@@ -200,36 +194,42 @@ export class FilesValidationDialogComponent implements OnInit {
     workspaceId?: number;
   }>(MAT_DIALOG_DATA);
 
-  expandedFilesLists: Map<string, ExpandedFilesLists> = new Map();
+  readonly expandedFilesLists = signal<Map<string, ExpandedFilesLists>>(new Map());
 
-  filteredTestTakers: FilteredTestTaker[] = [];
-  duplicateTestTakers: DuplicateTestTaker[] = [];
-  unusedTestFiles: UnusedTestFile[] = [];
-  geogebra?: GeoGebraValidationResult;
-  replayCompatibilityWarnings: ReplayCompatibilityWarning[] = [];
-  validationResults: FilesValidationView[] = [];
+  readonly filteredTestTakers = signal<FilteredTestTaker[]>([]);
+  readonly duplicateTestTakers = signal<DuplicateTestTaker[]>([]);
+  readonly unusedTestFiles = signal<UnusedTestFile[]>([]);
+  readonly geogebra = signal<GeoGebraValidationResult | undefined>(undefined);
+  readonly replayCompatibilityWarnings = signal<ReplayCompatibilityWarning[]>([]);
+  readonly validationResults = signal<FilesValidationView[]>([]);
 
   selection = new SelectionModel<FilteredTestTaker>(true, []);
-  duplicateSelection = new Map<string, string>(); // Maps login to selected testTaker file
+  readonly duplicateSelection = signal(new Map<string, string>()); // Maps login to selected testTaker file
 
   unusedFilesSelection = new SelectionModel<UnusedTestFile>(true, []);
-  allUnusedFilesSelected = false;
-  isDeletingUnusedFiles = false;
+  readonly allUnusedFilesSelected = signal(false);
+  readonly isDeletingUnusedFiles = signal(false);
 
-  modeGroups: { mode: string, count: number }[] = [];
+  readonly modeGroups = signal<{
+    mode: string;
+    count: number;
+  }[]>([]);
 
-  allSelected = false;
-  isResolvingDuplicates = false;
+  readonly allSelected = signal(false);
+  readonly isResolvingDuplicates = signal(false);
 
-  ignoredUnits = new Set<string>();
-  ignoredBooklets = new Set<string>();
-  ignoredTestlets: { bookletId: string; testletId: string }[] = [];
+  readonly ignoredUnits = signal(new Set<string>());
+  readonly ignoredBooklets = signal(new Set<string>());
+  readonly ignoredTestlets = signal<{
+    bookletId: string;
+    testletId: string;
+  }[]>([]);
 
-  bookletData: Map<string, BookletInfoDto> = new Map();
-  expandedBooklets: Set<string> = new Set();
-  loadingBooklets: Set<string> = new Set();
-  isApplyingTestletBulk = false;
-  selectedTabIndex = 0;
+  readonly bookletData = signal<Map<string, BookletInfoDto>>(new Map());
+  readonly expandedBooklets = signal<Set<string>>(new Set());
+  readonly loadingBooklets = signal<Set<string>>(new Set());
+  readonly isApplyingTestletBulk = signal(false);
+  readonly selectedTabIndex = signal(0);
 
   private workspaceService = inject(WorkspaceService);
   private fileService = inject(FileService);
@@ -238,17 +238,17 @@ export class FilesValidationDialogComponent implements OnInit {
   private validationService = inject(ValidationService);
   private translate = inject(TranslateService);
 
-  isExcluding = false;
-  excludingProgress = 0;
+  readonly isExcluding = signal(false);
+  readonly excludingProgress = signal(0);
 
-  isConsidering = false;
-  consideringProgress = 0;
-  isRefreshingValidation = false;
-  refreshValidationProgress = 0;
-  refreshValidationProgressMessage = '';
-  isInstallingCompatibleAspectPlayer = false;
+  readonly isConsidering = signal(false);
+  readonly consideringProgress = signal(0);
+  readonly isRefreshingValidation = signal(false);
+  readonly refreshValidationProgress = signal(0);
+  readonly refreshValidationProgressMessage = signal('');
+  readonly isInstallingCompatibleAspectPlayer = signal(false);
 
-  summary: ValidationSummary = {
+  readonly summary = signal<ValidationSummary>({
     totalTestTakers: 0,
     validTestTakerXmls: 0,
     invalidTestTakerXmls: 0,
@@ -273,26 +273,34 @@ export class FilesValidationDialogComponent implements OnInit {
     metadata: {
       complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
     }
-  };
+  });
 
-  expandedSummaryLists: Set<string> = new Set();
+  readonly expandedSummaryLists = signal<Set<string>>(new Set());
   private readonly relationPreviewLimit = 3;
 
   toggleSummaryList(section: string): void {
-    if (this.expandedSummaryLists.has(section)) {
-      this.expandedSummaryLists.delete(section);
+    if (this.expandedSummaryLists().has(section)) {
+      this.expandedSummaryLists.update(value => {
+        const next = new Set(value);
+        next.delete(section);
+        return next;
+      });
     } else {
-      this.expandedSummaryLists.add(section);
+      this.expandedSummaryLists.update(value => {
+        const next = new Set(value);
+        next.add(section);
+        return next;
+      });
     }
   }
 
   isSummaryListExpanded(section: string): boolean {
-    return this.expandedSummaryLists.has(section);
+    return this.expandedSummaryLists().has(section);
   }
 
   private calculateSummary(): void {
-    if (!this.validationResults.length) {
-      this.summary = {
+    if (!this.validationResults().length) {
+      this.summary.set({
         totalTestTakers: 0,
         validTestTakerXmls: 0,
         invalidTestTakerXmls: 0,
@@ -317,12 +325,12 @@ export class FilesValidationDialogComponent implements OnInit {
         metadata: {
           complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
         }
-      };
+      });
       return;
     }
 
     const summaryData: ValidationSummary = {
-      totalTestTakers: this.validationResults.length,
+      totalTestTakers: this.validationResults().length,
       validTestTakerXmls: 0,
       invalidTestTakerXmls: 0,
       booklets: {
@@ -358,7 +366,7 @@ export class FilesValidationDialogComponent implements OnInit {
       metadata: new Set<string>()
     };
 
-    this.validationResults.forEach(val => {
+    this.validationResults().forEach(val => {
       if (val.testTakerSchemaValid === false) {
         summaryData.invalidTestTakerXmls += 1;
       } else {
@@ -399,62 +407,69 @@ export class FilesValidationDialogComponent implements OnInit {
       summaryData[section].missingFiles = summaryData[section].missingFileNames.length;
     });
 
-    this.summary = summaryData;
+    this.summary.set(summaryData);
   }
 
   private rebuildValidationResults(): void {
     const rawResults = this.data.validationResults || [];
-    this.validationResults = rawResults.map(result => this.createValidationView(result));
+    this.validationResults.set(rawResults.map(result => this.createValidationView(result)));
     this.calculateSummary();
-    this.cdr.markForCheck();
   }
 
   private resetExpandedFilesLists(results: FilesValidation[]): void {
-    const previous = new Map(this.expandedFilesLists);
-    this.expandedFilesLists.clear();
+    const previous = new Map(this.expandedFilesLists());
+    this.expandedFilesLists.set(new Map());
     results.forEach(val => {
       const prev = previous.get(val.testTaker);
-      this.expandedFilesLists.set(val.testTaker, {
-        booklets: prev?.booklets || false,
-        units: prev?.units || false,
-        schemes: prev?.schemes || false,
-        schemer: prev?.schemer || false,
-        definitions: prev?.definitions || false,
-        player: prev?.player || false,
-        metadata: prev?.metadata || false
+      this.expandedFilesLists.update(value => {
+        const next = new Map(value);
+        next.set(val.testTaker, {
+          booklets: prev?.booklets || false,
+          units: prev?.units || false,
+          schemes: prev?.schemes || false,
+          schemer: prev?.schemer || false,
+          definitions: prev?.definitions || false,
+          player: prev?.player || false,
+          metadata: prev?.metadata || false
+        });
+        return next;
       });
     });
   }
 
   private updateModeGroups(): void {
     const modeMap = new Map<string, number>();
-    this.filteredTestTakers
+    this.filteredTestTakers()
       .filter(item => this.isKnownTestTaker(item))
       .forEach(item => {
         const count = modeMap.get(item.mode) || 0;
         modeMap.set(item.mode, count + 1);
       });
-    this.modeGroups = Array.from(modeMap.entries()).map(([mode, count]) => ({ mode, count }));
+    this.modeGroups.set(Array.from(modeMap.entries()).map(([mode, count]) => ({ mode, count })));
   }
 
   private applyValidationResultData(resultDto: FileValidationResultDto): void {
     const filteredResults = (resultDto.validationResults || []).filter(v => !!v?.testTaker) as FilesValidation[];
     this.data.validationResults = filteredResults;
-    this.filteredTestTakers = resultDto.filteredTestTakers || [];
-    this.duplicateTestTakers = resultDto.duplicateTestTakers || [];
-    this.unusedTestFiles = resultDto.unusedTestFiles || [];
-    this.geogebra = resultDto.geogebra;
-    this.replayCompatibilityWarnings = resultDto.replayCompatibilityWarnings || [];
+    this.filteredTestTakers.set(resultDto.filteredTestTakers || []);
+    this.duplicateTestTakers.set(resultDto.duplicateTestTakers || []);
+    this.unusedTestFiles.set(resultDto.unusedTestFiles || []);
+    this.geogebra.set(resultDto.geogebra);
+    this.replayCompatibilityWarnings.set(resultDto.replayCompatibilityWarnings || []);
 
     this.selection.clear();
-    this.allSelected = false;
+    this.allSelected.set(false);
     this.unusedFilesSelection.clear();
-    this.allUnusedFilesSelected = false;
-    this.duplicateSelection.clear();
+    this.allUnusedFilesSelected.set(false);
+    this.duplicateSelection.set(new Map());
 
-    this.duplicateTestTakers.forEach(duplicate => {
+    this.duplicateTestTakers().forEach(duplicate => {
       if (duplicate.occurrences.length > 0) {
-        this.duplicateSelection.set(duplicate.login, duplicate.occurrences[0].testTaker);
+        this.duplicateSelection.update(value => {
+          const next = new Map(value);
+          next.set(duplicate.login, duplicate.occurrences[0].testTaker);
+          return next;
+        });
       }
     });
 
@@ -464,15 +479,14 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   private refreshValidationData(successMessage?: string): void {
-    if (!this.data.workspaceId || this.isRefreshingValidation) {
+    if (!this.data.workspaceId || this.isRefreshingValidation()) {
       return;
     }
 
     const workspaceId = this.data.workspaceId;
-    this.isRefreshingValidation = true;
-    this.refreshValidationProgress = 0;
-    this.refreshValidationProgressMessage = 'Testdateien werden auf Änderungen geprüft...';
-    this.cdr.markForCheck();
+    this.isRefreshingValidation.set(true);
+    this.refreshValidationProgress.set(0);
+    this.refreshValidationProgressMessage.set('Testdateien werden auf Änderungen geprüft...');
 
     this.validationService.createValidationTask(workspaceId, 'testFiles').pipe(
       switchMap(task => this.waitForValidationTask(workspaceId, task)),
@@ -480,14 +494,13 @@ export class FilesValidationDialogComponent implements OnInit {
         if (task.status === 'failed') {
           throw new Error(task.error || 'Validierung fehlgeschlagen');
         }
-        this.refreshValidationProgress = 100;
-        this.refreshValidationProgressMessage = task.progress_message || 'Validierungsergebnis wird geladen...';
-        this.cdr.markForCheck();
+        this.refreshValidationProgress.set(100);
+        this.refreshValidationProgressMessage.set(task.progress_message || 'Validierungsergebnis wird geladen...');
+
         return this.validationService.getValidationResults(workspaceId, task.id);
       }),
       finalize(() => {
-        this.isRefreshingValidation = false;
-        this.cdr.markForCheck();
+        this.isRefreshingValidation.set(false);
       })
     ).subscribe({
       next: response => {
@@ -526,16 +539,14 @@ export class FilesValidationDialogComponent implements OnInit {
 
   private updateRefreshValidationProgress(task: ValidationTaskDto): void {
     const progress = task.progress ?? 0;
-    this.refreshValidationProgress = Math.max(this.refreshValidationProgress, progress);
+    this.refreshValidationProgress.set(Math.max(this.refreshValidationProgress(), progress));
     if (task.progress_message) {
-      this.refreshValidationProgressMessage = `${this.refreshValidationProgress}% - ${task.progress_message}`;
+      this.refreshValidationProgressMessage.set(`${this.refreshValidationProgress()}% - ${task.progress_message}`);
     } else {
-      this.refreshValidationProgressMessage =
-        this.refreshValidationProgress >= 100 ?
-          'Validierungsergebnis wird geladen...' :
-          `Validierung wird durchgeführt (${this.refreshValidationProgress}%)...`;
+      this.refreshValidationProgressMessage.set(this.refreshValidationProgress() >= 100 ?
+        'Validierungsergebnis wird geladen...' :
+        `Validierung wird durchgeführt (${this.refreshValidationProgress()}%)...`);
     }
-    this.cdr.markForCheck();
   }
 
   openGeoGebraResourcePackagesDialog(): void {
@@ -561,17 +572,15 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   installCompatibleAspectPlayer(): void {
-    if (!this.data.workspaceId || this.isInstallingCompatibleAspectPlayer) {
+    if (!this.data.workspaceId || this.isInstallingCompatibleAspectPlayer()) {
       return;
     }
 
-    this.isInstallingCompatibleAspectPlayer = true;
-    this.cdr.markForCheck();
+    this.isInstallingCompatibleAspectPlayer.set(true);
 
     this.fileService.installCompatibleAspectPlayer(this.data.workspaceId)
       .pipe(finalize(() => {
-        this.isInstallingCompatibleAspectPlayer = false;
-        this.cdr.markForCheck();
+        this.isInstallingCompatibleAspectPlayer.set(false);
       }))
       .subscribe({
         next: () => {
@@ -698,64 +707,68 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   get knownFilteredTestTakers(): FilteredTestTaker[] {
-    return this.filteredTestTakers.filter(item => this.isKnownTestTaker(item));
+    return this.filteredTestTakers().filter(item => this.isKnownTestTaker(item));
   }
 
   get knownFilteredCount(): number {
     return this.knownFilteredTestTakers.length;
   }
 
-  get filteredTotalCount(): number {
-    return this.filteredTestTakers.length;
-  }
+  readonly filteredTotalCount = computed<number>(() => this.filteredTestTakers().length);
 
-  get filteredExcludedCount(): number {
-    return this.filteredTestTakers.filter(item => item.consider === false).length;
-  }
+  readonly filteredExcludedCount = computed<number>(() => this.filteredTestTakers().filter(item => item.consider === false).length);
 
   constructor() {
     if (this.data) {
       if (this.data.validationResults) {
         this.data.validationResults.forEach((val: FilesValidation) => {
-          this.expandedFilesLists.set(val.testTaker, {
-            booklets: false,
-            units: false,
-            schemes: false,
-            schemer: false,
-            definitions: false,
-            player: false,
-            metadata: false
+          this.expandedFilesLists.update(value => {
+            const next = new Map(value);
+            next.set(val.testTaker, {
+              booklets: false,
+              units: false,
+              schemes: false,
+              schemer: false,
+              definitions: false,
+              player: false,
+              metadata: false
+            });
+            return next;
           });
         });
         this.rebuildValidationResults();
       }
 
       if (this.data.filteredTestTakers) {
-        this.filteredTestTakers = this.data.filteredTestTakers;
+        this.filteredTestTakers.set(this.data.filteredTestTakers);
         this.updateModeGroups();
       }
 
       if (this.data.duplicateTestTakers) {
-        this.duplicateTestTakers = this.data.duplicateTestTakers;
+        this.duplicateTestTakers.set(this.data.duplicateTestTakers);
 
         // Initialize selection with the first occurrence for each duplicate
-        this.duplicateTestTakers.forEach(duplicate => {
+        this.duplicateTestTakers().forEach(duplicate => {
           if (duplicate.occurrences.length > 0) {
-            this.duplicateSelection.set(duplicate.login, duplicate.occurrences[0].testTaker);
+            this.duplicateSelection.update(value => {
+              const next = new Map(value);
+              next.set(duplicate.login, duplicate.occurrences[0].testTaker);
+              return next;
+            });
           }
         });
       }
 
       if (this.data.unusedTestFiles) {
-        this.unusedTestFiles = this.data.unusedTestFiles;
+        this.unusedTestFiles.set(this.data.unusedTestFiles);
       }
 
       if (this.data.geogebra) {
-        this.geogebra = this.data.geogebra;
+        this.geogebra.set(this.data.geogebra);
       }
 
       if (this.data.replayCompatibilityWarnings) {
-        this.replayCompatibilityWarnings = this.data.replayCompatibilityWarnings;
+        this.replayCompatibilityWarnings.set(this.data.replayCompatibilityWarnings);
       }
     }
   }
@@ -769,9 +782,9 @@ export class FilesValidationDialogComponent implements OnInit {
   loadWorkspaceSettings(): void {
     if (!this.data.workspaceId) return;
     this.workspaceService.getWorkspaceSettings(this.data.workspaceId).subscribe(settings => {
-      this.ignoredUnits = new Set((settings.ignoredUnits || []).map(u => u.toUpperCase()));
-      this.ignoredBooklets = new Set((settings.ignoredBooklets || []).map(b => b.toUpperCase()));
-      this.ignoredTestlets = (settings.ignoredTestlets || []).map(t => ({ bookletId: t.bookletId.toUpperCase(), testletId: t.testletId.toUpperCase() }));
+      this.ignoredUnits.set(new Set((settings.ignoredUnits || []).map(u => u.toUpperCase())));
+      this.ignoredBooklets.set(new Set((settings.ignoredBooklets || []).map(b => b.toUpperCase())));
+      this.ignoredTestlets.set((settings.ignoredTestlets || []).map(t => ({ bookletId: t.bookletId.toUpperCase(), testletId: t.testletId.toUpperCase() })));
       this.rebuildValidationResults();
     });
   }
@@ -781,16 +794,16 @@ export class FilesValidationDialogComponent implements OnInit {
     const normalizedUnit = unit.toUpperCase();
 
     // Direct unit ignore
-    if (this.ignoredUnits.has(normalizedUnit)) return true;
+    if (this.ignoredUnits().has(normalizedUnit)) return true;
 
     // Check parent exclusions if parents are provided
     if (parents && parents.length > 0) {
       return parents.some(bookletId => {
         const normalizedBooklet = bookletId.toUpperCase();
-        if (this.ignoredBooklets.has(normalizedBooklet)) return true;
+        if (this.ignoredBooklets().has(normalizedBooklet)) return true;
 
         // Check testlets if we have booklet data loaded
-        const info = this.bookletData.get(normalizedBooklet);
+        const info = this.bookletData().get(normalizedBooklet);
         if (info && info.testlets) {
           return info.testlets.some((testlet: BookletTestletDto) => this.isTestletIgnored(normalizedBooklet, testlet.id) &&
             (testlet.units || []).some((u: BookletUnitDto) => u.id.toUpperCase() === normalizedUnit));
@@ -803,25 +816,25 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   isBookletIgnored(booklet: string): boolean {
-    return !!booklet && this.ignoredBooklets.has(booklet.toUpperCase());
+    return !!booklet && this.ignoredBooklets().has(booklet.toUpperCase());
   }
 
   isTestletIgnored(bookletId: string, testletId: string): boolean {
     if (!bookletId || !testletId) return false;
     const normBooklet = bookletId.toUpperCase();
     const normTestlet = testletId.toUpperCase();
-    return this.ignoredTestlets.some(t => t.bookletId === normBooklet && t.testletId === normTestlet);
+    return this.ignoredTestlets().some(t => t.bookletId === normBooklet && t.testletId === normTestlet);
   }
 
   hasIgnoredTestlets(bookletId: string): boolean {
     if (!bookletId) return false;
     const normBooklet = bookletId.toUpperCase();
-    return this.ignoredTestlets.some(t => t.bookletId === normBooklet);
+    return this.ignoredTestlets().some(t => t.bookletId === normBooklet);
   }
 
   private getExistingBookletIdsFromValidation(): string[] {
     const bookletIds = new Set<string>();
-    this.validationResults.forEach(result => {
+    this.validationResults().forEach(result => {
       result.booklets.files.forEach(file => {
         if (file.exists && file.filename) {
           bookletIds.add(file.filename.toUpperCase());
@@ -833,7 +846,7 @@ export class FilesValidationDialogComponent implements OnInit {
 
   private async ensureBookletData(bookletId: string): Promise<BookletInfoDto | null> {
     const normalizedBookletId = bookletId.toUpperCase();
-    const cached = this.bookletData.get(normalizedBookletId);
+    const cached = this.bookletData().get(normalizedBookletId);
     if (cached) {
       return cached;
     }
@@ -842,17 +855,28 @@ export class FilesValidationDialogComponent implements OnInit {
     }
 
     try {
-      this.loadingBooklets.add(normalizedBookletId);
+      this.loadingBooklets.update(value => {
+        const next = new Set(value);
+        next.add(normalizedBookletId);
+        return next;
+      });
       const info = await firstValueFrom(
         this.fileService.getBookletInfo(this.data.workspaceId, normalizedBookletId)
       );
-      this.bookletData.set(normalizedBookletId, info);
+      this.bookletData.update(value => {
+        const next = new Map(value);
+        next.set(normalizedBookletId, info);
+        return next;
+      });
       return info;
     } catch {
       return null;
     } finally {
-      this.loadingBooklets.delete(normalizedBookletId);
-      this.cdr.markForCheck();
+      this.loadingBooklets.update(value => {
+        const next = new Set(value);
+        next.delete(normalizedBookletId);
+        return next;
+      });
     }
   }
 
@@ -885,7 +909,7 @@ export class FilesValidationDialogComponent implements OnInit {
   ): { nextIgnoredTestlets: { bookletId: string; testletId: string }[]; changedCount: number } {
     const normalizedTestletId = testletId.toUpperCase();
     const existingMap = new Map<string, { bookletId: string; testletId: string }>();
-    this.ignoredTestlets.forEach(entry => {
+    this.ignoredTestlets().forEach(entry => {
       existingMap.set(`${entry.bookletId}|${entry.testletId}`, entry);
     });
 
@@ -920,11 +944,19 @@ export class FilesValidationDialogComponent implements OnInit {
     if (!bookletId) return;
     const normalized = bookletId.toUpperCase();
 
-    if (this.expandedBooklets.has(normalized)) {
-      this.expandedBooklets.delete(normalized);
+    if (this.expandedBooklets().has(normalized)) {
+      this.expandedBooklets.update(value => {
+        const next = new Set(value);
+        next.delete(normalized);
+        return next;
+      });
     } else {
-      this.expandedBooklets.add(normalized);
-      if (!this.bookletData.has(normalized) && !this.loadingBooklets.has(normalized)) {
+      this.expandedBooklets.update(value => {
+        const next = new Set(value);
+        next.add(normalized);
+        return next;
+      });
+      if (!this.bookletData().has(normalized) && !this.loadingBooklets().has(normalized)) {
         this.loadBookletData(normalized);
       }
     }
@@ -932,16 +964,30 @@ export class FilesValidationDialogComponent implements OnInit {
 
   private loadBookletData(bookletId: string): void {
     if (!this.data.workspaceId || !bookletId) return;
-    this.loadingBooklets.add(bookletId);
+    this.loadingBooklets.update(value => {
+      const next = new Set(value);
+      next.add(bookletId);
+      return next;
+    });
     this.fileService.getBookletInfo(this.data.workspaceId, bookletId).subscribe({
       next: info => {
-        this.bookletData.set(bookletId, info);
-        this.loadingBooklets.delete(bookletId);
-        this.cdr.markForCheck();
+        this.bookletData.update(value => {
+          const next = new Map(value);
+          next.set(bookletId, info);
+          return next;
+        });
+        this.loadingBooklets.update(value => {
+          const next = new Set(value);
+          next.delete(bookletId);
+          return next;
+        });
       },
       error: () => {
-        this.loadingBooklets.delete(bookletId);
-        this.cdr.markForCheck();
+        this.loadingBooklets.update(value => {
+          const next = new Set(value);
+          next.delete(bookletId);
+          return next;
+        });
       }
     });
   }
@@ -949,9 +995,9 @@ export class FilesValidationDialogComponent implements OnInit {
   private saveCurrentWorkspaceSettings(onSuccess: (message: string) => void, onRevert: () => void): void {
     if (!this.data.workspaceId) return;
     const settings = {
-      ignoredUnits: Array.from(this.ignoredUnits),
-      ignoredBooklets: Array.from(this.ignoredBooklets),
-      ignoredTestlets: this.ignoredTestlets
+      ignoredUnits: Array.from(this.ignoredUnits()),
+      ignoredBooklets: Array.from(this.ignoredBooklets()),
+      ignoredTestlets: this.ignoredTestlets()
     };
     this.workspaceService.saveWorkspaceSettings(this.data.workspaceId, settings).subscribe({
       next: success => {
@@ -964,13 +1010,11 @@ export class FilesValidationDialogComponent implements OnInit {
         } else {
           onRevert();
           this.snackBar.open('Fehler beim Speichern', 'OK', { duration: 3000 });
-          this.cdr.markForCheck();
         }
       },
       error: () => {
         onRevert();
         this.snackBar.open('Fehler beim Speichern', 'OK', { duration: 3000 });
-        this.cdr.markForCheck();
       }
     });
   }
@@ -979,12 +1023,28 @@ export class FilesValidationDialogComponent implements OnInit {
     if (!unit || !this.data.workspaceId) return;
     const normalized = unit.toUpperCase();
 
-    if (this.ignoredUnits.has(normalized)) {
-      this.ignoredUnits.delete(normalized);
-      this.saveCurrentWorkspaceSettings(() => this.snackBar.open('Aufgabe wiederhergestellt', 'OK', { duration: 3000 }), () => this.ignoredUnits.add(normalized));
+    if (this.ignoredUnits().has(normalized)) {
+      this.ignoredUnits.update(value => {
+        const next = new Set(value);
+        next.delete(normalized);
+        return next;
+      });
+      this.saveCurrentWorkspaceSettings(() => this.snackBar.open('Aufgabe wiederhergestellt', 'OK', { duration: 3000 }), () => this.ignoredUnits.update(value => {
+        const next = new Set(value);
+        next.add(normalized);
+        return next;
+      }));
     } else {
-      this.ignoredUnits.add(normalized);
-      this.saveCurrentWorkspaceSettings(() => this.snackBar.open('Aufgabe ignoriert', 'OK', { duration: 3000 }), () => this.ignoredUnits.delete(normalized));
+      this.ignoredUnits.update(value => {
+        const next = new Set(value);
+        next.add(normalized);
+        return next;
+      });
+      this.saveCurrentWorkspaceSettings(() => this.snackBar.open('Aufgabe ignoriert', 'OK', { duration: 3000 }), () => this.ignoredUnits.update(value => {
+        const next = new Set(value);
+        next.delete(normalized);
+        return next;
+      }));
     }
   }
 
@@ -992,12 +1052,28 @@ export class FilesValidationDialogComponent implements OnInit {
     if (!booklet || !this.data.workspaceId) return;
     const normalized = booklet.toUpperCase();
 
-    if (this.ignoredBooklets.has(normalized)) {
-      this.ignoredBooklets.delete(normalized);
-      this.saveCurrentWorkspaceSettings(() => this.snackBar.open('Testheft wiederhergestellt', 'OK', { duration: 3000 }), () => this.ignoredBooklets.add(normalized));
+    if (this.ignoredBooklets().has(normalized)) {
+      this.ignoredBooklets.update(value => {
+        const next = new Set(value);
+        next.delete(normalized);
+        return next;
+      });
+      this.saveCurrentWorkspaceSettings(() => this.snackBar.open('Testheft wiederhergestellt', 'OK', { duration: 3000 }), () => this.ignoredBooklets.update(value => {
+        const next = new Set(value);
+        next.add(normalized);
+        return next;
+      }));
     } else {
-      this.ignoredBooklets.add(normalized);
-      this.saveCurrentWorkspaceSettings(() => this.snackBar.open('Testheft ignoriert', 'OK', { duration: 3000 }), () => this.ignoredBooklets.delete(normalized));
+      this.ignoredBooklets.update(value => {
+        const next = new Set(value);
+        next.add(normalized);
+        return next;
+      });
+      this.saveCurrentWorkspaceSettings(() => this.snackBar.open('Testheft ignoriert', 'OK', { duration: 3000 }), () => this.ignoredBooklets.update(value => {
+        const next = new Set(value);
+        next.delete(normalized);
+        return next;
+      }));
     }
   }
 
@@ -1006,25 +1082,33 @@ export class FilesValidationDialogComponent implements OnInit {
     const normBooklet = bookletId.toUpperCase();
     const normTestlet = testletId.toUpperCase();
 
-    const index = this.ignoredTestlets.findIndex(t => t.bookletId === normBooklet && t.testletId === normTestlet);
+    const index = this.ignoredTestlets().findIndex(t => t.bookletId === normBooklet && t.testletId === normTestlet);
 
     if (index >= 0) {
-      this.ignoredTestlets.splice(index, 1);
+      this.ignoredTestlets.update(value => {
+        const next = [...value];
+        next.splice(index, 1);
+        return next;
+      });
       this.saveCurrentWorkspaceSettings(
         () => this.snackBar.open('Testlet wiederhergestellt', 'OK', { duration: 3000 }),
-        () => this.ignoredTestlets.push({ bookletId: normBooklet, testletId: normTestlet })
+        () => this.ignoredTestlets.update(value => [...value, { bookletId: normBooklet, testletId: normTestlet }])
       );
     } else {
-      this.ignoredTestlets.push({ bookletId: normBooklet, testletId: normTestlet });
+      this.ignoredTestlets.update(value => [...value, { bookletId: normBooklet, testletId: normTestlet }]);
       this.saveCurrentWorkspaceSettings(
         () => this.snackBar.open('Testlet ignoriert', 'OK', { duration: 3000 }),
-        () => this.ignoredTestlets.splice(this.ignoredTestlets.findIndex(t => t.bookletId === normBooklet && t.testletId === normTestlet), 1)
+        () => this.ignoredTestlets.update(value => {
+          const next = [...value];
+          next.splice(this.ignoredTestlets().findIndex(t => t.bookletId === normBooklet && t.testletId === normTestlet), 1);
+          return next;
+        })
       );
     }
   }
 
   async toggleTestletIgnoreForAllBooklets(bookletId: string, testletId: string): Promise<void> {
-    if (!bookletId || !testletId || !this.data.workspaceId || this.isApplyingTestletBulk) {
+    if (!bookletId || !testletId || !this.data.workspaceId || this.isApplyingTestletBulk()) {
       return;
     }
 
@@ -1032,8 +1116,7 @@ export class FilesValidationDialogComponent implements OnInit {
     const normalizedTestletId = testletId.toUpperCase();
     const shouldIgnore = !this.isTestletIgnored(normalizedBookletId, normalizedTestletId);
 
-    this.isApplyingTestletBulk = true;
-    this.cdr.markForCheck();
+    this.isApplyingTestletBulk.set(true);
 
     try {
       const matchingBooklets = await this.findBookletsWithTestlet(normalizedTestletId);
@@ -1042,7 +1125,7 @@ export class FilesValidationDialogComponent implements OnInit {
         return;
       }
 
-      const previousIgnoredTestlets = [...this.ignoredTestlets];
+      const previousIgnoredTestlets = [...this.ignoredTestlets()];
       const { nextIgnoredTestlets, changedCount } = this.applyTestletIgnoreToBooklets(
         matchingBooklets,
         normalizedTestletId,
@@ -1057,7 +1140,7 @@ export class FilesValidationDialogComponent implements OnInit {
         return;
       }
 
-      this.ignoredTestlets = nextIgnoredTestlets;
+      this.ignoredTestlets.set(nextIgnoredTestlets);
       this.saveCurrentWorkspaceSettings(
         () => {
           const bookletLabel = changedCount === 1 ? '1 Testheft' : `${changedCount} Testhefte`;
@@ -1065,17 +1148,15 @@ export class FilesValidationDialogComponent implements OnInit {
           this.snackBar.open(`Testlet in ${bookletLabel} ${actionLabel}`, 'OK', { duration: 3000 });
         },
         () => {
-          this.ignoredTestlets = previousIgnoredTestlets;
-          this.cdr.markForCheck();
+          this.ignoredTestlets.set(previousIgnoredTestlets);
         }
       );
     } finally {
-      this.isApplyingTestletBulk = false;
-      this.cdr.markForCheck();
+      this.isApplyingTestletBulk.set(false);
     }
   }
 
-  filesDeleted = false;
+  readonly filesDeleted = signal(false);
 
   toggleUnusedFilesSelection(file: UnusedTestFile): void {
     this.unusedFilesSelection.toggle(file);
@@ -1083,42 +1164,42 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   toggleAllUnusedFilesSelection(): void {
-    if (this.allUnusedFilesSelected) {
+    if (this.allUnusedFilesSelected()) {
       this.unusedFilesSelection.clear();
-      this.allUnusedFilesSelected = false;
+      this.allUnusedFilesSelected.set(false);
     } else {
-      this.unusedFilesSelection.select(...this.unusedTestFiles);
-      this.allUnusedFilesSelected = true;
+      this.unusedFilesSelection.select(...this.unusedTestFiles());
+      this.allUnusedFilesSelected.set(true);
     }
   }
 
   checkIfAllUnusedFilesSelected(): void {
-    this.allUnusedFilesSelected = this.unusedTestFiles.length > 0 &&
-      this.unusedFilesSelection.selected.length === this.unusedTestFiles.length;
+    this.allUnusedFilesSelected.set(this.unusedTestFiles().length > 0 &&
+    this.unusedFilesSelection.selected.length === this.unusedTestFiles().length);
   }
 
   deleteSelectedUnusedFiles(): void {
-    if (!this.data.workspaceId || this.unusedFilesSelection.selected.length === 0 || this.isDeletingUnusedFiles) {
+    if (!this.data.workspaceId || this.unusedFilesSelection.selected.length === 0 || this.isDeletingUnusedFiles()) {
       return;
     }
 
-    this.isDeletingUnusedFiles = true;
+    this.isDeletingUnusedFiles.set(true);
     const idsToDelete = this.unusedFilesSelection.selected.map(f => f.id);
 
     this.fileService.deleteFilesWithResult(this.data.workspaceId, idsToDelete)
       .subscribe({
         next: result => {
-          this.isDeletingUnusedFiles = false;
+          this.isDeletingUnusedFiles.set(false);
           if (result.success) {
-            this.filesDeleted = true;
-            this.unusedTestFiles = this.unusedTestFiles.filter(f => !idsToDelete.includes(f.id));
+            this.filesDeleted.set(true);
+            this.unusedTestFiles.set(this.unusedTestFiles().filter(f => !idsToDelete.includes(f.id)));
             this.unusedFilesSelection.clear();
             this.checkIfAllUnusedFilesSelected();
             this.refreshValidationData('Validierungsergebnisse wurden aktualisiert');
             this.snackBar.open('Dateien erfolgreich gelöscht', 'OK', { duration: 3000 });
           } else {
             if (result.requestHandled) {
-              this.filesDeleted = true;
+              this.filesDeleted.set(true);
               this.unusedFilesSelection.clear();
               this.checkIfAllUnusedFilesSelected();
               this.refreshValidationData();
@@ -1127,14 +1208,14 @@ export class FilesValidationDialogComponent implements OnInit {
           }
         },
         error: () => {
-          this.isDeletingUnusedFiles = false;
+          this.isDeletingUnusedFiles.set(false);
           this.snackBar.open('Fehler beim Löschen der Dateien', 'Fehler', { duration: 3000 });
         }
       });
   }
 
   close(): void {
-    this.dialogRef.close(this.filesDeleted);
+    this.dialogRef.close(this.filesDeleted());
   }
 
   private findBookletsForMissingUnit(data: DataValidation, unit: string): string[] {
@@ -1178,26 +1259,30 @@ export class FilesValidationDialogComponent implements OnInit {
 
   // Select which occurrence of a duplicate test taker to keep
   selectDuplicateOccurrence(login: string, testTaker: string): void {
-    this.duplicateSelection.set(login, testTaker);
+    this.duplicateSelection.update(value => {
+      const next = new Map(value);
+      next.set(login, testTaker);
+      return next;
+    });
   }
 
   // Get the selected occurrence for a duplicate test taker
   getSelectedOccurrence(login: string): string | undefined {
-    return this.duplicateSelection.get(login);
+    return this.duplicateSelection().get(login);
   }
 
   // Resolve duplicate test takers by keeping only the selected occurrences
   resolveDuplicateTestTakers(): void {
-    if (!this.data.workspaceId || this.duplicateTestTakers.length === 0 || this.isResolvingDuplicates) {
+    if (!this.data.workspaceId || this.duplicateTestTakers().length === 0 || this.isResolvingDuplicates()) {
       return;
     }
 
-    this.isResolvingDuplicates = true;
+    this.isResolvingDuplicates.set(true);
 
     // Create a map of login -> selected testTaker file
     const resolutionMap = new Map<string, string>();
-    this.duplicateTestTakers.forEach(duplicate => {
-      const selectedTestTaker = this.duplicateSelection.get(duplicate.login);
+    this.duplicateTestTakers().forEach(duplicate => {
+      const selectedTestTaker = this.duplicateSelection().get(duplicate.login);
       if (selectedTestTaker) {
         resolutionMap.set(duplicate.login, selectedTestTaker);
       }
@@ -1209,12 +1294,13 @@ export class FilesValidationDialogComponent implements OnInit {
         next: success => {
           if (success) {
             // Remove resolved duplicates from the list
-            this.duplicateTestTakers = [];
+            // Remove resolved duplicates from the list
+            this.duplicateTestTakers.set([]);
           }
-          this.isResolvingDuplicates = false;
+          this.isResolvingDuplicates.set(false);
         },
         error: () => {
-          this.isResolvingDuplicates = false;
+          this.isResolvingDuplicates.set(false);
         }
       });
   }
@@ -1228,9 +1314,9 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   toggleAllSelection(): void {
-    if (this.allSelected) {
+    if (this.allSelected()) {
       this.selection.clear();
-      this.allSelected = false;
+      this.allSelected.set(false);
     } else {
       const selectable = this.knownFilteredTestTakers;
       if (selectable.length > 1000) {
@@ -1256,12 +1342,12 @@ export class FilesValidationDialogComponent implements OnInit {
         this.selection.select(...selectable);
       }
 
-      this.allSelected = true;
+      this.allSelected.set(true);
     }
   }
 
   toggleModeSelection(mode: string): void {
-    const testTakersWithMode = this.filteredTestTakers.filter(item => item.mode === mode && this.isKnownTestTaker(item));
+    const testTakersWithMode = this.filteredTestTakers().filter(item => item.mode === mode && this.isKnownTestTaker(item));
 
     if (testTakersWithMode.length === 0) {
       return;
@@ -1309,23 +1395,23 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   checkIfAllSelected(): void {
-    this.allSelected = this.knownFilteredCount > 0 &&
-      this.selection.selected.length === this.knownFilteredCount;
+    this.allSelected.set(this.knownFilteredCount > 0 &&
+    this.selection.selected.length === this.knownFilteredCount);
   }
 
   isModeSelected(mode: string): boolean {
-    return this.filteredTestTakers
+    return this.filteredTestTakers()
       .filter(item => item.mode === mode && this.isKnownTestTaker(item))
       .every(item => this.selection.isSelected(item));
   }
 
   markTestTakersAsConsidered(): void {
-    if (!this.data.workspaceId || this.selection.selected.length === 0 || this.isConsidering) {
+    if (!this.data.workspaceId || this.selection.selected.length === 0 || this.isConsidering()) {
       return;
     }
 
-    this.isConsidering = true;
-    this.consideringProgress = 0;
+    this.isConsidering.set(true);
+    this.consideringProgress.set(0);
 
     if (this.selection.selected.length > 500) {
       const batchSize = 500;
@@ -1342,30 +1428,30 @@ export class FilesValidationDialogComponent implements OnInit {
             next: success => {
               if (success) {
                 const loginSet = new Set(batchLogins);
-                this.filteredTestTakers = this.filteredTestTakers.map(item => (loginSet.has(item.login) ? {
+                this.filteredTestTakers.set(this.filteredTestTakers().map(item => (loginSet.has(item.login) ? {
                   ...item,
                   consider: true
-                } : item));
+                } : item)));
 
                 this.testResultService.invalidateCache(this.data.workspaceId!);
 
-                this.consideringProgress = Math.round((endIndex / totalItems) * 100);
+                this.consideringProgress.set(Math.round((endIndex / totalItems) * 100));
 
                 if (endIndex < totalItems) {
                   setTimeout(() => processBatch(endIndex), 100);
                 } else {
                   this.selection.clear();
-                  this.isConsidering = false;
-                  this.consideringProgress = 0;
+                  this.isConsidering.set(false);
+                  this.consideringProgress.set(0);
                 }
               } else {
-                this.isConsidering = false;
-                this.consideringProgress = 0;
+                this.isConsidering.set(false);
+                this.consideringProgress.set(0);
               }
             },
             error: () => {
-              this.isConsidering = false;
-              this.consideringProgress = 0;
+              this.isConsidering.set(false);
+              this.consideringProgress.set(0);
             }
           });
       };
@@ -1373,39 +1459,39 @@ export class FilesValidationDialogComponent implements OnInit {
       processBatch(0);
     } else {
       const logins = this.selection.selected.map(item => item.login);
-      this.consideringProgress = 50;
+      this.consideringProgress.set(50);
 
       this.workspaceService.markTestTakersAsConsidered(this.data.workspaceId!, logins)
         .subscribe({
           next: success => {
             if (success) {
               const loginSet = new Set(logins);
-              this.filteredTestTakers = this.filteredTestTakers.map(item => (loginSet.has(item.login) ? {
+              this.filteredTestTakers.set(this.filteredTestTakers().map(item => (loginSet.has(item.login) ? {
                 ...item,
                 consider: true
-              } : item));
+              } : item)));
               this.selection.clear();
 
               this.testResultService.invalidateCache(this.data.workspaceId!);
             }
-            this.isConsidering = false;
-            this.consideringProgress = 0;
+            this.isConsidering.set(false);
+            this.consideringProgress.set(0);
           },
           error: () => {
-            this.isConsidering = false;
-            this.consideringProgress = 0;
+            this.isConsidering.set(false);
+            this.consideringProgress.set(0);
           }
         });
     }
   }
 
   markTestTakersAsExcluded(): void {
-    if (!this.data.workspaceId || this.selection.selected.length === 0 || this.isExcluding) {
+    if (!this.data.workspaceId || this.selection.selected.length === 0 || this.isExcluding()) {
       return;
     }
 
-    this.isExcluding = true;
-    this.excludingProgress = 0;
+    this.isExcluding.set(true);
+    this.excludingProgress.set(0);
 
     if (this.selection.selected.length > 500) {
       // Process in batches of 500 items
@@ -1425,15 +1511,16 @@ export class FilesValidationDialogComponent implements OnInit {
             next: success => {
               if (success) {
                 const loginSet = new Set(batchLogins);
-                this.filteredTestTakers = this.filteredTestTakers.map(item => (loginSet.has(item.login) ? {
+                this.filteredTestTakers.set(this.filteredTestTakers().map(item => (loginSet.has(item.login) ? {
                   ...item,
                   consider: false
-                } : item));
+                } : item)));
 
                 this.testResultService.invalidateCache(this.data.workspaceId!);
 
                 // Update progress
-                this.excludingProgress = Math.round((endIndex / totalItems) * 100);
+                // Update progress
+                this.excludingProgress.set(Math.round((endIndex / totalItems) * 100));
 
                 // If more batches remain, process the next batch
                 if (endIndex < totalItems) {
@@ -1442,17 +1529,17 @@ export class FilesValidationDialogComponent implements OnInit {
                 } else {
                   // All batches processed
                   this.selection.clear();
-                  this.isExcluding = false;
-                  this.excludingProgress = 0;
+                  this.isExcluding.set(false);
+                  this.excludingProgress.set(0);
                 }
               } else {
-                this.isExcluding = false;
-                this.excludingProgress = 0;
+                this.isExcluding.set(false);
+                this.excludingProgress.set(0);
               }
             },
             error: () => {
-              this.isExcluding = false;
-              this.excludingProgress = 0;
+              this.isExcluding.set(false);
+              this.excludingProgress.set(0);
             }
           });
       };
@@ -1464,7 +1551,8 @@ export class FilesValidationDialogComponent implements OnInit {
       const logins = this.selection.selected.map(item => item.login);
 
       // For smaller datasets, show 50% progress immediately and 100% when done
-      this.excludingProgress = 50;
+      // For smaller datasets, show 50% progress immediately and 100% when done
+      this.excludingProgress.set(50);
 
       // Call service to mark these test takers as excluded
       this.workspaceService.markTestTakersAsExcluded(this.data.workspaceId!, logins)
@@ -1472,34 +1560,34 @@ export class FilesValidationDialogComponent implements OnInit {
           next: success => {
             if (success) {
               const loginSet = new Set(logins);
-              this.filteredTestTakers = this.filteredTestTakers.map(item => (loginSet.has(item.login) ? {
+              this.filteredTestTakers.set(this.filteredTestTakers().map(item => (loginSet.has(item.login) ? {
                 ...item,
                 consider: false
-              } : item));
+              } : item)));
               this.selection.clear();
 
               this.testResultService.invalidateCache(this.data.workspaceId!);
             }
-            this.isExcluding = false;
-            this.excludingProgress = 0;
+            this.isExcluding.set(false);
+            this.excludingProgress.set(0);
           },
           error: () => {
-            this.isExcluding = false;
-            this.excludingProgress = 0;
+            this.isExcluding.set(false);
+            this.excludingProgress.set(0);
           }
         });
     }
   }
 
   toggleFilesList(testTaker: string, section: keyof ExpandedFilesLists): void {
-    const sections = this.expandedFilesLists.get(testTaker);
+    const sections = this.expandedFilesLists().get(testTaker);
     if (sections) {
       sections[section] = !sections[section];
     }
   }
 
   isFilesListExpanded(testTaker: string, section: keyof ExpandedFilesLists): boolean {
-    const sections = this.expandedFilesLists.get(testTaker);
+    const sections = this.expandedFilesLists().get(testTaker);
     return sections ? sections[section] : false;
   }
 

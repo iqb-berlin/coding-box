@@ -165,19 +165,19 @@ describe('FilesValidationComponent', () => {
     // Rebuild derived view data and summary after replacing injected data in test.
     (component as unknown as { rebuildValidationResults: () => void }).rebuildValidationResults();
 
-    expect(component.summary.totalTestTakers).toBe(3);
-    expect(component.summary.validTestTakerXmls).toBe(2);
-    expect(component.summary.invalidTestTakerXmls).toBe(1);
+    expect(component.summary().totalTestTakers).toBe(3);
+    expect(component.summary().validTestTakerXmls).toBe(2);
+    expect(component.summary().invalidTestTakerXmls).toBe(1);
 
-    expect(component.summary.booklets.complete).toBe(1);
-    expect(component.summary.booklets.incomplete).toBe(2);
-    expect(component.summary.booklets.missingFiles).toBe(2);
-    expect(component.summary.booklets.missingFileNames).toEqual(['b2', 'b3']);
+    expect(component.summary().booklets.complete).toBe(1);
+    expect(component.summary().booklets.incomplete).toBe(2);
+    expect(component.summary().booklets.missingFiles).toBe(2);
+    expect(component.summary().booklets.missingFileNames).toEqual(['b2', 'b3']);
 
-    expect(component.summary.units.complete).toBe(2);
-    expect(component.summary.units.incomplete).toBe(1);
-    expect(component.summary.units.missingFiles).toBe(1);
-    expect(component.summary.units.missingFileNames).toEqual(['u1']);
+    expect(component.summary().units.complete).toBe(2);
+    expect(component.summary().units.incomplete).toBe(1);
+    expect(component.summary().units.missingFiles).toBe(1);
+    expect(component.summary().units.missingFileNames).toEqual(['u1']);
   });
 
   it('should ignore a testlet across all matching booklets', async () => {
@@ -215,11 +215,11 @@ describe('FilesValidationComponent', () => {
       workspaceId: 1,
       validationResults: [createValidationResult('test1', ['BOOK1', 'BOOK2', 'BOOK3'])]
     };
-    component.ignoredTestlets = [
+    component.ignoredTestlets.set([
       { bookletId: 'BOOK1', testletId: 'TL1' },
       { bookletId: 'BOOK2', testletId: 'TL1' },
       { bookletId: 'BOOK3', testletId: 'TL9' }
-    ];
+    ]);
 
     (component as unknown as { rebuildValidationResults: () => void }).rebuildValidationResults();
 
@@ -273,7 +273,7 @@ describe('FilesValidationComponent', () => {
       validationResults: [],
       unusedTestFiles: unusedFiles
     };
-    component.unusedTestFiles = [...unusedFiles];
+    component.unusedTestFiles.set([...unusedFiles]);
     component.unusedFilesSelection.select(...unusedFiles);
     fileService.deleteFilesWithResult.mockReturnValue(of({
       success: true,
@@ -283,8 +283,8 @@ describe('FilesValidationComponent', () => {
     component.deleteSelectedUnusedFiles();
 
     expect(fileService.deleteFilesWithResult).toHaveBeenCalledWith(1, [101, 102, 103]);
-    expect(component.filesDeleted).toBe(true);
-    expect(component.unusedTestFiles).toEqual([]);
+    expect(component.filesDeleted()).toBe(true);
+    expect(component.unusedTestFiles()).toEqual([]);
     expect(component.unusedFilesSelection.selected).toHaveLength(0);
     expect(refreshSpy).toHaveBeenCalledWith('Validierungsergebnisse wurden aktualisiert');
   });
@@ -312,7 +312,7 @@ describe('FilesValidationComponent', () => {
       validationResults: [],
       unusedTestFiles: unusedFiles
     };
-    component.unusedTestFiles = [...unusedFiles];
+    component.unusedTestFiles.set([...unusedFiles]);
     component.unusedFilesSelection.select(...unusedFiles);
     fileService.deleteFilesWithResult.mockReturnValue(of({
       success: false,
@@ -321,7 +321,7 @@ describe('FilesValidationComponent', () => {
 
     component.deleteSelectedUnusedFiles();
 
-    expect(component.filesDeleted).toBe(true);
+    expect(component.filesDeleted()).toBe(true);
     expect(component.unusedFilesSelection.selected).toHaveLength(0);
     expect(refreshSpy).toHaveBeenCalledWith();
   });

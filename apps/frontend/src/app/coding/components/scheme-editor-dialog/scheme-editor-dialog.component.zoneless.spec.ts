@@ -145,8 +145,8 @@ describe('Schemer preview without Zone.js', () => {
     downloadResponse$.next({ base64Data: btoa('<html lang="en"></html>') });
     downloadResponse$.complete();
     await fixture.whenStable();
-    expect(component.schemerHtml).toBe('<html lang="en"></html>');
-    expect(component.unitScheme.schemeType).toBe('iqb@3.0');
+    expect(component.schemerHtml()).toBe('<html lang="en"></html>');
+    expect(component.unitScheme().schemeType).toBe('iqb@3.0');
     expect(fixture.nativeElement.querySelector('mat-spinner')).toBeNull();
     expect(fixture.nativeElement.querySelector('pre.raw-json')).toBeNull();
     expect(fixture.nativeElement.querySelector('unit-schemer-standalone')).not.toBeNull();
@@ -157,7 +157,7 @@ describe('Schemer preview without Zone.js', () => {
     list([]);
     await fixture.whenStable();
     expect(mockFileService.downloadFile).not.toHaveBeenCalled();
-    expect(component.isLoading).toBe(false);
+    expect(component.isLoading()).toBe(false);
     expect(fixture.nativeElement.querySelector('mat-spinner')).toBeNull();
     expect(fixture.nativeElement.querySelector('[role="alert"]')?.textContent).toContain('coding.schemer.not-found');
     expect(fixture.nativeElement.querySelector('pre.raw-json')?.textContent).toContain('variableCodings');
@@ -176,7 +176,7 @@ describe('Schemer preview without Zone.js', () => {
     list();
     downloadResponse$.error(new Error('Download failed'));
     await fixture.whenStable();
-    expect(component.isLoading).toBe(false);
+    expect(component.isLoading()).toBe(false);
     expect(fixture.nativeElement.querySelector('[role="alert"]')?.textContent).toContain('coding.schemer.download-error');
     expect(fixture.nativeElement.querySelector('pre.raw-json')).not.toBeNull();
   });
@@ -185,7 +185,7 @@ describe('Schemer preview without Zone.js', () => {
     await createPreview();
     filesResponse$.error(new Error('File list failed'));
     await fixture.whenStable();
-    expect(component.isLoading).toBe(false);
+    expect(component.isLoading()).toBe(false);
     expect(fixture.nativeElement.querySelector('[role="alert"]')?.textContent).toContain('coding.schemer.fetch-error');
   });
 
@@ -199,7 +199,7 @@ describe('Schemer preview without Zone.js', () => {
     await fixture.whenStable();
     expect(mockFileService.getUnitInfo).toHaveBeenCalledWith(2, 'DLB004');
     expect(mockFileService.downloadFile).toHaveBeenLastCalledWith(2, 25);
-    expect(component.unitScheme.schemeType).toBe('iqb@3.0');
+    expect(component.unitScheme().schemeType).toBe('iqb@3.0');
     expect(fixture.nativeElement.querySelector('unit-schemer-standalone')).not.toBeNull();
   });
 
@@ -213,7 +213,7 @@ describe('Schemer preview without Zone.js', () => {
     downloadResponse$.complete();
     await fixture.whenStable();
     expect(mockFileService.downloadFile).toHaveBeenLastCalledWith(2, 28);
-    expect(component.unitScheme.schemeType).toBe('iqb@3.4');
+    expect(component.unitScheme().schemeType).toBe('iqb@3.4');
     expect(fixture.nativeElement.querySelector('unit-schemer-standalone')).not.toBeNull();
   });
 
@@ -234,8 +234,8 @@ describe('Schemer preview without Zone.js', () => {
     downloadResponse$.complete();
     await fixture.whenStable();
     component.onSchemeChanged({ scheme: '{"unexpected":true}', schemeType: 'iqb@3.0' });
-    expect(component.hasChanges).toBe(false);
-    expect(component.unitScheme.scheme).toBe(mockData.content);
+    expect(component.hasChanges()).toBe(false);
+    expect(component.unitScheme().scheme).toBe(mockData.content);
     expect(fixture.nativeElement.querySelectorAll('mat-dialog-actions button')).toHaveLength(1);
   });
 

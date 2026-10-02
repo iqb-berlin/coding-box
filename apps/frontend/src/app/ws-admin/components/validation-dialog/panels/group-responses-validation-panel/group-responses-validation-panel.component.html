@@ -1,9 +1,12 @@
+@let errorMessageValue = errorMessage();
+@let resultValue = result();
+@let activeTaskValue = activeTask();
 <mat-expansion-panel>
   <mat-expansion-panel-header>
     <coding-box-validation-panel-header
       title="Gruppenantworten-Prüfung"
       [status]="status"
-      [errorCount]="errorCount"
+      [errorCount]="errorCount()"
     >
     </coding-box-validation-panel-header>
   </mat-expansion-panel-header>
@@ -19,47 +22,47 @@
     <button
       mat-button
       (click)="onValidate()"
-      [disabled]="isRunning || disabled"
+      [disabled]="isRunning() || disabled"
     >
       Gruppenantworten prüfen
     </button>
   </div>
 
-  <div class="validation-panel-content" [class.loading-fade]="isLoadingPage">
-    @if (isLoadingPage) {
+  <div class="validation-panel-content" [class.loading-fade]="isLoadingPage()">
+    @if (isLoadingPage()) {
       <mat-progress-bar
         mode="indeterminate"
         class="loading-progress"
       ></mat-progress-bar>
     }
 
-    @if (isRunning) {
+    @if (isRunning()) {
       <div class="loading-container">
         <mat-spinner
           class="mat-spinner"
           diameter="30"
-          [mode]="activeTask?.progress ? 'determinate' : 'indeterminate'"
-          [value]="activeTask?.progress"
+          [mode]="activeTaskValue?.progress ? 'determinate' : 'indeterminate'"
+          [value]="activeTaskValue?.progress"
         ></mat-spinner>
         <p class="loading-text">
           Gruppen-Antworten werden geprüft...
-          @if (activeTask?.progress) {
-            ({{ activeTask?.progress }}%)
+          @if (activeTaskValue?.progress) {
+            ({{ activeTaskValue?.progress }}%)
           }
         </p>
       </div>
     }
 
-    @if (errorMessage) {
+    @if (errorMessageValue) {
       <div class="validation-result validation-error">
         <mat-icon>error</mat-icon>
-        <span>Fehler bei der Validierung: {{ errorMessage }}</span>
+        <span>Fehler bei der Validierung: {{ errorMessageValue }}</span>
       </div>
     }
 
-    @if (result) {
+    @if (resultValue) {
       <div>
-        @if (result.testTakersFound) {
+        @if (resultValue.testTakersFound) {
           <p>Testpersonen-Datei gefunden und analysiert.</p>
         } @else {
           <div class="validation-result validation-error">
@@ -71,8 +74,8 @@
           </div>
         }
 
-        @if (result.groupsWithResponses.length > 0) {
-          @if (result.allGroupsHaveResponses) {
+        @if (resultValue.groupsWithResponses.length > 0) {
+          @if (resultValue.allGroupsHaveResponses) {
             <div class="validation-result validation-success">
               <mat-icon>check_circle</mat-icon>
               <span
@@ -92,14 +95,14 @@
 
           <div class="actions-container">
             <button mat-button (click)="toggleExpansion()">
-              {{ expandedPanel ? 'Liste einklappen' : 'Liste ausklappen' }}
+              {{ expandedPanel() ? 'Liste einklappen' : 'Liste ausklappen' }}
             </button>
             <button
               mat-button
               (click)="exportCsv()"
-              [disabled]="isExporting || isLoadingPage"
+              [disabled]="isExporting() || isLoadingPage()"
             >
-              @if (isExporting) {
+              @if (isExporting()) {
                 <mat-spinner diameter="20"></mat-spinner> Export...
               } @else {
                 CSV exportieren
@@ -107,7 +110,7 @@
             </button>
           </div>
 
-          <mat-expansion-panel [expanded]="expandedPanel">
+          <mat-expansion-panel [expanded]="expandedPanel()">
             <table mat-table [dataSource]="paginatedGroupResponses">
               <ng-container matColumnDef="group">
                 <th mat-header-cell *matHeaderCellDef>Gruppe</th>
@@ -130,11 +133,11 @@
             </table>
 
             <mat-paginator
-              [length]="totalItems"
-              [pageSize]="pageSize"
+              [length]="totalItems()"
+              [pageSize]="pageSize()"
               [pageSizeOptions]="[5, 10, 25, 100]"
-              [pageIndex]="currentPage - 1"
-              [disabled]="isLoadingPage"
+              [pageIndex]="currentPage() - 1"
+              [disabled]="isLoadingPage()"
               (page)="onPageChange($event)"
               aria-label="Seite auswählen"
             >

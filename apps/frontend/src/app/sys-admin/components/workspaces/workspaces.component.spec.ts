@@ -82,7 +82,7 @@ describe('WorkspaceGroupsComponent', () => {
 
     expect(workspaceBackendService.addWorkspace).toHaveBeenCalledWith({ name: 'New', settings: {} });
     expect(appService.refreshAuthData).toHaveBeenCalledTimes(1);
-    expect(component.workspacesChanged).toBe(true);
+    expect(component.workspacesChanged()).toBe(true);
   });
 
   it('should refresh auth data after renaming a workspace', () => {
@@ -92,7 +92,7 @@ describe('WorkspaceGroupsComponent', () => {
 
     expect(workspaceBackendService.changeWorkspace).toHaveBeenCalledWith({ id: 3, name: 'Renamed' });
     expect(appService.refreshAuthData).toHaveBeenCalledTimes(1);
-    expect(component.workspacesChanged).toBe(true);
+    expect(component.workspacesChanged()).toBe(true);
   });
 
   it('should refresh auth data after deleting a workspace', fakeAsync(() => {
@@ -100,12 +100,12 @@ describe('WorkspaceGroupsComponent', () => {
     tick(1000);
 
     expect(appService.refreshAuthData).toHaveBeenCalledTimes(1);
-    expect(component.workspacesChanged).toBe(true);
-    expect(component.isDeleting).toBe(false);
+    expect(component.workspacesChanged()).toBe(true);
+    expect(component.isDeleting()).toBe(false);
   }));
 
   it('should refresh auth data after changing workspace users', () => {
-    component.selectedWorkspaces = [3];
+    component.selectedWorkspaces.set([3]);
 
     component.setWorkspaceUsersAccessRight([7, 8]);
 
@@ -120,7 +120,7 @@ describe('WorkspaceGroupsComponent', () => {
     component.addWorkspace(form);
 
     expect(appService.refreshAuthData).not.toHaveBeenCalled();
-    expect(component.workspacesChanged).toBe(false);
+    expect(component.workspacesChanged()).toBe(false);
   });
 
   it('should keep a successful mutation while reporting a failed auth data refresh', () => {
@@ -129,7 +129,7 @@ describe('WorkspaceGroupsComponent', () => {
 
     component.addWorkspace(form);
 
-    expect(component.workspacesChanged).toBe(true);
+    expect(component.workspacesChanged()).toBe(true);
     expect(snackBar.open).toHaveBeenCalledWith(
       'admin.change-saved-auth-data-refresh-failed',
       'error',
@@ -143,7 +143,7 @@ describe('WorkspaceGroupsComponent', () => {
 
     component.addWorkspace(form);
 
-    expect(component.workspacesChanged).toBe(true);
+    expect(component.workspacesChanged()).toBe(true);
     expect(snackBar.open).not.toHaveBeenCalled();
   });
 });

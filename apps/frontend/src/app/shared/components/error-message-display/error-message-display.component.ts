@@ -1,4 +1,6 @@
-import { Component, inject } from '@angular/core';
+import {
+  Component, inject, signal
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -22,7 +24,7 @@ export class ErrorMessageDisplayComponent {
   appService: AppService = inject(AppService);
   authService = inject(AuthService);
   private router = inject(Router);
-  expandedErrorIds = new Set<number>();
+  readonly expandedErrorIds = signal(new Set<number>());
 
   get showGlobalReAuthenticationMessage(): boolean {
     return this.appService.needsReAuthentication && !this.isHomeRoute();
@@ -36,7 +38,11 @@ export class ErrorMessageDisplayComponent {
 
   dismissError(errorId: number): void {
     this.appService.errorMessages = this.appService.errorMessages.filter((e: AppHttpError) => e.id !== errorId);
-    this.expandedErrorIds.delete(errorId);
+    this.expandedErrorIds.update(value => {
+      const next = new Set(value);
+      next.delete(errorId);
+      return next;
+    });
   }
 
   dismissBackendUnavailable(): void {
@@ -61,16 +67,24 @@ export class ErrorMessageDisplayComponent {
   }
 
   toggleErrorDetails(errorId: number): void {
-    if (this.expandedErrorIds.has(errorId)) {
-      this.expandedErrorIds.delete(errorId);
+    if (this.expandedErrorIds().has(errorId)) {
+      this.expandedErrorIds.update(value => {
+        const next = new Set(value);
+        next.delete(errorId);
+        return next;
+      });
       return;
     }
 
-    this.expandedErrorIds.add(errorId);
+    this.expandedErrorIds.update(value => {
+      const next = new Set(value);
+      next.add(errorId);
+      return next;
+    });
   }
 
   isErrorDetailsExpanded(errorId: number): boolean {
-    return this.expandedErrorIds.has(errorId);
+    return this.expandedErrorIds().has(errorId);
   }
 
   hasErrorDetails(error: AppHttpError): boolean {

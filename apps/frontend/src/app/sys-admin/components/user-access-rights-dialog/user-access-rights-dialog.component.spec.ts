@@ -82,10 +82,10 @@ describe('UserAccessRightsDialogComponent', () => {
     const fixture = createComponent({ selectedWorkspace: [1] });
     const component = fixture.componentInstance;
 
-    expect(component.selectedUserIds).toEqual([7, 8]);
-    expect(component.result).toEqual([7, 8]);
-    expect(component.isLoadingWorkspaceUsers).toBe(false);
-    expect(component.workspaceUsersLoadingFailed).toBe(false);
+    expect(component.selectedUserIds()).toEqual([7, 8]);
+    expect(component.result()).toEqual([7, 8]);
+    expect(component.isLoadingWorkspaceUsers()).toBe(false);
+    expect(component.workspaceUsersLoadingFailed()).toBe(false);
   });
 
   it('should disable saving when loading workspace users fails', () => {
@@ -94,9 +94,9 @@ describe('UserAccessRightsDialogComponent', () => {
     const fixture = createComponent({ selectedWorkspace: [1] });
     const component = fixture.componentInstance;
 
-    expect(component.result).toEqual([]);
-    expect(component.isLoadingWorkspaceUsers).toBe(false);
-    expect(component.workspaceUsersLoadingFailed).toBe(true);
+    expect(component.result()).toEqual([]);
+    expect(component.isLoadingWorkspaceUsers()).toBe(false);
+    expect(component.workspaceUsersLoadingFailed()).toBe(true);
     const saveButton: HTMLButtonElement = fixture.nativeElement.querySelector('button[color="primary"]');
     expect(saveButton.disabled).toBe(true);
   });

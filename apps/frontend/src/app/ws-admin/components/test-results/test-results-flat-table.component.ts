@@ -1,15 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
-  ChangeDetectorRef, Component, DestroyRef,
-  EventEmitter,
-  Input,
-  OnChanges,
-  OnDestroy,
-  OnInit,
-  Output,
-  SimpleChanges,
-  inject
+  Component, DestroyRef, EventEmitter, Input, OnChanges, OnDestroy, OnInit, Output, SimpleChanges, inject, signal
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -214,7 +206,6 @@ const SPECIFIC_LOG_MEDIA_FILTERS: FlatTableMediaFilter[] = [
 })
 export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
-  private readonly changeDetectorRef = inject(ChangeDetectorRef);
 
   private fileService = inject(FileService);
   private unitNoteService = inject(UnitNoteService);
@@ -259,7 +250,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   private readonly SESSION_SCREENS_ALLOWLIST_STORAGE_KEY =
     'coding-box-test-results-session-screens-allowlist';
 
-  private unitIdsWithNotes = new Set<number>();
+  private readonly unitIdsWithNotes = signal(new Set<number>());
 
   private personTestResultsCache = new Map<
   number,
@@ -283,53 +274,53 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     'actions'
   ];
 
-  flatDisplayedColumns: string[] = [...this.baseFlatDisplayedColumns];
-  showLogAnomaliesInTable = false;
+  readonly flatDisplayedColumns = signal<string[]>([...this.baseFlatDisplayedColumns]);
+  readonly showLogAnomaliesInTable = signal(false);
   private logAnomalyTableSettingLoaded = false;
   private tableInitialized = false;
   private flatResponsesRequestSequence = 0;
 
-  isLoadingFrequencies: boolean = false;
-  private frequenciesByComboKey = new Map<
+  readonly isLoadingFrequencies = signal<boolean>(false);
+  private readonly frequenciesByComboKey = signal(new Map<
   string,
   { total: number; values: FlatResponseFrequencyItem[] }
-  >();
+  >());
 
-  flatData: FlatResponseRow[] = [];
-  flatTotalRecords: number = 0;
-  flatPageSize: number = 100;
-  flatPageIndex: number = 0;
-  isLoadingFlat: boolean = false;
+  readonly flatData = signal<FlatResponseRow[]>([]);
+  readonly flatTotalRecords = signal<number>(0);
+  readonly flatPageSize = signal<number>(100);
+  readonly flatPageIndex = signal<number>(0);
+  readonly isLoadingFlat = signal<boolean>(false);
 
-  flatFilters: FlatResponseFilters = this.createDefaultFlatFilters();
+  readonly flatFilters = signal<FlatResponseFilters>(this.createDefaultFlatFilters());
 
-  mediaFilters: FlatTableMediaFilter[] = [];
+  readonly mediaFilters = signal<FlatTableMediaFilter[]>([]);
 
-  processingDurationEnabled: boolean = false;
+  readonly processingDurationEnabled = signal<boolean>(false);
 
-  processingDurationsFilters: string[] = [];
-  unitProgressFilters: string[] = [];
+  readonly processingDurationsFilters = signal<string[]>([]);
+  readonly unitProgressFilters = signal<string[]>([]);
 
-  audioLowThreshold: number = 0.9;
+  readonly audioLowThreshold = signal<number>(0.9);
 
-  shortProcessingThresholdMs: number = 60000;
+  readonly shortProcessingThresholdMs = signal<number>(60000);
 
-  longLoadingThresholdMs: number = 5000;
+  readonly longLoadingThresholdMs = signal<number>(5000);
 
-  focusLostThresholdMs: number = 300000;
+  readonly focusLostThresholdMs = signal<number>(300000);
 
-  sessionSpanThresholdMs: number = 24 * 60 * 60 * 1000;
+  readonly sessionSpanThresholdMs = signal<number>(24 * 60 * 60 * 1000);
 
-  repeatedStartThreshold: number = 2;
+  readonly repeatedStartThreshold = signal<number>(2);
 
-  processingDurationMin: string = '00:00';
-  processingDurationMax: string = '99:59';
+  readonly processingDurationMin = signal<string>('00:00');
+  readonly processingDurationMax = signal<string>('99:59');
 
-  sessionBrowsersAllowlist: string = '';
-  sessionOsAllowlist: string = '';
-  sessionScreensAllowlist: string = '';
+  readonly sessionBrowsersAllowlist = signal<string>('');
+  readonly sessionOsAllowlist = signal<string>('');
+  readonly sessionScreensAllowlist = signal<string>('');
 
-  flatFilterOptions: FlatResponseFilterOptionsResponse = {
+  readonly flatFilterOptions = signal<FlatResponseFilterOptionsResponse>({
     codes: [],
     groups: [],
     logins: [],
@@ -344,7 +335,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     sessionOs: [],
     sessionScreens: [],
     sessionIds: []
-  };
+  });
 
   private flatSearchSubject = new Subject<void>();
   private flatSearchSubscription: Subscription;
@@ -369,7 +360,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       const raw = localStorage.getItem(this.AUDIO_LOW_THRESHOLD_STORAGE_KEY);
       const parsed = raw != null ? Number(raw) : NaN;
       if (Number.isFinite(parsed)) {
-        this.audioLowThreshold = parsed;
+        this.audioLowThreshold.set(parsed);
       }
     } catch {
       // ignore
@@ -381,7 +372,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       );
       const parsed = raw != null ? Number(raw) : NaN;
       if (Number.isFinite(parsed)) {
-        this.shortProcessingThresholdMs = parsed;
+        this.shortProcessingThresholdMs.set(parsed);
       }
     } catch {
       // ignore
@@ -391,7 +382,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       const raw = localStorage.getItem(this.LONG_LOADING_THRESHOLD_STORAGE_KEY);
       const parsed = raw != null ? Number(raw) : NaN;
       if (Number.isFinite(parsed)) {
-        this.longLoadingThresholdMs = parsed;
+        this.longLoadingThresholdMs.set(parsed);
       }
     } catch {
       // ignore
@@ -401,7 +392,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       const raw = localStorage.getItem(this.FOCUS_LOST_THRESHOLD_STORAGE_KEY);
       const parsed = raw != null ? Number(raw) : NaN;
       if (Number.isFinite(parsed)) {
-        this.focusLostThresholdMs = parsed;
+        this.focusLostThresholdMs.set(parsed);
       }
     } catch {
       // ignore
@@ -411,7 +402,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       const raw = localStorage.getItem(this.SESSION_SPAN_THRESHOLD_STORAGE_KEY);
       const parsed = raw != null ? Number(raw) : NaN;
       if (Number.isFinite(parsed)) {
-        this.sessionSpanThresholdMs = parsed;
+        this.sessionSpanThresholdMs.set(parsed);
       }
     } catch {
       // ignore
@@ -421,7 +412,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       const raw = localStorage.getItem(this.REPEATED_START_THRESHOLD_STORAGE_KEY);
       const parsed = raw != null ? Number(raw) : NaN;
       if (Number.isFinite(parsed)) {
-        this.repeatedStartThreshold = Math.max(2, Math.round(parsed));
+        this.repeatedStartThreshold.set(Math.max(2, Math.round(parsed)));
       }
     } catch {
       // ignore
@@ -432,7 +423,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         this.PROCESSING_DURATION_MIN_STORAGE_KEY
       );
       if (rawMin != null && String(rawMin).trim()) {
-        this.processingDurationMin = String(rawMin);
+        this.processingDurationMin.set(String(rawMin));
       }
     } catch {
       // ignore
@@ -443,7 +434,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         this.PROCESSING_DURATION_MAX_STORAGE_KEY
       );
       if (rawMax != null && String(rawMax).trim()) {
-        this.processingDurationMax = String(rawMax);
+        this.processingDurationMax.set(String(rawMax));
       }
     } catch {
       // ignore
@@ -454,7 +445,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         this.SESSION_BROWSERS_ALLOWLIST_STORAGE_KEY
       );
       if (raw != null) {
-        this.sessionBrowsersAllowlist = String(raw);
+        this.sessionBrowsersAllowlist.set(String(raw));
       }
     } catch {
       // ignore
@@ -463,7 +454,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     try {
       const raw = localStorage.getItem(this.SESSION_OS_ALLOWLIST_STORAGE_KEY);
       if (raw != null) {
-        this.sessionOsAllowlist = String(raw);
+        this.sessionOsAllowlist.set(String(raw));
       }
     } catch {
       // ignore
@@ -474,7 +465,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         this.SESSION_SCREENS_ALLOWLIST_STORAGE_KEY
       );
       if (raw != null) {
-        this.sessionScreensAllowlist = String(raw);
+        this.sessionScreensAllowlist.set(String(raw));
       }
     } catch {
       // ignore
@@ -484,14 +475,13 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       .pipe(debounceTime(this.FLAT_FILTER_DEBOUNCE_TIME))
       .subscribe(() => {
         if (!this.hasInvalidRegexFilters()) {
-          this.fetchFlatResponses(0, this.flatPageSize);
+          this.fetchFlatResponses(0, this.flatPageSize());
         }
       });
 
     this.workspaceCacheInvalidatedSubscription =
       this.testResultService.workspaceCacheInvalidated$.subscribe(
         workspaceId => {
-          this.changeDetectorRef.markForCheck();
           if (!this.appService.selectedWorkspaceId) {
             return;
           }
@@ -499,7 +489,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
             return;
           }
           this.refreshFlatResponseFilterOptionsWithRetry();
-          this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
+          this.fetchFlatResponses(this.flatPageIndex(), this.flatPageSize());
         }
       );
 
@@ -511,7 +501,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     this.fetchFlatResponseFilterOptions();
     this.logAnomalyTableSettingLoaded = true;
     this.updateLogAnomalyTableVisibility();
-    this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
+    this.fetchFlatResponses(this.flatPageIndex(), this.flatPageSize());
     this.syncMediaFiltersFromFlatFilters();
   }
 
@@ -524,20 +514,20 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
 
     if (changes.enableRegexSearch) {
       this.backendInvalidRegexFields.clear();
-      this.flatPageIndex = 0;
+      this.flatPageIndex.set(0);
       shouldFetch = true;
     }
 
     if (changes.initialFilters) {
       this.backendInvalidRegexFields.clear();
-      this.flatFilters = {
+      this.flatFilters.set({
         ...this.createDefaultFlatFilters(),
         ...(this.initialFilters || {})
-      };
-      this.processingDurationEnabled = false;
-      this.processingDurationsFilters = [];
-      this.unitProgressFilters = [];
-      this.flatPageIndex = 0;
+      });
+      this.processingDurationEnabled.set(false);
+      this.processingDurationsFilters.set([]);
+      this.unitProgressFilters.set([]);
+      this.flatPageIndex.set(0);
       this.syncMediaFiltersFromFlatFilters();
       shouldFetch = true;
     }
@@ -546,7 +536,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       this.tableInitialized &&
       this.logAnomalyTableSettingLoaded &&
       !this.hasInvalidRegexFilters()) {
-      this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
+      this.fetchFlatResponses(this.flatPageIndex(), this.flatPageSize());
     }
   }
 
@@ -573,32 +563,32 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
 
   private syncMediaFiltersFromFlatFilters(): void {
     const next: FlatTableMediaFilter[] = [];
-    if (this.flatFilters.geogebra) {
+    if (this.flatFilters().geogebra) {
       next.push('geogebra');
     }
-    if (this.flatFilters.audioLow) {
+    if (this.flatFilters().audioLow) {
       next.push('audioLow');
     }
-    if (this.flatFilters.nonEmptyResponse) {
+    if (this.flatFilters().nonEmptyResponse) {
       next.push('nonEmptyResponse');
     }
-    if (this.flatFilters.sessionFilter) {
+    if (this.flatFilters().sessionFilter) {
       next.push('sessionFilter');
     }
-    if (this.flatFilters.shortProcessing) {
+    if (this.flatFilters().shortProcessing) {
       next.push('shortProcessing');
     }
-    if (this.flatFilters.longLoading) {
+    if (this.flatFilters().longLoading) {
       next.push('longLoading');
     }
-    if (this.processingDurationEnabled) {
+    if (this.processingDurationEnabled()) {
       next.push('processingDuration');
     }
-    if (this.unitProgressFilters.includes('Vollständig')) {
+    if (this.unitProgressFilters().includes('Vollständig')) {
       next.push('unitProgressComplete');
     }
     const selectedAnomalyGroups = new Set(
-      String(this.flatFilters.logAnomalies || '')
+      String(this.flatFilters().logAnomalies || '')
         .split(',')
         .map(v => v.trim())
         .filter(Boolean)
@@ -633,35 +623,31 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     if (selectedAnomalyGroups.has('reloads')) {
       next.push('logReloads');
     }
-    this.mediaFilters = next;
+    this.mediaFilters.set(next);
   }
 
   onMediaFiltersChanged(): void {
-    const selected = new Set(this.mediaFilters || []);
+    const selected = new Set(this.mediaFilters() || []);
     if (selected.has('logAny')) {
       SPECIFIC_LOG_MEDIA_FILTERS.forEach(filter => selected.delete(filter));
-      this.mediaFilters = (this.mediaFilters || []).filter(filter => (
-        selected.has(filter)
-      ));
+      this.mediaFilters.set((this.mediaFilters() || []).filter(filter => (selected.has(filter))));
     }
 
-    this.flatFilters.geogebra = selected.has('geogebra');
-    this.flatFilters.audioLow = selected.has('audioLow');
-    this.flatFilters.nonEmptyResponse = selected.has('nonEmptyResponse');
-    this.flatFilters.sessionFilter = selected.has('sessionFilter');
-    this.flatFilters.shortProcessing = selected.has('shortProcessing');
-    this.flatFilters.longLoading = selected.has('longLoading');
+    this.flatFilters.update(value => ({ ...value, geogebra: selected.has('geogebra') }));
+    this.flatFilters.update(value => ({ ...value, audioLow: selected.has('audioLow') }));
+    this.flatFilters.update(value => ({ ...value, nonEmptyResponse: selected.has('nonEmptyResponse') }));
+    this.flatFilters.update(value => ({ ...value, sessionFilter: selected.has('sessionFilter') }));
+    this.flatFilters.update(value => ({ ...value, shortProcessing: selected.has('shortProcessing') }));
+    this.flatFilters.update(value => ({ ...value, longLoading: selected.has('longLoading') }));
 
-    this.processingDurationEnabled = selected.has('processingDuration');
+    this.processingDurationEnabled.set(selected.has('processingDuration'));
 
     if (selected.has('unitProgressComplete')) {
-      if (!this.unitProgressFilters.includes('Vollständig')) {
-        this.unitProgressFilters = ['Vollständig'];
+      if (!this.unitProgressFilters().includes('Vollständig')) {
+        this.unitProgressFilters.set(['Vollständig']);
       }
     } else {
-      this.unitProgressFilters = this.unitProgressFilters.filter(
-        f => f !== 'Vollständig'
-      );
+      this.unitProgressFilters.set(this.unitProgressFilters().filter(f => f !== 'Vollständig'));
     }
 
     const anomalyGroups: string[] = [];
@@ -693,7 +679,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         anomalyGroups.push('reloads');
       }
     }
-    this.flatFilters.logAnomalies = anomalyGroups.join(',');
+    this.flatFilters.update(value => ({ ...value, logAnomalies: anomalyGroups.join(',') }));
 
     this.onFlatFilterChanged();
   }
@@ -715,7 +701,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     string,
     FlatResponseFrequencyRequestCombo
     >();
-    (this.flatData || []).forEach(r => {
+    (this.flatData() || []).forEach(r => {
       const variableId = String(r.response || '').trim();
       const unitKey = String(r.unit || '').trim();
       const value = String(r.responseValue ?? '');
@@ -726,7 +712,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       const key = `${encodeURIComponent(unitKey)}:${encodeURIComponent(
         variableId
       )}`;
-      const cached = this.frequenciesByComboKey.get(key);
+      const cached = this.frequenciesByComboKey().get(key);
       const alreadyHave =
         !!cached &&
         Array.isArray(cached.values) &&
@@ -750,7 +736,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       return;
     }
 
-    this.isLoadingFrequencies = true;
+    this.isLoadingFrequencies.set(true);
     const batchSize = 25;
     const batches: FlatResponseFrequencyRequestCombo[][] = [];
     for (let i = 0; i < combosToFetch.length; i += batchSize) {
@@ -763,35 +749,37 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         .getFlatResponseFrequencies(this.appService.selectedWorkspaceId, batch)
         .subscribe({
           next: (resp: FlatResponseFrequenciesResponse) => {
-            this.changeDetectorRef.markForCheck();
-            Object.entries(resp || {}).forEach(([key, incoming]) => {
-              const existing = this.frequenciesByComboKey.get(key);
-              if (!existing) {
-                this.frequenciesByComboKey.set(key, incoming);
-                return;
-              }
+            this.frequenciesByComboKey.update(current => {
+              const next = new Map(current);
+              Object.entries(resp || {}).forEach(([key, incoming]) => {
+                const existing = next.get(key);
+                if (!existing) {
+                  next.set(key, incoming);
+                  return;
+                }
 
-              const mergedValues = new Map<string, FlatResponseFrequencyItem>();
-              (existing.values || []).forEach(v => mergedValues.set(String(v.value ?? ''), v)
-              );
-              (incoming.values || []).forEach(v => mergedValues.set(String(v.value ?? ''), v)
-              );
+                const mergedValues = new Map<string, FlatResponseFrequencyItem>();
+                (existing.values || []).forEach(v => mergedValues.set(String(v.value ?? ''), v)
+                );
+                (incoming.values || []).forEach(v => mergedValues.set(String(v.value ?? ''), v)
+                );
 
-              this.frequenciesByComboKey.set(key, {
-                total: incoming.total ?? existing.total,
-                values: Array.from(mergedValues.values())
+                next.set(key, {
+                  total: incoming.total ?? existing.total,
+                  values: Array.from(mergedValues.values())
+                });
               });
+              return next;
             });
             completedBatches += 1;
             if (completedBatches === batches.length) {
-              this.isLoadingFrequencies = false;
+              this.isLoadingFrequencies.set(false);
             }
           },
           error: () => {
-            this.changeDetectorRef.markForCheck();
             completedBatches += 1;
             if (completedBatches === batches.length) {
-              this.isLoadingFrequencies = false;
+              this.isLoadingFrequencies.set(false);
             }
           }
         });
@@ -802,7 +790,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     const comboKey = `${encodeURIComponent(
       String(row.unit || '').trim()
     )}:${encodeURIComponent(String(row.response || '').trim())}`;
-    const entry = this.frequenciesByComboKey.get(comboKey);
+    const entry = this.frequenciesByComboKey().get(comboKey);
     if (!entry || !Array.isArray(entry.values)) {
       return '';
     }
@@ -824,8 +812,8 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
 
   onFlatFilterOptionSelected(): void {
     this.suppressNextFlatFilterChange = true;
-    this.flatPageIndex = 0;
-    this.fetchFlatResponses(0, this.flatPageSize);
+    this.flatPageIndex.set(0);
+    this.fetchFlatResponses(0, this.flatPageSize());
   }
 
   private filterOptions(
@@ -845,63 +833,63 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
 
   filteredCodes(): string[] {
     return this.filterOptions(
-      this.flatFilterOptions.codes,
-      this.flatFilters.code,
+      this.flatFilterOptions().codes,
+      this.flatFilters().code,
       true
     );
   }
 
   filteredGroups(): string[] {
     return this.filterOptions(
-      this.flatFilterOptions.groups,
-      this.flatFilters.group,
+      this.flatFilterOptions().groups,
+      this.flatFilters().group,
       true
     );
   }
 
   filteredLogins(): string[] {
     return this.filterOptions(
-      this.flatFilterOptions.logins,
-      this.flatFilters.login,
+      this.flatFilterOptions().logins,
+      this.flatFilters().login,
       true
     );
   }
 
   filteredBooklets(): string[] {
     return this.filterOptions(
-      this.flatFilterOptions.booklets,
-      this.flatFilters.booklet,
+      this.flatFilterOptions().booklets,
+      this.flatFilters().booklet,
       true
     );
   }
 
   filteredUnits(): string[] {
     return this.filterOptions(
-      this.flatFilterOptions.units,
-      this.flatFilters.unit,
+      this.flatFilterOptions().units,
+      this.flatFilters().unit,
       true
     );
   }
 
   filteredResponses(): string[] {
     return this.filterOptions(
-      this.flatFilterOptions.responses,
-      this.flatFilters.response,
+      this.flatFilterOptions().responses,
+      this.flatFilters().response,
       true
     );
   }
 
   filteredResponseStatuses(): string[] {
     return this.filterOptions(
-      this.flatFilterOptions.responseStatuses,
-      this.flatFilters.responseStatus
+      this.flatFilterOptions().responseStatuses,
+      this.flatFilters().responseStatus
     );
   }
 
   filteredTags(): string[] {
     return this.filterOptions(
-      this.flatFilterOptions.tags,
-      this.flatFilters.tags
+      this.flatFilterOptions().tags,
+      this.flatFilters().tags
     );
   }
 
@@ -909,7 +897,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     return this.enableRegexSearch && (
       this.backendInvalidRegexFields.has(field) ||
       hasInvalidPostgresRegexFilter(
-        this.flatFilters[field],
+        this.flatFilters()[field],
         this.enableRegexSearch
       )
     );
@@ -1216,22 +1204,22 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     this.flatResponsesRequestSequence += 1;
     this.flatResponsesSubscription?.unsubscribe();
     this.flatResponsesSubscription = undefined;
-    this.isLoadingFlat = false;
-    this.flatPageIndex = 0;
+    this.isLoadingFlat.set(false);
+    this.flatPageIndex.set(0);
     this.flatSearchSubject.next();
   }
 
   clearFlatFilters(): void {
     this.backendInvalidRegexFields.clear();
-    this.flatFilters = this.createDefaultFlatFilters();
+    this.flatFilters.set(this.createDefaultFlatFilters());
     this.syncMediaFiltersFromFlatFilters();
 
-    this.processingDurationEnabled = false;
-    this.processingDurationsFilters = [];
-    this.unitProgressFilters = [];
+    this.processingDurationEnabled.set(false);
+    this.processingDurationsFilters.set([]);
+    this.unitProgressFilters.set([]);
 
-    this.flatPageIndex = 0;
-    this.fetchFlatResponses(0, this.flatPageSize);
+    this.flatPageIndex.set(0);
+    this.fetchFlatResponses(0, this.flatPageSize());
     this.fetchFlatResponseFilterOptions();
   }
 
@@ -1239,7 +1227,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     try {
       localStorage.setItem(
         this.AUDIO_LOW_THRESHOLD_STORAGE_KEY,
-        String(this.audioLowThreshold)
+        String(this.audioLowThreshold())
       );
     } catch {
       // ignore
@@ -1251,7 +1239,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     try {
       localStorage.setItem(
         this.SHORT_PROCESSING_THRESHOLD_STORAGE_KEY,
-        String(this.shortProcessingThresholdMs)
+        String(this.shortProcessingThresholdMs())
       );
     } catch {
       // ignore
@@ -1263,7 +1251,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     try {
       localStorage.setItem(
         this.LONG_LOADING_THRESHOLD_STORAGE_KEY,
-        String(this.longLoadingThresholdMs)
+        String(this.longLoadingThresholdMs())
       );
     } catch {
       // ignore
@@ -1275,7 +1263,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     try {
       localStorage.setItem(
         this.FOCUS_LOST_THRESHOLD_STORAGE_KEY,
-        String(this.focusLostThresholdMs)
+        String(this.focusLostThresholdMs())
       );
     } catch {
       // ignore
@@ -1287,7 +1275,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     try {
       localStorage.setItem(
         this.SESSION_SPAN_THRESHOLD_STORAGE_KEY,
-        String(this.sessionSpanThresholdMs)
+        String(this.sessionSpanThresholdMs())
       );
     } catch {
       // ignore
@@ -1299,7 +1287,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     try {
       localStorage.setItem(
         this.REPEATED_START_THRESHOLD_STORAGE_KEY,
-        String(this.repeatedStartThreshold)
+        String(this.repeatedStartThreshold())
       );
     } catch {
       // ignore
@@ -1315,16 +1303,15 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     this.testResultService
       .getFlatResponseFilterOptions(this.appService.selectedWorkspaceId, {})
       .subscribe(opts => {
-        this.changeDetectorRef.markForCheck();
-        const currentBrowsers = this.sessionBrowsersAllowlist
+        const currentBrowsers = this.sessionBrowsersAllowlist()
           .split(',')
           .map(v => v.trim())
           .filter(Boolean);
-        const currentOs = this.sessionOsAllowlist
+        const currentOs = this.sessionOsAllowlist()
           .split(',')
           .map(v => v.trim())
           .filter(Boolean);
-        const currentScreens = this.sessionScreensAllowlist
+        const currentScreens = this.sessionScreensAllowlist()
           .split(',')
           .map(v => v.trim())
           .filter(Boolean);
@@ -1354,14 +1341,14 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
           height: '560px',
           maxHeight: '90vh',
           data: {
-            audioLowThreshold: this.audioLowThreshold,
-            shortProcessingThresholdMs: this.shortProcessingThresholdMs,
-            longLoadingThresholdMs: this.longLoadingThresholdMs,
-            focusLostThresholdMs: this.focusLostThresholdMs,
-            sessionSpanThresholdMs: this.sessionSpanThresholdMs,
-            repeatedStartThreshold: this.repeatedStartThreshold,
-            processingDurationMin: this.processingDurationMin,
-            processingDurationMax: this.processingDurationMax,
+            audioLowThreshold: this.audioLowThreshold(),
+            shortProcessingThresholdMs: this.shortProcessingThresholdMs(),
+            longLoadingThresholdMs: this.longLoadingThresholdMs(),
+            focusLostThresholdMs: this.focusLostThresholdMs(),
+            sessionSpanThresholdMs: this.sessionSpanThresholdMs(),
+            repeatedStartThreshold: this.repeatedStartThreshold(),
+            processingDurationMin: this.processingDurationMin(),
+            processingDurationMax: this.processingDurationMax(),
             sessionBrowsersAllowlist:
               currentBrowsers.length > 0 ? currentBrowsers : [],
             sessionOsAllowlist: currentOs.length > 0 ? currentOs : [],
@@ -1374,82 +1361,73 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         });
 
         ref.afterClosed().subscribe(result => {
-          this.changeDetectorRef.markForCheck();
           if (!result) {
             return;
           }
-          this.audioLowThreshold = result.audioLowThreshold;
+          this.audioLowThreshold.set(result.audioLowThreshold);
 
-          this.shortProcessingThresholdMs = result.shortProcessingThresholdMs;
-          this.longLoadingThresholdMs = result.longLoadingThresholdMs;
-          this.focusLostThresholdMs = result.focusLostThresholdMs;
-          this.sessionSpanThresholdMs = result.sessionSpanThresholdMs;
-          this.repeatedStartThreshold = result.repeatedStartThreshold;
+          this.shortProcessingThresholdMs.set(result.shortProcessingThresholdMs);
+          this.longLoadingThresholdMs.set(result.longLoadingThresholdMs);
+          this.focusLostThresholdMs.set(result.focusLostThresholdMs);
+          this.sessionSpanThresholdMs.set(result.sessionSpanThresholdMs);
+          this.repeatedStartThreshold.set(result.repeatedStartThreshold);
 
-          this.processingDurationMin = String(
-            result.processingDurationMin ?? ''
-          );
-          this.processingDurationMax = String(
-            result.processingDurationMax ?? ''
-          );
-          this.sessionBrowsersAllowlist = Array.isArray(
-            result.sessionBrowsersAllowlist
-          ) ?
+          this.processingDurationMin.set(String(result.processingDurationMin ?? ''));
+          this.processingDurationMax.set(String(result.processingDurationMax ?? ''));
+          this.sessionBrowsersAllowlist.set(Array.isArray(result.sessionBrowsersAllowlist) ?
             result.sessionBrowsersAllowlist.join(',') :
-            '';
-          this.sessionOsAllowlist = Array.isArray(result.sessionOsAllowlist) ?
+            '');
+          this.sessionOsAllowlist.set(Array.isArray(result.sessionOsAllowlist) ?
             result.sessionOsAllowlist.join(',') :
-            '';
-          this.sessionScreensAllowlist = Array.isArray(
-            result.sessionScreensAllowlist
-          ) ?
+            '');
+          this.sessionScreensAllowlist.set(Array.isArray(result.sessionScreensAllowlist) ?
             result.sessionScreensAllowlist.join(',') :
-            '';
+            '');
 
           try {
             localStorage.setItem(
               this.AUDIO_LOW_THRESHOLD_STORAGE_KEY,
-              String(this.audioLowThreshold)
+              String(this.audioLowThreshold())
             );
             localStorage.setItem(
               this.SHORT_PROCESSING_THRESHOLD_STORAGE_KEY,
-              String(this.shortProcessingThresholdMs)
+              String(this.shortProcessingThresholdMs())
             );
             localStorage.setItem(
               this.LONG_LOADING_THRESHOLD_STORAGE_KEY,
-              String(this.longLoadingThresholdMs)
+              String(this.longLoadingThresholdMs())
             );
             localStorage.setItem(
               this.FOCUS_LOST_THRESHOLD_STORAGE_KEY,
-              String(this.focusLostThresholdMs)
+              String(this.focusLostThresholdMs())
             );
             localStorage.setItem(
               this.SESSION_SPAN_THRESHOLD_STORAGE_KEY,
-              String(this.sessionSpanThresholdMs)
+              String(this.sessionSpanThresholdMs())
             );
             localStorage.setItem(
               this.REPEATED_START_THRESHOLD_STORAGE_KEY,
-              String(this.repeatedStartThreshold)
+              String(this.repeatedStartThreshold())
             );
             localStorage.setItem(
               this.PROCESSING_DURATION_MIN_STORAGE_KEY,
-              String(this.processingDurationMin)
+              String(this.processingDurationMin())
             );
             localStorage.setItem(
               this.PROCESSING_DURATION_MAX_STORAGE_KEY,
-              String(this.processingDurationMax)
+              String(this.processingDurationMax())
             );
             localStorage.setItem(
               this.SESSION_BROWSERS_ALLOWLIST_STORAGE_KEY,
-              String(this.sessionBrowsersAllowlist)
+              String(this.sessionBrowsersAllowlist())
             );
             localStorage.setItem(
               this.SESSION_OS_ALLOWLIST_STORAGE_KEY,
-              String(this.sessionOsAllowlist)
+              String(this.sessionOsAllowlist())
             );
             localStorage.setItem(
               this.SESSION_SCREENS_ALLOWLIST_STORAGE_KEY,
-              String(this.sessionScreensAllowlist)
+              String(this.sessionScreensAllowlist())
             );
           } catch {
             // ignore
@@ -1468,8 +1446,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     this.testResultService
       .getFlatResponseFilterOptions(this.appService.selectedWorkspaceId, {})
       .subscribe(opts => {
-        this.changeDetectorRef.markForCheck();
-        this.flatFilterOptions = opts;
+        this.flatFilterOptions.set(opts);
       });
   }
 
@@ -1478,10 +1455,10 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   }
 
   private setShowLogAnomaliesInTable(enabled: boolean): boolean {
-    const changed = this.showLogAnomaliesInTable !== enabled;
-    this.showLogAnomaliesInTable = enabled;
+    const changed = this.showLogAnomaliesInTable() !== enabled;
+    this.showLogAnomaliesInTable.set(enabled);
     if (enabled) {
-      this.flatDisplayedColumns = [
+      this.flatDisplayedColumns.set([
         'code',
         'group',
         'login',
@@ -1494,17 +1471,17 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         'frequencies',
         'tags',
         'actions'
-      ];
+      ]);
       return changed;
     }
-    this.flatDisplayedColumns = [...this.baseFlatDisplayedColumns];
+    this.flatDisplayedColumns.set([...this.baseFlatDisplayedColumns]);
     return changed;
   }
 
   onFlatPaginatorChange(event: PageEvent): void {
-    this.flatPageSize = event.pageSize;
-    this.flatPageIndex = event.pageIndex;
-    this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
+    this.flatPageSize.set(event.pageSize);
+    this.flatPageIndex.set(event.pageIndex);
+    this.fetchFlatResponses(this.flatPageIndex(), this.flatPageSize());
   }
 
   private fetchFlatResponses(page: number, limit: number): void {
@@ -1515,77 +1492,75 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       return;
     }
     if (this.hasInvalidRegexFilters()) {
-      this.isLoadingFlat = false;
+      this.isLoadingFlat.set(false);
       return;
     }
     const validPage = Math.max(0, page);
     this.flatResponsesRequestSequence += 1;
     const requestSequence = this.flatResponsesRequestSequence;
-    this.isLoadingFlat = true;
-    this.changeDetectorRef.markForCheck();
+    this.isLoadingFlat.set(true);
 
-    const sessionFilterActive = this.flatFilters.sessionFilter;
+    const sessionFilterActive = this.flatFilters().sessionFilter;
     this.flatResponsesSubscription?.unsubscribe();
     this.flatResponsesSubscription = this.testResultService
       .getFlatResponses(this.appService.selectedWorkspaceId, {
         page: validPage + 1,
         limit,
-        code: this.flatFilters.code,
-        group: this.flatFilters.group,
-        login: this.flatFilters.login,
-        booklet: this.flatFilters.booklet,
-        unit: this.flatFilters.unit,
-        response: this.flatFilters.response,
-        responseStatus: this.flatFilters.responseStatus,
-        responseValue: this.flatFilters.responseValue,
-        tags: this.flatFilters.tags,
+        code: this.flatFilters().code,
+        group: this.flatFilters().group,
+        login: this.flatFilters().login,
+        booklet: this.flatFilters().booklet,
+        unit: this.flatFilters().unit,
+        response: this.flatFilters().response,
+        responseStatus: this.flatFilters().responseStatus,
+        responseValue: this.flatFilters().responseValue,
+        tags: this.flatFilters().tags,
         regexSearch: this.enableRegexSearch,
-        geogebra: this.flatFilters.geogebra ? 'true' : '',
-        audioLow: this.flatFilters.audioLow ? 'true' : '',
-        hasValue: this.flatFilters.nonEmptyResponse ? 'true' : '',
-        audioLowThreshold: this.flatFilters.audioLow ?
-          String(this.audioLowThreshold) :
+        geogebra: this.flatFilters().geogebra ? 'true' : '',
+        audioLow: this.flatFilters().audioLow ? 'true' : '',
+        hasValue: this.flatFilters().nonEmptyResponse ? 'true' : '',
+        audioLowThreshold: this.flatFilters().audioLow ?
+          String(this.audioLowThreshold()) :
           '',
-        shortProcessing: this.flatFilters.shortProcessing ? 'true' : '',
-        shortProcessingThresholdMs: this.flatFilters.shortProcessing ?
-          String(this.shortProcessingThresholdMs) :
+        shortProcessing: this.flatFilters().shortProcessing ? 'true' : '',
+        shortProcessingThresholdMs: this.flatFilters().shortProcessing ?
+          String(this.shortProcessingThresholdMs()) :
           '',
-        longLoading: this.flatFilters.longLoading ? 'true' : '',
-        longLoadingThresholdMs: String(this.longLoadingThresholdMs),
-        focusLostThresholdMs: String(this.focusLostThresholdMs),
-        sessionSpanThresholdMs: String(this.sessionSpanThresholdMs),
-        repeatedStartThreshold: String(this.repeatedStartThreshold),
+        longLoading: this.flatFilters().longLoading ? 'true' : '',
+        longLoadingThresholdMs: String(this.longLoadingThresholdMs()),
+        focusLostThresholdMs: String(this.focusLostThresholdMs()),
+        sessionSpanThresholdMs: String(this.sessionSpanThresholdMs()),
+        repeatedStartThreshold: String(this.repeatedStartThreshold()),
         processingDurations: '',
-        processingDurationMin: this.processingDurationEnabled ?
-          String(this.processingDurationMin) :
+        processingDurationMin: this.processingDurationEnabled() ?
+          String(this.processingDurationMin()) :
           '',
-        processingDurationMax: this.processingDurationEnabled ?
-          String(this.processingDurationMax) :
+        processingDurationMax: this.processingDurationEnabled() ?
+          String(this.processingDurationMax()) :
           '',
-        unitProgress: (this.unitProgressFilters || []).join(','),
+        unitProgress: (this.unitProgressFilters() || []).join(','),
         sessionBrowsers: sessionFilterActive ?
-          this.parseCsv(this.sessionBrowsersAllowlist) :
+          this.parseCsv(this.sessionBrowsersAllowlist()) :
           '',
         sessionOs: sessionFilterActive ?
-          this.parseCsv(this.sessionOsAllowlist) :
+          this.parseCsv(this.sessionOsAllowlist()) :
           '',
         sessionScreens: sessionFilterActive ?
-          this.parseCsv(this.sessionScreensAllowlist) :
+          this.parseCsv(this.sessionScreensAllowlist()) :
           '',
-        logAnomalies: this.flatFilters.logAnomalies,
-        includeLogAnomalies: this.showLogAnomaliesInTable ? 'true' : ''
+        logAnomalies: this.flatFilters().logAnomalies,
+        includeLogAnomalies: this.showLogAnomaliesInTable() ? 'true' : ''
       }, {
         suppressGlobalHttpError: true
       })
       .subscribe({
         next: resp => {
-          this.changeDetectorRef.markForCheck();
           if (requestSequence !== this.flatResponsesRequestSequence) {
             return;
           }
-          this.isLoadingFlat = false;
-          this.flatTotalRecords = resp.total;
-          this.flatData = (resp.data || []).map(r => ({
+          this.isLoadingFlat.set(false);
+          this.flatTotalRecords.set(resp.total);
+          this.flatData.set((resp.data || []).map(r => ({
             bookletId: r.bookletId,
             responseId: r.responseId,
             unitId: r.unitId,
@@ -1600,15 +1575,14 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
             responseValue: r.responseValue,
             tags: Array.isArray(r.tags) ? r.tags : [],
             logAnomalies: Array.isArray(r.logAnomalies) ? r.logAnomalies : []
-          }));
+          })));
 
           this.loadFrequenciesForCurrentPage();
           this.loadNotesPresenceForCurrentPage();
         },
         error: (error: HttpErrorResponse) => {
-          this.changeDetectorRef.markForCheck();
           if (requestSequence === this.flatResponsesRequestSequence) {
-            this.isLoadingFlat = false;
+            this.isLoadingFlat.set(false);
             this.showFlatResponseLoadError(error);
           }
         }
@@ -1637,7 +1611,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         this.backendInvalidRegexFields.add(errorField);
       }
     } else if (error.status === 400 && /timed out/i.test(backendMessage)) {
-      messageKey = this.flatFilters.responseValue.trim() ?
+      messageKey = this.flatFilters().responseValue.trim() ?
         'search-filter.response-value-timeout' :
         'search-filter.regex-timeout';
     } else if (error.status === 400 && this.enableRegexSearch) {
@@ -1660,7 +1634,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   }
 
   hasNotesForRow(row: FlatResponseRow): boolean {
-    return this.unitIdsWithNotes.has(row.unitId);
+    return this.unitIdsWithNotes().has(row.unitId);
   }
 
   hasLogAnomaliesForRow(row: FlatResponseRow): boolean {
@@ -1713,10 +1687,10 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     }
 
     const unitIds = Array.from(
-      new Set((this.flatData || []).map(r => r.unitId).filter(id => !!id))
+      new Set((this.flatData() || []).map(r => r.unitId).filter(id => !!id))
     );
     if (unitIds.length === 0) {
-      this.unitIdsWithNotes = new Set<number>();
+      this.unitIdsWithNotes.set(new Set<number>());
       return;
     }
 
@@ -1724,18 +1698,16 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       .getNotesForMultipleUnits(this.appService.selectedWorkspaceId, unitIds)
       .subscribe({
         next: notesByUnitId => {
-          this.changeDetectorRef.markForCheck();
           const nextSet = new Set<number>();
           Object.entries(notesByUnitId || {}).forEach(([unitId, notes]) => {
             if (Array.isArray(notes) && notes.length > 0) {
               nextSet.add(Number(unitId));
             }
           });
-          this.unitIdsWithNotes = nextSet;
+          this.unitIdsWithNotes.set(nextSet);
         },
         error: () => {
-          this.changeDetectorRef.markForCheck();
-          this.unitIdsWithNotes = new Set<number>();
+          this.unitIdsWithNotes.set(new Set<number>());
         }
       });
   }
@@ -1798,7 +1770,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
                   'Erfolg',
                   { duration: 3000 }
                 );
-                this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
+                this.fetchFlatResponses(this.flatPageIndex(), this.flatPageSize());
                 this.responseDeleted.emit();
               } else {
                 this.snackBar.open(
@@ -1828,5 +1800,9 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
 
   trackByRow(index: number, item: FlatResponseRow): number {
     return item.responseId;
+  }
+
+  setFlatFiltersField<K extends keyof FlatResponseFilters>(key: K, value: FlatResponseFilters[K]): void {
+    this.flatFilters.update(current => (current ? { ...current, [key]: value } : current));
   }
 }

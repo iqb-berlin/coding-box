@@ -2,7 +2,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ChangeDetectorRef, ViewChild, Component, OnInit, inject
+  ViewChild, Component, OnInit, inject, signal
 } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSort } from '@angular/material/sort';
@@ -34,22 +34,21 @@ export class UsersComponent implements OnInit {
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
-  private changeDetectorRef = inject(ChangeDetectorRef);
 
-  selectedUsers: number[] = [];
-  selectedRows: UserFullDto[] = [];
+  readonly selectedUsers = signal<number[]>([]);
+  readonly selectedRows = signal<UserFullDto[]>([]);
   userObjectsDatasource = new MatTableDataSource<UserFullDto>();
   tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
   tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
-  userWorkspaces: WorkspaceInListDto[] = [];
+  readonly userWorkspaces = signal<WorkspaceInListDto[]>([]);
 
   @ViewChild(MatSort) sort = new MatSort();
 
-  authData = AppService.defaultAuthData;
+  readonly authData = signal(AppService.defaultAuthData);
   ngOnInit(): void {
     this.appService.authData$.subscribe(
       authData => {
-        this.authData = authData;
+        this.authData.set(authData);
       }
     );
     setTimeout(() => {
@@ -116,9 +115,8 @@ export class UsersComponent implements OnInit {
   }
 
   userSelectionChanged(userData: UserFullDto[]): void {
-    this.selectedUsers = userData.map(user => user.id);
-    this.selectedRows = userData;
-    this.changeDetectorRef.markForCheck();
+    this.selectedUsers.set(userData.map(user => user.id));
+    this.selectedRows.set(userData);
   }
 
   editUser(value: { selection: UserFullDto[], user: UntypedFormGroup }): void {
@@ -128,7 +126,7 @@ export class UsersComponent implements OnInit {
       username: value.user.get('username')?.value,
       isAdmin: value.user.get('isAdmin')?.value
     };
-    this.userBackendService.changeUserData(this.authData.userId, changedData).subscribe(
+    this.userBackendService.changeUserData(this.authData().userId, changedData).subscribe(
       respOk => {
         this.updateUserList();
         if (respOk) {
@@ -173,7 +171,7 @@ export class UsersComponent implements OnInit {
   setUserWorkspaceAccessRight(workspaces: number[]): void {
     runMutationAndRefreshAuthData(
       this.appService,
-      this.userBackendService.setUserWorkspaceAccessRight(this.selectedUsers[0], workspaces)
+      this.userBackendService.setUserWorkspaceAccessRight(this.selectedUsers()[0], workspaces)
     )
       .subscribe(
         result => {
@@ -200,7 +198,7 @@ export class UsersComponent implements OnInit {
 
   createWorkspaceList(): void {
     this.workspaceBackendService.getAllWorkspacesList().subscribe(workspaces => {
-      if (workspaces.data.length > 0) { this.userWorkspaces = workspaces.data; }
+      if (workspaces.data.length > 0) { this.userWorkspaces.set(workspaces.data); }
     });
   }
 }

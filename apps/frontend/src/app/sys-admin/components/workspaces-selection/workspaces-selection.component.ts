@@ -12,9 +12,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ChangeDetectorRef, Component, OnInit, OnChanges, SimpleChanges, ViewChild, inject,
-  DestroyRef, input,
-  output
+  Component, OnInit, OnChanges, SimpleChanges, ViewChild, inject, DestroyRef, input, output, signal
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
@@ -39,13 +37,12 @@ import { WorkspaceBackendService } from '../../../workspace/services/workspace-b
 export class WorkspacesSelectionComponent implements OnInit, OnChanges {
   private workspaceBackendService = inject(WorkspaceBackendService);
   private destroyRef = inject(DestroyRef);
-  private changeDetectorRef = inject(ChangeDetectorRef);
 
   objectsDatasource = new MatTableDataSource<WorkspaceInListDto>();
   displayedColumns = ['selectCheckbox', 'name'];
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
   tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
-  selectedWorkspaceId = 0;
+  readonly selectedWorkspaceId = signal(0);
   private workspaceListLoaded = false;
   readonly workspaceListReady = output<boolean>();
 
@@ -72,7 +69,7 @@ export class WorkspacesSelectionComponent implements OnInit, OnChanges {
   }
 
   private updateWorkspaceList(): void {
-    this.selectedWorkspaceId = 0;
+    this.selectedWorkspaceId.set(0);
     this.workspaceListLoaded = false;
     this.workspaceListReady.emit(false);
     this.workspaceBackendService.getAllWorkspacesListOrFail()
@@ -85,11 +82,9 @@ export class WorkspacesSelectionComponent implements OnInit, OnChanges {
           this.tableSelectionRow.clear();
           this.applySelectedWorkspaceIds();
           this.workspaceListReady.emit(true);
-          this.changeDetectorRef.markForCheck();
         },
         error: () => {
           this.workspaceListReady.emit(false);
-          this.changeDetectorRef.markForCheck();
         }
       });
   }
@@ -100,7 +95,6 @@ export class WorkspacesSelectionComponent implements OnInit, OnChanges {
     this.tableSelectionCheckboxes.select(...this.objectsDatasource.data
       .filter(workspace => this.selectedWorkspacesIds().includes(workspace.id)));
     this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
-    this.changeDetectorRef.markForCheck();
   }
 
   private setObjectsDatasource(groups: WorkspaceInListDto[]): void {
@@ -118,7 +112,6 @@ export class WorkspacesSelectionComponent implements OnInit, OnChanges {
     if (this.selectionDisabled()) return;
     this.tableSelectionCheckboxes.toggle(row);
     this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
-    this.changeDetectorRef.markForCheck();
   }
 
   private isAllSelected(): boolean {
@@ -133,7 +126,6 @@ export class WorkspacesSelectionComponent implements OnInit, OnChanges {
       this.tableSelectionCheckboxes.clear() :
       this.objectsDatasource.data.forEach(row => this.tableSelectionCheckboxes.select(row));
     this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
-    this.changeDetectorRef.markForCheck();
   }
 
   toggleRowSelection(row: WorkspaceInListDto): void {

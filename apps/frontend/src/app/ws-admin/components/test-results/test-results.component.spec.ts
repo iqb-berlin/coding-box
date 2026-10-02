@@ -251,11 +251,11 @@ describe('TestResultsComponent', () => {
     };
 
     expect(testResultService.getLogAnomalySummary).not.toHaveBeenCalled();
-    expect(component.logAnomalySummaryRequested).toBe(false);
+    expect(component.logAnomalySummaryRequested()).toBe(false);
   });
 
   it('should load the workspace regex setting for the flat table', () => {
-    expect(component.enableRegexSearch).toBe(true);
+    expect(component.enableRegexSearch()).toBe(true);
   });
 
   it('should not show manual coding status controls on the test results page', () => {
@@ -273,7 +273,7 @@ describe('TestResultsComponent', () => {
   });
 
   it('should hide log quality when disabled by workspace setting', () => {
-    expect(component.showTestResultsLogAnomalies).toBe(false);
+    expect(component.showTestResultsLogAnomalies()).toBe(false);
     expect(fixture.nativeElement.textContent).not.toContain('Log-Qualität');
   });
 
@@ -283,7 +283,7 @@ describe('TestResultsComponent', () => {
   });
 
   it('should show clearer overview labels and formatted counts without translating technical statuses', () => {
-    component.overview = {
+    component.overview.set({
       testPersons: 135,
       testGroups: 6,
       uniqueBooklets: 48,
@@ -298,7 +298,7 @@ describe('TestResultsComponent', () => {
       sessionBrowserCounts: {},
       sessionOsCounts: {},
       sessionScreenCounts: {}
-    };
+    });
 
     fixture.detectChanges();
 
@@ -314,7 +314,7 @@ describe('TestResultsComponent', () => {
   });
 
   it('should open the flat table filtered by the selected technical response status', () => {
-    component.overview = {
+    component.overview.set({
       testPersons: 135,
       testGroups: 6,
       uniqueBooklets: 48,
@@ -326,7 +326,7 @@ describe('TestResultsComponent', () => {
       sessionBrowserCounts: {},
       sessionOsCounts: {},
       sessionScreenCounts: {}
-    };
+    });
     fixture.detectChanges();
 
     const root = fixture.nativeElement as HTMLElement;
@@ -336,13 +336,13 @@ describe('TestResultsComponent', () => {
 
     statusButton.click();
 
-    expect(component.quickSearchTableFilters).toEqual({ responseStatus: 'DISPLAYED' });
-    expect(component.forceShowLogAnomalyTableColumn).toBe(false);
-    expect(component.isTableView).toBe(true);
+    expect(component.quickSearchTableFilters()).toEqual({ responseStatus: 'DISPLAYED' });
+    expect(component.forceShowLogAnomalyTableColumn()).toBe(false);
+    expect(component.isTableView()).toBe(true);
   });
 
   it('should show log quality when enabled by workspace setting', () => {
-    component.showTestResultsLogAnomalies = true;
+    component.showTestResultsLogAnomalies.set(true);
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('Log-Qualität');
@@ -388,7 +388,7 @@ describe('TestResultsComponent', () => {
     };
     const response = { id: 13, variableid: 'VAR_1' };
 
-    component.responses = [response] as never;
+    component.responses.set([response] as never);
     testResultService.getWorkspaceOverview.mockClear();
     dialog.open.mockReturnValue({ afterClosed: () => of(true) });
     responseService.deleteResponse.mockReturnValue(of({
@@ -476,10 +476,10 @@ describe('TestResultsComponent', () => {
     appliedResults$.next({ appliedResponses: 5 });
     appliedResults$.complete();
 
-    expect(component.codingFreshnessSummary).toBeNull();
-    expect(component.manualAppliedResultsOverview).toBeNull();
-    expect(component.isLoadingCodingFreshnessStatus).toBe(false);
-    expect(component.isLoadingManualAppliedResultsOverview).toBe(false);
+    expect(component.codingFreshnessSummary()).toBeNull();
+    expect(component.manualAppliedResultsOverview()).toBeNull();
+    expect(component.isLoadingCodingFreshnessStatus()).toBe(false);
+    expect(component.isLoadingManualAppliedResultsOverview()).toBe(false);
   });
 
   it('should keep the last workspace overview while a reload has no result yet', () => {
@@ -498,14 +498,14 @@ describe('TestResultsComponent', () => {
       sessionScreenCounts: {}
     };
 
-    component.overview = previousOverview;
+    component.overview.set(previousOverview);
     testResultService.getWorkspaceOverview.mockReturnValue(of(null));
 
     (component as unknown as { loadWorkspaceOverview: () => void })
       .loadWorkspaceOverview();
 
-    expect(component.overview).toBe(previousOverview);
-    expect(component.isLoadingOverview).toBe(false);
+    expect(component.overview()).toBe(previousOverview);
+    expect(component.isLoadingOverview()).toBe(false);
   });
 
   it('should expose log anomaly summary load failures', () => {
@@ -513,8 +513,8 @@ describe('TestResultsComponent', () => {
       getLogAnomalySummary: jest.Mock;
     };
 
-    component.showTestResultsLogAnomalies = true;
-    component.logAnomalySummary = {
+    component.showTestResultsLogAnomalies.set(true);
+    component.logAnomalySummary.set({
       totalBooklets: 10,
       affectedBooklets: 1,
       criticalBooklets: 1,
@@ -523,7 +523,7 @@ describe('TestResultsComponent', () => {
       totalAnomalyRules: 1,
       totalAnomalyEvents: 1,
       byCode: { controller_error: 1 }
-    };
+    });
     testResultService.getLogAnomalySummary.mockReturnValue(
       throwError(() => new Error('summary failed'))
     );
@@ -531,32 +531,32 @@ describe('TestResultsComponent', () => {
     (component as unknown as { loadLogAnomalySummary: () => void })
       .loadLogAnomalySummary();
 
-    expect(component.logAnomalySummary).toBeNull();
-    expect(component.logAnomalySummaryLoadFailed).toBe(true);
-    expect(component.isLoadingLogAnomalySummary).toBe(false);
-    expect(component.logAnomalySummaryRequested).toBe(true);
+    expect(component.logAnomalySummary()).toBeNull();
+    expect(component.logAnomalySummaryLoadFailed()).toBe(true);
+    expect(component.isLoadingLogAnomalySummary()).toBe(false);
+    expect(component.logAnomalySummaryRequested()).toBe(true);
   });
 
   it('should force the log anomaly table column for the dashboard table action', () => {
-    component.showTestResultsLogAnomalies = true;
-    component.forceShowLogAnomalyTableColumn = false;
+    component.showTestResultsLogAnomalies.set(true);
+    component.forceShowLogAnomalyTableColumn.set(false);
 
     component.showLogAnomaliesInTable();
 
-    expect(component.quickSearchTableFilters).toEqual({ logAnomalies: 'any' });
-    expect(component.forceShowLogAnomalyTableColumn).toBe(true);
-    expect(component.isTableView).toBe(true);
+    expect(component.quickSearchTableFilters()).toEqual({ logAnomalies: 'any' });
+    expect(component.forceShowLogAnomalyTableColumn()).toBe(true);
+    expect(component.isTableView()).toBe(true);
   });
 
   it('should not force the log anomaly table column when workspace setting is disabled', () => {
-    component.showTestResultsLogAnomalies = false;
-    component.forceShowLogAnomalyTableColumn = false;
+    component.showTestResultsLogAnomalies.set(false);
+    component.forceShowLogAnomalyTableColumn.set(false);
 
     component.showLogAnomaliesInTable();
 
-    expect(component.quickSearchTableFilters).toEqual({ logAnomalies: 'any' });
-    expect(component.forceShowLogAnomalyTableColumn).toBe(false);
-    expect(component.isTableView).toBe(true);
+    expect(component.quickSearchTableFilters()).toEqual({ logAnomalies: 'any' });
+    expect(component.forceShowLogAnomalyTableColumn()).toBe(false);
+    expect(component.isTableView()).toBe(true);
   });
 
   it('should open booklet replay in booklet-view mode with a clean hash URL', () => {
@@ -579,11 +579,11 @@ describe('TestResultsComponent', () => {
 
     unitsReplayService.getUnitsFromFileUpload.mockReturnValue(of(bookletReplay));
     appService.createOwnToken.mockReturnValue(of('token'));
-    component.testPerson = {
+    component.testPerson.set({
       login: 'login',
       code: 'code',
       group: 'group'
-    } as never;
+    } as never);
 
     component.replayBooklet({ name: 'BOOKLET_Ä' } as never);
 
@@ -622,11 +622,11 @@ describe('TestResultsComponent', () => {
 
     unitsReplayService.getUnitsFromFileUpload.mockReturnValue(of(bookletReplay));
     appService.createOwnToken.mockReturnValue(of('token'));
-    component.testPerson = {
+    component.testPerson.set({
       login: 'login',
       code: '',
       group: 'group'
-    } as never;
+    } as never);
 
     component.replayBooklet({ name: 'BOOKLET_A' } as never);
 
@@ -722,7 +722,7 @@ describe('TestResultsComponent', () => {
   });
 
   it('should ignore zero-count coding freshness rows in the overview banner', () => {
-    component.codingFreshnessSummary = {
+    component.codingFreshnessSummary.set({
       workspaceId: 1,
       currentRevision: 2,
       items: [
@@ -733,15 +733,15 @@ describe('TestResultsComponent', () => {
           affectedResponseCount: 0
         }
       ]
-    };
+    });
 
-    expect(component.codingFreshnessWarnings).toEqual([]);
-    expect(component.hasCodingFreshnessWarning).toBe(false);
+    expect(component.codingFreshnessWarnings()).toEqual([]);
+    expect(component.hasCodingFreshnessWarning()).toBe(false);
     expect(component.codingFreshnessBannerTitle).toBe('Kodierstand aktuell');
   });
 
   it('should show second auto-coding as waiting while manual coding results are still open', () => {
-    component.codingFreshnessSummary = {
+    component.codingFreshnessSummary.set({
       workspaceId: 1,
       currentRevision: 2,
       items: [
@@ -752,8 +752,8 @@ describe('TestResultsComponent', () => {
           affectedResponseCount: 5098
         }
       ]
-    };
-    component.manualAppliedResultsOverview = {
+    });
+    component.manualAppliedResultsOverview.set({
       totalIncompleteResponses: 671,
       appliedResponses: 210,
       remainingResponses: 461,
@@ -764,22 +764,22 @@ describe('TestResultsComponent', () => {
       aggregationActive: false,
       aggregationThreshold: null,
       aggregatedDuplicateCases: 0
-    };
+    });
 
-    expect(component.hasCodingFreshnessWarning).toBe(true);
-    expect(component.codingFreshnessWarnings).toEqual([]);
-    expect(component.codingFreshnessDisplayWarnings).toHaveLength(1);
+    expect(component.hasCodingFreshnessWarning()).toBe(true);
+    expect(component.codingFreshnessWarnings()).toEqual([]);
+    expect(component.codingFreshnessDisplayWarnings()).toHaveLength(1);
     expect(component.codingFreshnessBannerTitle).toBe('Manuelle Kodierung abschließen');
     expect(component.codingFreshnessSummaryText).toContain('Auto-Coding 2 ist der nächste Schritt');
     expect(component.codingFreshnessSummaryText).toContain('461 manuelle Kodierergebnisse offen');
-    expect(component.getCodingFreshnessChipLabel(component.codingFreshnessDisplayWarnings[0])).toBe(
+    expect(component.getCodingFreshnessChipLabel(component.codingFreshnessDisplayWarnings()[0])).toBe(
       'Auto-Coding 2: 671 Aufgabenbearbeitungen wartet'
     );
-    expect(component.codingFreshnessActionLabel).toBe('Manuelle Kodierung öffnen');
+    expect(component.codingFreshnessActionLabel()).toBe('Manuelle Kodierung öffnen');
   });
 
   it('should hide second auto-coding while the manual coding status is still loading', () => {
-    component.codingFreshnessSummary = {
+    component.codingFreshnessSummary.set({
       workspaceId: 1,
       currentRevision: 2,
       items: [
@@ -790,8 +790,8 @@ describe('TestResultsComponent', () => {
           affectedResponseCount: 5098
         }
       ]
-    };
-    component.manualAppliedResultsOverview = {
+    });
+    component.manualAppliedResultsOverview.set({
       totalIncompleteResponses: 671,
       appliedResponses: 671,
       remainingResponses: 0,
@@ -802,17 +802,17 @@ describe('TestResultsComponent', () => {
       aggregationActive: false,
       aggregationThreshold: null,
       aggregatedDuplicateCases: 0
-    };
-    component.manualAppliedResultsOverviewLoadFailed = false;
-    component.isLoadingManualAppliedResultsOverview = true;
+    });
+    component.manualAppliedResultsOverviewLoadFailed.set(false);
+    component.isLoadingManualAppliedResultsOverview.set(true);
 
-    expect(component.hasCodingFreshnessWarning).toBe(false);
-    expect(component.codingFreshnessWarnings).toEqual([]);
-    expect(component.codingFreshnessDisplayWarnings).toEqual([]);
+    expect(component.hasCodingFreshnessWarning()).toBe(false);
+    expect(component.codingFreshnessWarnings()).toEqual([]);
+    expect(component.codingFreshnessDisplayWarnings()).toEqual([]);
   });
 
   it('should show second auto-coding as actionable once manual coding is complete', () => {
-    component.codingFreshnessSummary = {
+    component.codingFreshnessSummary.set({
       workspaceId: 1,
       currentRevision: 2,
       items: [
@@ -823,8 +823,8 @@ describe('TestResultsComponent', () => {
           affectedResponseCount: 5098
         }
       ]
-    };
-    component.manualAppliedResultsOverview = {
+    });
+    component.manualAppliedResultsOverview.set({
       totalIncompleteResponses: 671,
       appliedResponses: 671,
       remainingResponses: 0,
@@ -835,19 +835,19 @@ describe('TestResultsComponent', () => {
       aggregationActive: false,
       aggregationThreshold: null,
       aggregatedDuplicateCases: 0
-    };
+    });
 
-    expect(component.codingFreshnessWarnings).toHaveLength(1);
+    expect(component.codingFreshnessWarnings()).toHaveLength(1);
     expect(component.codingFreshnessBannerTitle).toBe('Auto-Coding starten');
     expect(component.codingFreshnessSummaryText).toBe(
       '671 Aufgabenbearbeitungen benötigen Auto-Coding 2. ' +
       'Dabei werden 5098 Antwortwerte berücksichtigt.'
     );
-    expect(component.codingFreshnessActionLabel).toBe('Auto-Coding öffnen');
+    expect(component.codingFreshnessActionLabel()).toBe('Auto-Coding öffnen');
   });
 
   it('should keep earlier auto-coding warnings actionable while second auto-coding waits', () => {
-    component.codingFreshnessSummary = {
+    component.codingFreshnessSummary.set({
       workspaceId: 1,
       currentRevision: 2,
       items: [
@@ -864,8 +864,8 @@ describe('TestResultsComponent', () => {
           affectedResponseCount: 5098
         }
       ]
-    };
-    component.manualAppliedResultsOverview = {
+    });
+    component.manualAppliedResultsOverview.set({
       totalIncompleteResponses: 671,
       appliedResponses: 210,
       remainingResponses: 461,
@@ -876,9 +876,9 @@ describe('TestResultsComponent', () => {
       aggregationActive: false,
       aggregationThreshold: null,
       aggregatedDuplicateCases: 0
-    };
+    });
 
-    expect(component.codingFreshnessWarnings).toEqual([
+    expect(component.codingFreshnessWarnings()).toEqual([
       expect.objectContaining({ version: 'v1' })
     ]);
     expect(component.codingFreshnessBannerTitle).toBe('Auto-Coding starten');
@@ -886,14 +886,14 @@ describe('TestResultsComponent', () => {
       '10 Aufgabenbearbeitungen benötigen Auto-Coding 1. ' +
       'Dabei werden 50 Antwortwerte berücksichtigt.'
     );
-    expect(component.codingFreshnessActionLabel).toBe('Auto-Coding öffnen');
+    expect(component.codingFreshnessActionLabel()).toBe('Auto-Coding öffnen');
   });
   it.each(['booklet', 'unit'].flatMap(kind => ['destroy', 'workspace'].flatMap(end => ['success', 'error'].map(outcome => ({ kind, end, outcome })))))('ignores delayed $kind $outcome after $end', async ({ kind, end, outcome }) => {
     const response = new Subject<unknown>();
     const files = TestBed.inject(FileService) as unknown as { getBookletInfo: jest.Mock; getUnitInfo: jest.Mock };
     files.getBookletInfo.mockReturnValue(response);
     files.getUnitInfo.mockReturnValue(response);
-    component.selectedUnit = { id: 10, name: 'UNIT' } as NonNullable<TestResultsComponent['selectedUnit']>;
+    component.selectedUnit.set({ id: 10, name: 'UNIT' } as NonNullable<ReturnType<TestResultsComponent['selectedUnit']>>);
     const snack = TestBed.inject(MatSnackBar).open as jest.Mock;
     snack.mockClear();
     if (kind === 'booklet') component.openBookletInfo('BOOKLET');

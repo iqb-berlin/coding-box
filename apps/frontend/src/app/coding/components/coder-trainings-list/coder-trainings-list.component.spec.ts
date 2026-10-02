@@ -79,8 +79,8 @@ describe('CoderTrainingsListComponent', () => {
     fixture = TestBed.createComponent(CoderTrainingsListComponent);
     component = fixture.componentInstance;
     (component as unknown as { dialog: MatDialog }).dialog = matDialogMock as unknown as MatDialog;
-    component.originalData = trainings;
-    component.coderTrainings = trainings;
+    component.originalData.set(trainings);
+    component.coderTrainings.set(trainings);
     component.rebuildTrainingNameFilterOptions();
   });
 
@@ -97,20 +97,20 @@ describe('CoderTrainingsListComponent', () => {
     expect(component.getTrainingTableMeta(trainings[0])).toContain('ID 10');
     expect(component.getTrainingTableMeta(trainings[0])).toContain('2 Jobs');
 
-    component.selectedTrainingName = 'Duplicate Label';
+    component.selectedTrainingName.set('Duplicate Label');
     component.onTrainingNameFilterChange();
 
-    expect(component.coderTrainings.map(training => training.id)).toEqual([10, 11]);
+    expect(component.coderTrainings().map(training => training.id)).toEqual([10, 11]);
   });
 
   it('keeps the selected training name filter across normal reloads', async () => {
-    component.selectedTrainingName = 'Duplicate Label';
+    component.selectedTrainingName.set('Duplicate Label');
     codingTrainingBackendServiceMock.getCoderTrainings.mockReturnValue(of(trainings));
 
     await component.loadCoderTrainings();
 
-    expect(component.selectedTrainingName).toBe('Duplicate Label');
-    expect(component.coderTrainings.map(training => training.id)).toEqual([10, 11]);
+    expect(component.selectedTrainingName()).toBe('Duplicate Label');
+    expect(component.coderTrainings().map(training => training.id)).toEqual([10, 11]);
   });
 
   it('reuses an in-flight training list request', async () => {
@@ -205,7 +205,7 @@ describe('CoderTrainingsListComponent', () => {
 
     expect(codingTrainingBackendServiceMock.getCoderTrainings).toHaveBeenCalledWith(1);
     expect(codingTrainingBackendServiceMock.getCoderTrainings).toHaveBeenCalledWith(2);
-    expect(component.coderTrainings).toEqual(workspace2Trainings);
+    expect(component.coderTrainings()).toEqual(workspace2Trainings);
   });
   it('renders a delayed server response without another user action', async () => {
     const backend = TestBed.inject(CodingTrainingBackendService);

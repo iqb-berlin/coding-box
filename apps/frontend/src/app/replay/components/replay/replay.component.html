@@ -1,58 +1,61 @@
-<div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isCodingMode || isBookletReplayMode"
-  [class.resizing]="isResizing" (window:keydown)="onKeyDown($any($event))">
+@let pageValue = page();
+@let responsesValue = responses();
+@let unitsDataValue = unitsData();
+<div class="replay-container" [class.print-mode]="isPrintMode()" [class.booklet-mode]="isCodingMode() || isBookletReplayMode()"
+  [class.resizing]="isResizing()" (window:keydown)="onKeyDown($any($event))">
   <cb-spinner [isLoaded]="isLoaded"></cb-spinner>
 
-  @if (isCodingMode || isBookletReplayMode) {
-  @if (isBookletReplayMode && !!player && unitDef) {
-  <coding-box-units-replay [unitsData]="unitsData" [freeNavigation]="isBookletReplayMode"
+  @if (isCodingMode() || isBookletReplayMode()) {
+  @if (isBookletReplayMode() && !!player() && unitDef()) {
+  <coding-box-units-replay [unitsData]="unitsDataValue" [freeNavigation]="isBookletReplayMode()"
     (unitChanged)="handleUnitChanged($event)">
   </coding-box-units-replay>
   }
 
   <div class="replay-content">
     <div class="unit-player-container">
-      @if (!!player && unitDef) {
+      @if (!!player() && unitDef()) {
       <!-- The changing key intentionally recreates the Verona player and its iframe for every replay payload. -->
-      @for (key of [reloadKey]; track key.toString()) {
-      <coding-box-unit-player [unitDef]="unitDef" [unitPlayer]="player" [unitResponses]="responses" [pageId]="page"
-        [printMode]="isPrintMode" (invalidPage)="checkPageError($event)" (playerReady)="onPlayerReady()"
+      @for (key of [reloadKey()]; track key.toString()) {
+      <coding-box-unit-player [unitDef]="unitDef()" [unitPlayer]="player()" [unitResponses]="responsesValue" [pageId]="pageValue"
+        [printMode]="isPrintMode()" (invalidPage)="checkPageError($event)" (playerReady)="onPlayerReady()"
         (responseVisible)="onResponseVisible()">
       </coding-box-unit-player>
       }
       }
-      @if (testPerson && unitId) {
+      @if (testPerson() && unitId()) {
       <div
         #watermark
         class="watermark"
-        [class.truncated]="isWatermarkTruncated"
-        [matTooltip]="watermarkText"
-        [matTooltipDisabled]="!isWatermarkTruncated"
+        [class.truncated]="isWatermarkTruncated()"
+        [matTooltip]="watermarkText()"
+        [matTooltipDisabled]="!isWatermarkTruncated()"
         matTooltipPosition="above">
-        {{ watermarkText }}
+        {{ watermarkText() }}
       </div>
       }
     </div>
 
-    @if (isCodingMode && hasCodingJobPanelContent()) {
+    @if (isCodingMode() && hasCodingJobPanelContent()) {
     <div class="resize-handle" (mousedown)="onResizeStart($event)"></div>
-    <div class="code-selector-container" [style.width.px]="codePanelWidth" [style.min-width.px]="codePanelWidth">
+    <div class="code-selector-container" [style.width.px]="codePanelWidth()" [style.min-width.px]="codePanelWidth()">
       @if (codingService.codingScheme && codingService.currentVariableId) {
       <app-code-selector [codingScheme]="codingService.codingScheme" [variableId]="codingService.currentVariableId"
         [codingCaseKey]="getCurrentCodingCaseKey()"
         [preSelectedCodeId]="getPreSelectedCodeId(codingService.currentVariableId)"
         [preSelectedCodingIssueOptionId]="getPreSelectedCodingIssueOptionId(codingService.currentVariableId)"
         [coderNotes]="getCoderNotes()" [showProgress]="!!codingService.codingJobId"
-        [completedCount]="getCompletedCount()" [totalUnits]="totalUnits" [progressPercentage]="getProgressPercentage()"
-        [openCount]="getOpenCount()" [isCodingActive]="!!codingService.codingJobId && !isBookletReplayMode"
+        [completedCount]="getCompletedCount()" [totalUnits]="totalUnits()" [progressPercentage]="getProgressPercentage()"
+        [openCount]="getOpenCount()" [isCodingActive]="!!codingService.codingJobId && !isBookletReplayMode()"
         [hasCodingJob]="!!codingService.codingJobId" [isCodingJobCompleted]="codingService.isCodingJobCompleted"
-        [isCompletedJobReview]="codingService.isCompletedJobReview || isReviewMode || isCodingIssueReviewMode"
-        [isPausingJob]="codingService.isPausingJob" [unitsData]="unitsData" [codingService]="codingService"
+        [isCompletedJobReview]="codingService.isCompletedJobReview || isReviewMode() || isCodingIssueReviewMode()"
+        [isPausingJob]="codingService.isPausingJob" [unitsData]="unitsDataValue" [codingService]="codingService"
         [showScore]="codingService.showScore" [allowComments]="codingService.allowComments"
         [suppressGeneralInstructions]="codingService.suppressGeneralInstructions"
         [isReadOnly]="isCodingReadOnly()" [isNavigationDisabled]="isCodingInteractionBlockedByReAuthentication()"
         [hasSaveError]="codingService.hasSaveError"
-        [clearCodingIssueOnRegularSelection]="isCodingIssueReviewMode"
-        [reviewCodeSelections]="reviewCodeSelections"
+        [clearCodingIssueOnRegularSelection]="isCodingIssueReviewMode()"
+        [reviewCodeSelections]="reviewCodeSelections()"
         (codeSelected)="onCodeSelected($event)"
         (notesChanged)="onNotesChanged($event)" (notesCommitted)="onNotesCommitted($event)"
         (openNavigateDialog)="openNavigateDialog()"
@@ -65,11 +68,11 @@
     }
   </div>
   } @else {
-  @if (!!player && unitDef) {
+  @if (!!player() && unitDef()) {
   <!-- The changing key intentionally recreates the Verona player and its iframe for every replay payload. -->
-  @for (key of [reloadKey]; track key.toString()) {
-  <coding-box-unit-player [unitDef]="unitDef" [unitPlayer]="player" [unitResponses]="responses" [pageId]="page"
-    [printMode]="isPrintMode" (invalidPage)="checkPageError($event)" (playerReady)="onPlayerReady()"
+  @for (key of [reloadKey()]; track key.toString()) {
+  <coding-box-unit-player [unitDef]="unitDef()" [unitPlayer]="player()" [unitResponses]="responsesValue" [pageId]="pageValue"
+    [printMode]="isPrintMode()" (invalidPage)="checkPageError($event)" (playerReady)="onPlayerReady()"
     (responseVisible)="onResponseVisible()">
   </coding-box-unit-player>
   }
@@ -80,7 +83,7 @@
 
 
 
-  @if (codingService.isCodingJobCompleted && !isBookletReplayMode && !isReviewMode && !codingService.isCompletedJobReview) {
+  @if (codingService.isCodingJobCompleted && !isBookletReplayMode() && !isReviewMode() && !codingService.isCompletedJobReview) {
   <div class="completion-overlay">
     <div class="completion-dialog">
       <h2>{{ 'replay.CODING_JOB_COMPLETED' | translate }}</h2>
@@ -99,7 +102,7 @@
   </div>
   }
 
-  @if (codingService.isCodingJobPaused && !isBookletReplayMode) {
+  @if (codingService.isCodingJobPaused && !isBookletReplayMode()) {
   <div class="pause-overlay">
     <div class="pause-dialog">
       <h2>{{ 'replay.coding-job-paused' | translate }}</h2>
