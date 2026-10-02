@@ -10,9 +10,12 @@
         "ZL-001",
         "ZL-002",
         "ZL-003",
-        "ZL-004"
+        "ZL-004",
+        "ZL-028"
       ],
       "tests": [
+        "apps/frontend/src/app/coding/components/cohens-kappa-statistics/cohens-kappa-statistics.component.zoneless.spec.ts",
+        "cypress/zoneless/cohens-kappa.cy.ts",
         "apps/frontend/src/app/coding/components/coding-management/coding-management.component.spec.ts",
         "apps/frontend/src/app/coding/components/coding-management-manual/coding-management-manual.component.spec.ts",
         "apps/frontend/src/app/coding/components/my-coding-jobs/my-coding-jobs.component.spec.ts",

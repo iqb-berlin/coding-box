@@ -1330,3 +1330,47 @@ Aktualisiert wurden ausschließlich Inventar, Testreferenzen und Dokumentation.
 Die vorhandenen Zoneless- und Browser-Targets erfassen die neuen Spezifikationen
 automatisch. Diese lokalen Ergebnisse sind kein CI-Nachweis. Die CI des
 veröffentlichten Commits ist gesondert zu prüfen.
+
+
+### ZL-028: Cohen-Kappa-Dialog bleibt nach verzögerter Antwort im Ladezustand
+
+Ausgangspunkt ist PR #1039, Commit `214646b01814bfcc18376c349612e9f145425de9`.
+Im echten Template blieb nach einer verzögerten Statistikantwort der Spinner
+stehen. Auch der Fehlerpfad und die Freigabe der Exportbuttons schrieben
+gewöhnliche Felder ohne Angular-Benachrichtigung. Ladezustand, Statistik,
+Zusammenfassung, Trainings- und Kodiererauswahl, Filter sowie Exportzustand
+verwenden jetzt Signals; abhängige Freigaben und Hinweistexte sind Computeds.
+Die bestehenden Anfrage- und Scope-Regeln bleiben erhalten.
+
+Elf Regressionen in `cohens-kappa-statistics.component.zoneless.spec.ts` prüfen
+verzögerten Erfolg, Leerzustand, Fehler, vertauschte Trainingsantworten,
+Gewichtungswechsel über das gebundene Material-Control sowie Erfolg und Fehler
+aller drei Exportvarianten. Die Tests liefern Antworten über echte Timer und
+warten anschließend auf Angular-Stabilität, ohne manuelles `detectChanges()`
+oder `markForCheck()`. Der bestehende Zoneless-Target erfasst die Datei automatisch.
+
+`cypress/zoneless/cohens-kappa.cy.ts` öffnet den Dialog über die Durchführung der
+manuellen Kodierung. Die drei Fälle prüfen verzögerten Erfolg einschließlich
+Gewichtungswechsel und Exportfehler sowie Leerzustand und HTTP-Fehler. Die App
+läuft mit `frontend:serve:zoneless`; `window.Zone` muss fehlen. Alle API-Antworten
+und die Anmeldung sind synthetische Fixtures. Beim HTTP-Fehler bildet der echte
+Service wie bisher eine leere Statistik, während der Komponententest zusätzlich
+den direkten Observable-Fehlerpfad prüft.
+
+### Lokale Abschlussläufe für ZL-028 am 02.10.2026
+
+| Nx-Prüfung | Ergebnis | Exit |
+|---|---|---|
+| `frontend:test --maxWorkers=2` | 2.538 Tests / 228 Suites bestanden | 0 |
+| `frontend:test-zoneless --maxWorkers=2` | 776 Tests / 33 Suites bestanden | 0 |
+| `frontend:e2e --configuration=zoneless --spec=cypress/zoneless/cohens-kappa.cy.ts` | Drei Browserfälle bestanden | 0 |
+| `frontend:lint` | bestanden | 0 |
+| `frontend:build --configuration=production` | bestanden | 0 |
+| `frontend:zoneless-approval` | Inventar ohne Abweichung, sechs Bereiche / sieben Mechanismen / 28 Befunde referenziert | 0 |
+
+Nach den Gesamt-Testläufen wurden ausschließlich die von ESLint verlangten
+Formatkorrekturen vorgenommen. Der vollständige Lint-Lauf, der Produktionsbuild
+und die elf neuen Regressionen im nativen Zoneless-Target bestehen anschließend.
+Das Inventar umfasst weiterhin 8.777 Einträge aus 325 Produktionsdateien.
+Diese lokalen Ergebnisse bestätigen keinen Push oder erfolgreichen CI-Lauf
+am veröffentlichten Commit; die Veröffentlichung ist gesondert zu prüfen.

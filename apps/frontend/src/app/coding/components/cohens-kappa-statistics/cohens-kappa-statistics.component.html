@@ -6,7 +6,7 @@
     </h1>
     <mat-dialog-content class="cohens-kappa-container">
       <div class="content-section">
-        @if (hasCoderTrainingSelection) {
+        @if (hasCoderTrainingSelection()) {
           <mat-card class="training-scope-card">
             <mat-card-header>
               <mat-card-title>
@@ -21,7 +21,7 @@
               <mat-form-field class="training-select" appearance="outline">
                 <mat-label>{{ 'cohens-kappa-statistics.training-select-label' | translate }}</mat-label>
                 <mat-select
-                  [(ngModel)]="selectedCoderTrainingId"
+                  [ngModel]="selectedCoderTrainingId()" (ngModelChange)="selectedCoderTrainingId.set($event)"
                   (selectionChange)="onCoderTrainingSelectionChange()"
                   >
                   <mat-select-trigger>
@@ -32,7 +32,7 @@
                       </span>
                     }
                   </mat-select-trigger>
-                  @for (training of availableCoderTrainings; track training) {
+                  @for (training of availableCoderTrainings(); track training) {
                     <mat-option [value]="training.id">
                       <span class="training-option">
                         <span class="training-option-title">{{ getTrainingOptionTitle(training) }}</span>
@@ -45,13 +45,13 @@
             </mat-card-content>
           </mat-card>
         }
-        @if (isLoading) {
+        @if (isLoading()) {
           <div class="loading-container">
             <mat-spinner diameter="40"></mat-spinner>
             <p>{{ 'cohens-kappa-statistics.loading' | translate }}</p>
           </div>
         } @else {
-          @if (workspaceKappaSummary || availableCoders.length > 0) {
+          @if (workspaceKappaSummary() || availableCoders().length > 0) {
             <mat-card class="workspace-kappa-card">
               <mat-card-header>
                 <mat-card-title>
@@ -64,9 +64,9 @@
               </mat-card-header>
               <mat-card-content>
                 <div class="toggles-container">
-                  @if (!excludeTrainingsLocked) {
+                  @if (!excludeTrainingsLocked()) {
                     <div class="toggle-item">
-                      <mat-slide-toggle [(ngModel)]="excludeTrainings" (change)="toggleExcludeTrainings()" color="primary">
+                      <mat-slide-toggle [ngModel]="excludeTrainings()" (ngModelChange)="excludeTrainings.set($event)" (change)="toggleExcludeTrainings()" color="primary">
                         {{ 'cohens-kappa-statistics.exclude-trainings' | translate }}
                       </mat-slide-toggle>
                       <mat-icon class="info-icon"
@@ -77,7 +77,7 @@
                     </div>
                   }
                   <div class="toggle-item">
-                    <mat-slide-toggle [(ngModel)]="useWeightedMean" (change)="toggleWeightingMethod()" color="primary">
+                    <mat-slide-toggle [ngModel]="useWeightedMean()" (ngModelChange)="useWeightedMean.set($event)" (change)="toggleWeightingMethod()" color="primary">
                       {{ 'cohens-kappa-statistics.weighted-mean' | translate }}
                     </mat-slide-toggle>
                     <mat-icon class="info-icon"
@@ -86,13 +86,13 @@
                       info
                     </mat-icon>
                     <span class="weighting-method-label">
-                      ({{ (useWeightedMean ?
+                      ({{ (useWeightedMean() ?
                       'cohens-kappa-statistics.weighted' :
                       'cohens-kappa-statistics.unweighted') | translate }})
                     </span>
                   </div>
                   <div class="toggle-item">
-                    <mat-slide-toggle [(ngModel)]="useCodeLevel" (change)="toggleCalculationLevel()" color="primary">
+                    <mat-slide-toggle [ngModel]="useCodeLevel()" (ngModelChange)="useCodeLevel.set($event)" (change)="toggleCalculationLevel()" color="primary">
                       {{ 'cohens-kappa-statistics.code-level' | translate }}
                     </mat-slide-toggle>
                     <mat-icon class="info-icon"
@@ -101,24 +101,24 @@
                       info
                     </mat-icon>
                     <span class="weighting-method-label">
-                      ({{ (useCodeLevel ?
+                      ({{ (useCodeLevel() ?
                       'cohens-kappa-statistics.code-level-short' :
                       'cohens-kappa-statistics.score-level-short') | translate }})
                     </span>
                   </div>
-                  @if (availableCoders.length > 0) {
+                  @if (availableCoders().length > 0) {
                     <div class="coder-selection">
                       <mat-form-field appearance="outline">
                         <mat-label>{{ 'cohens-kappa-statistics.coder-select-label' | translate }}</mat-label>
                         <mat-select
                           multiple
-                          [(ngModel)]="selectedCoderIds"
+                          [ngModel]="selectedCoderIds()" (ngModelChange)="selectedCoderIds.set($event)"
                           (selectionChange)="onCoderSelectionChange()"
                           >
                           <mat-select-trigger>
-                            {{ 'cohens-kappa-statistics.coder-select-count' | translate:{count: selectedCoderIds.length} }}
+                            {{ 'cohens-kappa-statistics.coder-select-count' | translate:{count: selectedCoderIds().length} }}
                           </mat-select-trigger>
-                          @for (coder of availableCoders; track coder) {
+                          @for (coder of availableCoders(); track coder) {
                             <mat-option [value]="coder.id">
                               {{ coder.name }}
                             </mat-option>
@@ -138,7 +138,7 @@
                     </div>
                   }
                 </div>
-                @if (workspaceKappaSummary; as summary) {
+                @if (workspaceKappaSummary(); as summary) {
                   <div class="kappa-stats">
                     <div class="stat-item">
                       <span class="stat-label">{{ 'cohens-kappa-statistics.average-kappa' | translate }}</span>
@@ -201,42 +201,42 @@
             </mat-card-header>
             <div class="kappa-detail-actions">
               <button mat-stroked-button color="primary" (click)="exportKappaWorkbook()"
-                [disabled]="!canLoadKappaStatistics || !!exportInProgress || isLoading || kappaStatistics.length === 0"
+                [disabled]="!canLoadKappaStatistics() || !!exportInProgress() || isLoading() || kappaStatistics().length === 0"
                 [matTooltip]="'cohens-kappa-statistics.export-xlsx-tooltip' | translate">
-                <mat-icon>{{ exportInProgress === 'xlsx' ? 'hourglass_empty' : 'download' }}</mat-icon>
-                <span>{{ (exportInProgress === 'xlsx' ?
+                <mat-icon>{{ exportInProgress() === 'xlsx' ? 'hourglass_empty' : 'download' }}</mat-icon>
+                <span>{{ (exportInProgress() === 'xlsx' ?
                   'cohens-kappa-statistics.export-running' :
                 'cohens-kappa-statistics.export-xlsx') | translate }}</span>
               </button>
               <button mat-stroked-button color="primary" (click)="exportKappaSummaryCsv()"
-                [disabled]="!canLoadKappaStatistics || !!exportInProgress || isLoading || kappaStatistics.length === 0"
+                [disabled]="!canLoadKappaStatistics() || !!exportInProgress() || isLoading() || kappaStatistics().length === 0"
                 [matTooltip]="'cohens-kappa-statistics.export-summary-tooltip' | translate">
-                <mat-icon>{{ exportInProgress === 'summary' ? 'hourglass_empty' : 'table_view' }}</mat-icon>
-                <span>{{ (exportInProgress === 'summary' ?
+                <mat-icon>{{ exportInProgress() === 'summary' ? 'hourglass_empty' : 'table_view' }}</mat-icon>
+                <span>{{ (exportInProgress() === 'summary' ?
                   'cohens-kappa-statistics.export-running' :
                 'cohens-kappa-statistics.export-summary') | translate }}</span>
               </button>
               <button mat-stroked-button (click)="exportKappaDetails()"
-                [disabled]="!canLoadKappaStatistics || !!exportInProgress || isLoading || kappaStatistics.length === 0"
+                [disabled]="!canLoadKappaStatistics() || !!exportInProgress() || isLoading() || kappaStatistics().length === 0"
                 [matTooltip]="'cohens-kappa-statistics.export-details-tooltip' | translate">
-                <mat-icon>{{ exportInProgress === 'details' ? 'hourglass_empty' : 'dataset' }}</mat-icon>
-                <span>{{ (exportInProgress === 'details' ?
+                <mat-icon>{{ exportInProgress() === 'details' ? 'hourglass_empty' : 'dataset' }}</mat-icon>
+                <span>{{ (exportInProgress() === 'details' ?
                   'cohens-kappa-statistics.export-running' :
                 'cohens-kappa-statistics.export-details') | translate }}</span>
               </button>
             </div>
             <div class="interpretation-scale-container">
               <button mat-button class="scale-toggle-btn" (click)="toggleInterpretationScale()"
-                [attr.aria-expanded]="showInterpretationScale">
-                <mat-icon>{{ showInterpretationScale ? 'expand_less' : 'expand_more' }}</mat-icon>
+                [attr.aria-expanded]="showInterpretationScale()">
+                <mat-icon>{{ showInterpretationScale() ? 'expand_less' : 'expand_more' }}</mat-icon>
                 <span>
                   {{ 'cohens-kappa-statistics.interpretation-scale' | translate }}
-                  {{ (showInterpretationScale ?
+                  {{ (showInterpretationScale() ?
                   'cohens-kappa-statistics.hide' :
                   'cohens-kappa-statistics.show') | translate }}
                 </span>
               </button>
-              @if (showInterpretationScale) {
+              @if (showInterpretationScale()) {
                 <div class="interpretation-scale">
                   <div class="scale-header">
                     <mat-icon class="scale-icon">analytics</mat-icon>
@@ -268,10 +268,10 @@
               }
             </div>
             <mat-card-content>
-              @if (kappaStatistics.length === 0) {
+              @if (kappaStatistics().length === 0) {
                 <div class="no-kappa-data">
                   <mat-icon>info</mat-icon>
-                  <p>{{ noDataTranslationKey | translate }}</p>
+                  <p>{{ noDataTranslationKey() | translate }}</p>
                 </div>
               } @else {
                 <section class="kappa-table-section">
@@ -289,7 +289,7 @@
                         </tr>
                       </thead>
                       <tbody>
-                        @for (stat of kappaStatistics; track stat.unitName + '-' + stat.variableId) {
+                        @for (stat of kappaStatistics(); track stat.unitName + '-' + stat.variableId) {
                           <tr>
                             <td>{{ getVariableLabel(stat) }}</td>
                             <td>{{ stat.caseCount }}</td>
@@ -322,7 +322,7 @@
                         </tr>
                       </thead>
                       <tbody>
-                        @for (stat of kappaStatistics; track stat.unitName + '-' + stat.variableId) {
+                        @for (stat of kappaStatistics(); track stat.unitName + '-' + stat.variableId) {
                           @for (pair of stat.coderPairs; track pair.coder1Id + '-' + pair.coder2Id) {
                             <tr>
                               <td>{{ getVariableLabel(stat) }}</td>
