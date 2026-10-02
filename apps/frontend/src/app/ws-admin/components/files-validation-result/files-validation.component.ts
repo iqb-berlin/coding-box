@@ -417,24 +417,31 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   private resetExpandedFilesLists(results: FilesValidation[]): void {
-    const previous = new Map(this.expandedFilesLists());
-    this.expandedFilesLists.set(new Map());
+    const previous = this.expandedFilesLists();
+    const next = new Map<string, ExpandedFilesLists>();
     results.forEach(val => {
       const prev = previous.get(val.testTaker);
-      this.expandedFilesLists.update(value => {
-        const next = new Map(value);
-        next.set(val.testTaker, {
-          booklets: prev?.booklets || false,
-          units: prev?.units || false,
-          schemes: prev?.schemes || false,
-          schemer: prev?.schemer || false,
-          definitions: prev?.definitions || false,
-          player: prev?.player || false,
-          metadata: prev?.metadata || false
-        });
-        return next;
+      next.set(val.testTaker, {
+        booklets: prev?.booklets || false,
+        units: prev?.units || false,
+        schemes: prev?.schemes || false,
+        schemer: prev?.schemer || false,
+        definitions: prev?.definitions || false,
+        player: prev?.player || false,
+        metadata: prev?.metadata || false
       });
     });
+    this.expandedFilesLists.set(next);
+  }
+
+  private resetDuplicateSelection(): void {
+    const next = new Map<string, string>();
+    this.duplicateTestTakers().forEach(duplicate => {
+      if (duplicate.occurrences.length > 0) {
+        next.set(duplicate.login, duplicate.occurrences[0].testTaker);
+      }
+    });
+    this.duplicateSelection.set(next);
   }
 
   private updateModeGroups(): void {
@@ -461,17 +468,7 @@ export class FilesValidationDialogComponent implements OnInit {
     this.allSelected.set(false);
     this.unusedFilesSelection.clear();
     this.allUnusedFilesSelected.set(false);
-    this.duplicateSelection.set(new Map());
-
-    this.duplicateTestTakers().forEach(duplicate => {
-      if (duplicate.occurrences.length > 0) {
-        this.duplicateSelection.update(value => {
-          const next = new Map(value);
-          next.set(duplicate.login, duplicate.occurrences[0].testTaker);
-          return next;
-        });
-      }
-    });
+    this.resetDuplicateSelection();
 
     this.resetExpandedFilesLists(filteredResults);
     this.updateModeGroups();
@@ -721,21 +718,7 @@ export class FilesValidationDialogComponent implements OnInit {
   constructor() {
     if (this.data) {
       if (this.data.validationResults) {
-        this.data.validationResults.forEach((val: FilesValidation) => {
-          this.expandedFilesLists.update(value => {
-            const next = new Map(value);
-            next.set(val.testTaker, {
-              booklets: false,
-              units: false,
-              schemes: false,
-              schemer: false,
-              definitions: false,
-              player: false,
-              metadata: false
-            });
-            return next;
-          });
-        });
+        this.resetExpandedFilesLists(this.data.validationResults);
         this.rebuildValidationResults();
       }
 
@@ -747,16 +730,7 @@ export class FilesValidationDialogComponent implements OnInit {
       if (this.data.duplicateTestTakers) {
         this.duplicateTestTakers.set(this.data.duplicateTestTakers);
 
-        // Initialize selection with the first occurrence for each duplicate
-        this.duplicateTestTakers().forEach(duplicate => {
-          if (duplicate.occurrences.length > 0) {
-            this.duplicateSelection.update(value => {
-              const next = new Map(value);
-              next.set(duplicate.login, duplicate.occurrences[0].testTaker);
-              return next;
-            });
-          }
-        });
+        this.resetDuplicateSelection();
       }
 
       if (this.data.unusedTestFiles) {
