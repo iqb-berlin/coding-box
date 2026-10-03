@@ -2,7 +2,6 @@ import {
   Component, inject, provideZonelessChangeDetection
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Subject } from 'rxjs';
@@ -49,7 +48,6 @@ describe('TagDialogComponent zoneless mutations', () => {
       imports: [TagsDialogHostComponent, MatDialogModule, MatSnackBarModule],
       providers: [
         provideZonelessChangeDetection(),
-        provideNoopAnimations(),
         { provide: UnitTagService, useValue: { createUnitTag, deleteUnitTag } },
         { provide: AppService, useValue: { selectedWorkspaceId: 1 } }
       ]

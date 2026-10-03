@@ -1,7 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
 import { ReviewListDialogComponent } from './review-list-dialog.component';
@@ -60,7 +59,7 @@ describe('ReviewListDialogComponent without ZoneJS', () => {
       .mockReturnValueOnce(replayResponses[1])
       .mockReturnValueOnce(replayResponses[2]);
     await TestBed.configureTestingModule({
-      imports: [ReviewListDialogComponent, TranslateModule.forRoot(), NoopAnimationsModule],
+      imports: [ReviewListDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MAT_DIALOG_DATA, useValue: { responses: [response(1), response(2)] } },

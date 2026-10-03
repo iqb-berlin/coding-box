@@ -1,6 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { WorkspacesMenuComponent } from './workspaces-menu.component';
 import { environment } from '../../../../environments/environment';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -14,8 +13,7 @@ describe('WorkspacesMenuComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         WorkspacesMenuComponent,
-        TranslateModule.forRoot(),
-        NoopAnimationsModule
+        TranslateModule.forRoot()
       ],
       providers: [
         { provide: SERVER_URL, useValue: environment.backendUrl }

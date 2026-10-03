@@ -1,6 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { StatisticsCardComponent } from './statistics-card.component';
 
 describe('StatisticsCardComponent', () => {
@@ -11,8 +10,7 @@ describe('StatisticsCardComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         StatisticsCardComponent,
-        TranslateModule.forRoot(),
-        NoopAnimationsModule
+        TranslateModule.forRoot()
       ]
     }).compileComponents();
 

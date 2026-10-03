@@ -2,7 +2,6 @@ import { provideZonelessChangeDetection, Type, ProviderToken } from '@angular/co
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
@@ -95,8 +94,7 @@ async function createDialog(c: DialogCase) {
   await TestBed.configureTestingModule({
     imports: [c.component, TranslateModule.forRoot()],
     providers: [
-      provideZonelessChangeDetection(),
-      provideNoopAnimations(), provideHttpClient(), provideHttpClientTesting(),
+      provideZonelessChangeDetection(), provideHttpClient(), provideHttpClientTesting(),
       { provide: SERVER_URL, useValue: '/api/' },
       { provide: MAT_DIALOG_DATA, useValue: { workspaceId: 1, unitId: 'UNIT', selectedWorkspace: [1] } },
       { provide: MatDialogRef, useValue: { close: jest.fn() } },

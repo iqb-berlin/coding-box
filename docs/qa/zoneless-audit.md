@@ -1952,7 +1952,7 @@ Backend-Persistenz oder Autorisierung. Die bestehenden Live-CI-Jobs bleiben
 Teil der Freigabe.
 
 
-### Native Diagrammanimationen und sichere RxJS-Übergänge am 03.10.2026
+### Zwischenstand: native Diagramme und sichere RxJS-Übergänge am 03.10.2026
 
 Basis: PR-Head `1a8fac0c65f2198e4c301d2536b926a5f0380dfb`.
 
@@ -1964,14 +1964,14 @@ Version 25.0.2 importierte `trigger`, `transition`, `style` und `animate`
 aus `@angular/animations`; lediglich den Provider zu entfernen wäre deshalb
 keine sichere Migration gewesen.
 
-Die acht Diagramme verwenden jetzt `VerticalBarChartComponent` mit nativen
+Die acht Diagramme verwendeten in diesem Zwischenstand `VerticalBarChartComponent` mit nativen
 SVG-Balken, Signal-Inputs, abgeleiteter Skalierung und OnPush. Achsentitel,
 gekürzte Unit-Beschriftungen, volle Werte im Tooltip, Tastaturfokus und
 Größenänderungen bleiben erhalten. `animate.enter` steuert eine CSS-Animation;
 `prefers-reduced-motion` deaktiviert sie. Leere/Null-Daten, Bruchteile und
 aktualisierte Inputs sind nativ ohne Animationsprovider geprüft. ngx-charts
 und seine exklusiven D3-Abhängigkeiten sind aus dem Lockfile entfernt.
-`@angular/animations` bleibt als Dev-Abhängigkeit für vorhandene
+`@angular/animations` blieb zunächst als Dev-Abhängigkeit für vorhandene
 `provideNoopAnimations()`-/`NoopAnimationsModule`-Testeinrichtungen, nicht
 als Anwendungskonsument.
 
@@ -2037,3 +2037,82 @@ Live-Backend-/Keycloak- oder Replay-Targets wurden bei dieser Migration lokal
 nicht erneut ausgeführt. Remote-CI für den neuen Commit ist separat
 nachzuweisen; die vorhandenen Browserjobs führen die geänderte Spezifikation
 automatisch aus.
+
+
+### Chart.js und vollständige Bereinigung der Animationstests am 03.10.2026
+
+Basis: PR-Head `dd81d74d263bf562e42a91d6bcaa1b4d2aea37fe`. Dieser Abschnitt
+ersetzt den oben dokumentierten SVG-Zwischenstand für die acht Replay-Diagramme.
+
+`VerticalBarChartComponent` verwendet Chart.js 4.5.1 direkt, mit expliziter
+Registrierung ausschließlich von `BarController`, `BarElement`, `CategoryScale`,
+`LinearScale` und `Tooltip`. Es gibt keinen Angular-Wrapper und keinen Import
+von `chart.js/auto`. Die bisherige zehnfarbige Vivid-Palette, abgerundete Balken,
+volle Tooltip-Namen und Werte sind vorhanden. Änderungen werden über 500 ms
+animiert; bei `prefers-reduced-motion` sind Animationen deaktiviert. Ein Wechsel
+der Bewegungseinstellung wird während der Lebensdauer berücksichtigt und beendet
+laufende Animationen sofort, wenn reduzierte Bewegung eingeschaltet wird.
+
+Signal-Inputs bleiben die führende Zustandsquelle. `afterRenderEffect` bindet
+frische Datenarrays nach dem DOM-Rendering an die imperative Bibliothek; sie
+erhält keine veränderbare Referenz auf die Signal-Eingaben. Die private Dataset-
+und Balkenidentität bleibt bei Aktualisierungen erhalten, damit Chart.js Werte
+interpolieren kann. Chart-Erstellung,
+Aktualisierung und Zerstörung erfolgen außerhalb der Angular-Zone. `DestroyRef`
+entfernt den Media-Query-Listener und ruft `Chart.destroy()` auf. Die beobachteten
+Dialogmaße steuern Canvas und internen Scrollbereich ausdrücklich.
+
+Die Diagramme besitzen einen zugänglichen Namen und einen Verweis auf die
+aufklappbare HTML-Datentabelle. Der native `summary`-Schalter ist per Tastatur
+mit der Leertaste bedienbar; das Öffnen und Schließen ist im Browser geprüft.
+Tabelle und Tooltip enthalten die vollständigen Kategorienamen,
+auch wenn Achsenbeschriftungen gekürzt sind. Die Tabelle hat Caption, Spalten-
+und Zeilenüberschriften; sie bietet den vollständigen Inhalt unabhängig vom
+Canvas. Das allein ist kein umfassendes Screenreader-Akzeptanzgutachten.
+
+Alle 88 Testdateien mit `NoopAnimationsModule` oder `provideNoopAnimations()`
+sind bereinigt. Das Paket `@angular/animations` ist aus den direkten
+Abhängigkeiten, dem aufgelösten Lockfile-Paketbestand und der lokalen Installation
+entfernt. Nur die unveränderte optionale Peer-Metadatenangabe von
+`@angular/platform-browser` enthält noch den Paketnamen. In den Informations-
+dialogtests ersetzen Material-Timingoptionen und das Warten auf `afterClosed()`
+die implizite Annahme eines synchronen Dialogschlusses. JSDOM wird für Canvas
+mit `jest-canvas-mock` ergänzt; Chart.js selbst wird in diesen Tests nicht gemockt.
+
+Der im Review reproduzierte Abstandfehler bei 30 Tageswerten wird jetzt durch
+Chart.js' gemessene Tickauswahl behandelt. Die Browserregression misst die
+tatsächlich gezeichneten Labelpositionen und Textbreiten bei 800 × 600 Pixeln.
+Sie prüft außerdem echte Canvas-Balkenpixel, Zwischenstände der Animation,
+ungekürzte Tooltip-Texte, Tastaturöffnung der Tabelle, alle acht Diagramme,
+25 Units, Größenänderung sowie Schließen und erneutes Öffnen des Dialogs.
+
+Im optimierten Produktionsbuild stammen 151.626 unkomprimierte Bytes aus
+Chart.js und dessen Farbmodul. Diese liegen im nachgeladenen Einstellungs-Chunk;
+sie werden nicht mit dem initialen App-Bundle geladen. Unter den 837 Bundle-
+Inputs findet sich weder `@angular/animations` noch `@swimlane/ngx-charts`.
+
+Referenzen: [Chart.js-Integration und gezielte Imports](https://www.chartjs.org/docs/latest/getting-started/integration.html),
+[Chart.js-Lebensdauer](https://www.chartjs.org/docs/latest/developers/api.html),
+[Canvas-Barrierefreiheit](https://www.chartjs.org/docs/latest/general/accessibility.html).
+
+
+### Lokale Abschlussprüfungen der Chart.js- und Testmigration am 03.10.2026
+
+| Prüfung | Ergebnis |
+|---|---|
+| `frontend:lint` | bestanden |
+| `frontend:test --runInBand` | 2.687 Tests / 256 Suites bestanden |
+| `frontend:test-zoneless --runInBand` | 920 Tests / 61 Suites bestanden |
+| `frontend:build --statsJson=true` | optimierter Produktionsbuild bestanden; 837 Bundle-Inputs ohne alte Animations-Engine oder ngx-charts |
+| Cypress, vollständige Produktions-Browsersuite | 128 Fälle / 23 Spezifikationen bestanden, keine Retries; einschließlich der erweiterten Chart.js-Regression |
+| `frontend:zoneless-approval` | 8.751 Inventareinträge; sechs Bereiche, sieben Mechanismen und 46 korrigierte Befunde; Referenzen gültig |
+| Abhängigkeitsprüfung | kein direktes, aufgelöstes oder installiertes `@angular/animations`; keine alten Animationstesthelfer im Frontend |
+
+Jest verwendet eine simulierte Canvas-API, führt aber die echte Chart.js-
+Implementierung aus. Der Browserlauf verwendet Electron 138, optimierte
+Produktionsbundles über einen lokalen HTTP-Server und kontrollierte API-
+Antworten. Er beweist keine reale Backend-Persistenz oder Autorisierung.
+Live-Backend-/Keycloak- und Replay-Targets wurden für diese Änderung nicht
+nochmals ausgeführt. Die vorhandenen CI-Browserjobs übernehmen die erweiterte
+Spezifikation automatisch; ihre Ergebnisse für den neuen Commit sind separat
+zu prüfen.

@@ -2,7 +2,6 @@ import { computed, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 import { EditMissingsProfilesDialogComponent } from './edit-missings-profiles-dialog.component';
@@ -14,7 +13,7 @@ describe('EditMissingsProfilesDialogComponent in zoneless mode', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [EditMissingsProfilesDialogComponent, NoopAnimationsModule, TranslateModule.forRoot()],
+      imports: [EditMissingsProfilesDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MAT_DIALOG_DATA, useValue: { workspaceId: 1 } },

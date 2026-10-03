@@ -1,6 +1,5 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject } from 'rxjs';
@@ -21,7 +20,6 @@ describe('TestResultsSearchComponent zoneless responses', () => {
       imports: [TestResultsSearchComponent],
       providers: [
         provideZonelessChangeDetection(),
-        provideNoopAnimations(),
         { provide: MAT_DIALOG_DATA, useValue: { title: 'Schnellsuche' } },
         { provide: MatDialogRef, useValue: { close: jest.fn() } },
         { provide: MatSnackBar, useValue: { open: jest.fn() } },

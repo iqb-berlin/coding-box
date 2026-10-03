@@ -1,7 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { By } from '@angular/platform-browser';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TestResultsExportDialogComponent } from './test-results-export-dialog.component';
 
 describe('TestResultsExportDialogComponent', () => {
@@ -13,7 +12,6 @@ describe('TestResultsExportDialogComponent', () => {
 
     TestBed.configureTestingModule({
       imports: [
-        NoopAnimationsModule,
         TestResultsExportDialogComponent
       ],
       providers: [

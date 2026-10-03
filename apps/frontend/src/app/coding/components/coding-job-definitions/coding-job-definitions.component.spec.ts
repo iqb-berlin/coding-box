@@ -4,7 +4,6 @@ import { provideHttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { OverlayContainer } from '@angular/cdk/overlay';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { of, throwError } from 'rxjs';
 
 import { CodingJobDefinitionsComponent } from './coding-job-definitions.component';
@@ -36,7 +35,6 @@ describe('CodingJobDefinitionsComponent', () => {
 
     await TestBed.configureTestingModule({
       providers: [
-        provideNoopAnimations(),
         { provide: SERVER_URL, useValue: environment.backendUrl },
         { provide: MatSnackBar, useValue: { open: jest.fn() } },
         {

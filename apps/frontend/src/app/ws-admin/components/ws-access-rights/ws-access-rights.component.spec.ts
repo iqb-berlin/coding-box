@@ -6,7 +6,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { WsAccessRightsComponent } from './ws-access-rights.component';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
@@ -49,7 +48,6 @@ describe('WsAccessRightsComponent', () => {
         MatCheckboxModule,
         MatTooltipModule,
         MatIconModule,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [

@@ -1,6 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { PageEvent } from '@angular/material/paginator';
 import { Sort } from '@angular/material/sort';
 import { ResponseTableComponent } from './response-table.component';
@@ -14,8 +13,7 @@ describe('ResponseTableComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         ResponseTableComponent,
-        TranslateModule.forRoot(),
-        NoopAnimationsModule
+        TranslateModule.forRoot()
       ]
     }).compileComponents();
 

@@ -1,6 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { ResponseFiltersComponent } from './response-filters.component';
 
 describe('ResponseFiltersComponent', () => {
@@ -11,8 +10,7 @@ describe('ResponseFiltersComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         ResponseFiltersComponent,
-        TranslateModule.forRoot(),
-        NoopAnimationsModule
+        TranslateModule.forRoot()
       ]
     }).compileComponents();
 

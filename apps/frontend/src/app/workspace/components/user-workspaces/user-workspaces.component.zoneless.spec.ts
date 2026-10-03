@@ -1,6 +1,5 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
@@ -20,7 +19,7 @@ describe('Workspace auth retry without Zone.js', () => {
       imports: [UserWorkspacesComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
-        provideRouter([]), provideNoopAnimations(),
+        provideRouter([]),
         { provide: AuthService, useValue: { isLoggedIn: () => true } },
         { provide: AppService, useValue: { retryAuthDataLoad } }
       ]

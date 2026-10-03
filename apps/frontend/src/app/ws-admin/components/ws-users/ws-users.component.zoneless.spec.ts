@@ -1,7 +1,6 @@
 import { Component, inject, provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { HttpClient } from '@angular/common/http';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { By } from '@angular/platform-browser';
@@ -43,7 +42,6 @@ describe('Workspace users without Zone.js', () => {
       imports: [RootLoadingHost, UsersComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
-        provideNoopAnimations(),
         AppService,
         { provide: MatSnackBar, useValue: { open: jest.fn() } },
         { provide: SERVER_URL, useValue: '/api/' },

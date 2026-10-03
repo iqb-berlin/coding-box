@@ -5,7 +5,6 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { provideHttpClient } from '@angular/common/http';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import * as csvExport from './shared/validation-export.util';
 import {
@@ -35,7 +34,7 @@ describe('Validation panels inside their real parent dialog', () => {
     await TestBed.configureTestingModule({
       imports: [ValidationDialogComponent, TranslateModule.forRoot()],
       providers: [
-        provideHttpClient(), provideHttpClientTesting(), provideNoopAnimations(), provideZonelessChangeDetection(),
+        provideHttpClient(), provideHttpClientTesting(), provideZonelessChangeDetection(),
         { provide: AppService, useValue: { selectedWorkspaceId: 5 } },
         { provide: SERVER_URL, useValue: 'http://localhost/api' },
         { provide: MAT_DIALOG_DATA, useValue: {} },

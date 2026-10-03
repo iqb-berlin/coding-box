@@ -8,7 +8,6 @@ import {
 } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { ReactiveFormsModule } from '@angular/forms';
 import { of, Subject, throwError } from 'rxjs';
 import { TestCenterImportComponent } from './test-center-import.component';
@@ -66,7 +65,6 @@ describe('TestCenterImportComponent', () => {
         TranslateModule.forRoot(),
         MatDialogModule,
         MatIconModule,
-        NoopAnimationsModule,
         ReactiveFormsModule,
         TestCenterImportComponent
       ],

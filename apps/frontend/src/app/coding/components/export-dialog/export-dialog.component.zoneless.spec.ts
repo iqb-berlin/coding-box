@@ -2,7 +2,6 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import * as ExcelJS from 'exceljs';
 import { Subject } from 'rxjs';
@@ -67,7 +66,7 @@ describe('Export dialog validation without ZoneJS', () => {
     download = new Subject<Blob>();
     validateCodingCompleteness = jest.fn().mockReturnValue(response);
     await TestBed.configureTestingModule({
-      imports: [ExportDialogComponent, MatSnackBarModule, TranslateModule.forRoot(), NoopAnimationsModule],
+      imports: [ExportDialogComponent, MatSnackBarModule, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MatDialogRef, useValue: { close: jest.fn() } },

@@ -5,7 +5,6 @@ import { MAT_DIALOG_DATA, MatDialog } from '@angular/material/dialog';
 import { MatPaginator } from '@angular/material/paginator';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { OverlayContainer } from '@angular/cdk/overlay';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { By } from '@angular/platform-browser';
 import { TranslateModule } from '@ngx-translate/core';
 import { Observable, of, Subject } from 'rxjs';
@@ -65,7 +64,6 @@ describe('DoubleCodedReviewComponent', () => {
       imports: [DoubleCodedReviewComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
-        provideNoopAnimations(),
         {
           provide: AppService,
           useValue: {

@@ -1,7 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
@@ -33,7 +32,6 @@ describe('JournalComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         JournalComponent,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [

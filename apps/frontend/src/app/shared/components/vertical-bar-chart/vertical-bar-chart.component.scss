@@ -4,55 +4,46 @@
   max-width: 100%;
 }
 
-.chart-scroll {
+.chart-scroll,
+.table-scroll {
   max-width: 100%;
   overflow-x: auto;
 }
 
-.axis {
-  stroke: currentColor;
-  stroke-opacity: 0.5;
+canvas {
+  display: block;
+  color: inherit;
 }
 
-.grid-line {
-  stroke: currentColor;
-  stroke-opacity: 0.15;
+.chart-data {
+  margin-top: 8px;
 }
 
-text {
-  fill: currentColor;
-  font-family: inherit;
+summary {
+  cursor: pointer;
+  width: fit-content;
 }
 
-.tick {
-  font-size: 12px;
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-top: 12px;
 }
 
-.axis-label {
-  font-size: 14px;
+caption {
+  text-align: left;
+  font-weight: 500;
+  padding-bottom: 8px;
 }
 
-.bar:focus rect,
-.bar:hover rect {
-  stroke: currentColor;
-  stroke-width: 2px;
+th,
+td {
+  text-align: left;
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.3);
 }
 
-.bar-enter {
-  transform-box: fill-box;
-  transform-origin: bottom;
-  animation: bar-enter 250ms ease-out;
-}
-
-@keyframes bar-enter {
-  from {
-    transform: scaleY(0);
-    opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bar-enter {
-    animation: none;
-  }
+tbody th {
+  font-weight: normal;
+  overflow-wrap: anywhere;
 }

@@ -1,7 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { delay } from 'rxjs/operators';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, throwError } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -85,7 +84,6 @@ describe('ExportComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         ExportComponent,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [

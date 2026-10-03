@@ -1,7 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
 import { VariableBundleDialogComponent, VariableBundleGroupDialogData } from './variable-bundle-dialog.component';
@@ -44,7 +43,7 @@ describe('VariableBundleDialogComponent in zoneless mode', () => {
     variables = new Subject<Variable[]>();
     close = jest.fn();
     await TestBed.configureTestingModule({
-      imports: [VariableBundleDialogComponent, TranslateModule.forRoot(), NoopAnimationsModule],
+      imports: [VariableBundleDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MatDialogRef, useValue: { close } },

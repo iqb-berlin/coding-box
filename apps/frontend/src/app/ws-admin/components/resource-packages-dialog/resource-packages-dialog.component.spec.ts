@@ -1,7 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { ResourcePackagesDialogComponent } from './resource-packages-dialog.component';
@@ -23,7 +22,6 @@ describe('ResourcePackagesDialogComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         ResourcePackagesDialogComponent,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [

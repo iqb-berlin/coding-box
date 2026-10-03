@@ -1,6 +1,5 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { OverlayContainer } from '@angular/cdk/overlay';
@@ -47,7 +46,6 @@ describe('Test person coding delayed responses without Zone.js', () => {
       imports: [TestPersonCodingComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
-        provideNoopAnimations(),
         { provide: TestPersonCodingService, useValue: service },
         { provide: AppService, useValue: appService },
         { provide: TestResultService, useValue: { getTestPersons: () => testPersons } },
@@ -287,7 +285,7 @@ describe('Test person coding terminal feedback without Zone.js', () => {
     await TestBed.configureTestingModule({
       imports: [TestPersonCodingComponent, MatSnackBarModule, TranslateModule.forRoot()],
       providers: [
-        provideZonelessChangeDetection(), provideNoopAnimations(),
+        provideZonelessChangeDetection(),
         { provide: TestPersonCodingService, useValue: service },
         { provide: AppService, useValue: { selectedWorkspaceId: 1 } },
         { provide: TestResultService, useValue: {} },

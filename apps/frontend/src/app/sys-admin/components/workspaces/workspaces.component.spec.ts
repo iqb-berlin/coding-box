@@ -11,7 +11,6 @@ import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialogModule } from '@angular/material/dialog';
 
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { WorkspacesComponent } from './workspaces.component';
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
@@ -53,7 +52,6 @@ describe('WorkspaceGroupsComponent', () => {
         MatTooltipModule,
         MatIconModule,
         MatTableModule,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [

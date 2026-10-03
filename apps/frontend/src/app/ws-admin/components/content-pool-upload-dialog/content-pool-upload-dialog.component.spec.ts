@@ -1,6 +1,5 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { Subject } from 'rxjs';
 import { ContentPoolUploadDialogComponent } from './content-pool-upload-dialog.component';
@@ -23,7 +22,6 @@ describe('ContentPoolUploadDialogComponent zoneless rendering', () => {
       imports: [ContentPoolUploadDialogComponent],
       providers: [
         provideZonelessChangeDetection(),
-        provideNoopAnimations(),
         { provide: MAT_DIALOG_DATA, useValue: { workspaceId: 1, settings, files: [{ id: 1, filename: 'unit.xml' }] } },
         { provide: MatDialogRef, useValue: { close } },
         {

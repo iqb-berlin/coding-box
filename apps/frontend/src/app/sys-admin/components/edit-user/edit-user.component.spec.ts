@@ -2,7 +2,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { HttpClientModule } from '@angular/common/http';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatInputModule } from '@angular/material/input';
@@ -21,7 +20,6 @@ describe('EditUserComponent', () => {
         MatIconModule,
         HttpClientModule,
         ReactiveFormsModule,
-        NoopAnimationsModule,
         MatDialogModule,
         MatCheckboxModule,
         TranslateModule.forRoot()

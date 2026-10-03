@@ -1,6 +1,5 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
@@ -27,7 +26,6 @@ describe('Coding results download with delayed responses without Zone.js', () =>
       imports: [DownloadCodingResultsDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
-        provideNoopAnimations(),
         { provide: MAT_DIALOG_DATA, useValue: { workspaceId: 5, currentVersion: 'v2' } },
         { provide: MatDialogRef, useValue: dialogRef },
         { provide: MissingsProfileService, useValue: service }

@@ -4,7 +4,6 @@ import { MatTableModule } from '@angular/material/table';
 import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { ValidationDataTableComponent, ValidationTableColumn } from './validation-data-table.component';
 
 interface TestData {
@@ -36,7 +35,6 @@ describe('ValidationDataTableComponent', () => {
         MatPaginatorModule,
         MatCheckboxModule,
         MatIconModule,
-        NoopAnimationsModule,
         ValidationDataTableComponent
       ]
     }).compileComponents();
