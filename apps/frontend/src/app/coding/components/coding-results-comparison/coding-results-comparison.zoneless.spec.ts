@@ -4,7 +4,7 @@ import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dial
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, Subject } from 'rxjs';
+import { Observable, of, Subject } from 'rxjs';
 import { CodingResultsComparisonComponent } from './coding-results-comparison.component';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
@@ -14,12 +14,17 @@ import { SessionRecoveryService } from '../../../core/services/session-recovery.
 import { PostMessageService } from '../../../core/services/post-message.service';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import { CoderTraining } from '../../models/coder-training.model';
+import type { TrainingKappaStatisticsDto } from '../../../../../../../api-dto/coding/training-kappa-statistics.dto';
 
-describe('Coding comparison training choices without Zone', () => {
+type DiscussionSaveResult = ReturnType<CodingTrainingBackendService['saveDiscussionResult']> extends Observable<infer Result> ? Result : never;
+
+describe('Coding comparison without Zone', () => {
   let fixture: ComponentFixture<CodingResultsComparisonComponent>;
   let trainings: Subject<CoderTraining[]>;
   let getCoderTrainings: jest.Mock;
   let snackBar: { open: jest.Mock };
+  let kappaResponse: Subject<TrainingKappaStatisticsDto>;
+  let saveResponse: Subject<DiscussionSaveResult>;
 
   const training = (id: number, label: string): CoderTraining => ({
     id,
@@ -36,6 +41,8 @@ describe('Coding comparison training choices without Zone', () => {
 
   beforeEach(async () => {
     trainings = new Subject<CoderTraining[]>();
+    kappaResponse = new Subject<TrainingKappaStatisticsDto>();
+    saveResponse = new Subject<DiscussionSaveResult>();
     getCoderTrainings = jest.fn().mockReturnValue(trainings);
     snackBar = { open: jest.fn() };
     await TestBed.configureTestingModule({
@@ -46,7 +53,7 @@ describe('Coding comparison training choices without Zone', () => {
         { provide: MatDialog, useValue: { open: jest.fn() } },
         { provide: MAT_DIALOG_DATA, useValue: { workspaceId: 1 } },
         { provide: MatSnackBar, useValue: snackBar },
-        { provide: CodingTrainingBackendService, useValue: { getCoderTrainings } },
+        { provide: CodingTrainingBackendService, useValue: { getCoderTrainings, getTrainingCohensKappa: () => kappaResponse, saveDiscussionResult: () => saveResponse } },
         { provide: CodingStatisticsService, useValue: {} },
         { provide: TestPersonCodingService, useValue: {} },
         { provide: AppService, useValue: { authData: { userName: 'Manager' }, needsReAuthentication: false } },
@@ -54,7 +61,7 @@ describe('Coding comparison training choices without Zone', () => {
         { provide: PostMessageService, useValue: { getMessages: () => new Subject<void>() } },
         {
           provide: SessionRecoveryService,
-          useValue: { restore$: new Subject<void>(), registerProvider: () => () => undefined }
+          useValue: { restore$: new Subject<void>(), registerProvider: () => () => undefined, peekDraft: () => undefined }
         }
       ]
     }).compileComponents();
@@ -136,5 +143,112 @@ describe('Coding comparison training choices without Zone', () => {
     trainings.next([training(1, 'Old training')]);
     await fixture.whenStable();
     expect(choiceLabels()).toEqual(['Current training · ID 5']);
+  });
+
+  async function prepareWithinTraining(): Promise<CodingResultsComparisonComponent> {
+    const c = fixture.componentInstance;
+    c.comparisonMode = 'within-training';
+    c.selectedTrainingForWithin = 5;
+    c.displayedColumns = ['index', 'discussion'];
+    c.totalItems = 1;
+    c.totalComparisons = 1;
+    c.availableCoders = [{ jobId: 1, coderName: 'A' }, { jobId: 2, coderName: 'B' }];
+    c.codersFormControl.setValue([1, 2]);
+    c.selectedCoderIds.setSelection(1, 2);
+    c.withinTrainingData = [{
+      responseId: 1,
+      unitName: 'U1',
+      variableId: 'V1',
+      testperson: 'T1',
+      coders: [{
+        jobId: 1, coderName: 'A', code: '1', score: 1
+      }, {
+        jobId: 2, coderName: 'B', code: '1', score: 1
+      }]
+    }];
+    c.dataSource.data = c.withinTrainingData;
+    fixture.changeDetectorRef.markForCheck();
+    await fixture.whenStable();
+    return c;
+  }
+
+  async function startDiscussionSave(): Promise<CodingResultsComparisonComponent> {
+    const c = await prepareWithinTraining();
+    const input = fixture.nativeElement.querySelector('.discussion-input input') as HTMLInputElement;
+    input.value = '1';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('blur', { bubbles: true }));
+    await fixture.whenStable();
+    await new Promise(resolve => { setTimeout(resolve, 50); });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.discussion-saving')).not.toBeNull();
+    return c;
+  }
+
+  it('renders a delayed Kappa result after the header click without another interaction', async () => {
+    const c = await prepareWithinTraining();
+    (fixture.nativeElement.querySelector('.kappa-header') as HTMLElement).click();
+    await fixture.whenStable();
+    await new Promise(resolve => { setTimeout(resolve, 50); });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('Berechne Interrater-Reliabilität');
+    kappaResponse.next({
+      variables: [],
+      workspaceSummary: {
+        totalDoubleCodedResponses: 1,
+        totalCoderPairs: 1,
+        averageKappa: 0.8,
+        averageBrennanPredigerKappa: 0.9,
+        variablesIncluded: 1,
+        codersIncluded: 2,
+        weightingMethod: 'weighted',
+        calculationLevel: 'code'
+      }
+    });
+    await fixture.whenStable();
+    expect(c.kappaStatistics()?.workspaceSummary.averageKappa).toBe(0.8);
+    expect(fixture.nativeElement.querySelector('.kappa-statistics')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).not.toContain('Berechne Interrater-Reliabilität');
+  });
+  it('clears the saving indication after a delayed discussion save', async () => {
+    const c = await startDiscussionSave();
+    const savingSnapshot = c.isSavingDiscussionByResponseId();
+    saveResponse.next({
+      success: true, code: 1, score: 1, notes: null, managerUserId: 1, managerName: 'Manager', source: 'manual'
+    });
+    await fixture.whenStable();
+    expect(c.isSavingDiscussionByResponseId()[1]).toBe(false);
+    expect(savingSnapshot[1]).toBe(true);
+    expect(c.isSavingDiscussionByResponseId()).not.toBe(savingSnapshot);
+    expect(fixture.nativeElement.querySelector('.discussion-saving')).toBeNull();
+  });
+
+  it('ends the Kappa loading indication after a delayed failure', async () => {
+    const c = await prepareWithinTraining();
+    (fixture.nativeElement.querySelector('.kappa-header') as HTMLElement).click();
+    await fixture.whenStable();
+    await new Promise(resolve => { setTimeout(resolve, 50); });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('Berechne Interrater-Reliabilität');
+
+    kappaResponse.error(new Error('Kappa unavailable'));
+    await fixture.whenStable();
+
+    expect(c.isLoadingKappa()).toBe(false);
+    expect(c.kappaStatistics()).toBeNull();
+    expect(fixture.nativeElement.textContent).not.toContain('Berechne Interrater-Reliabilität');
+    expect(snackBar.open).toHaveBeenCalledWith('coding.trainings.kappa.error', 'common.close', { duration: 3000 });
+  });
+
+  it('shows a delayed discussion save error and clears the saving indication', async () => {
+    const c = await startDiscussionSave();
+
+    saveResponse.error(new Error('Save unavailable'));
+    await fixture.whenStable();
+
+    expect(c.isSavingDiscussionByResponseId()[1]).toBe(false);
+    expect(fixture.nativeElement.querySelector('.discussion-saving')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.discussion-error')?.textContent)
+      .toContain('Diskussionsergebnis konnte nicht gespeichert werden.');
   });
 });
