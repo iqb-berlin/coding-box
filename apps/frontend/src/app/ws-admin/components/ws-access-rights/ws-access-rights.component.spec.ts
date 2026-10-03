@@ -1,3 +1,5 @@
+import { provideZonelessChangeDetection } from '@angular/core';
+import { delay } from 'rxjs/operators';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
@@ -51,6 +53,7 @@ describe('WsAccessRightsComponent', () => {
         TranslateModule.forRoot()
       ],
       providers: [
+        provideZonelessChangeDetection(),
         { provide: UserBackendService, useValue: mockUserBackendService },
         { provide: AppService, useValue: mockAppService },
         { provide: MatSnackBar, useValue: mockSnackBar }
@@ -68,63 +71,63 @@ describe('WsAccessRightsComponent', () => {
 
   it('should load users on creation', () => {
     expect(mockUserBackendService.getUsers).toHaveBeenCalledWith(1);
-    expect(component.workspaceUsers.entries.length).toBe(2);
-    expect(component.workspaceUsers.entries[0].name).toBe('user1');
+    expect(component.workspaceUsers().entries.length).toBe(2);
+    expect(component.workspaceUsers().entries[0].name).toBe('user1');
   });
 
   it('should change access level correctly', () => {
-    const user = component.workspaceUsers.entries[0];
+    const user = component.workspaceUsers().entries[0];
     component.changeAccessLevel(true, user, 3);
-    expect(user.accessLevel).toBe(3);
-    expect(user.isChecked).toBe(true);
-    expect(component.workspaceUsers.hasChanged).toBe(true);
+    expect(component.workspaceUsers().entries[0].accessLevel).toBe(3);
+    expect(component.workspaceUsers().entries[0].isChecked).toBe(true);
+    expect(component.workspaceUsers().hasChanged).toBe(true);
 
     component.changeAccessLevel(false, user, 3);
-    expect(user.accessLevel).toBe(0);
-    expect(user.isChecked).toBe(false);
-    expect(user.canCode).toBe(false);
+    expect(component.workspaceUsers().entries[0].accessLevel).toBe(0);
+    expect(component.workspaceUsers().entries[0].isChecked).toBe(false);
+    expect(component.workspaceUsers().entries[0].canCode).toBe(false);
   });
 
   it('should keep coding capability independent when changing workspace access', () => {
-    const user = component.workspaceUsers.entries[1];
+    const user = component.workspaceUsers().entries[1];
 
     component.changeAccessLevel(true, user, 3);
-    expect(user.accessLevel).toBe(3);
-    expect(user.canCode).toBe(false);
+    expect(component.workspaceUsers().entries[1].accessLevel).toBe(3);
+    expect(component.workspaceUsers().entries[1].canCode).toBe(false);
 
     component.changeCanCode(true, user);
     component.changeAccessLevel(true, user, 2);
-    expect(user.accessLevel).toBe(2);
-    expect(user.canCode).toBe(true);
+    expect(component.workspaceUsers().entries[1].accessLevel).toBe(2);
+    expect(component.workspaceUsers().entries[1].canCode).toBe(true);
 
     component.changeCanCode(false, user);
     component.changeAccessLevel(true, user, 1);
-    expect(user.accessLevel).toBe(1);
-    expect(user.canCode).toBe(false);
+    expect(component.workspaceUsers().entries[1].accessLevel).toBe(1);
+    expect(component.workspaceUsers().entries[1].canCode).toBe(false);
   });
 
   it('should change coding capability independently from access level', () => {
-    const user = component.workspaceUsers.entries[1];
+    const user = component.workspaceUsers().entries[1];
 
     component.changeCanCode(true, user);
 
-    expect(user.accessLevel).toBe(2);
-    expect(user.canCode).toBe(true);
-    expect(component.workspaceUsers.hasChanged).toBe(true);
+    expect(component.workspaceUsers().entries[1].accessLevel).toBe(2);
+    expect(component.workspaceUsers().entries[1].canCode).toBe(true);
+    expect(component.workspaceUsers().hasChanged).toBe(true);
   });
 
   it('should allow disabling coding capability for access level 1', () => {
-    const user = component.workspaceUsers.entries[0];
+    const user = component.workspaceUsers().entries[0];
 
     component.changeCanCode(false, user);
 
-    expect(user.accessLevel).toBe(1);
-    expect(user.canCode).toBe(false);
-    expect(component.workspaceUsers.hasChanged).toBe(true);
+    expect(component.workspaceUsers().entries[0].accessLevel).toBe(1);
+    expect(component.workspaceUsers().entries[0].canCode).toBe(false);
+    expect(component.workspaceUsers().hasChanged).toBe(true);
   });
 
   it('should save access rights successfully', () => {
-    const user = component.workspaceUsers.entries[0];
+    const user = component.workspaceUsers().entries[0];
     component.changeAccessLevel(true, user, 3);
 
     component.save();
@@ -136,11 +139,11 @@ describe('WsAccessRightsComponent', () => {
       '',
       expect.any(Object)
     );
-    expect(component.workspaceUsers.hasChanged).toBe(false);
+    expect(component.workspaceUsers().hasChanged).toBe(false);
   });
 
   it('should send removed existing access rights when saving', () => {
-    const user = component.workspaceUsers.entries[0];
+    const user = component.workspaceUsers().entries[0];
 
     component.changeAccessLevel(false, user, 1);
     component.save();
@@ -155,14 +158,14 @@ describe('WsAccessRightsComponent', () => {
   });
 
   it('should keep changes pending when saving access rights fails', () => {
-    const user = component.workspaceUsers.entries[0];
+    const user = component.workspaceUsers().entries[0];
     component.changeAccessLevel(true, user, 3);
     (mockUserBackendService.saveUsers as jest.Mock).mockReturnValueOnce(of(false));
 
     component.save();
 
     expect(mockAppService.refreshAuthData).not.toHaveBeenCalled();
-    expect(component.workspaceUsers.hasChanged).toBe(true);
+    expect(component.workspaceUsers().hasChanged).toBe(true);
     expect(mockSnackBar.open).toHaveBeenCalledWith(
       'admin.workspace-access-right-not-set',
       'error',
@@ -171,13 +174,13 @@ describe('WsAccessRightsComponent', () => {
   });
 
   it('should clear persisted changes and report a failed auth data refresh separately', () => {
-    const user = component.workspaceUsers.entries[0];
+    const user = component.workspaceUsers().entries[0];
     component.changeAccessLevel(true, user, 3);
     (mockAppService.refreshAuthData as jest.Mock).mockReturnValueOnce(of('failed'));
 
     component.save();
 
-    expect(component.workspaceUsers.hasChanged).toBe(false);
+    expect(component.workspaceUsers().hasChanged).toBe(false);
     expect(mockSnackBar.open).toHaveBeenCalledWith(
       'admin.change-saved-auth-data-refresh-failed',
       'error',
@@ -186,13 +189,26 @@ describe('WsAccessRightsComponent', () => {
   });
 
   it('should clear persisted changes without an obsolete message after the auth context changed', () => {
-    const user = component.workspaceUsers.entries[0];
+    const user = component.workspaceUsers().entries[0];
     component.changeAccessLevel(true, user, 3);
     (mockAppService.refreshAuthData as jest.Mock).mockReturnValueOnce(of('invalidated'));
 
     component.save();
 
-    expect(component.workspaceUsers.hasChanged).toBe(false);
+    expect(component.workspaceUsers().hasChanged).toBe(false);
     expect(mockSnackBar.open).not.toHaveBeenCalled();
+  });
+  it('renders a delayed server response without another user action', async () => {
+    const backend = TestBed.inject(UserBackendService);
+    const response = backend.getUsers(1).pipe(delay(30));
+    jest.spyOn(backend, 'getUsers').mockReturnValue(response);
+    fixture.destroy();
+    fixture = TestBed.createComponent(WsAccessRightsComponent);
+    component = fixture.componentInstance;
+    fixture.autoDetectChanges();
+    await new Promise<void>(resolve => { setTimeout(resolve, 80); });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('user1');
+    expect(fixture.nativeElement.querySelector('input:checked')).toBeTruthy();
   });
 });

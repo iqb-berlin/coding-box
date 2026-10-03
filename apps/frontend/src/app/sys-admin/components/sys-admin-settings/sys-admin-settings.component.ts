@@ -1,6 +1,6 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import {
-  Component, OnDestroy, OnInit, SecurityContext, inject
+  Component, OnDestroy, OnInit, SecurityContext, inject, signal
 } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
@@ -65,39 +65,40 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private rawServerUrl = inject(SERVER_URL);
   private sanitizer = inject(DomSanitizer);
+
   private exportPollingSubscription: Subscription | null = null;
 
-  selectedFile: File | null = null;
-  previewUrl: string | null = null;
-  isDefaultLogo = true;
-  logoAltText = '';
-  backgroundColorValue = '';
-  isExporting = false;
-  databaseExportProgress = 0;
-  databaseExportStatus: DatabaseExportStatus | null = null;
-  databaseExportError: string | null = null;
-  isLoadingLegalNotice = false;
-  isSavingLegalNotice = false;
-  isLegalNoticeDefault = true;
-  legalNoticeHtml = defaultLegalNoticeHtml;
-  legalNoticePreviewHtml = this.sanitizeHtml(defaultLegalNoticeHtml);
-  isLoadingContentPoolSettings = false;
-  isSavingContentPoolSettings = false;
-  isTestingContentPoolConnection = false;
-  contentPoolSettings: ContentPoolSettings = {
+  readonly selectedFile = signal<File | null>(null);
+  readonly previewUrl = signal<string | null>(null);
+  readonly isDefaultLogo = signal(true);
+  readonly logoAltText = signal('');
+  readonly backgroundColorValue = signal('');
+  readonly isExporting = signal(false);
+  readonly databaseExportProgress = signal(0);
+  readonly databaseExportStatus = signal<DatabaseExportStatus | null>(null);
+  readonly databaseExportError = signal<string | null>(null);
+  readonly isLoadingLegalNotice = signal(false);
+  readonly isSavingLegalNotice = signal(false);
+  readonly isLegalNoticeDefault = signal(true);
+  readonly legalNoticeHtml = signal(defaultLegalNoticeHtml);
+  readonly legalNoticePreviewHtml = signal(this.sanitizeHtml(defaultLegalNoticeHtml));
+  readonly isLoadingContentPoolSettings = signal(false);
+  readonly isSavingContentPoolSettings = signal(false);
+  readonly isTestingContentPoolConnection = signal(false);
+  readonly contentPoolSettings = signal<ContentPoolSettings>({
     enabled: false,
     baseUrl: '',
     hasApplicationToken: false
-  };
+  });
 
-  contentPoolApplicationToken = '';
-  clearContentPoolApplicationToken = false;
+  readonly contentPoolApplicationToken = signal('');
+  readonly clearContentPoolApplicationToken = signal(false);
 
   private readonly ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'];
   constructor() {
-    this.isDefaultLogo = this.appService.appLogo.data === standardLogo.data;
-    this.logoAltText = this.appService.appLogo.alt;
-    this.backgroundColorValue = this.appService.appLogo.bodyBackground || '';
+    this.isDefaultLogo.set(this.appService.appLogo.data === standardLogo.data);
+    this.logoAltText.set(this.appService.appLogo.alt);
+    this.backgroundColorValue.set(this.appService.appLogo.bodyBackground || '');
   }
 
   ngOnInit(): void {
@@ -108,15 +109,16 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files.length > 0) {
-      this.selectedFile = input.files[0];
+      const selectedFile = input.files[0];
+      this.selectedFile.set(selectedFile);
 
-      if (!this.ALLOWED_MIME_TYPES.includes(this.selectedFile.type)) {
+      if (!this.ALLOWED_MIME_TYPES.includes(selectedFile.type)) {
         this.snackBar.open('Bitte wählen Sie eine gültige Bilddatei aus (JPEG, PNG, GIF, SVG, WebP).', 'Schließen', { duration: 3000 });
         this.resetFileInput();
         return;
       }
 
-      if (this.selectedFile.size > 4 * 1024 * 1024) {
+      if (selectedFile.size > 4 * 1024 * 1024) {
         this.snackBar.open('Die Datei ist zu groß. Maximale Größe: 4MB', 'Schließen', { duration: 3000 });
         this.resetFileInput();
         return;
@@ -127,18 +129,20 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   }
 
   private createImagePreview(): void {
-    if (!this.selectedFile) return;
+    const selectedFileSnapshot = this.selectedFile();
+
+    if (!selectedFileSnapshot) return;
 
     const reader = new FileReader();
     reader.onload = () => {
-      this.previewUrl = reader.result as string;
+      this.previewUrl.set(reader.result as string);
     };
-    reader.readAsDataURL(this.selectedFile);
+    reader.readAsDataURL(selectedFileSnapshot);
   }
 
   resetFileInput(): void {
-    this.selectedFile = null;
-    this.previewUrl = null;
+    this.selectedFile.set(null);
+    this.previewUrl.set(null);
     const fileInput = document.getElementById('logo-upload') as HTMLInputElement;
     if (fileInput) {
       fileInput.value = '';
@@ -146,19 +150,21 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   }
 
   uploadLogo(): void {
-    if (!this.selectedFile || !this.previewUrl) return;
+    const selectedFileSnapshot = this.selectedFile();
 
-    this.logoService.uploadLogo(this.selectedFile).subscribe({
+    if (!selectedFileSnapshot || !this.previewUrl()) return;
+
+    this.logoService.uploadLogo(selectedFileSnapshot).subscribe({
       next: response => {
         const newLogo: AppLogoDto = {
           data: response.path,
-          alt: this.logoAltText,
-          bodyBackground: this.backgroundColorValue,
+          alt: this.logoAltText(),
+          bodyBackground: this.backgroundColorValue(),
           boxBackground: this.appService.appLogo.boxBackground
         };
 
         this.appService.appLogo = newLogo;
-        this.isDefaultLogo = false;
+        this.isDefaultLogo.set(false);
         this.logoService.saveLogoSettings(newLogo).subscribe({
           next: settingsResponse => {
             if (settingsResponse.success) {
@@ -185,9 +191,9 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
       next: response => {
         if (response.success) {
           this.appService.appLogo = standardLogo;
-          this.isDefaultLogo = true;
-          this.logoAltText = standardLogo.alt;
-          this.backgroundColorValue = standardLogo.bodyBackground || '';
+          this.isDefaultLogo.set(true);
+          this.logoAltText.set(standardLogo.alt);
+          this.backgroundColorValue.set(standardLogo.bodyBackground || '');
           this.snackBar.open('Standard-Logo wiederhergestellt', 'Schließen', { duration: 3000 });
         } else {
           this.snackBar.open('Fehler beim Zurücksetzen des Logos', 'Schließen', { duration: 3000 });
@@ -203,7 +209,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   saveAltText(): void {
     const updatedLogo = {
       ...this.appService.appLogo,
-      alt: this.logoAltText
+      alt: this.logoAltText()
     };
 
     this.appService.appLogo = updatedLogo;
@@ -225,7 +231,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   saveBackgroundColor(): void {
     const updatedLogo = {
       ...this.appService.appLogo,
-      bodyBackground: this.backgroundColorValue
+      bodyBackground: this.backgroundColorValue()
     };
 
     this.appService.appLogo = updatedLogo;
@@ -244,10 +250,10 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   }
 
   resetToDefaultBackground(): void {
-    this.backgroundColorValue = standardLogo.bodyBackground || '';
+    this.backgroundColorValue.set(standardLogo.bodyBackground || '');
     const updatedLogo = {
       ...this.appService.appLogo,
-      bodyBackground: this.backgroundColorValue
+      bodyBackground: this.backgroundColorValue()
     };
     this.appService.appLogo = updatedLogo;
     this.logoService.saveLogoSettings(updatedLogo).subscribe({
@@ -265,19 +271,19 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   }
 
   loadLegalNotice(): void {
-    this.isLoadingLegalNotice = true;
+    this.isLoadingLegalNotice.set(true);
     this.systemSettingsService.getLegalNotice().subscribe({
       next: legalNotice => {
-        this.legalNoticeHtml = legalNotice.html || defaultLegalNoticeHtml;
-        this.isLegalNoticeDefault = legalNotice.isDefault;
+        this.legalNoticeHtml.set(legalNotice.html || defaultLegalNoticeHtml);
+        this.isLegalNoticeDefault.set(legalNotice.isDefault);
         this.updateLegalNoticePreview();
-        this.isLoadingLegalNotice = false;
+        this.isLoadingLegalNotice.set(false);
       },
       error: () => {
-        this.legalNoticeHtml = defaultLegalNoticeHtml;
-        this.isLegalNoticeDefault = true;
+        this.legalNoticeHtml.set(defaultLegalNoticeHtml);
+        this.isLegalNoticeDefault.set(true);
         this.updateLegalNoticePreview();
-        this.isLoadingLegalNotice = false;
+        this.isLoadingLegalNotice.set(false);
         this.snackBar.open(
           'Impressum/Datenschutz-Text konnte nicht geladen werden.',
           'Schließen',
@@ -288,7 +294,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   }
 
   saveLegalNotice(): void {
-    const html = (this.legalNoticeHtml || '').trim();
+    const html = (this.legalNoticeHtml() || '').trim();
     if (!html) {
       this.snackBar.open(
         'Bitte einen Impressum/Datenschutz-Text hinterlegen.',
@@ -298,13 +304,13 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.isSavingLegalNotice = true;
+    this.isSavingLegalNotice.set(true);
     this.systemSettingsService.updateLegalNotice({ html }).subscribe({
       next: legalNotice => {
-        this.legalNoticeHtml = legalNotice.html;
-        this.isLegalNoticeDefault = legalNotice.isDefault;
+        this.legalNoticeHtml.set(legalNotice.html);
+        this.isLegalNoticeDefault.set(legalNotice.isDefault);
         this.updateLegalNoticePreview();
-        this.isSavingLegalNotice = false;
+        this.isSavingLegalNotice.set(false);
         this.snackBar.open(
           'Impressum/Datenschutz-Text wurde gespeichert.',
           'Schließen',
@@ -312,7 +318,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
         );
       },
       error: error => {
-        this.isSavingLegalNotice = false;
+        this.isSavingLegalNotice.set(false);
         const message = this.extractErrorMessage(
           error,
           'Impressum/Datenschutz-Text konnte nicht gespeichert werden.'
@@ -323,13 +329,13 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   }
 
   resetLegalNoticeToDefault(): void {
-    this.isSavingLegalNotice = true;
+    this.isSavingLegalNotice.set(true);
     this.systemSettingsService.resetLegalNotice().subscribe({
       next: legalNotice => {
-        this.legalNoticeHtml = legalNotice.html;
-        this.isLegalNoticeDefault = legalNotice.isDefault;
+        this.legalNoticeHtml.set(legalNotice.html);
+        this.isLegalNoticeDefault.set(legalNotice.isDefault);
         this.updateLegalNoticePreview();
-        this.isSavingLegalNotice = false;
+        this.isSavingLegalNotice.set(false);
         this.snackBar.open(
           'Impressum/Datenschutz-Text wurde auf den Standard zurückgesetzt.',
           'Schließen',
@@ -337,7 +343,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
         );
       },
       error: error => {
-        this.isSavingLegalNotice = false;
+        this.isSavingLegalNotice.set(false);
         const message = this.extractErrorMessage(
           error,
           'Impressum/Datenschutz-Text konnte nicht zurückgesetzt werden.'
@@ -348,7 +354,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   }
 
   updateLegalNoticePreview(): void {
-    this.legalNoticePreviewHtml = this.sanitizeHtml(this.legalNoticeHtml);
+    this.legalNoticePreviewHtml.set(this.sanitizeHtml(this.legalNoticeHtml()));
   }
 
   ngOnDestroy(): void {
@@ -356,7 +362,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   }
 
   getDatabaseExportStatusLabel(): string {
-    switch (this.databaseExportStatus) {
+    switch (this.databaseExportStatus()) {
       case 'queued':
         return 'In Warteschlange';
       case 'running':
@@ -373,20 +379,20 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   }
 
   loadContentPoolSettings(): void {
-    this.isLoadingContentPoolSettings = true;
+    this.isLoadingContentPoolSettings.set(true);
     this.systemSettingsService.getContentPoolSettings().subscribe({
       next: settings => {
-        this.contentPoolSettings = {
+        this.contentPoolSettings.set({
           enabled: !!settings.enabled,
           baseUrl: (settings.baseUrl || '').trim(),
           hasApplicationToken: !!settings.hasApplicationToken
-        };
-        this.contentPoolApplicationToken = '';
-        this.clearContentPoolApplicationToken = false;
-        this.isLoadingContentPoolSettings = false;
+        });
+        this.contentPoolApplicationToken.set('');
+        this.clearContentPoolApplicationToken.set(false);
+        this.isLoadingContentPoolSettings.set(false);
       },
       error: () => {
-        this.isLoadingContentPoolSettings = false;
+        this.isLoadingContentPoolSettings.set(false);
         this.snackBar.open(
           'Content-Pool-Einstellungen konnten nicht geladen werden.',
           'Schließen',
@@ -397,9 +403,9 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   }
 
   saveContentPoolSettings(): void {
-    const normalizedBaseUrl = (this.contentPoolSettings.baseUrl || '').trim();
-    const applicationToken = this.contentPoolApplicationToken.trim();
-    if (this.contentPoolSettings.enabled && !normalizedBaseUrl) {
+    const normalizedBaseUrl = (this.contentPoolSettings().baseUrl || '').trim();
+    const applicationToken = this.contentPoolApplicationToken().trim();
+    if (this.contentPoolSettings().enabled && !normalizedBaseUrl) {
       this.snackBar.open(
         'Bitte eine Content-Pool URL hinterlegen, bevor das Feature aktiviert wird.',
         'Schließen',
@@ -408,9 +414,9 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
       return;
     }
     if (
-      this.contentPoolSettings.enabled &&
+      this.contentPoolSettings().enabled &&
       !applicationToken &&
-      (!this.contentPoolSettings.hasApplicationToken || this.clearContentPoolApplicationToken)
+      (!this.contentPoolSettings().hasApplicationToken || this.clearContentPoolApplicationToken())
     ) {
       this.snackBar.open(
         'Bitte ein Content-Pool Application-Token hinterlegen, bevor das Feature aktiviert wird.',
@@ -420,24 +426,24 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.isSavingContentPoolSettings = true;
+    this.isSavingContentPoolSettings.set(true);
     this.systemSettingsService
       .updateContentPoolSettings({
-        enabled: this.contentPoolSettings.enabled,
+        enabled: this.contentPoolSettings().enabled,
         baseUrl: normalizedBaseUrl,
         applicationToken: applicationToken || undefined,
-        clearApplicationToken: this.clearContentPoolApplicationToken && !applicationToken
+        clearApplicationToken: this.clearContentPoolApplicationToken() && !applicationToken
       })
       .subscribe({
         next: settings => {
-          this.contentPoolSettings = {
+          this.contentPoolSettings.set({
             enabled: !!settings.enabled,
             baseUrl: (settings.baseUrl || '').trim(),
             hasApplicationToken: !!settings.hasApplicationToken
-          };
-          this.contentPoolApplicationToken = '';
-          this.clearContentPoolApplicationToken = false;
-          this.isSavingContentPoolSettings = false;
+          });
+          this.contentPoolApplicationToken.set('');
+          this.clearContentPoolApplicationToken.set(false);
+          this.isSavingContentPoolSettings.set(false);
           this.snackBar.open(
             'Content-Pool-Einstellungen wurden gespeichert.',
             'Schließen',
@@ -445,7 +451,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
           );
         },
         error: error => {
-          this.isSavingContentPoolSettings = false;
+          this.isSavingContentPoolSettings.set(false);
           const message = this.extractErrorMessage(
             error,
             'Content-Pool-Einstellungen konnten nicht gespeichert werden.'
@@ -456,19 +462,19 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   }
 
   clearStoredContentPoolToken(): void {
-    this.contentPoolApplicationToken = '';
-    this.clearContentPoolApplicationToken = true;
+    this.contentPoolApplicationToken.set('');
+    this.clearContentPoolApplicationToken.set(true);
   }
 
   onContentPoolTokenInputChange(value: string): void {
     if ((value || '').trim()) {
-      this.clearContentPoolApplicationToken = false;
+      this.clearContentPoolApplicationToken.set(false);
     }
   }
 
   testContentPoolConnection(): void {
-    const normalizedBaseUrl = (this.contentPoolSettings.baseUrl || '').trim();
-    const applicationToken = this.contentPoolApplicationToken.trim();
+    const normalizedBaseUrl = (this.contentPoolSettings().baseUrl || '').trim();
+    const applicationToken = this.contentPoolApplicationToken().trim();
     if (!normalizedBaseUrl) {
       this.snackBar.open(
         'Bitte eine Content-Pool URL für den Verbindungstest hinterlegen.',
@@ -480,7 +486,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
 
     if (
       !applicationToken &&
-      (!this.contentPoolSettings.hasApplicationToken || this.clearContentPoolApplicationToken)
+      (!this.contentPoolSettings().hasApplicationToken || this.clearContentPoolApplicationToken())
     ) {
       this.snackBar.open(
         'Bitte ein Content-Pool Application-Token für den Verbindungstest hinterlegen.',
@@ -490,16 +496,16 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.isTestingContentPoolConnection = true;
+    this.isTestingContentPoolConnection.set(true);
     this.systemSettingsService
       .testContentPoolConnection({
         baseUrl: normalizedBaseUrl,
         applicationToken: applicationToken || undefined,
-        clearApplicationToken: this.clearContentPoolApplicationToken && !applicationToken
+        clearApplicationToken: this.clearContentPoolApplicationToken() && !applicationToken
       })
       .subscribe({
         next: result => {
-          this.isTestingContentPoolConnection = false;
+          this.isTestingContentPoolConnection.set(false);
           this.snackBar.open(
             result.message ||
               `Verbindung erfolgreich. ${result.acpCount} ACPs erreichbar.`,
@@ -508,7 +514,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
           );
         },
         error: error => {
-          this.isTestingContentPoolConnection = false;
+          this.isTestingContentPoolConnection.set(false);
           const message = this.extractErrorMessage(
             error,
             'Content-Pool-Verbindung konnte nicht getestet werden. Token und Scopes prüfen.'
@@ -519,15 +525,15 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   }
 
   exportDatabase(): void {
-    if (this.isExporting) {
+    if (this.isExporting()) {
       return;
     }
 
     const authHeaders = this.getAuthHeaders();
-    this.isExporting = true;
-    this.databaseExportProgress = 0;
-    this.databaseExportStatus = 'queued';
-    this.databaseExportError = null;
+    this.isExporting.set(true);
+    this.databaseExportProgress.set(0);
+    this.databaseExportStatus.set('queued');
+    this.databaseExportError.set(null);
 
     this.http
       .post<{ jobId: string; message: string }>(`${this.exportBaseUrl}/job`, {}, { headers: authHeaders })
@@ -536,13 +542,13 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
           this.startExportPolling(jobId, authHeaders);
         },
         error: error => {
-          this.isExporting = false;
+          this.isExporting.set(false);
           const message = this.extractErrorMessage(
             error,
             'Fehler beim Starten des Datenbank-Exports.'
           );
-          this.databaseExportError = message;
-          this.databaseExportStatus = 'failed';
+          this.databaseExportError.set(message);
+          this.databaseExportStatus.set('failed');
           this.snackBar.open(message, 'Schließen', { duration: 5000 });
         }
       });
@@ -560,11 +566,11 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: state => {
-          this.databaseExportStatus = state.status;
-          this.databaseExportProgress = Math.max(0, Math.min(100, Math.round(state.progress || 0)));
+          this.databaseExportStatus.set(state.status);
+          this.databaseExportProgress.set(Math.max(0, Math.min(100, Math.round(state.progress || 0))));
 
           if (state.status === 'completed') {
-            this.databaseExportProgress = 100;
+            this.databaseExportProgress.set(100);
             this.stopExportPolling();
             this.downloadExportFile(jobId, headers);
             return;
@@ -572,22 +578,21 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
 
           if (state.status === 'failed' || state.status === 'cancelled') {
             this.stopExportPolling();
-            this.isExporting = false;
-            this.databaseExportError =
-              state.error ||
-              'Der Datenbank-Export ist fehlgeschlagen. Sie können den Export erneut starten.';
-            this.snackBar.open(this.databaseExportError, 'Schließen', { duration: 5000 });
+            this.isExporting.set(false);
+            this.databaseExportError.set(state.error ||
+    'Der Datenbank-Export ist fehlgeschlagen. Sie können den Export erneut starten.');
+            this.snackBar.open(this.databaseExportError() ?? '', 'Schließen', { duration: 5000 });
           }
         },
         error: error => {
           this.stopExportPolling();
-          this.isExporting = false;
+          this.isExporting.set(false);
           const message = this.extractErrorMessage(
             error,
             'Fehler beim Abrufen des Export-Status.'
           );
-          this.databaseExportStatus = 'failed';
-          this.databaseExportError = message;
+          this.databaseExportStatus.set('failed');
+          this.databaseExportError.set(message);
           this.snackBar.open(message, 'Schließen', { duration: 5000 });
         }
       });
@@ -605,19 +610,16 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
             blob,
             `database-export-${new Date().toISOString().split('T')[0]}.sqlite`
           );
-          this.isExporting = false;
-          this.databaseExportStatus = 'completed';
-          this.databaseExportError = null;
+          this.isExporting.set(false);
+          this.databaseExportStatus.set('completed');
+          this.databaseExportError.set(null);
           this.snackBar.open('Datenbank erfolgreich exportiert', 'Schließen', { duration: 3000 });
         },
         error: error => {
-          this.isExporting = false;
-          this.databaseExportStatus = 'failed';
-          this.databaseExportError = this.extractErrorMessage(
-            error,
-            'Fehler beim Herunterladen der Exportdatei.'
-          );
-          this.snackBar.open(this.databaseExportError, 'Schließen', { duration: 5000 });
+          this.isExporting.set(false);
+          this.databaseExportStatus.set('failed');
+          this.databaseExportError.set(this.extractErrorMessage(error, 'Fehler beim Herunterladen der Exportdatei.'));
+          this.snackBar.open(this.databaseExportError() ?? '', 'Schließen', { duration: 5000 });
         }
       });
   }
@@ -681,5 +683,9 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     }
 
     return fallback;
+  }
+
+  setContentPoolSettingsField<K extends keyof ContentPoolSettings>(key: K, value: ContentPoolSettings[K]): void {
+    this.contentPoolSettings.update(current => (current ? { ...current, [key]: value } : current));
   }
 }

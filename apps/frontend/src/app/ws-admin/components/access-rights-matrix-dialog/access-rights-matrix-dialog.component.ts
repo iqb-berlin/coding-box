@@ -1,4 +1,6 @@
-import { Component, inject, OnInit } from '@angular/core';
+import {
+  Component, inject, OnInit, signal
+} from '@angular/core';
 
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -35,19 +37,19 @@ interface MatrixRow {
 export class AccessRightsMatrixDialogComponent implements OnInit {
   private workspaceService = inject(WorkspaceService);
 
-  matrix: AccessRightsMatrixDto | null = null;
-  loading = true;
-  displayedColumns: string[] = [];
-  dataSource: MatrixRow[] = [];
-  levels: AccessLevelDto[] = [];
+  readonly matrix = signal<AccessRightsMatrixDto | null>(null);
+  readonly loading = signal(true);
+  readonly displayedColumns = signal<string[]>([]);
+  readonly dataSource = signal<MatrixRow[]>([]);
+  readonly levels = signal<AccessLevelDto[]>([]);
 
   ngOnInit(): void {
     this.workspaceService.getAccessRightsMatrix().subscribe(matrix => {
-      this.matrix = matrix;
-      this.levels = matrix.levels;
-      this.displayedColumns = ['feature', ...matrix.levels.map((l: AccessLevelDto) => `level-${l.level}`)];
-      this.dataSource = this.buildDataSource(matrix.categories);
-      this.loading = false;
+      this.matrix.set(matrix);
+      this.levels.set(matrix.levels);
+      this.displayedColumns.set(['feature', ...matrix.levels.map((l: AccessLevelDto) => `level-${l.level}`)]);
+      this.dataSource.set(this.buildDataSource(matrix.categories));
+      this.loading.set(false);
     });
   }
 
@@ -67,7 +69,7 @@ export class AccessRightsMatrixDialogComponent implements OnInit {
       // Add feature rows
       category.features.forEach((feature: { featureKey: string; translationKey: string; minAccessLevel: number }) => {
         const permissions: { [level: number]: boolean } = {};
-        this.levels.forEach(level => {
+        this.levels().forEach(level => {
           permissions[level.level] = level.level >= feature.minAccessLevel;
         });
 

@@ -2,8 +2,10 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, OnInit, inject
+  ViewChild, Component, DestroyRef, OnInit, inject, signal
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { finalize, timer } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSort } from '@angular/material/sort';
 import { UntypedFormGroup } from '@angular/forms';
@@ -29,29 +31,30 @@ import {
   imports: [UsersSelectionComponent, UsersMenuComponent]
 })
 export class UsersComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   private userBackendService = inject(UserBackendService);
   private workspaceBackendService = inject(WorkspaceBackendService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
 
-  selectedUsers: number[] = [];
-  selectedRows: UserFullDto[] = [];
+  readonly selectedUsers = signal<number[]>([]);
+  readonly selectedRows = signal<UserFullDto[]>([]);
   userObjectsDatasource = new MatTableDataSource<UserFullDto>();
   tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
   tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
-  userWorkspaces: WorkspaceInListDto[] = [];
+  readonly userWorkspaces = signal<WorkspaceInListDto[]>([]);
 
   @ViewChild(MatSort) sort = new MatSort();
 
-  authData = AppService.defaultAuthData;
+  readonly authData = signal(AppService.defaultAuthData);
   ngOnInit(): void {
-    this.appService.authData$.subscribe(
+    this.appService.authData$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(
       authData => {
-        this.authData = authData;
+        this.authData.set(authData);
       }
     );
-    setTimeout(() => {
+    timer(0).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
       this.createWorkspaceList();
       this.updateUserList();
     });
@@ -70,17 +73,18 @@ export class UsersComponent implements OnInit {
 
   updateUserList(): void {
     this.appService.dataLoading = true;
-    this.userBackendService.getUsersFull().subscribe(
+    this.userBackendService.getUsersFull().pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => { this.appService.dataLoading = false; })
+    ).subscribe(
       (users: UserFullDto[]) => {
         if (users.length > 0) {
           this.setObjectsDatasource(users);
           this.tableSelectionCheckboxes.clear();
           this.tableSelectionRow.clear();
-          this.appService.dataLoading = false;
         } else {
           this.tableSelectionCheckboxes.clear();
           this.tableSelectionRow.clear();
-          this.appService.dataLoading = false;
         }
       }
     );
@@ -115,8 +119,8 @@ export class UsersComponent implements OnInit {
   }
 
   userSelectionChanged(userData: UserFullDto[]): void {
-    this.selectedUsers = userData.map(user => user.id);
-    this.selectedRows = userData;
+    this.selectedUsers.set(userData.map(user => user.id));
+    this.selectedRows.set(userData);
   }
 
   editUser(value: { selection: UserFullDto[], user: UntypedFormGroup }): void {
@@ -126,7 +130,7 @@ export class UsersComponent implements OnInit {
       username: value.user.get('username')?.value,
       isAdmin: value.user.get('isAdmin')?.value
     };
-    this.userBackendService.changeUserData(this.authData.userId, changedData).subscribe(
+    this.userBackendService.changeUserData(this.authData().userId, changedData).subscribe(
       respOk => {
         this.updateUserList();
         if (respOk) {
@@ -171,7 +175,7 @@ export class UsersComponent implements OnInit {
   setUserWorkspaceAccessRight(workspaces: number[]): void {
     runMutationAndRefreshAuthData(
       this.appService,
-      this.userBackendService.setUserWorkspaceAccessRight(this.selectedUsers[0], workspaces)
+      this.userBackendService.setUserWorkspaceAccessRight(this.selectedUsers()[0], workspaces)
     )
       .subscribe(
         result => {
@@ -197,8 +201,8 @@ export class UsersComponent implements OnInit {
   }
 
   createWorkspaceList(): void {
-    this.workspaceBackendService.getAllWorkspacesList().subscribe(workspaces => {
-      if (workspaces.data.length > 0) { this.userWorkspaces = workspaces.data; }
+    this.workspaceBackendService.getAllWorkspacesList().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(workspaces => {
+      if (workspaces.data.length > 0) { this.userWorkspaces.set(workspaces.data); }
     });
   }
 }

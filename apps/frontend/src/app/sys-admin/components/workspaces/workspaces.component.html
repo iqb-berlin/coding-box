@@ -1,7 +1,7 @@
 <div class="fx-row-space-between-start admin-tab-content">
   <div class="object-list fx-column-start-stretch fx-flex-row-50">
     <coding-box-workspaces-menu
-      [selectedWorkspaces]="selectedWorkspaces"
+      [selectedWorkspaces]="selectedWorkspaces()"
       [selectedRows]="tableSelectionRow.selected"
       [checkedRows]="tableSelectionCheckboxes.selected"
       (workspaceAdded)="addWorkspace($event)"
@@ -9,17 +9,17 @@
       (workspaceDeleted)="deleteWorkspace($event)"
       (setWorkspaceUsersAccessRight) ="setWorkspaceUsersAccessRight($event)">
     </coding-box-workspaces-menu>
-    @if (isDeleting) {
+    @if (isDeleting()) {
       <div class="deleting-overlay">
         <mat-spinner diameter="50"></mat-spinner>
-        <div class="delete-status">{{ deleteStatus }}</div>
+        <div class="delete-status">{{ deleteStatus() }}</div>
       </div>
     }
     <coding-box-workspaces-selection
       (workspaceSelectionChanged)="workspaceSelectionChanged($event)"
       (workspacesUpdated)="workspacesUpdated()"
-      [workspacesChanged]="workspacesChanged"
-      [selectedWorkspacesIds]=[selectedWorkspaceId]>
+      [workspacesChanged]="workspacesChanged()"
+      [selectedWorkspacesIds]="initialSelectedWorkspaceIds">
     </coding-box-workspaces-selection>
   </div>
 </div>

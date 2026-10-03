@@ -1,3 +1,4 @@
+import { signal, WritableSignal } from '@angular/core';
 import { FormControl, FormGroup } from '@angular/forms';
 import { MatTableDataSource } from '@angular/material/table';
 import { Subject, of } from 'rxjs';
@@ -143,10 +144,520 @@ const sampleSearchItem = {
 
 const pageEvent = { pageIndex: 1, pageSize: 25, length: 100 };
 
+// Prototype doubles need the same writable signal API as the component state.
+const signalFieldsByClass: Record<string, string[]> = {
+  CodingJobDefinitionDialogComponent: [
+    'isLoading',
+    'isSaving',
+    'doubleCodingMode',
+    'variables',
+    'selectedVariables',
+    'coders',
+    'isLoadingCoders',
+    'availableCoders',
+    'isLoadingAvailableCoders',
+    'variableBundles',
+    'isLoadingBundles',
+    'isLoadingVariableAnalysis',
+    'totalVariableAnalysisRecords',
+    'missingsProfiles',
+    'isLoadingMissingsProfiles',
+    'unitNameFilter',
+    'variableIdFilter',
+    'bundleNameFilter',
+    'availabilityFilter',
+    'trainingRequiredFilter',
+    'existingJobDefinitions',
+    'manualCodingScopeSummary',
+    'includeDeriveErrorInManualCoding'
+  ],
+  CodingJobDefinitionsComponent: [
+    'jobDefinitions',
+    'isLoading',
+    'isBulkCreating',
+    'refreshingDefinitionIds',
+    'exportingDistributionDefinitionIds',
+    'coders',
+    'showInfo'
+  ],
+  CodingJobsComponent: [
+    'canApplyResults',
+    'canReviewCodingJobs',
+    'canManageCodingJobs',
+    'allCoders',
+    'isLoading',
+    'hasLoadedJobs',
+    'coderTrainings',
+    'selectedTrainingId',
+    'selectedStatus',
+    'selectedCoderId',
+    'selectedJobName',
+    'originalData',
+    'jobsTotal',
+    'pageSize',
+    'pageIndex',
+    'sortBy',
+    'sortDirection'
+  ],
+  CodingManagementManualComponent: [
+    'validationProgress',
+    'isLoading',
+    'autoRefreshManualCodingJobs',
+    'canApplyManualCodingResults',
+    'canManageManualCodingJobs',
+    'selectedManualTabIndex',
+    'renderedManualTabs',
+    'isLoadingVariableCoverage',
+    'isLoadingCaseCoverage',
+    'isLoadingCodingProgress',
+    'isLoadingManualCodeAvailability',
+    'isLoadingCodingIncompleteVariables',
+    'isLoadingAppliedResultsOverview',
+    'isLoadingKappaSummary',
+    'responseMatchingFlags',
+    'isLoadingMatchingMode',
+    'isSavingMatchingMode',
+    'responseAnalysis',
+    'responseAnalysisError',
+    'isLoadingResponseAnalysis',
+    'showEmptyResponsesDetails',
+    'showDuplicateValuesDetails',
+    'isApplyingEmptyCoding',
+    'showProgressInfo',
+    'showTotalDetails',
+    'showVariableCoverageInfo',
+    'showCaseCoverageInfo',
+    'showAppliedResultsInfo',
+    'showVariableBundlesInfo',
+    'showCoderTrainingsInfo',
+    'showCodingJobsInfo',
+    'duplicateAggregationThreshold',
+    'isApplyingDuplicateAggregation',
+    'emptyPageIndex',
+    'emptyPageSize',
+    'duplicatePageIndex',
+    'duplicatePageSize',
+    'codingProgressOverview',
+    'variableCoverageOverview',
+    'caseCoverageOverview',
+    'workspaceKappaSummary',
+    'codingIncompleteVariables',
+    'manualCodingScopeSummary',
+    'manualCodeAvailabilityWarnings',
+    'showAllManualCodeAvailabilityWarnings',
+    'statusDistribution',
+    'statusDistributionV2',
+    'appliedResultsOverview',
+    'completedJobsReadyForApply',
+    'completedJobsBlockedForReview',
+    'codingFreshnessSummary',
+    'isLoadingCompletedJobsReadyForApply',
+    'isLoadingCodingFreshness',
+    'isLoadingManualFreshnessJobSummary',
+    'isLoadingDoubleCodingConflictSummary',
+    'isApplyingCodingResults',
+    'emptyResponseMissing',
+    'showCoderTraining',
+    'editTraining',
+    'coders',
+    'isStartingManualExport',
+    'isLoadingCodersForExport'
+  ],
+  CodingManagementComponent: [
+    'isLoading',
+    'isLoadingStatistics',
+    'isLoadingReview',
+    'isDownloadInProgress',
+    'resetProgress',
+    'downloadProgress',
+    'codingListDownloadProgress',
+    'codingStatistics',
+    'referenceStatistics',
+    'referenceVersion',
+    'statisticsLoaded',
+    'isGeogebraAvailable',
+    'currentStatusFilter',
+    'pageSize',
+    'totalRecords',
+    'pageIndex',
+    'sortBy',
+    'sortDirection',
+    'selectedStatisticsVersion',
+    'codingFreshnessSummary',
+    'codingFreshnessScope',
+    'isLoadingCodingFreshness',
+    'autocodingReadiness',
+    'isLoadingAutocodingReadiness',
+    'autocodingReadinessLoadFailed',
+    'manualAppliedResultsOverview',
+    'isLoadingManualAppliedResultsOverview',
+    'manualAppliedResultsOverviewLoadFailed',
+    'evaluationMode',
+    'enableRegexSearch',
+    'autoRefreshManualCodingJobs',
+    'hasLoadedFullCodingStatusOverview',
+    'isStartingFreshnessCoding',
+    'activeFreshnessJobId',
+    'activeFreshnessJobProgress',
+    'filterParams'
+  ],
+  DoubleCodedReviewComponent: [
+    'dynamicCoderColumns',
+    'dynamicManagerColumns',
+    'displayedColumns',
+    'coderColumnMeta',
+    'managerColumnMeta',
+    'allData',
+    'totalItems',
+    'currentPage',
+    'pageSize',
+    'sortBy',
+    'sortDirection',
+    'isLoading',
+    'showOnlyConflicts',
+    'availableCoders',
+    'availableJobDefinitions',
+    'availableCoderTrainings',
+    'selectedItem',
+    'replayLoadingByResponseId'
+  ],
+  MyCodingJobsComponent: [
+    'isLoading',
+    'currentUserId',
+    'isAuthorized',
+    'totalProgress',
+    'totalCodedUnits',
+    'totalUnits',
+    'incompleteJobs',
+    'completedJobs',
+    'selectedStatus',
+    'selectedJobName',
+    'selectedWorkspaceIds',
+    'originalData',
+    'currentWorkspaces',
+    'jobsTotal',
+    'pageSize',
+    'pageIndex',
+    'serverPagingEnabled'
+  ],
+  ReplayComponent: [
+    'player',
+    'unitDef',
+    'responses',
+    'isPrintMode',
+    'testPerson',
+    'unitId',
+    'isCodingMode',
+    'isCodingDecisionMode',
+    'isCodingDecisionReadOnly',
+    'isBookletReplayMode',
+    'isReviewMode',
+    'isCodingIssueReviewMode',
+    'currentUnitIndex',
+    'totalUnits',
+    'isWatermarkTruncated',
+    'unitsData',
+    'reloadKey',
+    'workspaceId',
+    'originResponseId',
+    'reviewCodeSelections',
+    'codePanelWidth',
+    'isResizing',
+    'page',
+    'anchor'
+  ],
+  SysAdminSettingsComponent: [
+    'selectedFile',
+    'previewUrl',
+    'isDefaultLogo',
+    'logoAltText',
+    'backgroundColorValue',
+    'isExporting',
+    'databaseExportProgress',
+    'databaseExportStatus',
+    'databaseExportError',
+    'isLoadingLegalNotice',
+    'isSavingLegalNotice',
+    'isLegalNoticeDefault',
+    'legalNoticeHtml',
+    'legalNoticePreviewHtml',
+    'isLoadingContentPoolSettings',
+    'isSavingContentPoolSettings',
+    'isTestingContentPoolConnection',
+    'contentPoolSettings',
+    'contentPoolApplicationToken',
+    'clearContentPoolApplicationToken'
+  ],
+  AccessRightsMatrixDialogComponent: [
+    'matrix',
+    'loading',
+    'displayedColumns',
+    'dataSource',
+    'levels'
+  ],
+  FilesValidationDialogComponent: [
+    'expandedFilesLists',
+    'filteredTestTakers',
+    'duplicateTestTakers',
+    'unusedTestFiles',
+    'replayCompatibilityWarnings',
+    'validationResults',
+    'duplicateSelection',
+    'allUnusedFilesSelected',
+    'isDeletingUnusedFiles',
+    'modeGroups',
+    'allSelected',
+    'isResolvingDuplicates',
+    'ignoredUnits',
+    'ignoredBooklets',
+    'ignoredTestlets',
+    'bookletData',
+    'expandedBooklets',
+    'loadingBooklets',
+    'isApplyingTestletBulk',
+    'selectedTabIndex',
+    'isExcluding',
+    'excludingProgress',
+    'isConsidering',
+    'consideringProgress',
+    'isRefreshingValidation',
+    'refreshValidationProgress',
+    'refreshValidationProgressMessage',
+    'isInstallingCompatibleAspectPlayer',
+    'summary',
+    'expandedSummaryLists',
+    'filesDeleted',
+    'geogebra'
+  ],
+  JournalComponent: [
+    'journalEntries',
+    'totalEntries',
+    'pageSize',
+    'pageIndex',
+    'loading',
+    'loadError',
+    'loadErrorMessage',
+    'loadErrorRequestId',
+    'filters'
+  ],
+  TestFilesComponent: [
+    'isLoading',
+    'isValidating',
+    'isDownloadingAllFiles',
+    'isLoadingContentPoolConfig',
+    'isDeleting',
+    'isUploading',
+    'downloadProgressPercent',
+    'downloadProgressLoadedBytes',
+    'downloadProgressTotalBytes',
+    'downloadProgressStatus',
+    'validationProgress',
+    'validationProgressMessage',
+    'selectedFileType',
+    'selectedFileSize',
+    'enableRegexSearch',
+    'fileTypes',
+    'resourcePackagesModified',
+    'contentPoolSettings',
+    'textFilterValue',
+    'page',
+    'limit',
+    'total'
+  ],
+  TestResultsFlatTableComponent: [
+    'unitIdsWithNotes',
+    'frequenciesByComboKey',
+    'flatDisplayedColumns',
+    'showLogAnomaliesInTable',
+    'isLoadingFrequencies',
+    'flatData',
+    'flatTotalRecords',
+    'flatPageSize',
+    'flatPageIndex',
+    'isLoadingFlat',
+    'flatFilters',
+    'mediaFilters',
+    'processingDurationEnabled',
+    'processingDurationsFilters',
+    'unitProgressFilters',
+    'audioLowThreshold',
+    'shortProcessingThresholdMs',
+    'longLoadingThresholdMs',
+    'focusLostThresholdMs',
+    'sessionSpanThresholdMs',
+    'repeatedStartThreshold',
+    'processingDurationMin',
+    'processingDurationMax',
+    'sessionBrowsersAllowlist',
+    'sessionOsAllowlist',
+    'sessionScreensAllowlist',
+    'flatFilterOptions'
+  ],
+  TestResultsComponent: [
+    'isTableView',
+    'quickSearchTableFilters',
+    'forceShowLogAnomalyTableColumn',
+    'responses',
+    'logs',
+    'bookletLogs',
+    'totalRecords',
+    'pageSize',
+    'pageIndex',
+    'testPerson',
+    'isLoading',
+    'isUploadingResults',
+    'isSearching',
+    'isLoadingBooklets',
+    'isDeletingTestPersons',
+    'activeDeleteTask',
+    'deleteProgress',
+    'deleteProgressMessage',
+    'unitTags',
+    'unitTagsMap',
+    'unitNotes',
+    'unitNotesMap',
+    'isVariableValidationRunning',
+    'variableValidationResult',
+    'overview',
+    'isLoadingOverview',
+    'showTestResultsLogAnomalies',
+    'enableRegexSearch',
+    'logAnomalySummary',
+    'isLoadingLogAnomalySummary',
+    'logAnomalySummaryLoadFailed',
+    'logAnomalySummaryRequested',
+    'codingFreshnessSummary',
+    'manualAppliedResultsOverview',
+    'manualAppliedResultsOverviewLoadFailed',
+    'isLoadingManualAppliedResultsOverview',
+    'autoRefreshCodingStatus',
+    'codingFreshnessStatusChecked',
+    'isLoadingCodingFreshnessStatus',
+    'exportJobId',
+    'isExporting',
+    'exportJobStatus',
+    'exportJobProgress',
+    'exportTypeInProgress',
+    'uploadingMessage',
+    'booklets',
+    'selectedUnit',
+    'selectedBooklet'
+  ],
+  DuplicateResponsesValidationPanelComponent: [
+    'isRunning',
+    'wasRun',
+    'isLoadingPage',
+    'isExporting',
+    'errorMessage',
+    'duplicateResponses',
+    'totalDuplicates',
+    'duplicateResponseSelections',
+    'duplicateResponseTouchedKeys',
+    'expandedPanel',
+    'isResolvingDuplicates',
+    'activeTask',
+    'pageSize',
+    'currentPage'
+  ],
+  GroupResponsesValidationPanelComponent: [
+    'isRunning',
+    'wasRun',
+    'isLoadingPage',
+    'isExporting',
+    'errorMessage',
+    'result',
+    'expandedPanel',
+    'totalItems',
+    'pageSize',
+    'currentPage',
+    'activeTask'
+  ],
+  ResponseStatusValidationPanelComponent: [
+    'isRunning',
+    'wasRun',
+    'isLoadingPage',
+    'errorMessage',
+    'invalidStatusVariables',
+    'totalInvalid',
+    'currentPage',
+    'pageSize',
+    'selectedResponses',
+    'expandedPanel',
+    'isDeletingResponses',
+    'isExporting',
+    'activeTask'
+  ],
+  VariableTypesValidationPanelComponent: [
+    'isRunning',
+    'wasRun',
+    'isLoadingPage',
+    'errorMessage',
+    'invalidTypeVariables',
+    'totalInvalid',
+    'currentPage',
+    'pageSize',
+    'selectedResponses',
+    'expandedPanel',
+    'isDeletingResponses',
+    'isExporting',
+    'activeTask'
+  ],
+  VariablesValidationPanelComponent: [
+    'isRunning',
+    'wasRun',
+    'isLoadingPage',
+    'errorMessage',
+    'invalidVariables',
+    'totalInvalid',
+    'summary',
+    'currentPage',
+    'pageSize',
+    'selectedResponses',
+    'expandedPanel',
+    'isDeletingResponses',
+    'isExporting',
+    'activeTask'
+  ],
+  ValidationDialogComponent: [],
+  VariableAnalysisDialogComponent: [
+    'isLoading',
+    'variableFrequencies',
+    'analysisRows',
+    'allVariableCombos',
+    'variableCombos',
+    'searchText',
+    'onlyWithEmptyValues',
+    'includeSchemaCodes',
+    'isInfoVisible',
+    'currentPage',
+    'pageSize',
+    'totalFilteredVariables',
+    'sortBy',
+    'sortDirection',
+    'isJobsLoading',
+    'jobs',
+    'isStartingJob',
+    'isInitializing',
+    'isExporting',
+    'activeJob'
+  ],
+  CodeSelectorComponent: [
+    'selectedCode',
+    'selectedCodingIssueOption',
+    'newCodeCommentValidationError',
+    'variableManualInstruction',
+    'legacySelectedCode',
+    'isSupportSectionExpanded',
+    'isVariablePanelOpen',
+    'isBundleVariablePanelOpen'
+  ]
+};
+
 const createInstance = (ClassExport: ConstructorExport) => {
   const instance = Object.create(ClassExport.prototype || {});
 
   Object.assign(instance, {
+    changeDetectorRef: { markForCheck: jest.fn(), detectChanges: jest.fn() },
     appService: {
       selectedWorkspaceId: 1,
       authData: { userName: 'Reviewer' },
@@ -393,6 +904,15 @@ const createInstance = (ClassExport: ConstructorExport) => {
     stringToNumberMap: new Map([['VALUE_CHANGED', 1]])
   });
 
+  for (const field of signalFieldsByClass[ClassExport.name || ''] || []) {
+    instance[field] = signal(instance[field]);
+  }
+
+  if (ClassExport.name === 'DoubleCodedReviewComponent') {
+    instance.availableJobDefinitions = signal([]);
+    instance.availableCoderTrainings = signal([]);
+  }
+
   return instance;
 };
 
@@ -464,8 +984,8 @@ describe('high coverage component method smoke tests', () => {
     const instance = createInstance(DoubleCodedReviewComponent as ConstructorExport) as {
       appService: { selectedWorkspaceId: number };
       scopeControl: FormControl<string[]>;
-      availableJobDefinitions: Array<{ id: number; label: string }>;
-      availableCoderTrainings: Array<{ id: number; label: string }>;
+      availableJobDefinitions: WritableSignal<Array<{ id: number; label: string }>>;
+      availableCoderTrainings: WritableSignal<Array<{ id: number; label: string }>>;
       codingFacadeService: {
         getJobDefinitions: jest.Mock;
         getCoderTrainings: jest.Mock;
@@ -479,8 +999,8 @@ describe('high coverage component method smoke tests', () => {
 
     instance.appService = { selectedWorkspaceId: 1 };
     instance.scopeControl = new FormControl<string[]>(['job_99']) as FormControl<string[]>;
-    instance.availableJobDefinitions = [];
-    instance.availableCoderTrainings = [];
+    instance.availableJobDefinitions.set([]);
+    instance.availableCoderTrainings.set([]);
     instance.destroy$ = new Subject<void>();
     instance.loadData = jest.fn();
     instance.translateService = {
@@ -510,13 +1030,13 @@ describe('high coverage component method smoke tests', () => {
     instance.loadFilterOptions();
 
     expect(instance.scopeControl.value).toEqual(['job_3']);
-    expect(instance.availableJobDefinitions.map(definition => definition.id)).toEqual([3, 2]);
-    expect(instance.availableCoderTrainings.map(training => training.id)).toEqual([6]);
-    expect(instance.availableJobDefinitions.map(definition => definition.label)).toEqual([
+    expect(instance.availableJobDefinitions().map(definition => definition.id)).toEqual([3, 2]);
+    expect(instance.availableCoderTrainings().map(training => training.id)).toEqual([6]);
+    expect(instance.availableJobDefinitions().map(definition => definition.label)).toEqual([
       'Definition #3 (Genehmigt), 2 Kodierjobs',
       'Definition #2 (Warten auf Genehmigung), 1 Kodierjob'
     ]);
-    expect(instance.availableCoderTrainings[0].label).toBe('Training B (1 Kodierjob)');
+    expect(instance.availableCoderTrainings()[0].label).toBe('Training B (1 Kodierjob)');
     expect(instance.hasScopeOptions()).toBe(true);
     expect(instance.loadData).toHaveBeenCalled();
   });
@@ -526,30 +1046,30 @@ describe('high coverage component method smoke tests', () => {
     const instance = createInstance(DoubleCodedReviewComponent as ConstructorExport) as {
       appService: { selectedWorkspaceId: number };
       scopeControl: FormControl<string[]>;
-      availableJobDefinitions: Array<{ id: number; label: string }>;
-      availableCoderTrainings: Array<{ id: number; label: string }>;
+      availableJobDefinitions: WritableSignal<Array<{ id: number; label: string }>>;
+      availableCoderTrainings: WritableSignal<Array<{ id: number; label: string }>>;
       codingFacadeService: {
         getJobDefinitions: jest.Mock;
         getCoderTrainings: jest.Mock;
       };
       destroy$: Subject<void>;
       loadData: jest.Mock;
-      allData: unknown[];
+      allData: WritableSignal<unknown[]>;
       dataSource: MatTableDataSource<unknown>;
-      totalItems: number;
+      totalItems: WritableSignal<number>;
       loadFilterOptions: () => void;
       getScopeSelectionSummary: () => string;
     };
 
     instance.appService = { selectedWorkspaceId: 1 };
     instance.scopeControl = new FormControl<string[]>(['job_99']) as FormControl<string[]>;
-    instance.availableJobDefinitions = [{ id: 99, label: 'Stale scope' }];
-    instance.availableCoderTrainings = [];
+    instance.availableJobDefinitions.set([{ id: 99, label: 'Stale scope' }]);
+    instance.availableCoderTrainings.set([]);
     instance.destroy$ = new Subject<void>();
     instance.loadData = jest.fn();
-    instance.allData = [sampleReviewItem];
+    instance.allData.set([sampleReviewItem]);
     instance.dataSource = new MatTableDataSource<unknown>([sampleReviewItem]);
-    instance.totalItems = 1;
+    instance.totalItems.set(1);
     instance.codingFacadeService = {
       getJobDefinitions: jest.fn(() => of([{ id: 1, status: 'approved', createdJobsCount: 0 }])),
       getCoderTrainings: jest.fn(() => of([{ id: 5, label: 'Training A', jobsCount: 0 }]))
@@ -558,11 +1078,11 @@ describe('high coverage component method smoke tests', () => {
     instance.loadFilterOptions();
 
     expect(instance.scopeControl.value).toEqual([]);
-    expect(instance.availableJobDefinitions).toEqual([]);
-    expect(instance.availableCoderTrainings).toEqual([]);
-    expect(instance.allData).toEqual([]);
+    expect(instance.availableJobDefinitions()).toEqual([]);
+    expect(instance.availableCoderTrainings()).toEqual([]);
+    expect(instance.allData()).toEqual([]);
     expect(instance.dataSource.data).toEqual([]);
-    expect(instance.totalItems).toBe(0);
+    expect(instance.totalItems()).toBe(0);
     expect(instance.getScopeSelectionSummary()).toBe('double-coded-review.filter.scope-none');
     expect(instance.loadData).not.toHaveBeenCalled();
   });

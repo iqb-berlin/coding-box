@@ -69,13 +69,13 @@ describe('TestTakersValidationPanelComponent', () => {
     serviceMock.validate.mockReturnValue(of(mockResult));
     component.onValidate();
     expect(serviceMock.validate).toHaveBeenCalled();
-    expect(component.wasRun).toBe(true);
+    expect(component.wasRun()).toBe(true);
   });
 
   it('should toggle expansion', () => {
-    expect(component.expandedPanel).toBe(false);
+    expect(component.expandedPanel()).toBe(false);
     component.toggleExpansion();
-    expect(component.expandedPanel).toBe(true);
+    expect(component.expandedPanel()).toBe(true);
   });
 
   it('should reflect service status', () => {
@@ -86,7 +86,7 @@ describe('TestTakersValidationPanelComponent', () => {
   it('should load cached result on init', () => {
     serviceMock.observeValidationResult.mockReturnValue(of({ status: 'success', details: mockResult }));
     component.ngOnInit();
-    expect(component.result).toEqual(mockResult as unknown as typeof component.result);
-    expect(component.wasRun).toBe(true);
+    expect(component.result()).toEqual(mockResult as unknown as typeof component.result);
+    expect(component.wasRun()).toBe(true);
   });
 });

@@ -1,3 +1,5 @@
+import { provideZonelessChangeDetection } from '@angular/core';
+import { delay } from 'rxjs/operators';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -87,6 +89,7 @@ describe('ExportComponent', () => {
         TranslateModule.forRoot()
       ],
       providers: [
+        provideZonelessChangeDetection(),
         {
           provide: AppService,
           useValue: appService
@@ -185,7 +188,7 @@ describe('ExportComponent', () => {
     expect(component.selectedFormat).toBe('results-by-version');
     expect(getMissingsProfiles).not.toHaveBeenCalled();
     expect(getExportMissingsProfiles).toHaveBeenCalledWith(5);
-    expect(component.selectedResultsMissingsProfileId).toBe(4);
+    expect(component.selectedResultsMissingsProfileId()).toBe(4);
     expect(getPsychometricDomainCandidates).not.toHaveBeenCalled();
   });
 
@@ -195,7 +198,7 @@ describe('ExportComponent', () => {
 
     expect(getMissingsProfiles).toHaveBeenCalledTimes(1);
     expect(getPsychometricDomainCandidates).toHaveBeenCalledTimes(1);
-    expect(component.psychometricItemCount).toBe(2);
+    expect(component.psychometricItemCount()).toBe(2);
 
     component.selectedFormat = 'results-by-version';
     component.onSelectedFormatChange();
@@ -312,7 +315,7 @@ describe('ExportComponent', () => {
   it('starts final result exports without manual coding filters', () => {
     component.resultsVersion = 'v2';
     component.resultsFormat = 'excel';
-    component.includeResponseValues = true;
+    component.includeResponseValues.set(true);
 
     component.onExport();
 
@@ -348,7 +351,7 @@ describe('ExportComponent', () => {
       component.onResultsVersionChange();
 
       expect(getExportMissingsProfiles).toHaveBeenCalledWith(5);
-      expect(component.selectedResultsMissingsProfileId).toBe(4);
+      expect(component.selectedResultsMissingsProfileId()).toBe(4);
       expect(component.isExportDisabled).toBe(false);
 
       component.onExport();
@@ -362,7 +365,7 @@ describe('ExportComponent', () => {
         })
       );
 
-      component.selectedResultsMissingsProfileId = null;
+      component.selectedResultsMissingsProfileId.set(null);
 
       expect(component.isExportDisabled).toBe(true);
     }
@@ -373,9 +376,9 @@ describe('ExportComponent', () => {
     component.resultsVersion = 'v2';
     component.resultsFormat = 'csv';
     component.matrixValue = 'score';
-    component.includeResponseValues = true;
-    component.includeGeoGebraResponseValues = true;
-    component.includeGeoGebraFiles = true;
+    component.includeResponseValues.set(true);
+    component.includeGeoGebraResponseValues.set(true);
+    component.includeGeoGebraFiles.set(true);
 
     component.onSelectedFormatChange();
     component.onExport();
@@ -399,8 +402,8 @@ describe('ExportComponent', () => {
     expect(config).not.toHaveProperty('includeResponseValues');
     expect(config).not.toHaveProperty('includeGeoGebraResponseValues');
     expect(config).not.toHaveProperty('includeGeoGebraFiles');
-    expect(component.includeGeoGebraResponseValues).toBe(false);
-    expect(component.includeGeoGebraFiles).toBe(false);
+    expect(component.includeGeoGebraResponseValues()).toBe(false);
+    expect(component.includeGeoGebraFiles()).toBe(false);
   });
 
   it('blocks item dataset exports when VOMD mappings are invalid', () => {
@@ -426,7 +429,7 @@ describe('ExportComponent', () => {
     component.onSelectedFormatChange();
     fixture.detectChanges();
 
-    expect(component.itemDatasetMappingIssues).toHaveLength(1);
+    expect(component.itemDatasetMappingIssues()).toHaveLength(1);
     expect(component.isExportDisabled).toBe(true);
     const error = fixture.nativeElement.querySelector(
       '[data-cy="item-dataset-mapping-errors"]'
@@ -446,7 +449,7 @@ describe('ExportComponent', () => {
         maxHeight: '75vh',
         data: {
           severity: 'error',
-          diagnostics: component.itemDatasetMappingIssues
+          diagnostics: component.itemDatasetMappingIssues()
         }
       })
     );
@@ -477,8 +480,8 @@ describe('ExportComponent', () => {
     component.onSelectedFormatChange();
     fixture.detectChanges();
 
-    expect(component.itemDatasetMappingIssues).toEqual([]);
-    expect(component.itemDatasetMappingWarnings).toHaveLength(1);
+    expect(component.itemDatasetMappingIssues()).toEqual([]);
+    expect(component.itemDatasetMappingWarnings()).toHaveLength(1);
     expect(component.isExportDisabled).toBe(false);
     const warning = fixture.nativeElement.querySelector(
       '[data-cy="item-dataset-mapping-warnings"]'
@@ -497,7 +500,7 @@ describe('ExportComponent', () => {
       expect.objectContaining({
         data: {
           severity: 'warning',
-          diagnostics: component.itemDatasetMappingWarnings
+          diagnostics: component.itemDatasetMappingWarnings()
         }
       })
     );
@@ -515,10 +518,10 @@ describe('ExportComponent', () => {
     component.selectedFormat = 'item-matrix';
     component.onSelectedFormatChange();
 
-    expect(component.selectedItemDatasetMissingsProfileId).toBeNull();
+    expect(component.selectedItemDatasetMissingsProfileId()).toBeNull();
     expect(component.isExportDisabled).toBe(true);
 
-    component.selectedItemDatasetMissingsProfileId = 7;
+    component.selectedItemDatasetMissingsProfileId.set(7);
 
     expect(component.isExportDisabled).toBe(false);
   });
@@ -536,24 +539,24 @@ describe('ExportComponent', () => {
     component.selectedFormat = 'item-matrix';
     component.onSelectedFormatChange();
 
-    expect(component.selectedItemDatasetMissingsProfileId).toBe(4);
+    expect(component.selectedItemDatasetMissingsProfileId()).toBe(4);
   });
 
   it('keeps item dataset and psychometric profile selections separate', () => {
     component.selectedFormat = 'item-matrix';
     component.onSelectedFormatChange();
-    component.selectedItemDatasetMissingsProfileId = 7;
+    component.selectedItemDatasetMissingsProfileId.set(7);
 
     component.selectedFormat = 'psychometrics';
     component.onSelectedFormatChange();
-    component.selectedMissingsProfileId = 9;
+    component.selectedMissingsProfileId.set(9);
 
-    expect(component.selectedItemDatasetMissingsProfileId).toBe(7);
-    expect(component.selectedMissingsProfileId).toBe(9);
+    expect(component.selectedItemDatasetMissingsProfileId()).toBe(7);
+    expect(component.selectedMissingsProfileId()).toBe(9);
   });
 
   it('preserves hidden item selections when a filtered selection changes', () => {
-    component.itemDatasetOptions = [
+    component.itemDatasetOptions.set([
       {
         unitId: 'UNIT1',
         unitLabel: 'Aufgabe 1',
@@ -568,19 +571,17 @@ describe('ExportComponent', () => {
         itemLabel: 'Item 2',
         columnName: 'Aufgabe2_ITEM2'
       }
-    ];
-    component.selectedItemKeys = component.itemDatasetOptions.map(
-      item => component.getItemDatasetKey(item)
-    );
-    component.itemSearch = 'ITEM2';
+    ]);
+    component.selectedItemKeys.set(component.itemDatasetOptions().map(item => component.getItemDatasetKey(item)));
+    component.itemSearch.set('ITEM2');
 
     component.onItemDatasetSelectionChange([]);
 
-    expect(component.selectedItemKeys).toEqual(['UNIT1\u001FITEM1']);
+    expect(component.selectedItemKeys()).toEqual(['UNIT1\u001FITEM1']);
   });
 
   it('supports bulk selection for all items and filtered search results', () => {
-    component.itemDatasetOptions = [
+    component.itemDatasetOptions.set([
       {
         unitId: 'UNIT1',
         unitLabel: 'Aufgabe 1',
@@ -595,20 +596,20 @@ describe('ExportComponent', () => {
         itemLabel: 'Mathematik',
         columnName: 'Aufgabe2_ITEM2'
       }
-    ];
+    ]);
 
     component.selectAllItemDatasetItems();
-    expect(component.selectedItemKeys).toEqual([
+    expect(component.selectedItemKeys()).toEqual([
       'UNIT1\u001FITEM1', 'UNIT2\u001FITEM2'
     ]);
     component.clearAllItemDatasetItems();
-    expect(component.selectedItemKeys).toEqual([]);
+    expect(component.selectedItemKeys()).toEqual([]);
 
-    component.itemSearch = 'Mathematik';
+    component.itemSearch.set('Mathematik');
     component.selectFilteredItemDatasetItems();
-    expect(component.selectedItemKeys).toEqual(['UNIT2\u001FITEM2']);
+    expect(component.selectedItemKeys()).toEqual(['UNIT2\u001FITEM2']);
     component.clearFilteredItemDatasetItems();
-    expect(component.selectedItemKeys).toEqual([]);
+    expect(component.selectedItemKeys()).toEqual([]);
   });
 
   it('keeps item profiles available when psychometric profile loading fails', () => {
@@ -625,39 +626,39 @@ describe('ExportComponent', () => {
     component.selectedFormat = 'item-matrix';
     component.onSelectedFormatChange();
 
-    expect(component.itemDatasetMissingsProfiles).toEqual([
+    expect(component.itemDatasetMissingsProfiles()).toEqual([
       { id: 4, label: 'IQB-Standard' }
     ]);
-    expect(component.selectedItemDatasetMissingsProfileId).toBe(4);
+    expect(component.selectedItemDatasetMissingsProfileId()).toBe(4);
 
     component.selectedFormat = 'psychometrics';
     component.onSelectedFormatChange();
     component.selectedFormat = 'item-matrix';
     component.onSelectedFormatChange();
 
-    expect(component.itemDatasetMissingsProfiles).toEqual([
+    expect(component.itemDatasetMissingsProfiles()).toEqual([
       { id: 4, label: 'IQB-Standard' }
     ]);
-    expect(component.selectedItemDatasetMissingsProfileId).toBe(4);
+    expect(component.selectedItemDatasetMissingsProfileId()).toBe(4);
     expect(component.isExportDisabled).toBe(false);
   });
 
   it('clears trailing omission recoding for per-task scope', () => {
-    component.notReachedScope = 'booklet';
-    component.recodeTrailingOmissions = true;
-    component.notReachedScope = 'unit';
+    component.notReachedScope.set('booklet');
+    component.recodeTrailingOmissions.set(true);
+    component.notReachedScope.set('unit');
 
     component.onNotReachedScopeChange();
 
-    expect(component.recodeTrailingOmissions).toBe(false);
+    expect(component.recodeTrailingOmissions()).toBe(false);
   });
 
   it('includes GeoGebra package option only for Excel result exports', () => {
     component.resultsVersion = 'v2';
     component.resultsFormat = 'excel';
-    component.includeResponseValues = true;
-    component.hasGeoGebraResponses = true;
-    component.includeGeoGebraFiles = true;
+    component.includeResponseValues.set(true);
+    component.hasGeoGebraResponses.set(true);
+    component.includeGeoGebraFiles.set(true);
 
     component.onExport();
 
@@ -690,9 +691,9 @@ describe('ExportComponent', () => {
 
   it('includes raw GeoGebra response value option for result exports', () => {
     component.resultsFormat = 'csv';
-    component.includeResponseValues = true;
-    component.hasGeoGebraResponses = true;
-    component.includeGeoGebraResponseValues = true;
+    component.includeResponseValues.set(true);
+    component.hasGeoGebraResponses.set(true);
+    component.includeGeoGebraResponseValues.set(true);
 
     component.onExport();
 
@@ -713,12 +714,11 @@ describe('ExportComponent', () => {
     component.onSelectedFormatChange();
     component.resultsVersion = 'v2';
     component.resultsFormat = 'excel';
-    component.partWholeCorrection = true;
-    component.maxCategoryCount = 12;
-    component.selectedMissingsProfileId = 4;
-    const candidate = component.psychometricDomainCandidates[0];
-    component.selectedPsychometricDomain =
-      component.getPsychometricDomainKey(candidate);
+    component.partWholeCorrection.set(true);
+    component.maxCategoryCount.set(12);
+    component.selectedMissingsProfileId.set(4);
+    const candidate = component.psychometricDomainCandidates()[0];
+    component.selectedPsychometricDomain.set(component.getPsychometricDomainKey(candidate));
 
     component.onExport();
 
@@ -741,22 +741,22 @@ describe('ExportComponent', () => {
 
   it('shows VOMD mapping issues separately from item coverage', () => {
     component.selectedFormat = 'psychometrics';
-    component.psychometricDomainCandidates = [];
-    component.psychometricMappingIssueCount = 3;
+    component.psychometricDomainCandidates.set([]);
+    component.psychometricMappingIssueCount.set(3);
 
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain(
       'Fatale Zuordnungsprobleme: 3'
     );
-    expect(component.psychometricMappingIssueCount).toBe(3);
+    expect(component.psychometricMappingIssueCount()).toBe(3);
   });
 
   it('disables psychometric exports when VOMD mappings are invalid', () => {
     component.selectedFormat = 'psychometrics';
-    component.selectedPsychometricDomain = 'workspace';
-    component.selectedMissingsProfileId = 4;
-    component.psychometricMappingIssueCount = 1;
+    component.selectedPsychometricDomain.set('workspace');
+    component.selectedMissingsProfileId.set(4);
+    component.psychometricMappingIssueCount.set(1);
 
     expect(component.isExportDisabled).toBe(true);
 
@@ -767,10 +767,10 @@ describe('ExportComponent', () => {
 
   it('disables psychometric exports when no VOMD items are mapped', () => {
     component.selectedFormat = 'psychometrics';
-    component.selectedPsychometricDomain = 'workspace';
-    component.selectedMissingsProfileId = 4;
-    component.psychometricItemCount = 0;
-    component.psychometricMappingIssueCount = 0;
+    component.selectedPsychometricDomain.set('workspace');
+    component.selectedMissingsProfileId.set(4);
+    component.psychometricItemCount.set(0);
+    component.psychometricMappingIssueCount.set(0);
 
     fixture.detectChanges();
 
@@ -782,10 +782,10 @@ describe('ExportComponent', () => {
 
   it('allows unambiguous legacy mappings without presenting a warning', () => {
     component.selectedFormat = 'psychometrics';
-    component.selectedPsychometricDomain = 'workspace';
-    component.selectedMissingsProfileId = 4;
-    component.psychometricItemCount = 23;
-    component.psychometricMappingIssueCount = 0;
+    component.selectedPsychometricDomain.set('workspace');
+    component.selectedMissingsProfileId.set(4);
+    component.psychometricItemCount.set(23);
+    component.psychometricMappingIssueCount.set(0);
 
     fixture.detectChanges();
 
@@ -807,10 +807,10 @@ describe('ExportComponent', () => {
     component.selectedFormat = 'psychometrics';
     component.onSelectedFormatChange();
 
-    expect(component.isLoadingPsychometricOptions).toBe(false);
-    expect(component.missingsProfiles).toEqual([]);
-    expect(component.selectedMissingsProfileId).toBeNull();
-    expect(component.psychometricOptionsLoadFailed).toBe(true);
+    expect(component.isLoadingPsychometricOptions()).toBe(false);
+    expect(component.missingsProfiles()).toEqual([]);
+    expect(component.selectedMissingsProfileId()).toBeNull();
+    expect(component.psychometricOptionsLoadFailed()).toBe(true);
     expect(snackOpen).toHaveBeenCalledWith(
       'Missing-Profile konnten nicht geladen werden',
       'Schließen',
@@ -829,10 +829,10 @@ describe('ExportComponent', () => {
     fixture.detectChanges();
     component.selectedFormat = 'psychometrics';
     component.onSelectedFormatChange();
-    component.selectedMissingsProfileId = 4;
+    component.selectedMissingsProfileId.set(4);
 
-    expect(component.isLoadingPsychometricOptions).toBe(false);
-    expect(component.psychometricOptionsLoadFailed).toBe(true);
+    expect(component.isLoadingPsychometricOptions()).toBe(false);
+    expect(component.psychometricOptionsLoadFailed()).toBe(true);
     expect(component.isExportDisabled).toBe(true);
     expect(snackOpen).toHaveBeenCalledWith(
       'VOMD-Domänen konnten nicht geladen werden',
@@ -865,12 +865,12 @@ describe('ExportComponent', () => {
     component.selectedFormat = 'psychometrics';
     component.onSelectedFormatChange();
 
-    expect(component.isLoadingPsychometricOptions).toBe(true);
+    expect(component.isLoadingPsychometricOptions()).toBe(true);
 
     profiles.next([{ id: 7, label: 'Profil 7' }]);
     profiles.complete();
 
-    expect(component.isLoadingPsychometricOptions).toBe(true);
+    expect(component.isLoadingPsychometricOptions()).toBe(true);
 
     domains.next({
       candidates: [],
@@ -882,12 +882,12 @@ describe('ExportComponent', () => {
     });
     domains.complete();
 
-    expect(component.isLoadingPsychometricOptions).toBe(false);
-    expect(component.psychometricOptionsLoadFailed).toBe(false);
-    expect(component.missingsProfiles).toEqual([{ id: 7, label: 'Profil 7' }]);
-    expect(component.selectedMissingsProfileId).toBe(7);
-    expect(component.psychometricItemCount).toBe(7);
-    expect(component.psychometricMappingIssueDetails).toBe('');
+    expect(component.isLoadingPsychometricOptions()).toBe(false);
+    expect(component.psychometricOptionsLoadFailed()).toBe(false);
+    expect(component.missingsProfiles()).toEqual([{ id: 7, label: 'Profil 7' }]);
+    expect(component.selectedMissingsProfileId()).toBe(7);
+    expect(component.psychometricItemCount()).toBe(7);
+    expect(component.psychometricMappingIssueDetails()).toBe('');
   });
 
   it('shows an error when the export job cannot be started', () => {
@@ -900,6 +900,19 @@ describe('ExportComponent', () => {
       'Schließen',
       { duration: 5000 }
     );
-    expect(component.isStartingExport).toBe(false);
+    expect(component.isStartingExport()).toBe(false);
+  });
+  it('renders a delayed server response without another user action', async () => {
+    const backend = TestBed.inject(MissingsProfileService);
+    const response = backend.getExportMissingsProfilesOrThrow(1).pipe(delay(30));
+    jest.spyOn(backend, 'getExportMissingsProfilesOrThrow').mockReturnValue(response);
+    fixture.destroy();
+    fixture = TestBed.createComponent(ExportComponent);
+    component = fixture.componentInstance;
+    fixture.autoDetectChanges();
+    await new Promise<void>(resolve => { setTimeout(resolve, 80); });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('IQB-Standard');
+    expect(fixture.nativeElement.querySelector('button[color=primary]').disabled).toBe(false);
   });
 });

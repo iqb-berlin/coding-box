@@ -1,4 +1,5 @@
 import {
+  ChangeDetectorRef,
   Component,
   inject,
   OnInit
@@ -34,6 +35,7 @@ import { AppService } from '../../../core/services/app.service';
   ]
 })
 export class CodingValidationResultsDialogComponent implements OnInit {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
   private testPersonCodingService = inject(TestPersonCodingService);
   private appService: AppService = inject(AppService);
   private snackBar = inject(MatSnackBar);
@@ -93,10 +95,12 @@ export class CodingValidationResultsDialogComponent implements OnInit {
 
   private loadValidationPage(page: number): void {
     this.isLoading = true;
+    this.changeDetectorRef.markForCheck();
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (!workspaceId) {
       this.isLoading = false;
+      this.changeDetectorRef.markForCheck();
       return;
     }
 
@@ -113,9 +117,11 @@ export class CodingValidationResultsDialogComponent implements OnInit {
           this.validationCacheKey = results.cacheKey;
         }
         this.isLoading = false;
+        this.changeDetectorRef.markForCheck();
       },
       error: () => {
         this.isLoading = false;
+        this.changeDetectorRef.markForCheck();
         this.snackBar.open('Fehler beim Laden der Validierungsergebnisse', 'Schließen', {
           duration: 5000,
           panelClass: ['error-snackbar']
@@ -136,6 +142,7 @@ export class CodingValidationResultsDialogComponent implements OnInit {
     }
 
     this.isLoading = true;
+    this.changeDetectorRef.markForCheck();
 
     this.testPersonCodingService.downloadValidationResultsAsExcel(
       workspaceId,
@@ -157,6 +164,7 @@ export class CodingValidationResultsDialogComponent implements OnInit {
           panelClass: ['success-snackbar']
         });
         this.isLoading = false;
+        this.changeDetectorRef.markForCheck();
       },
       error: error => {
         let errorMessage = 'Fehler beim Herunterladen der Excel-Datei';
@@ -177,6 +185,7 @@ export class CodingValidationResultsDialogComponent implements OnInit {
           panelClass: ['error-snackbar']
         });
         this.isLoading = false;
+        this.changeDetectorRef.markForCheck();
       }
     });
   }

@@ -9,6 +9,8 @@ import { FileService } from '../../../../shared/services/file/file.service';
 import { CodingStatisticsService } from '../../../services/coding-statistics.service';
 import { Success } from '../../../models/success.model';
 import { ContentDialogComponent } from '../../../../shared/dialogs/content-dialog/content-dialog.component';
+import { UnitCodingSchemeRefDto } from '../../../../../../../../api-dto/unit-info/unit-coding-scheme-ref.dto';
+import { readCodingSchemeReference } from '../../../utils/coding-scheme-reference';
 import { SchemeEditorDialogComponent } from '../../scheme-editor-dialog/scheme-editor-dialog.component';
 
 @Injectable({
@@ -67,7 +69,7 @@ export class CodingManagementUiService {
   /**
      * Gets coding scheme reference from unit XML
      */
-  getCodingSchemeFromUnit(unitId: number): Observable<string | null> {
+  getCodingSchemeFromUnit(unitId: number): Observable<UnitCodingSchemeRefDto | null> {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     return this.fileService.getUnitContentXml(workspaceId, unitId.toString()).pipe(
@@ -84,7 +86,7 @@ export class CodingManagementUiService {
           return of(null);
         }
 
-        const codingSchemeRef = this.extractCodingSchemeRefFromXml(xmlContent);
+        const codingSchemeRef = readCodingSchemeReference(xmlContent);
         if (!codingSchemeRef) {
           this.snackBar.open(
             `Kein Kodierschema in Kodierdaten für die Unit ${unitId} gefunden.`,
@@ -117,13 +119,7 @@ export class CodingManagementUiService {
      */
   extractCodingSchemeRefFromXml(xmlContent: string): string | null {
     try {
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
-      const codingSchemeRefElement = xmlDoc.querySelector('CodingSchemeRef');
-
-      if (codingSchemeRefElement && codingSchemeRefElement.textContent) {
-        return codingSchemeRefElement.textContent.trim();
-      }
+      return readCodingSchemeReference(xmlContent)?.content || null;
     } catch (error) {
       this.snackBar.open(
         'Fehler beim Verarbeiten der Unit-XML-Daten',
@@ -141,7 +137,8 @@ export class CodingManagementUiService {
   /**
      * Shows coding scheme in a dialog
      */
-  showCodingSchemeDialog(codingSchemeRef: string): void {
+  showCodingSchemeDialog(reference: string | UnitCodingSchemeRefDto): void {
+    const codingSchemeRef = typeof reference === 'string' ? reference : reference.content;
     const workspaceId = this.appService.selectedWorkspaceId;
 
     this.fileService
@@ -182,7 +179,8 @@ export class CodingManagementUiService {
               fileId: codingSchemeRef,
               fileName: codingSchemeRef,
               content: decodedData,
-              readOnly: true
+              readOnly: true,
+              ...(typeof reference === 'string' ? {} : { codingSchemeRef: reference })
             },
             panelClass: 'scheme-editor-dialog-container'
           });

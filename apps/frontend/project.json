@@ -27,9 +27,7 @@
           "browser": ""
         },
         "index": "apps/frontend/src/index.html",
-        "polyfills": [
-          "apps/frontend/src/polyfills.ts"
-        ],
+        "polyfills": [],
         "tsConfig": "apps/frontend/tsconfig.app.json",
         "inlineStyleLanguage": "scss",
         "assets": [
@@ -69,6 +67,17 @@
           "extractLicenses": false,
           "sourceMap": true,
           "namedChunks": true
+        },
+        "zoneless": {
+          "polyfills": [],
+          "outputPath": {
+            "base": "dist/apps/frontend-zoneless",
+            "browser": ""
+          },
+          "optimization": false,
+          "extractLicenses": false,
+          "sourceMap": true,
+          "namedChunks": true
         }
       },
       "defaultConfiguration": "production"
@@ -81,6 +90,9 @@
         },
         "development": {
           "buildTarget": "frontend:build:development"
+        },
+        "zoneless": {
+          "buildTarget": "frontend:build:zoneless"
         }
       },
       "options": {
@@ -124,7 +136,18 @@
       "configurations": {
         "production": {
           "devServerTarget": "frontend:serve:production"
+        },
+        "zoneless": {
+          "devServerTarget": "frontend:serve:zoneless",
+          "cypressConfig": "cypress.zoneless.config.ts"
         }
+      }
+    },
+    "test-e2e-harness": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node --test scripts/e2e/replay/loopback-forwarders.test.mjs"
       }
     },
     "e2e-replay-live": {
@@ -132,6 +155,11 @@
       "cache": false,
       "options": {
         "command": "node scripts/e2e/replay/run-replay-e2e.mjs"
+      },
+      "configurations": {
+        "zoneless": {
+          "command": "node scripts/e2e/replay/run-replay-e2e.mjs --zoneless"
+        }
       }
     },
     "e2e-replay-existing": {
@@ -139,6 +167,59 @@
       "cache": false,
       "options": {
         "command": "node scripts/e2e/replay/run-existing-replay-e2e.mjs"
+      }
+    },
+    "e2e-auth-live": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/e2e/replay/run-replay-e2e.mjs --auth"
+      },
+      "configurations": {
+        "zoneless": {
+          "command": "node scripts/e2e/replay/run-replay-e2e.mjs --auth --zoneless"
+        },
+        "production": {
+          "command": "node scripts/e2e/replay/run-replay-e2e.mjs --auth --production"
+        }
+      }
+    },
+    "test-zoneless": {
+      "executor": "@nx/jest:jest",
+      "outputs": [
+        "{workspaceRoot}/coverage/apps/frontend-zoneless"
+      ],
+      "options": {
+        "jestConfig": "apps/frontend/jest.zoneless.config.ts",
+        "passWithNoTests": false
+      }
+    },
+    "zoneless-inventory": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/qa/zoneless-inventory.mjs"
+      }
+    },
+    "zoneless-approval": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/qa/zoneless-inventory.mjs --require-risk-coverage"
+      }
+    },
+    "zoneless-exhaustive-approval": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node scripts/qa/zoneless-inventory.mjs --require-complete"
+      }
+    },
+    "zoneless-inventory-test": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node --test scripts/qa/zoneless-inventory.test.mjs"
       }
     }
   }

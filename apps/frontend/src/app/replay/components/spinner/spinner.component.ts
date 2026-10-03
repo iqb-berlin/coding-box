@@ -1,6 +1,5 @@
 import {
-  ChangeDetectorRef, Component, OnDestroy, OnInit, inject,
-  input
+  Component, OnDestroy, OnInit, input, signal
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -15,10 +14,8 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
   ]
 })
 export class SpinnerComponent implements OnInit, OnDestroy {
-  private changeDetectionRef = inject(ChangeDetectorRef);
-
   readonly isLoaded = input.required<Subject<boolean>>();
-  isLoading: boolean = true;
+  readonly isLoading = signal<boolean>(true);
   private ngUnsubscribe = new Subject<void>();
 
   ngOnInit(): void {
@@ -26,8 +23,7 @@ export class SpinnerComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.ngUnsubscribe))
       .subscribe(isLoaded => {
         if (isLoaded) {
-          this.isLoading = false;
-          this.changeDetectionRef.detectChanges();
+          this.isLoading.set(false);
         }
       });
   }

@@ -1,10 +1,6 @@
 import {
-  Component,
-  Input,
-  Output,
-  EventEmitter,
-  OnInit,
-  OnDestroy
+  Component, Input, Output, EventEmitter, OnInit, OnDestroy, signal,
+  computed
 } from '@angular/core';
 
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -134,13 +130,13 @@ implements OnInit, OnDestroy {
   @Input() disabled = false;
   @Output() validate = new EventEmitter<void>();
 
-  isRunning = false;
-  wasRun = false;
-  isLoadingPage = false;
-  isExporting = false;
-  errorMessage: string | null = null;
-  result: GroupResponsesValidationResult | null = null;
-  expandedPanel = false;
+  readonly isRunning = signal(false);
+  readonly wasRun = signal(false);
+  readonly isLoadingPage = signal(false);
+  readonly isExporting = signal(false);
+  readonly errorMessage = signal<string | null>(null);
+  readonly result = signal<GroupResponsesValidationResult | null>(null);
+  readonly expandedPanel = signal(false);
   paginatedGroupResponses = new MatTableDataSource<{
     group: string;
     hasResponse: boolean;
@@ -149,10 +145,10 @@ implements OnInit, OnDestroy {
   displayedColumns = ['group', 'status'];
 
   // Pagination state
-  totalItems = 0;
-  pageSize = 10;
-  currentPage = 1;
-  activeTask: ValidationTaskDto | null = null;
+  readonly totalItems = signal(0);
+  readonly pageSize = signal(10);
+  readonly currentPage = signal(1);
+  readonly activeTask = signal<ValidationTaskDto | null>(null);
 
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
@@ -168,18 +164,19 @@ implements OnInit, OnDestroy {
       this.groupResponsesValidationService.observeValidationResult();
 
     this.stateSubscription = cachedResult.subscribe(result => {
-      if (result && !this.isRunning) {
-        this.wasRun = true;
+      if (result && !this.isRunning()) {
+        this.wasRun.set(true);
         const details = result.details as Record<string, unknown>;
         if (result.status === 'failed' && details?.error) {
-          this.errorMessage = details.error as string;
-          this.result = null;
+          this.errorMessage.set(details.error as string);
+          this.result.set(null);
         } else if (result.details) {
-          this.errorMessage = null;
-          this.result = result.details as GroupResponsesValidationResult;
-          this.totalItems = this.result.total || 0;
-          this.currentPage = this.result.page || 1;
-          this.pageSize = this.result.limit || 10;
+          this.errorMessage.set(null);
+          const groupResult = result.details as GroupResponsesValidationResult;
+          this.result.set(groupResult);
+          this.totalItems.set(groupResult.total || 0);
+          this.currentPage.set(groupResult.page || 1);
+          this.pageSize.set(groupResult.limit || 10);
           this.updatePaginatedGroupResponses();
         }
       }
@@ -189,8 +186,8 @@ implements OnInit, OnDestroy {
     this.taskSubscription = this.groupResponsesValidationService
       .observeValidationTask()
       .subscribe(task => {
-        this.activeTask = task;
-        this.isRunning = !!task;
+        this.activeTask.set(task);
+        this.isRunning.set(!!task);
       });
   }
 
@@ -204,30 +201,28 @@ implements OnInit, OnDestroy {
     return this.groupResponsesValidationService.getValidationStatus();
   }
 
-  get errorCount(): number {
-    return this.result?.totalGroupsWithoutResponses || 0;
-  }
+  readonly errorCount = computed<number>(() => this.result()?.totalGroupsWithoutResponses || 0);
 
   onValidate(): void {
-    if (this.isRunning || this.disabled) {
+    if (this.isRunning() || this.disabled) {
       return;
     }
 
-    this.isRunning = true;
+    this.isRunning.set(true);
     this.subscription = this.groupResponsesValidationService
-      .validate(this.currentPage, this.pageSize)
+      .validate(this.currentPage(), this.pageSize())
       .subscribe({
         next: result => {
-          this.result = result;
-          this.totalItems = result.total || 0;
-          this.currentPage = result.page || 1;
-          this.pageSize = result.limit || 10;
-          this.wasRun = true;
-          this.isRunning = false;
+          this.result.set(result);
+          this.totalItems.set(result.total || 0);
+          this.currentPage.set(result.page || 1);
+          this.pageSize.set(result.limit || 10);
+          this.wasRun.set(true);
+          this.isRunning.set(false);
           this.updatePaginatedGroupResponses();
         },
         error: () => {
-          this.isRunning = false;
+          this.isRunning.set(false);
           this.snackBar.open('Fehler bei der Validierung', 'Schließen', {
             duration: 5000
           });
@@ -238,23 +233,24 @@ implements OnInit, OnDestroy {
   }
 
   onPageChange(event: PageEvent): void {
-    this.currentPage = event.pageIndex + 1;
-    this.pageSize = event.pageSize;
-    this.isLoadingPage = true;
+    this.currentPage.set(event.pageIndex + 1);
+    this.pageSize.set(event.pageSize);
+    this.isLoadingPage.set(true);
     this.subscription?.unsubscribe();
     this.subscription = this.groupResponsesValidationService
-      .fetchPage(this.currentPage, this.pageSize)
+      .fetchPage(this.currentPage(), this.pageSize())
       .subscribe({
         next: result => {
-          this.result = result;
-          this.totalItems = result.total || 0;
-          this.currentPage = result.page || 1;
-          this.pageSize = result.limit || 10;
+          this.result.set(result);
+          this.totalItems.set(result.total || 0);
+          this.currentPage.set(result.page || 1);
+          this.pageSize.set(result.limit || 10);
           this.updatePaginatedGroupResponses();
-          this.isLoadingPage = false;
+          this.isLoadingPage.set(false);
         },
         error: () => {
-          this.isLoadingPage = false;
+          this.isLoadingPage.set(false);
+
           this.snackBar.open('Fehler beim Laden der Seite', 'Schließen', {
             duration: 5000
           });
@@ -263,21 +259,23 @@ implements OnInit, OnDestroy {
   }
 
   toggleExpansion(): void {
-    this.expandedPanel = !this.expandedPanel;
+    this.expandedPanel.set(!this.expandedPanel());
   }
 
   private updatePaginatedGroupResponses(): void {
-    if (this.result?.groupsWithResponses) {
-      this.paginatedGroupResponses.data = this.result.groupsWithResponses;
+    const resultValue = this.result();
+
+    if (resultValue?.groupsWithResponses) {
+      this.paginatedGroupResponses.data = resultValue.groupsWithResponses;
     }
   }
 
   exportCsv(): void {
-    if (this.isExporting) {
+    if (this.isExporting()) {
       return;
     }
 
-    this.isExporting = true;
+    this.isExporting.set(true);
     this.subscription?.unsubscribe();
     this.subscription = this.groupResponsesValidationService
       .fetchPage(1, Number.MAX_SAFE_INTEGER)
@@ -298,10 +296,11 @@ implements OnInit, OnDestroy {
           this.snackBar.open('CSV-Export erfolgreich erstellt', 'OK', {
             duration: 3000
           });
-          this.isExporting = false;
+          this.isExporting.set(false);
         },
         error: () => {
-          this.isExporting = false;
+          this.isExporting.set(false);
+
           this.snackBar.open('Fehler beim CSV-Export', 'Schließen', {
             duration: 5000
           });

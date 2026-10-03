@@ -7,7 +7,8 @@ import {
   map,
   Observable,
   of,
-  reduce
+  reduce,
+  throwError
 } from 'rxjs';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
@@ -29,9 +30,7 @@ export class WorkspaceBackendService {
   private http = inject(HttpClient);
 
   getAllWorkspacesList(): Observable<PaginatedWorkspacesDto> {
-    return this.http
-      .get<PaginatedWorkspacesDto>(`${this.serverUrl}admin/workspace`,
-      {})
+    return this.getAllWorkspacesListOrFail()
       .pipe(
         catchError(() => {
           const defaultResponse: PaginatedWorkspacesDto = {
@@ -43,6 +42,43 @@ export class WorkspaceBackendService {
           return of(defaultResponse);
         })
       );
+  }
+
+  getAllWorkspacesListOrFail(): Observable<PaginatedWorkspacesDto> {
+    return this.http.get<PaginatedWorkspacesDto>(`${this.serverUrl}admin/workspace`, {}).pipe(
+      expand(response => {
+        const page = Number(response.page);
+        const limit = Number(response.limit);
+        if (response.total === 0) return EMPTY;
+        if (!Number.isInteger(page) || page < 1 || !Number.isInteger(limit) || limit < 1 ||
+          response.data.length === 0) {
+          return throwError(() => new Error('Incomplete workspace list'));
+        }
+        if (page * limit >= response.total) return EMPTY;
+        return this.http.get<PaginatedWorkspacesDto>(`${this.serverUrl}admin/workspace`, {
+          params: new HttpParams().set('page', page + 1).set('limit', limit)
+        }).pipe(map(nextPage => {
+          if (Number(nextPage.page) !== page + 1 || Number(nextPage.limit) !== limit || nextPage.total !== response.total) {
+            throw new Error('Workspace pagination changed while loading');
+          }
+          return nextPage;
+        }));
+      }),
+      reduce((all, response) => ({
+        data: [...all.data, ...response.data],
+        total: response.total,
+        page: 1,
+        limit: all.data.length + response.data.length
+      }), {
+        data: [], total: 0, page: 1, limit: 0
+      } as PaginatedWorkspacesDto),
+      map(result => {
+        if (result.data.length !== result.total || new Set(result.data.map(workspace => workspace.id)).size !== result.total) {
+          throw new Error('Incomplete workspace list');
+        }
+        return result;
+      })
+    );
   }
 
   getWorkspaceUsers(

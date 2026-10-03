@@ -1,6 +1,7 @@
 import {
   ComponentFixture, fakeAsync, TestBed, tick
 } from '@angular/core/testing';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClient } from '@angular/common/http';
 import {
@@ -9,7 +10,7 @@ import {
 } from '@angular/common/http/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations'; // Importieren
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { SysAdminSettingsComponent } from './sys-admin-settings.component';
 import { SERVER_URL } from '../../../injection-tokens';
 import { SystemSettingsService } from '../../../core/services/system-settings.service';
@@ -66,6 +67,7 @@ describe('SysAdminSettingsComponent', () => {
 
     await TestBed.configureTestingModule({
       providers: [
+        provideZonelessChangeDetection(),
         provideHttpClient(),
         provideHttpClientTesting(),
         {
@@ -113,22 +115,41 @@ describe('SysAdminSettingsComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('renders content-pool settings after a delayed response without another UI event', async () => {
+    const settings = new Subject<{
+      enabled: boolean;
+      baseUrl: string;
+      hasApplicationToken: boolean;
+    }>();
+    systemSettingsService.getContentPoolSettings.mockReturnValueOnce(settings.asObservable());
+    component.loadContentPoolSettings();
+    fixture.detectChanges();
+
+    settings.next({ enabled: true, baseUrl: 'https://content-pool.test', hasApplicationToken: false });
+    await fixture.whenStable();
+
+    const urlInput = fixture.nativeElement.querySelector(
+      '.content-pool-settings-card input[placeholder*="content-pool.example.org"]'
+    ) as HTMLInputElement;
+    expect(urlInput.value).toBe('https://content-pool.test');
+  });
+
   describe('legal notice settings', () => {
     it('loads the current legal notice on init', () => {
       expect(systemSettingsService.getLegalNotice).toHaveBeenCalled();
-      expect(component.legalNoticeHtml).toBe('<p>Legal</p>');
-      expect(component.isLegalNoticeDefault).toBe(false);
+      expect(component.legalNoticeHtml()).toBe('<p>Legal</p>');
+      expect(component.isLegalNoticeDefault()).toBe(false);
     });
 
     it('saves the edited legal notice', () => {
-      component.legalNoticeHtml = ' <p>Edited legal</p> ';
+      component.legalNoticeHtml.set(' <p>Edited legal</p> ');
 
       component.saveLegalNotice();
 
       expect(systemSettingsService.updateLegalNotice).toHaveBeenCalledWith({
         html: '<p>Edited legal</p>'
       });
-      expect(component.legalNoticeHtml).toBe('<p>Updated legal</p>');
+      expect(component.legalNoticeHtml()).toBe('<p>Updated legal</p>');
       expect(snackBar.open).toHaveBeenCalledWith(
         'Impressum/Datenschutz-Text wurde gespeichert.',
         'Schließen',
@@ -137,7 +158,7 @@ describe('SysAdminSettingsComponent', () => {
     });
 
     it('requires legal notice text before saving', () => {
-      component.legalNoticeHtml = '   ';
+      component.legalNoticeHtml.set('   ');
 
       component.saveLegalNotice();
 
@@ -153,19 +174,19 @@ describe('SysAdminSettingsComponent', () => {
       component.resetLegalNoticeToDefault();
 
       expect(systemSettingsService.resetLegalNotice).toHaveBeenCalled();
-      expect(component.legalNoticeHtml).toBe('<p>Default legal</p>');
-      expect(component.isLegalNoticeDefault).toBe(true);
+      expect(component.legalNoticeHtml()).toBe('<p>Default legal</p>');
+      expect(component.isLegalNoticeDefault()).toBe(true);
     });
   });
 
   describe('testContentPoolConnection', () => {
     it('tests the current URL with an unsaved token and shows the result', () => {
-      component.contentPoolSettings = {
+      component.contentPoolSettings.set({
         enabled: true,
         baseUrl: ' http://content-pool.test ',
         hasApplicationToken: false
-      };
-      component.contentPoolApplicationToken = ' cp_unsaved_token ';
+      });
+      component.contentPoolApplicationToken.set(' cp_unsaved_token ');
 
       component.testContentPoolConnection();
 
@@ -180,16 +201,16 @@ describe('SysAdminSettingsComponent', () => {
         'Schließen',
         { duration: 4000 }
       );
-      expect(component.isTestingContentPoolConnection).toBe(false);
+      expect(component.isTestingContentPoolConnection()).toBe(false);
     });
 
     it('requires a token when no stored token is available', () => {
-      component.contentPoolSettings = {
+      component.contentPoolSettings.set({
         enabled: true,
         baseUrl: 'http://content-pool.test',
         hasApplicationToken: false
-      };
-      component.contentPoolApplicationToken = '';
+      });
+      component.contentPoolApplicationToken.set('');
 
       component.testContentPoolConnection();
 
@@ -238,8 +259,8 @@ describe('SysAdminSettingsComponent', () => {
       downloadRequest.flush(new Blob(['sqlite']));
 
       expect(clickSpy).toHaveBeenCalled();
-      expect(component.isExporting).toBe(false);
-      expect(component.databaseExportStatus).toBe('completed');
+      expect(component.isExporting()).toBe(false);
+      expect(component.databaseExportStatus()).toBe('completed');
 
       appendChildSpy.mockRestore();
       removeChildSpy.mockRestore();
@@ -257,10 +278,26 @@ describe('SysAdminSettingsComponent', () => {
       const statusRequest = httpMock.expectOne('http://test-url/admin/database/export/sqlite/job/job-1');
       statusRequest.flush({ status: 'failed', progress: 42, error: 'Export failed' });
 
-      expect(component.isExporting).toBe(false);
-      expect(component.databaseExportStatus).toBe('failed');
-      expect(component.databaseExportError).toBe('Export failed');
+      expect(component.isExporting()).toBe(false);
+      expect(component.databaseExportStatus()).toBe('failed');
+      expect(component.databaseExportError()).toBe('Export failed');
       expect(snackBar.open).toHaveBeenCalledWith('Export failed', 'Schließen', { duration: 5000 });
+    }));
+
+    it('renders background export progress after polling without another UI event', fakeAsync(() => {
+      component.exportDatabase();
+      fixture.detectChanges();
+
+      httpMock.expectOne('http://test-url/admin/database/export/sqlite/job')
+        .flush({ jobId: 'job-1', message: 'started' });
+      tick(0);
+      httpMock.expectOne('http://test-url/admin/database/export/sqlite/job/job-1')
+        .flush({ status: 'running', progress: 42 });
+      tick(0);
+
+      expect(fixture.nativeElement.querySelector('.export-progress .progress-text').textContent)
+        .toContain('42%');
+      component.ngOnDestroy();
     }));
 
     it('starts export without a local token because auth is handled by the interceptor', () => {
@@ -278,7 +315,7 @@ describe('SysAdminSettingsComponent', () => {
       );
 
       expect(snackBar.open).toHaveBeenCalled();
-      expect(component.isExporting).toBe(false);
+      expect(component.isExporting()).toBe(false);
     });
   });
 });

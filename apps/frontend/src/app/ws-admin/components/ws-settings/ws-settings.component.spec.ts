@@ -6,9 +6,9 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { Clipboard } from '@angular/cdk/clipboard';
-import { Component } from '@angular/core';
+import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import {
   HttpTestingController,
@@ -101,6 +101,7 @@ describe('WsSettingsComponent', () => {
         WsSettingsComponent
       ],
       providers: [
+        provideZonelessChangeDetection(),
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: AppService, useValue: mockAppService },
@@ -133,27 +134,41 @@ describe('WsSettingsComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('renders a delayed replay URL setting without another UI event', async () => {
+    const mode = new Subject<'auth' | 'workspaceId'>();
+    mockWorkspaceSettingsService.getReplayUrlExportMode.mockReturnValueOnce(mode.asObservable());
+    component.ngOnInit();
+    fixture.detectChanges();
+
+    mode.next('workspaceId');
+    await fixture.whenStable();
+
+    expect(fixture.nativeElement.querySelector('.replay-url-export-token-duration')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.replay-url-export-mode').textContent)
+      .toContain('ws-settings.replay-url-export-mode-workspace');
+  });
+
   describe('ngOnInit', () => {
     it('should load workspace settings on init', () => {
       expect(mockAppService.getWorkspaceTokenPolicy).toHaveBeenCalled();
       expect(mockWorkspaceSettingsService.getEvaluationMode).toHaveBeenCalledWith(1);
-      expect(component.evaluationMode).toBe(false);
+      expect(component.evaluationMode()).toBe(false);
       expect(mockWorkspaceSettingsService.getAutoFetchCodingStatistics).toHaveBeenCalledWith(1);
-      expect(component.autoFetchCodingStatistics).toBe(true);
+      expect(component.autoFetchCodingStatistics()).toBe(true);
       expect(mockWorkspaceSettingsService.getAutoRefreshManualCodingJobs).toHaveBeenCalledWith(1);
-      expect(component.autoRefreshManualCodingJobs).toBe(true);
+      expect(component.autoRefreshManualCodingJobs()).toBe(true);
       expect(mockWorkspaceSettingsService.getIncludeDeriveErrorInManualCoding).toHaveBeenCalledWith(1);
-      expect(component.includeDeriveErrorInManualCoding).toBe(false);
+      expect(component.includeDeriveErrorInManualCoding()).toBe(false);
       expect(mockWorkspaceSettingsService.getShowTestResultsLogAnomalies).toHaveBeenCalledWith(1);
-      expect(component.showTestResultsLogAnomalies).toBe(false);
+      expect(component.showTestResultsLogAnomalies()).toBe(false);
       expect(mockWorkspaceSettingsService.getEnableRegexSearch).toHaveBeenCalledWith(1);
-      expect(component.enableRegexSearch).toBe(false);
+      expect(component.enableRegexSearch()).toBe(false);
       expect(mockWorkspaceSettingsService.getReplayUrlExportMode).toHaveBeenCalledWith(1);
-      expect(component.replayUrlExportMode).toBe('auth');
+      expect(component.replayUrlExportMode()).toBe('auth');
       expect(mockWorkspaceSettingsService.getReplayUrlExportTokenDurationDays).toHaveBeenCalledWith(1, 90);
-      expect(component.replayUrlExportTokenDurationDays).toBe(90);
+      expect(component.replayUrlExportTokenDurationDays()).toBe(90);
       expect(mockWorkspaceSettingsService.getAuthSessionIdleTimeoutMinutes).toHaveBeenCalledWith(1);
-      expect(component.authSessionIdleTimeoutMinutes).toBe(45);
+      expect(component.authSessionIdleTimeoutMinutes()).toBe(45);
     });
   });
 
@@ -169,10 +184,10 @@ describe('WsSettingsComponent', () => {
       component.createToken();
       expect(mockAppService.createOwnToken).toHaveBeenCalledWith(
         1,
-        component.duration,
+        component.duration(),
         ['replay:read']
       );
-      expect(component.authToken).toBe('test-token');
+      expect(component.authToken()).toBe('test-token');
       expect(mockSnackBar.open).toHaveBeenCalled();
     });
 
@@ -187,16 +202,16 @@ describe('WsSettingsComponent', () => {
 
       component.ngOnInit();
 
-      expect(component.maxTokenDurationDays).toBe(60);
-      expect(component.duration).toBe(60);
+      expect(component.maxTokenDurationDays()).toBe(60);
+      expect(component.duration()).toBe(60);
       expect(component.isTokenDurationValid()).toBe(true);
 
-      component.duration = 61;
+      component.duration.set(61);
       expect(component.isTokenDurationValid()).toBe(false);
     });
 
     it('should reject decimal durations before requesting a token', () => {
-      component.duration = 1.5;
+      component.duration.set(1.5);
 
       component.createToken();
 
@@ -209,21 +224,21 @@ describe('WsSettingsComponent', () => {
 
       component.createToken();
 
-      expect(component.authToken).toBeNull();
+      expect(component.authToken()).toBeNull();
       expect(mockSnackBar.open).toHaveBeenCalled();
     });
   });
 
   describe('copyToken', () => {
     it('should copy token to clipboard if it exists', () => {
-      component.authToken = 'test-token';
+      component.authToken.set('test-token');
       component.copyToken();
       expect(mockClipboard.copy).toHaveBeenCalledWith('test-token');
       expect(mockSnackBar.open).toHaveBeenCalled();
     });
 
     it('should not copy if no token exists', () => {
-      component.authToken = null;
+      component.authToken.set(null);
       component.copyToken();
       expect(mockClipboard.copy).not.toHaveBeenCalled();
     });
@@ -233,33 +248,33 @@ describe('WsSettingsComponent', () => {
     it('should persist auth mode', () => {
       component.toggleReplayUrlExportMode({ checked: true });
 
-      expect(component.replayUrlExportMode).toBe('auth');
+      expect(component.replayUrlExportMode()).toBe('auth');
       expect(mockWorkspaceSettingsService.setReplayUrlExportMode).toHaveBeenCalledWith(1, 'auth');
     });
 
     it('should persist workspaceId mode', () => {
       component.toggleReplayUrlExportMode({ checked: false });
 
-      expect(component.replayUrlExportMode).toBe('workspaceId');
+      expect(component.replayUrlExportMode()).toBe('workspaceId');
       expect(mockWorkspaceSettingsService.setReplayUrlExportMode).toHaveBeenCalledWith(1, 'workspaceId');
     });
 
     it('should revert replay URL export mode on error', () => {
-      component.replayUrlExportMode = 'auth';
+      component.replayUrlExportMode.set('auth');
       mockWorkspaceSettingsService.setReplayUrlExportMode.mockReturnValue(
         throwError(() => new Error('error'))
       );
 
       component.toggleReplayUrlExportMode({ checked: false });
 
-      expect(component.replayUrlExportMode).toBe('auth');
+      expect(component.replayUrlExportMode()).toBe('auth');
       expect(mockSnackBar.open).toHaveBeenCalled();
     });
   });
 
   describe('saveReplayUrlExportTokenDuration', () => {
     it('should persist replay URL export token duration', () => {
-      component.replayUrlExportTokenDurationDays = 45;
+      component.replayUrlExportTokenDurationDays.set(45);
 
       component.saveReplayUrlExportTokenDuration();
 
@@ -268,7 +283,7 @@ describe('WsSettingsComponent', () => {
     });
 
     it('should reject invalid replay URL export token durations before saving', () => {
-      component.replayUrlExportTokenDurationDays = 91;
+      component.replayUrlExportTokenDurationDays.set(91);
 
       component.saveReplayUrlExportTokenDuration();
 
@@ -280,7 +295,7 @@ describe('WsSettingsComponent', () => {
       mockWorkspaceSettingsService.setReplayUrlExportTokenDurationDays.mockReturnValue(
         throwError(() => new Error('error'))
       );
-      component.replayUrlExportTokenDurationDays = 45;
+      component.replayUrlExportTokenDurationDays.set(45);
 
       component.saveReplayUrlExportTokenDuration();
 
@@ -290,7 +305,7 @@ describe('WsSettingsComponent', () => {
 
   describe('saveAuthSessionIdleTimeout', () => {
     it('should persist auth session idle timeout minutes', () => {
-      component.authSessionIdleTimeoutMinutes = 60;
+      component.authSessionIdleTimeoutMinutes.set(60);
 
       component.saveAuthSessionIdleTimeout();
 
@@ -299,7 +314,7 @@ describe('WsSettingsComponent', () => {
     });
 
     it('should reject invalid auth session idle timeout minutes before saving', () => {
-      component.authSessionIdleTimeoutMinutes = 481;
+      component.authSessionIdleTimeoutMinutes.set(481);
 
       component.saveAuthSessionIdleTimeout();
 
@@ -311,7 +326,7 @@ describe('WsSettingsComponent', () => {
       mockWorkspaceSettingsService.setAuthSessionIdleTimeoutMinutes.mockReturnValue(
         throwError(() => new Error('error'))
       );
-      component.authSessionIdleTimeoutMinutes = 60;
+      component.authSessionIdleTimeoutMinutes.set(60);
 
       component.saveAuthSessionIdleTimeout();
 
@@ -337,22 +352,22 @@ describe('WsSettingsComponent', () => {
     it('should enable evaluation mode and turn off expensive automatic refreshes', () => {
       component.toggleEvaluationMode({ checked: true });
 
-      expect(component.evaluationMode).toBe(true);
-      expect(component.autoFetchCodingStatistics).toBe(false);
-      expect(component.autoRefreshManualCodingJobs).toBe(false);
+      expect(component.evaluationMode()).toBe(true);
+      expect(component.autoFetchCodingStatistics()).toBe(false);
+      expect(component.autoRefreshManualCodingJobs()).toBe(false);
       expect(mockWorkspaceSettingsService.setEvaluationMode).toHaveBeenCalledWith(1, true);
     });
 
     it('should disable evaluation mode and restore normal automatic refresh defaults', () => {
-      component.evaluationMode = true;
-      component.autoFetchCodingStatistics = false;
-      component.autoRefreshManualCodingJobs = false;
+      component.evaluationMode.set(true);
+      component.autoFetchCodingStatistics.set(false);
+      component.autoRefreshManualCodingJobs.set(false);
 
       component.toggleEvaluationMode({ checked: false });
 
-      expect(component.evaluationMode).toBe(false);
-      expect(component.autoFetchCodingStatistics).toBe(false);
-      expect(component.autoRefreshManualCodingJobs).toBe(true);
+      expect(component.evaluationMode()).toBe(false);
+      expect(component.autoFetchCodingStatistics()).toBe(false);
+      expect(component.autoRefreshManualCodingJobs()).toBe(true);
       expect(mockWorkspaceSettingsService.setEvaluationMode).toHaveBeenCalledWith(1, false);
     });
 
@@ -360,15 +375,15 @@ describe('WsSettingsComponent', () => {
       mockWorkspaceSettingsService.setEvaluationMode.mockReturnValue(
         throwError(() => new Error('error'))
       );
-      component.evaluationMode = false;
-      component.autoFetchCodingStatistics = true;
-      component.autoRefreshManualCodingJobs = true;
+      component.evaluationMode.set(false);
+      component.autoFetchCodingStatistics.set(true);
+      component.autoRefreshManualCodingJobs.set(true);
 
       component.toggleEvaluationMode({ checked: true });
 
-      expect(component.evaluationMode).toBe(false);
-      expect(component.autoFetchCodingStatistics).toBe(true);
-      expect(component.autoRefreshManualCodingJobs).toBe(true);
+      expect(component.evaluationMode()).toBe(false);
+      expect(component.autoFetchCodingStatistics()).toBe(true);
+      expect(component.autoRefreshManualCodingJobs()).toBe(true);
       expect(mockSnackBar.open).toHaveBeenCalled();
     });
   });
@@ -376,26 +391,26 @@ describe('WsSettingsComponent', () => {
   describe('toggleAutoFetchCodingStatistics', () => {
     it('should call service with true', () => {
       component.toggleAutoFetchCodingStatistics({ checked: true });
-      expect(component.autoFetchCodingStatistics).toBe(true);
+      expect(component.autoFetchCodingStatistics()).toBe(true);
       expect(mockWorkspaceSettingsService.setAutoFetchCodingStatistics).toHaveBeenCalledWith(1, true);
     });
 
     it('should call service with false', () => {
       component.toggleAutoFetchCodingStatistics({ checked: false });
-      expect(component.autoFetchCodingStatistics).toBe(false);
+      expect(component.autoFetchCodingStatistics()).toBe(false);
       expect(mockWorkspaceSettingsService.setAutoFetchCodingStatistics).toHaveBeenCalledWith(1, false);
     });
 
     it('should revert state on error', () => {
       mockWorkspaceSettingsService.setAutoFetchCodingStatistics.mockReturnValue(throwError(() => new Error('error')));
-      component.autoFetchCodingStatistics = true;
+      component.autoFetchCodingStatistics.set(true);
       component.toggleAutoFetchCodingStatistics({ checked: false });
-      expect(component.autoFetchCodingStatistics).toBe(true);
+      expect(component.autoFetchCodingStatistics()).toBe(true);
       expect(mockSnackBar.open).toHaveBeenCalled();
     });
 
     it('should ignore changes while evaluation mode is active', () => {
-      component.evaluationMode = true;
+      component.evaluationMode.set(true);
 
       component.toggleAutoFetchCodingStatistics({ checked: true });
 
@@ -406,26 +421,26 @@ describe('WsSettingsComponent', () => {
   describe('toggleAutoRefreshManualCodingJobs', () => {
     it('should call service with true', () => {
       component.toggleAutoRefreshManualCodingJobs({ checked: true });
-      expect(component.autoRefreshManualCodingJobs).toBe(true);
+      expect(component.autoRefreshManualCodingJobs()).toBe(true);
       expect(mockWorkspaceSettingsService.setAutoRefreshManualCodingJobs).toHaveBeenCalledWith(1, true);
     });
 
     it('should call service with false', () => {
       component.toggleAutoRefreshManualCodingJobs({ checked: false });
-      expect(component.autoRefreshManualCodingJobs).toBe(false);
+      expect(component.autoRefreshManualCodingJobs()).toBe(false);
       expect(mockWorkspaceSettingsService.setAutoRefreshManualCodingJobs).toHaveBeenCalledWith(1, false);
     });
 
     it('should revert state on error', () => {
       mockWorkspaceSettingsService.setAutoRefreshManualCodingJobs.mockReturnValue(throwError(() => new Error('error')));
-      component.autoRefreshManualCodingJobs = true;
+      component.autoRefreshManualCodingJobs.set(true);
       component.toggleAutoRefreshManualCodingJobs({ checked: false });
-      expect(component.autoRefreshManualCodingJobs).toBe(true);
+      expect(component.autoRefreshManualCodingJobs()).toBe(true);
       expect(mockSnackBar.open).toHaveBeenCalled();
     });
 
     it('should ignore changes while evaluation mode is active', () => {
-      component.evaluationMode = true;
+      component.evaluationMode.set(true);
 
       component.toggleAutoRefreshManualCodingJobs({ checked: true });
 
@@ -436,15 +451,15 @@ describe('WsSettingsComponent', () => {
   describe('toggleIncludeDeriveErrorInManualCoding', () => {
     it('should call service with true', () => {
       component.toggleIncludeDeriveErrorInManualCoding({ checked: true });
-      expect(component.includeDeriveErrorInManualCoding).toBe(true);
+      expect(component.includeDeriveErrorInManualCoding()).toBe(true);
       expect(mockWorkspaceSettingsService.setIncludeDeriveErrorInManualCoding).toHaveBeenCalledWith(1, true);
     });
 
     it('should revert state on error', () => {
       mockWorkspaceSettingsService.setIncludeDeriveErrorInManualCoding.mockReturnValue(throwError(() => new Error('error')));
-      component.includeDeriveErrorInManualCoding = true;
+      component.includeDeriveErrorInManualCoding.set(true);
       component.toggleIncludeDeriveErrorInManualCoding({ checked: false });
-      expect(component.includeDeriveErrorInManualCoding).toBe(true);
+      expect(component.includeDeriveErrorInManualCoding()).toBe(true);
       expect(mockSnackBar.open).toHaveBeenCalled();
     });
   });
@@ -452,21 +467,21 @@ describe('WsSettingsComponent', () => {
   describe('toggleShowTestResultsLogAnomalies', () => {
     it('should call service with true', () => {
       component.toggleShowTestResultsLogAnomalies({ checked: true });
-      expect(component.showTestResultsLogAnomalies).toBe(true);
+      expect(component.showTestResultsLogAnomalies()).toBe(true);
       expect(mockWorkspaceSettingsService.setShowTestResultsLogAnomalies).toHaveBeenCalledWith(1, true);
     });
 
     it('should call service with false', () => {
       component.toggleShowTestResultsLogAnomalies({ checked: false });
-      expect(component.showTestResultsLogAnomalies).toBe(false);
+      expect(component.showTestResultsLogAnomalies()).toBe(false);
       expect(mockWorkspaceSettingsService.setShowTestResultsLogAnomalies).toHaveBeenCalledWith(1, false);
     });
 
     it('should revert state on error', () => {
       mockWorkspaceSettingsService.setShowTestResultsLogAnomalies.mockReturnValue(throwError(() => new Error('error')));
-      component.showTestResultsLogAnomalies = true;
+      component.showTestResultsLogAnomalies.set(true);
       component.toggleShowTestResultsLogAnomalies({ checked: false });
-      expect(component.showTestResultsLogAnomalies).toBe(true);
+      expect(component.showTestResultsLogAnomalies()).toBe(true);
       expect(mockSnackBar.open).toHaveBeenCalled();
     });
   });
@@ -474,15 +489,15 @@ describe('WsSettingsComponent', () => {
   describe('toggleEnableRegexSearch', () => {
     it('should call service with true', () => {
       component.toggleEnableRegexSearch({ checked: true });
-      expect(component.enableRegexSearch).toBe(true);
+      expect(component.enableRegexSearch()).toBe(true);
       expect(mockWorkspaceSettingsService.setEnableRegexSearch).toHaveBeenCalledWith(1, true);
     });
 
     it('should revert state on error', () => {
       mockWorkspaceSettingsService.setEnableRegexSearch.mockReturnValue(throwError(() => new Error('error')));
-      component.enableRegexSearch = true;
+      component.enableRegexSearch.set(true);
       component.toggleEnableRegexSearch({ checked: false });
-      expect(component.enableRegexSearch).toBe(true);
+      expect(component.enableRegexSearch()).toBe(true);
       expect(mockSnackBar.open).toHaveBeenCalled();
     });
   });
@@ -524,12 +539,28 @@ describe('WsSettingsComponent', () => {
       downloadRequest.flush(new Blob(['test']));
 
       expect(clickSpy).toHaveBeenCalled();
-      expect(component.isExporting).toBe(false);
-      expect(component.databaseExportStatus).toBe('completed');
+      expect(component.isExporting()).toBe(false);
+      expect(component.databaseExportStatus()).toBe('completed');
 
       appendChildSpy.mockRestore();
       removeChildSpy.mockRestore();
       createElementSpy.mockRestore();
+    }));
+
+    it('renders background export progress after polling without another UI event', fakeAsync(() => {
+      component.exportWorkspaceDatabase();
+      fixture.detectChanges();
+
+      httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/job')
+        .flush({ jobId: 'job-1', message: 'started' });
+      tick(0);
+      httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/job/job-1')
+        .flush({ status: 'running', progress: 42 });
+      tick(0);
+
+      expect(fixture.nativeElement.querySelector('.database-export-card .progress-text').textContent)
+        .toContain('42');
+      component.ngOnDestroy();
     }));
 
     it('should start export without a local token because auth is handled by the interceptor', () => {
@@ -547,7 +578,7 @@ describe('WsSettingsComponent', () => {
       );
 
       expect(mockSnackBar.open).toHaveBeenCalled();
-      expect(component.isExporting).toBe(false);
+      expect(component.isExporting()).toBe(false);
     });
   });
 });

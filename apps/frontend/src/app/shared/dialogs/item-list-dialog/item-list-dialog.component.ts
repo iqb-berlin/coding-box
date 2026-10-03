@@ -1,4 +1,6 @@
-import { Component, OnInit, inject } from '@angular/core';
+import {
+  Component, OnInit, inject, signal
+} from '@angular/core';
 
 import { MatDialogModule, MatDialogRef, MatDialog } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -38,9 +40,14 @@ export class ItemListDialogComponent implements OnInit {
   private dialogRef = inject(MatDialogRef<ItemListDialogComponent>);
   private snackBar = inject(MatSnackBar);
 
-  itemGroups: { fileId: string; id: number; items: string[] }[] = [];
-  isLoading = true;
-  error = '';
+  readonly itemGroups = signal<{
+    fileId: string;
+    id: number;
+    items: string[];
+  }[]>([]);
+
+  readonly isLoading = signal(true);
+  readonly error = signal('');
 
   ngOnInit(): void {
     this.loadItemIds();
@@ -49,18 +56,18 @@ export class ItemListDialogComponent implements OnInit {
   loadItemIds(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.error = 'Kein Workspace ausgewählt.';
-      this.isLoading = false;
+      this.error.set('Kein Workspace ausgewählt.');
+      this.isLoading.set(false);
       return;
     }
 
-    this.isLoading = true;
-    this.error = '';
+    this.isLoading.set(true);
+    this.error.set('');
 
     this.fileService.getItemIdsFromMetadata(workspaceId).subscribe({
       next: groups => {
-        this.itemGroups = groups;
-        this.isLoading = false;
+        this.itemGroups.set(groups);
+        this.isLoading.set(false);
       }
     });
   }

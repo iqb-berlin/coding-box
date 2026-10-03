@@ -1,6 +1,7 @@
 import {
-  Component, OnInit, OnDestroy, effect, inject
+  Component, OnInit, OnDestroy, DestroyRef, effect, inject, untracked, signal
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   Router, RouterLink, RouterOutlet, NavigationEnd
 } from '@angular/router';
@@ -12,7 +13,7 @@ import { MatButton } from '@angular/material/button';
 import { LocationStrategy } from '@angular/common';
 import { KeycloakProfile } from 'keycloak-js';
 import { KEYCLOAK_EVENT_SIGNAL } from 'keycloak-angular';
-import { Subscription, filter, firstValueFrom } from 'rxjs';
+import { filter, firstValueFrom } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
@@ -47,29 +48,39 @@ export class AppComponent implements OnInit, OnDestroy {
   private systemNotifications = inject(SystemNotificationService);
 
   title = 'IQB-Kodierbox';
-  loggedInKeycloak: boolean = false;
-  errorMessage = '';
-  authData: AuthDataDto = AppService.defaultAuthData;
-  currentWorkspaceName = '';
-  private routerSubscription: Subscription | null = null;
+  readonly loggedInKeycloak = signal<boolean>(false);
+  readonly errorMessage = signal('');
+  readonly authData = signal<AuthDataDto>(AppService.defaultAuthData);
+  readonly currentWorkspaceName = signal('');
+  private readonly destroyRef = inject(DestroyRef);
 
   constructor() {
     effect(() => {
-      handleKeycloakSessionEvent(this.keycloakEvent(), this.appService, this.router);
-      if (this.authService.isLoggedIn() && !this.appService.needsReAuthentication) {
-        this.authSessionActivity.start();
-      } else {
-        this.authSessionActivity.restart();
-      }
+      const event = this.keycloakEvent();
+      // Only a new Keycloak event may replay its authentication side effects.
+      untracked(() => handleKeycloakSessionEvent(event, this.appService, this.router));
     });
 
-    this.appService.authData$.subscribe(authData => {
-      this.authData = authData;
+    effect(() => {
+      // Keycloak authentication itself is not a signal; re-read it on each event.
+      this.keycloakEvent();
+      const sessionActive = this.authService.isLoggedIn() && !this.appService.needsReAuthentication;
+      untracked(() => {
+        if (sessionActive) {
+          this.authSessionActivity.start();
+        } else {
+          this.authSessionActivity.restart();
+        }
+      });
+    });
+
+    this.appService.authData$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(authData => {
+      this.authData.set(authData);
       this.updateCurrentWorkspaceName();
     });
 
-    this.routerSubscription = this.router.events
-      .pipe(filter(event => event instanceof NavigationEnd))
+    this.router.events
+      .pipe(filter(event => event instanceof NavigationEnd), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         this.updateCurrentWorkspaceName();
       });
@@ -77,11 +88,11 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private updateCurrentWorkspaceName(): void {
     const workspaceId = this.getWorkspaceIdFromUrl();
-    if (workspaceId > 0 && this.authData.workspaces) {
-      const workspace = this.authData.workspaces.find(ws => ws.id === workspaceId);
-      this.currentWorkspaceName = workspace?.name || '';
+    if (workspaceId > 0 && this.authData().workspaces) {
+      const workspace = this.authData().workspaces.find(ws => ws.id === workspaceId);
+      this.currentWorkspaceName.set(workspace?.name || '');
     } else {
-      this.currentWorkspaceName = '';
+      this.currentWorkspaceName.set('');
     }
   }
 
@@ -92,13 +103,12 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.routerSubscription?.unsubscribe();
     this.authSessionActivity.stop();
     this.systemNotifications.stopPolling();
   }
 
   async loadAuthData(identity: string): Promise<boolean> {
-    this.errorMessage = '';
+    this.errorMessage.set('');
     this.appService.errorMessagesDisabled = true;
 
     try {
@@ -150,7 +160,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   private setAuthState(): void {
-    this.loggedInKeycloak = true;
+    this.loggedInKeycloak.set(true);
     this.appService.isLoggedInKeycloak = true;
     this.appService.loggedUser = this.authService.getLoggedUser();
   }
@@ -160,6 +170,6 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   isAdminUser(): boolean {
-    return hasAdminBypass(this.authService.getRoles(), this.authData.isAdmin);
+    return hasAdminBypass(this.authService.getRoles(), this.authData().isAdmin);
   }
 }

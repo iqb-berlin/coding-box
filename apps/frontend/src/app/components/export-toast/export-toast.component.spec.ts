@@ -142,12 +142,10 @@ describe('ExportToastComponent', () => {
   });
 
   it('summarizes jobs and delegates user actions', () => {
-    component.ngOnInit();
-
-    expect(component.hasJobs).toBe(true);
-    expect(component.activeJobCount).toBe(2);
-    expect(component.completedJobCount).toBe(1);
-    expect(component.failedJobCount).toBe(1);
+    expect(component.hasJobs()).toBe(true);
+    expect(component.activeJobCount()).toBe(2);
+    expect(component.completedJobCount()).toBe(1);
+    expect(component.failedJobCount()).toBe(1);
     expect(component.getStatusIcon('waiting')).toBe('hourglass_empty');
     expect(component.getStatusIcon('active')).toBe('sync');
     expect(component.getStatusIcon('downloading')).toBe('file_download');
@@ -176,7 +174,7 @@ describe('ExportToastComponent', () => {
     expect(component.getErrorTitle(jobs[3])).toBe('Export fehlgeschlagen');
 
     component.toggleCollapse();
-    expect(component.isCollapsed).toBe(true);
+    expect(component.isCollapsed()).toBe(true);
     component.downloadFile(jobs[0]);
     component.removeJob(jobs[0]);
     component.cancelJob(jobs[1]);
@@ -197,15 +195,14 @@ describe('ExportToastComponent', () => {
   });
 
   it('updates from the jobs stream and tears down subscriptions', () => {
-    component.ngOnInit();
     jobs$.next([]);
 
-    expect(component.jobs).toEqual([]);
-    expect(component.hasJobs).toBe(false);
+    expect(component.jobs()).toEqual([]);
+    expect(component.hasJobs()).toBe(false);
 
-    component.ngOnDestroy();
+    fixture.destroy();
     jobs$.next(jobs);
-    expect(component.jobs).toEqual([]);
+    expect(component.jobs()).toEqual([]);
   });
 
   it('keeps a job visible and reports a failed removal', () => {

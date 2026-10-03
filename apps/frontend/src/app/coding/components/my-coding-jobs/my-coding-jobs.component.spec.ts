@@ -99,12 +99,29 @@ describe('MyCodingJobsComponent', () => {
     component = fixture.componentInstance;
   });
 
+  it('stops loading jobs from auth updates after the view is destroyed', () => {
+    const authData = new BehaviorSubject({ userId: 7, workspaces: [] });
+    const appService = TestBed.inject(AppService) as unknown as { authData$: Observable<unknown> };
+    appService.authData$ = authData.asObservable();
+    const loadJobs = jest.spyOn(component, 'loadMyCodingJobs').mockImplementation(() => {});
+    fixture.detectChanges();
+    expect(loadJobs).toHaveBeenCalledTimes(1);
+    authData.next({ userId: 8, workspaces: [] });
+    expect(loadJobs).toHaveBeenCalledTimes(2);
+
+    fixture.destroy();
+    authData.next({ userId: 9, workspaces: [] });
+    expect(loadJobs).toHaveBeenCalledTimes(2);
+    expect(component.currentUserId()).toBe(8);
+  });
+
   it('renders completed coding jobs with start and submit-for-review actions', () => {
     fixture.detectChanges();
-    component.isAuthorized = true;
-    component.isLoading = false;
+    component.isAuthorized.set(true);
+    component.isLoading.set(false);
     component.dataSource.data = [completedJob];
-    component.jobsTotal = 1;
+    component.jobsTotal.set(1);
+    fixture.changeDetectorRef.markForCheck();
 
     fixture.detectChanges();
 
@@ -128,10 +145,11 @@ describe('MyCodingJobsComponent', () => {
         status
       };
       fixture.detectChanges();
-      component.isAuthorized = true;
-      component.isLoading = false;
+      component.isAuthorized.set(true);
+      component.isLoading.set(false);
       component.dataSource.data = [job];
-      component.jobsTotal = 1;
+      component.jobsTotal.set(1);
+      fixture.changeDetectorRef.markForCheck();
 
       fixture.detectChanges();
 
@@ -214,7 +232,7 @@ describe('MyCodingJobsComponent', () => {
       { id: 2, name: 'Workspace 2' }
     ]);
 
-    expect(component.serverPagingEnabled).toBe(false);
+    expect(component.serverPagingEnabled()).toBe(false);
     expect(codingJobBackendService.getCodingJobs).toHaveBeenCalledWith(
       1,
       undefined,
@@ -304,9 +322,9 @@ describe('MyCodingJobsComponent', () => {
 
     routeFixture.detectChanges();
 
-    expect(routeComponent.currentWorkspaces.map(workspace => workspace.id))
+    expect(routeComponent.currentWorkspaces().map(workspace => workspace.id))
       .toEqual([1, 2]);
-    expect(routeComponent.selectedWorkspaceIds).toEqual([2]);
+    expect(routeComponent.selectedWorkspaceIds()).toEqual([2]);
     expect(codingJobBackendService.getCodingJobs).toHaveBeenCalledTimes(1);
     expect(codingJobBackendService.getCodingJobs).toHaveBeenCalledWith(
       2,
@@ -380,7 +398,7 @@ describe('MyCodingJobsComponent', () => {
 
     topLevelFixture.detectChanges();
 
-    expect(topLevelComponent.selectedWorkspaceIds).toEqual([1, 2]);
+    expect(topLevelComponent.selectedWorkspaceIds()).toEqual([1, 2]);
     expect(codingJobBackendService.getCodingJobs).toHaveBeenCalledTimes(2);
     expect(codingJobBackendService.getCodingJobs).toHaveBeenCalledWith(
       1,
@@ -401,11 +419,11 @@ describe('MyCodingJobsComponent', () => {
   });
 
   it('keeps the select-all action out of the closed workspace selection text', () => {
-    component.currentWorkspaces = [
+    component.currentWorkspaces.set([
       { id: 1, name: 'Workspace 1' },
       { id: 2, name: 'Workspace 2' }
-    ];
-    component.selectedWorkspaceIds = [1, 2, -1];
+    ]);
+    component.selectedWorkspaceIds.set([1, 2, -1]);
 
     expect(component.getWorkspaceFilterTriggerText()).toBe(
       'coding.my-coding-jobs.all-workspaces-selected'
@@ -425,7 +443,7 @@ describe('MyCodingJobsComponent', () => {
         page: 1
       })
     );
-    component.isAuthorized = true;
+    component.isAuthorized.set(true);
     fixture.detectChanges();
 
     component.loadMyCodingJobs([
@@ -434,7 +452,7 @@ describe('MyCodingJobsComponent', () => {
     ]);
     fixture.detectChanges();
 
-    expect(component.serverPagingEnabled).toBe(false);
+    expect(component.serverPagingEnabled()).toBe(false);
     expect(component.dataSource.paginator).toBeTruthy();
     expect(fixture.nativeElement.querySelector('mat-paginator')).toBeTruthy();
   });
@@ -472,11 +490,11 @@ describe('MyCodingJobsComponent', () => {
     component.loadMyCodingJobs([{ id: 1, name: 'Workspace 1' }]);
 
     expect(component.dataSource.data).toEqual([activeJob, reviewJob]);
-    expect(component.totalProgress).toBe(50);
-    expect(component.totalCodedUnits).toBe(1);
-    expect(component.totalUnits).toBe(2);
-    expect(component.incompleteJobs).toBe(1);
-    expect(component.completedJobs).toBe(1);
+    expect(component.totalProgress()).toBe(50);
+    expect(component.totalCodedUnits()).toBe(1);
+    expect(component.totalUnits()).toBe(2);
+    expect(component.incompleteJobs()).toBe(1);
+    expect(component.completedJobs()).toBe(1);
   });
 
   it('keeps all workspaces deselected without reloading jobs', () => {
@@ -497,9 +515,9 @@ describe('MyCodingJobsComponent', () => {
 
     component.toggleAllWorkspaces();
 
-    expect(component.selectedWorkspaceIds).toEqual([]);
+    expect(component.selectedWorkspaceIds()).toEqual([]);
     expect(component.dataSource.data).toEqual([]);
-    expect(component.jobsTotal).toBe(0);
+    expect(component.jobsTotal()).toBe(0);
     expect(codingJobBackendService.getCodingJobs).not.toHaveBeenCalled();
   });
 
@@ -537,11 +555,11 @@ describe('MyCodingJobsComponent', () => {
       workspaces: []
     });
 
-    expect(component.currentWorkspaces).toEqual([]);
+    expect(component.currentWorkspaces()).toEqual([]);
     expect(component.dataSource.data).toEqual([]);
-    expect(component.originalData).toEqual([]);
-    expect(component.selectedWorkspaceIds).toEqual([]);
-    expect(component.jobsTotal).toBe(0);
+    expect(component.originalData()).toEqual([]);
+    expect(component.selectedWorkspaceIds()).toEqual([]);
+    expect(component.jobsTotal()).toBe(0);
   });
 
   it('ignores stale coding job loads after a newer workspace request starts', () => {
@@ -599,25 +617,25 @@ describe('MyCodingJobsComponent', () => {
       throwError(() => new Error('load failed'))
     );
     component.dataSource.data = [completedJob];
-    component.originalData = [completedJob];
-    component.selectedWorkspaceIds = [1];
-    component.totalProgress = 100;
-    component.totalCodedUnits = 3;
-    component.totalUnits = 3;
-    component.incompleteJobs = 1;
-    component.completedJobs = 1;
+    component.originalData.set([completedJob]);
+    component.selectedWorkspaceIds.set([1]);
+    component.totalProgress.set(100);
+    component.totalCodedUnits.set(3);
+    component.totalUnits.set(3);
+    component.incompleteJobs.set(1);
+    component.completedJobs.set(1);
 
     component.loadMyCodingJobs([{ id: 5, name: 'Target workspace' }]);
 
     expect(component.dataSource.data).toEqual([]);
-    expect(component.originalData).toEqual([]);
-    expect(component.selectedWorkspaceIds).toEqual([]);
-    expect(component.totalProgress).toBe(0);
-    expect(component.totalCodedUnits).toBe(0);
-    expect(component.totalUnits).toBe(0);
-    expect(component.incompleteJobs).toBe(0);
-    expect(component.completedJobs).toBe(0);
-    expect(component.isLoading).toBe(false);
+    expect(component.originalData()).toEqual([]);
+    expect(component.selectedWorkspaceIds()).toEqual([]);
+    expect(component.totalProgress()).toBe(0);
+    expect(component.totalCodedUnits()).toBe(0);
+    expect(component.totalUnits()).toBe(0);
+    expect(component.incompleteJobs()).toBe(0);
+    expect(component.completedJobs()).toBe(0);
+    expect(component.isLoading()).toBe(false);
   });
 
   it('opens backend-generated replay URLs on the current frontend origin', () => {
@@ -640,5 +658,31 @@ describe('MyCodingJobsComponent', () => {
       'http://localhost/#/replay/person/unit/0/var?mode=coding&codingJobId=10&workspaceId=1',
       '_blank'
     );
+  });
+  it('renders the empty state after delayed authorization without workspaces', async () => {
+    const auth = new Subject<{ userId: number; workspaces: [] }>();
+    const appService = TestBed.inject(AppService) as unknown as { authData$: Observable<unknown> };
+    appService.authData$ = auth;
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    auth.next({ userId: 7, workspaces: [] });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('coding.my-coding-jobs.no-jobs-assigned');
+    expect(fixture.nativeElement.querySelector('.filter-row')).not.toBeNull();
+  });
+
+  it('ends the loading view after a delayed job-list error', async () => {
+    const response = new Subject<{ data: CodingJob[]; total: number; page: number; limit: number }>();
+    jest.spyOn(TestBed.inject(CodingJobBackendService), 'getCodingJobs').mockReturnValue(response);
+    const appService = TestBed.inject(AppService) as unknown as { authData$: Observable<unknown> };
+    appService.authData$ = of({ userId: 7, workspaces: [{ id: 1, name: 'Workspace' }] });
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.loading-container')).not.toBeNull();
+    response.error(new Error('failed'));
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.loading-container')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.filter-row')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('coding.my-coding-jobs.no-jobs-assigned');
   });
 });

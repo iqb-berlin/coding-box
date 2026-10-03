@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy
+  Component, Inject, OnInit, OnDestroy, signal
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -199,8 +199,11 @@ type VariableAnalysisExportFormat = 'csv' | 'xlsx';
   ]
 })
 export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
-  isLoading = false;
-  variableFrequencies: { [key: string]: VariableFrequency[] } = {};
+  readonly isLoading = signal(false);
+  readonly variableFrequencies = signal<{
+    [key: string]: VariableFrequency[];
+  }>({});
+
   displayedColumns: string[] = [
     'unitName',
     'variableId',
@@ -218,26 +221,26 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     'metric'
   ];
 
-  analysisRows: VariableAnalysisTableRowDto[] = [];
+  readonly analysisRows = signal<VariableAnalysisTableRowDto[]>([]);
 
   private serverAnalysisRows: VariableAnalysisTableRowDto[] = [];
 
-  allVariableCombos: VariableCombo[] = [];
+  readonly allVariableCombos = signal<VariableCombo[]>([]);
 
-  variableCombos: VariableCombo[] = [];
+  readonly variableCombos = signal<VariableCombo[]>([]);
 
-  searchText = '';
-  onlyWithEmptyValues = false;
-  includeSchemaCodes = false;
-  isInfoVisible = false;
+  readonly searchText = signal('');
+  readonly onlyWithEmptyValues = signal(false);
+  readonly includeSchemaCodes = signal(false);
+  readonly isInfoVisible = signal(false);
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | undefined;
-  currentPage = 0;
-  pageSize = 50;
+  readonly currentPage = signal(0);
+  readonly pageSize = signal(50);
   pageSizeOptions = [25, 50, 100, 200];
-  totalFilteredVariables = 0;
-  sortBy: VariableAnalysisSortBy = 'unitName';
-  sortDirection: VariableAnalysisSortDirection = 'asc';
+  readonly totalFilteredVariables = signal(0);
+  readonly sortBy = signal<VariableAnalysisSortBy>('unitName');
+  readonly sortDirection = signal<VariableAnalysisSortDirection>('asc');
   private currentAnalysisJobId: number | string | undefined;
   private isUsingServerSideResults = false;
   private latestResultsRequestId = 0;
@@ -245,8 +248,8 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   readonly MAX_VALUES_PER_VARIABLE = 20;
 
-  isJobsLoading = false;
-  jobs: VariableAnalysisJobDto[] = [];
+  readonly isJobsLoading = signal(false);
+  readonly jobs = signal<VariableAnalysisJobDto[]>([]);
   jobsDisplayedColumns: string[] = [
     'id',
     'status',
@@ -256,7 +259,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     'actions'
   ];
 
-  activeJob: VariableAnalysisJobDto | undefined;
+  readonly activeJob = signal<VariableAnalysisJobDto | undefined>(undefined);
   private refreshSubscription: Subscription | undefined;
   private hasLoadedJobsSuccessfully = false;
   private responseAnalysisGuardActive = false;
@@ -267,10 +270,10 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     'processing'
   ] as const;
 
-  isStartingJob = false;
+  readonly isStartingJob = signal(false);
   private hasAutoStarted = false;
-  isInitializing = false;
-  isExporting = false;
+  readonly isInitializing = signal(false);
+  readonly isExporting = signal(false);
 
   constructor(
     public dialogRef: MatDialogRef<VariableAnalysisDialogComponent>,
@@ -285,8 +288,8 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     this.searchSubscription = this.searchSubject
       .pipe(debounceTime(300), distinctUntilChanged())
       .subscribe(searchText => {
-        this.searchText = searchText;
-        this.currentPage = 0;
+        this.searchText.set(searchText);
+        this.currentPage.set(0);
         if (this.currentAnalysisJobId && this.isUsingServerSideResults) {
           this.loadAnalysisResultsPage(this.currentAnalysisJobId);
           return;
@@ -297,7 +300,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     this.analyzeVariables();
 
     if (this.data.jobs) {
-      this.isInitializing = false;
+      this.isInitializing.set(false);
       this.applyJobs(this.data.jobs, true);
     } else {
       this.initialize();
@@ -305,24 +308,24 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   }
 
   private initialize(): void {
-    this.isInitializing = true;
-    this.isJobsLoading = true;
+    this.isInitializing.set(true);
+    this.isJobsLoading.set(true);
 
     this.variableAnalysisService.getAllJobs(this.data.workspaceId).subscribe({
       next: (jobs: VariableAnalysisJobDto[]) => {
-        this.isJobsLoading = false;
-        this.isInitializing = false;
+        this.isJobsLoading.set(false);
+        this.isInitializing.set(false);
         this.applyJobs(jobs, true);
       },
       error: () => {
-        this.isJobsLoading = false;
-        this.isInitializing = false;
+        this.isJobsLoading.set(false);
+        this.isInitializing.set(false);
       }
     });
   }
 
   private startPolling(): void {
-    if (this.refreshSubscription || (!this.activeJob && !this.isStartingJob)) {
+    if (this.refreshSubscription || (!this.activeJob() && !this.isStartingJob())) {
       return;
     }
 
@@ -339,9 +342,9 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   private updatePollingState(): void {
     this.setResponseAnalysisGuardActive(
-      Boolean(this.activeJob || this.isStartingJob)
+      Boolean(this.activeJob() || this.isStartingJob())
     );
-    if (this.activeJob || this.isStartingJob) {
+    if (this.activeJob() || this.isStartingJob()) {
       this.startPolling();
       return;
     }
@@ -358,19 +361,19 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     autoStartIfEmpty = false
   ): void {
     this.hasLoadedJobsSuccessfully = true;
-    const previousActiveJob = this.activeJob;
-    this.jobs = jobs.filter(job => job.type === 'variable-analysis');
-    this.activeJob = this.jobs.find(job => this.isActiveJob(job));
+    const previousActiveJob = this.activeJob();
+    this.jobs.set(jobs.filter(job => job.type === 'variable-analysis'));
+    this.activeJob.set(this.jobs().find(job => this.isActiveJob(job)));
 
-    if (previousActiveJob && !this.activeJob) {
-      const justCompletedJob = this.jobs.find(
+    if (previousActiveJob && !this.activeJob()) {
+      const justCompletedJob = this.jobs().find(
         job => job.id === previousActiveJob.id && job.status === 'completed'
       );
       if (justCompletedJob) {
         this.viewJobResults(justCompletedJob.id);
       }
     } else if (this.shouldLoadAnalysisResult()) {
-      const latestCompletedJob = this.jobs.find(
+      const latestCompletedJob = this.jobs().find(
         job => job.status === 'completed'
       );
       if (latestCompletedJob) {
@@ -380,9 +383,9 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
     if (
       autoStartIfEmpty &&
-      this.jobs.length === 0 &&
-      !this.isLoading &&
-      !this.isStartingJob &&
+      this.jobs().length === 0 &&
+      !this.isLoading() &&
+      !this.isStartingJob() &&
       !this.hasAutoStarted
     ) {
       this.startNewAnalysis();
@@ -401,8 +404,8 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   }
 
   analyzeVariables(): void {
-    this.isLoading = true;
-    this.variableFrequencies = {};
+    this.isLoading.set(true);
+    this.variableFrequencies.set({});
     this.serverAnalysisRows = [];
 
     if (this.data.analysisResults) {
@@ -411,8 +414,9 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           const firstFreq = this.data.analysisResults!.frequencies[comboKey][0];
           if (firstFreq) {
             const newComboKey = `${firstFreq.unitId ?? 0}:${firstFreq.variableId}`;
-            this.variableFrequencies[newComboKey] =
-              this.data.analysisResults!.frequencies[comboKey].map(freq => ({
+            this.variableFrequencies.update(value => ({
+              ...value,
+              [newComboKey]: this.data.analysisResults!.frequencies[comboKey].map(freq => ({
                 unitName: freq.unitName,
                 variableid: freq.variableId,
                 value: freq.value,
@@ -429,20 +433,19 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
                 pointBiserial: freq.pointBiserial,
                 codePbc: freq.codePbc,
                 categoryPbc: freq.categoryPbc
-              }));
+              }))
+            }));
           }
         }
       );
-      this.allVariableCombos = this.data.analysisResults!.variableCombos.map(
-        combo => this.withDerivedSummary(combo)
-      );
+      this.allVariableCombos.set(this.data.analysisResults!.variableCombos.map(combo => this.withDerivedSummary(combo)));
       this.serverAnalysisRows = this.data.analysisResults!.rows ||
-        this.createRowsFromCombos(this.allVariableCombos);
-      this.totalFilteredVariables = this.isUsingServerSideResults ?
+        this.createRowsFromCombos(this.allVariableCombos());
+      this.totalFilteredVariables.set(this.isUsingServerSideResults ?
         this.data.analysisResults!.pageableRowTotal ??
-          this.data.analysisResults!.rowTotal ??
-          this.serverAnalysisRows.length :
-        this.allVariableCombos.length;
+        this.data.analysisResults!.rowTotal ??
+        this.serverAnalysisRows.length :
+        this.allVariableCombos().length);
     } else if (this.data.responses && this.data.responses.length > 0) {
       const responsesByVariable: { [key: string]: { [key: string]: number } } =
         {};
@@ -451,7 +454,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       const variableIds = Array.from(
         new Set(this.data.responses.map(r => r.variableid))
       );
-      this.allVariableCombos = variableIds.map(variableId => ({
+      this.allVariableCombos.set(variableIds.map(variableId => ({
         unitId: 0,
         unitName: 'Unknown',
         variableId,
@@ -460,7 +463,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         emptyPercentage: 0,
         distinctValueCount: 0,
         statusCounts: []
-      }));
+      })));
 
       this.data.responses.forEach(response => {
         if (!responsesByVariable[response.variableid]) {
@@ -515,43 +518,44 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         const comboKey = `0:${variableid}`;
         const emptyResponses = valueMap[''] || 0;
         const validResponses = Math.max(0, totalResponses - emptyResponses);
-        this.variableFrequencies[comboKey] = Object.keys(valueMap)
-          .map(value => {
-            const count = valueMap[value];
-            const validOccurrenceCount = value === '' ? 0 : count;
-            const percentageTotal = (count / totalResponses) * 100;
-            return {
-              unitName: 'Unknown',
-              variableid,
-              value,
-              count,
-              validOccurrenceCount,
-              percentage: percentageTotal,
-              percentageTotal,
-              percentageValid: validResponses > 0 ?
-                (validOccurrenceCount / validResponses) * 100 :
-                null
-            };
-          })
-          .sort((a, b) => b.count - a.count)
-          .slice(0, this.MAX_VALUES_PER_VARIABLE);
+        this.variableFrequencies.update(current => ({
+          ...current,
+          [comboKey]: Object.keys(valueMap)
+            .map(value => {
+              const count = valueMap[value];
+              const validOccurrenceCount = value === '' ? 0 : count;
+              const percentageTotal = (count / totalResponses) * 100;
+              return {
+                unitName: 'Unknown',
+                variableid,
+                value,
+                count,
+                validOccurrenceCount,
+                percentage: percentageTotal,
+                percentageTotal,
+                percentageValid: validResponses > 0 ?
+                  (validOccurrenceCount / validResponses) * 100 :
+                  null
+              };
+            })
+            .sort((a, b) => b.count - a.count)
+            .slice(0, this.MAX_VALUES_PER_VARIABLE)
+        }));
       });
-      this.allVariableCombos = this.allVariableCombos.map(combo => {
+      this.allVariableCombos.set(this.allVariableCombos().map(combo => {
         const comboKey = this.getComboKey(combo);
         const summary = comboSummaries.get(comboKey) || combo;
         const totalCount = summary.totalCount || 0;
         const emptyCount = summary.emptyCount || 0;
         const validCount = summary.validCount ??
-          Math.max(0, totalCount - emptyCount);
+        Math.max(0, totalCount - emptyCount);
         return {
           ...summary,
           validCount,
           invalidCount: summary.invalidCount ??
             Math.max(0, totalCount - validCount),
           emptyPercentage: totalCount > 0 ? (emptyCount / totalCount) * 100 : 0,
-          distinctValueCount: Object.keys(
-            responsesByVariable[combo.variableId] || {}
-          ).length,
+          distinctValueCount: Object.keys(responsesByVariable[combo.variableId] || {}).length,
           statusCounts: (summary.statusCounts || [])
             .map(item => ({
               ...item,
@@ -559,23 +563,27 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
             }))
             .sort((a, b) => b.count - a.count)
         };
-      });
-      this.totalFilteredVariables = this.allVariableCombos.length;
+      }));
+      this.totalFilteredVariables.set(this.allVariableCombos().length);
     } else {
-      this.allVariableCombos = [];
-      this.analysisRows = [];
-      this.totalFilteredVariables = 0;
+      this.allVariableCombos.set([]);
+      this.analysisRows.set([]);
+      this.totalFilteredVariables.set(0);
     }
-    this.allVariableCombos.sort((a, b) => {
-      if (a.unitName !== b.unitName) {
-        return a.unitName.localeCompare(b.unitName);
-      }
-      return a.variableId.localeCompare(b.variableId);
+    this.allVariableCombos.update(value => {
+      const next = [...value];
+      next.sort((a, b) => {
+        if (a.unitName !== b.unitName) {
+          return a.unitName.localeCompare(b.unitName);
+        }
+        return a.variableId.localeCompare(b.variableId);
+      });
+      return next;
     });
 
     this.filterVariables();
 
-    this.isLoading = false;
+    this.isLoading.set(false);
   }
 
   getComboKey(combo: { unitId: number; variableId: string }): string {
@@ -583,7 +591,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   }
 
   private withDerivedSummary(combo: VariableCombo): VariableCombo {
-    const frequencies = this.variableFrequencies[this.getComboKey(combo)] || [];
+    const frequencies = this.variableFrequencies()[this.getComboKey(combo)] || [];
     const totalCount =
       combo.totalCount ??
       frequencies.reduce((sum, item) => sum + item.count, 0);
@@ -610,7 +618,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   }
 
   getComboSummary(combo: VariableCombo): VariableComboSummary {
-    const frequencies = this.variableFrequencies[this.getComboKey(combo)] || [];
+    const frequencies = this.variableFrequencies()[this.getComboKey(combo)] || [];
     const totalCount =
       combo.totalCount ??
       frequencies.reduce((sum, item) => sum + item.count, 0);
@@ -664,7 +672,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   }
 
   getHiddenValueCount(combo: VariableCombo): number {
-    const frequencies = this.variableFrequencies[this.getComboKey(combo)] || [];
+    const frequencies = this.variableFrequencies()[this.getComboKey(combo)] || [];
     const distinctValueCount = combo.distinctValueCount ?? frequencies.length;
     const displayedObservedValueCount = frequencies.filter(
       item => !item.isSchemaOnly
@@ -673,17 +681,17 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   }
 
   private getFilteredCombos(): VariableCombo[] {
-    const normalizedSearchText = this.searchText.toLowerCase();
-    let filteredCombos = this.allVariableCombos;
+    const normalizedSearchText = this.searchText().toLowerCase();
+    let filteredCombos = this.allVariableCombos();
 
     if (normalizedSearchText) {
-      filteredCombos = this.allVariableCombos.filter(
+      filteredCombos = this.allVariableCombos().filter(
         combo => combo.unitName.toLowerCase().includes(normalizedSearchText) ||
           combo.variableId.toLowerCase().includes(normalizedSearchText)
       );
     }
 
-    if (this.onlyWithEmptyValues) {
+    if (this.onlyWithEmptyValues()) {
       filteredCombos = filteredCombos.filter(
         combo => this.getComboSummary(combo).emptyCount > 0
       );
@@ -694,16 +702,16 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   filterVariables(): void {
     if (this.isUsingServerSideResults) {
-      this.variableCombos = this.allVariableCombos;
-      this.analysisRows = this.serverAnalysisRows;
+      this.variableCombos.set(this.allVariableCombos());
+      this.analysisRows.set(this.serverAnalysisRows);
       return;
     }
 
     const filteredRows = this.getFilteredRows();
-    const startIndex = this.currentPage * this.pageSize;
-    const endIndex = startIndex + this.pageSize;
-    this.analysisRows = filteredRows.slice(startIndex, endIndex);
-    this.variableCombos = this.getCombosForRows(this.analysisRows);
+    const startIndex = this.currentPage() * this.pageSize();
+    const endIndex = startIndex + this.pageSize();
+    this.analysisRows.set(filteredRows.slice(startIndex, endIndex));
+    this.variableCombos.set(this.getCombosForRows(this.analysisRows()));
   }
 
   onSearchChange(event: Event): void {
@@ -712,8 +720,8 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   }
 
   clearSearch(): void {
-    this.searchText = '';
-    this.currentPage = 0;
+    this.searchText.set('');
+    this.currentPage.set(0);
     if (this.currentAnalysisJobId && this.isUsingServerSideResults) {
       this.loadAnalysisResultsPage(this.currentAnalysisJobId);
       return;
@@ -722,7 +730,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   }
 
   onEmptyValuesFilterChange(): void {
-    this.currentPage = 0;
+    this.currentPage.set(0);
     if (this.currentAnalysisJobId && this.isUsingServerSideResults) {
       this.loadAnalysisResultsPage(this.currentAnalysisJobId);
       return;
@@ -731,7 +739,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   }
 
   onSchemaCodesToggleChange(): void {
-    this.currentPage = 0;
+    this.currentPage.set(0);
     if (this.currentAnalysisJobId && this.isUsingServerSideResults) {
       this.loadAnalysisResultsPage(this.currentAnalysisJobId);
       return;
@@ -740,8 +748,8 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   }
 
   onPageChange(event: PageEvent): void {
-    this.currentPage = event.pageIndex;
-    this.pageSize = event.pageSize;
+    this.currentPage.set(event.pageIndex);
+    this.pageSize.set(event.pageSize);
     if (this.currentAnalysisJobId && this.isUsingServerSideResults) {
       this.loadAnalysisResultsPage(this.currentAnalysisJobId);
       return;
@@ -750,11 +758,11 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   }
 
   onSortChange(sort: Sort): void {
-    this.sortBy = this.isSupportedSortBy(sort.active) ?
+    this.sortBy.set(this.isSupportedSortBy(sort.active) ?
       sort.active :
-      'unitName';
-    this.sortDirection = sort.direction === 'desc' ? 'desc' : 'asc';
-    this.currentPage = 0;
+      'unitName');
+    this.sortDirection.set(sort.direction === 'desc' ? 'desc' : 'asc');
+    this.currentPage.set(0);
 
     if (this.currentAnalysisJobId && this.isUsingServerSideResults) {
       this.loadAnalysisResultsPage(this.currentAnalysisJobId);
@@ -766,7 +774,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   getTotalFilteredVariables(): number {
     if (this.isUsingServerSideResults) {
-      return this.totalFilteredVariables;
+      return this.totalFilteredVariables();
     }
     return this.getFilteredRows().length;
   }
@@ -822,8 +830,8 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   shouldShowStartAnalysisButton(): boolean {
     return (
       !this.hasLoadedAnalysisContext() &&
-      !this.activeJob &&
-      !this.isStartingJob
+      !this.activeJob() &&
+      !this.isStartingJob()
     );
   }
 
@@ -831,7 +839,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     return Boolean(
       this.currentAnalysisJobId ||
         this.data.analysisResults ||
-        this.allVariableCombos.length > 0
+        this.allVariableCombos().length > 0
     );
   }
 
@@ -840,12 +848,12 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   }
 
   refreshJobs(showError = true): void {
-    if (this.isStartingJob || this.isInitializing) return;
-    this.isJobsLoading = showError;
+    if (this.isStartingJob() || this.isInitializing()) return;
+    this.isJobsLoading.set(showError);
 
     this.variableAnalysisService.getAllJobs(this.data.workspaceId).subscribe({
       next: (jobs: VariableAnalysisJobDto[]) => {
-        this.isJobsLoading = false;
+        this.isJobsLoading.set(false);
         this.applyJobs(jobs);
       },
       error: () => {
@@ -856,17 +864,17 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
             { duration: 3000 }
           );
         }
-        this.isJobsLoading = false;
+        this.isJobsLoading.set(false);
       }
     });
   }
 
   startNewAnalysis(): void {
-    if (this.isStartingJob || this.activeJob) return;
-    this.isStartingJob = true;
+    if (this.isStartingJob() || this.activeJob()) return;
+    this.isStartingJob.set(true);
     this.setResponseAnalysisGuardActive(true);
     this.hasAutoStarted = true;
-    this.isJobsLoading = true;
+    this.isJobsLoading.set(true);
     const loadingSnackBar = this.snackBar.open(
       this.translate.instant('variable-analysis.starting-analysis'),
       '',
@@ -880,9 +888,9 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: (job: VariableAnalysisJobDto) => {
-          this.isStartingJob = false;
+          this.isStartingJob.set(false);
           this.applyStartedJob(job);
-          this.isJobsLoading = false; // Reset loading flag here too
+          this.isJobsLoading.set(false); // Reset loading flag here too
           loadingSnackBar.dismiss();
           this.snackBar.open(
             this.translate.instant('variable-analysis.analysis-started', {
@@ -894,8 +902,8 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           this.refreshJobs();
         },
         error: error => {
-          this.isStartingJob = false;
-          this.setResponseAnalysisGuardActive(Boolean(this.activeJob));
+          this.isStartingJob.set(false);
+          this.setResponseAnalysisGuardActive(Boolean(this.activeJob()));
           loadingSnackBar.dismiss();
           const errorMessage = error?.error?.message || error?.message || '';
           this.snackBar.open(
@@ -903,7 +911,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
             this.translate.instant('error'),
             { duration: 5000 }
           );
-          this.isJobsLoading = false;
+          this.isJobsLoading.set(false);
           this.updatePollingState();
         }
       });
@@ -911,17 +919,17 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   private applyStartedJob(job: VariableAnalysisJobDto): void {
     if (job.type === 'variable-analysis') {
-      this.jobs = [
+      this.jobs.set([
         job,
-        ...this.jobs.filter(existingJob => existingJob.id !== job.id)
-      ];
+        ...this.jobs().filter(existingJob => existingJob.id !== job.id)
+      ]);
     }
-    this.activeJob = this.isActiveJob(job) ? job : undefined;
+    this.activeJob.set(this.isActiveJob(job) ? job : undefined);
     this.updatePollingState();
   }
 
   cancelJob(jobId: number | string): void {
-    this.isJobsLoading = true;
+    this.isJobsLoading.set(true);
     this.variableAnalysisService
       .cancelJob(this.data.workspaceId, jobId)
       .subscribe({
@@ -946,7 +954,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
               this.translate.instant('error'),
               { duration: 3000 }
             );
-            this.isJobsLoading = false;
+            this.isJobsLoading.set(false);
           }
         },
         error: error => {
@@ -956,7 +964,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
             this.translate.instant('error'),
             { duration: 5000 }
           );
-          this.isJobsLoading = false;
+          this.isJobsLoading.set(false);
         }
       });
   }
@@ -981,7 +989,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         return;
       }
 
-      this.isJobsLoading = true;
+      this.isJobsLoading.set(true);
       this.variableAnalysisService
         .deleteJob(this.data.workspaceId, jobId)
         .subscribe({
@@ -1006,7 +1014,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
                 this.translate.instant('error'),
                 { duration: 3000 }
               );
-              this.isJobsLoading = false;
+              this.isJobsLoading.set(false);
             }
           },
           error: error => {
@@ -1016,7 +1024,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
               this.translate.instant('error'),
               { duration: 5000 }
             );
-            this.isJobsLoading = false;
+            this.isJobsLoading.set(false);
           }
         });
     });
@@ -1038,7 +1046,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        this.isJobsLoading = true;
+        this.isJobsLoading.set(true);
         this.variableAnalysisService
           .deleteAllJobs(this.data.workspaceId)
           .subscribe({
@@ -1048,15 +1056,15 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
                 'OK',
                 { duration: 3000 }
               );
-              this.jobs = [];
-              this.activeJob = undefined;
+              this.jobs.set([]);
+              this.activeJob.set(undefined);
               this.clearCurrentAnalysisResults();
-              this.isJobsLoading = false;
+              this.isJobsLoading.set(false);
               this.updatePollingState();
               this.refreshJobs();
             },
             error: error => {
-              this.isJobsLoading = false;
+              this.isJobsLoading.set(false);
               const errorMessage =
                 error?.error?.message || error?.message || '';
               this.snackBar.open(
@@ -1072,7 +1080,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   viewJobResults(jobId: number | string): void {
     this.currentAnalysisJobId = jobId;
-    this.currentPage = 0;
+    this.currentPage.set(0);
     this.isUsingServerSideResults = true;
     this.loadAnalysisResultsPage(jobId, true);
   }
@@ -1081,22 +1089,22 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     return Boolean(
       this.currentAnalysisJobId &&
         this.isUsingServerSideResults &&
-        !this.isLoading &&
-        !this.isExporting
+        !this.isLoading() &&
+        !this.isExporting()
     );
   }
 
   downloadAnalysisResults(format: VariableAnalysisExportFormat): void {
     const jobId = this.currentAnalysisJobId;
-    if (!jobId || this.isExporting) {
+    if (!jobId || this.isExporting()) {
       return;
     }
 
-    this.isExporting = true;
+    this.isExporting.set(true);
     const options = {
-      search: this.searchText.trim() || undefined,
-      onlyEmpty: this.onlyWithEmptyValues,
-      includeSchemaCodes: this.includeSchemaCodes
+      search: this.searchText().trim() || undefined,
+      onlyEmpty: this.onlyWithEmptyValues(),
+      includeSchemaCodes: this.includeSchemaCodes()
     };
     const request = format === 'csv' ?
       this.variableAnalysisService.exportAnalysisResultsAsCsv(
@@ -1113,7 +1121,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     request.subscribe({
       next: blob => {
         this.saveBlob(blob, this.createExportFileName(format));
-        this.isExporting = false;
+        this.isExporting.set(false);
         this.snackBar.open(
           this.translate.instant('variable-analysis.export-success'),
           'OK',
@@ -1121,7 +1129,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         );
       },
       error: error => {
-        this.isExporting = false;
+        this.isExporting.set(false);
         const errorMessage = error?.error?.message || error?.message || '';
         this.snackBar.open(
           `${this.translate.instant('variable-analysis.export-error')}${errorMessage ? `: ${errorMessage}` : ''}`,
@@ -1154,7 +1162,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   ): void {
     this.latestResultsRequestId += 1;
     const requestId = this.latestResultsRequestId;
-    this.isLoading = true;
+    this.isLoading.set(true);
     this.dismissTrackedResultsLoadingSnackBar();
     const loadingSnackBar = showLoadingMessage ?
       this.snackBar.open(
@@ -1167,13 +1175,13 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
     this.variableAnalysisService
       .getAnalysisResultsPage(this.data.workspaceId, jobId, {
-        page: this.currentPage + 1,
-        pageSize: this.pageSize,
-        search: this.searchText,
-        onlyEmpty: this.onlyWithEmptyValues,
-        includeSchemaCodes: this.includeSchemaCodes,
-        sortBy: this.sortBy,
-        sortDirection: this.sortDirection
+        page: this.currentPage() + 1,
+        pageSize: this.pageSize(),
+        search: this.searchText(),
+        onlyEmpty: this.onlyWithEmptyValues(),
+        includeSchemaCodes: this.includeSchemaCodes(),
+        sortBy: this.sortBy(),
+        sortDirection: this.sortDirection()
       })
       .subscribe({
         next: (results: VariableAnalysisResultPageDto) => {
@@ -1183,11 +1191,11 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           }
 
           this.dismissResultsLoadingSnackBar(loadingSnackBar);
-          this.isLoading = false;
+          this.isLoading.set(false);
           this.data.analysisResults = results;
-          this.totalFilteredVariables = results.total;
-          this.pageSize = results.pageSize;
-          this.currentPage = Math.max(0, results.page - 1);
+          this.totalFilteredVariables.set(results.total);
+          this.pageSize.set(results.pageSize);
+          this.currentPage.set(Math.max(0, results.page - 1));
           this.analyzeVariables();
         },
         error: () => {
@@ -1197,7 +1205,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           }
 
           this.dismissResultsLoadingSnackBar(loadingSnackBar);
-          this.isLoading = false;
+          this.isLoading.set(false);
           this.snackBar.open(
             this.translate.instant('variable-analysis.error-loading-results'),
             this.translate.instant('error'),
@@ -1209,18 +1217,18 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   private clearCurrentAnalysisResults(): void {
     this.latestResultsRequestId += 1;
-    this.isLoading = false;
+    this.isLoading.set(false);
     this.dismissTrackedResultsLoadingSnackBar();
     this.currentAnalysisJobId = undefined;
     this.isUsingServerSideResults = false;
     this.data.analysisResults = undefined;
-    this.variableFrequencies = {};
-    this.allVariableCombos = [];
-    this.variableCombos = [];
-    this.analysisRows = [];
+    this.variableFrequencies.set({});
+    this.allVariableCombos.set([]);
+    this.variableCombos.set([]);
+    this.analysisRows.set([]);
     this.serverAnalysisRows = [];
-    this.totalFilteredVariables = 0;
-    this.currentPage = 0;
+    this.totalFilteredVariables.set(0);
+    this.currentPage.set(0);
   }
 
   private dismissTrackedResultsLoadingSnackBar(): void {
@@ -1252,7 +1260,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopPolling();
-    if (this.activeJob || this.isStartingJob) {
+    if (this.activeJob() || this.isStartingJob()) {
       this.variableAnalysisService.trackVariableAnalysisGuardUntilComplete(
         this.data.workspaceId
       );
@@ -1279,7 +1287,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   ): VariableAnalysisTableRowDto[] {
     return combos.flatMap(combo => {
       const comboKey = this.getComboKey(combo);
-      const frequencies = this.variableFrequencies[comboKey] || [];
+      const frequencies = this.variableFrequencies()[comboKey] || [];
       const summary = this.getComboSummary(combo);
       const distinctValueCount = combo.distinctValueCount ?? frequencies.length;
       const displayedObservedValueCount = frequencies.filter(
@@ -1367,8 +1375,8 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     b: VariableAnalysisTableRowDto
   ): number {
     return this.compareSortValues(
-      this.getSortValue(a, this.sortBy),
-      this.getSortValue(b, this.sortBy)
+      this.getSortValue(a, this.sortBy()),
+      this.getSortValue(b, this.sortBy())
     ) ||
       this.compareValues(a.unitName, b.unitName) ||
       this.compareValues(a.unitId, b.unitId) ||
@@ -1400,7 +1408,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     }
 
     const result = this.compareDefinedValues(a, b);
-    return this.sortDirection === 'desc' ? -result : result;
+    return this.sortDirection() === 'desc' ? -result : result;
   }
 
   private compareValues(
@@ -1436,7 +1444,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     rows: VariableAnalysisTableRowDto[]
   ): VariableCombo[] {
     const comboByKey = new Map(
-      this.allVariableCombos.map(combo => [this.getComboKey(combo), combo])
+      this.allVariableCombos().map(combo => [this.getComboKey(combo), combo])
     );
     const seenKeys = new Set<string>();
     const combos: VariableCombo[] = [];

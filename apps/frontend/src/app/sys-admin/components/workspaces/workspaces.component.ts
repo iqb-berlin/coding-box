@@ -1,4 +1,6 @@
-import { Component, ViewChild, inject } from '@angular/core';
+import {
+  Component, ViewChild, inject, signal
+} from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSort } from '@angular/material/sort';
@@ -37,11 +39,11 @@ export class WorkspacesComponent {
 
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
   tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
-  selectedWorkspaceId = 0;
-  selectedWorkspaces: number[] = [];
-  workspacesChanged: boolean = false;
-  isDeleting: boolean = false;
-  deleteStatus: string = '';
+  readonly initialSelectedWorkspaceIds: number[] = [];
+  readonly selectedWorkspaces = signal<number[]>([]);
+  readonly workspacesChanged = signal<boolean>(false);
+  readonly isDeleting = signal<boolean>(false);
+  readonly deleteStatus = signal<string>('');
 
   @ViewChild(MatSort) sort = new MatSort();
 
@@ -56,7 +58,7 @@ export class WorkspacesComponent {
       mutationResult => {
         if (mutationResult.mutationSucceeded) {
           this.showMutationSuccess('admin.workspace-created', mutationResult);
-          this.workspacesChanged = true;
+          this.workspacesChanged.set(true);
         } else {
           this.snackBar.open(
             this.translateService.instant('admin.workspace-not-created'),
@@ -79,7 +81,7 @@ export class WorkspacesComponent {
         result => {
           if (result.mutationSucceeded) {
             this.showMutationSuccess('admin.workspace-edited', result);
-            this.workspacesChanged = true;
+            this.workspacesChanged.set(true);
           } else {
             this.snackBar.open(
               this.translateService.instant('admin.workspace-not-edited'),
@@ -92,7 +94,8 @@ export class WorkspacesComponent {
   }
 
   deleteWorkspace(workspace_ids: number[]): void {
-    this.isDeleting = true;
+    this.isDeleting.set(true);
+
     const deleteSteps = [
       'admin.deleting-workspace-starting',
       'admin.deleting-workspace-files',
@@ -103,7 +106,8 @@ export class WorkspacesComponent {
     let stepIndex = 0;
     const interval = setInterval(() => {
       if (stepIndex < deleteSteps.length) {
-        this.deleteStatus = this.translateService.instant(deleteSteps[stepIndex]);
+        this.deleteStatus.set(this.translateService.instant(deleteSteps[stepIndex]));
+
         // eslint-disable-next-line no-plusplus
         stepIndex++;
       } else {
@@ -119,35 +123,36 @@ export class WorkspacesComponent {
         result => {
           clearInterval(interval);
           if (result.mutationSucceeded) {
-            this.deleteStatus = this.translateService.instant('admin.deleting-workspace-success');
+            this.deleteStatus.set(this.translateService.instant('admin.deleting-workspace-success'));
+
             setTimeout(() => {
               this.showMutationSuccess('admin.workspace-deleted', result);
-              this.workspacesChanged = true;
-              this.isDeleting = false;
+              this.workspacesChanged.set(true);
+              this.isDeleting.set(false);
             }, 1000);
           } else {
             this.snackBar.open(
               this.translateService.instant('admin.workspace-not-deleted'),
               this.translateService.instant('error'),
               { duration: 1000 });
-            this.isDeleting = false;
+            this.isDeleting.set(false);
           }
         }
       );
   }
 
   workspacesUpdated(): void {
-    this.workspacesChanged = false;
+    this.workspacesChanged.set(false);
   }
 
   workspaceSelectionChanged(workspaceData: WorkspaceData[]): void {
-    this.selectedWorkspaces = workspaceData.map(workspace => workspace.id);
+    this.selectedWorkspaces.set(workspaceData.map(workspace => workspace.id));
   }
 
   setWorkspaceUsersAccessRight(users: number[]): void {
     runMutationAndRefreshAuthData(
       this.appService,
-      this.workspaceBackendService.setWorkspaceUsersAccessRight(this.selectedWorkspaces[0], users)
+      this.workspaceBackendService.setWorkspaceUsersAccessRight(this.selectedWorkspaces()[0], users)
     )
       .subscribe(
         result => {

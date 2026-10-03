@@ -1,25 +1,25 @@
-@if (hasJobs) {
+@if (hasJobs()) {
   <div class="export-toast-container">
     <mat-card class="export-toast-card">
       <div class="toast-header" (click)="toggleCollapse()">
         <div class="header-left">
           <mat-icon>download</mat-icon>
           <span class="title">{{ 'export-toast.title' | translate }}</span>
-          @if (activeJobCount > 0) {
-            <span class="badge">{{ activeJobCount }}</span>
+          @if (activeJobCount() > 0) {
+            <span class="badge">{{ activeJobCount() }}</span>
           }
         </div>
         <button
           mat-icon-button
           class="collapse-btn"
-          [attr.aria-label]="(isCollapsed ? 'export-toast.expand' : 'export-toast.collapse') | translate">
-          <mat-icon>{{ isCollapsed ? 'expand_less' : 'expand_more' }}</mat-icon>
+          [attr.aria-label]="(isCollapsed() ? 'export-toast.expand' : 'export-toast.collapse') | translate">
+          <mat-icon>{{ isCollapsed() ? 'expand_less' : 'expand_more' }}</mat-icon>
         </button>
       </div>
-      @if (!isCollapsed) {
+      @if (!isCollapsed()) {
         <div class="toast-content">
           <div class="job-list">
-            @for (job of jobs; track job) {
+            @for (job of jobs(); track job) {
               <div class="job-item" [class]="getStatusClass(job.status)">
                 <div class="job-info">
                   <mat-icon [class]="getStatusClass(job.status)" class="status-icon">
@@ -110,7 +110,7 @@
               </div>
             }
           </div>
-          @if (completedJobCount > 0 || failedJobCount > 0) {
+          @if (completedJobCount() > 0 || failedJobCount() > 0) {
             <div class="toast-footer">
               <button mat-button (click)="clearCompleted()">
                 {{ 'export-toast.clear-all' | translate }}

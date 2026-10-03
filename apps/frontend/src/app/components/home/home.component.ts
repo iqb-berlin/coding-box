@@ -1,15 +1,18 @@
 import {
-  Component, OnInit, OnDestroy, inject
+  Component, OnInit, DestroyRef, inject, signal
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import {
-  Subscription, catchError, forkJoin, of
+  catchError, forkJoin, of
 } from 'rxjs';
-import { ActivatedRoute, Params, Router } from '@angular/router';
+import {
+  ActivatedRoute, NavigationStart, Params, Router
+} from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService, AuthBootstrapStatus } from '../../core/services/app.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -43,41 +46,43 @@ import {
   templateUrl: './home.component.html',
   styleUrls: ['./home.component.scss']
 })
-export class HomeComponent implements OnInit, OnDestroy {
+export class HomeComponent implements OnInit {
   readonly appService: AppService = inject(AppService);
-  private route = inject(ActivatedRoute);
+  private readonly destroyRef = inject(DestroyRef);
+
+  private readonly route = inject(ActivatedRoute);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
   private userService = inject(UserService);
   private authService = inject(AuthService);
 
-  workspaces: WorkspaceFullDto[] = [];
-  authData = AppService.defaultAuthData;
-  authBootstrapStatus: AuthBootstrapStatus = 'checking';
+  readonly workspaces = signal<WorkspaceFullDto[]>([]);
+  readonly authData = signal(AppService.defaultAuthData);
+  readonly authBootstrapStatus = signal<AuthBootstrapStatus>('checking');
   private isPersonalCodingJobsRedirectChecked = false;
   private authDataRefreshRequested = false;
+  private navigationStarted = false;
   private authDataFailedQueryParamActive = false;
   private authDataFailedMessageShown = false;
 
-  private authSubscription?: Subscription;
-  private authBootstrapSubscription?: Subscription;
-  private authDataRefreshSubscription?: Subscription;
-  private queryParamsSubscription?: Subscription;
-
   ngOnInit(): void {
-    this.authSubscription = this.appService.authData$.subscribe((authData: AuthDataDto) => {
+    this.router.events.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(event => {
+      if (event instanceof NavigationStart) this.navigationStarted = true;
+    });
+    this.appService.authData$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((authData: AuthDataDto) => {
       if (authData) {
-        this.authData = authData;
-        this.workspaces = authData.workspaces;
+        this.authData.set(authData);
+        this.workspaces.set(authData.workspaces);
         if (authData.userId > 0) {
           this.resolveAuthDataFailedQueryParam();
         }
       }
     });
 
-    this.authBootstrapSubscription = this.appService.authBootstrapStatus$
+    this.appService.authBootstrapStatus$
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(status => {
-        this.authBootstrapStatus = status;
+        this.authBootstrapStatus.set(status);
 
         if (status === 'ready' && !this.authDataRefreshRequested) {
           this.authDataRefreshRequested = true;
@@ -87,7 +92,7 @@ export class HomeComponent implements OnInit, OnDestroy {
         this.resolveAuthDataFailedQueryParam();
       });
 
-    this.queryParamsSubscription = this.route.queryParams.subscribe(params => {
+    this.route.queryParams.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       if (params.error) {
         this.showErrorMessage(params.error);
       }
@@ -100,11 +105,11 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   private refreshHomeAuthData(): void {
-    this.authDataRefreshSubscription = this.appService.refreshAuthData().subscribe(() => {
-      if (!this.isPersonalCodingJobsRedirectChecked &&
-        this.authData.userId > 0 &&
-        !this.authData.isAdmin) {
-        this.redirectPureCoderToPersonalCodingJobs(this.authData.userId);
+    this.appService.refreshAuthData().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      if (!this.navigationStarted && !this.isPersonalCodingJobsRedirectChecked &&
+        this.authData().userId > 0 &&
+        !this.authData().isAdmin) {
+        this.redirectPureCoderToPersonalCodingJobs(this.authData().userId);
       }
     });
   }
@@ -112,15 +117,15 @@ export class HomeComponent implements OnInit, OnDestroy {
   private redirectPureCoderToPersonalCodingJobs(userId: number): void {
     this.isPersonalCodingJobsRedirectChecked = true;
 
-    if (!this.workspaces || this.workspaces.length === 0) {
+    if (!this.workspaces() || this.workspaces().length === 0) {
       return;
     }
 
-    const workspaceIds = this.workspaces.map(workspace => workspace.id);
+    const workspaceIds = this.workspaces().map(workspace => workspace.id);
     const observables = workspaceIds.map(workspaceId => this.userService.getUsers(workspaceId));
 
-    forkJoin(observables).pipe(catchError(() => of(null))).subscribe(responses => {
-      if (!responses) {
+    forkJoin(observables).pipe(catchError(() => of(null)), takeUntilDestroyed(this.destroyRef)).subscribe(responses => {
+      if (this.navigationStarted || !responses) {
         return;
       }
 
@@ -197,12 +202,12 @@ export class HomeComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (this.authData.userId > 0 || this.authBootstrapStatus === 'ready') {
+    if (this.authData().userId > 0 || this.authBootstrapStatus() === 'ready') {
       this.clearAuthDataFailedQueryParams();
       return;
     }
 
-    if (this.authBootstrapStatus === 'auth-data-failed' && !this.authDataFailedMessageShown) {
+    if (this.authBootstrapStatus() === 'auth-data-failed' && !this.authDataFailedMessageShown) {
       this.authDataFailedMessageShown = true;
       this.snackBar.open(
         'Ihre Anmeldung wurde erkannt, aber die Sitzungsdaten konnten nicht geladen werden. Bitte laden Sie die Seite neu oder melden Sie sich erneut an.',
@@ -232,13 +237,6 @@ export class HomeComponent implements OnInit, OnDestroy {
   private resetAuthDataFailedQueryParamState(): void {
     this.authDataFailedQueryParamActive = false;
     this.authDataFailedMessageShown = false;
-  }
-
-  ngOnDestroy(): void {
-    this.authSubscription?.unsubscribe();
-    this.authBootstrapSubscription?.unsubscribe();
-    this.authDataRefreshSubscription?.unsubscribe();
-    this.queryParamsSubscription?.unsubscribe();
   }
 
   protected readonly Number = Number;

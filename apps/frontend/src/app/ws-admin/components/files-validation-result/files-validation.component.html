@@ -32,40 +32,40 @@
       </mat-expansion-panel>
     </div>
 
-    @if (isRefreshingValidation) {
+    @if (isRefreshingValidation()) {
     <div class="validation-refresh-panel" aria-live="polite">
       <div class="validation-refresh-header">
         <mat-spinner diameter="24"></mat-spinner>
         <div class="validation-refresh-text">
           <strong>Validierung wird aktualisiert</strong>
-          <p>{{ refreshValidationProgressMessage }}</p>
+          <p>{{ refreshValidationProgressMessage() }}</p>
         </div>
-        <span class="validation-refresh-percent">{{ refreshValidationProgress }}%</span>
+        <span class="validation-refresh-percent">{{ refreshValidationProgress() }}%</span>
       </div>
-      <mat-progress-bar mode="determinate" [value]="refreshValidationProgress"></mat-progress-bar>
+      <mat-progress-bar mode="determinate" [value]="refreshValidationProgress()"></mat-progress-bar>
     </div>
     }
 
-    @if (geogebra?.hasTasks) {
-    <div class="geogebra-status-panel" [class.geogebra-status-ok]="geogebra?.packageStatus?.valid"
-      [class.geogebra-status-warning]="!geogebra?.packageStatus?.valid">
-      <mat-expansion-panel [expanded]="!geogebra?.packageStatus?.valid">
+    @if (geogebra()?.hasTasks) {
+    <div class="geogebra-status-panel" [class.geogebra-status-ok]="geogebra()?.packageStatus?.valid"
+      [class.geogebra-status-warning]="!geogebra()?.packageStatus?.valid">
+      <mat-expansion-panel [expanded]="!geogebra()?.packageStatus?.valid">
         <mat-expansion-panel-header>
           <mat-panel-title>
-            <mat-icon class="geogebra-status-icon">{{ geogebra?.packageStatus?.valid ? 'check_circle' : 'warning'
+            <mat-icon class="geogebra-status-icon">{{ geogebra()?.packageStatus?.valid ? 'check_circle' : 'warning'
               }}</mat-icon>
             <span class="geogebra-status-title">GeoGebra-Aufgaben gefunden</span>
           </mat-panel-title>
           <mat-panel-description>
-            {{ geogebra?.units?.length || 0 }} Aufgabe(n)
+            {{ geogebra()?.units?.length || 0 }} Aufgabe(n)
           </mat-panel-description>
         </mat-expansion-panel-header>
 
         <div class="geogebra-status-content">
-          @if (geogebra?.packageStatus?.valid) {
-          @if (geogebra?.packageStatus?.detectedVersion) {
+          @if (geogebra()?.packageStatus?.valid) {
+          @if (geogebra()?.packageStatus?.detectedVersion) {
           <p class="geogebra-status-message">
-            Das GeoGebra Math Apps Bundle ist installiert ({{ geogebra?.packageStatus?.detectedVersion }}).
+            Das GeoGebra Math Apps Bundle ist installiert ({{ geogebra()?.packageStatus?.detectedVersion }}).
           </p>
           } @else {
           <p class="geogebra-status-message">
@@ -83,14 +83,14 @@
           </p>
           @if (data.workspaceId) {
           <button mat-raised-button color="primary" class="geogebra-resource-action"
-            [disabled]="isRefreshingValidation" (click)="openGeoGebraResourcePackagesDialog()">
+            [disabled]="isRefreshingValidation()" (click)="openGeoGebraResourcePackagesDialog()">
             <mat-icon>archive</mat-icon>
             GeoGebra-Ressourcenpakete öffnen
           </button>
           }
-          @if (geogebra?.packageStatus?.errors?.length) {
+          @if (geogebra()?.packageStatus?.errors?.length) {
           <ul class="geogebra-error-list">
-            @for (error of geogebra?.packageStatus?.errors || []; track error) {
+            @for (error of geogebra()?.packageStatus?.errors || []; track error) {
             <li>{{ error }}</li>
             }
           </ul>
@@ -100,10 +100,10 @@
           <div class="geogebra-unit-section">
             <div class="geogebra-unit-header">
               <span>Betroffene Aufgaben (Unit-IDs)</span>
-              <span class="geogebra-unit-count">{{ geogebra?.units?.length || 0 }}</span>
+              <span class="geogebra-unit-count">{{ geogebra()?.units?.length || 0 }}</span>
             </div>
             <div class="geogebra-unit-list" aria-label="Betroffene GeoGebra Unit-IDs">
-              @for (unit of geogebra?.units || []; track unit) {
+              @for (unit of geogebra()?.units || []; track unit) {
               <span class="geogebra-unit-chip">{{ unit }}</span>
               }
             </div>
@@ -113,7 +113,7 @@
     </div>
     }
 
-    @if (replayCompatibilityWarnings && replayCompatibilityWarnings.length > 0) {
+    @if (replayCompatibilityWarnings() && replayCompatibilityWarnings().length > 0) {
     <div class="replay-compatibility-panel">
       <mat-expansion-panel [expanded]="true">
         <mat-expansion-panel-header>
@@ -124,7 +124,7 @@
             </span>
           </mat-panel-title>
           <mat-panel-description>
-            {{ 'files-validation.replay-compatibility.task-count' | translate: { count: replayCompatibilityWarnings.length } }}
+            {{ 'files-validation.replay-compatibility.task-count' | translate: { count: replayCompatibilityWarnings().length } }}
           </mat-panel-description>
         </mat-expansion-panel-header>
 
@@ -135,10 +135,10 @@
 
           @if (data.workspaceId) {
           <button mat-raised-button color="primary" class="replay-compatibility-action"
-            [disabled]="isInstallingCompatibleAspectPlayer || isRefreshingValidation"
+            [disabled]="isInstallingCompatibleAspectPlayer() || isRefreshingValidation()"
             (click)="installCompatibleAspectPlayer()">
-            <mat-icon>{{ isInstallingCompatibleAspectPlayer ? 'hourglass_empty' : 'system_update_alt' }}</mat-icon>
-            @if (isInstallingCompatibleAspectPlayer) {
+            <mat-icon>{{ isInstallingCompatibleAspectPlayer() ? 'hourglass_empty' : 'system_update_alt' }}</mat-icon>
+            @if (isInstallingCompatibleAspectPlayer()) {
             {{ 'files-validation.replay-compatibility.installing' | translate }}
             } @else {
             {{ 'files-validation.replay-compatibility.install-action' | translate }}
@@ -149,11 +149,11 @@
           <div class="replay-compatibility-unit-section">
             <div class="replay-compatibility-unit-header">
               <span>{{ 'files-validation.replay-compatibility.affected-units' | translate }}</span>
-              <span class="replay-compatibility-unit-count">{{ replayCompatibilityWarnings.length }}</span>
+              <span class="replay-compatibility-unit-count">{{ replayCompatibilityWarnings().length }}</span>
             </div>
             <div class="replay-compatibility-unit-list"
               [attr.aria-label]="'files-validation.replay-compatibility.affected-units' | translate">
-              @for (warning of replayCompatibilityWarnings; track warning.unit + warning.requestedPlayer) {
+              @for (warning of replayCompatibilityWarnings(); track warning.unit + warning.requestedPlayer) {
               <span class="replay-compatibility-unit-chip"
                 matTooltip="{{ warning.requestedPlayer }} -> {{ warning.resolvedPlayer || warning.requestedPlayer }}">
                 {{ warning.unit }}
@@ -166,7 +166,7 @@
     </div>
     }
 
-    @if (duplicateTestTakers && duplicateTestTakers.length > 0) {
+    @if (duplicateTestTakers() && duplicateTestTakers().length > 0) {
     <div class="missing-units-warning duplicate-testtakers-warning">
       <mat-expansion-panel>
         <mat-expansion-panel-header>
@@ -180,7 +180,7 @@
           <p>Die folgenden Login-Namen wurden in mehreren TestTaker-Dateien gefunden. Bitte wählen Sie aus, welche
             Vorkommen Sie behalten möchten.</p>
 
-          @for (duplicate of duplicateTestTakers; track duplicate.login) {
+          @for (duplicate of duplicateTestTakers(); track duplicate.login) {
           <div class="duplicate-item">
             <p class="duplicate-login">Login: <strong>{{ duplicate.login }}</strong></p>
             <div class="duplicate-occurrences">
@@ -198,9 +198,9 @@
 
           <div class="resolve-button-container">
             <button mat-raised-button color="primary" class="resolve-button" (click)="resolveDuplicateTestTakers()"
-              [disabled]="isResolvingDuplicates">
-              <mat-icon>{{ isResolvingDuplicates ? 'hourglass_empty' : 'check_circle' }}</mat-icon>
-              @if (isResolvingDuplicates) {
+              [disabled]="isResolvingDuplicates()">
+              <mat-icon>{{ isResolvingDuplicates() ? 'hourglass_empty' : 'check_circle' }}</mat-icon>
+              @if (isResolvingDuplicates()) {
               Wird bearbeitet...
               } @else {
               Doppelte TestTaker auflösen
@@ -212,7 +212,7 @@
     </div>
     }
 
-    @if (filteredTestTakers && filteredTestTakers.length > 0) {
+    @if (filteredTestTakers() && filteredTestTakers().length > 0) {
     <div class="missing-units-warning filtered-testtakers-warning">
       <mat-expansion-panel>
         <mat-expansion-panel-header>
@@ -221,7 +221,7 @@
             <span class="warning-title">TestTaker zum Filtern</span>
           </mat-panel-title>
           <mat-panel-description>
-            {{ filteredExcludedCount }} / {{ filteredTotalCount }}
+            {{ filteredExcludedCount() }} / {{ filteredTotalCount() }}
           </mat-panel-description>
         </mat-expansion-panel-header>
 
@@ -235,14 +235,14 @@
 
           <div class="mode-selection">
             <div class="select-all-row">
-              <mat-checkbox [checked]="allSelected" [indeterminate]="selection.hasValue() && !allSelected"
+              <mat-checkbox [checked]="allSelected()" [indeterminate]="selectedTestTakerCount() > 0 && !allSelected()"
                 (change)="toggleAllSelection()">
                 Alle auswählen
               </mat-checkbox>
-              <span class="count-badge">{{ filteredExcludedCount }} / {{ filteredTotalCount }}</span>
+              <span class="count-badge">{{ filteredExcludedCount() }} / {{ filteredTotalCount() }}</span>
             </div>
 
-            @for (modeGroup of modeGroups; track modeGroup) {
+            @for (modeGroup of modeGroups(); track modeGroup) {
             <div class="mode-group">
               <mat-checkbox [checked]="isModeSelected(modeGroup.mode)" (change)="toggleModeSelection(modeGroup.mode)">
                 {{ modeGroup.mode }} ({{ modeGroup.count }})
@@ -252,8 +252,8 @@
           </div>
 
           <cdk-virtual-scroll-viewport class="test-takers-list" [itemSize]="48" [minBufferPx]="200" [maxBufferPx]="400">
-            <div *cdkVirtualFor="let item of filteredTestTakers; trackBy: trackByFn" class="virtual-item">
-              <mat-checkbox [checked]="selection.isSelected(item)" (change)="toggleSelection(item)">
+            <div *cdkVirtualFor="let item of filteredTestTakers(); trackBy: trackByFn" class="virtual-item">
+              <mat-checkbox [checked]="isTestTakerSelected(item)" (change)="toggleSelection(item)">
                 <strong>{{ item.testTaker }}:</strong> {{ item.login }} ({{ item.mode }})
                 @if (item.consider === true) {
                 <mat-icon matTooltip="Wird berücksichtigt">check_circle</mat-icon>
@@ -267,34 +267,34 @@
 
           <div class="exclude-button-container">
             <button mat-raised-button color="primary" class="exclude-button" (click)="markTestTakersAsConsidered()"
-              [disabled]="isConsidering || selection.selected.length === 0">
-              <mat-icon>{{ isConsidering ? 'hourglass_empty' : 'check_circle' }}</mat-icon>
-              @if (isConsidering) {
-              Wird bearbeitet... ({{ consideringProgress }}%)
+              [disabled]="isConsidering() || selectedTestTakerCount() === 0">
+              <mat-icon>{{ isConsidering() ? 'hourglass_empty' : 'check_circle' }}</mat-icon>
+              @if (isConsidering()) {
+              Wird bearbeitet... ({{ consideringProgress() }}%)
               } @else {
-              Ausgewählte TestTaker berücksichtigen ({{ selection.selected.length }})
+              Ausgewählte TestTaker berücksichtigen ({{ selectedTestTakerCount() }})
               }
             </button>
 
             <button mat-raised-button color="warn" class="exclude-button" (click)="markTestTakersAsExcluded()"
-              [disabled]="isExcluding || selection.selected.length === 0">
-              <mat-icon>{{ isExcluding ? 'hourglass_empty' : 'block' }}</mat-icon>
-              @if (isExcluding) {
-              Wird bearbeitet... ({{ excludingProgress }}%)
+              [disabled]="isExcluding() || selectedTestTakerCount() === 0">
+              <mat-icon>{{ isExcluding() ? 'hourglass_empty' : 'block' }}</mat-icon>
+              @if (isExcluding()) {
+              Wird bearbeitet... ({{ excludingProgress() }}%)
               } @else {
-              Ausgewählte TestTaker ausschließen ({{ selection.selected.length }})
+              Ausgewählte TestTaker ausschließen ({{ selectedTestTakerCount() }})
               }
             </button>
 
-            @if (isConsidering) {
+            @if (isConsidering()) {
             <div class="progress-container">
-              <div class="progress-bar" [style.width.%]="consideringProgress"></div>
+              <div class="progress-bar" [style.width.%]="consideringProgress()"></div>
             </div>
             }
 
-            @if (isExcluding) {
+            @if (isExcluding()) {
             <div class="progress-container">
-              <div class="progress-bar" [style.width.%]="excludingProgress"></div>
+              <div class="progress-bar" [style.width.%]="excludingProgress()"></div>
             </div>
             }
           </div>
@@ -303,7 +303,7 @@
     </div>
     }
 
-    @if (unusedTestFiles && unusedTestFiles.length > 0) {
+    @if (unusedTestFiles() && unusedTestFiles().length > 0) {
     <div class="missing-units-warning filtered-testtakers-warning">
       <mat-expansion-panel>
         <mat-expansion-panel-header>
@@ -312,24 +312,24 @@
             <span class="warning-title">Nicht verwendete Dateien</span>
           </mat-panel-title>
           <mat-panel-description>
-            {{ unusedFilesSelection.selected.length }} / {{ unusedTestFiles.length }}
+            {{ unusedFilesSelection.selected.length }} / {{ unusedTestFiles().length }}
           </mat-panel-description>
         </mat-expansion-panel-header>
 
         <div class="warning-content">
           <div class="mode-selection">
             <div class="select-all-row">
-              <mat-checkbox [checked]="allUnusedFilesSelected"
-                [indeterminate]="unusedFilesSelection.hasValue() && !allUnusedFilesSelected"
+              <mat-checkbox [checked]="allUnusedFilesSelected()"
+                [indeterminate]="unusedFilesSelection.hasValue() && !allUnusedFilesSelected()"
                 (change)="toggleAllUnusedFilesSelection()">
                 Alle auswählen
               </mat-checkbox>
-              <span class="count-badge">{{ unusedFilesSelection.selected.length }} / {{ unusedTestFiles.length }}</span>
+              <span class="count-badge">{{ unusedFilesSelection.selected.length }} / {{ unusedTestFiles().length }}</span>
             </div>
           </div>
 
           <cdk-virtual-scroll-viewport class="test-takers-list" [itemSize]="48" [minBufferPx]="200" [maxBufferPx]="400">
-            <div *cdkVirtualFor="let file of unusedTestFiles" class="virtual-item">
+            <div *cdkVirtualFor="let file of unusedTestFiles()" class="virtual-item">
               <mat-checkbox [checked]="unusedFilesSelection.isSelected(file)"
                 (change)="toggleUnusedFilesSelection(file)">
                 <strong>{{ file.fileId }}</strong>: {{ file.filename }} ({{ file.fileType }})
@@ -339,9 +339,9 @@
 
           <div class="exclude-button-container">
             <button mat-raised-button color="warn" class="exclude-button" (click)="deleteSelectedUnusedFiles()"
-              [disabled]="isDeletingUnusedFiles || unusedFilesSelection.selected.length === 0">
-              <mat-icon>{{ isDeletingUnusedFiles ? 'hourglass_empty' : 'delete' }}</mat-icon>
-              @if (isDeletingUnusedFiles) {
+              [disabled]="isDeletingUnusedFiles() || unusedFilesSelection.selected.length === 0">
+              <mat-icon>{{ isDeletingUnusedFiles() ? 'hourglass_empty' : 'delete' }}</mat-icon>
+              @if (isDeletingUnusedFiles()) {
               Wird gelöscht...
               } @else {
               Ausgewählte Dateien löschen ({{ unusedFilesSelection.selected.length }})
@@ -353,9 +353,9 @@
     </div>
     }
 
-    @if (validationResults.length > 0) {
+    @if (validationResults().length > 0) {
     <mat-tab-group [(selectedIndex)]="selectedTabIndex">
-      @if (validationResults.length > 1) {
+      @if (validationResults().length > 1) {
       <mat-tab label="Übersicht">
         <div class="summary-container">
           <div class="summary-header">
@@ -363,19 +363,19 @@
             <div class="summary-stats">
               <div class="stat-item">
                 <span class="stat-label">Gesamtanzahl TestTaker:</span>
-                <span class="stat-value">{{ summary.totalTestTakers }}</span>
+                <span class="stat-value">{{ summary().totalTestTakers }}</span>
               </div>
               <div class="stat-item">
                 <span class="stat-label">Valide TestTaker XMLs:</span>
                 <span class="stat-value success">
-                  <mat-icon class="inline-icon">check_circle</mat-icon> {{ summary.validTestTakerXmls }}
+                  <mat-icon class="inline-icon">check_circle</mat-icon> {{ summary().validTestTakerXmls }}
                 </span>
               </div>
-              @if (summary.invalidTestTakerXmls > 0) {
+              @if (summary().invalidTestTakerXmls > 0) {
               <div class="stat-item">
                 <span class="stat-label">Invalide TestTaker XMLs:</span>
                 <span class="stat-value error">
-                  <mat-icon class="inline-icon">error</mat-icon> {{ summary.invalidTestTakerXmls }}
+                  <mat-icon class="inline-icon">error</mat-icon> {{ summary().invalidTestTakerXmls }}
                 </span>
               </div>
               }
@@ -392,22 +392,22 @@
               <div class="card-content">
                 <div class="card-stat">
                   <span class="label">Vollständig:</span>
-                  <span class="value success">{{ summary.booklets.complete }} / {{ summary.totalTestTakers }}</span>
+                  <span class="value success">{{ summary().booklets.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
-                <div class="card-stat" [class.clickable-stat]="summary.booklets.missingFiles > 0"
-                  (click)="summary.booklets.missingFiles > 0 ? toggleSummaryList('booklets') : null">
+                <div class="card-stat" [class.clickable-stat]="summary().booklets.missingFiles > 0"
+                  (click)="summary().booklets.missingFiles > 0 ? toggleSummaryList('booklets') : null">
                   <span class="label">So viele fehlen (einzigartig):</span>
-                  <span class="value" [class.error]="summary.booklets.missingFiles > 0">{{ summary.booklets.missingFiles
+                  <span class="value" [class.error]="summary().booklets.missingFiles > 0">{{ summary().booklets.missingFiles
                     }}</span>
-                  @if (summary.booklets.missingFiles > 0) {
+                  @if (summary().booklets.missingFiles > 0) {
                   <mat-icon class="toggle-icon">{{ isSummaryListExpanded('booklets') ? 'expand_less' : 'expand_more'
                     }}</mat-icon>
                   }
                 </div>
-                @if (isSummaryListExpanded('booklets') && summary.booklets.missingFiles > 0) {
+                @if (isSummaryListExpanded('booklets') && summary().booklets.missingFiles > 0) {
                 <div class="missing-files-list">
                   <ul>
-                    @for (file of summary.booklets.missingFileNames; track file) {
+                    @for (file of summary().booklets.missingFileNames; track file) {
                     <li>{{ file }}</li>
                     }
                   </ul>
@@ -425,22 +425,22 @@
               <div class="card-content">
                 <div class="card-stat">
                   <span class="label">Vollständig:</span>
-                  <span class="value success">{{ summary.units.complete }} / {{ summary.totalTestTakers }}</span>
+                  <span class="value success">{{ summary().units.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
-                <div class="card-stat" [class.clickable-stat]="summary.units.missingFiles > 0"
-                  (click)="summary.units.missingFiles > 0 ? toggleSummaryList('units') : null">
+                <div class="card-stat" [class.clickable-stat]="summary().units.missingFiles > 0"
+                  (click)="summary().units.missingFiles > 0 ? toggleSummaryList('units') : null">
                   <span class="label">So viele fehlen (einzigartig):</span>
-                  <span class="value" [class.error]="summary.units.missingFiles > 0">{{ summary.units.missingFiles
+                  <span class="value" [class.error]="summary().units.missingFiles > 0">{{ summary().units.missingFiles
                     }}</span>
-                  @if (summary.units.missingFiles > 0) {
+                  @if (summary().units.missingFiles > 0) {
                   <mat-icon class="toggle-icon">{{ isSummaryListExpanded('units') ? 'expand_less' : 'expand_more'
                     }}</mat-icon>
                   }
                 </div>
-                @if (isSummaryListExpanded('units') && summary.units.missingFiles > 0) {
+                @if (isSummaryListExpanded('units') && summary().units.missingFiles > 0) {
                 <div class="missing-files-list">
                   <ul>
-                    @for (file of summary.units.missingFileNames; track file) {
+                    @for (file of summary().units.missingFileNames; track file) {
                     <li>{{ file }}</li>
                     }
                   </ul>
@@ -458,22 +458,22 @@
               <div class="card-content">
                 <div class="card-stat">
                   <span class="label">Vollständig:</span>
-                  <span class="value success">{{ summary.schemes.complete }} / {{ summary.totalTestTakers }}</span>
+                  <span class="value success">{{ summary().schemes.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
-                <div class="card-stat" [class.clickable-stat]="summary.schemes.missingFiles > 0"
-                  (click)="summary.schemes.missingFiles > 0 ? toggleSummaryList('schemes') : null">
+                <div class="card-stat" [class.clickable-stat]="summary().schemes.missingFiles > 0"
+                  (click)="summary().schemes.missingFiles > 0 ? toggleSummaryList('schemes') : null">
                   <span class="label">So viele fehlen (einzigartig):</span>
-                  <span class="value" [class.error]="summary.schemes.missingFiles > 0">{{ summary.schemes.missingFiles
+                  <span class="value" [class.error]="summary().schemes.missingFiles > 0">{{ summary().schemes.missingFiles
                     }}</span>
-                  @if (summary.schemes.missingFiles > 0) {
+                  @if (summary().schemes.missingFiles > 0) {
                   <mat-icon class="toggle-icon">{{ isSummaryListExpanded('schemes') ? 'expand_less' : 'expand_more'
                     }}</mat-icon>
                   }
                 </div>
-                @if (isSummaryListExpanded('schemes') && summary.schemes.missingFiles > 0) {
+                @if (isSummaryListExpanded('schemes') && summary().schemes.missingFiles > 0) {
                 <div class="missing-files-list">
                   <ul>
-                    @for (file of summary.schemes.missingFileNames; track file) {
+                    @for (file of summary().schemes.missingFileNames; track file) {
                     <li>{{ file }}</li>
                     }
                   </ul>
@@ -491,22 +491,22 @@
               <div class="card-content">
                 <div class="card-stat">
                   <span class="label">Vollständig:</span>
-                  <span class="value success">{{ summary.schemer.complete }} / {{ summary.totalTestTakers }}</span>
+                  <span class="value success">{{ summary().schemer.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
-                <div class="card-stat" [class.clickable-stat]="summary.schemer.missingFiles > 0"
-                  (click)="summary.schemer.missingFiles > 0 ? toggleSummaryList('schemer') : null">
+                <div class="card-stat" [class.clickable-stat]="summary().schemer.missingFiles > 0"
+                  (click)="summary().schemer.missingFiles > 0 ? toggleSummaryList('schemer') : null">
                   <span class="label">So viele fehlen (einzigartig):</span>
-                  <span class="value" [class.error]="summary.schemer.missingFiles > 0">{{ summary.schemer.missingFiles
+                  <span class="value" [class.error]="summary().schemer.missingFiles > 0">{{ summary().schemer.missingFiles
                     }}</span>
-                  @if (summary.schemer.missingFiles > 0) {
+                  @if (summary().schemer.missingFiles > 0) {
                   <mat-icon class="toggle-icon">{{ isSummaryListExpanded('schemer') ? 'expand_less' : 'expand_more'
                     }}</mat-icon>
                   }
                 </div>
-                @if (isSummaryListExpanded('schemer') && summary.schemer.missingFiles > 0) {
+                @if (isSummaryListExpanded('schemer') && summary().schemer.missingFiles > 0) {
                 <div class="missing-files-list">
                   <ul>
-                    @for (file of summary.schemer.missingFileNames; track file) {
+                    @for (file of summary().schemer.missingFileNames; track file) {
                     <li>{{ file }}</li>
                     }
                   </ul>
@@ -524,22 +524,22 @@
               <div class="card-content">
                 <div class="card-stat">
                   <span class="label">Vollständig:</span>
-                  <span class="value success">{{ summary.definitions.complete }} / {{ summary.totalTestTakers }}</span>
+                  <span class="value success">{{ summary().definitions.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
-                <div class="card-stat" [class.clickable-stat]="summary.definitions.missingFiles > 0"
-                  (click)="summary.definitions.missingFiles > 0 ? toggleSummaryList('definitions') : null">
+                <div class="card-stat" [class.clickable-stat]="summary().definitions.missingFiles > 0"
+                  (click)="summary().definitions.missingFiles > 0 ? toggleSummaryList('definitions') : null">
                   <span class="label">So viele fehlen (einzigartig):</span>
-                  <span class="value" [class.error]="summary.definitions.missingFiles > 0">{{
-                    summary.definitions.missingFiles }}</span>
-                  @if (summary.definitions.missingFiles > 0) {
+                  <span class="value" [class.error]="summary().definitions.missingFiles > 0">{{
+                    summary().definitions.missingFiles }}</span>
+                  @if (summary().definitions.missingFiles > 0) {
                   <mat-icon class="toggle-icon">{{ isSummaryListExpanded('definitions') ? 'expand_less' : 'expand_more'
                     }}</mat-icon>
                   }
                 </div>
-                @if (isSummaryListExpanded('definitions') && summary.definitions.missingFiles > 0) {
+                @if (isSummaryListExpanded('definitions') && summary().definitions.missingFiles > 0) {
                 <div class="missing-files-list">
                   <ul>
-                    @for (file of summary.definitions.missingFileNames; track file) {
+                    @for (file of summary().definitions.missingFileNames; track file) {
                     <li>{{ file }}</li>
                     }
                   </ul>
@@ -557,22 +557,22 @@
               <div class="card-content">
                 <div class="card-stat">
                   <span class="label">Vollständig:</span>
-                  <span class="value success">{{ summary.player.complete }} / {{ summary.totalTestTakers }}</span>
+                  <span class="value success">{{ summary().player.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
-                <div class="card-stat" [class.clickable-stat]="summary.player.missingFiles > 0"
-                  (click)="summary.player.missingFiles > 0 ? toggleSummaryList('player') : null">
+                <div class="card-stat" [class.clickable-stat]="summary().player.missingFiles > 0"
+                  (click)="summary().player.missingFiles > 0 ? toggleSummaryList('player') : null">
                   <span class="label">So viele fehlen (einzigartig):</span>
-                  <span class="value" [class.error]="summary.player.missingFiles > 0">{{ summary.player.missingFiles
+                  <span class="value" [class.error]="summary().player.missingFiles > 0">{{ summary().player.missingFiles
                     }}</span>
-                  @if (summary.player.missingFiles > 0) {
+                  @if (summary().player.missingFiles > 0) {
                   <mat-icon class="toggle-icon">{{ isSummaryListExpanded('player') ? 'expand_less' : 'expand_more'
                     }}</mat-icon>
                   }
                 </div>
-                @if (isSummaryListExpanded('player') && summary.player.missingFiles > 0) {
+                @if (isSummaryListExpanded('player') && summary().player.missingFiles > 0) {
                 <div class="missing-files-list">
                   <ul>
-                    @for (file of summary.player.missingFileNames; track file) {
+                    @for (file of summary().player.missingFileNames; track file) {
                     <li>{{ file }}</li>
                     }
                   </ul>
@@ -590,22 +590,22 @@
               <div class="card-content">
                 <div class="card-stat">
                   <span class="label">Vollständig:</span>
-                  <span class="value success">{{ summary.metadata.complete }} / {{ summary.totalTestTakers }}</span>
+                  <span class="value success">{{ summary().metadata.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
-                <div class="card-stat" [class.clickable-stat]="summary.metadata.missingFiles > 0"
-                  (click)="summary.metadata.missingFiles > 0 ? toggleSummaryList('metadata') : null">
+                <div class="card-stat" [class.clickable-stat]="summary().metadata.missingFiles > 0"
+                  (click)="summary().metadata.missingFiles > 0 ? toggleSummaryList('metadata') : null">
                   <span class="label">So viele fehlen (einzigartig):</span>
-                  <span class="value" [class.error]="summary.metadata.missingFiles > 0">{{ summary.metadata.missingFiles
+                  <span class="value" [class.error]="summary().metadata.missingFiles > 0">{{ summary().metadata.missingFiles
                     }}</span>
-                  @if (summary.metadata.missingFiles > 0) {
+                  @if (summary().metadata.missingFiles > 0) {
                   <mat-icon class="toggle-icon">{{ isSummaryListExpanded('metadata') ? 'expand_less' : 'expand_more'
                     }}</mat-icon>
                   }
                 </div>
-                @if (isSummaryListExpanded('metadata') && summary.metadata.missingFiles > 0) {
+                @if (isSummaryListExpanded('metadata') && summary().metadata.missingFiles > 0) {
                 <div class="missing-files-list">
                   <ul>
-                    @for (file of summary.metadata.missingFileNames; track file) {
+                    @for (file of summary().metadata.missingFileNames; track file) {
                     <li>{{ file }}</li>
                     }
                   </ul>
@@ -617,7 +617,7 @@
         </div>
       </mat-tab>
       }
-      @for (val of validationResults; track val.testTaker) {
+      @for (val of validationResults(); track val.testTaker) {
       <mat-tab [label]="val.testTaker">
         <h4>
           <mat-icon class="test-taker-icon">person</mat-icon>
@@ -694,7 +694,7 @@
                     <div class="file-item-header">
                       @if (file.exists) {
                       <button mat-icon-button class="expansion-toggle" (click)="toggleBookletExpand(file.filename); $event.stopPropagation()">
-                          <mat-icon>{{ expandedBooklets.has(file.filename.toUpperCase()) ? 'expand_less' : 'expand_more' }}</mat-icon>
+                          <mat-icon>{{ expandedBooklets().has(file.filename.toUpperCase()) ? 'expand_less' : 'expand_more' }}</mat-icon>
                       </button>
                       }
                       <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
@@ -729,21 +729,21 @@
                     </div>
                     
                     <!-- Nested Testlets Section -->
-                    @if (expandedBooklets.has(file.filename.toUpperCase())) {
+                    @if (expandedBooklets().has(file.filename.toUpperCase())) {
                       <div class="nested-testlets">
-                        @if (loadingBooklets.has(file.filename.toUpperCase())) {
+                        @if (loadingBooklets().has(file.filename.toUpperCase())) {
                         <mat-spinner diameter="20"></mat-spinner>
-                        } @else if (bookletData.get(file.filename.toUpperCase())) {
+                        } @else if (bookletData().get(file.filename.toUpperCase())) {
                         <ul class="testlet-nested-list">
-                          @for (testlet of bookletData.get(file.filename.toUpperCase())?.testlets; track testlet.id) {
+                          @for (testlet of bookletData().get(file.filename.toUpperCase())?.testlets; track testlet.id) {
                           <li class="testlet-nested-item" [class.ignored-testlet]="isTestletIgnored(file.filename, testlet.id)">
                             <mat-icon class="testlet-icon">layers</mat-icon>
                             <span class="testlet-label">{{ testlet.label || testlet.id }}</span>
                             <button mat-icon-button class="testlet-action-button testlet-bulk-action-button"
-                                    [disabled]="isApplyingTestletBulk"
+                                    [disabled]="isApplyingTestletBulk()"
                                     (click)="toggleTestletIgnoreForAllBooklets(file.filename, testlet.id); $event.stopPropagation()"
                                     matTooltip="{{ isTestletIgnored(file.filename, testlet.id) ? 'Dieses Testlet in allen Testheften wiederherstellen' : 'Dieses Testlet in allen Testheften ignorieren' }}">
-                              <mat-icon>{{ isApplyingTestletBulk ? 'hourglass_top' : 'done_all' }}</mat-icon>
+                              <mat-icon>{{ isApplyingTestletBulk() ? 'hourglass_top' : 'done_all' }}</mat-icon>
                             </button>
                             <button mat-icon-button class="testlet-action-button"
                                     (click)="toggleTestletIgnore(file.filename, testlet.id); $event.stopPropagation()"
@@ -752,7 +752,7 @@
                             </button>
                           </li>
                           }
-                          @if (!(bookletData.get(file.filename.toUpperCase())?.testlets?.length)) {
+                          @if (!(bookletData().get(file.filename.toUpperCase())?.testlets?.length)) {
                             <li class="no-testlets">Keine Testlets gefunden</li>
                           }
                         </ul>

@@ -4,8 +4,8 @@
       <mat-form-field appearance="outline">
         <mat-label>{{ 'journal.event-type' | translate }}</mat-label>
         <mat-select
-          [ngModel]="filters.eventType || ''"
-          (ngModelChange)="filters.eventType = $event || undefined">
+          [ngModel]="filters().eventType || ''"
+          (ngModelChange)="updateFilter('eventType', $event || undefined)">
           <mat-option value="">{{ 'journal.all' | translate }}</mat-option>
           @for (eventType of eventTypes; track eventType) {
             <mat-option [value]="eventType">{{ eventType }}</mat-option>
@@ -16,8 +16,8 @@
       <mat-form-field appearance="outline">
         <mat-label>{{ 'journal.result' | translate }}</mat-label>
         <mat-select
-          [ngModel]="filters.result || ''"
-          (ngModelChange)="filters.result = $event || undefined">
+          [ngModel]="filters().result || ''"
+          (ngModelChange)="updateFilter('result', $event || undefined)">
           <mat-option value="">{{ 'journal.all' | translate }}</mat-option>
           @for (result of resultTypes; track result) {
             <mat-option [value]="result">{{ 'journal.result-' + result | translate }}</mat-option>
@@ -30,8 +30,8 @@
         <input
           matInput
           type="date"
-          [ngModel]="filters.fromDate || ''"
-          (ngModelChange)="filters.fromDate = $event || undefined">
+          [ngModel]="filters().fromDate || ''"
+          (ngModelChange)="updateFilter('fromDate', $event || undefined)">
       </mat-form-field>
 
       <mat-form-field appearance="outline">
@@ -39,8 +39,8 @@
         <input
           matInput
           type="date"
-          [ngModel]="filters.toDate || ''"
-          (ngModelChange)="filters.toDate = $event || undefined">
+          [ngModel]="filters().toDate || ''"
+          (ngModelChange)="updateFilter('toDate', $event || undefined)">
       </mat-form-field>
 
       <button mat-stroked-button color="primary" (click)="applyFilters()">
@@ -62,18 +62,18 @@
   </div>
 
   <div class="journal-table-container">
-    @if (loading) {
+    @if (loading()) {
       <div class="loading-indicator">
         <p>{{ 'journal.loading' | translate }}</p>
       </div>
-    } @else if (loadError) {
+    } @else if (loadError()) {
       <div class="load-error" role="alert">
         <mat-icon>error_outline</mat-icon>
         <div class="load-error-text">
           <h3>{{ 'journal.load-error-title' | translate }}</h3>
-          <p>{{ loadErrorMessage }}</p>
-          @if (loadErrorRequestId) {
-            <small>{{ 'error.details_request_id' | translate }} {{ loadErrorRequestId }}</small>
+          <p>{{ loadErrorMessage() }}</p>
+          @if (loadErrorRequestId()) {
+            <small>{{ 'error.details_request_id' | translate }} {{ loadErrorRequestId() }}</small>
           }
         </div>
         <button mat-stroked-button color="primary" (click)="loadJournalEntries()">
@@ -81,12 +81,12 @@
           {{ 'journal.retry' | translate }}
         </button>
       </div>
-    } @else if (journalEntries.length === 0) {
+    } @else if (journalEntries().length === 0) {
       <div class="no-entries">
         <p>{{ 'journal.no-entries' | translate }}</p>
       </div>
     } @else {
-      <table mat-table [dataSource]="journalEntries" class="journal-table">
+      <table mat-table [dataSource]="journalEntries()" class="journal-table">
         <ng-container matColumnDef="timestamp">
           <th mat-header-cell *matHeaderCellDef>{{ 'journal.timestamp' | translate }}</th>
           <td mat-cell *matCellDef="let entry">{{ entry.timestamp | date:'dd.MM.yyyy HH:mm:ss' }}</td>
@@ -134,9 +134,9 @@
       </table>
 
         <mat-paginator
-          [length]="totalEntries"
-          [pageIndex]="pageIndex"
-          [pageSize]="pageSize"
+          [length]="totalEntries()"
+          [pageIndex]="pageIndex()"
+          [pageSize]="pageSize()"
           [pageSizeOptions]="[5, 10, 20, 50, 100]"
           (page)="handlePageEvent($event)"
           [attr.aria-label]="'journal.select-page' | translate">

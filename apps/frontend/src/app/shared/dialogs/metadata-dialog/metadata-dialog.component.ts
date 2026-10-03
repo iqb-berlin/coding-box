@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, CUSTOM_ELEMENTS_SCHEMA
+  Component, Inject, OnInit, OnDestroy, ElementRef, ViewChild, inject, CUSTOM_ELEMENTS_SCHEMA, signal
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -20,8 +20,9 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MDProfile } from '@iqbspecs/metadata-profile/metadata-profile.interface';
 import { MetadataProfileValues, VocabularyEntry } from '@iqbspecs/metadata-values/metadata-values.interface';
-import { bootstrapMetadataWebComponents, UnitMetadataValues } from '@iqb/metadata-components';
-import { MetadataResolver } from '@iqb/metadata-resolver';
+import { UnitMetadataValues, VocabularyProvider, TopConcept } from '@iqb/metadata-components';
+import { MetadataResolver, VocabConcept } from '@iqb/metadata-resolver';
+import { MetadataWebComponentService } from '../../services/metadata-web-component.service';
 
 export interface MetadataItem {
   id: string;
@@ -37,7 +38,7 @@ export interface VomdMetadata {
 }
 
 interface MetadataProfileFormElement extends HTMLElement {
-  resolver?: MetadataResolver;
+  vocabularyProvider?: VocabularyProvider;
   profileData?: MDProfile;
   metadataValues: Partial<UnitMetadataValues>;
   language?: string;
@@ -85,25 +86,25 @@ export interface MetadataDialogData {
           [(ngModel)]="isEditing"
           (change)="onEditModeChange()"
           color="primary">
-          {{ isEditing ? 'Bearbeiten aktiv' : 'Bearbeiten' }}
+          {{ isEditing() ? 'Bearbeiten aktiv' : 'Bearbeiten' }}
         </mat-slide-toggle>
       </div>
     </div>
 
     <mat-dialog-content>
-      @if (isLoading) {
+      @if (isLoading()) {
         <div class="spinner-container">
           <mat-progress-spinner mode="indeterminate"></mat-progress-spinner>
         </div>
       }
 
-      <div [style.display]="isLoading ? 'none' : 'block'">
+      <div [style.display]="isLoading() ? 'none' : 'block'">
         <div class="selection-container">
           <mat-form-field appearance="outline">
             <mat-label>Metadaten anzeigen für</mat-label>
             <mat-select [(ngModel)]="selectedView" (selectionChange)="onViewChange()">
               <mat-option value="unit">Unit (Aufgabe)</mat-option>
-              @for (item of items; track item.uuid) {
+              @for (item of items(); track item.uuid) {
                 <mat-option [value]="item.uuid">
                   Item {{ item.id }}
                 </mat-option>
@@ -112,13 +113,13 @@ export interface MetadataDialogData {
           </mat-form-field>
         </div>
 
-        @if (selectedView !== 'unit') {
+        @if (selectedView() !== 'unit') {
           <div class="item-info">
             <mat-form-field appearance="outline">
               <mat-label>Item-ID</mat-label>
               <input matInput
                      [value]="getSelectedItem()!.id"
-                     [readonly]="!isEditing"
+                     [readonly]="!isEditing()"
                      (input)="updateItemProperty('id', $any($event.target).value)">
             </mat-form-field>
 
@@ -126,7 +127,7 @@ export interface MetadataDialogData {
               <mat-label>Variablen-ID</mat-label>
               <input matInput
                      [value]="getSelectedItem()!.variableId"
-                     [readonly]="!isEditing"
+                     [readonly]="!isEditing()"
                      (input)="updateItemProperty('variableId', $any($event.target).value)">
             </mat-form-field>
 
@@ -134,7 +135,7 @@ export interface MetadataDialogData {
               <mat-label>Beschreibung</mat-label>
               <textarea matInput
                         [value]="getSelectedItem()!.description"
-                        [readonly]="!isEditing"
+                        [readonly]="!isEditing()"
                         rows="3"
                         (input)="updateItemProperty('description', $any($event.target).value)"></textarea>
             </mat-form-field>
@@ -145,9 +146,9 @@ export interface MetadataDialogData {
 
         <div class="metadata-container">
           <metadata-profile-form
-            id="metadata-form"
+            #metadataForm
             [attr.language]="data.language || 'de'"
-            [attr.readonly]="isEditing ? null : ''">
+            [attr.readonly]="isEditing() ? null : ''">
           </metadata-profile-form>
         </div>
       </div>
@@ -157,10 +158,10 @@ export interface MetadataDialogData {
 
     <mat-dialog-actions align="end">
       <button mat-button (click)="close(false)">
-        {{ isEditing && hasChanges ? 'Abbrechen' : 'Schließen' }}
+        {{ isEditing() && hasChanges() ? 'Abbrechen' : 'Schließen' }}
       </button>
 
-      @if (isEditing && hasChanges) {
+      @if (isEditing() && hasChanges()) {
         <button mat-raised-button color="primary" (click)="close(true)">
           Speichern
         </button>
@@ -205,17 +206,29 @@ export interface MetadataDialogData {
     }
   `]
 })
-export class MetadataDialogComponent implements OnInit {
+export class MetadataDialogComponent implements OnInit, OnDestroy {
+  @ViewChild('metadataForm') private metadataFormElement?: ElementRef<MetadataProfileFormElement>;
+
+  private readonly webComponents = inject(MetadataWebComponentService);
+  private destroyed = false;
+  private initializationTimer?: ReturnType<typeof setTimeout>;
+  private metadataForm?: MetadataProfileFormElement;
+  private readonly metadataChangeListener = (event: Event) => {
+    this.currentWebComponentMetadata = (event as CustomEvent).detail;
+    this.saveCurrentViewDataToLocal();
+    this.markAsChanged();
+  };
+
   private currentWebComponentMetadata: Partial<UnitMetadataValues> | null = null;
   private webComponentInitialized = false;
-  isLoading = true;
+  readonly isLoading = signal(true);
 
-  selectedView: string = 'unit';
-  items: MetadataItem[] = [];
-  localMetadataValues: VomdMetadata | undefined; // Local copy of full metadata
+  readonly selectedView = signal<string>('unit');
+  readonly items = signal<MetadataItem[]>([]);
+  readonly localMetadataValues = signal<VomdMetadata | undefined>(undefined); // Local copy of full metadata
 
-  isEditing = false;
-  hasChanges = false;
+  readonly isEditing = signal(false);
+  readonly hasChanges = signal(false);
 
   constructor(
     public dialogRef: MatDialogRef<MetadataDialogComponent>,
@@ -224,30 +237,40 @@ export class MetadataDialogComponent implements OnInit {
 
   async ngOnInit() {
     // Deep copy metadata values to avoid mutating reference passed in
-    this.localMetadataValues = JSON.parse(JSON.stringify(this.data.metadataValues));
+    // Deep copy metadata values to avoid mutating reference passed in
+    this.localMetadataValues.set(JSON.parse(JSON.stringify(this.data.metadataValues)));
 
     if (this.data.selectedView) {
-      this.selectedView = this.data.selectedView;
+      this.selectedView.set(this.data.selectedView);
     }
 
-    await bootstrapMetadataWebComponents();
+    await this.webComponents.ensureRegistered();
+    if (this.destroyed) return;
     this.extractItems();
 
-    setTimeout(() => {
+    this.initializationTimer = setTimeout(() => {
+      this.initializationTimer = undefined;
       this.initializeWebComponent();
     }, 100);
   }
 
+  ngOnDestroy(): void {
+    this.destroyed = true;
+    if (this.initializationTimer !== undefined) clearTimeout(this.initializationTimer);
+    this.metadataForm?.removeEventListener('metadataChange', this.metadataChangeListener);
+  }
+
   private extractItems(): void {
-    if (!this.localMetadataValues?.items) {
+    const localMetadataValuesSnapshot = this.localMetadataValues();
+
+    if (!localMetadataValuesSnapshot?.items) {
       return;
     }
-    // Items are references to objects inside localMetadataValues, so editing them updates localMetadataValues
-    this.items = this.localMetadataValues.items;
+    this.items.set(localMetadataValuesSnapshot.items);
   }
 
   private initializeWebComponent(): void {
-    const form = document.getElementById('metadata-form') as unknown as MetadataProfileFormElement;
+    const form = this.metadataFormElement?.nativeElement;
 
     if (!form) {
       return;
@@ -256,34 +279,31 @@ export class MetadataDialogComponent implements OnInit {
     try {
       this.updateFormData(form);
 
-      form.addEventListener('metadataChange', ((event: CustomEvent) => {
-        this.currentWebComponentMetadata = event.detail;
-        this.saveCurrentViewDataToLocal();
-        this.markAsChanged();
-      }) as EventListener);
+      this.metadataForm = form;
+      form.addEventListener('metadataChange', this.metadataChangeListener);
 
-      form.readonly = !this.isEditing;
+      form.readonly = !this.isEditing();
       this.webComponentInitialized = true;
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('Error initializing web component:', err);
     } finally {
-      this.isLoading = false;
+      this.isLoading.set(false);
     }
   }
 
   private updateFormData(form: MetadataProfileFormElement): void {
-    if (this.selectedView === 'unit') {
+    if (this.selectedView() === 'unit') {
       form.metadataValues = {
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         // @ts-ignore
-        profiles: this.localMetadataValues?.profiles || []
+        profiles: this.localMetadataValues()?.profiles || []
       };
       // Force reference change to trigger update if needed
       form.profileData = this.data.profileData ? JSON.parse(JSON.stringify(this.data.profileData)) : undefined;
     } else {
-      const selectedItem = this.items.find(
-        (item: MetadataItem) => item.uuid === this.selectedView
+      const selectedItem = this.items().find(
+        (item: MetadataItem) => item.uuid === this.selectedView()
       );
 
       if (selectedItem) {
@@ -298,65 +318,87 @@ export class MetadataDialogComponent implements OnInit {
     }
 
     form.language = this.data.language || 'de';
-    form.resolver = this.data.resolver;
-    form.readonly = !this.isEditing;
+    form.vocabularyProvider = this.getVocabularyProvider();
+    form.readonly = !this.isEditing();
+  }
+
+  private getVocabularyProvider(): VocabularyProvider | undefined {
+    const resolver = this.data.resolver;
+    if (!resolver) return undefined;
+    const normalize = (concept: VocabConcept): TopConcept => ({
+      ...concept,
+      notation: concept.notation ?? [],
+      prefLabel: { ...concept.prefLabel, de: concept.prefLabel?.de ?? concept.prefLabel?.en ?? '' },
+      narrower: (concept.narrower ?? []).map(normalize)
+    });
+    return {
+      getVocabularies: () => resolver.getVocabularies().map(vocabulary => ({
+        url: vocabulary.url,
+        data: { ...vocabulary.data, hasTopConcept: vocabulary.data.hasTopConcept?.map(normalize) }
+      })),
+      getVocabularyDictionary: () => resolver.getVocabularyDictionary()
+    };
   }
 
   onViewChange(): void {
     // We don't save here because the listener already updates local state on every change
     // But we need to update the form with the new view's data
-    const form = document.getElementById('metadata-form') as unknown as MetadataProfileFormElement;
+    const form = this.metadataFormElement?.nativeElement;
     if (form && this.webComponentInitialized) {
       this.updateFormData(form);
     }
   }
 
   onEditModeChange(): void {
-    const form = document.getElementById('metadata-form') as unknown as MetadataProfileFormElement;
+    const form = this.metadataFormElement?.nativeElement;
     if (form) {
-      form.readonly = !this.isEditing;
+      form.readonly = !this.isEditing();
     }
   }
 
   markAsChanged(): void {
-    this.hasChanges = true;
+    this.hasChanges.set(true);
   }
 
   updateItemProperty(prop: 'id' | 'variableId' | 'description', value: string): void {
     const item = this.getSelectedItem();
     if (item) {
-      item[prop] = value;
+      this.updateItems(this.items().map(current => (current.uuid === item.uuid ? { ...current, [prop]: value } : current)));
       this.markAsChanged();
     }
   }
 
-  private saveCurrentViewDataToLocal(): void {
-    if (!this.currentWebComponentMetadata) return;
+  private updateItems(items: MetadataItem[]): void {
+    this.items.set(items);
+    this.localMetadataValues.update(current => ({ ...current, items }));
+  }
 
-    if (this.selectedView === 'unit') {
-      if (!this.localMetadataValues) this.localMetadataValues = {};
-      this.localMetadataValues.profiles = this.currentWebComponentMetadata.profiles as unknown as MetadataProfileValues[];
+  private saveCurrentViewDataToLocal(): void {
+    const metadata = this.currentWebComponentMetadata;
+    if (!metadata) return;
+    const profiles = metadata.profiles as unknown as MetadataProfileValues[];
+
+    if (this.selectedView() === 'unit') {
+      this.localMetadataValues.update(current => ({ ...current, profiles }));
     } else {
-      const itemIndex = this.items.findIndex(i => i.uuid === this.selectedView);
-      if (itemIndex > -1) {
-        this.items[itemIndex].profiles = this.currentWebComponentMetadata.profiles as unknown as MetadataProfileValues[];
-      }
+      const view = this.selectedView();
+      this.updateItems(this.items().map(item => (item.uuid === view ? { ...item, profiles } : item)));
     }
   }
 
   close(save: boolean = false): void {
     if (save) {
       // Ensure latest web component state is captured (should be covered by listener, but good to be sure)
-      this.dialogRef.close(this.localMetadataValues);
+      this.dialogRef.close(this.localMetadataValues());
     } else {
       this.dialogRef.close(null);
     }
   }
 
   getSelectedItem(): MetadataItem | undefined {
-    if (this.selectedView === 'unit') {
+    if (this.selectedView() === 'unit') {
       return undefined;
     }
-    return this.items.find(item => item.uuid === this.selectedView);
+    return this.items().find(item => item.uuid === this.selectedView());
   }
 }

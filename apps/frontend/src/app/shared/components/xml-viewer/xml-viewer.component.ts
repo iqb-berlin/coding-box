@@ -1,6 +1,8 @@
 import { Clipboard } from '@angular/cdk/clipboard';
 
-import { Component, Input, OnChanges } from '@angular/core';
+import {
+  Component, Input, OnChanges, OnDestroy, signal
+} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -23,16 +25,17 @@ type XmlFormatResult = {
   templateUrl: './xml-viewer.component.html',
   styleUrls: ['./xml-viewer.component.scss']
 })
-export class XmlViewerComponent implements OnChanges {
+export class XmlViewerComponent implements OnChanges, OnDestroy {
   @Input() xml: string | null | undefined = '';
 
-  formattedXml = '';
-  hasParseError = false;
-  lineWrap = false;
-  copySucceeded = false;
+  readonly formattedXml = signal('');
+  readonly hasParseError = signal(false);
+  readonly lineWrap = signal(false);
+  readonly copySucceeded = signal(false);
 
   private readonly indentUnit = '  ';
   private rawXml = '';
+  private copyResetTimer?: number;
 
   constructor(private clipboard: Clipboard) {}
 
@@ -41,20 +44,26 @@ export class XmlViewerComponent implements OnChanges {
 
     const result = this.formatXml(this.rawXml);
 
-    this.formattedXml = result.content;
-    this.hasParseError = result.hasParseError;
+    this.formattedXml.set(result.content);
+    this.hasParseError.set(result.hasParseError);
   }
 
   toggleLineWrap(): void {
-    this.lineWrap = !this.lineWrap;
+    this.lineWrap.set(!this.lineWrap());
+  }
+
+  ngOnDestroy(): void {
+    window.clearTimeout(this.copyResetTimer);
   }
 
   copyToClipboard(): void {
-    this.copySucceeded = this.clipboard.copy(this.rawXml);
+    window.clearTimeout(this.copyResetTimer);
+    this.copySucceeded.set(this.clipboard.copy(this.rawXml));
 
-    if (this.copySucceeded) {
-      window.setTimeout(() => {
-        this.copySucceeded = false;
+    if (this.copySucceeded()) {
+      this.copyResetTimer = window.setTimeout(() => {
+        this.copySucceeded.set(false);
+        this.copyResetTimer = undefined;
       }, 1500);
     }
   }

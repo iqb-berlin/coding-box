@@ -1,4 +1,5 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
   BehaviorSubject,
@@ -68,24 +69,126 @@ export class AppService {
   };
 
   keycloakIdentity?: string;
-  userProfile: KeycloakProfile = {};
-  isLoggedInKeycloak = false;
-  errorMessagesDisabled = false;
-  dataLoading: boolean | number = false;
-  appLogo: AppLogoDto = standardLogo;
+  private readonly userProfileState = signal<KeycloakProfile>({});
+
+  get userProfile(): KeycloakProfile {
+    return this.userProfileState();
+  }
+
+  set userProfile(value: KeycloakProfile) {
+    this.userProfileState.set(value);
+  }
+
+  private readonly isLoggedInKeycloakState = signal<boolean>(false);
+
+  get isLoggedInKeycloak(): boolean {
+    return this.isLoggedInKeycloakState();
+  }
+
+  set isLoggedInKeycloak(value: boolean) {
+    this.isLoggedInKeycloakState.set(value);
+  }
+
+  private readonly errorMessagesDisabledState = signal<boolean>(false);
+
+  get errorMessagesDisabled(): boolean {
+    return this.errorMessagesDisabledState();
+  }
+
+  set errorMessagesDisabled(value: boolean) {
+    this.errorMessagesDisabledState.set(value);
+  }
+
+  private readonly dataLoadingState = signal<boolean | number>(false);
+
+  get dataLoading(): boolean | number {
+    return this.dataLoadingState();
+  }
+
+  set dataLoading(value: boolean | number) {
+    this.dataLoadingState.set(value);
+  }
+
+  private readonly appLogoState = signal<AppLogoDto>(standardLogo);
+
+  get appLogo(): AppLogoDto {
+    return this.appLogoState();
+  }
+
+  set appLogo(value: AppLogoDto) {
+    this.appLogoState.set(value);
+  }
+
   postMessage$ = new Subject<MessageEvent>();
-  loggedUser: KeycloakTokenParsed | undefined;
-  errorMessages: AppHttpError[] = [];
-  errorMessageCounter = 0;
-  backendUnavailable = false;
-  needsReAuthentication = false;
-  sessionExpiryWarning = false;
+  private readonly loggedUserState = signal<KeycloakTokenParsed | undefined>(undefined);
+
+  get loggedUser(): KeycloakTokenParsed | undefined {
+    return this.loggedUserState();
+  }
+
+  set loggedUser(value: KeycloakTokenParsed | undefined) {
+    this.loggedUserState.set(value);
+  }
+
+  private readonly errorMessagesState = signal<AppHttpError[]>([]);
+
+  get errorMessages(): AppHttpError[] {
+    return this.errorMessagesState();
+  }
+
+  set errorMessages(value: AppHttpError[]) {
+    this.errorMessagesState.set(value);
+  }
+
+  private readonly errorMessageCounterState = signal<number>(0);
+
+  get errorMessageCounter(): number {
+    return this.errorMessageCounterState();
+  }
+
+  set errorMessageCounter(value: number) {
+    this.errorMessageCounterState.set(value);
+  }
+
+  private readonly backendUnavailableState = signal<boolean>(false);
+
+  get backendUnavailable(): boolean {
+    return this.backendUnavailableState();
+  }
+
+  set backendUnavailable(value: boolean) {
+    this.backendUnavailableState.set(value);
+  }
+
+  private readonly reAuthenticationRequired = signal(false);
+
+  get needsReAuthentication(): boolean {
+    return this.reAuthenticationRequired();
+  }
+
+  set needsReAuthentication(value: boolean) {
+    this.reAuthenticationRequired.set(value);
+  }
+
+  private readonly sessionExpiryWarningVisible = signal(false);
+
+  get sessionExpiryWarning(): boolean {
+    return this.sessionExpiryWarningVisible();
+  }
+
+  set sessionExpiryWarning(value: boolean) {
+    this.sessionExpiryWarningVisible.set(value);
+  }
+
   reAuthenticationReturnUrl?: string;
-  private selectedWorkspaceIdValue = 0;
+  private readonly selectedWorkspaceIdValue = signal(0);
+  // A changes-only event stream; selectedWorkspaceIdValue owns the state.
   private readonly selectedWorkspaceIdSubject = new Subject<number>();
   readonly selectedWorkspaceId$ = this.selectedWorkspaceIdSubject.asObservable();
   private explicitLogoutInProgress = false;
-  private authBootstrapStatusSubject = new BehaviorSubject<AuthBootstrapStatus>('checking');
+  // Guards consume synchronous auth notifications; signals are readonly views of that state.
+  private readonly authBootstrapStatusSubject = new BehaviorSubject<AuthBootstrapStatus>('checking');
+  private readonly authBootstrapStatusState = toSignal(this.authBootstrapStatusSubject, { requireSync: true });
   private authDataSessionGeneration = 0;
   private authDataRefreshRequestId = 0;
   private latestAppliedAuthDataRefreshRequestId = 0;
@@ -95,7 +198,7 @@ export class AppService {
   }
 
   get selectedWorkspaceId(): number {
-    return this.selectedWorkspaceIdValue;
+    return this.selectedWorkspaceIdValue();
   }
 
   set selectedWorkspaceId(workspaceId: number | null | undefined) {
@@ -103,11 +206,11 @@ export class AppService {
     const nextWorkspaceId = Number.isFinite(numericWorkspaceId) ?
       numericWorkspaceId :
       0;
-    if (nextWorkspaceId === this.selectedWorkspaceIdValue) {
+    if (nextWorkspaceId === this.selectedWorkspaceIdValue()) {
       return;
     }
 
-    this.selectedWorkspaceIdValue = nextWorkspaceId;
+    this.selectedWorkspaceIdValue.set(nextWorkspaceId);
     this.selectedWorkspaceIdSubject.next(nextWorkspaceId);
   }
 
@@ -179,19 +282,26 @@ export class AppService {
       return of(false);
     }
 
+    const sessionGeneration = this.authDataSessionGeneration;
+    const isCurrentSession = () => sessionGeneration === this.authDataSessionGeneration &&
+      identity === (this.loggedUser?.sub || this.keycloakIdentity);
+
     this.setAuthBootstrapStatus('backend-login-running');
     this.sessionRecoveryService.setOwnerId(identity);
     return this.getAuthDataWithRetry(identity)
       .pipe(
         map(authData => {
+          if (!isCurrentSession()) return false;
           this.updateAuthData(authData);
           this.completeBackendLogin();
           return true;
         }),
         catchError(() => {
-          this.markAuthDataFailed();
+          if (isCurrentSession()) this.markAuthDataFailed();
           return of(false);
-        })
+        }),
+        // Global authentication must finish even if the retrying view is destroyed.
+        shareReplay({ bufferSize: 1, refCount: false })
       );
   }
 
@@ -272,7 +382,8 @@ export class AppService {
     });
   }
 
-  private authDataSubject = new BehaviorSubject<AuthDataDto>(AppService.defaultAuthData);
+  private readonly authDataSubject = new BehaviorSubject<AuthDataDto>(AppService.defaultAuthData);
+  private readonly authDataState = toSignal(this.authDataSubject, { requireSync: true });
 
   get authData$() {
     return this.authDataSubject.asObservable();
@@ -283,15 +394,15 @@ export class AppService {
   }
 
   get authData(): AuthDataDto {
-    return this.authDataSubject.value;
+    return this.authDataState();
   }
 
   get authBootstrapStatus(): AuthBootstrapStatus {
-    return this.authBootstrapStatusSubject.value;
+    return this.authBootstrapStatusState();
   }
 
   get userId(): number {
-    return this.authDataSubject.value.userId;
+    return this.authDataState().userId;
   }
 
   setAuthBootstrapStatus(status: AuthBootstrapStatus): void {
@@ -319,20 +430,26 @@ export class AppService {
     const alikeError = this.errorMessages.find(existingError => this.isSameErrorGroup(existingError, error));
 
     if (alikeError) {
-      this.normalizeError(alikeError);
-      alikeError.requestCount = (alikeError.requestCount || 1) + 1;
-      this.addAffectedRequest(alikeError, error);
-      if (!alikeError.isBackendConnectivityError && !alikeError.message.includes(error.message)) {
-        alikeError.message += `; ${error.message}`;
-        alikeError.userMessage = alikeError.message;
+      const updatedError: AppHttpError = Object.assign(
+        Object.create(Object.getPrototypeOf(alikeError)),
+        alikeError,
+        { affectedRequests: [...(alikeError.affectedRequests || [])] }
+      );
+      this.normalizeError(updatedError);
+      updatedError.requestCount = (updatedError.requestCount || 1) + 1;
+      this.addAffectedRequest(updatedError, error);
+      if (!updatedError.isBackendConnectivityError && !updatedError.message.includes(error.message)) {
+        updatedError.message += `; ${error.message}`;
+        updatedError.userMessage = updatedError.message;
       }
+      this.errorMessages = this.errorMessages.map(current => (current === alikeError ? updatedError : current));
       return;
     }
 
     this.errorMessageCounter += 1;
     error.id = this.errorMessageCounter;
     this.addAffectedRequest(error, error);
-    this.errorMessages.push(error);
+    this.errorMessages = [...this.errorMessages, error];
   }
 
   setBackendUnavailable(unavailable: boolean): void {

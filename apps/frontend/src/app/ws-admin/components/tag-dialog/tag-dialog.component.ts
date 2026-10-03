@@ -1,4 +1,6 @@
-import { Component, OnInit, inject } from '@angular/core';
+import {
+  ChangeDetectorRef, Component, OnInit, inject
+} from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -233,6 +235,7 @@ export class TagDialogComponent implements OnInit {
   private unitTagService = inject(UnitTagService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
+  private cdr = inject(ChangeDetectorRef);
 
   tags: UnitTagDto[] = [];
   newTagText: string = '';
@@ -266,6 +269,7 @@ export class TagDialogComponent implements OnInit {
       next: tag => {
         this.tags.push(tag);
         this.newTagText = ''; // Clear the input field
+        this.cdr.markForCheck();
 
         this.snackBar.open(
           'Tag erfolgreich hinzugefügt',
@@ -295,6 +299,7 @@ export class TagDialogComponent implements OnInit {
       next: success => {
         if (success) {
           this.tags = this.tags.filter(tag => tag.id !== tagId);
+          this.cdr.markForCheck();
 
           this.snackBar.open(
             'Tag erfolgreich gelöscht',

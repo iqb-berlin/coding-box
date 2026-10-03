@@ -1,4 +1,6 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import {
+  Component, Inject, OnInit, signal
+} from '@angular/core';
 
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -27,11 +29,11 @@ import { UnitPlayerComponent } from '../../../replay/components/unit-player/unit
   ]
 })
 export class UnitDefinitionPlayerDialogComponent implements OnInit {
-  isLoading = true;
-  errorMessage: string | null = null;
+  readonly isLoading = signal(true);
+  readonly errorMessage = signal<string | null>(null);
 
-  unitDef: string | undefined;
-  unitPlayer: string | undefined;
+  readonly unitDef = signal<string | undefined>(undefined);
+  readonly unitPlayer = signal<string | undefined>(undefined);
 
   constructor(
     public dialogRef: MatDialogRef<UnitDefinitionPlayerDialogComponent>,
@@ -43,8 +45,8 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
     if (this.data.workspaceId && this.data.unitId) {
       this.loadUnitData();
     } else {
-      this.errorMessage = 'Ungültige Parameter für die Aufgabendefinition.';
-      this.isLoading = false;
+      this.errorMessage.set('Ungültige Parameter für die Aufgabendefinition.');
+      this.isLoading.set(false);
     }
   }
 
@@ -59,8 +61,8 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
     this.fileService.getUnit(workspaceId, unitId).subscribe({
       next: (unitFiles: FilesDto[]) => {
         if (!unitFiles || unitFiles.length === 0) {
-          this.errorMessage = `Aufgabe ${unitId} wurde nicht gefunden.`;
-          this.isLoading = false;
+          this.errorMessage.set(`Aufgabe ${unitId} wurde nicht gefunden.`);
+          this.isLoading.set(false);
           return;
         }
 
@@ -80,8 +82,8 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
         }
 
         if (!playerRef) {
-          this.errorMessage = 'Kein Player in der Aufgabendefinition gefunden.';
-          this.isLoading = false;
+          this.errorMessage.set('Kein Player in der Aufgabendefinition gefunden.');
+          this.isLoading.set(false);
           return;
         }
 
@@ -92,12 +94,12 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
           player: this.fileService.getPlayer(workspaceId, normalizedPlayerId)
         }).pipe(
           catchError(() => {
-            this.errorMessage = 'Fehler beim Laden der Aufgabendefinition.';
-            this.isLoading = false;
+            this.errorMessage.set('Fehler beim Laden der Aufgabendefinition.');
+            this.isLoading.set(false);
             return of({ def: [] as FilesDto[], player: [] as FilesDto[] });
           })
         ).subscribe((result: { def: FilesDto[]; player: FilesDto[] }) => {
-          if (this.errorMessage) {
+          if (this.errorMessage()) {
             return;
           }
 
@@ -105,19 +107,19 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
           const playerFile = result.player[0];
 
           if (!defFile || !playerFile) {
-            this.errorMessage = 'Aufgabendefinition oder Player konnten nicht geladen werden.';
-            this.isLoading = false;
+            this.errorMessage.set('Aufgabendefinition oder Player konnten nicht geladen werden.');
+            this.isLoading.set(false);
             return;
           }
 
-          this.unitDef = defFile.data;
-          this.unitPlayer = playerFile.data;
-          this.isLoading = false;
+          this.unitDef.set(defFile.data);
+          this.unitPlayer.set(playerFile.data);
+          this.isLoading.set(false);
         });
       },
       error: () => {
-        this.errorMessage = 'Fehler beim Laden der Aufgabendaten.';
-        this.isLoading = false;
+        this.errorMessage.set('Fehler beim Laden der Aufgabendaten.');
+        this.isLoading.set(false);
       }
     });
   }

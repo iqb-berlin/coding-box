@@ -1,4 +1,6 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import {
+  Component, Inject, OnInit, signal
+} from '@angular/core';
 
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -46,12 +48,16 @@ import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/co
 export class EditMissingsProfilesDialogComponent implements OnInit {
   private readonly requiredMissingIds = ['mir', 'mci'];
 
-  missingsProfiles: { label: string; id: number }[] = [];
-  selectedProfile: MissingsProfilesDto | null = null;
-  editMode = false;
-  loading = false;
-  saving = false;
-  editMissings: MissingDto[] = [];
+  readonly missingsProfiles = signal<{
+    label: string;
+    id: number;
+  }[]>([]);
+
+  readonly selectedProfile = signal<MissingsProfilesDto | null>(null);
+  readonly editMode = signal(false);
+  readonly loading = signal(false);
+  readonly saving = signal(false);
+  readonly editMissings = signal<MissingDto[]>([]);
   displayedColumns: string[] = ['id', 'label', 'description', 'code', 'score', 'actions'];
 
   constructor(
@@ -70,11 +76,11 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   loadMissingsProfiles(): void {
     const workspaceId = this.data.workspaceId;
     if (workspaceId) {
-      this.loading = true;
+      this.loading.set(true);
       this.missingsProfileService.getMissingsProfiles(workspaceId).subscribe({
         next: profiles => {
-          this.missingsProfiles = profiles;
-          this.loading = false;
+          this.missingsProfiles.set(profiles);
+          this.loading.set(false);
           // Auto-select IQB-Standard profile if it exists
           const iqbStandardProfile = profiles.find(p => p.label === 'IQB-Standard');
           if (iqbStandardProfile) {
@@ -82,7 +88,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
           }
         },
         error: () => {
-          this.loading = false;
+          this.loading.set(false);
           this.snackBar.open(this.translateService.instant('workspace.error-loading-missings-profiles'), this.translateService.instant('close'), { duration: 3000 });
         }
       });
@@ -92,9 +98,9 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   selectProfile(label: string): void {
     const workspaceId = this.data.workspaceId;
     if (workspaceId) {
-      const profile = this.missingsProfiles.find(p => p.label === label);
+      const profile = this.missingsProfiles().find(p => p.label === label);
       if (profile) {
-        this.loading = true;
+        this.loading.set(true);
         this.missingsProfileService.getMissingsProfileDetails(workspaceId, profile.id).subscribe({
           next: profileDetails => {
             const missingsProfile = new MissingsProfilesDto();
@@ -103,11 +109,11 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
               missingsProfile.label = profileDetails.label;
               missingsProfile.missings = profileDetails.missings;
             }
-            this.selectedProfile = missingsProfile;
-            this.loading = false;
+            this.selectedProfile.set(missingsProfile);
+            this.loading.set(false);
           },
           error: () => {
-            this.loading = false;
+            this.loading.set(false);
             this.snackBar.open(this.translateService.instant('workspace.error-loading-missings-profile-details'), this.translateService.instant('close'), { duration: 3000 });
           }
         });
@@ -116,25 +122,31 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   }
 
   createProfile(): void {
-    this.selectedProfile = new MissingsProfilesDto();
-    this.selectedProfile.label = '';
-    this.editMissings = this.createRequiredMissings();
-    this.selectedProfile.setMissings(this.editMissings);
-    this.editMode = true;
+    const profile = new MissingsProfilesDto();
+    profile.label = '';
+    const missings = this.createRequiredMissings();
+    profile.setMissings(missings);
+    this.editMissings.set(missings);
+    this.selectedProfile.set(profile);
+    this.editMode.set(true);
   }
 
   editProfile(): void {
-    if (this.selectedProfile) {
-      const missings = this.selectedProfile.parseMissings();
-      this.editMissings = Array.isArray(missings) ? [...missings] : [];
+    const selectedProfileValue = this.selectedProfile();
+
+    if (selectedProfileValue) {
+      const missings = selectedProfileValue.parseMissings();
+      this.editMissings.set(Array.isArray(missings) ? missings.map(missing => ({ ...missing })) : []);
     }
-    this.editMode = true;
+    this.editMode.set(true);
   }
 
   saveProfile(): void {
+    const currentProfile = this.selectedProfile();
     const workspaceId = this.data.workspaceId;
-    if (workspaceId && this.selectedProfile) {
-      const missings = this.editMode ? this.editMissings : this.selectedProfile.parseMissings();
+    if (workspaceId && currentProfile) {
+      const selectedProfile = Object.assign(new MissingsProfilesDto(), currentProfile);
+      const missings = this.editMode() ? this.editMissings() : selectedProfile.parseMissings();
       if (!this.isProfileValid(missings)) {
         this.snackBar.open(this.translateService.instant('workspace.missing-validation-error'), this.translateService.instant('close'), { duration: 3000 });
         return;
@@ -142,27 +154,27 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
 
       const normalizedMissings = this.normalizeMissingsForStorage(missings);
 
-      if (this.editMode) {
-        this.selectedProfile.setMissings(normalizedMissings);
+      if (this.editMode()) {
+        selectedProfile.setMissings(normalizedMissings);
       }
 
-      this.saving = true;
+      this.saving.set(true);
 
-      const existingProfile = this.selectedProfile.id ?
-        this.missingsProfiles.find(p => p.id === this.selectedProfile?.id) :
+      const existingProfile = selectedProfile.id ?
+        this.missingsProfiles().find(p => p.id === selectedProfile?.id) :
         undefined;
 
-      if (this.selectedProfile.id && !existingProfile) {
-        this.saving = false;
+      if (selectedProfile.id && !existingProfile) {
+        this.saving.set(false);
         this.snackBar.open(this.translateService.instant('workspace.error-updating-missings-profile'), this.translateService.instant('close'), { duration: 3000 });
         return;
       }
 
       if (existingProfile) {
-        this.missingsProfileService.updateMissingsProfile(workspaceId, existingProfile.label, this.selectedProfile).subscribe({
+        this.missingsProfileService.updateMissingsProfile(workspaceId, existingProfile.label, selectedProfile).subscribe({
           next: profile => {
             if (!profile) {
-              this.saving = false;
+              this.saving.set(false);
               this.snackBar.open(this.translateService.instant('workspace.error-updating-missings-profile'), this.translateService.instant('close'), { duration: 3000 });
               return;
             }
@@ -170,22 +182,22 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
             missingsProfile.id = profile.id;
             missingsProfile.label = profile.label;
             missingsProfile.missings = profile.missings;
-            this.selectedProfile = missingsProfile;
-            this.saving = false;
-            this.editMode = false;
+            this.selectedProfile.set(missingsProfile);
+            this.saving.set(false);
+            this.editMode.set(false);
             this.loadMissingsProfiles();
             this.snackBar.open(this.translateService.instant('workspace.profile-updated-successfully'), this.translateService.instant('close'), { duration: 3000 });
           },
           error: () => {
-            this.saving = false;
+            this.saving.set(false);
             this.snackBar.open(this.translateService.instant('workspace.error-updating-missings-profile'), this.translateService.instant('close'), { duration: 3000 });
           }
         });
       } else {
-        this.missingsProfileService.createMissingsProfile(workspaceId, this.selectedProfile).subscribe({
+        this.missingsProfileService.createMissingsProfile(workspaceId, selectedProfile).subscribe({
           next: profile => {
             if (!profile) {
-              this.saving = false;
+              this.saving.set(false);
               this.snackBar.open(this.translateService.instant('workspace.error-creating-missings-profile'), this.translateService.instant('close'), { duration: 3000 });
               return;
             }
@@ -193,14 +205,14 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
             missingsProfile.id = profile.id;
             missingsProfile.label = profile.label;
             missingsProfile.missings = profile.missings;
-            this.selectedProfile = missingsProfile;
-            this.saving = false;
-            this.editMode = false;
+            this.selectedProfile.set(missingsProfile);
+            this.saving.set(false);
+            this.editMode.set(false);
             this.loadMissingsProfiles();
             this.snackBar.open(this.translateService.instant('workspace.profile-created-successfully'), this.translateService.instant('close'), { duration: 3000 });
           },
           error: () => {
-            this.saving = false;
+            this.saving.set(false);
             this.snackBar.open(this.translateService.instant('workspace.error-creating-missings-profile'), this.translateService.instant('close'), { duration: 3000 });
           }
         });
@@ -209,24 +221,25 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   }
 
   deleteProfile(): void {
+    const selectedProfile = this.selectedProfile();
     const workspaceId = this.data.workspaceId;
-    if (workspaceId && this.selectedProfile) {
-      this.saving = true;
-      this.missingsProfileService.deleteMissingsProfile(workspaceId, this.selectedProfile.label).subscribe({
+    if (workspaceId && selectedProfile) {
+      this.saving.set(true);
+      this.missingsProfileService.deleteMissingsProfile(workspaceId, selectedProfile.label).subscribe({
         next: success => {
           if (success) {
-            this.selectedProfile = null;
-            this.saving = false;
-            this.editMode = false;
+            this.selectedProfile.set(null);
+            this.saving.set(false);
+            this.editMode.set(false);
             this.loadMissingsProfiles();
             this.snackBar.open('Profile deleted successfully', 'Close', { duration: 3000 });
           } else {
-            this.saving = false;
+            this.saving.set(false);
             this.snackBar.open('Error deleting missings profile', 'Close', { duration: 3000 });
           }
         },
         error: () => {
-          this.saving = false;
+          this.saving.set(false);
           this.snackBar.open('Error deleting missings profile', 'Close', { duration: 3000 });
         }
       });
@@ -234,16 +247,18 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   }
 
   cancelEdit(): void {
-    this.editMode = false;
+    this.editMode.set(false);
 
     // If this was a new profile, clear the selection
-    if (!this.missingsProfiles.find(p => p.label === this.selectedProfile?.label)) {
-      this.selectedProfile = null;
+    if (!this.missingsProfiles().find(p => p.label === this.selectedProfile()?.label)) {
+      this.selectedProfile.set(null);
     }
   }
 
   addMissing(): void {
-    const missings = this.editMode ? this.editMissings : (this.selectedProfile?.parseMissings() || []);
+    const selectedProfileValue = this.selectedProfile();
+
+    const missings = [...(this.editMode() ? this.editMissings() : (selectedProfileValue?.parseMissings() || []))];
 
     missings.push({
       id: `missing-${Date.now()}`,
@@ -253,32 +268,40 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
       score: 0
     });
 
-    if (this.editMode) {
-      this.editMissings = [...missings];
-    } else if (this.selectedProfile) {
-      this.selectedProfile.setMissings(missings);
+    if (this.editMode()) {
+      this.editMissings.set([...missings]);
+    } else if (selectedProfileValue) {
+      const profile = Object.assign(new MissingsProfilesDto(), selectedProfileValue);
+      profile.setMissings(missings);
+      this.selectedProfile.set(profile);
     }
   }
 
   removeMissing(index: number): void {
-    if (this.editMode) {
-      const missings = [...this.editMissings];
+    const selectedProfileValue = this.selectedProfile();
+
+    if (this.editMode()) {
+      const missings = [...this.editMissings()];
       missings.splice(index, 1);
-      this.editMissings = missings;
-    } else if (this.selectedProfile) {
-      const missings = this.selectedProfile.parseMissings();
+      this.editMissings.set(missings);
+    } else if (selectedProfileValue) {
+      const missings = [...selectedProfileValue.parseMissings()];
       missings.splice(index, 1);
-      this.selectedProfile.setMissings(missings);
+      const profile = Object.assign(new MissingsProfilesDto(), selectedProfileValue);
+      profile.setMissings(missings);
+      this.selectedProfile.set(profile);
     }
   }
 
   getMissings(): MissingDto[] {
-    if (!this.selectedProfile) {
+    const selectedProfileValue = this.selectedProfile();
+
+    if (!selectedProfileValue) {
       return [];
     }
 
     try {
-      const missings = this.selectedProfile.parseMissings();
+      const missings = selectedProfileValue.parseMissings();
       if (!Array.isArray(missings)) {
         return [];
       }
@@ -407,21 +430,37 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
     return missing.score === null;
   }
 
-  setMissingScoreNa(missing: MissingDto, isNa: boolean): void {
-    missing.score = isNa ? null : 0;
+  setMissingScoreNa(missing: MissingDto | number, isNa: boolean): void {
+    this.setMissingField(missing, 'score', isNa ? null : 0);
   }
 
-  setMissingScore(missing: MissingDto, value: unknown): void {
+  setMissingScore(missing: MissingDto | number, value: unknown): void {
     if (value === null || value === undefined || value === '') {
-      (missing as { score: unknown }).score = '';
+      this.setMissingField(missing, 'score', '');
       return;
     }
 
     const score = Number(value);
-    (missing as { score: unknown }).score = Number.isFinite(score) ? score : value;
+    this.setMissingField(missing, 'score', Number.isFinite(score) ? score : value);
+  }
+
+  setMissingField(missing: MissingDto | number, key: keyof MissingDto, value: unknown): void {
+    this.editMissings.update(missings => {
+      const index = typeof missing === 'number' ? missing : missings.indexOf(missing);
+      return missings.map((candidate, candidateIndex) => (candidateIndex === index ?
+        { ...candidate, [key]: value } as MissingDto : candidate));
+    });
+  }
+
+  trackMissingRow(index: number): number {
+    return index;
   }
 
   getScoreDisplay(score: number | null): string | number {
     return score === null ? 'NA' : score;
+  }
+
+  setSelectedProfileField<K extends keyof MissingsProfilesDto>(key: K, value: MissingsProfilesDto[K]): void {
+    this.selectedProfile.update(current => (current ? Object.assign(new MissingsProfilesDto(), current, { [key]: value }) : current));
   }
 }

@@ -1,5 +1,7 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
+import {
+  Component, OnInit, inject, signal
+} from '@angular/core';
 import {
   AbstractControl,
   FormBuilder,
@@ -83,11 +85,11 @@ export class SystemNotificationsComponent implements OnInit {
 
   readonly columns = ['status', 'type', 'title', 'window', 'actions'];
 
-  notifications: SystemNotificationDto[] = [];
+  readonly notifications = signal<SystemNotificationDto[]>([]);
 
-  editingId: number | null = null;
+  readonly editingId = signal<number | null>(null);
 
-  loading = false;
+  readonly loading = signal(false);
 
   readonly form = this.formBuilder.nonNullable.group({
     type: [SystemNotificationType.Info, Validators.required],
@@ -107,21 +109,21 @@ export class SystemNotificationsComponent implements OnInit {
   }
 
   load(): void {
-    this.loading = true;
+    this.loading.set(true);
     this.service.getAll().subscribe({
       next: notifications => {
-        this.notifications = notifications;
-        this.loading = false;
+        this.notifications.set(notifications);
+        this.loading.set(false);
       },
       error: () => {
-        this.loading = false;
+        this.loading.set(false);
         this.showMessage('system-notifications.load-error');
       }
     });
   }
 
   edit(notification: SystemNotificationDto): void {
-    this.editingId = notification.id;
+    this.editingId.set(notification.id);
     this.form.reset({
       type: notification.type,
       severity: notification.severity,
@@ -137,7 +139,7 @@ export class SystemNotificationsComponent implements OnInit {
   }
 
   cancelEdit(): void {
-    this.editingId = null;
+    this.editingId.set(null);
     this.form.reset({
       type: SystemNotificationType.Info,
       severity: SystemNotificationSeverity.Low,
@@ -153,6 +155,8 @@ export class SystemNotificationsComponent implements OnInit {
   }
 
   save(): void {
+    const editingIdSnapshot = this.editingId();
+
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
@@ -167,9 +171,9 @@ export class SystemNotificationsComponent implements OnInit {
       visibleFrom: this.toIso(value.visibleFrom),
       visibleUntil: this.toIso(value.visibleUntil)
     };
-    const request = this.editingId === null ?
+    const request = editingIdSnapshot === null ?
       this.service.create(input) :
-      this.service.update(this.editingId, input);
+      this.service.update(editingIdSnapshot, input);
     request.subscribe({
       next: () => {
         this.showMessage('system-notifications.saved');
@@ -201,7 +205,7 @@ export class SystemNotificationsComponent implements OnInit {
     this.service.delete(notification.id).subscribe({
       next: () => {
         this.showMessage('system-notifications.deleted');
-        if (this.editingId === notification.id) this.cancelEdit();
+        if (this.editingId() === notification.id) this.cancelEdit();
         this.load();
       },
       error: () => this.showMessage('system-notifications.delete-error')
@@ -220,7 +224,7 @@ export class SystemNotificationsComponent implements OnInit {
   preview(): SystemNotificationDto {
     const value = this.form.getRawValue();
     return {
-      id: this.editingId ?? 0,
+      id: this.editingId() ?? 0,
       ...value,
       title: value.title || this.translate.instant('system-notifications.preview-title'),
       message: value.message || this.translate.instant('system-notifications.preview-message'),

@@ -216,6 +216,7 @@ build-cicd-base-image:
   rules:
     - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
       changes:
+        - .gitlab-ci.yml
         - .gitlab-ci/CICD.Dockerfile
     - if: $CI_COMMIT_BRANCH &&
         $CI_COMMIT_BRANCH != "main" &&
@@ -263,6 +264,9 @@ build-cicd-base-image:
     - !reference [ .default_rules, rules ]
   needs:
     - install-dependencies
+    - job: build-cicd-base-image
+      optional: true
+      artifacts: false
   artifacts:
     paths:
       - node_modules/.cache/nx
@@ -462,11 +466,88 @@ test-app:
   script:
     - npx nx affected --base=HEAD~1 --target=test --parallel=1 -- --maxWorkers=2
 
+test-frontend-zoneless:
+  stage: test-units
+  interruptible: true
+  image: ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
+  needs:
+    - install-dependencies
+    - job: build-cicd-base-image
+      optional: true
+      artifacts: false
+  rules:
+    - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
+      changes:
+        - apps/frontend/**/*
+        - scripts/qa/**/*
+        - docs/qa/**/*
+        - cypress/**/*
+        - cypress*.config.ts
+        - scripts/e2e/replay/**/*
+        - api-dto/coding/**/*
+        - package.json
+        - package-lock.json
+        - .gitlab-ci/Branch&PreRelease-Pipelines.gitlab-ci.yml
+    - if: $CI_COMMIT_BRANCH &&
+        $CI_COMMIT_BRANCH != "main" &&
+        $CI_COMMIT_BRANCH != "develop" &&
+        $CI_PIPELINE_SOURCE != "external_pull_request_event"
+      changes:
+        - apps/frontend/**/*
+        - scripts/qa/**/*
+        - docs/qa/**/*
+        - cypress/**/*
+        - cypress*.config.ts
+        - scripts/e2e/replay/**/*
+        - api-dto/coding/**/*
+        - package.json
+        - package-lock.json
+        - .gitlab-ci/Branch&PreRelease-Pipelines.gitlab-ci.yml
+    - when: never
+  script:
+    - npx nx run frontend:lint
+    - npx nx run frontend:test --maxWorkers=2
+    - npx nx run frontend:zoneless-inventory
+    - npx nx run frontend:zoneless-inventory-test
+    - npx nx run frontend:test-zoneless --maxWorkers=2
+    - npx nx build frontend --configuration=production
+
+test-zoneless-approval:
+  extends: test-frontend-zoneless
+  script:
+    - npx nx run frontend:zoneless-approval
+
+test-browser-zoneless:
+  stage: test-replay
+  interruptible: true
+  image: ${CYPRESS_IMAGE}
+  needs:
+    - install-dependencies
+  rules:
+    - !reference [ .default_rules, rules ]
+  script:
+    - npx cypress install
+    - npx nx run frontend:e2e --configuration=zoneless --browser=electron
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - cypress/screenshots
+      - cypress/videos
+
+test-browser-production:
+  extends: test-browser-zoneless
+  script:
+    - npx cypress install
+    - npx nx run frontend:e2e --configuration=production --cypressConfig=cypress.zoneless.config.ts --browser=electron
+
 test-replay-live:
   stage: test-replay
   interruptible: true
-  allow_failure: true
   image: ${CYPRESS_IMAGE}
+  variables:
+    REPLAY_E2E_CONNECT_HOST: docker
+    REPLAY_E2E_PUBLISH_HOST: 0.0.0.0
   services:
     - name: ${DOCKER_SERVICE}
       variables:
@@ -481,13 +562,34 @@ test-replay-live:
         - api-dto/coding/**/*
         - apps/backend/src/app/admin/workspace/workspace-coding-replay*
         - apps/backend/src/app/database/services/test-results/**/*
-        - apps/frontend/src/app/replay/**/*
+        - apps/frontend/**/*
         - cypress/fixtures/replay-datasets/**/*
         - cypress/e2e/replay-live.cy.ts
+        - cypress/auth/**/*
+        - cypress.auth.config.ts
+        - cypress/e2e/item-matrix-live.cy.ts
         - cypress/support/replay-e2e.ts
         - cypress.replay.config.ts
         - scripts/e2e/replay/**/*
-      when: manual
+        - .gitlab-ci/Branch&PreRelease-Pipelines.gitlab-ci.yml
+    - if: $CI_COMMIT_BRANCH &&
+        $CI_COMMIT_BRANCH != "main" &&
+        $CI_COMMIT_BRANCH != "develop" &&
+        $CI_PIPELINE_SOURCE != "external_pull_request_event"
+      changes:
+        - api-dto/coding/**/*
+        - apps/backend/src/app/admin/workspace/workspace-coding-replay*
+        - apps/backend/src/app/database/services/test-results/**/*
+        - apps/frontend/**/*
+        - cypress/fixtures/replay-datasets/**/*
+        - cypress/e2e/replay-live.cy.ts
+        - cypress/auth/**/*
+        - cypress.auth.config.ts
+        - cypress/e2e/item-matrix-live.cy.ts
+        - cypress/support/replay-e2e.ts
+        - cypress.replay.config.ts
+        - scripts/e2e/replay/**/*
+        - .gitlab-ci/Branch&PreRelease-Pipelines.gitlab-ci.yml
     - when: never
   before_script:
     - apt-get update
@@ -495,7 +597,7 @@ test-replay-live:
     - until docker info > /dev/null 2>&1; do sleep 1; done
     - npx cypress install
   script:
-    - npx nx run frontend:e2e-replay-live
+    - npx nx run frontend:e2e-replay-live --configuration=zoneless
   artifacts:
     when: always
     expire_in: 7 days
@@ -503,6 +605,13 @@ test-replay-live:
       - cypress/replay-artifacts/screenshots
       - cypress/replay-artifacts/videos
       - tmp/replay-e2e-artifacts
+
+test-auth-live-zoneless:
+  extends: test-replay-live
+  script:
+    - npx nx run frontend:test-e2e-harness
+    - npx nx run frontend:e2e-auth-live --configuration=zoneless
+    - npx nx run frontend:e2e-auth-live --configuration=production
 
 lint-app:
   stage: lint
@@ -518,13 +627,13 @@ lint-app:
 audit-app:
   stage: audit
   interruptible: true
-  allow_failure: true
+  allow_failure: false
   rules:
     - !reference [ .default_rules, rules ]
   needs:
     - install-dependencies
   script:
-    - npm audit --audit-level critical
+    - npm audit --audit-level high
 
 build-develop-commit-db-image:
   stage: build-images

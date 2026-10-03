@@ -1,8 +1,8 @@
+import { provideZonelessChangeDetection } from '@angular/core';
+import { delay } from 'rxjs/operators';
 import {
   ComponentFixture,
-  TestBed,
-  fakeAsync,
-  tick
+  TestBed
 } from '@angular/core/testing';
 import {
   MatDialogRef,
@@ -129,6 +129,7 @@ describe('VariableAnalysisDialogComponent', () => {
         VariableAnalysisDialogComponent
       ],
       providers: [
+        provideZonelessChangeDetection(),
         { provide: MatDialogRef, useValue: mockDialogRef },
         { provide: MAT_DIALOG_DATA, useValue: mockDialogData },
         {
@@ -150,7 +151,7 @@ describe('VariableAnalysisDialogComponent', () => {
   });
 
   it('should keep tracking the response-analysis guard after destroy while a job is active', () => {
-    expect(component.activeJob).toBeDefined();
+    expect(component.activeJob()).toBeDefined();
 
     component.ngOnDestroy();
 
@@ -164,17 +165,17 @@ describe('VariableAnalysisDialogComponent', () => {
       component.analyzeVariables();
 
       const comboKey = '0:VAR1';
-      expect(component.variableFrequencies[comboKey]).toBeDefined();
-      expect(component.variableFrequencies[comboKey][0].value).toBe('Val1');
-      expect(component.variableFrequencies[comboKey][0].count).toBe(2);
-      expect(component.variableFrequencies[comboKey][0].percentage).toBe(
+      expect(component.variableFrequencies()[comboKey]).toBeDefined();
+      expect(component.variableFrequencies()[comboKey][0].value).toBe('Val1');
+      expect(component.variableFrequencies()[comboKey][0].count).toBe(2);
+      expect(component.variableFrequencies()[comboKey][0].percentage).toBe(
         (2 / 2) * 100
       );
-      expect(component.variableFrequencies[comboKey][0].percentageValid).toBe(
+      expect(component.variableFrequencies()[comboKey][0].percentageValid).toBe(
         100
       );
       expect(
-        component.allVariableCombos.find(combo => combo.variableId === 'VAR1')
+        component.allVariableCombos().find(combo => combo.variableId === 'VAR1')
       ).toEqual(expect.objectContaining({
         totalCount: 2,
         validCount: 2,
@@ -204,23 +205,25 @@ describe('VariableAnalysisDialogComponent', () => {
       component.analyzeVariables();
 
       const comboKey = '10:VAR1';
-      expect(component.variableFrequencies[comboKey]).toBeDefined();
-      expect(component.variableFrequencies[comboKey][0].value).toBe('Result1');
+      expect(component.variableFrequencies()[comboKey]).toBeDefined();
+      expect(component.variableFrequencies()[comboKey][0].value).toBe('Result1');
     });
   });
 
   describe('filterVariables', () => {
-    it('should filter variables based on searchText', fakeAsync(() => {
+    it('should filter variables based on searchText', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'requestAnimationFrame'] });
       component.onSearchChange({
         target: { value: 'VAR1' }
       } as unknown as Event);
-      tick(300);
+      jest.advanceTimersByTime(300);
+      jest.useRealTimers();
 
-      expect(component.variableCombos.length).toBe(1);
-      expect(component.variableCombos[0].variableId).toBe('VAR1');
-    }));
+      expect(component.variableCombos().length).toBe(1);
+      expect(component.variableCombos()[0].variableId).toBe('VAR1');
+    });
 
-    it('should render filtered analysis table rows', fakeAsync(() => {
+    it('should render filtered analysis table rows', async () => {
       const getAnalysisTableText = (): string => (
         fixture.nativeElement.querySelector('.analysis-table')?.textContent || ''
       );
@@ -233,20 +236,22 @@ describe('VariableAnalysisDialogComponent', () => {
       expect(tableText).toContain('VAR1');
       expect(tableText).toContain('Val1');
 
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'requestAnimationFrame'] });
       component.onSearchChange({
         target: { value: 'VAR2' }
       } as unknown as Event);
-      tick(300);
+      jest.advanceTimersByTime(300);
+      jest.useRealTimers();
       fixture.detectChanges();
       tableText = getAnalysisTableText();
 
-      expect(component.analysisRows.map(row => row.variableId)).toEqual([
+      expect(component.analysisRows().map(row => row.variableId)).toEqual([
         'VAR2'
       ]);
       expect(tableText).toContain('VAR2');
       expect(tableText).toContain('Val2');
       expect(tableText).not.toContain('VAR1');
-    }));
+    });
 
     it('should keep rows with missing labels last when sorting descending', () => {
       component.data.analysisResults = {
@@ -286,7 +291,7 @@ describe('VariableAnalysisDialogComponent', () => {
       component.analyzeVariables();
       component.onSortChange({ active: 'label', direction: 'desc' });
 
-      expect(component.analysisRows.map(row => row.value)).toEqual([
+      expect(component.analysisRows().map(row => row.value)).toEqual([
         'beta',
         'alpha',
         'missing'
@@ -297,9 +302,9 @@ describe('VariableAnalysisDialogComponent', () => {
   describe('empty state', () => {
     it('should distinguish no analysis from filtered server-side results', () => {
       component.data.analysisResults = undefined;
-      component.allVariableCombos = [];
-      component.activeJob = undefined;
-      component.isStartingJob = false;
+      component.allVariableCombos.set([]);
+      component.activeJob.set(undefined);
+      component.isStartingJob.set(false);
 
       expect(component.getEmptyStateMessageKey()).toBe(
         'variable-analysis.no-results-yet'
@@ -335,7 +340,7 @@ describe('VariableAnalysisDialogComponent', () => {
     it('should load jobs from service', () => {
       component.refreshJobs();
       expect(mockVariableAnalysisService.getAllJobs).toHaveBeenCalledWith(1);
-      expect(component.jobs.length).toBe(1);
+      expect(component.jobs().length).toBe(1);
     });
 
     it('should show error snackbar on failure', () => {
@@ -373,7 +378,7 @@ describe('VariableAnalysisDialogComponent', () => {
 
   describe('startNewAnalysis', () => {
     it('should call service and refresh jobs', () => {
-      component.activeJob = undefined;
+      component.activeJob.set(undefined);
       component.startNewAnalysis();
       expect(
         mockVariableAnalysisService.createAnalysisJob
@@ -387,8 +392,8 @@ describe('VariableAnalysisDialogComponent', () => {
         id: 2,
         status: 'pending'
       };
-      component.activeJob = undefined;
-      component.jobs = [];
+      component.activeJob.set(undefined);
+      component.jobs.set([]);
       mockVariableAnalysisService.createAnalysisJob.mockReturnValueOnce(
         of(startedJob)
       );
@@ -400,7 +405,7 @@ describe('VariableAnalysisDialogComponent', () => {
 
       component.startNewAnalysis();
 
-      expect(component.activeJob).toEqual(startedJob);
+      expect(component.activeJob()).toEqual(startedJob);
       expect(mockVariableAnalysisService.getAllJobs).toHaveBeenCalledTimes(1);
       expect(
         mockVariableAnalysisService.setVariableAnalysisGuardRunning
@@ -437,11 +442,11 @@ describe('VariableAnalysisDialogComponent', () => {
       );
 
       component.viewJobResults(1);
-      expect(component.isLoading).toBe(true);
+      expect(component.isLoading()).toBe(true);
 
       component.deleteJob(1);
 
-      expect(component.isLoading).toBe(false);
+      expect(component.isLoading()).toBe(false);
       expect(component.data.analysisResults).toBeUndefined();
       expect(dismissLoadingResults).toHaveBeenCalled();
     });
@@ -524,14 +529,14 @@ describe('VariableAnalysisDialogComponent', () => {
       expect(
         fixture.nativeElement.querySelector('.page-window-message')
       ).not.toBeNull();
-      expect(component.currentPage).toBe(0);
+      expect(component.currentPage()).toBe(0);
     });
 
     it('reloads server-side results when schema code visibility changes', () => {
       component.viewJobResults(1);
       mockVariableAnalysisService.getAnalysisResultsPage.mockClear();
 
-      component.includeSchemaCodes = true;
+      component.includeSchemaCodes.set(true);
       component.onSchemaCodesToggleChange();
 
       expect(
@@ -553,8 +558,8 @@ describe('VariableAnalysisDialogComponent', () => {
 
       component.onSortChange({ active: 'count', direction: 'desc' });
 
-      expect(component.sortBy).toBe('count');
-      expect(component.sortDirection).toBe('desc');
+      expect(component.sortBy()).toBe('count');
+      expect(component.sortDirection()).toBe('desc');
       expect(
         mockVariableAnalysisService.getAnalysisResultsPage
       ).toHaveBeenCalledWith(1, 1, {
@@ -568,7 +573,7 @@ describe('VariableAnalysisDialogComponent', () => {
       });
     });
 
-    it('should dismiss stale loading snackbars without applying stale results', fakeAsync(() => {
+    it('should dismiss stale loading snackbars without applying stale results', async () => {
       const firstResults = new Subject<VariableAnalysisResultPageDto>();
       const secondResults = new Subject<VariableAnalysisResultPageDto>();
       const firstDismiss = jest.fn();
@@ -580,10 +585,12 @@ describe('VariableAnalysisDialogComponent', () => {
         .mockReturnValueOnce(secondResults);
 
       component.viewJobResults(1);
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'requestAnimationFrame'] });
       component.onSearchChange({
         target: { value: 'VAR' }
       } as unknown as Event);
-      tick(300);
+      jest.advanceTimersByTime(300);
+      jest.useRealTimers();
 
       firstResults.next({
         variableCombos: [],
@@ -597,7 +604,7 @@ describe('VariableAnalysisDialogComponent', () => {
 
       expect(firstDismiss).toHaveBeenCalled();
       expect(component.data.analysisResults?.total).not.toBe(1);
-    }));
+    });
   });
 
   describe('downloadAnalysisResults', () => {
@@ -615,8 +622,8 @@ describe('VariableAnalysisDialogComponent', () => {
         .mockImplementation(jest.fn());
 
       component.viewJobResults(1);
-      component.searchText = 'VAR';
-      component.onlyWithEmptyValues = true;
+      component.searchText.set('VAR');
+      component.onlyWithEmptyValues.set(true);
 
       expect(component.canExportAnalysisResults()).toBe(true);
       component.downloadAnalysisResults('csv');
@@ -635,5 +642,17 @@ describe('VariableAnalysisDialogComponent', () => {
 
       clickSpy.mockRestore();
     });
+  });
+  it('renders a delayed server response without another user action', async () => {
+    const backend = TestBed.inject(VariableAnalysisService);
+    const response = backend.getAllJobs(1).pipe(delay(30));
+    jest.spyOn(backend, 'getAllJobs').mockReturnValue(response);
+    fixture.destroy();
+    fixture = TestBed.createComponent(VariableAnalysisDialogComponent);
+    component = fixture.componentInstance;
+    fixture.autoDetectChanges();
+    await new Promise<void>(resolve => { setTimeout(resolve, 80); });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('variable-analysis.analysis-running');
   });
 });

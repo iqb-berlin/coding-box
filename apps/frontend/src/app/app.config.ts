@@ -11,7 +11,6 @@ import {
 } from '@angular/common/http';
 import { registerLocaleData, HashLocationStrategy, LocationStrategy } from '@angular/common';
 import localeDeAt from '@angular/common/locales/de-AT';
-import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import {
   AutoRefreshTokenService, createInterceptorCondition,
   INCLUDE_BEARER_TOKEN_INTERCEPTOR_CONFIG, IncludeBearerTokenCondition,
@@ -55,6 +54,7 @@ export const provideKeycloakAngular = () => provideKeycloak({
   },
   initOptions: {
     onLoad: 'check-sso',
+    pkceMethod: 'S256',
     checkLoginIframe: false
   },
   features: [
@@ -89,7 +89,6 @@ export const appConfig: ApplicationConfig = {
     })),
     provideKeycloakAngular(),
     provideRouter(routes),
-    provideAnimationsAsync(),
     {
       provide: SERVER_URL,
       useValue: environment.backendUrl

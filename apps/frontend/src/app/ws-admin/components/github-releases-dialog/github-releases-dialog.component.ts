@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, inject
+  Component, Inject, OnInit, inject, signal
 } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -36,10 +36,10 @@ export class GithubReleasesDialogComponent implements OnInit {
   private snackBar = inject(MatSnackBar);
   translate = inject(TranslateService);
 
-  releases: GithubReleaseShort[] = [];
-  isLoading = false;
+  readonly releases = signal<GithubReleaseShort[]>([]);
+  readonly isLoading = signal(false);
   displayedColumns = ['name', 'version', 'published_at', 'actions'];
-  selectedType: 'aspect-player' | 'schemer' = 'aspect-player';
+  readonly selectedType = signal<'aspect-player' | 'schemer'>('aspect-player');
 
   constructor(
     public dialogRef: MatDialogRef<GithubReleasesDialogComponent>,
@@ -51,31 +51,31 @@ export class GithubReleasesDialogComponent implements OnInit {
   }
 
   setType(type: 'aspect-player' | 'schemer'): void {
-    this.selectedType = type;
+    this.selectedType.set(type);
     this.loadReleases();
   }
 
   loadReleases(): void {
-    this.isLoading = true;
-    this.fileService.getGithubReleases(this.data.workspaceId, this.selectedType)
+    this.isLoading.set(true);
+    this.fileService.getGithubReleases(this.data.workspaceId, this.selectedType())
       .subscribe({
         next: releases => {
-          this.releases = releases;
-          this.isLoading = false;
+          this.releases.set(releases);
+          this.isLoading.set(false);
         },
         error: () => {
-          this.isLoading = false;
+          this.isLoading.set(false);
           this.snackBar.open('Fehler beim Laden der Releases von GitHub.', 'OK', { duration: 3000 });
         }
       });
   }
 
   install(release: GithubReleaseShort): void {
-    this.isLoading = true;
+    this.isLoading.set(true);
     this.fileService.installGithubRelease(this.data.workspaceId, release.url)
       .subscribe({
         next: success => {
-          this.isLoading = false;
+          this.isLoading.set(false);
           if (success) {
             this.snackBar.open(`${release.name} erfolgreich installiert.`, 'OK', { duration: 3000 });
             this.dialogRef.close(true);
@@ -84,7 +84,7 @@ export class GithubReleasesDialogComponent implements OnInit {
           }
         },
         error: () => {
-          this.isLoading = false;
+          this.isLoading.set(false);
           this.snackBar.open('Fehler bei der Installation.', 'OK', { duration: 3000 });
         }
       });

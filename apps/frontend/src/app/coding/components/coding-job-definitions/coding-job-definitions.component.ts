@@ -1,11 +1,5 @@
 import {
-  Component,
-  OnDestroy,
-  OnInit,
-  inject,
-  Output,
-  EventEmitter,
-  Input
+  Component, OnDestroy, OnInit, inject, Output, EventEmitter, Input, signal
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -15,7 +9,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDividerModule } from '@angular/material/divider';
-import { MatDialog } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatCardModule } from '@angular/material/card';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatChipsModule } from '@angular/material/chips';
@@ -112,15 +106,18 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   private codingJobService = inject(CodingJobService);
   private translateService = inject(TranslateService);
   private sessionRecoveryService = inject(SessionRecoveryService);
-  private destroy$ = new Subject<void>();
 
-  jobDefinitions: JobDefinition[] = [];
-  isLoading = false;
-  isBulkCreating = false;
-  refreshingDefinitionIds = new Set<number>();
-  exportingDistributionDefinitionIds = new Set<number>();
-  coders: Coder[] = [];
-  showInfo = false;
+  private destroy$ = new Subject<void>();
+  private destroyed = false;
+  private bulkCreationDialogRef?: MatDialogRef<CodingJobBulkCreationDialogComponent>;
+
+  readonly jobDefinitions = signal<JobDefinition[]>([]);
+  readonly isLoading = signal(false);
+  readonly isBulkCreating = signal(false);
+  readonly refreshingDefinitionIds = signal(new Set<number>());
+  readonly exportingDistributionDefinitionIds = signal(new Set<number>());
+  readonly coders = signal<Coder[]>([]);
+  readonly showInfo = signal(false);
   private readonly variablePreviewLimit = 12;
   private expandedVariableDefinitions = new WeakSet<JobDefinition>();
   private definitionDialogOpen = false;
@@ -149,6 +146,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
+    this.bulkCreationDialogRef?.close();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -166,16 +165,16 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: coders => {
-          this.coders = coders || [];
+          this.coders.set(coders || []);
         },
         error: () => {
-          this.coders = [];
+          this.coders.set([]);
         }
       });
   }
 
   private loadJobDefinitions(): void {
-    this.isLoading = true;
+    this.isLoading.set(true);
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (!workspaceId) {
@@ -184,7 +183,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
           'coding-job-definitions.messages.snackbar.no-workspace'
         )
       );
-      this.isLoading = false;
+      this.isLoading.set(false);
       return;
     }
 
@@ -193,8 +192,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: definitions => {
-          this.jobDefinitions = definitions;
-          this.isLoading = false;
+          this.jobDefinitions.set(definitions);
+          this.isLoading.set(false);
         },
         error: error => {
           this.showError(
@@ -202,7 +201,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
               error: error.message
             })
           );
-          this.isLoading = false;
+          this.isLoading.set(false);
         }
       });
   }
@@ -212,7 +211,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return '-';
     }
     const coderNames = definition.assignedCoders
-      .map(id => this.coders.find(c => c.id === id)?.name)
+      .map(id => this.coders().find(c => c.id === id)?.name)
       .filter(name => name)
       .join(', ');
     return coderNames || '-';
@@ -302,12 +301,12 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   getDefinitionCountByStatus(
     status: NonNullable<JobDefinition['status']>
   ): number {
-    return this.jobDefinitions.filter(definition => definition.status === status)
+    return this.jobDefinitions().filter(definition => definition.status === status)
       .length;
   }
 
   getDefinitionsReadyForJobsCount(): number {
-    return this.jobDefinitions.filter(definition => this.canCreateCodingJobs(definition)).length;
+    return this.jobDefinitions().filter(definition => this.canCreateCodingJobs(definition)).length;
   }
 
   getStatusHint(status?: JobDefinition['status']): string {
@@ -463,11 +462,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   isRefreshingDefinition(definition: JobDefinition): boolean {
-    return !!definition.id && this.refreshingDefinitionIds.has(definition.id);
+    return !!definition.id && this.refreshingDefinitionIds().has(definition.id);
   }
 
   isExportingDistribution(definition: JobDefinition): boolean {
-    return !!definition.id && this.exportingDistributionDefinitionIds.has(definition.id);
+    return !!definition.id && this.exportingDistributionDefinitionIds().has(definition.id);
   }
 
   getEditDefinitionLabel(definition: JobDefinition): string {
@@ -813,7 +812,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.refreshingDefinitionIds.add(definition.id);
+    this.refreshingDefinitionIds.update(value => {
+      const next = new Set(value);
+      next.add(definition.id!);
+      return next;
+    });
     try {
       const preview = await firstValueFrom(
         this.codingJobBackendService.previewJobDefinitionRefresh(
@@ -844,7 +847,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         )
       );
     } finally {
-      this.refreshingDefinitionIds.delete(definition.id);
+      this.refreshingDefinitionIds.update(value => {
+        const next = new Set(value);
+        next.delete(definition.id!);
+        return next;
+      });
     }
   }
 
@@ -861,7 +868,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         definitionLabel: this.getDefinitionDisplayLabel(definition),
         snapshot: this.getLatestDistributionSnapshot(definition),
         snapshots: definition.distributionSnapshots || [],
-        coders: this.coders,
+        coders: this.coders(),
         createdJobsCount: this.getCreatedJobsCount(definition)
       },
       autoFocus: false
@@ -892,12 +899,20 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.exportingDistributionDefinitionIds.add(definition.id);
+    this.exportingDistributionDefinitionIds.update(value => {
+      const next = new Set(value);
+      next.add(definition.id!);
+      return next;
+    });
     this.codingJobBackendService
       .exportJobDefinitionDistributionCsv(workspaceId, definition.id)
       .pipe(
         finalize(() => {
-          this.exportingDistributionDefinitionIds.delete(definition.id!);
+          this.exportingDistributionDefinitionIds.update(value => {
+            const next = new Set(value);
+            next.delete(definition.id!);
+            return next;
+          });
         }),
         takeUntil(this.destroy$)
       )
@@ -923,7 +938,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     workspaceId: number,
     jobDefinitionId: number
   ): Promise<void> {
-    this.refreshingDefinitionIds.add(jobDefinitionId);
+    this.refreshingDefinitionIds.update(value => {
+      const next = new Set(value);
+      next.add(jobDefinitionId);
+      return next;
+    });
     try {
       const result = await firstValueFrom(
         this.codingJobBackendService.applyJobDefinitionRefresh(
@@ -951,7 +970,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         )
       );
     } finally {
-      this.refreshingDefinitionIds.delete(jobDefinitionId);
+      this.refreshingDefinitionIds.update(value => {
+        const next = new Set(value);
+        next.delete(jobDefinitionId);
+        return next;
+      });
     }
   }
 
@@ -982,14 +1005,16 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     }
 
     let preview: JobDefinitionDistributionPreviewResponse;
+    const isCurrentContext = () => !this.destroyed && this.appService.selectedWorkspaceId === workspaceId;
     try {
       preview = await firstValueFrom(
         this.codingJobBackendService.previewCodingJobFromDefinition(
           workspaceId,
           definition.id
-        )
+        ).pipe(takeUntil(this.destroy$))
       );
     } catch (error) {
+      if (!isCurrentContext()) return;
       this.showError(
         this.translateService.instant(
           'coding-job-definitions.messages.snackbar.create-preview-failed',
@@ -998,6 +1023,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       );
       return;
     }
+
+    if (!isCurrentContext()) return;
 
     const selectedCoders = this.mapPreviewSelectedCoders(preview.selectedCoders);
     if (selectedCoders.length === 0) {
@@ -1038,10 +1065,14 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       width: '1200px',
       data: dialogData
     });
+    this.bulkCreationDialogRef = dialogRef;
 
     const result = await firstValueFrom(dialogRef.afterClosed());
+    if (this.bulkCreationDialogRef === dialogRef) {
+      this.bulkCreationDialogRef = undefined;
+    }
 
-    if (result && result.confirmed) {
+    if (isCurrentContext() && result && result.confirmed) {
       await this.createBulkJobsFromDefinition(
         workspaceId,
         definition.id
@@ -1070,7 +1101,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     workspaceId: number,
     jobDefinitionId: number
   ): Promise<void> {
-    this.isBulkCreating = true;
+    const isCurrentContext = () => !this.destroyed && this.appService.selectedWorkspaceId === workspaceId;
+    this.isBulkCreating.set(true);
     try {
       const result = await firstValueFrom(
         this.codingJobBackendService.createCodingJobFromDefinition(
@@ -1078,6 +1110,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
           jobDefinitionId
         )
       );
+
+      if (!isCurrentContext()) return;
 
       if (result && result.success) {
         this.snackBar.open(
@@ -1107,6 +1141,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         );
       }
     } catch (error) {
+      if (!isCurrentContext()) return;
       this.snackBar.open(
         this.translateService.instant(
           'coding-job-definition-dialog.snackbars.bulk-creation-failed',
@@ -1116,7 +1151,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         { duration: 5000 }
       );
     } finally {
-      this.isBulkCreating = false;
+      this.isBulkCreating.set(false);
     }
 
     this.loadJobDefinitions();

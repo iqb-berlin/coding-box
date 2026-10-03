@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnDestroy, inject
+  Component, Inject, OnDestroy, inject, signal
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
@@ -60,19 +60,19 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
     MatDialogRef<ContentPoolImportDialogComponent>
   );
 
-  acps: ContentPoolAcpSummary[] = [];
+  readonly acps = signal<ContentPoolAcpSummary[]>([]);
 
-  selectedAcpId = '';
+  readonly selectedAcpId = signal('');
 
-  isLoadingAcps = false;
+  readonly isLoadingAcps = signal(false);
 
-  isImporting = false;
+  readonly isImporting = signal(false);
 
-  hasLoadedAcps = false;
+  readonly hasLoadedAcps = signal(false);
 
-  errorMessage = '';
+  readonly errorMessage = signal('');
 
-  importProgress?: ContentPoolImportAcpProgress;
+  readonly importProgress = signal<ContentPoolImportAcpProgress | undefined>(undefined);
 
   private importSubscription?: Subscription;
 
@@ -85,42 +85,39 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
   }
 
   loadAcps(): void {
-    this.errorMessage = '';
-    this.isLoadingAcps = true;
-    this.hasLoadedAcps = false;
-    this.selectedAcpId = '';
-    this.acps = [];
+    this.errorMessage.set('');
+    this.isLoadingAcps.set(true);
+    this.hasLoadedAcps.set(false);
+    this.selectedAcpId.set('');
+    this.acps.set([]);
 
     this.contentPoolIntegrationService
       .listAccessibleAcps(this.data.workspaceId)
       .subscribe({
         next: response => {
-          this.isLoadingAcps = false;
-          this.hasLoadedAcps = true;
-          this.acps = response.acps || [];
-          if (this.acps.length === 0) {
-            this.errorMessage = 'Keine ACPs gefunden oder kein Zugriff vorhanden.';
+          this.isLoadingAcps.set(false);
+          this.hasLoadedAcps.set(true);
+          this.acps.set(response.acps || []);
+          if (this.acps().length === 0) {
+            this.errorMessage.set('Keine ACPs gefunden oder kein Zugriff vorhanden.');
           }
         },
         error: error => {
-          this.isLoadingAcps = false;
-          this.errorMessage = this.extractErrorMessage(
-            error,
-            'ACP-Liste konnte nicht aus dem Content Pool geladen werden.'
-          );
+          this.isLoadingAcps.set(false);
+          this.errorMessage.set(this.extractErrorMessage(error, 'ACP-Liste konnte nicht aus dem Content Pool geladen werden.'));
         }
       });
   }
 
   importAcp(): void {
-    if (!this.selectedAcpId) {
-      this.errorMessage = 'Bitte ein ACP auswählen.';
+    if (!this.selectedAcpId()) {
+      this.errorMessage.set('Bitte ein ACP auswählen.');
       return;
     }
 
-    this.errorMessage = '';
-    this.isImporting = true;
-    this.importProgress = {
+    this.errorMessage.set('');
+    this.isImporting.set(true);
+    this.importProgress.set({
       jobId: '',
       status: 'pending',
       phase: 'queued',
@@ -130,70 +127,69 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
       progress: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
-    };
+    });
     this.importSubscription?.unsubscribe();
 
     this.importSubscription = this.contentPoolIntegrationService
       .importAcpWithProgress(this.data.workspaceId, {
-        acpId: this.selectedAcpId
+        acpId: this.selectedAcpId()
       })
       .subscribe({
         next: progress => {
-          this.importProgress = progress;
+          this.importProgress.set(progress);
 
           if (progress.status === 'failed') {
-            this.isImporting = false;
-            this.errorMessage = progress.error ||
-              'ACP konnte nicht importiert werden.';
+            this.isImporting.set(false);
+            this.errorMessage.set(progress.error ||
+    'ACP konnte nicht importiert werden.');
             return;
           }
 
           if (progress.status === 'completed' && progress.result) {
-            this.isImporting = false;
+            this.isImporting.set(false);
             this.dialogRef.close({
               success: true,
-              acpId: this.selectedAcpId,
+              acpId: this.selectedAcpId(),
               result: progress.result
             });
           }
         },
         error: error => {
-          this.isImporting = false;
-          this.errorMessage = this.extractErrorMessage(
-            error,
-            'ACP konnte nicht importiert werden.'
-          );
+          this.isImporting.set(false);
+          this.errorMessage.set(this.extractErrorMessage(error, 'ACP konnte nicht importiert werden.'));
         }
       });
   }
 
   get importProgressMode(): 'determinate' | 'indeterminate' {
-    return this.importProgress?.totalFiles || this.importProgress?.progress ?
+    return this.importProgress()?.totalFiles || this.importProgress()?.progress ?
       'determinate' :
       'indeterminate';
   }
 
   get importProgressValue(): number {
-    const progress = this.importProgress?.progress || 0;
+    const progress = this.importProgress()?.progress || 0;
     return Math.max(0, Math.min(100, progress));
   }
 
   get importProgressText(): string {
-    if (!this.importProgress) {
+    const importProgressSnapshot = this.importProgress();
+
+    if (!importProgressSnapshot) {
       return '';
     }
 
     if (
-      this.importProgress.phase === 'downloading-files' &&
-      this.importProgress.totalFiles > 0
+      importProgressSnapshot.phase === 'downloading-files' &&
+      importProgressSnapshot.totalFiles > 0
     ) {
-      const currentFile = this.importProgress.currentFileName ?
-        `: ${this.importProgress.currentFileName}` :
+      const currentFile = importProgressSnapshot.currentFileName ?
+        `: ${importProgressSnapshot.currentFileName}` :
         '';
-      return `Datei ${this.importProgress.processedFiles} von ${this.importProgress.totalFiles}${currentFile}`;
+      return `Datei ${importProgressSnapshot.processedFiles} von ${importProgressSnapshot.totalFiles}${currentFile}`;
     }
 
-    return this.importProgress.message;
+    return importProgressSnapshot.message;
   }
 
   cancel(): void {

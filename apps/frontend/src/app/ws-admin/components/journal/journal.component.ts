@@ -1,4 +1,6 @@
-import { Component, OnInit, inject } from '@angular/core';
+import {
+  Component, OnInit, inject, signal
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -46,7 +48,7 @@ export class JournalComponent implements OnInit {
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
 
-  journalEntries: JournalEntry[] = [];
+  readonly journalEntries = signal<JournalEntry[]>([]);
   displayedColumns: string[] = [
     'timestamp',
     'actor',
@@ -58,16 +60,16 @@ export class JournalComponent implements OnInit {
     'details'
   ];
 
-  totalEntries = 0;
-  pageSize = 20;
-  pageIndex = 0;
-  loading = false;
-  loadError = false;
-  loadErrorMessage = '';
-  loadErrorRequestId = '';
+  readonly totalEntries = signal(0);
+  readonly pageSize = signal(20);
+  readonly pageIndex = signal(0);
+  readonly loading = signal(false);
+  readonly loadError = signal(false);
+  readonly loadErrorMessage = signal('');
+  readonly loadErrorRequestId = signal('');
   eventTypes = auditEventTypes;
   resultTypes = auditEventResults;
-  filters: JournalFilters = {};
+  readonly filters = signal<JournalFilters>({});
 
   ngOnInit(): void {
     this.loadJournalEntries();
@@ -76,57 +78,61 @@ export class JournalComponent implements OnInit {
   loadJournalEntries(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.journalEntries = [];
-      this.totalEntries = 0;
-      this.loadError = false;
-      this.loadErrorMessage = '';
-      this.loadErrorRequestId = '';
+      this.journalEntries.set([]);
+      this.totalEntries.set(0);
+      this.loadError.set(false);
+      this.loadErrorMessage.set('');
+      this.loadErrorRequestId.set('');
       return;
     }
 
-    this.loading = true;
-    this.loadError = false;
-    this.loadErrorMessage = '';
-    this.loadErrorRequestId = '';
+    this.loading.set(true);
+    this.loadError.set(false);
+    this.loadErrorMessage.set('');
+    this.loadErrorRequestId.set('');
 
     this.journalService.getJournalEntries(
       workspaceId,
-      this.pageIndex + 1,
-      this.pageSize,
-      this.filters,
+      this.pageIndex() + 1,
+      this.pageSize(),
+      this.filters(),
       { suppressGlobalError: true }
     )
       .subscribe({
         next: response => {
-          this.journalEntries = response.data;
-          this.totalEntries = response.total;
-          this.loadError = false;
-          this.loading = false;
+          this.journalEntries.set(response.data);
+          this.totalEntries.set(response.total);
+          this.loadError.set(false);
+          this.loading.set(false);
         },
         error: error => {
-          this.journalEntries = [];
-          this.totalEntries = 0;
-          this.loadError = true;
+          this.journalEntries.set([]);
+          this.totalEntries.set(0);
+          this.loadError.set(true);
           this.setLoadErrorDetails(error);
-          this.loading = false;
+          this.loading.set(false);
         }
       });
   }
 
   handlePageEvent(event: PageEvent): void {
-    this.pageSize = event.pageSize;
-    this.pageIndex = event.pageIndex;
+    this.pageSize.set(event.pageSize);
+    this.pageIndex.set(event.pageIndex);
     this.loadJournalEntries();
   }
 
   applyFilters(): void {
-    this.pageIndex = 0;
+    this.pageIndex.set(0);
     this.loadJournalEntries();
   }
 
+  updateFilter<K extends keyof JournalFilters>(field: K, value: JournalFilters[K]): void {
+    this.filters.update(current => ({ ...current, [field]: value }));
+  }
+
   clearFilters(): void {
-    this.filters = {};
-    this.pageIndex = 0;
+    this.filters.set({});
+    this.pageIndex.set(0);
     this.loadJournalEntries();
   }
 
@@ -192,12 +198,12 @@ export class JournalComponent implements OnInit {
   private setLoadErrorDetails(error: unknown): void {
     if (error instanceof HttpErrorResponse) {
       const httpError = new AppHttpError(error);
-      this.loadErrorMessage = httpError.userMessage;
-      this.loadErrorRequestId = httpError.requestId;
+      this.loadErrorMessage.set(httpError.userMessage);
+      this.loadErrorRequestId.set(httpError.requestId);
       return;
     }
 
-    this.loadErrorMessage = this.translateService.instant('journal.load-error-message');
-    this.loadErrorRequestId = this.extractRequestId(error);
+    this.loadErrorMessage.set(this.translateService.instant('journal.load-error-message'));
+    this.loadErrorRequestId.set(this.extractRequestId(error));
   }
 }

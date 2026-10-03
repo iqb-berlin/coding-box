@@ -1,11 +1,5 @@
 import {
-  ChangeDetectorRef,
-  Component,
-  OnInit,
-  OnDestroy,
-  Inject,
-  Optional,
-  inject
+  Component, OnInit, OnDestroy, Inject, Optional, inject, signal
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
@@ -74,7 +68,7 @@ import {
   DoubleCodedReviewSortDirection
 } from '../../../../../../../api-dto/coding/double-coded-review.dto';
 import { DoubleCodedDecisionCellComponent } from './double-coded-decision-cell.component';
-import { DoubleCodedReviewFacade } from './double-coded-review.facade';
+import { DoubleCodedReviewFacade, ManagerDraftUpdate } from './double-coded-review.facade';
 import {
   ConflictType,
   CoderResult,
@@ -149,7 +143,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   private codingStatisticsService = inject(CodingStatisticsService);
   private reviewFacade = inject(DoubleCodedReviewFacade);
   private replayDecisionBridge = inject(ReplayDecisionBridgeService);
-  private changeDetectorRef = inject(ChangeDetectorRef);
+
   selectionForm: FormGroup = this.reviewFacade.selectionForm;
 
   constructor(
@@ -171,36 +165,48 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     'givenAnswer'
   ];
 
-  dynamicCoderColumns: string[] = [];
-  dynamicManagerColumns: string[] = [];
-  displayedColumns: string[] = [...this.staticColumns, 'selection'];
-  coderColumnMeta: Record<string, CoderColumnMeta> = {};
-  managerColumnMeta: Record<string, ManagerColumnMeta> = {};
+  readonly dynamicCoderColumns = signal<string[]>([]);
+  readonly dynamicManagerColumns = signal<string[]>([]);
+  readonly displayedColumns = signal<string[]>([...this.staticColumns, 'selection']);
+  readonly coderColumnMeta = signal<Record<string, CoderColumnMeta>>({});
+  readonly managerColumnMeta = signal<Record<string, ManagerColumnMeta>>({});
 
   dataSource = new MatTableDataSource<DoubleCodedItem>([]);
-  allData: DoubleCodedItem[] = [];
-  totalItems = 0;
-  currentPage = 1;
-  pageSize = 50;
-  sortBy: DoubleCodedReviewSortBy = 'unitVariable';
-  sortDirection: DoubleCodedReviewSortDirection = 'asc';
-  isLoading = false;
-  showOnlyConflicts = false;
+  readonly allData = signal<DoubleCodedItem[]>([]);
+  readonly totalItems = signal(0);
+  readonly currentPage = signal(1);
+  readonly pageSize = signal(50);
+  readonly sortBy = signal<DoubleCodedReviewSortBy>('unitVariable');
+  readonly sortDirection = signal<DoubleCodedReviewSortDirection>('asc');
+  readonly isLoading = signal(false);
+  readonly showOnlyConflicts = signal(false);
   agreementControl = new FormControl<'all' | 'match' | 'differ'>('all');
   searchControl = new FormControl('');
   coderControl = new FormControl<number | null>(null);
   statusControl = new FormControl<'all' | 'done' | 'pending'>('all');
   resolvedControl = new FormControl<'all' | 'resolved' | 'unresolved'>('all');
   scopeControl = new FormControl<string[]>([]);
-  availableCoders: { id: number; name: string }[] = [];
-  availableJobDefinitions: Array<{ id: number; label: string }> = [];
-  availableCoderTrainings: Array<{ id: number; label: string }> = [];
+  readonly availableCoders = signal<{
+    id: number;
+    name: string;
+  }[]>([]);
+
+  readonly availableJobDefinitions = signal<Array<{
+    id: number;
+    label: string;
+  }>>([]);
+
+  readonly availableCoderTrainings = signal<Array<{
+    id: number;
+    label: string;
+  }>>([]);
+
   private filterOptionsLoaded = false;
   private resultsApplied = false;
   private destroy$ = new Subject<void>();
 
-  selectedItem: DoubleCodedItem | null = null;
-  replayLoadingByResponseId: Record<number, boolean> = {};
+  readonly selectedItem = signal<DoubleCodedItem | null>(null);
+  readonly replayLoadingByResponseId = signal<Record<number, boolean>>({});
   private get replayWindowByResponseId(): Map<number, MessageEventSource> {
     return this.replayDecisionBridge.replayWindowByResponseId;
   }
@@ -208,7 +214,10 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   private readonly standaloneCodingIssueOptionIds = new Set([-3, -4]);
 
   ngOnInit(): void {
-    this.reviewFacade.connectRecovery(() => this.allData);
+    this.reviewFacade.managerDraftUpdates$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(update => this.applyManagerDraftUpdate(update));
+    this.reviewFacade.connectRecovery(() => this.allData());
     this.setupFilters();
     this.loadCoders();
     this.loadFilterOptions();
@@ -218,9 +227,9 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.reviewFacade.destroy(this.allData);
     this.destroy$.next();
     this.destroy$.complete();
+    this.reviewFacade.destroy(this.allData());
   }
 
   private setupFilters(): void {
@@ -265,7 +274,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
         )
       )
       .subscribe(coders => {
-        this.availableCoders = coders;
+        this.availableCoders.set(coders);
       });
   }
 
@@ -293,25 +302,23 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
           )
           .sort((a, b) => (b.id || 0) - (a.id || 0));
 
-        this.availableJobDefinitions = sortedJobDefinitions.map(
-          definition => ({
-            id: definition.id!,
-            label: this.getJobDefinitionLabel(definition)
-          })
-        );
+        this.availableJobDefinitions.set(sortedJobDefinitions.map(definition => ({
+          id: definition.id!,
+          label: this.getJobDefinitionLabel(definition)
+        })));
 
-        this.availableCoderTrainings = coderTrainings
+        this.availableCoderTrainings.set(coderTrainings
           .filter(training => (training.jobsCount ?? 0) > 0)
           .map(training => ({
             id: training.id,
             label: this.getCoderTrainingLabel(training)
-          }));
+          })));
 
         const validScopes = new Set([
-          ...this.availableJobDefinitions.map(
+          ...this.availableJobDefinitions().map(
             definition => `job_${definition.id}`
           ),
-          ...this.availableCoderTrainings.map(
+          ...this.availableCoderTrainings().map(
             training => `training_${training.id}`
           )
         ]);
@@ -320,14 +327,14 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
         if (currentScopes.length > 0) {
           this.scopeControl.setValue(currentScopes, { emitEvent: false });
-        } else if (this.availableJobDefinitions.length > 0) {
+        } else if (this.availableJobDefinitions().length > 0) {
           this.scopeControl.setValue(
-            [`job_${this.availableJobDefinitions[0].id}`],
+            [`job_${this.availableJobDefinitions()[0].id}`],
             { emitEvent: false }
           );
-        } else if (this.availableCoderTrainings.length > 0) {
+        } else if (this.availableCoderTrainings().length > 0) {
           this.scopeControl.setValue(
-            [`training_${this.availableCoderTrainings[0].id}`],
+            [`training_${this.availableCoderTrainings()[0].id}`],
             { emitEvent: false }
           );
         } else {
@@ -386,8 +393,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
   hasScopeOptions(): boolean {
     return (
-      this.availableJobDefinitions.length > 0 ||
-      this.availableCoderTrainings.length > 0
+      this.availableJobDefinitions().length > 0 ||
+      this.availableCoderTrainings().length > 0
     );
   }
 
@@ -424,7 +431,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     if (scope.startsWith('job_')) {
       const scopeId = parseInt(scope.replace('job_', ''), 10);
       return (
-        this.availableJobDefinitions.find(
+        this.availableJobDefinitions().find(
           definition => definition.id === scopeId
         )?.label || getJobDefinitionDisplayLabel({ id: scopeId })
       );
@@ -433,7 +440,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     if (scope.startsWith('training_')) {
       const scopeId = parseInt(scope.replace('training_', ''), 10);
       return (
-        this.availableCoderTrainings.find(training => training.id === scopeId)
+        this.availableCoderTrainings().find(training => training.id === scopeId)
           ?.label ||
         this.translateService.instant(
           'double-coded-review.filter.training-fallback',
@@ -533,28 +540,27 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       );
     });
 
-    this.coderColumnMeta = meta;
-    this.dynamicCoderColumns = Object.values(meta)
+    this.coderColumnMeta.set(meta);
+    this.dynamicCoderColumns.set(Object.values(meta)
       .sort((a, b) => {
         const labelComparison = a.label.localeCompare(b.label, 'de', {
           sensitivity: 'base'
         });
         return labelComparison || a.coderId - b.coderId;
       })
-      .map(column => column.columnId);
+      .map(column => column.columnId));
 
-    this.managerColumnMeta = managerMeta;
-    this.dynamicManagerColumns = Object.values(managerMeta)
-      .sort((a, b) => a.label.localeCompare(b.label, 'de', { sensitivity: 'base' })
-      )
-      .map(column => column.columnId);
+    this.managerColumnMeta.set(managerMeta);
+    this.dynamicManagerColumns.set(Object.values(managerMeta)
+      .sort((a, b) => a.label.localeCompare(b.label, 'de', { sensitivity: 'base' }))
+      .map(column => column.columnId));
 
-    this.displayedColumns = [
+    this.displayedColumns.set([
       ...this.staticColumns,
-      ...this.dynamicCoderColumns,
-      ...this.dynamicManagerColumns,
+      ...this.dynamicCoderColumns(),
+      ...this.dynamicManagerColumns(),
       'selection'
-    ];
+    ]);
   }
 
   getSelectionColumnHeader(): string {
@@ -565,13 +571,13 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
   getCoderColumnHeader(columnId: string): string {
     return (
-      this.coderColumnMeta[columnId]?.label ||
+      this.coderColumnMeta()[columnId]?.label ||
       this.translateService.instant('double-coded-review.columns.coder-results')
     );
   }
 
   getCoderColumnTooltip(columnId: string): string {
-    const meta = this.coderColumnMeta[columnId];
+    const meta = this.coderColumnMeta()[columnId];
     if (!meta) return '';
 
     const details: string[] = [];
@@ -608,7 +614,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     item: DoubleCodedItem,
     columnId: string
   ): CoderResult[] {
-    const meta = this.coderColumnMeta[columnId];
+    const meta = this.coderColumnMeta()[columnId];
     if (!meta) return [];
 
     return item.coderResults
@@ -623,7 +629,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
   getManagerColumnHeader(columnId: string): string {
     return (
-      this.managerColumnMeta[columnId]?.label || this.getUnknownManagerLabel()
+      this.managerColumnMeta()[columnId]?.label || this.getUnknownManagerLabel()
     );
   }
 
@@ -631,7 +637,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     item: DoubleCodedItem,
     columnId: string
   ): DoubleCodedManagerDecisionDto | undefined {
-    const managerKey = this.managerColumnMeta[columnId]?.managerKey;
+    const managerKey = this.managerColumnMeta()[columnId]?.managerKey;
     const decisions = [
       ...(item.managerDrafts || []),
       ...(item.managerHistory || [])
@@ -764,7 +770,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
         itemOrResponseId.responseId;
     const item =
       typeof itemOrResponseId === 'number' ?
-        this.allData.find(
+        this.allData().find(
           reviewItem => reviewItem.responseId === responseId
         ) :
         itemOrResponseId;
@@ -778,13 +784,13 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.replayLoadingByResponseId[responseId] = true;
+    this.replayLoadingByResponseId.update(value => ({ ...value, [responseId]: true }));
     this.codingStatisticsService
       .getReplayUrl(workspaceId, responseId)
       .pipe(
         take(1),
         finalize(() => {
-          this.replayLoadingByResponseId[responseId] = false;
+          this.replayLoadingByResponseId.update(value => ({ ...value, [responseId]: false }));
         })
       )
       .subscribe({
@@ -905,7 +911,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   private applyReplayDecisionSelection(
     selection: ReplayDecisionSelection
   ): void {
-    const candidates = this.allData.filter(
+    const candidates = this.allData().filter(
       item => item.responseId === selection.responseId
     );
     const item =
@@ -926,7 +932,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       selection.hasNotes
     );
     this.refreshReviewRows(item);
-    this.changeDetectorRef.detectChanges();
+
     this.showSuccess(
       this.translateService.instant(
         'double-coded-review.success.replay-code-selected'
@@ -985,8 +991,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   onFilterChange(): void {
-    this.showOnlyConflicts = this.agreementControl.value === 'differ';
-    this.currentPage = 1;
+    this.showOnlyConflicts.set(this.agreementControl.value === 'differ');
+    this.currentPage.set(1);
     this.loadData();
   }
 
@@ -994,9 +1000,9 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     if (sort.active !== 'unitVariable' && sort.active !== 'personInfo') {
       return;
     }
-    this.sortBy = sort.active;
-    this.sortDirection = sort.direction === 'desc' ? 'desc' : 'asc';
-    this.currentPage = 1;
+    this.sortBy.set(sort.active);
+    this.sortDirection.set(sort.direction === 'desc' ? 'desc' : 'asc');
+    this.currentPage.set(1);
     this.loadData();
   }
 
@@ -1023,9 +1029,9 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   loadData(): void {
-    this.isLoading = true;
+    this.isLoading.set(true);
     const agreementFilter = this.agreementControl.value || 'all';
-    this.showOnlyConflicts = agreementFilter === 'differ';
+    this.showOnlyConflicts.set(agreementFilter === 'differ');
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (!workspaceId) {
@@ -1034,7 +1040,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
         .subscribe(message => {
           this.showError(message);
         });
-      this.isLoading = false;
+      this.isLoading.set(false);
       return;
     }
 
@@ -1047,41 +1053,39 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       .getDoubleCodedVariablesForReview(
         workspaceId,
         {
-          page: this.currentPage,
-          limit: this.pageSize,
-          onlyConflicts: this.showOnlyConflicts,
+          page: this.currentPage(),
+          limit: this.pageSize(),
+          onlyConflicts: this.showOnlyConflicts(),
           excludeTrainings: false,
           search: this.searchControl.value || undefined,
           coderId: this.coderControl.value || undefined,
           statusFilter: this.statusControl.value || undefined,
           resolvedFilter: this.resolvedControl.value || undefined,
           agreementFilter,
-          sortBy: this.sortBy,
-          sortDirection: this.sortDirection,
+          sortBy: this.sortBy(),
+          sortDirection: this.sortDirection(),
           jobDefinitionIds: this.getSelectedJobDefinitionIds(),
           coderTrainingIds: this.getSelectedCoderTrainingIds()
         }
       )
       .subscribe({
         next: response => {
-          this.allData = response.data.map(item => ({
+          this.allData.set(response.data.map(item => ({
             ...item,
-            availableCodes:
-              item.availableCodes ||
-              this.getFallbackAvailableCodes(item.coderResults),
+            availableCodes: item.availableCodes ||
+        this.getFallbackAvailableCodes(item.coderResults),
             managerDrafts: item.managerDrafts || [],
             managerHistory: item.managerHistory || [],
-            selectedCoderResult:
-              this.reviewFacade.getAppliedMatchingCoderResult(item) ||
-              item.coderResults.find(result => result.code !== null)
-          }));
-          this.updateDisplayedColumns(this.allData);
-          this.dataSource.data = this.allData;
-          this.totalItems = response.total;
+            selectedCoderResult: this.reviewFacade.getAppliedMatchingCoderResult(item) ||
+        item.coderResults.find(result => result.code !== null)
+          })));
+          this.updateDisplayedColumns(this.allData());
+          this.dataSource.data = this.allData();
+          this.totalItems.set(response.total);
 
           this.updateForm();
-          this.reviewFacade.restoreRecoveryDraft(this.allData);
-          this.isLoading = false;
+          this.reviewFacade.restoreRecoveryDraft(this.allData());
+          this.isLoading.set(false);
         },
         error: () => {
           this.updateDisplayedColumns([]);
@@ -1090,25 +1094,25 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
             .subscribe(message => {
               this.showError(message);
             });
-          this.isLoading = false;
+          this.isLoading.set(false);
         }
       });
   }
 
   private clearReviewData(): void {
-    this.allData = [];
+    this.allData.set([]);
     this.dataSource.data = [];
-    this.totalItems = 0;
+    this.totalItems.set(0);
     this.updateDisplayedColumns([]);
     if (this.selectionForm) {
       this.updateForm();
     }
-    this.isLoading = false;
+    this.isLoading.set(false);
   }
 
   onPageChange(event: PageEvent): void {
-    this.currentPage = event.pageIndex + 1;
-    this.pageSize = event.pageSize;
+    this.currentPage.set(event.pageIndex + 1);
+    this.pageSize.set(event.pageSize);
     this.loadData();
   }
 
@@ -1117,10 +1121,25 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     this.refreshReviewRows(item);
   }
 
+  private applyManagerDraftUpdate(update: ManagerDraftUpdate): void {
+    if (update.workspaceId !== this.appService.selectedWorkspaceId ||
+      update.managerUserId !== this.appService.userId) return;
+
+    const item = this.allData().find(candidate => candidate.responseId === update.responseId);
+    if (!item || item.isResolved) return;
+
+    // A queued response may belong to an older row object. Merge its draft into
+    // the current row so newer selections and other managers' decisions survive.
+    const retainedDrafts = item.managerDrafts.filter(draft => draft.managerUserId !== update.managerUserId);
+    this.refreshReviewRows({
+      ...item,
+      managerDrafts: update.savedDraft ? [...retainedDrafts, update.savedDraft] : retainedDrafts
+    });
+  }
+
   private refreshReviewRows(item: DoubleCodedItem): void {
     const refreshedItem = { ...item };
-    this.allData = this.allData.map(candidate => (candidate.responseId === item.responseId ? refreshedItem : candidate)
-    );
+    this.allData.set(this.allData().map(candidate => (candidate.responseId === item.responseId ? refreshedItem : candidate)));
     this.dataSource.data = this.dataSource.data.map(candidate => (candidate.responseId === item.responseId ? refreshedItem : candidate)
     );
   }
@@ -1267,7 +1286,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     workspaceId: number,
     decisions: DoubleCodedResolutionDecisionDto[]
   ): void {
-    this.isLoading = true;
+    this.isLoading.set(true);
     this.doubleCodedReviewApi
       .applyDoubleCodedResolutions(workspaceId, { decisions })
       .subscribe({
@@ -1302,7 +1321,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
             .subscribe(message => {
               this.showError(message);
             });
-          this.isLoading = false;
+          this.isLoading.set(false);
         }
       });
   }

@@ -23,20 +23,20 @@
     </div>
 
 
-    @if (userObjectsDatasource.data.length) {
+    @if (userObjectsDatasource().data.length) {
     <coding-box-search-filter
       [title]="'search-filter.filter-users' | translate"
-      (valueChange)="userObjectsDatasource.filter = $event.trim().toLowerCase()">
+      (valueChange)="userObjectsDatasource().filter = $event.trim().toLowerCase()">
     </coding-box-search-filter>
   }
 
-  <mat-table [dataSource]="userObjectsDatasource"
+  <mat-table [dataSource]="userObjectsDatasource()"
              matSort
              class="scroll-area">
     <ng-container matColumnDef="selectCheckbox">
       <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
-        <mat-checkbox [checked]="(tableSelectionCheckboxes | hasSelectionValue : tableSelectionCheckboxes.selected.length) &&  (tableSelectionCheckboxes.selected.length | isAllSelected : userObjectsDatasource.data.length)"
-                      [indeterminate]="(tableSelectionCheckboxes | hasSelectionValue : tableSelectionCheckboxes.selected.length) && !(tableSelectionCheckboxes.selected.length | isAllSelected : userObjectsDatasource.data.length)"
+        <mat-checkbox [checked]="(tableSelectionCheckboxes | hasSelectionValue : tableSelectionCheckboxes.selected.length) &&  (tableSelectionCheckboxes.selected.length | isAllSelected : userObjectsDatasource().data.length)"
+                      [indeterminate]="(tableSelectionCheckboxes | hasSelectionValue : tableSelectionCheckboxes.selected.length) && !(tableSelectionCheckboxes.selected.length | isAllSelected : userObjectsDatasource().data.length)"
                       (change)="$event ? masterToggle() : null">
         </mat-checkbox>
       </mat-header-cell>

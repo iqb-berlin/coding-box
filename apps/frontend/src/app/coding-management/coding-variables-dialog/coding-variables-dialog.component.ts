@@ -1,9 +1,6 @@
 import {
-  AfterViewInit,
-  Component,
-  Inject,
-  OnInit,
-  ViewChild
+  AfterViewInit, Component, Inject, OnInit, ViewChild, signal,
+  computed, WritableSignal
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -62,9 +59,9 @@ export interface FlattenedVariable {
   hasManualInstruction?: boolean;
   hasClosedCoding?: boolean;
   coderTrainingRequired?: boolean;
-  replayAnchor?: string;
-  savedReplayAnchor?: string;
-  isSavingReplayAnchor?: boolean;
+  readonly replayAnchor: WritableSignal<string>;
+  readonly savedReplayAnchor: WritableSignal<string>;
+  readonly isSavingReplayAnchor: WritableSignal<boolean>;
 }
 
 @Component({
@@ -94,17 +91,17 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
   dataSource = new MatTableDataSource<FlattenedVariable>([]);
   displayedColumns: string[] = ['unitName', 'variableId', 'variableType', 'replayAnchor', 'actions'];
 
-  unitNameFilter = '';
-  variableIdFilter = '';
-  hasCodingSchemeFilter = false;
-  hasCodesFilter = false;
-  isDerivedFilter = false;
-  isManualOnlyFilter = false;
-  isClosedCodingFilter = false;
-  trainingRequiredFilter: 'all' | 'required' | 'not-required' = 'all';
-  selectedTypes: string[] = [];
+  readonly unitNameFilter = signal('');
+  readonly variableIdFilter = signal('');
+  readonly hasCodingSchemeFilter = signal(false);
+  readonly hasCodesFilter = signal(false);
+  readonly isDerivedFilter = signal(false);
+  readonly isManualOnlyFilter = signal(false);
+  readonly isClosedCodingFilter = signal(false);
+  readonly trainingRequiredFilter = signal<'all' | 'required' | 'not-required'>('all');
+  readonly selectedTypes = signal<string[]>([]);
   availableTypes = ['string', 'integer', 'number', 'boolean', 'attachment', 'json'];
-  isLoading = false;
+  readonly isLoading = signal(false);
 
   @ViewChild(MatSort) sort!: MatSort;
 
@@ -134,19 +131,17 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
     return this.dataSource.filteredData.length > 0;
   }
 
-  get hasActiveFilters(): boolean {
-    return !!(
-      this.unitNameFilter.trim() ||
-      this.variableIdFilter.trim() ||
-      this.hasCodingSchemeFilter ||
-      this.hasCodesFilter ||
-      this.isDerivedFilter ||
-      this.isManualOnlyFilter ||
-      this.isClosedCodingFilter ||
-      this.trainingRequiredFilter !== 'all' ||
-      this.selectedTypes.length
-    );
-  }
+  readonly hasActiveFilters = computed<boolean>(() => !!(
+    this.unitNameFilter().trim() ||
+      this.variableIdFilter().trim() ||
+      this.hasCodingSchemeFilter() ||
+      this.hasCodesFilter() ||
+      this.isDerivedFilter() ||
+      this.isManualOnlyFilter() ||
+      this.isClosedCodingFilter() ||
+      this.trainingRequiredFilter() !== 'all' ||
+      this.selectedTypes().length
+  ));
 
   private setupFilter(): void {
     this.dataSource.filterPredicate = (data: FlattenedVariable, filter: string): boolean => {
@@ -214,7 +209,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
   }
 
   private loadData(): void {
-    this.isLoading = true;
+    this.isLoading.set(true);
 
     forkJoin({
       unitVariableDetails: this.fileBackendService.getUnitVariables(this.data.workspaceId),
@@ -254,8 +249,9 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
               hasManualInstruction: variable.hasManualInstruction,
               hasClosedCoding: variable.hasClosedCoding,
               coderTrainingRequired: variable.coderTrainingRequired,
-              replayAnchor: savedReplayAnchor,
-              savedReplayAnchor
+              replayAnchor: signal(savedReplayAnchor),
+              savedReplayAnchor: signal(savedReplayAnchor),
+              isSavingReplayAnchor: signal(false)
             });
           });
         });
@@ -265,41 +261,41 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
           this.dataSource.sort = this.sort;
         }
         this.applyFilter();
-        this.isLoading = false;
+        this.isLoading.set(false);
       },
       error: () => {
         this.snackBar.open('Fehler beim Laden der Kodiervariablen', 'Schließen', {
           duration: 5000,
           panelClass: ['error-snackbar']
         });
-        this.isLoading = false;
+        this.isLoading.set(false);
       }
     });
   }
 
   saveReplayAnchor(variable: FlattenedVariable): void {
-    const replayAnchor = (variable.replayAnchor || '').trim();
+    const replayAnchor = variable.replayAnchor().trim();
     if (!replayAnchor) {
       this.clearReplayAnchor(variable);
       return;
     }
 
-    variable.isSavingReplayAnchor = true;
+    variable.isSavingReplayAnchor.set(true);
     this.fileBackendService.saveReplayAnchorOverride(this.data.workspaceId, {
       unitName: variable.unitName,
       variableId: variable.variableId,
       replayAnchor
     }).subscribe({
       next: saved => {
-        variable.replayAnchor = saved.replayAnchor;
-        variable.savedReplayAnchor = saved.replayAnchor;
-        variable.isSavingReplayAnchor = false;
+        variable.replayAnchor.set(saved.replayAnchor);
+        variable.savedReplayAnchor.set(saved.replayAnchor);
+        variable.isSavingReplayAnchor.set(false);
         this.snackBar.open('Replay-Anchor gespeichert', 'Schließen', {
           duration: 2500
         });
       },
       error: () => {
-        variable.isSavingReplayAnchor = false;
+        variable.isSavingReplayAnchor.set(false);
         this.snackBar.open('Replay-Anchor konnte nicht gespeichert werden', 'Schließen', {
           duration: 5000,
           panelClass: ['error-snackbar']
@@ -309,22 +305,22 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
   }
 
   clearReplayAnchor(variable: FlattenedVariable): void {
-    variable.isSavingReplayAnchor = true;
+    variable.isSavingReplayAnchor.set(true);
     this.fileBackendService.deleteReplayAnchorOverride(
       this.data.workspaceId,
       variable.unitName,
       variable.variableId
     ).subscribe({
       next: () => {
-        variable.replayAnchor = '';
-        variable.savedReplayAnchor = '';
-        variable.isSavingReplayAnchor = false;
+        variable.replayAnchor.set('');
+        variable.savedReplayAnchor.set('');
+        variable.isSavingReplayAnchor.set(false);
         this.snackBar.open('Replay-Anchor zurückgesetzt', 'Schließen', {
           duration: 2500
         });
       },
       error: () => {
-        variable.isSavingReplayAnchor = false;
+        variable.isSavingReplayAnchor.set(false);
         this.snackBar.open('Replay-Anchor konnte nicht zurückgesetzt werden', 'Schließen', {
           duration: 5000,
           panelClass: ['error-snackbar']
@@ -334,7 +330,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
   }
 
   hasReplayAnchorChanges(variable: FlattenedVariable): boolean {
-    return (variable.replayAnchor || '').trim() !== (variable.savedReplayAnchor || '');
+    return variable.replayAnchor().trim() !== variable.savedReplayAnchor();
   }
 
   private toReplayAnchorMap(
@@ -354,29 +350,29 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
 
   applyFilter(): void {
     const filterValue = JSON.stringify({
-      unitName: this.unitNameFilter.trim(),
-      variableId: this.variableIdFilter.trim(),
-      hasCodingScheme: this.hasCodingSchemeFilter,
-      hasCodes: this.hasCodesFilter,
-      isDerived: this.isDerivedFilter,
-      isManualOnly: this.isManualOnlyFilter,
-      isClosedCoding: this.isClosedCodingFilter,
-      trainingRequired: this.trainingRequiredFilter,
-      types: this.selectedTypes
+      unitName: this.unitNameFilter().trim(),
+      variableId: this.variableIdFilter().trim(),
+      hasCodingScheme: this.hasCodingSchemeFilter(),
+      hasCodes: this.hasCodesFilter(),
+      isDerived: this.isDerivedFilter(),
+      isManualOnly: this.isManualOnlyFilter(),
+      isClosedCoding: this.isClosedCodingFilter(),
+      trainingRequired: this.trainingRequiredFilter(),
+      types: this.selectedTypes()
     });
     this.dataSource.filter = filterValue;
   }
 
   clearFilters(): void {
-    this.unitNameFilter = '';
-    this.variableIdFilter = '';
-    this.hasCodingSchemeFilter = false;
-    this.hasCodesFilter = false;
-    this.isDerivedFilter = false;
-    this.isManualOnlyFilter = false;
-    this.isClosedCodingFilter = false;
-    this.trainingRequiredFilter = 'all';
-    this.selectedTypes = [];
+    this.unitNameFilter.set('');
+    this.variableIdFilter.set('');
+    this.hasCodingSchemeFilter.set(false);
+    this.hasCodesFilter.set(false);
+    this.isDerivedFilter.set(false);
+    this.isManualOnlyFilter.set(false);
+    this.isClosedCodingFilter.set(false);
+    this.trainingRequiredFilter.set('all');
+    this.selectedTypes.set([]);
     this.applyFilter();
   }
 

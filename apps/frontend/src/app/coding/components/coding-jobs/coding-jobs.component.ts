@@ -1,11 +1,5 @@
 import {
-  Component,
-  OnInit,
-  OnDestroy,
-  inject,
-  Output,
-  EventEmitter,
-  Input
+  Component, OnInit, OnDestroy, inject, Output, EventEmitter, Input, signal
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -169,12 +163,12 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   private coderService = inject(CoderService);
   private testPersonCodingService = inject(TestPersonCodingService);
 
-  canApplyResults = false;
-  canReviewCodingJobs = false;
-  canManageCodingJobs = false;
+  readonly canApplyResults = signal(false);
+  readonly canReviewCodingJobs = signal(false);
+  readonly canManageCodingJobs = signal(false);
 
   private coderNamesByJobId = new Map<number, string>();
-  allCoders: Coder[] = [];
+  readonly allCoders = signal<Coder[]>([]);
 
   private jobDetailsCache = new Map<
   number,
@@ -200,22 +194,21 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
   dataSource = new MatTableDataSource<CodingJob>([]);
   selection = new SelectionModel<CodingJob>(true, []);
-  isLoading = false;
-  hasLoadedJobs = false;
+  readonly isLoading = signal(false);
+  readonly hasLoadedJobs = signal(false);
 
-  coderTrainings: CoderTraining[] = [];
-  selectedTrainingId: number | string | null = null;
-  selectedStatus: string | null = null;
-  selectedCoderId: number | null = null;
-  selectedJobName: string | null = null;
-  originalData: CodingJob[] = [];
-  jobsTotal = 0;
-  pageSize = 50;
-  pageIndex = 0;
-  sortBy: 'name' | 'description' | 'status' | 'createdAt' | 'updatedAt' =
-    'createdAt';
+  readonly coderTrainings = signal<CoderTraining[]>([]);
+  readonly selectedTrainingId = signal<number | string | null>(null);
+  readonly selectedStatus = signal<string | null>(null);
+  readonly selectedCoderId = signal<number | null>(null);
+  readonly selectedJobName = signal<string | null>(null);
+  readonly originalData = signal<CodingJob[]>([]);
+  readonly jobsTotal = signal(0);
+  readonly pageSize = signal(50);
+  readonly pageIndex = signal(0);
+  readonly sortBy = signal<'name' | 'description' | 'status' | 'createdAt' | 'updatedAt'>('createdAt');
 
-  sortDirection: 'asc' | 'desc' = 'desc';
+  readonly sortDirection = signal<'asc' | 'desc'>('desc');
 
   private loadJobsSubscription?: Subscription;
   private jobNameFilterSubscription?: Subscription;
@@ -237,7 +230,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   @Input() autoReloadOnFocus = false;
 
   private handleWindowFocus = () => {
-    if (!this.autoReloadOnFocus || this.isLoading) {
+    if (!this.autoReloadOnFocus || this.isLoading()) {
       return;
     }
     const now = Date.now();
@@ -252,7 +245,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     this.coderService.getCoders()
       .pipe(takeUntil(this.destroy$))
       .subscribe(coders => {
-        this.allCoders = coders;
+        this.allCoders.set(coders);
         this.updateCoderNamesMap(this.dataSource.data);
       });
 
@@ -278,9 +271,9 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     const userId = this.appService.authData.userId;
     if (this.appService.authData.isAdmin || !workspaceId || userId <= 0) {
       this.permissionsSubscription?.unsubscribe();
-      this.canApplyResults = this.appService.authData.isAdmin;
-      this.canReviewCodingJobs = this.appService.authData.isAdmin;
-      this.canManageCodingJobs = this.appService.authData.isAdmin;
+      this.canApplyResults.set(this.appService.authData.isAdmin);
+      this.canReviewCodingJobs.set(this.appService.authData.isAdmin);
+      this.canManageCodingJobs.set(this.appService.authData.isAdmin);
       return;
     }
     this.permissionsSubscription?.unsubscribe();
@@ -293,11 +286,11 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         }
         const currentUser = users.find(u => u.id === userId);
         const accessLevel = currentUser?.accessLevel ?? 0;
-        this.canManageCodingJobs = accessLevel >= 2;
-        this.canApplyResults = accessLevel >= 3;
-        this.canReviewCodingJobs = currentUser ?
+        this.canManageCodingJobs.set(accessLevel >= 2);
+        this.canApplyResults.set(accessLevel >= 3);
+        this.canReviewCodingJobs.set(currentUser ?
           hasManagementWorkspaceAccess(currentUser) :
-          false;
+          false);
       });
   }
 
@@ -313,14 +306,14 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   loadCodingJobs(): void {
-    this.isLoading = true;
+    this.isLoading.set(true);
     this.updateCodingJobPermissions();
     this.loadCoderTrainings();
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.isLoading = false;
-      this.hasLoadedJobs = true;
+      this.isLoading.set(false);
+      this.hasLoadedJobs.set(true);
       return;
     }
 
@@ -328,29 +321,29 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     this.loadJobsSubscription = this.codingJobBackendService
       .getCodingJobs(
         workspaceId,
-        this.pageIndex + 1,
-        this.pageSize,
+        this.pageIndex() + 1,
+        this.pageSize(),
         this.getListOptions()
       )
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: response => {
           const processedData = this.normalizeCodingJobs(response.data);
-          this.originalData = [...processedData];
+          this.originalData.set([...processedData]);
           this.dataSource.data = processedData;
-          this.jobsTotal = response.total ?? processedData.length;
+          this.jobsTotal.set(response.total ?? processedData.length);
           this.updateCoderNamesMap(processedData);
 
           this.jobDetailsCache.clear();
-          this.hasLoadedJobs = true;
-          this.isLoading = false;
+          this.hasLoadedJobs.set(true);
+          this.isLoading.set(false);
         },
         error: () => {
           this.snackBar.open('Fehler beim Laden der Kodierjobs', 'Schließen', {
             duration: 3000
           });
-          this.hasLoadedJobs = true;
-          this.isLoading = false;
+          this.hasLoadedJobs.set(true);
+          this.isLoading.set(false);
         }
       });
   }
@@ -358,23 +351,23 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   private getListOptions() {
     return {
       scope: this.jobScope,
-      status: this.selectedStatus || undefined,
-      coderId: this.selectedCoderId || undefined,
+      status: this.selectedStatus() || undefined,
+      coderId: this.selectedCoderId() || undefined,
       jobName: this.normalizeJobNameFilter(),
       trainingId: this.showTrainingFilter ?
-        ((this.selectedTrainingId ?? undefined) as
+        ((this.selectedTrainingId() ?? undefined) as
             | number
             | 'none'
             | undefined) :
         undefined,
       includeIssueSummary: true,
-      sortBy: this.sortBy,
-      sortDirection: this.sortDirection
+      sortBy: this.sortBy(),
+      sortDirection: this.sortDirection()
     };
   }
 
   private normalizeJobNameFilter(): string | undefined {
-    const normalized = this.selectedJobName?.trim();
+    const normalized = this.selectedJobName()?.trim();
     return normalized || undefined;
   }
 
@@ -446,30 +439,30 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   onJobNameFilterChange(): void {
-    this.jobNameFilterChanges.next(this.selectedJobName ?? '');
+    this.jobNameFilterChanges.next(this.selectedJobName() ?? '');
   }
 
   onSortChange(sort: Sort): void {
     if (!this.isSupportedServerSort(sort.active) || !sort.direction) {
-      this.sortBy = 'createdAt';
-      this.sortDirection = 'desc';
+      this.sortBy.set('createdAt');
+      this.sortDirection.set('desc');
     } else {
-      this.sortBy = sort.active;
-      this.sortDirection = sort.direction;
+      this.sortBy.set(sort.active);
+      this.sortDirection.set(sort.direction);
     }
     this.selection.clear();
     this.reloadFirstPage();
   }
 
   onPageChange(event: PageEvent): void {
-    this.pageIndex = event.pageIndex;
-    this.pageSize = event.pageSize;
+    this.pageIndex.set(event.pageIndex);
+    this.pageSize.set(event.pageSize);
     this.selection.clear();
     this.loadCodingJobs();
   }
 
   private reloadFirstPage(): void {
-    this.pageIndex = 0;
+    this.pageIndex.set(0);
     this.loadCodingJobs();
   }
 
@@ -486,10 +479,10 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   private reloadCurrentOrPreviousPageAfterDelete(deletedCount: number): void {
-    const remainingTotal = Math.max(0, this.jobsTotal - deletedCount);
+    const remainingTotal = Math.max(0, this.jobsTotal() - deletedCount);
     const maxPageIndex =
-      remainingTotal > 0 ? Math.ceil(remainingTotal / this.pageSize) - 1 : 0;
-    this.pageIndex = Math.min(this.pageIndex, maxPageIndex);
+      remainingTotal > 0 ? Math.ceil(remainingTotal / this.pageSize()) - 1 : 0;
+    this.pageIndex.set(Math.min(this.pageIndex(), maxPageIndex));
     this.loadCodingJobs();
   }
 
@@ -684,7 +677,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   deleteCodingJob(job: CodingJob): void {
-    if (!this.canManageCodingJobs) {
+    if (!this.canManageCodingJobs()) {
       this.snackBar.open(
         'Keine Berechtigung zum Verwalten von Kodierjobs.',
         'Schließen',
@@ -807,7 +800,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   canReviewCodingJob(job: CodingJob): boolean {
-    return !!job?.id && this.canReviewCodingJobs;
+    return !!job?.id && this.canReviewCodingJobs();
   }
 
   getStartCodingJobLabel(): string {
@@ -825,7 +818,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   canApplyCodingResults(job: CodingJob): boolean {
     return (
       this.showApplyActions &&
-      this.canApplyResults &&
+      this.canApplyResults() &&
       ['completed', 'review'].includes(job.status) &&
       this.isCodingJobFreshnessApplyable(job) &&
       !job.training?.id &&
@@ -839,7 +832,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
   canRestartCodingJob(job: CodingJob): boolean {
     return (
-      this.canManageCodingJobs &&
+      this.canManageCodingJobs() &&
       (job.totalUnits || 0) > 0 &&
       (job.openUnits || 0) > 0 &&
       this.canStartCodingJob(job) &&
@@ -1102,7 +1095,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const byId = new Map<number, Coder>(this.allCoders.map(c => [c.id, c]));
+    const byId = new Map<number, Coder>(this.allCoders().map(c => [c.id, c]));
     jobs.forEach(job => {
       const ids = job.assignedCoders || [];
       if (ids.length === 0) {
@@ -1137,13 +1130,13 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
           if (workspaceId !== this.appService.selectedWorkspaceId) {
             return;
           }
-          this.coderTrainings = trainings;
+          this.coderTrainings.set(trainings);
         },
         error: () => {
           if (workspaceId !== this.appService.selectedWorkspaceId) {
             return;
           }
-          this.coderTrainings = [];
+          this.coderTrainings.set([]);
         }
       });
   }
@@ -1266,7 +1259,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       data: {
         codingJob: job,
         workspaceId: workspaceId,
-        canApplyResults: this.canApplyResults
+        canApplyResults: this.canApplyResults()
       }
     });
 
@@ -1314,7 +1307,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       maxWidth: '100vw',
       height: '95vh',
       maxHeight: '100vh',
-      data: { canApplyResults: this.canApplyResults }
+      data: { canApplyResults: this.canApplyResults() }
     });
 
     dialogRef.afterClosed().subscribe(result => {
@@ -1325,7 +1318,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   openTransferCodingCasesDialog(): void {
-    if (!this.canManageCodingJobs) {
+    if (!this.canManageCodingJobs()) {
       this.snackBar.open(
         'Keine Berechtigung zum Verwalten von Kodierjobs.',
         'Schließen',
@@ -1334,7 +1327,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (!this.allCoders?.length) {
+    if (!this.allCoders()?.length) {
       this.snackBar.open('Keine Kodierer verfügbar', 'Schließen', {
         duration: 3000
       });
@@ -1352,7 +1345,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     const dialogRef = this.dialog.open(TransferCodingCasesDialogComponent, {
       width: '560px',
       maxWidth: '95vw',
-      data: { coders: this.allCoders }
+      data: { coders: this.allCoders() }
     });
 
     dialogRef
@@ -1400,7 +1393,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   bulkDeleteCodingJobs(): void {
-    if (!this.canManageCodingJobs) {
+    if (!this.canManageCodingJobs()) {
       this.snackBar.open(
         'Keine Berechtigung zum Verwalten von Kodierjobs.',
         'Schließen',

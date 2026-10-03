@@ -432,7 +432,7 @@ describe('ContentPoolIntegrationService.listAccessibleAcps', () => {
 });
 
 describe('ContentPoolIntegrationService.importAcpFilesToWorkspace', () => {
-  it('should download ACP files through the server API and pass them through the workspace upload pipeline', async () => {
+  it.each(['application/xml', undefined, 42, ['application/xml']])('should import ACP files with content-type %j', async contentType => {
     const httpService = createHttpServiceMock();
     const workspaceFilesService = createWorkspaceFilesServiceMock();
     const settingRepository = createEnabledSettings();
@@ -450,7 +450,7 @@ describe('ContentPoolIntegrationService.importAcpFilesToWorkspace', () => {
       })
       .mockResolvedValueOnce({
         data: Buffer.from('<Unit/>'),
-        headers: { 'content-type': 'application/xml' }
+        headers: { 'content-type': contentType }
       })
       .mockResolvedValueOnce({
         data: Buffer.from('{}'),

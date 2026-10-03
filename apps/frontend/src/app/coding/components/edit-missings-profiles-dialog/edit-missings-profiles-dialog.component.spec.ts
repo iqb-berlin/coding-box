@@ -1,8 +1,15 @@
+import { ChangeDetectorRef, computed } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { EditMissingsProfilesDialogComponent } from './edit-missings-profiles-dialog.component';
 import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
 
 describe('EditMissingsProfilesDialogComponent', () => {
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [{ provide: ChangeDetectorRef, useValue: { markForCheck: jest.fn() } }]
+    });
+  });
   const createValidMissings = (): MissingDto[] => [
     {
       id: 'mir',
@@ -28,14 +35,14 @@ describe('EditMissingsProfilesDialogComponent', () => {
       getMissingsProfileDetails: jest.Mock;
     }> = {},
     snackBar = { open: jest.fn() }
-  ) => new EditMissingsProfilesDialogComponent(
+  ) => TestBed.runInInjectionContext(() => new EditMissingsProfilesDialogComponent(
     { close: jest.fn() } as never,
     { workspaceId: 1 },
     missingsProfileService as never,
     {} as never,
     snackBar as never,
     { instant: jest.fn(key => key) } as never
-  );
+  ));
 
   it('validates missing entries like the backend', () => {
     const component = createComponent();
@@ -159,7 +166,36 @@ describe('EditMissingsProfilesDialogComponent', () => {
 
     component.createProfile();
 
-    expect(component.editMissings).toEqual(createValidMissings());
+    expect(component.editMissings()).toEqual(createValidMissings());
+  });
+
+  it('publishes missing field and score edits without mutating the previous signal value', () => {
+    const component = createComponent();
+    const profile = new MissingsProfilesDto();
+    const originalMissings = createValidMissings();
+    profile.missings = originalMissings;
+    component.selectedProfile.set(profile);
+    component.editProfile();
+    const previousRows = component.editMissings();
+    const label = computed(() => component.editMissings()[0].label);
+    const score = computed(() => component.editMissings()[0].score);
+    expect(label()).toBe(originalMissings[0].label);
+    expect(score()).toBe(0);
+
+    component.setMissingField(previousRows[0], 'label', 'Changed');
+    expect(label()).toBe('Changed');
+    expect(component.editMissings()).not.toBe(previousRows);
+    expect(previousRows[0].label).toBe(originalMissings[0].label);
+    expect(originalMissings[0].label).toBe('missing invalid response');
+
+    component.setMissingScoreNa(component.editMissings()[0], true);
+    expect(score()).toBeNull();
+    component.setMissingScore(component.editMissings()[0], '3');
+    expect(score()).toBe(3);
+    component.setMissingScore(component.editMissings()[0], '');
+    expect(score()).toBe('');
+    expect(previousRows[0].score).toBe(0);
+    expect(originalMissings[0].score).toBe(0);
   });
 
   it('adds new missing rows with an editable score value', () => {
@@ -168,10 +204,32 @@ describe('EditMissingsProfilesDialogComponent', () => {
 
     component.addMissing();
 
-    expect(component.editMissings[2]).toEqual(expect.objectContaining({
+    expect(component.editMissings()[2]).toEqual(expect.objectContaining({
       code: -99,
       score: 0
     }));
+  });
+
+  it('notifies derived rows while preserving the previous profile and DTO methods', () => {
+    const component = createComponent();
+    const profile = new MissingsProfilesDto();
+    profile.label = 'Original';
+    profile.setMissings(createValidMissings());
+    component.selectedProfile.set(profile);
+    const count = computed(() => component.getMissings().length);
+    expect(count()).toBe(2);
+
+    component.addMissing();
+    expect(count()).toBe(3);
+    expect(profile.parseMissings()).toHaveLength(2);
+    const addedProfile = component.selectedProfile();
+    component.removeMissing(2);
+    expect(count()).toBe(2);
+    expect(addedProfile?.parseMissings()).toHaveLength(3);
+    component.setSelectedProfileField('label', 'Changed');
+    expect(component.selectedProfile()).toBeInstanceOf(MissingsProfilesDto);
+    expect(component.selectedProfile()?.parseMissings()).toHaveLength(2);
+    expect(profile.label).toBe('Original');
   });
 
   it('normalizes explicit NA scores for storage and display', () => {
@@ -195,16 +253,16 @@ describe('EditMissingsProfilesDialogComponent', () => {
     selectedProfile.id = 7;
     selectedProfile.label = 'Existing';
     selectedProfile.setMissings(createValidMissings());
-    component.missingsProfiles = [{ id: 7, label: 'Existing' }];
-    component.selectedProfile = selectedProfile;
-    component.editMissings = createValidMissings();
-    component.editMode = true;
+    component.missingsProfiles.set([{ id: 7, label: 'Existing' }]);
+    component.selectedProfile.set(selectedProfile);
+    component.editMissings.set(createValidMissings());
+    component.editMode.set(true);
 
     component.saveProfile();
 
     expect(missingsProfileService.updateMissingsProfile).toHaveBeenCalledWith(1, 'Existing', selectedProfile);
-    expect(component.saving).toBe(false);
-    expect(component.editMode).toBe(true);
+    expect(component.saving()).toBe(false);
+    expect(component.editMode()).toBe(true);
     expect(snackBar.open).toHaveBeenCalledWith('workspace.error-updating-missings-profile', 'close', { duration: 3000 });
   });
 
@@ -217,15 +275,15 @@ describe('EditMissingsProfilesDialogComponent', () => {
     const selectedProfile = new MissingsProfilesDto();
     selectedProfile.label = 'New';
     selectedProfile.setMissings(createValidMissings());
-    component.selectedProfile = selectedProfile;
-    component.editMissings = createValidMissings();
-    component.editMode = true;
+    component.selectedProfile.set(selectedProfile);
+    component.editMissings.set(createValidMissings());
+    component.editMode.set(true);
 
     component.saveProfile();
 
     expect(missingsProfileService.createMissingsProfile).toHaveBeenCalledWith(1, selectedProfile);
-    expect(component.saving).toBe(false);
-    expect(component.editMode).toBe(true);
+    expect(component.saving()).toBe(false);
+    expect(component.editMode()).toBe(true);
     expect(snackBar.open).toHaveBeenCalledWith('workspace.error-creating-missings-profile', 'close', { duration: 3000 });
   });
 
@@ -239,17 +297,17 @@ describe('EditMissingsProfilesDialogComponent', () => {
     const selectedProfile = new MissingsProfilesDto();
     selectedProfile.label = 'Existing';
     selectedProfile.setMissings(createValidMissings());
-    component.missingsProfiles = [{ id: 7, label: 'Existing' }];
-    component.selectedProfile = selectedProfile;
-    component.editMissings = createValidMissings();
-    component.editMode = true;
+    component.missingsProfiles.set([{ id: 7, label: 'Existing' }]);
+    component.selectedProfile.set(selectedProfile);
+    component.editMissings.set(createValidMissings());
+    component.editMode.set(true);
 
     component.saveProfile();
 
     expect(missingsProfileService.createMissingsProfile).toHaveBeenCalledWith(1, selectedProfile);
     expect(missingsProfileService.updateMissingsProfile).not.toHaveBeenCalled();
-    expect(component.saving).toBe(false);
-    expect(component.editMode).toBe(true);
+    expect(component.saving()).toBe(false);
+    expect(component.editMode()).toBe(true);
     expect(snackBar.open).toHaveBeenCalledWith('workspace.error-creating-missings-profile', 'close', { duration: 3000 });
   });
 });

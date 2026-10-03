@@ -4,6 +4,7 @@ describe('Kodierbox App E2E', () => {
   });
 
   it('should display the landing page structure', () => {
+    cy.window().should('not.have.property', 'Zone');
     cy.get('coding-box-home').should('exist');
     cy.get('coding-box-app-info').should('exist').and('be.visible');
     cy.get('coding-box-user-workspaces-area').should('exist').and('be.visible');

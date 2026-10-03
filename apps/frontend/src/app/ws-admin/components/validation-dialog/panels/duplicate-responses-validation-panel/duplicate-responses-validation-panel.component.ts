@@ -1,11 +1,8 @@
 import {
-  Component,
-  Input,
-  Output,
-  EventEmitter,
-  OnInit,
-  OnDestroy
+  Component, DestroyRef, inject, Input, Output, EventEmitter, OnInit, OnDestroy, signal,
+  computed
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatButtonModule } from '@angular/material/button';
@@ -187,25 +184,27 @@ import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
 })
 export class DuplicateResponsesValidationPanelComponent
 implements OnInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   @Input() disabled = false;
   @Output() validate = new EventEmitter<void>();
 
-  isRunning = false;
-  wasRun = false;
-  isLoadingPage = false;
-  isExporting = false;
-  errorMessage: string | null = null;
-  duplicateResponses: DuplicateResponseSelectionDto[] = [];
-  totalDuplicates = 0;
-  duplicateResponseSelections: Map<string, number> = new Map();
-  duplicateResponseTouchedKeys: Set<string> = new Set();
-  expandedPanel = false;
-  isResolvingDuplicates = false;
-  activeTask: ValidationTaskDto | null = null;
+  readonly isRunning = signal(false);
+  readonly wasRun = signal(false);
+  readonly isLoadingPage = signal(false);
+  readonly isExporting = signal(false);
+  readonly errorMessage = signal<string | null>(null);
+  readonly duplicateResponses = signal<DuplicateResponseSelectionDto[]>([]);
+  readonly totalDuplicates = signal(0);
+  readonly duplicateResponseSelections = signal<Map<string, number>>(new Map());
+  readonly duplicateResponseTouchedKeys = signal<Set<string>>(new Set());
+  readonly expandedPanel = signal(false);
+  readonly isResolvingDuplicates = signal(false);
+  readonly activeTask = signal<ValidationTaskDto | null>(null);
 
   // Pagination state
-  pageSize = 10;
-  currentPage = 1;
+  readonly pageSize = signal(10);
+  readonly currentPage = signal(1);
 
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
@@ -221,25 +220,23 @@ implements OnInit, OnDestroy {
       this.duplicateResponsesValidationService.observeValidationResult();
 
     this.stateSubscription = cachedResult.subscribe(result => {
-      if (result && !this.isRunning) {
-        this.wasRun = true;
+      if (result && !this.isRunning()) {
+        this.wasRun.set(true);
         const details = result.details as Record<string, unknown>;
         if (result.status === 'failed' && details?.error) {
-          this.errorMessage = details.error as string;
-          this.duplicateResponses = [];
-          this.totalDuplicates = 0;
+          this.errorMessage.set(details.error as string);
+          this.duplicateResponses.set([]);
+          this.totalDuplicates.set(0);
         } else if (result.details) {
           const duplicateResult = result.details as DuplicateResponsesResultDto;
-          this.errorMessage = null;
-          this.duplicateResponses = (
-            (duplicateResult.data || []) as DuplicateResponseSelectionDto[]
-          ).map(d => ({
+          this.errorMessage.set(null);
+          this.duplicateResponses.set(((duplicateResult.data || []) as DuplicateResponseSelectionDto[]).map(d => ({
             ...d,
             key: this.buildDuplicateKey(d)
-          }));
-          this.totalDuplicates = duplicateResult.total || 0;
-          this.currentPage = duplicateResult.page || 1;
-          this.pageSize = duplicateResult.limit || 10;
+          })));
+          this.totalDuplicates.set(duplicateResult.total || 0);
+          this.currentPage.set(duplicateResult.page || 1);
+          this.pageSize.set(duplicateResult.limit || 10);
         }
       }
     });
@@ -248,8 +245,8 @@ implements OnInit, OnDestroy {
     this.taskSubscription = this.duplicateResponsesValidationService
       .observeValidationTask()
       .subscribe(task => {
-        this.activeTask = task;
-        this.isRunning = !!task;
+        this.activeTask.set(task);
+        this.isRunning.set(!!task);
       });
   }
 
@@ -263,34 +260,30 @@ implements OnInit, OnDestroy {
     return this.duplicateResponsesValidationService.getValidationStatus();
   }
 
-  get errorCount(): number {
-    return this.totalDuplicates;
-  }
+  readonly errorCount = computed<number>(() => this.totalDuplicates());
 
   onValidate(): void {
-    if (this.isRunning || this.disabled) {
+    if (this.isRunning() || this.disabled) {
       return;
     }
 
-    this.isRunning = true;
+    this.isRunning.set(true);
     this.subscription = this.duplicateResponsesValidationService
-      .validate(this.currentPage, this.pageSize)
+      .validate(this.currentPage(), this.pageSize())
       .subscribe({
         next: result => {
-          this.duplicateResponses = (
-            result.data as DuplicateResponseSelectionDto[]
-          ).map(d => ({
+          this.duplicateResponses.set((result.data as DuplicateResponseSelectionDto[]).map(d => ({
             ...d,
             key: this.buildDuplicateKey(d)
-          }));
-          this.totalDuplicates = result.total;
-          this.currentPage = result.page;
-          this.pageSize = result.limit;
-          this.wasRun = true;
-          this.isRunning = false;
+          })));
+          this.totalDuplicates.set(result.total);
+          this.currentPage.set(result.page);
+          this.pageSize.set(result.limit);
+          this.wasRun.set(true);
+          this.isRunning.set(false);
         },
         error: () => {
-          this.isRunning = false;
+          this.isRunning.set(false);
           this.snackBar.open('Fehler bei der Validierung', 'Schließen', {
             duration: 5000
           });
@@ -301,27 +294,26 @@ implements OnInit, OnDestroy {
   }
 
   onPageChange(event: PageEvent): void {
-    this.currentPage = event.pageIndex + 1;
-    this.pageSize = event.pageSize;
-    this.isLoadingPage = true;
+    this.currentPage.set(event.pageIndex + 1);
+    this.pageSize.set(event.pageSize);
+    this.isLoadingPage.set(true);
     this.subscription?.unsubscribe();
     this.subscription = this.duplicateResponsesValidationService
-      .fetchPage(this.currentPage, this.pageSize)
+      .fetchPage(this.currentPage(), this.pageSize())
       .subscribe({
         next: result => {
-          this.duplicateResponses = (
-            result.data as DuplicateResponseSelectionDto[]
-          ).map(d => ({
+          this.duplicateResponses.set((result.data as DuplicateResponseSelectionDto[]).map(d => ({
             ...d,
             key: this.buildDuplicateKey(d)
-          }));
-          this.totalDuplicates = result.total;
-          this.currentPage = result.page;
-          this.pageSize = result.limit;
-          this.isLoadingPage = false;
+          })));
+          this.totalDuplicates.set(result.total);
+          this.currentPage.set(result.page);
+          this.pageSize.set(result.limit);
+          this.isLoadingPage.set(false);
         },
         error: () => {
-          this.isLoadingPage = false;
+          this.isLoadingPage.set(false);
+
           this.snackBar.open('Fehler beim Laden der Seite', 'Schließen', {
             duration: 5000
           });
@@ -330,7 +322,7 @@ implements OnInit, OnDestroy {
   }
 
   toggleExpansion(): void {
-    this.expandedPanel = !this.expandedPanel;
+    this.expandedPanel.set(!this.expandedPanel());
   }
 
   private buildDuplicateKey(duplicate: DuplicateResponseDto): string {
@@ -341,15 +333,23 @@ implements OnInit, OnDestroy {
     duplicate: DuplicateResponseSelectionDto,
     responseId: number
   ): void {
-    this.duplicateResponseSelections.set(duplicate.key, responseId);
-    this.duplicateResponseTouchedKeys.add(duplicate.key);
+    this.duplicateResponseSelections.update(value => {
+      const next = new Map(value);
+      next.set(duplicate.key, responseId);
+      return next;
+    });
+    this.duplicateResponseTouchedKeys.update(value => {
+      const next = new Set(value);
+      next.add(duplicate.key);
+      return next;
+    });
   }
 
   isSelectedDuplicateResponse(
     duplicate: DuplicateResponseSelectionDto,
     responseId: number
   ): boolean {
-    return this.duplicateResponseSelections.get(duplicate.key) === responseId;
+    return this.duplicateResponseSelections().get(duplicate.key) === responseId;
   }
 
   isDuplicateRowSelected(
@@ -368,7 +368,7 @@ implements OnInit, OnDestroy {
     );
     if (values.size <= 1) return false;
 
-    const selectedId = this.duplicateResponseSelections.get(duplicate.key);
+    const selectedId = this.duplicateResponseSelections().get(duplicate.key);
     if (!selectedId) return true;
 
     const selected = (duplicate.duplicates || []).find(
@@ -389,7 +389,7 @@ implements OnInit, OnDestroy {
     );
     if (statuses.size <= 1) return false;
 
-    const selectedId = this.duplicateResponseSelections.get(duplicate.key);
+    const selectedId = this.duplicateResponseSelections().get(duplicate.key);
     if (!selectedId) return true;
 
     const selected = (duplicate.duplicates || []).find(
@@ -419,15 +419,15 @@ implements OnInit, OnDestroy {
   }
 
   isDuplicateGroupTouched(duplicate: DuplicateResponseSelectionDto): boolean {
-    return this.duplicateResponseTouchedKeys.has(duplicate.key);
+    return this.duplicateResponseTouchedKeys().has(duplicate.key);
   }
 
   hasSelectedDuplicateResponses(): boolean {
-    return this.duplicateResponseSelections.size > 0;
+    return this.duplicateResponseSelections().size > 0;
   }
 
   getSelectedDuplicateResponsesCount(): number {
-    return this.duplicateResponseSelections.size;
+    return this.duplicateResponseSelections().size;
   }
 
   selectSuggestedDuplicateResponse(
@@ -446,7 +446,7 @@ implements OnInit, OnDestroy {
   }
 
   resolveDuplicateGroup(duplicate: DuplicateResponseSelectionDto): void {
-    const selectedId = this.duplicateResponseSelections.get(duplicate.key);
+    const selectedId = this.duplicateResponseSelections().get(duplicate.key);
     if (!selectedId) return;
 
     const responseIdsToDelete = (duplicate.duplicates || [])
@@ -455,21 +455,32 @@ implements OnInit, OnDestroy {
 
     if (responseIdsToDelete.length === 0) return;
 
-    this.isResolvingDuplicates = true;
+    this.isResolvingDuplicates.set(true);
     this.duplicateResponsesValidationService
       .resolveDuplicateGroup(responseIdsToDelete)
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
-          this.isResolvingDuplicates = false;
-          this.duplicateResponseSelections.delete(duplicate.key);
-          this.duplicateResponseTouchedKeys.delete(duplicate.key);
+          this.isResolvingDuplicates.set(false);
+
+          this.duplicateResponseSelections.update(value => {
+            const next = new Map(value);
+            next.delete(duplicate.key);
+            return next;
+          });
+          this.duplicateResponseTouchedKeys.update(value => {
+            const next = new Set(value);
+            next.delete(duplicate.key);
+            return next;
+          });
           this.snackBar.open('Duplikate wurden aufgelöst', 'OK', {
             duration: 3000
           });
           this.onValidate();
         },
         error: () => {
-          this.isResolvingDuplicates = false;
+          this.isResolvingDuplicates.set(false);
+
           this.snackBar.open('Fehler beim Auflösen', 'Schließen', {
             duration: 5000
           });
@@ -478,16 +489,17 @@ implements OnInit, OnDestroy {
   }
 
   resolveAllDuplicates(): void {
-    if (this.duplicateResponses.length === 0 || this.isResolvingDuplicates) {
+    if (this.duplicateResponses().length === 0 || this.isResolvingDuplicates()) {
       return;
     }
 
-    this.isResolvingDuplicates = true;
-    this.duplicateResponsesValidationService.resolveAllDuplicates().subscribe({
+    this.isResolvingDuplicates.set(true);
+    this.duplicateResponsesValidationService.resolveAllDuplicates().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
-        this.isResolvingDuplicates = false;
-        this.duplicateResponseSelections.clear();
-        this.duplicateResponseTouchedKeys.clear();
+        this.isResolvingDuplicates.set(false);
+
+        this.duplicateResponseSelections.set(new Map());
+        this.duplicateResponseTouchedKeys.set(new Set());
         this.snackBar.open(
           'Alle Duplikate wurden automatisch aufgelöst',
           'OK',
@@ -496,7 +508,8 @@ implements OnInit, OnDestroy {
         this.onValidate();
       },
       error: () => {
-        this.isResolvingDuplicates = false;
+        this.isResolvingDuplicates.set(false);
+
         this.snackBar.open('Fehler beim Auflösen', 'Schließen', {
           duration: 5000
         });
@@ -506,14 +519,14 @@ implements OnInit, OnDestroy {
 
   resolveSelectedDuplicates(): void {
     // Resolve all duplicates that have a selection
-    const duplicatesToResolve = this.duplicateResponses.filter(d => this.duplicateResponseTouchedKeys.has(d.key)
+    const duplicatesToResolve = this.duplicateResponses().filter(d => this.duplicateResponseTouchedKeys().has(d.key)
     );
 
     if (duplicatesToResolve.length === 0) return;
 
     const resolvedKeys: string[] = [];
     const resolveRequests = duplicatesToResolve.flatMap(duplicate => {
-      const selectedId = this.duplicateResponseSelections.get(duplicate.key);
+      const selectedId = this.duplicateResponseSelections().get(duplicate.key);
       if (!selectedId) return [];
 
       const responseIdsToDelete = (duplicate.duplicates || [])
@@ -531,13 +544,22 @@ implements OnInit, OnDestroy {
 
     if (resolveRequests.length === 0) return;
 
-    this.isResolvingDuplicates = true;
-    forkJoin(resolveRequests).subscribe({
+    this.isResolvingDuplicates.set(true);
+    forkJoin(resolveRequests).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
-        this.isResolvingDuplicates = false;
+        this.isResolvingDuplicates.set(false);
+
         resolvedKeys.forEach(key => {
-          this.duplicateResponseSelections.delete(key);
-          this.duplicateResponseTouchedKeys.delete(key);
+          this.duplicateResponseSelections.update(value => {
+            const next = new Map(value);
+            next.delete(key);
+            return next;
+          });
+          this.duplicateResponseTouchedKeys.update(value => {
+            const next = new Set(value);
+            next.delete(key);
+            return next;
+          });
         });
         this.snackBar.open(
           `${resolvedKeys.length} Duplikatgruppen wurden aufgelöst`,
@@ -547,7 +569,8 @@ implements OnInit, OnDestroy {
         this.onValidate();
       },
       error: () => {
-        this.isResolvingDuplicates = false;
+        this.isResolvingDuplicates.set(false);
+
         this.snackBar.open('Fehler beim Auflösen', 'Schließen', {
           duration: 5000
         });
@@ -556,11 +579,11 @@ implements OnInit, OnDestroy {
   }
 
   exportCsv(): void {
-    if (this.isExporting) {
+    if (this.isExporting()) {
       return;
     }
 
-    this.isExporting = true;
+    this.isExporting.set(true);
     this.subscription?.unsubscribe();
     this.subscription = this.duplicateResponsesValidationService
       .fetchPage(1, Number.MAX_SAFE_INTEGER)
@@ -597,10 +620,11 @@ implements OnInit, OnDestroy {
           this.snackBar.open('CSV-Export erfolgreich erstellt', 'OK', {
             duration: 3000
           });
-          this.isExporting = false;
+          this.isExporting.set(false);
         },
         error: () => {
-          this.isExporting = false;
+          this.isExporting.set(false);
+
           this.snackBar.open('Fehler beim CSV-Export', 'Schließen', {
             duration: 5000
           });
