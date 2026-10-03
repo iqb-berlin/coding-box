@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { createMock, DeepMocked } from '@golevelup/ts-jest';
 import { HttpService } from '@nestjs/axios';
 import { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
-import { DataSource } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { of, throwError } from 'rxjs';
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
 import { ImportOptionsDto } from '../../../../../../../api-dto/files/import-options.dto';
@@ -14,6 +14,7 @@ import { CacheService } from '../../../cache/cache.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { CodingAnalysisService } from '../coding/coding-analysis.service';
+import { TestcenterImportRun } from '../../entities/testcenter-import-run.entity';
 
 describe('TestCenterService', () => {
   let service: TestcenterService;
@@ -24,8 +25,26 @@ describe('TestCenterService', () => {
   let workspaceTestResultsService: DeepMocked<WorkspaceTestResultsService>;
   let codingFreshnessService: DeepMocked<CodingFreshnessService>;
   let codingAnalysisService: DeepMocked<CodingAnalysisService>;
+  let connection: DataSource;
+  let importRunRepository: DeepMocked<Repository<TestcenterImportRun>>;
 
   beforeEach(async () => {
+    const runs = new Map<string, TestcenterImportRun>();
+    const runKey = (run: { workspace_id?: number; import_run_id?: string }) => `${run.workspace_id}:${run.import_run_id}`;
+    importRunRepository = createMock<Repository<TestcenterImportRun>>({
+      findOneBy: jest.fn().mockImplementation(async key => structuredClone(runs.get(runKey(key)) || null)),
+      insert: jest.fn().mockImplementation(async run => {
+        if (runs.has(runKey(run))) throw new Error('Duplicate run');
+        runs.set(runKey(run), structuredClone(run));
+        return { identifiers: [], generatedMaps: [], raw: [] };
+      }),
+      update: jest.fn().mockImplementation(async (key, patch) => {
+        const previous = runs.get(runKey(key));
+        if (!previous) return { affected: 0, generatedMaps: [], raw: [] };
+        runs.set(runKey(key), structuredClone({ ...previous, ...patch }));
+        return { affected: 1, generatedMaps: [], raw: [] };
+      })
+    });
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TestcenterService,
@@ -64,9 +83,10 @@ describe('TestCenterService', () => {
         {
           provide: DataSource,
           useValue: {
+            getRepository: jest.fn().mockReturnValue(importRunRepository),
             createQueryRunner: jest.fn().mockReturnValue({
               connect: jest.fn().mockResolvedValue(undefined),
-              query: jest.fn().mockResolvedValue([]),
+              query: jest.fn().mockResolvedValue([{ locked: true }]),
               release: jest.fn().mockResolvedValue(undefined)
             })
           }
@@ -101,6 +121,7 @@ describe('TestCenterService', () => {
     workspaceTestResultsService = module.get(WorkspaceTestResultsService);
     codingFreshnessService = module.get(CodingFreshnessService);
     codingAnalysisService = module.get(CodingAnalysisService);
+    connection = module.get(DataSource);
     personService.filterLogRowsForPerson.mockImplementation((rows, person) => (
       (rows || []).filter(row => row.groupname === person.group &&
         row.loginname === person.login &&
@@ -410,6 +431,164 @@ describe('TestCenterService', () => {
       metadata: 'false'
     };
 
+    describe('recoverable run status', () => {
+      beforeEach(() => {
+        const cache = new Map<string, unknown>();
+        cacheService.get.mockImplementation(async key => cache.get(key) as never || null);
+        cacheService.set.mockImplementation(async (key, value) => { cache.set(key, structuredClone(value)); return true; });
+        httpService.axiosRef.get.mockResolvedValue({ data: [] });
+        personService.createPersonList.mockResolvedValue([]);
+        personService.getImportStatistics.mockResolvedValue({ persons: 0, booklets: 0, units: 0 });
+        personService.processPersonLogs.mockResolvedValue({
+          success: true, totalBooklets: 0, totalLogsSaved: 0, totalLogsSkipped: 0
+        });
+      });
+
+      it('stores the terminal result and returns it without reimporting the same run', async () => {
+        const result = await service.importWorkspaceFiles('123', 'tc', '1', '', 'token', mockImportOptions, 'g1', true, undefined, 'run-1');
+        const progress = await service.getImportWorkspaceFilesProgress('123', 'run-1');
+        expect(progress).toMatchObject({
+          status: 'completed', currentGroup: 'g1', result, totalUploaded: 1
+        });
+        expect(progress.startedAt).toEqual(expect.any(Number));
+        expect(result.completedSteps).toEqual(['responses']);
+        expect(httpService.axiosRef.get).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ timeout: 120000 }));
+        const recovered = await service.importWorkspaceFiles('123', 'tc', '1', '', 'token', mockImportOptions, 'g1', true, undefined, 'run-1');
+        expect(recovered).toEqual(result);
+        expect(httpService.axiosRef.get).toHaveBeenCalledTimes(1);
+      });
+
+      it('preserves completed responses when the log persistence reports failure', async () => {
+        personService.processPersonLogs.mockResolvedValue({
+          success: false, totalBooklets: 1, totalLogsSaved: 0, totalLogsSkipped: 0
+        });
+        const result = await service.importWorkspaceFiles('123', 'tc', '1', '', 'token', { ...mockImportOptions, logs: 'true' }, 'g1', true, undefined, 'run-2');
+        expect(result.success).toBe(false);
+        expect(result.completedSteps).toEqual(['responses']);
+        expect(result.importedGroups).toEqual([]);
+        expect(result.issues).toEqual(expect.arrayContaining([expect.objectContaining({ level: 'error', message: expect.stringContaining('Logs') })]));
+        expect(await service.getImportWorkspaceFilesProgress('123', 'run-2')).toMatchObject({ status: 'failed', phase: 'saving-logs', result });
+        expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(123);
+      });
+
+      it('keeps full log coverage details in the HTTP result but not in the reconnect cache', async () => {
+        personService.getLogCoverageStats.mockResolvedValue({
+          bookletsWithLogs: 1,
+          totalBooklets: 1,
+          unitsWithLogs: 1,
+          totalUnits: 1,
+          bookletDetails: [{ name: 'B', hasLog: true }],
+          unitDetails: [{ bookletName: 'B', unitKey: 'U', hasLog: true }]
+        });
+        const result = await service.importWorkspaceFiles('123', 'tc', '1', '', 'token', { ...mockImportOptions, responses: 'false', logs: 'true' }, 'g1', true, undefined, 'run-compact');
+        const progress = await service.getImportWorkspaceFilesProgress('123', 'run-compact');
+        expect(result.unitDetails).toHaveLength(1);
+        expect(progress.result).toMatchObject({ success: true, unitsWithLogs: 1 });
+        expect(progress.result.unitDetails).toBeUndefined();
+        expect(progress.result.bookletDetails).toBeUndefined();
+      });
+
+      it('does not report success for swallowed response persistence errors', async () => {
+        const person = {
+          workspace_id: 123, group: 'g1', login: 'l', code: 'c', booklets: []
+        };
+        httpService.axiosRef.get.mockResolvedValue({ data: [{ groupname: 'g1', loginname: 'l', code: 'c' }] });
+        personService.createPersonList.mockResolvedValue([person]);
+        personService.assignBookletsToPerson.mockResolvedValue(person);
+        personService.assignUnitsToBookletAndPerson.mockResolvedValue(person);
+        personService.processPersonBooklets.mockImplementation(async (_persons, _workspace, _mode, _scope, issues) => {
+          issues.push({ level: 'error', message: 'Database write failed' });
+          return {
+            addedUnitIds: [], changedUnitIds: [], addedResponseCount: 0, changedResponseCount: 0
+          };
+        });
+        const result = await service.importWorkspaceFiles('123', 'tc', '1', '', 'token', mockImportOptions, 'g1', true, undefined, 'run-3');
+        expect(result.success).toBe(false);
+        expect(result.completedSteps).toEqual([]);
+        expect(await service.getImportWorkspaceFilesProgress('123', 'run-3')).toMatchObject({ status: 'failed', result });
+      });
+
+      it('rejects a concurrent import before fetching or saving any data', async () => {
+        const queryRunner = connection.createQueryRunner();
+        jest.spyOn(queryRunner, 'query').mockResolvedValueOnce([{ locked: false }]);
+        await expect(service.importWorkspaceFiles('123', 'tc', '1', '', 'token', mockImportOptions, 'g1', true, undefined, 'run-busy'))
+          .rejects.toMatchObject({ response: { importNotStarted: true }, status: 409 });
+        expect(httpService.axiosRef.get).not.toHaveBeenCalled();
+        expect(cacheService.set).not.toHaveBeenCalled();
+        expect(queryRunner.release).toHaveBeenCalled();
+      });
+
+      it('fails closed if the durable run cannot be registered', async () => {
+        importRunRepository.insert.mockRejectedValue(new Error('Database unavailable'));
+        await expect(service.importWorkspaceFiles('123', 'tc', '1', '', 'token', mockImportOptions, 'g1', true, undefined, 'run-db'))
+          .rejects.toMatchObject({ response: { importNotStarted: true }, status: 503 });
+        expect(httpService.axiosRef.get).not.toHaveBeenCalled();
+      });
+
+      it('recovers the completed result from Postgres when the cache is unavailable', async () => {
+        cacheService.set.mockResolvedValue(false);
+        const result = await service.importWorkspaceFiles('123', 'tc', '1', '', 'token', mockImportOptions, 'g1', true, undefined, 'run-cache');
+        cacheService.get.mockResolvedValue(null);
+        expect(await service.getImportWorkspaceFilesProgress('123', 'run-cache')).toMatchObject({ status: 'completed', result });
+        const restartedService = new TestcenterService(personService, httpService as unknown as HttpService, workspaceFilesService, cacheService, workspaceTestResultsService, connection, codingFreshnessService, codingAnalysisService);
+        expect(await restartedService.importWorkspaceFiles('123', 'tc', '1', '', 'token', mockImportOptions, 'g1', true, undefined, 'run-cache')).toEqual(result);
+        expect(httpService.axiosRef.get).toHaveBeenCalledTimes(1);
+      });
+
+      it('prefers a durable terminal result over stale running progress in the cache', async () => {
+        const cacheSet = cacheService.set.getMockImplementation();
+        cacheService.set.mockImplementation(async (key, value, ttl) => (
+          (value as { status: string }).status === 'running' ? cacheSet(key, value, ttl) : false
+        ));
+        const result = await service.importWorkspaceFiles('123', 'tc', '1', '', 'token', mockImportOptions, 'g1', true, undefined, 'run-stale');
+        expect((await cacheService.get('testcenter_import_progress:123:run-stale') as { status: string }).status).toBe('running');
+        expect(await service.getImportWorkspaceFilesProgress('123', 'run-stale')).toMatchObject({ status: 'completed', result });
+        await service.importWorkspaceFiles('123', 'tc', '1', '', 'token', mockImportOptions, 'g1', true, undefined, 'run-stale');
+        expect(httpService.axiosRef.get).toHaveBeenCalledTimes(1);
+      });
+
+      it('retries a transient terminal write without replaying data persistence', async () => {
+        const update = importRunRepository.update.getMockImplementation();
+        let failTerminal = true;
+        importRunRepository.update.mockImplementation(async (key, patch) => {
+          if ((patch.progress as { status: string }).status === 'completed' && failTerminal) {
+            failTerminal = false;
+            throw new Error('Temporary database failure');
+          }
+          return update(key, patch);
+        });
+        const result = await service.importWorkspaceFiles('123', 'tc', '1', '', 'token', mockImportOptions, 'g1', true, undefined, 'run-retry');
+        expect(result.success).toBe(true);
+        expect(await service.getImportWorkspaceFilesProgress('123', 'run-retry')).toMatchObject({ status: 'completed', result });
+        expect(httpService.axiosRef.get).toHaveBeenCalledTimes(1);
+      });
+
+      it('reports failed terminal storage and refuses to replay an unconfirmed run after a restart', async () => {
+        const update = importRunRepository.update.getMockImplementation();
+        importRunRepository.update.mockImplementation(async (key, patch) => {
+          if ((patch.progress as { status: string }).status !== 'running') throw new Error('Database failure');
+          return update(key, patch);
+        });
+        cacheService.set.mockResolvedValue(false);
+        const result = await service.importWorkspaceFiles('123', 'tc', '1', '', 'token', mockImportOptions, 'g1', true, undefined, 'run-unconfirmed');
+        expect(result.success).toBe(true);
+        expect(result.issues).toEqual(expect.arrayContaining([expect.objectContaining({ level: 'warning', message: expect.stringContaining('nicht dauerhaft gespeichert') })]));
+        cacheService.get.mockResolvedValue(null);
+        const restartedService = new TestcenterService(personService, httpService as unknown as HttpService, workspaceFilesService, cacheService, workspaceTestResultsService, connection, codingFreshnessService, codingAnalysisService);
+        await expect(restartedService.importWorkspaceFiles('123', 'tc', '1', '', 'token', mockImportOptions, 'g1', true, undefined, 'run-unconfirmed'))
+          .rejects.toMatchObject({ status: 409 });
+        expect(httpService.axiosRef.get).toHaveBeenCalledTimes(1);
+      });
+
+      it('does not start a new run when the durable status cannot be read', async () => {
+        importRunRepository.findOneBy.mockRejectedValue(new Error('Database unavailable'));
+        await expect(service.importWorkspaceFiles('123', 'tc', '1', '', 'token', mockImportOptions, 'g1', true, undefined, 'run-unreadable'))
+          .rejects.toThrow('Database unavailable');
+        expect(httpService.axiosRef.get).not.toHaveBeenCalled();
+        expect(importRunRepository.insert).not.toHaveBeenCalled();
+      });
+    });
+
     it('should import responses and create persons/booklets/units', async () => {
       const mockResponses: Response[] = [
         {
@@ -464,6 +643,7 @@ describe('TestCenterService', () => {
       expect(result.persons).toBe(1);
       expect(result.booklets).toBe(1);
       expect(result.units).toBe(1);
+      expect(connection.createQueryRunner).toHaveBeenCalledTimes(1);
       expect(
         workspaceTestResultsService.invalidateWorkspaceStatsCache
       ).toHaveBeenCalledWith(123);

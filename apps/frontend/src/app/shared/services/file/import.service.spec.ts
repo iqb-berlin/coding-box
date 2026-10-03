@@ -40,6 +40,45 @@ describe('ImportService', () => {
     expect(service).toBeTruthy();
   });
 
+  it('bounds the import request without interpreting a timeout as a server failure', async () => {
+    jest.useFakeTimers();
+    const onError = jest.fn();
+    const options: ImportOptions = {
+      responses: 'true',
+      definitions: 'false',
+      units: 'false',
+      player: 'false',
+      codings: 'false',
+      logs: 'false',
+      testTakers: 'false',
+      booklets: 'false',
+      metadata: 'false'
+    };
+    try {
+      service.importWorkspaceFiles(1, 'tc', '1', '', 'token', options, ['g1'], false, undefined, 'run').subscribe({ error: onError });
+      const request = httpMock.expectOne(req => req.url.endsWith('/importWorkspaceFiles'));
+      await jest.advanceTimersByTimeAsync(180001);
+      expect(request.cancelled).toBe(true);
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ name: 'TimeoutError' }));
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('returns an unknown progress result when its request does not respond', async () => {
+    jest.useFakeTimers();
+    const onProgress = jest.fn();
+    try {
+      service.getImportWorkspaceFilesProgress(1, 'run').subscribe(onProgress);
+      const request = httpMock.expectOne(req => req.url.endsWith('/progress'));
+      await jest.advanceTimersByTimeAsync(10001);
+      expect(request.cancelled).toBe(true);
+      expect(onProgress).toHaveBeenCalledWith(null);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   describe('importWorkspaceFiles', () => {
     it('should send import request with all options', () => {
       const options: ImportOptions = {

@@ -25,6 +25,7 @@ export interface ImportResultDto {
   units: number;
   persons: number;
   importedGroups: string[];
+  completedSteps?: Array<'responses' | 'logs'>;
   filesPlayer?: number;
   filesUnits?: number;
   filesDefinitions?: number;

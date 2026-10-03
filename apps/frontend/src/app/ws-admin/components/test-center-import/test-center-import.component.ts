@@ -1,5 +1,5 @@
 import { Component, inject } from '@angular/core';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 import {
   MatDialogContent,
@@ -24,7 +24,7 @@ import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import { MatIcon } from '@angular/material/icon';
 import {
-  catchError, firstValueFrom, interval, of, startWith, Subscription, switchMap
+  catchError, exhaustMap, firstValueFrom, interval, of, startWith, Subscription, switchMap
 } from 'rxjs';
 import { DatePipe } from '@angular/common';
 import {
@@ -131,6 +131,7 @@ export class TestCenterImportComponent {
   private fb = inject(UntypedFormBuilder);
   private appService = inject(AppService);
   private dialog = inject(MatDialog);
+  private translate = inject(TranslateService);
 
   testCenters: Testcenter[] = [
     {
@@ -196,6 +197,28 @@ export class TestCenterImportComponent {
   private progressPollingSub?: Subscription;
   private testGroupsProgressPollingSub?: Subscription;
   private testGroupsLoadStartedAt: number | null = null;
+  resultStatusUncertain = false;
+  isCheckingImportStatus = false;
+  isConfirmingImport = false;
+  completedGroupNames: string[] = [];
+  failedGroupName: string | null = null;
+  importElapsedSeconds = 0;
+  private retrySelection?: {
+    workspaceId: number;
+    tcWorkspace: string;
+    testCenter: number;
+    url: string;
+    groups: string[];
+  };
+
+  private resultImportState?: {
+    formValues: ImportFormValues;
+    groups: string[];
+    index: number;
+    overwriteExistingLogs: boolean;
+    workspaceId: number;
+    mergedResult: Result | null;
+  };
 
   constructor() {
     this.loginForm = this.fb.group({
@@ -355,6 +378,12 @@ export class TestCenterImportComponent {
   }
 
   logout(): boolean {
+    this.retrySelection = undefined;
+    this.failedGroupName = null;
+    this.completedGroupNames = [];
+    this.uploadData = null;
+    this.uploadError = null;
+    this.resetUploadProgress();
     this.authenticated = false;
     this.authToken = '';
     this.workspaceAdminService.setLastAuthToken('');
@@ -390,6 +419,21 @@ export class TestCenterImportComponent {
       this.workspaceAdminService.getLastUrl() ||
       formValues.testCenterIndividual;
 
+    const retrySelection = this.retrySelection;
+    const restoreSelection = !!retrySelection &&
+      retrySelection.workspaceId === this.appService.selectedWorkspaceId &&
+      retrySelection.tcWorkspace === formValues.workspace &&
+      retrySelection.testCenter === Number(formValues.testCenter) &&
+      retrySelection.url === formValues.testCenterIndividual;
+    const retryGroupNames = new Set(restoreSelection ? retrySelection.groups : []);
+    if (retrySelection && !restoreSelection) {
+      this.retrySelection = undefined;
+      this.failedGroupName = null;
+      this.completedGroupNames = [];
+      this.uploadData = null;
+      this.resetUploadProgress();
+    }
+
     const importRunId = this.createImportRunId();
     this.isLoadingTestGroups = true;
     this.importProgressPercent = 0;
@@ -413,7 +457,8 @@ export class TestCenterImportComponent {
           this.stopTestGroupsProgressPolling();
           this.workspaceAdminService.setTestGroups(response);
           this.testGroups = response;
-          this.selectedRows = [];
+          this.selectedRows = restoreSelection ?
+            response.filter(group => retryGroupNames.has(group.groupName)) : [];
           this.showTestGroups = true;
         },
         error: error => {
@@ -431,6 +476,9 @@ export class TestCenterImportComponent {
   }
 
   goBackToOptions(): void {
+    if (this.retrySelection) {
+      this.retrySelection.groups = this.selectedRows.map(group => group.groupName);
+    }
     this.showTestGroups = false;
     this.selectedRows = [];
   }
@@ -470,6 +518,7 @@ export class TestCenterImportComponent {
   }
 
   getTestData(): void {
+    if (this.isUploadingTestFiles || this.isUploadingTestResults || this.resultStatusUncertain || this.isConfirmingImport) return;
     const formValues = {
       testCenter: this.loginForm.get('testCenter')?.value,
       workspace: this.importFilesForm.get('workspace')?.value,
@@ -493,6 +542,9 @@ export class TestCenterImportComponent {
     this.uploadData = null;
     this.firstTestFilesImportData = null;
     this.uploadError = null;
+    this.completedGroupNames = [];
+    this.failedGroupName = null;
+    this.retrySelection = undefined;
     this.isUploadingTestFiles = true;
     this.isUploadingTestResults = this.data.importType === 'testResults';
     this.importProgressPercent = 0;
@@ -508,11 +560,13 @@ export class TestCenterImportComponent {
       formValues.importOptions.logs && this.hasSelectedGroupsWithLogs();
 
     if (needsConfirmation) {
+      this.isConfirmingImport = true;
       this.isUploadingTestFiles = false;
       this.isUploadingTestResults = false;
       this.resetUploadProgress();
 
       this.confirmOverwriteLogs().then(choice => {
+        this.isConfirmingImport = false;
         if (choice === 'cancel') {
           this.resetUploadProgress();
           return;
@@ -744,9 +798,10 @@ export class TestCenterImportComponent {
       testFiles: (base.testFiles || 0) + (current.testFiles || 0),
       responses: (base.responses || 0) + (current.responses || 0),
       logs: (base.logs || 0) + (current.logs || 0),
-      booklets: (base.booklets || 0) + (current.booklets || 0),
-      units: (base.units || 0) + (current.units || 0),
-      persons: (base.persons || 0) + (current.persons || 0),
+      // These are workspace totals, not per-group deltas.
+      booklets: current.booklets || base.booklets || 0,
+      units: current.units || base.units || 0,
+      persons: current.persons || base.persons || 0,
       importedGroups: [...new Set([...(base.importedGroups || []), ...(current.importedGroups || [])])],
       issues: [...(base.issues || []), ...(current.issues || [])],
       codingFreshness: current.codingFreshness || base.codingFreshness
@@ -758,86 +813,156 @@ export class TestCenterImportComponent {
     selectedGroupNames: string[],
     overwriteExistingLogs: boolean
   ): Promise<void> {
-    try {
-      let mergedResult: Result | null = null;
-      const total = selectedGroupNames.length;
-      for (let i = 0; i < total; i++) {
-        const groupName = selectedGroupNames[i];
-        this.importProgressPercent = Math.round((i / total) * 100);
-        this.loadingMessage = `Importiere Testgruppe ${i + 1}/${total}: ${groupName} (${this.importProgressPercent}%)...`;
+    this.resultImportState = {
+      formValues,
+      groups: selectedGroupNames,
+      index: 0,
+      overwriteExistingLogs,
+      workspaceId: this.appService.selectedWorkspaceId,
+      mergedResult: null
+    };
+    await this.continueTestResultsImport();
+  }
 
-        const currentResult = await firstValueFrom(
-          this.importService.importWorkspaceFiles(
-            this.appService.selectedWorkspaceId,
-            formValues.workspace,
-            formValues.testCenter.toString(),
-            formValues.testCenterIndividual,
-            this.authToken,
-            formValues.importOptions,
-            [groupName],
-            overwriteExistingLogs,
-            undefined,
-            undefined,
-            formValues.responseOverwriteMode
-          )
-        );
-
-        if (currentResult.success === false) {
-          throw new Error(
-            `Import der Testgruppe "${groupName}" wurde vom Server nicht erfolgreich abgeschlossen.`
-          );
+  private async continueTestResultsImport(recoveredResult?: Result): Promise<void> {
+    const state = this.resultImportState;
+    if (!state) return;
+    this.resultStatusUncertain = false;
+    this.uploadError = null;
+    this.isUploadingTestFiles = true;
+    this.isUploadingTestResults = true;
+    const { formValues } = state;
+    let pendingRecoveredResult = recoveredResult;
+    while (state.index < state.groups.length) {
+      const groupName = state.groups[state.index];
+      this.importProgressPercent = this.uploadProgressPercent;
+      this.loadingMessage = `Importiere Testgruppe ${state.index + 1}/${state.groups.length}: ${groupName} (${this.importProgressPercent}%)...`;
+      let currentResult = pendingRecoveredResult;
+      pendingRecoveredResult = undefined;
+      if (!currentResult) {
+        this.importRunId = this.createImportRunId();
+        this.uploadProgressDetails = null;
+        this.startResultImportProgressPolling(state.workspaceId, this.importRunId);
+        try {
+          currentResult = await firstValueFrom(this.importService.importWorkspaceFiles(
+            state.workspaceId, formValues.workspace, formValues.testCenter.toString(), formValues.testCenterIndividual, this.authToken, formValues.importOptions, [groupName], state.overwriteExistingLogs, undefined, this.importRunId, formValues.responseOverwriteMode
+          ));
+        } catch (error) {
+          // A disconnected request does not cancel persistence on the server.
+          const progress = await firstValueFrom(this.importService.getImportWorkspaceFilesProgress(state.workspaceId, this.importRunId));
+          this.uploadProgressDetails = progress;
+          if ((progress?.status === 'completed' || progress?.status === 'failed') && progress.result) {
+            currentResult = progress.result;
+          } else if (progress?.status !== 'running' &&
+            this.importWasRejectedBeforeStart(error)) {
+            currentResult = {
+              success: false,
+              testFiles: 0,
+              responses: 0,
+              logs: 0,
+              booklets: 0,
+              units: 0,
+              persons: 0,
+              importedGroups: [],
+              issues: [{ level: 'error', message: this.getErrorMessage(error, this.translate.instant('testcenter-import.not-started')) }]
+            };
+          } else {
+            this.resultStatusUncertain = true;
+            this.uploadError = this.getErrorMessage(error, this.translate.instant('testcenter-import.connection-error'));
+            this.stopResultImport();
+            return;
+          }
         }
-
-        mergedResult = this.mergeImportResults(mergedResult, currentResult);
-        this.incrementCompletedUploads();
+        this.stopUploadProgressPolling();
       }
+      state.mergedResult = this.mergeImportResults(state.mergedResult, currentResult);
+      this.uploadData = state.mergedResult;
+      if (currentResult.success === false) {
+        this.failedGroupName = groupName;
+        this.uploadError = currentResult.issues?.filter(issue => issue.level === 'error').map(issue => issue.message).join(' ') ||
+          `Import der Testgruppe "${groupName}" wurde nicht vollständig abgeschlossen.`;
+        const remainingGroups = new Set(state.groups.slice(state.index));
+        this.selectedRows = this.selectedRows.filter(group => remainingGroups.has(group.groupName));
+        this.retrySelection = {
+          workspaceId: state.workspaceId,
+          tcWorkspace: formValues.workspace,
+          testCenter: Number(formValues.testCenter),
+          url: formValues.testCenterIndividual,
+          groups: this.selectedRows.map(group => group.groupName)
+        };
+        this.resultImportState = undefined;
+        this.stopResultImport();
+        return;
+      }
+      this.completedGroupNames.push(groupName);
+      this.incrementCompletedUploads();
+      state.index += 1;
+    }
+    this.importProgressPercent = 100;
+    this.stopResultImport();
+    this.resultImportState = undefined;
+    const importedResponses = !!formValues.importOptions.responses;
+    this.dialogRef.close({
+      didImport: true,
+      resultType: importedResponses ? 'responses' : 'logs',
+      importedResponses,
+      importedLogs: !!formValues.importOptions.logs,
+      uploadResult: state.mergedResult
+    });
+  }
 
-      this.importProgressPercent = 100;
-      this.loadingMessage = 'Import abgeschlossen (100%)';
-      this.uploadData = mergedResult;
-      this.isUploadingTestFiles = false;
-      this.isUploadingTestResults = false;
-
-      const importedResponses = !!formValues.importOptions.responses;
-      const importedLogs = !!formValues.importOptions.logs;
-      const resultType: 'logs' | 'responses' = importedResponses ? 'responses' : 'logs';
-
-      this.dialogRef.close({
-        didImport: true,
-        resultType,
-        importedResponses,
-        importedLogs,
-        uploadResult: mergedResult
-      });
-    } catch (error) {
-      this.uploadError = this.getErrorMessage(
-        error,
-        'Testcenter-Import fehlgeschlagen. Bitte Verbindung prüfen und erneut versuchen.'
-      );
-      this.isUploadingTestFiles = false;
-      this.isUploadingTestResults = false;
-      this.importProgressPercent = 0;
-      this.resetUploadProgress();
+  async checkTestResultsImportStatus(): Promise<void> {
+    const state = this.resultImportState;
+    if (!state || !this.importRunId || this.isCheckingImportStatus) return;
+    this.isCheckingImportStatus = true;
+    try {
+      const progress = await firstValueFrom(this.importService.getImportWorkspaceFilesProgress(state.workspaceId, this.importRunId));
+      this.uploadProgressDetails = progress;
+      if ((progress?.status === 'completed' || progress?.status === 'failed') && progress.result) {
+        await this.continueTestResultsImport(progress.result);
+      }
+    } finally {
+      this.isCheckingImportStatus = false;
     }
   }
 
-  private getErrorMessage(error: unknown, fallback: string): string {
-    if (error instanceof Error && error.message) {
-      return `${fallback} (${error.message})`;
-    }
+  private stopResultImport(): void {
+    this.stopUploadProgressPolling();
+    this.isUploadingTestFiles = false;
+    this.isUploadingTestResults = false;
+  }
 
+  private startResultImportProgressPolling(workspaceId: number, importRunId: string): void {
+    this.stopUploadProgressPolling();
+    const startedAt = Date.now();
+    this.importElapsedSeconds = 0;
+    this.progressPollingSub = interval(2000).pipe(
+      startWith(0),
+      exhaustMap(() => this.importService.getImportWorkspaceFilesProgress(workspaceId, importRunId))
+    ).subscribe(progress => {
+      this.importElapsedSeconds = Math.floor((Date.now() - startedAt) / 1000);
+      if (progress) this.uploadProgressDetails = progress;
+    });
+  }
+
+  private getErrorMessage(error: unknown, fallback: string): string {
     const maybeHttpError = error as {
       error?: { message?: string } | string;
       message?: string;
       status?: number;
     };
     const detail =
-      (typeof maybeHttpError.error === 'string' && maybeHttpError.error) ||
-      (typeof maybeHttpError.error === 'object' && maybeHttpError.error?.message) ||
-      maybeHttpError.message ||
-      (maybeHttpError.status ? `HTTP ${maybeHttpError.status}` : '');
+      (typeof maybeHttpError?.error === 'string' && maybeHttpError.error) ||
+      (typeof maybeHttpError?.error === 'object' && maybeHttpError.error?.message) ||
+      maybeHttpError?.message ||
+      (maybeHttpError?.status ? `HTTP ${maybeHttpError.status}` : '');
 
     return detail ? `${fallback} (${detail})` : fallback;
+  }
+
+  private importWasRejectedBeforeStart(error: unknown): boolean {
+    const httpError = error as { status?: number; error?: { importNotStarted?: boolean } };
+    return httpError?.error?.importNotStarted === true || httpError?.status === 401 || httpError?.status === 403;
   }
 
   get uploadProgressPercent(): number {
