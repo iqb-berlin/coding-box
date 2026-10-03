@@ -1,7 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
@@ -37,7 +36,6 @@ describe('TestPersonCodingComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         TestPersonCodingComponent,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [

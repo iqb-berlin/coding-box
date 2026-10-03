@@ -1,5 +1,4 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -31,7 +30,7 @@ describe('CoderListComponent', () => {
     snackBar = { open: jest.fn() };
 
     await TestBed.configureTestingModule({
-      imports: [CoderListComponent, NoopAnimationsModule, TranslateModule.forRoot()],
+      imports: [CoderListComponent, TranslateModule.forRoot()],
       providers: [
         { provide: CoderService, useValue: coderService },
         { provide: MatSnackBar, useValue: snackBar }

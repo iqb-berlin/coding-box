@@ -224,7 +224,7 @@
         "administration",
         "jobs"
       ],
-      "evidence": "Schließen, DestroyRef und Workspace-Wechsel; verspätete Antworten erzeugen keine Folgeansichten. Browserregressionen schließen Schulungsdialoge während ausstehender Antworten und verlassen Workspaces während Bulk-Vorschau oder Bestätigung; keine alte Jobanlage."
+      "evidence": "Schließen, DestroyRef und Workspace-Wechsel; verspätete Antworten erzeugen keine Folgeansichten. Browserregressionen schließen Schulungsdialoge während ausstehender Antworten und verlassen Workspaces während Bulk-Vorschau oder Bestätigung; keine alte Jobanlage. Chart.js-Tests prüfen die Freigabe von Chart-Instanzen und Media-Query-Listenern; der Browser öffnet den Statistikdialog erneut."
     },
     {
       "id": "timers-promises",
@@ -257,6 +257,7 @@
   ],
   "unresolvedFindings": [],
   "residualLimits": [
+    "Chart.js ist in JSDOM mit simulierter Canvas-API und im Electron-Browser mit echten gezeichneten Pixeln, Animationen und Beschriftungen geprüft. Ein vollständiges Screenreader-Gutachten, visuelle Identität zu ngx-charts und sämtliche Browser sind nicht nachgewiesen.",
     "Nicht jedes UI-Element, jede Template-Bindung oder jede Kombination von Aktionen ist einzeln nachgewiesen. Das detaillierte Inventar bleibt eine Suchhilfe.",
     "Nicht alle Dialogeinbettungen, Rollen je Einzelaktion, Trainingsvarianten und Metadatenfeldtypen sind im Browser geprüft.",
     "Browsernachweise prüfen verzögerte Schulungslisten, Auswahl und Filter sowie den erreichbaren Bulk-Definitionsablauf mit fertiger Serververteilung. Die zusätzliche interne asynchrone Bulk-Berechnung (ZL-034) hat weiterhin keinen Template-Einstieg und bleibt nativ geprüft. Der Schulungsvergleich übernimmt am erreichbaren Einstieg die bereits gecachte Liste; sein separater verspäteter Listenabruf (ZL-035) bleibt nativ geprüft. Browser-Anmeldung und API-Antworten dieser zusätzlichen Fälle sind synthetisch und belegen keine reale Backend-Persistenz oder Autorisierung.",

@@ -2,7 +2,6 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { Observable, Subject } from 'rxjs';
 import { CodingResultsComparisonComponent } from './coding-results-comparison.component';
@@ -48,7 +47,7 @@ describe('Coding comparison without Zone', () => {
     getCoderTrainings = jest.fn().mockReturnValue(trainings);
     snackBar = { open: jest.fn() };
     await TestBed.configureTestingModule({
-      imports: [CodingResultsComparisonComponent, TranslateModule.forRoot(), NoopAnimationsModule],
+      imports: [CodingResultsComparisonComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MatDialogRef, useValue: { close: jest.fn() } },

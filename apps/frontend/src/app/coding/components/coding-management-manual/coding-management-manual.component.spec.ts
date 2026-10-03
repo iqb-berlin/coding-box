@@ -4,7 +4,6 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import {
@@ -67,7 +66,6 @@ describe('CodingManagementManualComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       providers: [
-        provideNoopAnimations(),
         {
           provide: ActivatedRoute,
           useValue: fakeActivatedRoute

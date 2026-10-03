@@ -1,6 +1,5 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { BehaviorSubject, of, Subject } from 'rxjs';
 import { ExportCodingBookComponent } from './export-coding-book.component';
@@ -36,7 +35,6 @@ describe('Codebook export with delayed responses without Zone', () => {
       imports: [ExportCodingBookComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
-        provideNoopAnimations(),
         {
           provide: CodingExportService,
           useValue: {

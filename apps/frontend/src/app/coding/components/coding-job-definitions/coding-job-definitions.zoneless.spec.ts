@@ -3,7 +3,6 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
 
@@ -37,7 +36,7 @@ describe('CodingJobDefinitionsComponent in zoneless mode', () => {
     await TestBed.configureTestingModule({
       imports: [CodingJobDefinitionsComponent, TranslateModule.forRoot()],
       providers: [
-        provideZonelessChangeDetection(), provideNoopAnimations(), provideHttpClient(),
+        provideZonelessChangeDetection(), provideHttpClient(),
         { provide: SERVER_URL, useValue: environment.backendUrl },
         { provide: AppService, useValue: appService },
         { provide: MatDialog, useValue: dialog },
@@ -133,7 +132,6 @@ describe('CodingJobDefinitionsComponent in zoneless mode', () => {
       imports: [CodingJobDefinitionsComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
-        provideNoopAnimations(),
         provideHttpClient(),
         { provide: SERVER_URL, useValue: environment.backendUrl },
         { provide: MatSnackBar, useValue: { open: jest.fn() } },

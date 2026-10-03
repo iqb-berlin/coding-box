@@ -7,7 +7,6 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { provideHttpClient } from '@angular/common/http';
 import { Subject, of, throwError } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
@@ -46,7 +45,6 @@ describe('TestResultsComponent', () => {
         MatTooltipModule,
         MatIconModule,
         MatTableModule,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [

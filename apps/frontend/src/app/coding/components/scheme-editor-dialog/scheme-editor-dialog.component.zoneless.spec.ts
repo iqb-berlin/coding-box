@@ -7,7 +7,6 @@ import {
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of, Subject, throwError } from 'rxjs';
 import {
   Component, EventEmitter, Input, Output, provideZonelessChangeDetection
@@ -105,8 +104,7 @@ describe('Schemer preview without Zone.js', () => {
 
     await TestBed.configureTestingModule({
       imports: [
-        SchemeEditorDialogComponent,
-        NoopAnimationsModule
+        SchemeEditorDialogComponent
       ],
       providers: [
         provideZonelessChangeDetection(),

@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
+import { Chart } from 'chart.js';
 import { ReplayStatisticsDialogComponent } from './replay-statistics-dialog.component';
 import { ReplayBackendService, ReplaySourceSummaryResponse } from '../../../replay/services/replay-backend.service';
 
@@ -79,9 +80,9 @@ describe('Replay statistics with delayed responses without Zone', () => {
     const values = Array.from(fixture.nativeElement.querySelectorAll('.source-summary .stat-value'))
       .map(element => (element as HTMLElement).textContent?.trim());
     expect(values).toEqual(['4', '3', '1']);
-    const bar = fixture.nativeElement.querySelector('coding-box-vertical-bar-chart .bar');
-    expect(bar.getAttribute('aria-label')).toBe('UNIT: 4');
-    expect(Number(bar.querySelector('rect').getAttribute('height'))).toBeGreaterThan(0);
+    const canvas = fixture.nativeElement.querySelector('coding-box-vertical-bar-chart canvas');
+    expect(Chart.getChart(canvas)?.data.datasets[0].data).toEqual([4]);
+    expect(fixture.nativeElement.querySelector('coding-box-vertical-bar-chart tbody tr').textContent).toBe('UNIT4');
   });
 
   it('ends loading after a delayed frequency request fails', async () => {

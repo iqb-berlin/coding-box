@@ -1,26 +1,25 @@
 <div class="chart-scroll">
-  <svg [attr.width]="width()" [attr.height]="height()" role="group"
-    [attr.aria-label]="xAxisLabel() + ': ' + yAxisLabel()">
-    @for (tick of ticks(); track tick.value) {
-      <line class="grid-line" [attr.x1]="left" [attr.x2]="left + plotWidth()"
-        [attr.y1]="tick.y" [attr.y2]="tick.y" />
-      <text class="tick" [attr.x]="left - 10" [attr.y]="tick.y" text-anchor="end" dominant-baseline="middle">{{ tick.value }}</text>
-    }
-    <line class="axis" [attr.x1]="left" [attr.x2]="left + plotWidth()" [attr.y1]="baseline()" [attr.y2]="baseline()" />
-    <line class="axis" [attr.x1]="left" [attr.x2]="left" [attr.y1]="top" [attr.y2]="baseline()" />
-    @for (bar of bars(); track $index) {
-      <g class="bar" tabindex="0" role="img" [attr.aria-label]="bar.description" [matTooltip]="bar.description">
-        <title>{{ bar.description }}</title>
-        <rect animate.enter="bar-enter" [attr.x]="bar.x" [attr.y]="bar.y" [attr.width]="bar.width"
-          [attr.height]="bar.height" [attr.fill]="bar.color" />
-      </g>
-      @if (bar.showTick) {
-        <text class="tick" [attr.x]="bar.x + bar.width / 2" [attr.y]="baseline() + 18"
-          [attr.text-anchor]="rotateXAxisTicks() ? 'end' : 'middle'"
-          [attr.transform]="rotateXAxisTicks() ? 'rotate(-35 ' + (bar.x + bar.width / 2) + ' ' + (baseline() + 18) + ')' : null">{{ bar.label }}</text>
-      }
-    }
-    <text class="axis-label" [attr.x]="left + plotWidth() / 2" [attr.y]="height() - 12" text-anchor="middle">{{ xAxisLabel() }}</text>
-    <text class="axis-label" [attr.transform]="'translate(18 ' + (top + plotHeight() / 2) + ') rotate(-90)'" text-anchor="middle">{{ yAxisLabel() }}</text>
-  </svg>
+  <div class="canvas-container" [style.width.px]="width()" [style.height.px]="height()">
+    <canvas #canvas [attr.width]="width()" [attr.height]="height()" role="img"
+      [attr.aria-label]="xAxisLabel() + ': ' + yAxisLabel()"
+      [attr.aria-describedby]="tableToggleId">
+      {{ 'charts.show-data-table' | translate }}
+    </canvas>
+  </div>
 </div>
+<details class="chart-data">
+  <summary [id]="tableToggleId" tabindex="0">{{ 'charts.show-data-table' | translate }}</summary>
+  <div class="table-scroll">
+    <table>
+      <caption>{{ xAxisLabel() }}: {{ yAxisLabel() }}</caption>
+      <thead>
+        <tr><th scope="col">{{ xAxisLabel() }}</th><th scope="col">{{ yAxisLabel() }}</th></tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track $index) {
+          <tr><th scope="row">{{ row.name }}</th><td>{{ row.value }}</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</details>

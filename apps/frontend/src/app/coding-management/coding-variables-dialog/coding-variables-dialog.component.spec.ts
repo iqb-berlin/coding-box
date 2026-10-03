@@ -3,7 +3,6 @@ import { delay } from 'rxjs/operators';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 import { CodingVariablesDialogComponent } from './coding-variables-dialog.component';
@@ -77,7 +76,6 @@ describe('CodingVariablesDialogComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [
-        NoopAnimationsModule,
         TranslateModule.forRoot(),
         CodingVariablesDialogComponent
       ],

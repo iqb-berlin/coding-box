@@ -1,16 +1,25 @@
+import { DOCUMENT } from '@angular/common';
 import {
-  ChangeDetectionStrategy, Component, computed, input
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, NgZone,
+  afterRenderEffect, computed, inject, input, signal, viewChild
 } from '@angular/core';
-import { MatTooltipModule } from '@angular/material/tooltip';
+import { TranslateModule } from '@ngx-translate/core';
+import {
+  BarController, BarElement, CategoryScale, Chart, ChartConfiguration, LinearScale, Tooltip
+} from 'chart.js';
+
+Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip);
 
 export interface BarChartDatum {
   name: string;
   value: number;
 }
 
+let nextTableId = 0;
+
 @Component({
   selector: 'coding-box-vertical-bar-chart',
-  imports: [MatTooltipModule],
+  imports: [TranslateModule],
   templateUrl: './vertical-bar-chart.component.html',
   styleUrl: './vertical-bar-chart.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -23,57 +32,114 @@ export class VerticalBarChartComponent {
   readonly rotateXAxisTicks = input(false);
   readonly xAxisTickFormatting = input<(value: string) => string>(value => value);
 
-  private readonly colors = ['#647c8a', '#3f51b5', '#2196f3', '#00b862', '#afdf0a', '#a7b61a'];
-  readonly left = 76;
-  readonly top = 20;
-  readonly width = computed(() => Math.max(320, this.view()[0], this.results().length * 28 + this.left + 20));
+  readonly tableToggleId: string;
+  readonly width = computed(() => Math.max(320, this.view()[0], this.results().length * 28 + 96));
   readonly height = computed(() => Math.max(240, this.view()[1]));
-  readonly plotWidth = computed(() => this.width() - this.left - 20);
-  readonly plotHeight = computed(() => this.height() - this.top - (this.rotateXAxisTicks() ? 125 : 85));
-  readonly baseline = computed(() => this.top + this.plotHeight());
+  readonly rows = computed(() => this.results().map(datum => ({
+    name: datum.name,
+    value: Number.isFinite(datum.value) ? Math.max(0, datum.value) : 0
+  })));
 
-  // Counts and durations are nonnegative. Keep an empty/zero chart finite,
-  // and use round scale steps without rounding away fractional durations.
-  readonly scale = computed(() => {
-    const maximum = this.results().reduce((max, datum) => Math.max(max, this.safeValue(datum.value)), 0);
-    const roughStep = (maximum || 1) / 4;
-    const magnitude = 10 ** Math.floor(Math.log10(roughStep));
-    const normalized = roughStep / magnitude;
-    const factor = [1, 2, 5, 10].find(value => value >= normalized) ?? 10;
-    const step = factor * magnitude;
-    const count = Math.ceil((maximum || 1) / step);
-    return { step, maximum: count * step, count };
-  });
+  private readonly canvas = viewChild.required<ElementRef<HTMLCanvasElement>>('canvas');
+  private readonly document = inject(DOCUMENT);
+  private readonly zone = inject(NgZone);
+  private readonly reducedMotion = signal(false);
+  private readonly colors = [
+    '#647c8a', '#3f51b5', '#2196f3', '#00b862', '#afdf0a',
+    '#a7b61a', '#f3e562', '#ff9800', '#ff5722', '#ff4514'
+  ];
 
-  readonly ticks = computed(() => Array.from({ length: this.scale().count + 1 }, (_, index) => {
-    const value = Number((index * this.scale().step).toPrecision(12));
-    return {
-      value,
-      y: this.baseline() - (value / this.scale().maximum) * this.plotHeight()
-    };
-  }));
+  private chart?: Chart<'bar', number[], string>;
+  private motionQuery?: MediaQueryList;
+  private readonly motionChanged = (event: MediaQueryListEvent): void => {
+    this.reducedMotion.set(event.matches);
+  };
 
-  readonly bars = computed(() => {
-    const results = this.results();
-    const slot = this.plotWidth() / Math.max(1, results.length);
-    const tickStride = Math.max(1, Math.ceil(results.length / (this.plotWidth() / 80)));
-    return results.map((datum, index) => {
-      const height = (this.safeValue(datum.value) / this.scale().maximum) * this.plotHeight();
-      return {
-        ...datum,
-        x: this.left + index * slot + slot * 0.15,
-        y: this.baseline() - height,
-        width: slot * 0.7,
-        height,
-        color: this.colors[index % this.colors.length],
-        label: this.xAxisTickFormatting()(datum.name),
-        showTick: index % tickStride === 0 || index === results.length - 1,
-        description: `${datum.name}: ${datum.value}`
+  constructor() {
+    nextTableId += 1;
+    this.tableToggleId = `bar-chart-data-${nextTableId}`;
+    afterRenderEffect(() => {
+      const canvas = this.canvas().nativeElement;
+      if (!this.motionQuery) {
+        this.motionQuery = this.document.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)');
+        if (this.motionQuery) {
+          this.reducedMotion.set(this.motionQuery.matches);
+          this.motionQuery.addEventListener('change', this.motionChanged);
+        }
+      }
+      const labels = this.rows().map(row => row.name);
+      const formatTick = this.xAxisTickFormatting();
+      const rotated = this.rotateXAxisTicks();
+      const reducedMotion = this.reducedMotion();
+      const width = this.width();
+      const height = this.height();
+      const styles = this.document.defaultView?.getComputedStyle(canvas);
+      const color = styles?.color || '#666';
+      const configuration: ChartConfiguration<'bar', number[], string> = {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: this.yAxisLabel(),
+            data: this.rows().map(row => row.value),
+            backgroundColor: labels.map((_, index) => this.colors[index % this.colors.length]),
+            borderRadius: 5,
+            borderSkipped: 'start',
+            maxBarThickness: 90
+          }]
+        },
+        options: {
+          // The dialog supplies its observed dimensions. Explicit resizing also
+          // gives scrollable charts a stable minimum category width.
+          responsive: false,
+          color,
+          font: { family: styles?.fontFamily || 'sans-serif' },
+          animation: reducedMotion ? false : { duration: 500, easing: 'easeOutQuart' },
+          transitions: { resize: { animation: { duration: reducedMotion ? 0 : 300 } } },
+          plugins: {
+            tooltip: { callbacks: { title: items => items[0]?.label || '' } }
+          },
+          scales: {
+            x: {
+              title: { display: true, text: this.xAxisLabel(), color },
+              grid: { display: false },
+              ticks: {
+                color,
+                autoSkip: true,
+                autoSkipPadding: 16,
+                minRotation: rotated ? 35 : 0,
+                maxRotation: rotated ? 35 : 0,
+                callback: value => formatTick(labels[Number(value)] || '')
+              }
+            },
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: this.yAxisLabel(), color },
+              grid: { color: 'rgba(128, 128, 128, 0.2)' },
+              ticks: { color }
+            }
+          }
+        }
       };
+      this.zone.runOutsideAngular(() => {
+        if (this.chart) {
+          // Chart.js mutates its configuration; keep signal-owned arrays private.
+          this.chart.data.labels = configuration.data.labels;
+          Object.assign(this.chart.data.datasets[0], configuration.data.datasets[0]);
+          this.chart.options = configuration.options || {};
+          if (reducedMotion) this.chart.stop();
+          this.chart.resize(width, height);
+          this.chart.update(reducedMotion ? 'none' : undefined);
+        } else {
+          this.chart = new Chart(canvas, configuration);
+        }
+      });
     });
-  });
 
-  private safeValue(value: number): number {
-    return Number.isFinite(value) ? Math.max(0, value) : 0;
+    inject(DestroyRef).onDestroy(() => {
+      this.motionQuery?.removeEventListener('change', this.motionChanged);
+      this.zone.runOutsideAngular(() => this.chart?.destroy());
+      this.chart = undefined;
+    });
   }
 }

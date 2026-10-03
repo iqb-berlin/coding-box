@@ -1,6 +1,5 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { Subject, of } from 'rxjs';
 import { TestResultsResponseCleanupDialogComponent } from './test-results-response-cleanup-dialog.component';
@@ -17,7 +16,6 @@ describe('TestResultsResponseCleanupDialogComponent zoneless rendering', () => {
       imports: [TestResultsResponseCleanupDialogComponent],
       providers: [
         provideZonelessChangeDetection(),
-        provideNoopAnimations(),
         { provide: MAT_DIALOG_DATA, useValue: { workspaceId: 1 } },
         { provide: MatDialogRef, useValue: { close: jest.fn() } },
         { provide: TestResultBackendService, useValue: { getExportOptions: () => response } },

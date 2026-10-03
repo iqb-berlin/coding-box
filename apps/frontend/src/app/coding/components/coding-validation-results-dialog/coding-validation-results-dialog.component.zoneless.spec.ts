@@ -2,7 +2,6 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
@@ -57,7 +56,7 @@ describe('CodingValidationResultsDialogComponent without ZoneJS', () => {
       downloadValidationResultsAsExcel: jest.fn(() => downloadResponse)
     };
     await TestBed.configureTestingModule({
-      imports: [CodingValidationResultsDialogComponent, TranslateModule.forRoot(), NoopAnimationsModule],
+      imports: [CodingValidationResultsDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MAT_DIALOG_DATA, useValue: { validationResults: page(1), validationCacheKey: 'cache-1', expectedCombinations: [] } },

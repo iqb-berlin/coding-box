@@ -1,7 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 import {
@@ -48,8 +47,7 @@ describe('CodingJobBulkCreationDialogComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         CodingJobBulkCreationDialogComponent,
-        TranslateModule.forRoot(),
-        NoopAnimationsModule
+        TranslateModule.forRoot()
       ],
       providers: [
         { provide: MatDialogRef, useValue: mockDialogRef },

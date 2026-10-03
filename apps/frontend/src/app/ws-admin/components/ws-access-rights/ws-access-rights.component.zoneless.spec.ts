@@ -1,6 +1,5 @@
 import { computed, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
@@ -27,7 +26,6 @@ describe('Workspace access rights save without ZoneJS', () => {
       imports: [WsAccessRightsComponent, MatSnackBarModule, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
-        provideNoopAnimations(),
         {
           provide: UserBackendService,
           useValue: {

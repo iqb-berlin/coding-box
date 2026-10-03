@@ -2,7 +2,6 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
 import { BulkCreationData, CodingJobBulkCreationDialogComponent } from './coding-job-bulk-creation-dialog.component';
@@ -58,7 +57,7 @@ describe('CodingJobBulkCreationDialogComponent in zoneless mode', () => {
     close = jest.fn();
     snackBarOpen = jest.fn();
     await TestBed.configureTestingModule({
-      imports: [CodingJobBulkCreationDialogComponent, TranslateModule.forRoot(), NoopAnimationsModule],
+      imports: [CodingJobBulkCreationDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MatDialogRef, useValue: { close } },

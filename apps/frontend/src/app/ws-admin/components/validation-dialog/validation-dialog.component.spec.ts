@@ -6,7 +6,6 @@ import {
   MAT_DIALOG_DATA
 } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import {
   Component,
@@ -159,7 +158,7 @@ describe('ValidationDialogComponent', () => {
     stateServiceMock.hasCompleteValidationResults.mockReturnValue(false);
 
     await TestBed.configureTestingModule({
-      imports: [NoopAnimationsModule, ValidationDialogComponent],
+      imports: [ValidationDialogComponent],
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
       providers: [
         provideHttpClient(),

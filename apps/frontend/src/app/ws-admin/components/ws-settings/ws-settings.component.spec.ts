@@ -5,7 +5,6 @@ import {
 import { TranslateModule } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of, Subject, throwError } from 'rxjs';
 import { Clipboard } from '@angular/cdk/clipboard';
 import { Component, provideZonelessChangeDetection } from '@angular/core';
@@ -96,7 +95,6 @@ describe('WsSettingsComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [
-        NoopAnimationsModule,
         TranslateModule.forRoot(),
         WsSettingsComponent
       ],

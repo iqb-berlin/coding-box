@@ -1,3 +1,5 @@
+import 'jest-canvas-mock';
+
 // Mock jwt-decode
 jest.mock('jwt-decode', () => ({
   jwtDecode: jest.fn(() => ({ workspace: '1' }))

@@ -2,7 +2,6 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
 import { CodingVariablesDialogComponent } from './coding-variables-dialog.component';
@@ -24,7 +23,6 @@ describe('CodingVariablesDialogComponent asynchronous replay anchors', () => {
     clear = new Subject<{ deleted: boolean }>();
     await TestBed.configureTestingModule({
       imports: [
-        NoopAnimationsModule,
         TranslateModule.forRoot(),
         MatSnackBarModule,
         CodingVariablesDialogComponent

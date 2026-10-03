@@ -1,8 +1,60 @@
 describe('Zoneless replay statistics and codebook export', () => {
   let unexpectedRequests: string[];
+  let dateLabels: Map<HTMLCanvasElement, Map<string, { left: number; right: number }>>;
+  let renderedText: Map<HTMLCanvasElement, Set<string>>;
+  let animatedHeights: Map<HTMLCanvasElement, Set<number>>;
+  let animationsExpected: boolean;
+  const fullUnitName = 'UNIT with a long complete name ä';
+
+  function expectDrawnChart(canvas: HTMLCanvasElement): void {
+    const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+    let barPixels = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      if (pixels[index] === 100 && pixels[index + 1] === 124 && pixels[index + 2] === 138 && pixels[index + 3] > 0) barPixels++;
+    }
+    expect(barPixels, 'Painted first bar').to.be.greaterThan(30);
+  }
+
+  function captureChartDrawing(win: Window & typeof globalThis): void {
+    animationsExpected = !win.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const prototype = win.CanvasRenderingContext2D.prototype;
+    const clearRect = prototype.clearRect;
+    prototype.clearRect = function (x: number, y: number, width: number, height: number): void {
+      if (this.canvas.width > 0 && this.canvas.height > 0) {
+        const pixels = this.getImageData(Math.floor(this.canvas.width / 2), 0, 1, this.canvas.height).data;
+        let paintedHeight = 0;
+        for (let index = 0; index < pixels.length; index += 4) {
+          if (pixels[index] === 100 && pixels[index + 1] === 124 && pixels[index + 2] === 138 && pixels[index + 3] > 0) paintedHeight++;
+        }
+        if (paintedHeight > 0) {
+          if (!animatedHeights.has(this.canvas)) animatedHeights.set(this.canvas, new Set());
+          animatedHeights.get(this.canvas)!.add(paintedHeight);
+        }
+      }
+      clearRect.call(this, x, y, width, height);
+    };
+    const fillText = prototype.fillText;
+    prototype.fillText = function (text: string, x: number, y: number, maxWidth?: number): void {
+      if (!renderedText.has(this.canvas)) renderedText.set(this.canvas, new Set());
+      renderedText.get(this.canvas)!.add(String(text));
+      if (/^2026-09-\d{2}$/.test(String(text))) {
+        const transform = this.getTransform();
+        const origin = transform.e + transform.a * x + transform.c * y;
+        const width = this.measureText(text).width * transform.a;
+        const left = this.textAlign === 'center' ? origin - width / 2 : origin;
+        if (!dateLabels.has(this.canvas)) dateLabels.set(this.canvas, new Map());
+        dateLabels.get(this.canvas)!.set(text, { left, right: left + width });
+      }
+      if (maxWidth === undefined) fillText.call(this, text, x, y);
+      else fillText.call(this, text, x, y, maxWidth);
+    };
+  }
 
   beforeEach(() => {
     unexpectedRequests = [];
+    dateLabels = new Map();
+    renderedText = new Map();
+    animatedHeights = new Map();
     cy.intercept('**/api/**', request => {
       unexpectedRequests.push(`${request.method} ${request.url}`);
       request.reply({ statusCode: 501, body: { message: 'Missing test fixture' } });
@@ -26,8 +78,8 @@ describe('Zoneless replay statistics and codebook export', () => {
     cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/sources?*', {
       delay: 300, body: { internal: 3, external: 1, total: 4 }
     });
-    cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/frequency?*', { body: { UNIT: 4 } });
-    cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/distribution/day?*', { body: { '2026-10-02': 4 } });
+    cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/frequency?*', { body: { [fullUnitName]: 4 } });
+    cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/distribution/day?*', { body: Object.fromEntries(Array.from({ length: 30 }, (_, index) => [`2026-09-${String(index + 1).padStart(2, '0')}`, 4])) });
     cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/distribution/hour?*', { body: { 12: 4 } });
     cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/duration?*', {
       body: { min: 1000, max: 3000, average: 2000, distribution: { '1000-3000': 4 }, unitAverages: Object.fromEntries(Array.from({ length: 25 }, (_, index) => [`UNIT-${index}`, 2000])) }
@@ -40,6 +92,7 @@ describe('Zoneless replay statistics and codebook export', () => {
     cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/failures/hour?*', {
       delay: 800, body: { 12: 1 }
     }).as('finalStatistics');
+    cy.on('window:before:load', captureChartDrawing);
     cy.visit('/');
     cy.wait('@authData');
     cy.window().then(win => { win.location.hash = '/workspace-admin/5/settings'; });
@@ -50,14 +103,33 @@ describe('Zoneless replay statistics and codebook export', () => {
     cy.get('coding-box-replay-statistics-dialog .source-summary .stat-value')
       .then(values => { expect([...values].map(value => value.textContent?.trim())).to.deep.equal(['4', '3', '1']); });
     cy.get('coding-box-replay-statistics-dialog').as('statisticsDialog');
-    cy.get('@statisticsDialog').find('coding-box-vertical-bar-chart .bar')
-      .should('have.length', 1).and('have.attr', 'aria-label', 'UNIT: 4');
-    cy.get('@statisticsDialog').find('.bar rect').invoke('attr', 'height').then(height => {
-      expect(Number(height)).to.be.greaterThan(0);
+    cy.get('@statisticsDialog').find('coding-box-vertical-bar-chart canvas')
+      .should('have.length', 1).and('have.attr', 'role', 'img')
+      .should(canvas => { expectDrawnChart(canvas[0] as HTMLCanvasElement); });
+    cy.get('@statisticsDialog').find('summary').scrollIntoView().click().should('have.focus');
+    cy.get('@statisticsDialog').find('details').should('have.attr', 'open');
+    cy.press(Cypress.Keyboard.Keys.SPACE);
+    cy.get('@statisticsDialog').find('details').should('not.have.attr', 'open');
+    cy.press(Cypress.Keyboard.Keys.SPACE);
+    cy.get('@statisticsDialog').find('details').should('have.attr', 'open');
+    cy.get('@statisticsDialog').find('tbody tr').should('have.length', 1).and('contain.text', fullUnitName).and('contain.text', '4');
+    cy.press(Cypress.Keyboard.Keys.SPACE);
+    cy.get('@statisticsDialog').find('details').should('not.have.attr', 'open');
+    cy.get('@statisticsDialog').find('canvas').scrollIntoView().should(canvas => {
+      const element = canvas[0] as HTMLCanvasElement;
+      const pixel = element.getContext('2d')!.getImageData(Math.floor(element.width / 2), Math.floor(element.height / 2), 1, 1).data;
+      expect([...pixel].slice(0, 3)).to.deep.equal([100, 124, 138]);
+    }).then(canvas => {
+      const bounds = canvas[0].getBoundingClientRect();
+      cy.wrap(canvas).trigger('mousemove', { clientX: bounds.left + bounds.width / 2, clientY: bounds.top + bounds.height / 2 });
     });
-    cy.screenshot('native-replay-frequency', { capture: 'viewport' });
-    cy.get('@statisticsDialog').find('.bar').should('have.attr', 'tabindex', '0').trigger('mouseenter');
-    cy.get('mat-tooltip-component').should('contain.text', 'UNIT: 4');
+    cy.get('@statisticsDialog').find('canvas').should(canvas => {
+      expect([...renderedText.get(canvas[0] as HTMLCanvasElement)!]).to.include(fullUnitName);
+    });
+    cy.get('@statisticsDialog').find('canvas').should(canvas => {
+      if (animationsExpected) expect(animatedHeights.get(canvas[0] as HTMLCanvasElement)?.size, 'Intermediate animation frames').to.be.greaterThan(1);
+    });
+    cy.screenshot('chartjs-replay-frequency', { capture: 'viewport' });
     for (const tabIndex of [1, 2, 3, 5, 6, 7]) {
       cy.get('@statisticsDialog').find('[role="tab"]').eq(tabIndex).click({ force: true });
       if (tabIndex === 1) {
@@ -68,25 +140,46 @@ describe('Zoneless replay statistics and codebook export', () => {
           expect(chart[0].scrollWidth).to.be.greaterThan(chart[0].clientWidth);
         });
       }
-      cy.get('@statisticsDialog').find('.mat-mdc-tab-body-active coding-box-vertical-bar-chart .bar rect')
-        .should('have.length', tabIndex === 1 ? 26 : 1).each(rectangle => {
-          expect(Number(rectangle.attr('height'))).to.be.greaterThan(0);
-          cy.wrap(rectangle).scrollIntoView().should('be.visible');
+      cy.get('@statisticsDialog').find('.mat-mdc-tab-body-active coding-box-vertical-bar-chart tbody tr')
+        .should('have.length', tabIndex === 1 ? 26 : tabIndex === 2 ? 30 : 1);
+      cy.get('@statisticsDialog').find('.mat-mdc-tab-body-active coding-box-vertical-bar-chart canvas')
+        .should('have.length', tabIndex === 1 ? 2 : 1).each(canvas => {
+          cy.wrap(canvas).scrollIntoView().should('be.visible').should(elements => {
+            expectDrawnChart(elements[0] as HTMLCanvasElement);
+          });
         });
     }
-    cy.get('@statisticsDialog').find('.mat-mdc-tab-body-active coding-box-vertical-bar-chart svg')
-      .should(svg => { expect(Number(svg.attr('width'))).to.be.greaterThan(800); })
-      .invoke('attr', 'width').then(originalWidth => {
+    cy.get('@statisticsDialog').find('.mat-mdc-tab-body-active coding-box-vertical-bar-chart canvas')
+      .should(canvas => { expect(canvas[0].getBoundingClientRect().width).to.be.greaterThan(800); })
+      .then(canvas => {
+        const originalWidth = canvas[0].getBoundingClientRect().width;
         cy.viewport(800, 600);
-        cy.get('@statisticsDialog').find('.mat-mdc-tab-body-active coding-box-vertical-bar-chart svg').should(svg => {
-          const width = Number(svg.attr('width'));
-          expect(width).to.be.greaterThan(0);
-          expect(width).to.be.lessThan(Number(originalWidth));
+        cy.get('@statisticsDialog').find('.mat-mdc-tab-body-active coding-box-vertical-bar-chart canvas').should(resized => {
+          expect(resized[0].getBoundingClientRect().width).to.be.lessThan(originalWidth);
         });
       });
+    cy.get('@statisticsDialog').find('[role="tab"]').eq(2).click({ force: true });
+    cy.get('@statisticsDialog').find('.mat-mdc-tab-body-active canvas').scrollIntoView().should(canvas => {
+      const boxes = [...(dateLabels.get(canvas[0] as HTMLCanvasElement)?.values() || [])].sort((a, b) => a.left - b.left);
+      expect(boxes.length, 'Drawn date labels').to.be.greaterThan(2);
+      for (let index = 1; index < boxes.length; index++) {
+        expect(boxes[index - 1].right, 'Date labels stay separate').to.be.at.most(boxes[index].left);
+      }
+    });
+    cy.get('@statisticsDialog').find('.mat-mdc-tab-body-active canvas').should(canvas => {
+      expectDrawnChart(canvas[0] as HTMLCanvasElement);
+    });
+    cy.get('@statisticsDialog').find('.mat-mdc-tab-body-active .mat-mdc-tab-body-content').scrollTo('bottom');
+    cy.screenshot('chartjs-replay-30-days', { capture: 'viewport' });
+    cy.viewport(1280, 900);
     cy.get('@statisticsDialog').find('[role="tab"]').eq(0).click({ force: true });
-    cy.get('@statisticsDialog').find('.mat-mdc-tab-body-active coding-box-vertical-bar-chart .bar')
-      .scrollIntoView().should('be.visible').and('have.attr', 'aria-label', 'UNIT: 4');
+    cy.get('@statisticsDialog').find('.mat-mdc-tab-body-active canvas').scrollIntoView().should('be.visible')
+      .should(canvas => { expectDrawnChart(canvas[0] as HTMLCanvasElement); });
+    cy.get('@statisticsDialog').find('mat-dialog-actions button').click();
+    cy.get('coding-box-replay-statistics-dialog').should('not.exist');
+    cy.get('coding-box-ws-settings .replay-statistics-actions button').click();
+    cy.get('coding-box-replay-statistics-dialog canvas').should('have.length', 1)
+      .should(canvas => { expectDrawnChart(canvas[0] as HTMLCanvasElement); });
   });
 
   for (const outcome of ['completed', 'failed']) {

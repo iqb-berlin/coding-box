@@ -6,7 +6,6 @@ import {
 import { provideHttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import {
   BehaviorSubject,
   of,
@@ -250,8 +249,7 @@ describe('CodingManagementComponent', () => {
       ],
       imports: [
         TranslateModule.forRoot(),
-        CodingManagementComponent,
-        NoopAnimationsModule
+        CodingManagementComponent
       ]
     }).compileComponents();
 

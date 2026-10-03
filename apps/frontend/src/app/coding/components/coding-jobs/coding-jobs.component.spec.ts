@@ -12,7 +12,6 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { of, Subject, throwError } from 'rxjs';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { CodingJobsComponent } from './coding-jobs.component';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
@@ -162,7 +161,6 @@ describe('CodingJobsComponent', () => {
       imports: [TranslateModule.forRoot(), CodingJobsComponent],
       providers: [
         provideZonelessChangeDetection(),
-        provideNoopAnimations(),
         {
           provide: CodingJobBackendService,
           useValue: codingJobBackendServiceMock

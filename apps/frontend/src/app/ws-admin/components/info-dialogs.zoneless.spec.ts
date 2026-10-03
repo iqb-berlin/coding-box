@@ -1,9 +1,10 @@
 import { Clipboard } from '@angular/cdk/clipboard';
 import { Component, provideZonelessChangeDetection, Type } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { MatDialog } from '@angular/material/dialog';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { MAT_DIALOG_DEFAULT_OPTIONS, MatDialog, MatDialogConfig } from '@angular/material/dialog';
+import { MAT_TABS_CONFIG } from '@angular/material/tabs';
 import { TranslateModule } from '@ngx-translate/core';
+import { firstValueFrom } from 'rxjs';
 import { BookletInfoDialogComponent } from './booklet-info-dialog/booklet-info-dialog.component';
 import { UnitInfoDialogComponent } from './unit-info-dialog/unit-info-dialog.component';
 
@@ -57,7 +58,13 @@ describe.each(variants)('$name information dialog without Zone', variant => {
     copy = jest.fn().mockReturnValue(true);
     await TestBed.configureTestingModule({
       imports: [DialogHost, BookletInfoDialogComponent, UnitInfoDialogComponent, TranslateModule.forRoot()],
-      providers: [provideZonelessChangeDetection(), provideNoopAnimations(), { provide: Clipboard, useValue: { copy } }]
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: Clipboard, useValue: { copy } },
+        // JSDOM has no CSS transition events. Use Material's supported timings.
+        { provide: MAT_DIALOG_DEFAULT_OPTIONS, useValue: { ...new MatDialogConfig(), enterAnimationDuration: 0, exitAnimationDuration: 0 } },
+        { provide: MAT_TABS_CONFIG, useValue: { animationDuration: '0ms' } }
+      ]
     }).compileComponents();
     host = TestBed.createComponent(DialogHost);
     host.autoDetectChanges();
@@ -68,10 +75,16 @@ describe.each(variants)('$name information dialog without Zone', variant => {
 
   afterEach(async () => {
     jest.useRealTimers();
-    dialogs.closeAll();
-    await host.whenStable();
+    await closeAllDialogs();
     host.destroy();
   });
+
+  async function closeAllDialogs(): Promise<void> {
+    const closed = dialogs.openDialogs.map(dialog => firstValueFrom(dialog.afterClosed()));
+    dialogs.closeAll();
+    await Promise.all(closed);
+    await host.whenStable();
+  }
 
   function element(): HTMLElement {
     return document.querySelector(variant.selector)!;
@@ -101,8 +114,7 @@ describe.each(variants)('$name information dialog without Zone', variant => {
   });
 
   it('renders minimal data without optional tabs or an endless loading indicator', async () => {
-    dialogs.closeAll();
-    await host.whenStable();
+    await closeAllDialogs();
     const data = variant.name === 'booklet' ? {
       bookletId: 'EMPTY',
       bookletInfo: {
@@ -125,7 +137,9 @@ describe.each(variants)('$name information dialog without Zone', variant => {
     expect(element().querySelector('[aria-label="xml-viewer.copy-xml"]')?.textContent).toContain('done');
     const button = position === 'header' ? element().querySelector<HTMLButtonElement>('.close-button')! :
       Array.from(element().querySelectorAll('button')).find(item => item.textContent?.trim() === 'Schließen')!;
+    const closed = firstValueFrom(dialogs.openDialogs[0].afterClosed());
     button.click();
+    await closed;
     await host.whenStable();
     expect(document.querySelector(variant.selector)).toBeNull();
     dialogs.open(variant.component as Type<unknown>, { data: variant.data });

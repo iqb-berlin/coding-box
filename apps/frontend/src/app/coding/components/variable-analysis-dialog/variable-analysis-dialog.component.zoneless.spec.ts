@@ -1,6 +1,5 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
@@ -66,7 +65,6 @@ describe('Code/score distribution without Zone', () => {
       imports: [VariableAnalysisDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
-        provideNoopAnimations(),
         { provide: MAT_DIALOG_DATA, useValue: { workspaceId: 5 } },
         { provide: MatDialogRef, useValue: { close: jest.fn() } },
         { provide: CodingStatisticsService, useValue: { getVariableAnalysis } },

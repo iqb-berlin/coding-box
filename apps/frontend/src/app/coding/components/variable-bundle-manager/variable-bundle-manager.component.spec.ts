@@ -1,5 +1,4 @@
 import { TestBed } from '@angular/core/testing';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -29,7 +28,6 @@ describe('VariableBundleManagerComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         VariableBundleManagerComponent,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [

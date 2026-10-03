@@ -2,7 +2,6 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
@@ -98,7 +97,6 @@ describe('Cohen kappa delayed responses without Zone', () => {
       imports: [CohensKappaStatisticsComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
-        provideNoopAnimations(),
         { provide: MAT_DIALOG_DATA, useValue: data },
         { provide: MatDialogRef, useValue: { close: jest.fn() } },
         { provide: MatSnackBar, useValue: snackBar },

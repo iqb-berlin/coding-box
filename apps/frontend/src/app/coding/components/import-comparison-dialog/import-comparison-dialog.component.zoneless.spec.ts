@@ -2,7 +2,6 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
 import {
@@ -52,7 +51,7 @@ describe('External coding import delayed responses without Zone.js', () => {
       notifyTestResultsChanged: jest.fn()
     };
     await TestBed.configureTestingModule({
-      imports: [ImportComparisonDialogComponent, TranslateModule.forRoot(), NoopAnimationsModule],
+      imports: [ImportComparisonDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MatDialogRef, useValue: dialogRef },

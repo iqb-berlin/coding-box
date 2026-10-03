@@ -1,6 +1,5 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
@@ -21,7 +20,6 @@ describe('User selection in the workspace rights dialog without Zone', () => {
       imports: [UserAccessRightsDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
-        provideNoopAnimations(),
         { provide: MAT_DIALOG_DATA, useValue: { selectedWorkspace: [1] } },
         { provide: MatDialogRef, useValue: { close: jest.fn() } },
         {

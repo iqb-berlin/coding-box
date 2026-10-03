@@ -11,7 +11,6 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { WsUsersComponent } from './ws-users.component';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
@@ -76,7 +75,6 @@ describe('WsUsersComponent', () => {
         MatIconModule,
         MatTableModule,
         MatDialogModule,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [

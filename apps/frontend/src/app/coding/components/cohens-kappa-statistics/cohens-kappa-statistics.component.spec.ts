@@ -4,7 +4,6 @@ import {
   MatDialogRef
 } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
@@ -135,7 +134,6 @@ describe('CohensKappaStatisticsComponent', () => {
         TranslateModule.forRoot()
       ],
       providers: [
-        provideNoopAnimations(),
         {
           provide: MatDialogRef,
           useValue: { close: jest.fn() }
