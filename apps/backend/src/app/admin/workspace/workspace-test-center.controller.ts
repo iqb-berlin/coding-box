@@ -215,10 +215,18 @@ export class WorkspaceTestCenterController {
       normalizedResponseOverwriteMode
     );
 
-    if (result?.success) {
+    if (result?.success || result?.responses || result?.logs) {
       const workspaceId = Number(workspace_id);
       if (Number.isFinite(workspaceId) && workspaceId > 0) {
-        await this.invalidateFlatResponseFilterOptionsCache(workspaceId);
+        try {
+          await this.invalidateFlatResponseFilterOptionsCache(workspaceId);
+        } catch {
+          result.issues = [...(result.issues || []), {
+            level: 'warning',
+            category: 'other',
+            message: 'Der Import ist abgeschlossen, aber die Antwortfilter konnten noch nicht aktualisiert werden. Bitte die Übersicht später neu laden.'
+          }];
+        }
       }
     }
 

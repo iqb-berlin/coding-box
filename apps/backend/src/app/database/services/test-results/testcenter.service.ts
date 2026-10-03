@@ -1,4 +1,6 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import {
+  ConflictException, Injectable, Logger, Optional, ServiceUnavailableException
+} from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { DataSource } from 'typeorm';
 import * as https from 'https';
@@ -22,7 +24,8 @@ import {
 } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
 import {
   ImportWorkspaceFilesProgressDto,
-  ImportWorkspaceOptionKey
+  ImportWorkspaceOptionKey,
+  TestcenterImportPhase
 } from '../../../../../../../api-dto/files/import-workspace-progress.dto';
 import { TestGroupsLoadProgressDto } from '../../../../../../../api-dto/files/test-groups-load-progress.dto';
 import { CacheService } from '../../../cache/cache.service';
@@ -30,13 +33,15 @@ import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { CodingAnalysisService } from '../coding/coding-analysis.service';
 import { TestResultsMutationSummary } from './person-persistence.service';
-import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
+import { withWorkspaceTestcenterImportLock, WorkspaceTestcenterImportBusyError } from '../shared/workspace-test-results-lock.util';
+import { TestcenterImportRun } from '../../entities/testcenter-import-run.entity';
 
 export { Result };
 
 const agent = new https.Agent({
   rejectUnauthorized: false
 });
+const TESTCENTER_REQUEST_TIMEOUT_MS = 120000;
 
 type ServerFilesResponse = {
   Booklet: [];
@@ -352,7 +357,8 @@ export class TestcenterService {
     url: string,
     authToken: string,
     testGroups: string,
-    responseOverwriteMode: TestResultsOverwriteMode = 'skip'
+    responseOverwriteMode: TestResultsOverwriteMode = 'skip',
+    importRunId?: string
   ): Promise<Promise<{ issues: TestResultsUploadIssueDto[] }>[]> {
     this.logger.log('Import response data from TC');
     const headersRequest = this.createHeaders(authToken);
@@ -365,6 +371,7 @@ export class TestcenterService {
           const PERSON_BATCH_SIZE = 50;
 
           for (const chunk of chunks) {
+            await this.updateResultImportPhase(workspace_id, importRunId, 'fetching-responses');
             const endpoint = url ?
               `${url}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(
                 ','
@@ -377,9 +384,13 @@ export class TestcenterService {
             try {
               const response = await this.httpService.axiosRef.get<Response[]>(endpoint, {
                 httpsAgent: agent,
+                timeout: TESTCENTER_REQUEST_TIMEOUT_MS,
                 headers: headersRequest
               });
-              rawResponses = response.data || [];
+              if (!Array.isArray(response.data)) {
+                throw new Error('Das Testcenter hat keine gültige Antwortliste geliefert.');
+              }
+              rawResponses = response.data;
             } catch (error) {
               this.logger.error(
                 `Error fetching response chunk from "${endpoint}": ${
@@ -391,7 +402,7 @@ export class TestcenterService {
 
             if (!rawResponses.length) continue;
 
-            this.persons = await this.personService.createPersonList(
+            const persons = await this.personService.createPersonList(
               rawResponses,
               Number(workspace_id)
             );
@@ -406,7 +417,7 @@ export class TestcenterService {
 
             let personList: Person[] = [];
             const personBatches: Person[][] = [];
-            for (const person of this.persons) {
+            for (const person of persons) {
               const personKey = `${person.group || ''}@@${person.login || ''}@@${person.code || ''}`;
               const personRows = responsesByPerson.get(personKey) || [];
               if (!personRows.length) continue;
@@ -436,28 +447,20 @@ export class TestcenterService {
 
             if (personBatches.length === 0) continue;
 
-            let responseImportMutatedData = false;
-            await withWorkspaceTestResultsMutationLock(this.connection, Number(workspace_id), async () => {
-              const mutationSummary = this.createMutationSummary();
-              for (const personBatch of personBatches) {
-                const batchSummary = await this.personService.processPersonBooklets(
-                  personBatch,
-                  Number(workspace_id),
-                  responseOverwriteMode,
-                  'person',
-                  issues
-                );
-                this.mergeMutationSummary(mutationSummary, batchSummary);
-              }
-
-              responseImportMutatedData =
-                this.responseImportMutatedTestResults(mutationSummary);
-              await this.updateCodingFreshnessAfterResponseImport(
+            await this.updateResultImportPhase(workspace_id, importRunId, 'saving-responses');
+            const mutationSummary = this.createMutationSummary();
+            for (const personBatch of personBatches) {
+              const batchSummary = await this.personService.processPersonBooklets(
+                personBatch,
                 Number(workspace_id),
-                mutationSummary,
+                responseOverwriteMode,
+                'person',
                 issues
               );
-            });
+              this.mergeMutationSummary(mutationSummary, batchSummary);
+            }
+            const responseImportMutatedData = this.responseImportMutatedTestResults(mutationSummary);
+            await this.updateCodingFreshnessAfterResponseImport(Number(workspace_id), mutationSummary, issues);
 
             if (responseImportMutatedData) {
               await this.invalidateCodingCachesAfterResponsesImport(
@@ -483,7 +486,8 @@ export class TestcenterService {
     url: string,
     authToken: string,
     testGroups: string,
-    overwriteExistingLogs: boolean = true
+    overwriteExistingLogs: boolean = true,
+    importRunId?: string
   ): Promise<{ issues: TestResultsUploadIssueDto[] }> {
     this.logger.log('Import logs data from TC');
     const headersRequest = this.createHeaders(authToken);
@@ -492,6 +496,7 @@ export class TestcenterService {
     const importIssues: TestResultsUploadIssueDto[] = [];
 
     for (const chunk of logsChunks) {
+      await this.updateResultImportPhase(workspace_id, importRunId, 'fetching-logs');
       const logsUrl = url ?
         `${url}/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(
           ','
@@ -505,9 +510,11 @@ export class TestcenterService {
           logsUrl,
           {
             httpsAgent: agent,
+            timeout: TESTCENTER_REQUEST_TIMEOUT_MS,
             headers: headersRequest
           }
         );
+        if (!Array.isArray(logData)) throw new Error('Das Testcenter hat keine gültige Logliste geliefert.');
         allLogData.push(...logData);
       } catch (error) {
         this.logger.error(`Error fetching log chunk: ${error.message}`);
@@ -533,6 +540,7 @@ export class TestcenterService {
         })
       );
 
+      await this.updateResultImportPhase(workspace_id, importRunId, 'saving-logs');
       const result = await this.personService.processPersonLogs(
         persons,
         unitLogs,
@@ -542,6 +550,9 @@ export class TestcenterService {
 
       if (result.issues) {
         importIssues.push(...result.issues);
+      }
+      if (result.success === false) {
+        importIssues.push({ level: 'error', category: 'other', message: 'Die Logs wurden nicht vollständig gespeichert. Bereits gespeicherte Antworten bleiben erhalten.' });
       }
 
       this.logger.log(`Logs import result: ${JSON.stringify(result)}`);
@@ -606,9 +617,28 @@ export class TestcenterService {
     importRunId?: string
   ): Promise<ImportWorkspaceFilesProgressDto | null> {
     if (!importRunId) return null;
-    return this.cacheService.get<ImportWorkspaceFilesProgressDto>(
+    const run = await this.connection.getRepository(TestcenterImportRun).findOneBy({
+      workspace_id: Number(workspaceId), import_run_id: importRunId
+    });
+    if (run?.progress.result && run.progress.status !== 'running') return run.progress;
+    const cached = await this.cacheService.get<ImportWorkspaceFilesProgressDto>(
       this.importProgressKey(workspaceId, importRunId)
     );
+    if (cached?.result && cached.status !== 'running') return cached;
+    return run?.progress || cached;
+  }
+
+  private async saveResultImportProgress(workspaceId: string, importRunId: string, progress: ImportWorkspaceFilesProgressDto): Promise<void> {
+    progress.updatedAt = Date.now();
+    const updated = await this.connection.getRepository(TestcenterImportRun).update({
+      workspace_id: Number(workspaceId), import_run_id: importRunId
+    }, { progress });
+    if (updated.affected !== 1) throw new Error('Der gespeicherte Importlauf wurde nicht gefunden.');
+  }
+
+  private async cacheResultImportProgress(workspaceId: string, importRunId: string, progress: ImportWorkspaceFilesProgressDto): Promise<void> {
+    const cached = await this.cacheService.set(this.importProgressKey(workspaceId, importRunId), progress, 3600);
+    if (!cached) this.logger.warn(`Testcenter import ${importRunId}: progress cache unavailable; using durable run status`);
   }
 
   private async saveProgress(
@@ -1008,6 +1038,89 @@ export class TestcenterService {
     importRunId?: string,
     responseOverwriteMode: TestResultsOverwriteMode = 'skip'
   ): Promise<Result> {
+    if (importOptions.responses !== 'true' && importOptions.logs !== 'true') {
+      return this.executeWorkspaceImport(workspace_id, tc_workspace, server, url, authToken, importOptions, testGroups, overwriteExistingLogs, overwriteFileIds, importRunId, responseOverwriteMode);
+    }
+    const cached = await this.loadProgress(workspace_id, importRunId);
+    if (cached?.result && cached.status !== 'running') return cached.result;
+
+    return withWorkspaceTestcenterImportLock(this.connection, Number(workspace_id), async () => {
+      // Check again after acquiring the cross-process lock to avoid replaying a finished run.
+      const previous = await this.loadProgress(workspace_id, importRunId);
+      if (previous?.result && previous.status !== 'running') return previous.result;
+      if (previous?.status === 'running') {
+        throw new ConflictException({
+          message: 'Für diese Lauf-ID liegt noch kein bestätigter Abschluss vor. Prüfen Sie den Status; starten Sie den Import nicht erneut.'
+        });
+      }
+      let progress: ImportWorkspaceFilesProgressDto | undefined;
+      if (importRunId) {
+        const now = Date.now();
+        progress = {
+          importRunId,
+          status: 'running',
+          totalPlanned: 1,
+          totalProcessed: 0,
+          totalUploaded: 0,
+          totalFailed: 0,
+          options: [],
+          startedAt: now,
+          updatedAt: now,
+          phaseStartedAt: now,
+          currentGroup: testGroups
+        };
+        try {
+          await this.connection.getRepository(TestcenterImportRun).insert({
+            workspace_id: Number(workspace_id), import_run_id: importRunId, progress
+          });
+        } catch (error) {
+          this.logger.error(`Could not register Testcenter import ${importRunId}: ${error.message}`);
+          throw new ServiceUnavailableException({
+            importNotStarted: true,
+            message: 'Der Importstatus kann nicht gespeichert werden. Es wurden keine Testdaten importiert.'
+          });
+        }
+        await this.cacheResultImportProgress(workspace_id, importRunId, progress);
+      }
+      const result = await this.executeWorkspaceImport(workspace_id, tc_workspace, server, url, authToken, importOptions, testGroups, overwriteExistingLogs, overwriteFileIds, importRunId, responseOverwriteMode);
+      if (importRunId && progress) await this.finishResultImport(workspace_id, importRunId, result, progress);
+      return result;
+    }).catch(error => {
+      if (error instanceof WorkspaceTestcenterImportBusyError) {
+        throw new ConflictException({ importNotStarted: true, message: error.message });
+      }
+      throw error;
+    });
+  }
+
+  private async updateResultImportPhase(workspaceId: string, importRunId: string | undefined, phase: TestcenterImportPhase): Promise<void> {
+    if (!importRunId) return;
+    try {
+      const progress = await this.loadProgress(workspaceId, importRunId);
+      if (!progress) return;
+      progress.phase = phase;
+      progress.phaseStartedAt = Date.now();
+      await this.saveResultImportProgress(workspaceId, importRunId, progress);
+      await this.cacheResultImportProgress(workspaceId, importRunId, progress);
+      this.logger.log(`Testcenter import ${importRunId}, workspace ${workspaceId}: ${phase}`);
+    } catch (error) {
+      this.logger.warn(`Could not update Testcenter import ${importRunId} phase: ${error.message}`);
+    }
+  }
+
+  private async executeWorkspaceImport(
+    workspace_id: string,
+    tc_workspace: string,
+    server: string,
+    url: string,
+    authToken: string,
+    importOptions: ImportOptions,
+    testGroups: string,
+    overwriteExistingLogs: boolean,
+    overwriteFileIds: string[] | undefined,
+    importRunId: string | undefined,
+    responseOverwriteMode: TestResultsOverwriteMode
+  ): Promise<Result> {
     const { responses, logs } = importOptions;
     const result: Result = {
       success: false,
@@ -1017,7 +1130,8 @@ export class TestcenterService {
       booklets: 0,
       units: 0,
       persons: 0,
-      importedGroups: testGroups.split(',').map(g => g.trim())
+      importedGroups: [],
+      completedSteps: []
     };
 
     const appendIssues = (issues?: TestResultsUploadIssueDto[]): void => {
@@ -1037,7 +1151,8 @@ export class TestcenterService {
           url,
           authToken,
           testGroups,
-          responseOverwriteMode
+          responseOverwriteMode,
+          importRunId
         );
         result.responses = responsePromises.length;
         const responseResults = await Promise.all(responsePromises);
@@ -1046,6 +1161,10 @@ export class TestcenterService {
             appendIssues(res.issues);
           }
         });
+        if (result.issues?.some(issue => issue.level === 'error')) {
+          throw new Error('Antworten wurden nicht vollständig importiert. Die betroffene Gruppe kann bereits Teildaten enthalten.');
+        }
+        result.completedSteps.push('responses');
 
         try {
           const stats = await this.personService.getImportStatistics(
@@ -1067,10 +1186,15 @@ export class TestcenterService {
           url,
           authToken,
           testGroups,
-          overwriteExistingLogs
+          overwriteExistingLogs,
+          importRunId
         );
         result.logs = 1; // Mark that log import was triggered
         appendIssues(logsIssues);
+        if (logsIssues.some(issue => issue.level === 'error')) {
+          throw new Error('Logs wurden nicht vollständig importiert. Bereits gespeicherte Antworten bleiben erhalten.');
+        }
+        result.completedSteps.push('logs');
 
         // Calculate log coverage statistics
         try {
@@ -1112,12 +1236,15 @@ export class TestcenterService {
       }
 
       if (responses === 'true') {
+        await this.updateResultImportPhase(workspace_id, importRunId, 'finalizing');
         await this.attachCodingFreshnessSummary(Number(workspace_id), result);
       }
       if (responses === 'true' || logs === 'true') {
         await this.invalidateWorkspaceOverviewCache(workspace_id, result);
       }
-      result.success = true;
+      result.success = !result.issues?.some(issue => issue.level === 'error') &&
+        (!shouldImportFiles || result.success);
+      if (result.success) result.importedGroups = testGroups.split(',').map(g => g.trim()).filter(Boolean);
       return result;
     } catch (error) {
       this.logger.error(
@@ -1125,6 +1252,12 @@ export class TestcenterService {
           error?.message || error
         }`
       );
+      appendIssues([{ level: 'error', category: 'other', message: error?.message || 'Testcenter-Import fehlgeschlagen.' }]);
+      result.success = false;
+      if (responses === 'true' || logs === 'true') {
+        await this.invalidateWorkspaceOverviewCache(workspace_id, result);
+        return result;
+      }
       if (importRunId) {
         const progress = await this.loadProgress(workspace_id, importRunId);
         if (progress) {
@@ -1138,6 +1271,42 @@ export class TestcenterService {
       result.success = false;
       return result;
     }
+  }
+
+  private async finishResultImport(workspaceId: string, importRunId: string, result: Result, initialProgress: ImportWorkspaceFilesProgressDto): Promise<void> {
+    let progress = initialProgress;
+    try {
+      progress = await this.loadProgress(workspaceId, importRunId) || initialProgress;
+    } catch (error) {
+      this.logger.warn(`Could not read Testcenter import ${importRunId} before finalizing: ${error.message}`);
+    }
+    progress.status = result.success ? 'completed' : 'failed';
+    progress.totalProcessed = 1;
+    progress.totalUploaded = result.success ? 1 : 0;
+    progress.totalFailed = result.success ? 0 : 1;
+    progress.error = result.issues?.find(issue => issue.level === 'error')?.message;
+    // Keep reconnect results compact; coverage details describe the whole workspace.
+    progress.result = { ...result, bookletDetails: undefined, unitDetails: undefined };
+    let persisted = false;
+    for (let attempt = 0; attempt < 3 && !persisted; attempt += 1) {
+      try {
+        await this.saveResultImportProgress(workspaceId, importRunId, progress);
+        persisted = true;
+      } catch (error) {
+        this.logger.error(`Could not store Testcenter import ${importRunId} outcome (attempt ${attempt + 1}): ${error.message}`);
+        if (attempt < 2) await new Promise(resolve => { setTimeout(resolve, 100); });
+      }
+    }
+    if (!persisted) {
+      result.issues = [...(result.issues || []), {
+        level: 'warning',
+        category: 'other',
+        message: 'Das Importergebnis konnte nicht dauerhaft gespeichert werden. Bereits importierte Daten bleiben erhalten. Starten Sie diesen Lauf nicht erneut; prüfen Sie den Status oder wenden Sie sich mit der Lauf-ID an die Administration.'
+      }];
+      progress.result = { ...result, bookletDetails: undefined, unitDetails: undefined };
+    }
+    await this.cacheResultImportProgress(workspaceId, importRunId, progress);
+    this.logger.log(`Testcenter import ${importRunId}: ${progress.status}, outcome persisted: ${persisted}, elapsed ${Date.now() - (progress.startedAt || Date.now())} ms`);
   }
 
   private async invalidateWorkspaceOverviewCache(
