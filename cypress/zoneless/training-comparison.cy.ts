@@ -70,19 +70,124 @@ describe('Zoneless training comparison', () => {
     cy.then(() => { expect(unexpectedRequests).to.deep.equal([]); });
   });
 
-  function openComparison(): void {
+  function openTrainingList(): void {
     cy.visit('/');
     cy.wait('@authData');
     cy.window().then(win => { win.location.hash = '/workspace-admin/5/coding/manual'; });
     cy.contains('.manual-coding-tabs [role="tab"]', 'Schulung').click();
     cy.contains('#manual-support button', 'Aktualisieren').click();
+  }
+
+  function openComparisonDialog(): void {
+    openTrainingList();
     cy.wait('@trainings');
-    cy.get('#manual-support .more-actions-button').click();
+    cy.get('#manual-support .more-actions-button').first().click();
     cy.contains('[role="menuitem"]', 'Ergebnisse vergleichen').click();
     cy.get('coding-box-coding-results-comparison').as('dialog');
+  }
+
+  function openComparison(): void {
+    openComparisonDialog();
     cy.wait('@comparison');
     cy.get('@dialog').find('.discussion-input input').should('exist');
   }
+
+  it('renders delayed training options, filters them and sends only the visible selection', () => {
+    const gate = createResponseGate();
+    const trainings = [
+      { id: 7, workspace_id: 5, label: 'Synthetic training', jobsCount: 2, assigned_coders: [11, 12] },
+      { id: 8, workspace_id: 5, label: 'Second training', jobsCount: 2, assigned_coders: [11, 12] }
+    ];
+    let reads = 0;
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/coder-trainings', async request => {
+      reads += 1;
+      await gate.wait;
+      request.reply({ body: trainings });
+    }).as('trainings');
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/coder-trainings/8/comparison-freshness', { body: null });
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/compare-within-training?*', request => {
+      if (request.query.trainingId === '8') request.alias = 'selectedComparison';
+      request.reply({ delay: 300, body: {
+        ...comparison, data: comparison.data.map(row => ({
+          ...row, givenAnswer: request.query.trainingId === '8' ? 'Second training answer' : 'First training answer'
+        }))
+      } });
+    }).as('comparison');
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/compare-training-results?*', {
+      delay: 300, body: { ...comparison, data: [], total: 0, availableCoders: [] }
+    }).as('betweenComparison');
+
+    openTrainingList();
+    cy.get('coding-box-coder-trainings-list .loading-container').should('be.visible');
+    cy.get('#manual-support .more-actions-button').should('not.exist');
+    cy.then(() => gate.release());
+    cy.wait('@trainings');
+    cy.get('coding-box-coder-trainings-list .training-title').should('have.length', 2);
+    cy.get('#manual-support .more-actions-button').first().click();
+    cy.contains('[role="menuitem"]', 'Ergebnisse vergleichen').click();
+    cy.get('coding-box-coding-results-comparison').as('dialog');
+    cy.wait('@comparison').its('request.query.trainingId').should('equal', '7');
+    cy.get('@dialog').find('.training-selection > mat-form-field mat-select').click();
+    cy.get('mat-option .training-option-title').should('have.length', 2);
+    cy.contains('mat-option', 'Second training').click();
+    cy.wait('@selectedComparison').its('request.query.trainingId').should('equal', '8');
+    cy.get('@dialog').find('.selected-training-title').should('contain.text', 'Second training');
+    cy.get('@dialog').should('contain.text', 'Second training answer');
+
+    cy.get('@dialog').find('mat-radio-button[value="between-trainings"] input').check();
+    cy.get('@dialog').find('.training-checkbox').should('have.length', 2);
+    cy.get('@dialog').find('input[placeholder="Schulungen filtern..."]').focus().type('Second');
+    cy.get('@dialog').find('.training-checkbox').should('have.length', 1).and('contain.text', 'Second training');
+    cy.get('@dialog').find('.training-checkbox input').check();
+    cy.get('@dialog').find('input[placeholder="Schulungen filtern..."]').clear();
+    cy.get('@dialog').find('.training-checkbox').should('have.length', 2);
+    cy.get('@dialog').find('.training-checkbox input:checked').should('have.length', 1);
+    cy.get('@dialog').contains('.training-checkbox', 'Synthetic training').find('input').check();
+    cy.wait('@betweenComparison').its('request.query.trainingIds').should('equal', '8,7');
+
+    cy.get('@dialog').find('input[placeholder="Schulungen filtern..."]').type('missing');
+    cy.get('@dialog').find('.training-checkbox').should('not.exist');
+    cy.get('@dialog').find('mat-radio-button[value="within-training"] input').check();
+    cy.get('@dialog').find('mat-radio-button[value="between-trainings"] input').check();
+    cy.get('@dialog').find('.training-checkbox').should('have.length', 2);
+    cy.get('@dialog').find('.training-checkbox input:checked').should('not.exist');
+    cy.then(() => { expect(reads, 'comparison reuses the loaded training list').to.equal(1); });
+  });
+
+  it('ignores the closed dialog’s pending comparison response when reopened', { defaultCommandTimeout: 15_000 }, () => {
+    const gate = createResponseGate();
+    let reopened = false;
+    let oldRequests = 0;
+    let oldReplies = 0;
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/compare-within-training?*', async request => {
+      const oldContext = !reopened;
+      if (oldContext) {
+        oldRequests += 1;
+        await gate.wait;
+      } else request.alias = 'freshComparison';
+      request.reply({ body: {
+        ...comparison, data: comparison.data.map(row => ({
+          ...row, givenAnswer: oldContext ? 'Old comparison answer' : 'Fresh comparison answer'
+        }))
+      } });
+      if (oldContext) oldReplies += 1;
+    }).as('comparison');
+    openComparisonDialog();
+    cy.wrap(null).should(() => { expect(oldRequests).to.be.greaterThan(0); });
+    cy.get('@dialog').find('.loading-container').should('be.visible');
+    cy.get('@dialog').contains('button', 'Schließen').click();
+    cy.get('coding-box-coding-results-comparison').should('not.exist');
+    cy.then(() => { reopened = true; });
+    cy.get('#manual-support .more-actions-button').click();
+    cy.contains('[role="menuitem"]', 'Ergebnisse vergleichen').click();
+    cy.get('coding-box-coding-results-comparison').as('dialog');
+    cy.wait('@freshComparison');
+    cy.get('@dialog').should('contain.text', 'Fresh comparison answer');
+    cy.then(() => gate.release());
+    cy.wrap(null).should(() => { expect(oldReplies).to.equal(oldRequests); });
+    cy.get('@dialog').should('contain.text', 'Fresh comparison answer');
+    cy.get('@dialog').should('not.contain.text', 'Old comparison answer');
+  });
 
   for (const outcome of ['loaded', 'failed']) {
     it(`settles a delayed ${outcome} Kappa request without another interaction`, () => {

@@ -9,7 +9,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDividerModule } from '@angular/material/divider';
-import { MatDialog } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatCardModule } from '@angular/material/card';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatChipsModule } from '@angular/material/chips';
@@ -108,6 +108,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   private sessionRecoveryService = inject(SessionRecoveryService);
 
   private destroy$ = new Subject<void>();
+  private destroyed = false;
+  private bulkCreationDialogRef?: MatDialogRef<CodingJobBulkCreationDialogComponent>;
 
   readonly jobDefinitions = signal<JobDefinition[]>([]);
   readonly isLoading = signal(false);
@@ -144,6 +146,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
+    this.bulkCreationDialogRef?.close();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -1001,14 +1005,16 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     }
 
     let preview: JobDefinitionDistributionPreviewResponse;
+    const isCurrentContext = () => !this.destroyed && this.appService.selectedWorkspaceId === workspaceId;
     try {
       preview = await firstValueFrom(
         this.codingJobBackendService.previewCodingJobFromDefinition(
           workspaceId,
           definition.id
-        )
+        ).pipe(takeUntil(this.destroy$))
       );
     } catch (error) {
+      if (!isCurrentContext()) return;
       this.showError(
         this.translateService.instant(
           'coding-job-definitions.messages.snackbar.create-preview-failed',
@@ -1017,6 +1023,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       );
       return;
     }
+
+    if (!isCurrentContext()) return;
 
     const selectedCoders = this.mapPreviewSelectedCoders(preview.selectedCoders);
     if (selectedCoders.length === 0) {
@@ -1057,10 +1065,14 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       width: '1200px',
       data: dialogData
     });
+    this.bulkCreationDialogRef = dialogRef;
 
     const result = await firstValueFrom(dialogRef.afterClosed());
+    if (this.bulkCreationDialogRef === dialogRef) {
+      this.bulkCreationDialogRef = undefined;
+    }
 
-    if (result && result.confirmed) {
+    if (isCurrentContext() && result && result.confirmed) {
       await this.createBulkJobsFromDefinition(
         workspaceId,
         definition.id
@@ -1089,6 +1101,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     workspaceId: number,
     jobDefinitionId: number
   ): Promise<void> {
+    const isCurrentContext = () => !this.destroyed && this.appService.selectedWorkspaceId === workspaceId;
     this.isBulkCreating.set(true);
     try {
       const result = await firstValueFrom(
@@ -1097,6 +1110,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
           jobDefinitionId
         )
       );
+
+      if (!isCurrentContext()) return;
 
       if (result && result.success) {
         this.snackBar.open(
@@ -1126,6 +1141,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         );
       }
     } catch (error) {
+      if (!isCurrentContext()) return;
       this.snackBar.open(
         this.translateService.instant(
           'coding-job-definition-dialog.snackbars.bulk-creation-failed',

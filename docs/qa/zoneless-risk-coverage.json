@@ -41,7 +41,8 @@
         "ZL-034",
         "ZL-035",
         "ZL-037",
-        "ZL-040"
+        "ZL-040",
+        "ZL-046"
       ],
       "tests": [
         "apps/frontend/src/app/coding/components/coding-job-definitions/coding-job-definitions.zoneless.spec.ts",
@@ -53,7 +54,9 @@
         "apps/frontend/src/app/coding/components/coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component.zoneless.spec.ts",
         "apps/frontend/src/app/coding/components/coding-results-comparison/coding-results-comparison.zoneless.spec.ts",
         "apps/frontend/src/app/coding/components/variable-bundle-dialog/variable-bundle-dialog.component.zoneless.spec.ts",
-        "cypress/zoneless/review-notifications.cy.ts"
+        "cypress/zoneless/review-notifications.cy.ts",
+        "cypress/zoneless/manual-preparation.cy.ts",
+        "cypress/zoneless/training-comparison.cy.ts"
       ]
     },
     {
@@ -175,7 +178,8 @@
         "apps/frontend/src/app/workspace/components/user-workspaces/user-workspaces.component.zoneless.spec.ts",
         "apps/frontend/src/app/core/services/app.service.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/components/ws-users/ws-users.component.zoneless.spec.ts",
-        "apps/frontend/src/app/ws-admin/components/journal/journal.component.zoneless.spec.ts"
+        "apps/frontend/src/app/ws-admin/components/journal/journal.component.zoneless.spec.ts",
+        "cypress/zoneless/manual-preparation.cy.ts"
       ]
     }
   ],
@@ -218,7 +222,7 @@
         "administration",
         "jobs"
       ],
-      "evidence": "Schließen, DestroyRef und Workspace-Wechsel; verspätete Antworten erzeugen keine Folgeansichten."
+      "evidence": "Schließen, DestroyRef und Workspace-Wechsel; verspätete Antworten erzeugen keine Folgeansichten. Browserregressionen schließen Schulungsdialoge während ausstehender Antworten und verlassen Workspaces während Bulk-Vorschau oder Bestätigung; keine alte Jobanlage."
     },
     {
       "id": "timers-promises",
@@ -227,7 +231,7 @@
         "files-exports-metadata",
         "jobs"
       ],
-      "evidence": "Debouncing, Initialisierungstimer, Resolver-Promises und Wiederherstellung abgelaufener Sitzungen; ZL-034/035 prüfen verzögerte Promise-Fortsetzung und ZL-037 den realen Kartenfilter-Debounce im nativen Template."
+      "evidence": "Debouncing, Initialisierungstimer, Resolver-Promises und Sitzungswiederherstellung; native verspätete Bulk-/Trainingsfortsetzungen, Browserfilter mit echtem Debounce sowie verzögerte Schulungs- und Variablenlisten über erreichbare Menüs."
     },
     {
       "id": "browser-libraries",
@@ -243,16 +247,17 @@
       "areas": [
         "coding-replay",
         "files-exports-metadata",
-        "administration"
+        "administration",
+        "jobs"
       ],
-      "evidence": "Synthetische Workspace-Rollen 0–3, persistierte und Realm-Administration; Keycloak, direkte API-Prüfung und erneutes Lesen gespeicherter Werte."
+      "evidence": "Synthetische Workspace-Rollen 0–3, persistierte und Realm-Administration; Keycloak, direkte API-Prüfung und erneutes Lesen gespeicherter Werte. Zusätzlich prüfen synthetische Browserfälle verzögerte Rechte für Schulungsanlage (Stufen 0–3) sowie Rechte-Speicherfehler und Wiederholung als Realm-Admin und Studienleitung."
     }
   ],
   "unresolvedFindings": [],
   "residualLimits": [
     "Nicht jedes UI-Element, jede Template-Bindung oder jede Kombination von Aktionen ist einzeln nachgewiesen. Das detaillierte Inventar bleibt eine Suchhilfe.",
     "Nicht alle Dialogeinbettungen, Rollen je Einzelaktion, Trainingsvarianten und Metadatenfeldtypen sind im Browser geprüft.",
-    "ZL-034, ZL-035 und ZL-037 sind durch native Jest-Regressionen mit echten Templates abgesichert; spezifische Browsernachweise für den asynchronen Bulk-Antwortpfad, Trainingsauswahl und Variablenkartenfilter liegen nicht vor. Der erreichbare Bulk-Definitionsablauf übergibt bereits eine fertige Verteilung.",
+    "Browsernachweise prüfen verzögerte Schulungslisten, Auswahl und Filter sowie den erreichbaren Bulk-Definitionsablauf mit fertiger Serververteilung. Die zusätzliche interne asynchrone Bulk-Berechnung (ZL-034) hat weiterhin keinen Template-Einstieg und bleibt nativ geprüft. Der Schulungsvergleich übernimmt am erreichbaren Einstieg die bereits gecachte Liste; sein separater verspäteter Listenabruf (ZL-035) bleibt nativ geprüft. Browser-Anmeldung und API-Antworten dieser zusätzlichen Fälle sind synthetisch und belegen keine reale Backend-Persistenz oder Autorisierung.",
     "Der MetadataResolver unterstützt am verwendeten öffentlichen Aufruf kein AbortSignal; laufende interne Arbeit kann weitergehen, ihr Ergebnis wird nach Abbruch verworfen.",
     "Ein bereits angenommener Backend-Job wird durch Schließen des Dialogs nicht zurückgerollt.",
     "Historische Workspace-Stufe 4 ist nur synthetisch geprüft. Die aktuelle Rechte-API vergibt Stufen 0–3; ein echtes Backend-Szenario für historische Stufe 4 fehlt.",

@@ -16,6 +16,14 @@ Lokale Nachweise, gepushte Änderungen und entfernte CI-Ergebnisse werden getren
 
 ### Zusätzliche Regressionen vom 03.10.2026
 
+- **Browserabdeckung für manuelle Vorbereitung:** 16 zusätzliche Fälle prüfen
+  verzögerte Schulungslisten und Referenzauswahl, Filter und Auswahl im
+  Schulungsvergleich, Variablenkarten nach echtem Debounce, Speicherfehler mit
+  Wiederholung, verzögerte Rollenrechte und den erreichbaren Bulk-Definitionsablauf.
+  Die neue Workspace-Navigation reproduzierte einen weiteren Fehler in der
+  Bulk-Vorschau (**ZL-046**); die Korrektur und Nachweisgrenzen stehen unten.
+  Die vorhandenen CI-Jobs `test-browser-zoneless` und `test-browser-production`
+  erfassen die drei betroffenen Cypress-Dateien automatisch.
 - **ZL-041 – Schemer-Rückmeldungen:** `vosReadNotification` und der Timer zum
   Ausblenden aktualisierten ein normales Feld ohne Angular-Benachrichtigung.
   Die Meldung ist jetzt ein Signal. Ein neuer Hinweis ersetzt den bisherigen
@@ -60,7 +68,7 @@ Entwicklungsdaten und Produktion gehören nicht zur Prüfung.
 ## Matrix
 
 Aktueller Umfang: 155 Komponenten, 73 Services, fünf Pipes und 24 externe
-Bibliotheken. Insgesamt 8.777 Einträge einschließlich Template-Ereignissen,
+Bibliotheken. Insgesamt 8.783 Einträge einschließlich Template-Ereignissen,
 Bindungen und asynchronen Quellen. Alle Gesamteinträge sind noch offen.
 
 `zoneless-coverage.json` erfasst Komponenten, Services, Pipes, Template-Ereignisse,
@@ -1587,7 +1595,12 @@ Vor deren Freigabe wartet die Suite nach `whenStable()` zusätzlich reale
 die fehlende Änderungsbenachrichtigung nicht verdecken. Weitere Fälle prüfen
 Filter und Reset, Leerantwort mit Wiederholung, Ladefehler mit Wiederholung
 sowie die ältere Antwort nach einem neueren erfolgreichen Ladevorgang.
-Ein spezifischer Browsernachweis für diese Trainingsauswahl liegt nicht vor.
+Seit 03.10.2026 prüft `cypress/zoneless/training-comparison.cy.ts` zusätzlich die
+verzögerte Schulungsliste und beide Auswahlen über den erreichbaren Menüablauf,
+einschließlich Filter, Auswahlbeibehaltung und Reset beim Moduswechsel. Die
+Liste ist bei diesem Einstieg bereits im gemeinsamen Backend-Service gecacht;
+eine separate verspätete HTTP-Antwort erst innerhalb des Vergleichsdialogs
+wird weiterhin durch die native Regression geprüft.
 
 ### ZL-036: XLSX-Parsefehler blockiert Upload und Wiederholung
 
@@ -1640,8 +1653,12 @@ dispatcht echte Input-Ereignisse im vollständigen Template und wartet reale
 Einheiten- und Variablenfilter, leere Treffer, Wiederherstellung nach dem
 Leeren der Filter sowie Auswahl und Rückgabe ausschließlich sichtbarer
 Variablen. Verzögerter Listenerfolg, Leerantwort und Fehler prüfen zusätzlich
-die Karten und Ladeanzeige ohne weiteren Klick. Ein spezifischer
-Browsernachweis für diese Kartenfilter liegt nicht vor.
+die Karten und Ladeanzeige ohne weiteren Klick. Seit 03.10.2026 hält
+`cypress/zoneless/manual-preparation.cy.ts` den Variablenabruf am realen
+Erstellbutton zurück und prüft anschließend Einheiten- und Variablenfilter,
+leere Treffer, Reset, Auswahlbeibehaltung und den tatsächlich gesendeten
+Speicherinhalt im Browser. Der erreichbare Dialog erhält die fertige Liste
+vom Manager; sein zusätzlicher interner Ladepfad bleibt nativ geprüft.
 
 ### ZL-038: Gespeicherte Rechte behalten nach Auth-Fehler den Änderungsstatus
 
@@ -1852,3 +1869,84 @@ Der Fehler trat nur im Gesamtlauf auf. Die Ergebnis-Tabelle und ihr Test wurden
 nicht geändert. Der Gesamtlauf wird deshalb trotz erfolgreicher Gegenprüfungen
 als fehlgeschlagen dokumentiert. Remote-CI und reale Backend-Persistenz sind
 durch diese lokalen Läufe nicht bestätigt.
+
+### ZL-046: Bulk-Fortsetzungen verlassen ihren Workspace-Kontext
+
+Eine zurückgehaltene `create-job-preview`-Antwort öffnete den Bulk-Dialog noch,
+nachdem die Jobdefinitionsansicht zerstört und ein anderer Workspace geöffnet
+worden war. Ein bereits geöffneter Bestätigungsdialog wurde ebenfalls nicht
+von seiner aufrufenden Ansicht geschlossen. Zusätzlich lösten verzögerte
+Erfolgs- und Fehlerantworten einer bereits gestarteten Bulk-Anlage weiterhin
+Snackbar-Meldungen, Listenabrufe und Aktualisierungsereignisse aus.
+
+Die Vorschau endet jetzt mit der Lebensdauer der Jobdefinitionsansicht. Vor
+Dialogöffnung, bestätigter Mutation und Verarbeitung einer Speicherantwort
+werden Lebensdauer und ursprüngliche Workspace-ID geprüft. Die Ansicht hält
+nur ihren eigenen Bulk-Dialog und schließt ihn beim Zerstören. Bereits
+abgeschickte Mutationen werden nicht abgebrochen oder zurückgerollt; ihre
+verspäteten UI-Fortsetzungen werden verworfen.
+
+Fünf neue native Regressionen in `coding-job-definitions.zoneless.spec.ts`
+prüfen Abonnementabbruch, einen Workspace-Wechsel vor der Vorschauantwort,
+Schließen des eigenen Dialogs, eine verspätete Bestätigung sowie Erfolg und
+Fehler eines bereits gestarteten Auftrags nach dem Verlassen des Workspaces.
+Die letzten beiden Fälle scheiterten vor der ergänzten Kontextprüfung mit
+einer Snackbar aus dem alten Auftrag. Die Browserregression für die alte
+Vorschau scheiterte zuvor mit einem nach der Navigation geöffneten Dialog.
+
+`cypress/zoneless/manual-preparation.cy.ts` verwendet den tatsächlichen
+Erstellbutton einer genehmigten Definition. Es prüft Serververteilung,
+Vorschaufehler mit Wiederholung, ausbleibende Anlage vor Bestätigung, Abbruch,
+Ladeende nach Erfolg und Workspace-Wechsel während Vorschau, Bestätigung und
+laufender Mutation. Weitere Fälle prüfen Schulungsanlage mit Referenzen,
+Speicherfehler und Wiederholung, Dialogschließen während Referenzabruf,
+Workspace-Stufen 0–3 und Variablenfilter mit dem tatsächlich gesendeten Bundle.
+
+Die beiden ergänzten Fälle in `training-comparison.cy.ts` prüfen die verspätete
+Schulungsliste vor dem realen Menüaufruf, Auswahl in beiden Vergleichsmodi,
+Filter und Reset sowie Schließen und erneutes Öffnen während einer ausstehenden
+Vergleichsantwort. Der normale Einstieg übernimmt die zuvor geladene Liste
+aus dem gemeinsamen Cache. Die zwei ergänzten Fälle in
+`workspace-access-rights.cy.ts` prüfen Rechte-Speicherfehler mit Wiederholung
+als Realm-Admin und Studienleitung; die ausgewählten Rechte bleiben erhalten.
+
+Alle neuen Browserfälle verwenden echte Angular-/Material-Ansichten ohne
+`window.Zone`, synthetische Anmeldung und kontrollierte API-Antworten. Nicht
+explizit vorbereitete API-Aufrufe lassen die Tests fehlschlagen. Die bereits
+vorhandenen CI-Jobs erfassen sämtliche Fälle über
+`cypress.zoneless.config.ts`, auch mit Produktionseinstellungen. Der interne
+Bulk-Berechnungspfad ohne vorbereitete Serververteilung hat weiterhin keinen
+Template-Einstieg; seine bestehenden nativen Regressionen bleiben der Nachweis.
+
+### Lokale Abschlussprüfungen der Browserergänzung am 03.10.2026
+
+Basis war PR-Head `1e29acee1bdb7d75fc22137465ea37f16c0c60bf`.
+
+| Prüfung | Ergebnis |
+|---|---|
+| `frontend:test-zoneless --runInBand` | 914 Tests / 59 Suites bestanden |
+| `frontend:test --runInBand` | 2.681 Tests / 254 Suites bestanden |
+| `frontend:lint` | bestanden |
+| `frontend:test-zoneless --runInBand --testPathPatterns=coding-job-definitions.zoneless.spec` | sechs Fälle nach der abschließenden Testformatierung bestanden |
+| Betroffene Cypress-Spezifikationen, Zoneless | 26 Fälle bestanden: zwölf manuelle Vorbereitung, sechs Schulungsvergleich und acht Rechte; abschließende Läufe der Dateien getrennt |
+| `frontend:serve --configuration=production` mit `NG_BUILD_MAX_WORKERS=2` | optimierte Bundles erfolgreich erzeugt und für die Browserprüfung bereitgestellt |
+| `frontend:e2e --configuration=production --cypressConfig=cypress.zoneless.config.ts` | vollständige Suite: 128 Fälle / 23 Spezifikationen bestanden, keine Retries |
+| `frontend:zoneless-approval` | 8.783 Inventareinträge ohne Abweichung; sechs Bereiche, sieben Mechanismen und 46 korrigierte Befunde referenziert |
+
+Der erste vollständige Zoneless-Browserlauf bestand 125 von 127 Fällen; zwei
+neue Fälle scheiterten im Testaufbau. Ein Variablenabruf wurde vor seinem
+Erstellbutton erwartet, und eine zurückgehaltene Vergleichsantwort wurde als
+Wartebedingung für die Wiederöffnung verwendet. Diese Bedingungen wurden
+korrigiert. Vergleichsantworten werden außerdem nach Trainings-ID bzw.
+Dialogöffnung unterschieden, damit zusätzliche Initialisierungsabrufe nicht
+mit der getesteten Auswahl verwechselt werden. Die Tabelle weist die
+abschließenden erfolgreichen Läufe aus. Die vollständige Produktionssuite
+enthält sämtliche betroffenen Fälle; der vollständige Zoneless-Browserlauf
+wird zusätzlich im bestehenden CI-Job ausgeführt.
+
+Die lokalen Prüfungen erfolgten vor Commit und Push. Remote-CI für den neuen
+Commit ist separat nachzuweisen. Live-Backend-/Keycloak- und Replay-Targets
+wurden bei dieser Ergänzung lokal nicht erneut ausgeführt; die Browserfälle
+belegen kontrollierte HTTP-Verarbeitung und UI-Zustände, keine tatsächliche
+Backend-Persistenz oder Autorisierung. Die bestehenden Live-CI-Jobs bleiben
+Teil der Freigabe.
