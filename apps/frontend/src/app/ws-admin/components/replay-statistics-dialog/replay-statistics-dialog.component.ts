@@ -15,7 +15,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { TranslateModule } from '@ngx-translate/core';
-import { NgxChartsModule } from '@swimlane/ngx-charts';
+import { VerticalBarChartComponent } from '../../../shared/components/vertical-bar-chart/vertical-bar-chart.component';
 import {
   ReplayBackendService,
   ReplaySourceSummaryResponse
@@ -36,7 +36,7 @@ interface ReplayFrequencyData {
     MatTabsModule,
     MatProgressSpinnerModule,
     TranslateModule,
-    NgxChartsModule
+    VerticalBarChartComponent
   ],
   template: `
     <h2 mat-dialog-title>{{ 'workspace.replay-statistics' | translate }}</h2>
@@ -80,20 +80,14 @@ interface ReplayFrequencyData {
               <div class="chart-container">
                 <h3>{{ 'workspace.replay-frequency-by-unit' | translate }}</h3>
                 @if (selectedTabIndex() === 0) {
-                  <ngx-charts-bar-vertical
+                  <coding-box-vertical-bar-chart
                     [results]="frequencyData()"
-                    [xAxis]="true"
-                    [yAxis]="true"
-                    [showXAxisLabel]="true"
-                    [showYAxisLabel]="true"
                     [xAxisLabel]="'workspace.unit' | translate"
                     [yAxisLabel]="'workspace.replay-count' | translate"
-                    [scheme]="colorScheme"
-                    [showDataLabel]="false"
                     [rotateXAxisTicks]="true"
                     [xAxisTickFormatting]="formatXAxisTick"
                     [view]="wideView()"
-                  ></ngx-charts-bar-vertical>
+                  ></coding-box-vertical-bar-chart>
                 }
               </div>
             </mat-tab>
@@ -136,39 +130,27 @@ interface ReplayFrequencyData {
                             {{ 'workspace.replay-duration-distribution' | translate }}
                           </h3>
                           @if (selectedTabIndex() === 1) {
-                            <ngx-charts-bar-vertical
+                            <coding-box-vertical-bar-chart
                               [results]="durationDistributionData()"
-                              [xAxis]="true"
-                              [yAxis]="true"
-                              [showXAxisLabel]="true"
-                              [showYAxisLabel]="true"
                               [xAxisLabel]="'workspace.duration-milliseconds' | translate"
                               [yAxisLabel]="'workspace.replay-count' | translate"
-                              [scheme]="colorScheme"
-                              [showDataLabel]="false"
                               [view]="halfView()"
-                            ></ngx-charts-bar-vertical>
+                            ></coding-box-vertical-bar-chart>
                           }
                         </div>
                         <div class="chart-column">
                           <h3>{{ 'workspace.avg-duration-by-unit' | translate }}</h3>
                           @if (selectedTabIndex() === 1) {
-                            <ngx-charts-bar-vertical
+                            <coding-box-vertical-bar-chart
                               [results]="unitDurationData()"
-                              [xAxis]="true"
-                              [yAxis]="true"
-                              [showXAxisLabel]="true"
-                              [showYAxisLabel]="true"
                               [xAxisLabel]="'workspace.unit' | translate"
                     [yAxisLabel]="
                       'workspace.avg-duration-milliseconds' | translate
                     "
-                              [scheme]="colorScheme"
-                              [showDataLabel]="false"
                               [rotateXAxisTicks]="true"
                               [xAxisTickFormatting]="formatXAxisTick"
                               [view]="halfView()"
-                            ></ngx-charts-bar-vertical>
+                            ></coding-box-vertical-bar-chart>
                           }
                         </div>
                       </div>
@@ -181,18 +163,12 @@ interface ReplayFrequencyData {
                     <div class="chart-container">
                       <h3>{{ 'workspace.replay-distribution-by-day' | translate }}</h3>
                       @if (selectedTabIndex() === 2) {
-                        <ngx-charts-bar-vertical
+                        <coding-box-vertical-bar-chart
                           [results]="dayDistributionData()"
-                          [xAxis]="true"
-                          [yAxis]="true"
-                          [showXAxisLabel]="true"
-                          [showYAxisLabel]="true"
                           [xAxisLabel]="'workspace.date' | translate"
                           [yAxisLabel]="'workspace.replay-count' | translate"
-                          [scheme]="colorScheme"
-                          [showDataLabel]="false"
                           [view]="wideView()"
-                        ></ngx-charts-bar-vertical>
+                        ></coding-box-vertical-bar-chart>
                       }
                     </div>
                   </mat-tab>
@@ -203,18 +179,12 @@ interface ReplayFrequencyData {
                     <div class="chart-container">
                       <h3>{{ 'workspace.replay-distribution-by-hour' | translate }}</h3>
                       @if (selectedTabIndex() === 3) {
-                        <ngx-charts-bar-vertical
+                        <coding-box-vertical-bar-chart
                           [results]="hourDistributionData()"
-                          [xAxis]="true"
-                          [yAxis]="true"
-                          [showXAxisLabel]="true"
-                          [showYAxisLabel]="true"
                           [xAxisLabel]="'workspace.hour' | translate"
                           [yAxisLabel]="'workspace.replay-count' | translate"
-                          [scheme]="colorScheme"
-                          [showDataLabel]="false"
                           [view]="wideView()"
-                        ></ngx-charts-bar-vertical>
+                        ></coding-box-vertical-bar-chart>
                       }
                     </div>
                   </mat-tab>
@@ -301,20 +271,14 @@ interface ReplayFrequencyData {
                                   </div>
                                 }
                                 @if (failureByUnitData().length > 0 && selectedTabIndex() === 5) {
-                                  <ngx-charts-bar-vertical
+                                  <coding-box-vertical-bar-chart
                                     [results]="failureByUnitData()"
-                                    [xAxis]="true"
-                                    [yAxis]="true"
-                                    [showXAxisLabel]="true"
-                                    [showYAxisLabel]="true"
                                     [xAxisLabel]="'workspace.unit' | translate"
                                     [yAxisLabel]="'workspace.failure-count' | translate"
-                                    [scheme]="colorScheme"
-                                    [showDataLabel]="false"
                                     [rotateXAxisTicks]="true"
                                     [xAxisTickFormatting]="formatXAxisTick"
                                     [view]="wideView()"
-                                  ></ngx-charts-bar-vertical>
+                                  ></coding-box-vertical-bar-chart>
                                 }
                               </div>
                             </mat-tab>
@@ -330,18 +294,12 @@ interface ReplayFrequencyData {
                                   </div>
                                 }
                                 @if (failureByDayData().length > 0 && selectedTabIndex() === 6) {
-                                  <ngx-charts-bar-vertical
+                                  <coding-box-vertical-bar-chart
                                     [results]="failureByDayData()"
-                                    [xAxis]="true"
-                                    [yAxis]="true"
-                                    [showXAxisLabel]="true"
-                                    [showYAxisLabel]="true"
                                     [xAxisLabel]="'workspace.date' | translate"
                                     [yAxisLabel]="'workspace.failure-count' | translate"
-                                    [scheme]="colorScheme"
-                                    [showDataLabel]="false"
                                     [view]="wideView()"
-                                  ></ngx-charts-bar-vertical>
+                                  ></coding-box-vertical-bar-chart>
                                 }
                               </div>
                             </mat-tab>
@@ -359,18 +317,12 @@ interface ReplayFrequencyData {
                                   </div>
                                 }
                                 @if (failureByHourData().length > 0 && selectedTabIndex() === 7) {
-                                  <ngx-charts-bar-vertical
+                                  <coding-box-vertical-bar-chart
                                     [results]="failureByHourData()"
-                                    [xAxis]="true"
-                                    [yAxis]="true"
-                                    [showXAxisLabel]="true"
-                                    [showYAxisLabel]="true"
                                     [xAxisLabel]="'workspace.hour' | translate"
                                     [yAxisLabel]="'workspace.failure-count' | translate"
-                                    [scheme]="colorScheme"
-                                    [showDataLabel]="false"
                                     [view]="wideView()"
-                                  ></ngx-charts-bar-vertical>
+                                  ></coding-box-vertical-bar-chart>
                                 }
                               </div>
                             </mat-tab>
@@ -442,6 +394,7 @@ interface ReplayFrequencyData {
 
       .chart-column {
         flex: 1;
+        min-width: 0;
         height: auto;
       }
 
@@ -567,9 +520,6 @@ implements OnInit, AfterViewInit, OnDestroy {
     max: 0,
     average: 0
   });
-
-  // Chart configuration
-  colorScheme = 'vivid';
 
   formatMilliseconds(milliseconds: number): string {
     // Convert to seconds with 2 decimal places for better readability

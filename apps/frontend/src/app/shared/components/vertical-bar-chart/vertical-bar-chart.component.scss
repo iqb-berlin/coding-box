@@ -1,0 +1,58 @@
+:host {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chart-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.axis {
+  stroke: currentColor;
+  stroke-opacity: 0.5;
+}
+
+.grid-line {
+  stroke: currentColor;
+  stroke-opacity: 0.15;
+}
+
+text {
+  fill: currentColor;
+  font-family: inherit;
+}
+
+.tick {
+  font-size: 12px;
+}
+
+.axis-label {
+  font-size: 14px;
+}
+
+.bar:focus rect,
+.bar:hover rect {
+  stroke: currentColor;
+  stroke-width: 2px;
+}
+
+.bar-enter {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: bar-enter 250ms ease-out;
+}
+
+@keyframes bar-enter {
+  from {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar-enter {
+    animation: none;
+  }
+}

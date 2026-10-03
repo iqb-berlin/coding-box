@@ -142,8 +142,6 @@ describe('ExportToastComponent', () => {
   });
 
   it('summarizes jobs and delegates user actions', () => {
-    component.ngOnInit();
-
     expect(component.hasJobs()).toBe(true);
     expect(component.activeJobCount()).toBe(2);
     expect(component.completedJobCount()).toBe(1);
@@ -197,13 +195,12 @@ describe('ExportToastComponent', () => {
   });
 
   it('updates from the jobs stream and tears down subscriptions', () => {
-    component.ngOnInit();
     jobs$.next([]);
 
     expect(component.jobs()).toEqual([]);
     expect(component.hasJobs()).toBe(false);
 
-    component.ngOnDestroy();
+    fixture.destroy();
     jobs$.next(jobs);
     expect(component.jobs()).toEqual([]);
   });

@@ -20,24 +20,25 @@ describe('Zoneless replay statistics and codebook export', () => {
   });
 
   it('renders replay statistics after the delayed final response without another click', () => {
+    cy.viewport(1280, 900);
     cy.intercept('GET', '**/api/admin/workspace/token-policy', { body: { scopes: {} } });
     cy.intercept('GET', '**/api/admin/workspace/5/journal*', { body: { data: [], total: 0, page: 1, limit: 20 } });
     cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/sources?*', {
       delay: 300, body: { internal: 3, external: 1, total: 4 }
     });
     cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/frequency?*', { body: { UNIT: 4 } });
-    cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/distribution/day?*', { body: {} });
-    cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/distribution/hour?*', { body: {} });
+    cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/distribution/day?*', { body: { '2026-10-02': 4 } });
+    cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/distribution/hour?*', { body: { 12: 4 } });
     cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/duration?*', {
-      body: { min: 1000, max: 3000, average: 2000, distribution: {} }
+      body: { min: 1000, max: 3000, average: 2000, distribution: { '1000-3000': 4 }, unitAverages: Object.fromEntries(Array.from({ length: 25 }, (_, index) => [`UNIT-${index}`, 2000])) }
     });
     cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/errors?*', {
       body: { successRate: 75, totalReplays: 4, successfulReplays: 3, failedReplays: 1, commonErrors: [] }
     });
-    cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/failures/unit?*', { body: {} });
-    cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/failures/day?*', { body: {} });
+    cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/failures/unit?*', { body: { UNIT: 1 } });
+    cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/failures/day?*', { body: { '2026-10-02': 1 } });
     cy.intercept('GET', '**/api/admin/workspace/5/replay-statistics/failures/hour?*', {
-      delay: 800, body: {}
+      delay: 800, body: { 12: 1 }
     }).as('finalStatistics');
     cy.visit('/');
     cy.wait('@authData');
@@ -48,10 +49,44 @@ describe('Zoneless replay statistics and codebook export', () => {
     cy.get('coding-box-replay-statistics-dialog mat-spinner').should('not.exist');
     cy.get('coding-box-replay-statistics-dialog .source-summary .stat-value')
       .then(values => { expect([...values].map(value => value.textContent?.trim())).to.deep.equal(['4', '3', '1']); });
-    cy.get('coding-box-replay-statistics-dialog ngx-charts-bar-vertical svg path.bar')
-      .should('have.length', 1)
-      .and('have.attr', 'd')
-      .should('not.be.empty');
+    cy.get('coding-box-replay-statistics-dialog').as('statisticsDialog');
+    cy.get('@statisticsDialog').find('coding-box-vertical-bar-chart .bar')
+      .should('have.length', 1).and('have.attr', 'aria-label', 'UNIT: 4');
+    cy.get('@statisticsDialog').find('.bar rect').invoke('attr', 'height').then(height => {
+      expect(Number(height)).to.be.greaterThan(0);
+    });
+    cy.screenshot('native-replay-frequency', { capture: 'viewport' });
+    cy.get('@statisticsDialog').find('.bar').should('have.attr', 'tabindex', '0').trigger('mouseenter');
+    cy.get('mat-tooltip-component').should('contain.text', 'UNIT: 4');
+    for (const tabIndex of [1, 2, 3, 5, 6, 7]) {
+      cy.get('@statisticsDialog').find('[role="tab"]').eq(tabIndex).click({ force: true });
+      if (tabIndex === 1) {
+        cy.get('@statisticsDialog').find('.mat-mdc-tab-body-active .charts-row').should(row => {
+          expect(row[0].scrollWidth).to.be.at.most(row[0].clientWidth + 1);
+        });
+        cy.get('@statisticsDialog').find('.mat-mdc-tab-body-active .chart-scroll').eq(1).should(chart => {
+          expect(chart[0].scrollWidth).to.be.greaterThan(chart[0].clientWidth);
+        });
+      }
+      cy.get('@statisticsDialog').find('.mat-mdc-tab-body-active coding-box-vertical-bar-chart .bar rect')
+        .should('have.length', tabIndex === 1 ? 26 : 1).each(rectangle => {
+          expect(Number(rectangle.attr('height'))).to.be.greaterThan(0);
+          cy.wrap(rectangle).scrollIntoView().should('be.visible');
+        });
+    }
+    cy.get('@statisticsDialog').find('.mat-mdc-tab-body-active coding-box-vertical-bar-chart svg')
+      .should(svg => { expect(Number(svg.attr('width'))).to.be.greaterThan(800); })
+      .invoke('attr', 'width').then(originalWidth => {
+        cy.viewport(800, 600);
+        cy.get('@statisticsDialog').find('.mat-mdc-tab-body-active coding-box-vertical-bar-chart svg').should(svg => {
+          const width = Number(svg.attr('width'));
+          expect(width).to.be.greaterThan(0);
+          expect(width).to.be.lessThan(Number(originalWidth));
+        });
+      });
+    cy.get('@statisticsDialog').find('[role="tab"]').eq(0).click({ force: true });
+    cy.get('@statisticsDialog').find('.mat-mdc-tab-body-active coding-box-vertical-bar-chart .bar')
+      .scrollIntoView().should('be.visible').and('have.attr', 'aria-label', 'UNIT: 4');
   });
 
   for (const outcome of ['completed', 'failed']) {
