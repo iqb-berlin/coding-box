@@ -983,7 +983,7 @@ describe('CodingResultsComparisonComponent', () => {
   });
 
   it('should apply regex filters when workspace regex search is enabled', () => {
-    component.enableRegexSearch = true;
+    component.enableRegexSearch.set(true);
     component.comparisonMode = 'between-trainings';
     component.codersFromTrainingsFormControl.setValue(['1_101', '2_201']);
     component.selectedCodersFromTrainings = new Set(['1_101', '2_201']);
@@ -1071,7 +1071,7 @@ describe('CodingResultsComparisonComponent', () => {
   });
 
   it('should reject invalid regex filters before reloading comparison data', () => {
-    component.enableRegexSearch = true;
+    component.enableRegexSearch.set(true);
     component.tableFilters.variableId = '[';
 
     component.applyTableFilters();

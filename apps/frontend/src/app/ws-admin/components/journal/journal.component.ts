@@ -126,6 +126,10 @@ export class JournalComponent implements OnInit {
     this.loadJournalEntries();
   }
 
+  updateFilter<K extends keyof JournalFilters>(field: K, value: JournalFilters[K]): void {
+    this.filters.update(current => ({ ...current, [field]: value }));
+  }
+
   clearFilters(): void {
     this.filters.set({});
     this.pageIndex.set(0);

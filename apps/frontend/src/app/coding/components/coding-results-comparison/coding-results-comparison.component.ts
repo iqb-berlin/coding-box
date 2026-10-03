@@ -389,7 +389,7 @@ export class CodingResultsComparisonComponent implements OnInit {
     notesMode: 'all'
   };
 
-  enableRegexSearch = false;
+  readonly enableRegexSearch = signal(false);
 
   readonly discussionManagerLabel = signal('');
   readonly discussionCodeByResponseId = signal<Record<number, string>>({});
@@ -442,7 +442,7 @@ export class CodingResultsComparisonComponent implements OnInit {
     this.workspaceSettingsService.getEnableRegexSearch(this.data.workspaceId)
       .pipe(takeUntil(this.ngUnsubscribe))
       .subscribe(enabled => {
-        this.enableRegexSearch = enabled;
+        this.enableRegexSearch.set(enabled);
         this.applyTableFilters();
       });
 
@@ -583,7 +583,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   private getTableFilterSignature(): string {
     return JSON.stringify({
       ...this.tableFilters,
-      regexSearch: this.enableRegexSearch
+      regexSearch: this.enableRegexSearch()
     });
   }
 
@@ -637,7 +637,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   isTableRegexFilterInvalid(field: RegexComparisonFilterField): boolean {
-    return hasInvalidRegexFilter(this.tableFilters[field], this.enableRegexSearch);
+    return hasInvalidRegexFilter(this.tableFilters[field], this.enableRegexSearch());
   }
 
   private hasInvalidTableRegexFilters(): boolean {
@@ -1860,7 +1860,7 @@ export class CodingResultsComparisonComponent implements OnInit {
       sortDirection: this.sortDirection,
       filters: {
         ...this.tableFilters,
-        regexSearch: this.enableRegexSearch
+        regexSearch: this.enableRegexSearch()
       }
     };
 

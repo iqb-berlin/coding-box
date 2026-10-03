@@ -4,7 +4,7 @@ import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dial
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
-import { Observable, of, Subject } from 'rxjs';
+import { Observable, Subject } from 'rxjs';
 import { CodingResultsComparisonComponent } from './coding-results-comparison.component';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
@@ -25,6 +25,7 @@ describe('Coding comparison without Zone', () => {
   let snackBar: { open: jest.Mock };
   let kappaResponse: Subject<TrainingKappaStatisticsDto>;
   let saveResponse: Subject<DiscussionSaveResult>;
+  let regexResponse: Subject<boolean>;
 
   const training = (id: number, label: string): CoderTraining => ({
     id,
@@ -43,6 +44,7 @@ describe('Coding comparison without Zone', () => {
     trainings = new Subject<CoderTraining[]>();
     kappaResponse = new Subject<TrainingKappaStatisticsDto>();
     saveResponse = new Subject<DiscussionSaveResult>();
+    regexResponse = new Subject<boolean>();
     getCoderTrainings = jest.fn().mockReturnValue(trainings);
     snackBar = { open: jest.fn() };
     await TestBed.configureTestingModule({
@@ -57,7 +59,7 @@ describe('Coding comparison without Zone', () => {
         { provide: CodingStatisticsService, useValue: {} },
         { provide: TestPersonCodingService, useValue: {} },
         { provide: AppService, useValue: { authData: { userName: 'Manager' }, needsReAuthentication: false } },
-        { provide: WorkspaceSettingsService, useValue: { getEnableRegexSearch: () => of(false) } },
+        { provide: WorkspaceSettingsService, useValue: { getEnableRegexSearch: () => regexResponse } },
         { provide: PostMessageService, useValue: { getMessages: () => new Subject<void>() } },
         {
           provide: SessionRecoveryService,
@@ -184,6 +186,23 @@ describe('Coding comparison without Zone', () => {
     expect(fixture.nativeElement.querySelector('.discussion-saving')).not.toBeNull();
     return c;
   }
+
+  it('renders invalid regex feedback when the workspace setting arrives after the filter', async () => {
+    const c = await prepareWithinTraining();
+    c.tableFilters.unitName = '[';
+    fixture.changeDetectorRef.markForCheck();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.table-filters input')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.regex-filter-invalid')).toBeNull();
+
+    regexResponse.next(true);
+    await fixture.whenStable();
+
+    expect(c.isTableRegexFilterInvalid('unitName')).toBe(true);
+    expect(fixture.nativeElement.querySelector('.regex-filter-invalid')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.regex-filter-error')?.textContent)
+      .toContain('search-filter.invalid-regex');
+  });
 
   it('renders a delayed Kappa result after the header click without another interaction', async () => {
     const c = await prepareWithinTraining();
