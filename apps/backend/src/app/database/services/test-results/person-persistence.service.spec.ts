@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { createMock } from '@golevelup/ts-jest';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { PersonPersistenceService } from './person-persistence.service';
 import Persons from '../../entities/persons.entity';
 import { Booklet } from '../../entities/booklet.entity';
@@ -52,6 +52,15 @@ describe('PersonPersistenceService', () => {
     bookletLogRepository = module.get(getRepositoryToken(BookletLog));
     bookletSessionRepository = module.get(getRepositoryToken(Session));
     chunkRepository = module.get(getRepositoryToken(ChunkEntity));
+
+    const repositories = new Map<unknown, unknown>([
+      [Unit, unitRepository], [ResponseEntity, responseRepository],
+      [UnitLastState, module.get(getRepositoryToken(UnitLastState))], [ChunkEntity, chunkRepository],
+      [BookletLog, bookletLogRepository], [Session, bookletSessionRepository],
+      [UnitLog, module.get(getRepositoryToken(UnitLog))]
+    ]);
+    const manager = { query: jest.fn().mockResolvedValue([]), getRepository: jest.fn(entity => repositories.get(entity)) } as unknown as EntityManager;
+    jest.spyOn(unitRepository.manager, 'transaction').mockImplementation((async callback => callback(manager)) as never);
 
     jest.spyOn(unitRepository, 'create').mockImplementation(entity => entity as Unit);
   });
@@ -563,6 +572,36 @@ describe('PersonPersistenceService', () => {
       savedResponseCount: 1,
       skippedExistingResponseCount: 0
     });
+  });
+
+  it('rejects a failed response write inside the unit transaction without counting it as imported', async () => {
+    jest.spyOn(bookletInfoRepository, 'findOne').mockResolvedValue({ id: 20, name: 'B' } as BookletInfo);
+    jest.spyOn(bookletRepository, 'findOne').mockResolvedValue({ id: 30 } as Booklet);
+    jest.spyOn(unitRepository, 'findOne').mockResolvedValue(null);
+    jest.spyOn(unitRepository, 'save').mockResolvedValue({ id: 99 } as Unit);
+    jest.spyOn(service, 'saveUnitLastState').mockResolvedValue(undefined);
+    jest.spyOn(service, 'processChunks').mockResolvedValue(undefined);
+    jest.spyOn(responseRepository, 'find').mockResolvedValue([]);
+    jest.spyOn(responseRepository, 'save').mockRejectedValue(new Error('disk full'));
+    const issues = [];
+    const result = await service.processBookletWithTransaction({
+      id: 'B',
+      logs: [],
+      sessions: [],
+      units: [{
+        id: 'U',
+        alias: 'U',
+        logs: [],
+        chunks: [],
+        laststate: [],
+        subforms: [{ id: '', responses: [{ id: 'V', status: 'VALUE_CHANGED', value: 'answer' }] }]
+      }]
+    }, { id: 10 } as Persons, 'skip', issues);
+
+    expect(unitRepository.manager.transaction).toHaveBeenCalled();
+    expect(result.addedUnitIds).toEqual([]);
+    expect(result.savedResponseCount).toBe(0);
+    expect(issues).toEqual([expect.objectContaining({ level: 'error', message: expect.stringContaining('Antworten') })]);
   });
 
   it('adds a new unit for an existing person/booklet in merge mode without replacing existing data', async () => {
