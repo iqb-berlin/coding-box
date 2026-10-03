@@ -1,5 +1,5 @@
 import {
-  AfterViewInit, Component, ElementRef, EventEmitter, Input, OnDestroy, Output, ViewChild
+  AfterViewInit, Component, ElementRef, EventEmitter, Input, OnDestroy, Output, ViewChild, signal
 } from '@angular/core';
 
 import { Subject, takeUntil } from 'rxjs';
@@ -41,7 +41,8 @@ export class StandaloneUnitSchemerComponent implements AfterViewInit, OnDestroy 
   private iFrameElement: HTMLIFrameElement | undefined;
   private sessionId = '';
   private destroy$ = new Subject<void>();
-  message = '';
+  private messageTimeout?: ReturnType<typeof setTimeout>;
+  readonly message = signal('');
 
   constructor(private postMessageService: PostMessageService) {}
 
@@ -94,10 +95,12 @@ export class StandaloneUnitSchemerComponent implements AfterViewInit, OnDestroy 
 
           // Optionally display a message in the component
           if (event.message.message) {
-            this.message = event.message.message;
+            this.message.set(event.message.message);
+            clearTimeout(this.messageTimeout);
             // Clear the message after a few seconds
-            setTimeout(() => {
-              this.message = '';
+            this.messageTimeout = setTimeout(() => {
+              this.message.set('');
+              this.messageTimeout = undefined;
             }, 3000);
           }
         }
@@ -127,6 +130,7 @@ export class StandaloneUnitSchemerComponent implements AfterViewInit, OnDestroy 
   }
 
   ngOnDestroy(): void {
+    clearTimeout(this.messageTimeout);
     this.destroy$.next();
     this.destroy$.complete();
   }

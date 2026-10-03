@@ -108,7 +108,8 @@
         "ZL-025",
         "ZL-027",
         "ZL-029",
-        "ZL-036"
+        "ZL-036",
+        "ZL-041"
       ],
       "tests": [
         "apps/frontend/src/app/coding/components/export-coding-book/export-coding-book.component.zoneless.spec.ts",
@@ -136,7 +137,8 @@
         "apps/frontend/src/app/ws-admin/components/test-center-import/test-center-import.component.zoneless.spec.ts",
         "cypress/zoneless/testcenter-import.cy.ts",
         "apps/frontend/src/app/coding/components/export-dialog/export-dialog.component.zoneless.spec.ts",
-        "cypress/zoneless/async-coding-dialogs.cy.ts"
+        "cypress/zoneless/async-coding-dialogs.cy.ts",
+        "apps/frontend/src/app/coding/components/schemer/unit-schemer.component.zoneless.spec.ts"
       ]
     },
     {
@@ -149,7 +151,8 @@
         "ZL-026",
         "ZL-031",
         "ZL-032",
-        "ZL-038"
+        "ZL-038",
+        "ZL-042"
       ],
       "tests": [
         "apps/frontend/src/app/ws-admin/components/replay-statistics-dialog/replay-statistics-dialog.component.zoneless.spec.ts",
@@ -164,7 +167,8 @@
         "cypress/e2e/zoneless-dialogs.cy.ts",
         "cypress/auth/coding-session.cy.ts",
         "apps/frontend/src/app/workspace/components/user-workspaces/user-workspaces.component.zoneless.spec.ts",
-        "apps/frontend/src/app/core/services/app.service.zoneless.spec.ts"
+        "apps/frontend/src/app/core/services/app.service.zoneless.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/ws-users/ws-users.component.zoneless.spec.ts"
       ]
     }
   ],

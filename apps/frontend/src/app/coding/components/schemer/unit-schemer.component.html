@@ -1,6 +1,6 @@
 <div class="unit-schemer-container">
-  @if (message) {
-    <div class="message">{{ message }}</div>
+  @if (message()) {
+    <div class="message">{{ message() }}</div>
   }
   <iframe #hostingIframe class="schemer-iframe" title="Unit Schemer"></iframe>
 </div>
