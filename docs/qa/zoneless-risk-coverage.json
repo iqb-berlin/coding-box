@@ -174,7 +174,8 @@
         "cypress/auth/coding-session.cy.ts",
         "apps/frontend/src/app/workspace/components/user-workspaces/user-workspaces.component.zoneless.spec.ts",
         "apps/frontend/src/app/core/services/app.service.zoneless.spec.ts",
-        "apps/frontend/src/app/ws-admin/components/ws-users/ws-users.component.zoneless.spec.ts"
+        "apps/frontend/src/app/ws-admin/components/ws-users/ws-users.component.zoneless.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/journal/journal.component.zoneless.spec.ts"
       ]
     }
   ],
