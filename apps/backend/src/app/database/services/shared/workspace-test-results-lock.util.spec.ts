@@ -1,9 +1,19 @@
 import {
   tryWithWorkspaceTestResultsMutationLock,
-  withWorkspaceTestResultsMutationLock
+  withWorkspaceTestResultsMutationLock,
+  withWorkspaceTestcenterImportLock
 } from './workspace-test-results-lock.util';
 
 describe('workspace test results mutation lock', () => {
+  it('rejects a concurrent import without executing its callback or releasing another run lock', async () => {
+    const queryRunner = { connect: jest.fn(), query: jest.fn().mockResolvedValue([{ locked: false }]), release: jest.fn() };
+    const callback = jest.fn();
+    await expect(withWorkspaceTestcenterImportLock({ createQueryRunner: () => queryRunner } as never, 1, callback)).rejects.toThrow('bereits');
+    expect(callback).not.toHaveBeenCalled();
+    expect(queryRunner.query).toHaveBeenCalledTimes(1);
+    expect(queryRunner.release).toHaveBeenCalled();
+  });
+
   it('releases the query runner when advisory lock acquisition fails', async () => {
     const lockError = new Error('lock failed');
     const queryRunner = {
