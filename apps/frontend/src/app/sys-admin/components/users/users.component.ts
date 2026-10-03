@@ -2,8 +2,10 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, OnInit, inject, signal
+  ViewChild, Component, DestroyRef, OnInit, inject, signal
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { finalize, timer } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSort } from '@angular/material/sort';
 import { UntypedFormGroup } from '@angular/forms';
@@ -29,6 +31,7 @@ import {
   imports: [UsersSelectionComponent, UsersMenuComponent]
 })
 export class UsersComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   private userBackendService = inject(UserBackendService);
   private workspaceBackendService = inject(WorkspaceBackendService);
   private appService = inject(AppService);
@@ -46,12 +49,12 @@ export class UsersComponent implements OnInit {
 
   readonly authData = signal(AppService.defaultAuthData);
   ngOnInit(): void {
-    this.appService.authData$.subscribe(
+    this.appService.authData$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(
       authData => {
         this.authData.set(authData);
       }
     );
-    setTimeout(() => {
+    timer(0).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
       this.createWorkspaceList();
       this.updateUserList();
     });
@@ -70,17 +73,18 @@ export class UsersComponent implements OnInit {
 
   updateUserList(): void {
     this.appService.dataLoading = true;
-    this.userBackendService.getUsersFull().subscribe(
+    this.userBackendService.getUsersFull().pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => { this.appService.dataLoading = false; })
+    ).subscribe(
       (users: UserFullDto[]) => {
         if (users.length > 0) {
           this.setObjectsDatasource(users);
           this.tableSelectionCheckboxes.clear();
           this.tableSelectionRow.clear();
-          this.appService.dataLoading = false;
         } else {
           this.tableSelectionCheckboxes.clear();
           this.tableSelectionRow.clear();
-          this.appService.dataLoading = false;
         }
       }
     );
@@ -197,7 +201,7 @@ export class UsersComponent implements OnInit {
   }
 
   createWorkspaceList(): void {
-    this.workspaceBackendService.getAllWorkspacesList().subscribe(workspaces => {
+    this.workspaceBackendService.getAllWorkspacesList().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(workspaces => {
       if (workspaces.data.length > 0) { this.userWorkspaces.set(workspaces.data); }
     });
   }

@@ -104,21 +104,21 @@ describe('WsUsersComponent', () => {
     component.ngOnInit();
     tick(); // processes setTimeout
     expect(mockUserBackendService.getUsersFull).toHaveBeenCalled();
-    expect(component.userObjectsDatasource.data.length).toBe(2);
+    expect(component.userObjectsDatasource().data.length).toBe(2);
   }));
 
   it('should load users when updateUserList is called', () => {
     component.updateUserList();
     expect(mockUserBackendService.getUsersFull).toHaveBeenCalled();
-    expect(component.userObjectsDatasource.data.length).toBe(2);
+    expect(component.userObjectsDatasource().data.length).toBe(2);
   });
 
   it('should filter users correctly', fakeAsync(() => {
     component.ngOnInit();
     tick();
-    component.userObjectsDatasource.filter = 'user1';
-    expect(component.userObjectsDatasource.filteredData.length).toBe(1);
-    expect(component.userObjectsDatasource.filteredData[0].username).toBe('user1');
+    component.userObjectsDatasource().filter = 'user1';
+    expect(component.userObjectsDatasource().filteredData.length).toBe(1);
+    expect(component.userObjectsDatasource().filteredData[0].username).toBe('user1');
   }));
 
   it('should toggle checkbox and emit selection', fakeAsync(() => {

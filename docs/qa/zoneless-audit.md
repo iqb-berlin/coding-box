@@ -14,6 +14,24 @@ Lokale Nachweise, gepushte Änderungen und entfernte CI-Ergebnisse werden getren
 
 ## Prüfinfrastruktur
 
+### Zusätzliche Regressionen vom 03.10.2026
+
+- **ZL-041 – Schemer-Rückmeldungen:** `vosReadNotification` und der Timer zum
+  Ausblenden aktualisierten ein normales Feld ohne Angular-Benachrichtigung.
+  Die Meldung ist jetzt ein Signal. Ein neuer Hinweis ersetzt den bisherigen
+  Ausblendetimer; beim Schließen wird der Timer beendet. Die native Regression
+  `unit-schemer.component.zoneless.spec.ts` prüft Anzeige und Ausblenden im echten
+  Template ohne zusätzliche Change Detection.
+- **ZL-042 – Workspace-Benutzerliste:** Die Tabelle hing für verzögerte Antworten
+  an einer Änderung des globalen Ladesignals. Wenn eine andere Anfrage dieses
+  bereits auf `false` setzte, blieb die normale Datasource-Zuweisung unsichtbar.
+  Die Datasource ist jetzt ein Signal und aktualisiert auch leere Ergebnisse.
+  Leseanfragen und Initialisierungstimer beider Benutzeransichten enden beim
+  Verlassen der Ansicht; der Ladezustand wird bei Abschluss oder Abbruch
+  freigegeben. `ws-users.component.zoneless.spec.ts` prüft verzögerte Antworten
+  mit unverändertem Ladesignal, leere Ergebnisse, Auswahlrücksetzung und verspätete
+  Antworten nach dem Zerstören beider Ansichten.
+
 Alle Befehle im Repository-Verzeichnis; Validierungen nacheinander ausführen.
 
 ```sh
