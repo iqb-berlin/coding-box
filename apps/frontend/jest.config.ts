@@ -14,14 +14,13 @@ export default {
       }
     ]
   },
-  transformIgnorePatterns: ['node_modules/(?!.*\\.mjs$|@iqb/metadata-resolver|d3-[^/]*|keycloak-js)'],
+  transformIgnorePatterns: ['node_modules/(?!.*\\.mjs$|@iqb/metadata-resolver|keycloak-js)'],
   snapshotSerializers: [
     'jest-preset-angular/build/serializers/no-ng-attributes',
     'jest-preset-angular/build/serializers/ng-snapshot',
     'jest-preset-angular/build/serializers/html-comment'
   ],
   moduleNameMapper: {
-    '^@swimlane/ngx-charts$': '<rootDir>/src/test-mocks.ts',
     '^keycloak-js$': '<rootDir>/src/mocks/keycloak-js.mock.ts',
     '^@iqb/metadata-resolver$': '<rootDir>/../../node_modules/@iqb/metadata-resolver/dist/index.mjs',
     '^@iqb/metadata-resolver/(.*)$': '<rootDir>/../../node_modules/@iqb/metadata-resolver/dist/$1'

@@ -1320,8 +1320,8 @@ sind jetzt Signals. Sortierte Daten werden als neue Arrays veröffentlicht.
 Die native Regression verwendet das echte Template und verzögerte Subjects.
 Sie prüft den erfolgreichen Abschluss sowie Fehler beim Frequenzabruf und
 bei der letzten Anfrage, ohne nach den Antworten `detectChanges()` oder
-`markForCheck()` aufzurufen. Der Browserfall verwendet echte ngx-charts und
-prüft das Ende des Ladezustands, die Kennzahlen und den gerenderten Balken
+`markForCheck()` aufzurufen. Der damalige Browserfall verwendete echte ngx-charts (in der Migration
+vom 03.10.2026 durch native SVG-Diagramme ersetzt) und prüft das Ende des Ladezustands, die Kennzahlen und den gerenderten Balken
 nach der verzögerten letzten Antwort. `window.Zone` muss fehlen.
 
 ### ZL-027: Kodierbuch-Fortschritt und Abschluss aktualisieren die Ansicht nicht
@@ -1950,3 +1950,90 @@ wurden bei dieser Ergänzung lokal nicht erneut ausgeführt; die Browserfälle
 belegen kontrollierte HTTP-Verarbeitung und UI-Zustände, keine tatsächliche
 Backend-Persistenz oder Autorisierung. Die bestehenden Live-CI-Jobs bleiben
 Teil der Freigabe.
+
+
+### Native Diagrammanimationen und sichere RxJS-Übergänge am 03.10.2026
+
+Basis: PR-Head `1a8fac0c65f2198e4c301d2536b926a5f0380dfb`.
+
+Die Anwendung benötigt keine globale Angular-Animationsengine mehr.
+`provideAnimationsAsync()` ist entfernt. Der einzige Anwendungskonsument
+von `@swimlane/ngx-charts` war der Replay-Statistikdialog mit acht vertikalen
+Balkendiagrammen. Auch die installierte und zum Prüfzeitpunkt aktuelle
+Version 25.0.2 importierte `trigger`, `transition`, `style` und `animate`
+aus `@angular/animations`; lediglich den Provider zu entfernen wäre deshalb
+keine sichere Migration gewesen.
+
+Die acht Diagramme verwenden jetzt `VerticalBarChartComponent` mit nativen
+SVG-Balken, Signal-Inputs, abgeleiteter Skalierung und OnPush. Achsentitel,
+gekürzte Unit-Beschriftungen, volle Werte im Tooltip, Tastaturfokus und
+Größenänderungen bleiben erhalten. `animate.enter` steuert eine CSS-Animation;
+`prefers-reduced-motion` deaktiviert sie. Leere/Null-Daten, Bruchteile und
+aktualisierte Inputs sind nativ ohne Animationsprovider geprüft. ngx-charts
+und seine exklusiven D3-Abhängigkeiten sind aus dem Lockfile entfernt.
+`@angular/animations` bleibt als Dev-Abhängigkeit für vorhandene
+`provideNoopAnimations()`-/`NoopAnimationsModule`-Testeinrichtungen, nicht
+als Anwendungskonsument.
+
+Die Aussage „toSignal wird nicht verwendet“ war bereits vor dieser Änderung
+überholt: sieben Anwendungscalls. Geprüft wurden zwei synchrone Auth-Quellen
+im AppService, zwei synchrone Validierungsquellen im Exportdialog, zwei
+SelectionModel-Ereignisbrücken und eine MatTableDataSource-Brücke. Die
+BehaviorSubjects besitzen jeweils die führende Zustandsquelle und sind mit
+`requireSync: true` eingebunden; die Ereignis-/Tabellenbrücken haben explizite
+Startwerte. Alle Aufrufe laufen im Injection-Kontext mit automatischer
+Bereinigung. Sie sind keine HTTP-Streams mit unbehandelten Netzwerkfehlern.
+
+Als achter Aufruf ersetzt `toSignal(exportJobService.jobs$, { requireSync:
+true })` die manuelle Subscription mit Schreibkopie im Export-Toast. Dessen
+BehaviorSubject bleibt die führende Quelle, der UI-Zustand ist schreibgeschützt.
+Aktionsabonnements verwenden `takeUntilDestroyed(DestroyRef)`. Der neue native
+Zoneless-Fall prüft initialen Zustand, verspäteten Fortschritt im echten
+Template und Bereinigung von Zustands- sowie Aktionsabonnements. RxJS bleibt
+für Polling, HTTP und Ereignisverarbeitung erhalten.
+
+Referenzen: [Angular-Animationsmigration](https://angular.dev/guide/animations/migration),
+[provideAnimationsAsync](https://angular.dev/api/platform-browser/animations/async/provideAnimationsAsync),
+[toSignal-Vertrag](https://angular.dev/ecosystem/rxjs-interop).
+
+
+### Lokale Prüfungen der Animations- und Interop-Migration am 03.10.2026
+
+| Prüfung | Ergebnis |
+|---|---|
+| `frontend:lint` | bestanden |
+| `frontend:test --runInBand` | 2.685 Tests / 256 Suites bestanden |
+| `frontend:test-zoneless --runInBand` | 918 Tests / 61 Suites bestanden |
+| `frontend:build --statsJson=true` | Produktionsbuild bestanden; kein Input aus `@angular/animations` oder `@swimlane/ngx-charts` unter den 834 Bundle-Inputs |
+| Cypress, abschließende vollständige Produktions-Browsersuite | 128 Fälle / 23 Spezifikationen bestanden, keine Retries; inklusive 25 Units in der Daueransicht nach der Spaltenkorrektur |
+| Cypress, Produktions-Nachlauf `cypress/zoneless/app.cy.ts` | nach SPA-Fallback im lokalen Server alle vier Fälle bestanden; anschließend wurde die vollständige Suite erneut erfolgreich ausgeführt |
+| Cypress, Zoneless-Entwicklungsbuild `cypress/zoneless/statistics-codebook.cy.ts` | drei Fälle mit allen acht Diagrammen, 25 Units in der Daueransicht, internem Scrollbereich und Größenänderung bestanden |
+| Native betroffene Komponenten nach der abschließenden CSS-Korrektur | sieben Fälle / drei Suites bestanden |
+| `frontend:zoneless-approval` | 8.773 Inventareinträge, sechs Bereiche, sieben Mechanismen und 46 korrigierte Befunde; Referenzen gültig |
+
+Die Produktionsprüfung verwendet die optimierten Bundles über einen lokalen
+HTTP-Server, kontrollierte API-Antworten und Electron. Der erste vollständige
+Lauf bestand 127 von 128 Fällen; der direkte `/coding`-Aufruf scheiterte vor
+App-Start mit HTTP 404 am einfachen lokalen Dateiserver. Der Nachlauf ergänzte
+den SPA-Fallback, den der Nx-Server der CI-Browserjobs bereitstellt; er ist
+kein Nachweis für die Nginx-Konfiguration eines Deployments. Im erweiterten
+Diagrammfall ist die Ausgangsgröße 1280 × 900 explizit gesetzt, die
+Verkleinerung auf 800 × 600 wird über die tatsächlich aktualisierte SVG-Breite
+nachgewiesen. Die aktiven Material-Tabs und sichtbaren, in den Scrollbereich
+gebrachten Balken werden geprüft. Die Screenshot-Erfassung verwendet den
+Viewport statt des Inline-Dialoghosts.
+
+Der zusätzliche Browsernachweis mit 25 Unit-Durchschnittswerten zeigte, dass
+die SVG-Mindestbreite beide Flex-Spalten auseinanderdrückte (1.357 Pixel
+Scrollbreite bei 1.078 Pixeln Zeilenbreite). `min-width: 0` begrenzt die
+Spalten; die SVG-Breite bleibt im internen Scrollbereich. Der Fall prüft die
+Zeilenbreite, den internen Überlauf und alle 26 Balken der beiden
+Dauerdiagramme. Danach bestanden die sieben betroffenen nativen Fälle und
+der Entwicklungs-Browserlauf erneut; die finalen Produktionsbundles wurden
+neuerstellt und die vollständige Browser-Suite erfolgreich wiederholt.
+Die vollständigen Jest-Läufe stammen vor dieser begrenzten CSS-Korrektur.
+
+Live-Backend-/Keycloak- oder Replay-Targets wurden bei dieser Migration lokal
+nicht erneut ausgeführt. Remote-CI für den neuen Commit ist separat
+nachzuweisen; die vorhandenen Browserjobs führen die geänderte Spezifikation
+automatisch aus.

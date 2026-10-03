@@ -147,7 +147,8 @@
         "cypress/zoneless/testcenter-import.cy.ts",
         "apps/frontend/src/app/coding/components/export-dialog/export-dialog.component.zoneless.spec.ts",
         "cypress/zoneless/async-coding-dialogs.cy.ts",
-        "apps/frontend/src/app/coding/components/schemer/unit-schemer.component.zoneless.spec.ts"
+        "apps/frontend/src/app/coding/components/schemer/unit-schemer.component.zoneless.spec.ts",
+        "apps/frontend/src/app/components/export-toast/export-toast.component.zoneless.spec.ts"
       ]
     },
     {
@@ -179,7 +180,8 @@
         "apps/frontend/src/app/core/services/app.service.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/components/ws-users/ws-users.component.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/components/journal/journal.component.zoneless.spec.ts",
-        "cypress/zoneless/manual-preparation.cy.ts"
+        "cypress/zoneless/manual-preparation.cy.ts",
+        "apps/frontend/src/app/shared/components/vertical-bar-chart/vertical-bar-chart.component.zoneless.spec.ts"
       ]
     }
   ],
@@ -240,7 +242,7 @@
         "files-exports-metadata",
         "administration"
       ],
-      "evidence": "Echter Aspect-Player, Diagramme, Material-Overlays und Metadaten-Webkomponente; window.Zone fehlt."
+      "evidence": "Echter Aspect-Player, Diagramme, Material-Overlays und Metadaten-Webkomponente; window.Zone fehlt. Replay-Balkendiagramme verwenden native SVG/CSS-Animationen ohne globalen Angular-Animationsprovider; der Browserfall wechselt alle Diagramm-Tabs und prüft Tooltip sowie Größenänderung."
     },
     {
       "id": "roles-persistence",

@@ -1,9 +1,7 @@
-import { CUSTOM_ELEMENTS_SCHEMA, provideZonelessChangeDetection } from '@angular/core';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA } from '@angular/material/dialog';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
-import { NgxChartsModule } from '@swimlane/ngx-charts';
 import { of, Subject } from 'rxjs';
 import { ReplayStatisticsDialogComponent } from './replay-statistics-dialog.component';
 import { ReplayBackendService, ReplaySourceSummaryResponse } from '../../../replay/services/replay-backend.service';
@@ -35,7 +33,6 @@ describe('Replay statistics with delayed responses without Zone', () => {
       imports: [ReplayStatisticsDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
-        provideNoopAnimations(),
         { provide: MAT_DIALOG_DATA, useValue: { workspaceId: 1 } },
         {
           provide: ReplayBackendService,
@@ -63,9 +60,6 @@ describe('Replay statistics with delayed responses without Zone', () => {
           }
         }
       ]
-    }).overrideComponent(ReplayStatisticsDialogComponent, {
-      remove: { imports: [NgxChartsModule] },
-      add: { schemas: [CUSTOM_ELEMENTS_SCHEMA] }
     }).compileComponents();
     fixture = TestBed.createComponent(ReplayStatisticsDialogComponent);
     fixture.autoDetectChanges();
@@ -85,8 +79,9 @@ describe('Replay statistics with delayed responses without Zone', () => {
     const values = Array.from(fixture.nativeElement.querySelectorAll('.source-summary .stat-value'))
       .map(element => (element as HTMLElement).textContent?.trim());
     expect(values).toEqual(['4', '3', '1']);
-    const chart = fixture.nativeElement.querySelector('ngx-charts-bar-vertical');
-    expect(chart.results).toEqual([{ name: 'UNIT', value: 4 }]);
+    const bar = fixture.nativeElement.querySelector('coding-box-vertical-bar-chart .bar');
+    expect(bar.getAttribute('aria-label')).toBe('UNIT: 4');
+    expect(Number(bar.querySelector('rect').getAttribute('height'))).toBeGreaterThan(0);
   });
 
   it('ends loading after a delayed frequency request fails', async () => {
