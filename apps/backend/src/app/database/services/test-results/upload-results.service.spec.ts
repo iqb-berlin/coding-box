@@ -1029,6 +1029,14 @@ existing-group;existing-login;existing-code;booklet1;unit2;"[{""subForm"":"""","
       jest.spyOn(responseRepository, 'find').mockResolvedValue([]);
       jest.spyOn(responseRepository, 'save').mockResolvedValue([] as never);
 
+      const transactionRepositories = new Map<unknown, unknown>([
+        [Unit, unitRepository], [UnitLastState, unitLastStateRepository],
+        [ChunkEntity, chunkRepository], [ResponseEntity, responseRepository]
+      ]);
+      jest.spyOn(unitRepository.manager, 'transaction').mockImplementation((async callback => callback({
+        query: jest.fn().mockResolvedValue([]), getRepository: entity => transactionRepositories.get(entity)
+      })) as never);
+
       const realPersonService = new PersonService(
         createMock<PersonQueryService>({
           getWorkspaceUploadStats: jest.fn()
