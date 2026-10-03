@@ -8,7 +8,9 @@ import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { provideHttpClient } from '@angular/common/http';
-import { Subject, of, throwError } from 'rxjs';
+import {
+  NEVER, Subject, of, throwError
+} from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { provideRouter } from '@angular/router';
 import { environment } from '../../../../environments/environment';
@@ -736,6 +738,42 @@ describe('TestResultsComponent', () => {
     expect(component.codingFreshnessWarnings).toEqual([]);
     expect(component.hasCodingFreshnessWarning).toBe(false);
     expect(component.codingFreshnessBannerTitle).toBe('Kodierstand aktuell');
+  });
+
+  it('shows an import result even when all post-import overview requests never respond', async () => {
+    const dialog = TestBed.inject(MatDialog) as unknown as { open: jest.Mock };
+    const service = TestBed.inject(TestResultService) as unknown as { getWorkspaceOverview: jest.Mock };
+    const progressClose = jest.fn();
+    service.getWorkspaceOverview.mockReturnValueOnce(of({})).mockReturnValue(NEVER);
+    const statistics = TestBed.inject(CodingStatisticsService) as unknown as { getCodingFreshness: jest.Mock };
+    const coding = TestBed.inject(TestPersonCodingService) as unknown as { getAppliedResultsOverview: jest.Mock };
+    statistics.getCodingFreshness.mockReturnValue(NEVER);
+    coding.getAppliedResultsOverview.mockReturnValue(NEVER);
+    dialog.open.mockImplementation((type: unknown) => {
+      if (type === TestCenterImportComponent) {
+        return {
+          afterClosed: () => of({
+            didImport: true,
+            resultType: 'responses',
+            importedResponses: true,
+            uploadResult: { success: true, issues: [] }
+          })
+        };
+      }
+      if (type === TestResultsImportProgressDialogComponent) return { close: progressClose };
+      return { close: jest.fn(), afterClosed: () => of(undefined) };
+    });
+    jest.useFakeTimers();
+    try {
+      await component.testCenterImport();
+      await jest.advanceTimersByTimeAsync(31000);
+      expect(progressClose).toHaveBeenCalled();
+      const resultCall = dialog.open.mock.calls.find(([type]) => type === TestResultsUploadResultDialogComponent);
+      expect(resultCall?.[1].data.result).toMatchObject({ overviewPending: true });
+      expect(resultCall?.[1].data.manualAppliedResultsOverviewLoadFailed).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('should show second auto-coding as waiting while manual coding results are still open', () => {

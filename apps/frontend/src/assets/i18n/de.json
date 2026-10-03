@@ -27,6 +27,34 @@
   "filter-by": "Filtern nach...",
   "hour": "Uhr",
   "files-import": "Dateien importieren",
+  "testcenter-import": {
+    "partial": "Import nicht vollständig abgeschlossen",
+    "unknown": "Verbindung unterbrochen: Importstatus noch unklar",
+    "completed": "Bestätigte Gruppen",
+    "current-group": "Betroffene Testgruppe",
+    "remaining": "Noch nicht gestartete Gruppen",
+    "run-id": "Import-Lauf-ID",
+    "check-status": "Status prüfen",
+    "not-started": "Der Import wurde nicht gestartet. Prüfen Sie Ihre Anmeldung und Berechtigungen beziehungsweise die folgende Fehlermeldung.",
+    "connection-error": "Die Importanfrage wurde unterbrochen. Der Serverstatus muss vor einer Wiederholung geprüft werden.",
+    "overview-pending": "Der Import ist abgeschlossen. Nur die aktualisierte Übersicht ist noch nicht verfügbar. Bereits importierte Daten bleiben gespeichert. Laden Sie diese Ansicht in Kürze neu; starten Sie den Import nicht erneut.",
+    "unknown-guidance": "Der Server kann noch arbeiten. Nicht erneut importieren. Prüfen Sie zuerst den Status. Bei weiter unklarem Status wenden Sie sich mit der Lauf-ID an die Administration. Das Schließen dieses Dialogs beendet den Serverimport nicht.",
+    "retry-guidance": "Bestätigte Gruppen bleiben gespeichert. Die betroffene Gruppe kann Teildaten enthalten; weitere Gruppen wurden nicht gestartet. Prüfen Sie die Fehlermeldung und die Übersicht. Für einen erneuten Antwortimport wählen Sie bei den Optionen 'Fehlende Antwortwerte ergänzen'. Verwenden Sie 'Vorhandene Antwortwerte ersetzen' nur bewusst. Die betroffene und die ausstehenden Gruppen bleiben auch beim Optionswechsel ausgewählt.",
+    "responses-saved": "Die Antworten der betroffenen Gruppe wurden gespeichert; der anschließende Logimport ist nicht vollständig abgeschlossen. Sie können ausschließlich die Logs erneut importieren.",
+    "status": {
+      "running": "Serverstatus: Import läuft noch.",
+      "unknown": "Serverstatus: aktuell nicht verfügbar. Nicht erneut starten.",
+      "completed": "Serverstatus: abgeschlossen.",
+      "failed": "Serverstatus: nicht vollständig abgeschlossen."
+    },
+    "phase": {
+      "fetching-responses": "Antworten werden vom Testcenter abgerufen",
+      "saving-responses": "Antworten werden gespeichert",
+      "fetching-logs": "Logs werden vom Testcenter abgerufen",
+      "saving-logs": "Logs werden gespeichert",
+      "finalizing": "Import wird abgeschlossen"
+    }
+  },
   "search": "Suchen",
   "search-units": "Nach Aufgaben suchen",
   "loading-units": "Aufgaben werden geladen...",
