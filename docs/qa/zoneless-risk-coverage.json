@@ -12,7 +12,10 @@
         "ZL-003",
         "ZL-004",
         "ZL-028",
-        "ZL-039"
+        "ZL-039",
+        "ZL-043",
+        "ZL-044",
+        "ZL-045"
       ],
       "tests": [
         "apps/frontend/src/app/coding/components/cohens-kappa-statistics/cohens-kappa-statistics.component.zoneless.spec.ts",
@@ -22,7 +25,10 @@
         "apps/frontend/src/app/coding/components/my-coding-jobs/my-coding-jobs.component.spec.ts",
         "cypress/auth/coding-session.cy.ts",
         "apps/frontend/src/app/coding/components/import-comparison-dialog/import-comparison-dialog.component.zoneless.spec.ts",
-        "cypress/zoneless/review-notifications.cy.ts"
+        "cypress/zoneless/review-notifications.cy.ts",
+        "apps/frontend/src/app/coding/components/coding-results-comparison/coding-results-comparison.component.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-results-comparison/coding-results-comparison.zoneless.spec.ts",
+        "cypress/zoneless/training-comparison.cy.ts"
       ]
     },
     {

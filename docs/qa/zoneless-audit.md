@@ -1790,3 +1790,65 @@ Das aktualisierte Inventar umfasst 8.781 Einträge aus 325 Produktionsdateien.
 Die Prüfungen erfolgten vor Commit und Push; CI für diese Korrekturen ist
 durch die lokalen Läufe nicht bestätigt. Die oben dokumentierten Grenzen des
 risikobasierten Nachweises gelten weiterhin.
+
+### ZL-043: Verzögerte Kappa-Ergebnisse bleiben im Schulungsvergleich unsichtbar
+
+Der Schulungsvergleich schrieb Kappa-Ergebnisse und Ladezustände in normale
+Felder. Eine verzögerte Backend-Antwort füllte das Modell, während das Template
+weiterhin „Berechne Interrater-Reliabilität“ zeigte. Ergebnisse, Optionen und
+Ladezustände sind jetzt Signals; Variablenzusammenfassungen werden mit `computed`
+abgeleitet. Die Berechnung der mittleren Übereinstimmung ersetzt das Ergebnis
+und seine `workspaceSummary`, ohne frühere Snapshots oder die Backend-Antwort
+zu verändern. Bei einem Fehler endet die Ladeanzeige ebenfalls.
+
+### ZL-044: Diskussionsspeicherungen lassen die Speicheranzeige stehen
+
+Verzögerte Speicherantworten änderten die Diskussionswerte und den Speicherstatus
+in gewöhnlichen Records. Die Anzeige „Speichert ...“ blieb nach Erfolg bestehen.
+Codes, Scores, Notizen, Fehler, Speicherstatus und Managername sind jetzt Signals.
+Alle Änderungen an den Records erzeugen neue Objekte; die Initialisierung baut
+lokale Records auf und veröffentlicht sie jeweils einmal. Replay-Übernahme,
+eingereihte Notizen und Sitzungswiederherstellung verwenden dieselben Schreibpfade.
+
+### ZL-045: Der initiale Vergleich beendet seine Ladeanzeige nicht
+
+Die Browserregression erreichte zunächst weder Kappa noch Diskussion: Auch nach
+der verzögerten Vergleichsantwort blieb „Lade Vergleichsdaten“ sichtbar. Solange
+nur der Ladeblock gerendert wurde, waren die Diskussions-Signals noch keine
+Template-Abhängigkeiten. `isLoading` ist deshalb ebenfalls ein Signal; Erfolg,
+Fehler und Abbruch benachrichtigen das Template über diesen Zustand.
+
+Die nativen Regressionen in
+`coding-results-comparison.zoneless.spec.ts` prüfen verzögerte Kappa- und
+Speicherantworten einschließlich Fehlern mit echtem Template, ohne nach der
+Antwort Änderungserkennung zu erzwingen. Der bestehende Komponententest prüft
+zusätzlich, dass die Kappa-Berechnung eingefrorene frühere Snapshots erhält.
+Vier Browserfälle in `cypress/zoneless/training-comparison.cy.ts` öffnen den
+Schulungsvergleich über die Schulungsliste, laden Vergleichsdaten über HTTP und
+prüfen Kappa beziehungsweise Diskussion bei Erfolg und Fehler. Der Kappa-Erfolg
+prüft auch Gewichtung und Code-/Score-Ebene. Alle vier Fälle bestehen ohne
+`window.Zone`; Anmeldung und Backend-Antworten sind synthetisch.
+
+### Lokale Prüfungen für ZL-043 bis ZL-045 am 03.10.2026
+
+Die Korrekturen wurden auf Basis von PR-Head
+`d03c2f4ef70b15d292686a4de8504a8389f8a716` geprüft.
+
+| Nx-Prüfung | Ergebnis | Exit |
+|---|---|---|
+| `frontend:test --runInBand` | 2.673 Tests bestanden; ein Regex-Timer-Test fehlgeschlagen | 1 |
+| `frontend:test --runInBand --testPathPatterns='coding-results-comparison\|test-results-flat-table.component.spec'` | 91 Tests / drei Suites bestanden | 0 |
+| `frontend:test-zoneless --runInBand` | 907 Tests / 58 Suites bestanden | 0 |
+| `frontend:e2e:zoneless --spec=cypress/zoneless/training-comparison.cy.ts` | vier Browserfälle bestanden; `window.Zone` fehlt | 0 |
+| `frontend:lint` | bestanden | 0 |
+| `frontend:build:production` mit `NG_BUILD_MAX_WORKERS=2` | bestanden | 0 |
+| `frontend:zoneless-approval` | 8.783 Inventareinträge ohne Abweichung; 45 Befunde referenziert | 0 |
+
+Der fehlgeschlagene Test `should ignore an invalid-regex error for an edited
+filter` wartet real 401 ms bei einer Debounce-Zeit von 400 ms. Er und seine
+vollständige Suite mit 31 Tests bestehen separat im unveränderten PR-Stand;
+die Suite besteht auch zusammen mit den Vergleichstests im korrigierten Stand.
+Der Fehler trat nur im Gesamtlauf auf. Die Ergebnis-Tabelle und ihr Test wurden
+nicht geändert. Der Gesamtlauf wird deshalb trotz erfolgreicher Gegenprüfungen
+als fehlgeschlagen dokumentiert. Remote-CI und reale Backend-Persistenz sind
+durch diese lokalen Läufe nicht bestätigt.

@@ -162,7 +162,7 @@
                           mat-stroked-button
                           type="button"
                           color="primary"
-                          [disabled]="isLoading || isApplyingDiscussionResults"
+                          [disabled]="isLoading() || isApplyingDiscussionResults()"
                           (click)="openApplyTrainingDiscussionResults('auto_agreement')"
                           >
                           <mat-icon>verified</mat-icon>
@@ -172,13 +172,13 @@
                           mat-raised-button
                           type="button"
                           color="primary"
-                          [disabled]="isLoading || isApplyingDiscussionResults"
+                          [disabled]="isLoading() || isApplyingDiscussionResults()"
                           (click)="openApplyTrainingDiscussionResults('manual')"
                           >
                           <mat-icon>rule</mat-icon>
                           Diskussionsergebnisse anwenden
                         </button>
-                        @if (isApplyingDiscussionResults) {
+                        @if (isApplyingDiscussionResults()) {
                           <mat-progress-spinner
                             mode="indeterminate"
                             diameter="24"
@@ -190,7 +190,7 @@
                 }
 
                 @if (
-                  isLoading &&
+                  isLoading() &&
                   !hasComparisonRows() &&
                   !hasNoSelectedCodersState() &&
                   !hasFilterEmptyState()
@@ -267,23 +267,23 @@
                           </div>
                           @if (
                             comparisonMode === 'within-training' &&
-                            kappaStatistics?.workspaceSummary?.averageKappa !== null &&
-                            kappaStatistics?.workspaceSummary?.averageKappa !== undefined
+                            kappaStatistics()?.workspaceSummary?.averageKappa !== null &&
+                            kappaStatistics()?.workspaceSummary?.averageKappa !== undefined
                             ) {
                             <div
                               class="evaluation-metric"
                               >
                               <span class="metric-label">{{
-                                (useCodeLevel
+                                (useCodeLevel()
                                 ? 'coding.trainings.compare.metric-code-kappa'
                                 : 'coding.trainings.compare.metric-score-kappa') | translate
                               }}</span>
                               <strong>{{
-                                kappaStatistics!.workspaceSummary.averageKappa!
+                                kappaStatistics()!.workspaceSummary.averageKappa!
                                 | number: '1.3-3'
                               }}</strong>
                               <small>{{
-                                (useWeightedMean
+                                (useWeightedMean()
                                 ? 'coding.trainings.compare.metric-weighted'
                                 : 'coding.trainings.compare.metric-unweighted') | translate
                               }}</small>
@@ -291,19 +291,19 @@
                           }
                           @if (
                             comparisonMode === 'within-training' &&
-                            kappaStatistics?.workspaceSummary?.meanAgreement !== null &&
-                            kappaStatistics?.workspaceSummary?.meanAgreement !== undefined
+                            kappaStatistics()?.workspaceSummary?.meanAgreement !== null &&
+                            kappaStatistics()?.workspaceSummary?.meanAgreement !== undefined
                             ) {
                             <div
                               class="evaluation-metric"
                               >
                               <span class="metric-label">{{ 'coding.trainings.compare.metric-mean-agreement' | translate }}</span>
                               <strong>{{
-                                kappaStatistics!.workspaceSummary.meanAgreement!
+                                kappaStatistics()!.workspaceSummary.meanAgreement!
                                 | percent: '1.1-1'
                               }}</strong>
                               <small>{{
-                                (useWeightedMean
+                                (useWeightedMean()
                                 ? 'coding.trainings.compare.metric-weighted'
                                 : 'coding.trainings.compare.metric-unweighted') | translate
                               }}</small>
@@ -322,19 +322,19 @@
                         <div class="kappa-header" (click)="toggleKappaStatistics()">
                           <h4>
                             <mat-icon>{{
-                              showKappaStatistics ? 'expand_less' : 'expand_more'
+                              showKappaStatistics() ? 'expand_less' : 'expand_more'
                             }}</mat-icon>
                             Interrater-Reliabilität
                           </h4>
                           <button mat-icon-button class="toggle-button">
                             <mat-icon>{{
-                              showKappaStatistics ? 'expand_less' : 'expand_more'
+                              showKappaStatistics() ? 'expand_less' : 'expand_more'
                             }}</mat-icon>
                           </button>
                         </div>
-                        @if (showKappaStatistics) {
+                        @if (showKappaStatistics()) {
                           <div class="kappa-content">
-                            @if (!kappaStatistics) {
+                            @if (isLoadingKappa()) {
                               <div class="loading-container">
                                 <mat-progress-spinner
                                   mode="indeterminate"
@@ -343,15 +343,15 @@
                                 <p>Berechne Interrater-Reliabilität...</p>
                               </div>
                             }
-                            @if (kappaStatistics) {
+                            @if (kappaStatistics(); as statistics) {
                               <div class="kappa-statistics">
                                 <!-- Weighted Mean Toggle -->
                                 <div class="weighting-toggle-container">
                                   <mat-slide-toggle
-                                    [(ngModel)]="useWeightedMean"
+                                    [ngModel]="useWeightedMean()" (ngModelChange)="useWeightedMean.set($event)"
                                     (change)="toggleWeightingMethod()"
                                     color="primary"
-                                    [disabled]="isLoadingKappa"
+                                    [disabled]="isLoadingKappa()"
                                     >
                                     Gewichteter Mittelwert (R eatPrep::meanKappa)
                                   </mat-slide-toggle>
@@ -362,7 +362,7 @@
                                     >
                                     info
                                   </mat-icon>
-                                  @if (isLoadingKappa) {
+                                  @if (isLoadingKappa()) {
                                     <mat-progress-spinner
                                       mode="indeterminate"
                                       diameter="20"
@@ -373,10 +373,10 @@
                                 <!-- Calculation Level Toggle -->
                                 <div class="level-toggle-container">
                                   <mat-slide-toggle
-                                    [(ngModel)]="useCodeLevel"
+                                    [ngModel]="useCodeLevel()" (ngModelChange)="useCodeLevel.set($event)"
                                     (change)="toggleCalculationLevel()"
                                     color="primary"
-                                    [disabled]="isLoadingKappa"
+                                    [disabled]="isLoadingKappa()"
                                     >
                                     Kappa auf Ebene der Codes
                                   </mat-slide-toggle>
@@ -388,9 +388,9 @@
                                     info
                                   </mat-icon>
                                   <span class="level-indicator">
-                                    ({{ useCodeLevel ? 'Code-Ebene' : 'Score-Ebene' }})
+                                    ({{ useCodeLevel() ? 'Code-Ebene' : 'Score-Ebene' }})
                                   </span>
-                                  @if (isLoadingKappa) {
+                                  @if (isLoadingKappa()) {
                                     <mat-progress-spinner
                                       mode="indeterminate"
                                       diameter="20"
@@ -404,9 +404,9 @@
                                     color="primary"
                                     type="button"
                                     (click)="exportTrainingReliability()"
-                                    [disabled]="isLoadingKappa || isExportingReliability || !kappaStatistics.variables.length"
+                                    [disabled]="isLoadingKappa() || isExportingReliability() || !statistics.variables.length"
                                     >
-                                    <mat-icon>{{ isExportingReliability ? 'hourglass_empty' : 'download' }}</mat-icon>
+                                    <mat-icon>{{ isExportingReliability() ? 'hourglass_empty' : 'download' }}</mat-icon>
                                     {{ 'coding.trainings.compare.reliability-export-csv' | translate }}
                                   </button>
                                 </div>
@@ -427,19 +427,19 @@
                   [class]="
                     'stat-value kappa-value ' +
                     getKappaCellClass(
-                      kappaStatistics.workspaceSummary.averageKappa
+                      statistics.workspaceSummary.averageKappa
                     )
                   "
                                       >
                                       {{
-                                      kappaStatistics.workspaceSummary.averageKappa !== null
-                                      ? (kappaStatistics.workspaceSummary.averageKappa
+                                      statistics.workspaceSummary.averageKappa !== null
+                                      ? (statistics.workspaceSummary.averageKappa
                                       | number: '1.3-3')
                                       : 'N/A'
                                       }}
                                     </span>
                                     <span class="stat-sublabel">{{
-                                      kappaStatistics.workspaceSummary.weightingMethod ===
+                                      statistics.workspaceSummary.weightingMethod ===
                                       'weighted'
                                       ? 'Gewichtet'
                                       : 'Ungewichtet'
@@ -451,20 +451,20 @@
                   [class]="
                     'stat-value kappa-value ' +
                     getKappaCellClass(
-                      kappaStatistics.workspaceSummary.averageBrennanPredigerKappa ?? null
+                      statistics.workspaceSummary.averageBrennanPredigerKappa ?? null
                     )
                   "
                                       >
                                       {{
-                                      kappaStatistics.workspaceSummary.averageBrennanPredigerKappa !== null &&
-                                      kappaStatistics.workspaceSummary.averageBrennanPredigerKappa !== undefined
-                                      ? (kappaStatistics.workspaceSummary.averageBrennanPredigerKappa
+                                      statistics.workspaceSummary.averageBrennanPredigerKappa !== null &&
+                                      statistics.workspaceSummary.averageBrennanPredigerKappa !== undefined
+                                      ? (statistics.workspaceSummary.averageBrennanPredigerKappa
                                       | number: '1.3-3')
                                       : 'N/A'
                                       }}
                                     </span>
                                     <span class="stat-sublabel">{{
-                                      kappaStatistics.workspaceSummary.weightingMethod === 'weighted'
+                                      statistics.workspaceSummary.weightingMethod === 'weighted'
                                       ? 'Gewichtet'
                                       : 'Ungewichtet'
                                     }}</span>
@@ -472,19 +472,19 @@
                                   <div class="stat-card">
                                     <span class="stat-label">Kodierer-Paare</span>
                                     <span class="stat-value">{{
-                                      kappaStatistics.workspaceSummary.totalCoderPairs
+                                      statistics.workspaceSummary.totalCoderPairs
                                     }}</span>
                                   </div>
                                   <div class="stat-card">
                                     <span class="stat-label">Doppelt kodierte Antworten</span>
                                     <span class="stat-value">{{
-                                      kappaStatistics.workspaceSummary.totalDoubleCodedResponses
+                                      statistics.workspaceSummary.totalDoubleCodedResponses
                                     }}</span>
                                   </div>
                                   <div class="stat-card">
                                     <span class="stat-label">Kodierer</span>
                                     <span class="stat-value">{{
-                                      kappaStatistics.workspaceSummary.codersIncluded
+                                      statistics.workspaceSummary.codersIncluded
                                     }}</span>
                                   </div>
                                 </div>
@@ -500,7 +500,7 @@
                                 }
                                 <!-- Detailed Coder Pair Statistics -->
                                 @if (
-                                  kappaStatistics.variables.length > 0 &&
+                                  statistics.variables.length > 0 &&
                                   !hasKappaNoDoubleCodingState()
                                   ) {
                                   <div
@@ -521,7 +521,7 @@
                                           </tr>
                                         </thead>
                                         <tbody>
-                                          @for (variable of kappaStatistics.variables; track variable) {
+                                          @for (variable of statistics.variables; track variable) {
                                             @for (pair of variable.coderPairs; track pair) {
                                               <tr>
                                                 <td>{{ getVariableLabel(variable) }}</td>
@@ -638,7 +638,7 @@
                                         </tbody>
                                       </table>
                                     </div>
-                                    @if (variableKappaSummaries.length > 0) {
+                                    @if (variableKappaSummaries().length > 0) {
                                       <div
                                         class="variable-mean-table"
                                         >
@@ -657,7 +657,7 @@
                                               </tr>
                                             </thead>
                                             <tbody>
-                                          @for (summary of variableKappaSummaries; track summary.key) {
+                                          @for (summary of variableKappaSummaries(); track summary.key) {
                                                 <tr>
                                                   <td>
                                                     {{ summary.unitName }} - {{ summary.variableId }}
@@ -822,7 +822,7 @@
                         Filter zurücksetzen
                       </button>
                     </div>
-                    @if (isLoading && (hasComparisonRows() || hasFilterEmptyState())) {
+                    @if (isLoading() && (hasComparisonRows() || hasFilterEmptyState())) {
                       <div class="comparison-refresh-indicator">
                         <mat-progress-spinner
                           mode="indeterminate"
@@ -950,9 +950,9 @@
                             <th mat-header-cell *matHeaderCellDef>
                               <div class="discussion-header">
                                 <span class="discussion-header-title">Diskussionsergebnis</span>
-                                @if (discussionManagerLabel) {
+                                @if (discussionManagerLabel()) {
                                   <span class="discussion-header-manager">
-                                    Manager: {{ discussionManagerLabel }}
+                                    Manager: {{ discussionManagerLabel() }}
                                   </span>
                                 }
                               </div>
@@ -964,7 +964,7 @@
                                   <input
                                     matInput
                     [value]="
-                      discussionCodeByResponseId[comparison.responseId] || ''
+                      discussionCodeByResponseId()[comparison.responseId] || ''
                     "
                     (input)="
                       onDiscussionCodeInput(
@@ -978,7 +978,7 @@
                                 <span class="discussion-score"
                                   >Score:
                                   {{
-                                  discussionScoreByResponseId[comparison.responseId] ?? '-'
+                                  discussionScoreByResponseId()[comparison.responseId] ?? '-'
                                   }}</span
                                   >
                                   <mat-form-field appearance="outline" class="discussion-notes">
@@ -987,7 +987,7 @@
                                       matInput
                                       rows="2"
                                       [placeholder]="'double-coded-review.comment-placeholder' | translate"
-                                      [value]="discussionNotesByResponseId[comparison.responseId] || ''"
+                                      [value]="discussionNotesByResponseId()[comparison.responseId] || ''"
                     (input)="
                       onDiscussionNotesInput(
                         comparison,
@@ -997,16 +997,16 @@
                                       (blur)="onDiscussionNotesBlur(comparison)"
                                     ></textarea>
                                   </mat-form-field>
-                                  @if (isSavingDiscussionByResponseId[comparison.responseId]) {
+                                  @if (isSavingDiscussionByResponseId()[comparison.responseId]) {
                                     <span
                                       class="discussion-saving"
                                       >Speichert ...</span
                                       >
                                     }
-                                    @if (discussionErrorByResponseId[comparison.responseId]) {
+                                    @if (discussionErrorByResponseId()[comparison.responseId]) {
                                       <span
                                         class="discussion-error"
-                                        >{{ discussionErrorByResponseId[comparison.responseId] }}</span
+                                        >{{ discussionErrorByResponseId()[comparison.responseId] }}</span
                                         >
                                       }
                                       @if (comparison.discussionSource === 'auto_agreement') {
@@ -1174,7 +1174,7 @@
                           }
 
                           @if (
-                            !isLoading &&
+                            !isLoading() &&
                             comparisonMode === 'between-trainings' &&
                             comparisonData.length === 0 &&
                             selectedTrainings.selected.length < 2
@@ -1192,7 +1192,7 @@
                           }
 
                           @if (
-                            !isLoading &&
+                            !isLoading() &&
                             comparisonMode === 'within-training' &&
                             withinTrainingData.length === 0 &&
                             !selectedTrainingForWithin
@@ -1210,7 +1210,7 @@
                           }
 
                           @if (
-                            !isLoading &&
+                            !isLoading() &&
                             comparisonMode === 'between-trainings' &&
                             totalItems === 0 &&
                             selectedTrainings.selected.length >= 2 &&
@@ -1230,7 +1230,7 @@
                           }
 
                           @if (
-                            !isLoading &&
+                            !isLoading() &&
                             comparisonMode === 'within-training' &&
                             totalItems === 0 &&
                             selectedTrainingForWithin &&
