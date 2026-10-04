@@ -2181,3 +2181,97 @@ und Replay-Targets wurden für diese Änderung nicht erneut ausgeführt. Die
 vollständige Produktions-Browsersuite wurde für die Formularmigration nicht
 wiederholt. Der bestehende CI-Browserjob nimmt die neue Spezifikation über
 sein Glob automatisch auf; Remote-CI-Ergebnisse sind separat zu prüfen.
+
+
+### Anwendungsweite Komponenten-API-Migration am 04.10.2026
+
+Basis: PR-Head `5fd872a28f8b9194e579422d977a431e6273ea79`.
+
+Alle 111 verbliebenen Decorator-Inputs und 39 Decorator-Outputs in der
+Anwendung sind auf `input()` beziehungsweise `output()` umgestellt.
+Von 43 alten View-Queries verwenden 38 jetzt `viewChild()`/`viewChildren()`;
+fünf ungenutzte oder nicht erreichbare Queries wurden entfernt (die beiden
+Administrations-Elternkomponenten mit Tabellen in ihren Kindkomponenten,
+TestFiles ohne MatSort sowie die ungenutzten Paginator-Referenzen der beiden
+Suchdialoge). Es bleiben keine `@Input`-, `@Output`-, `@ViewChild`-,
+`@ViewChildren`-, `@ContentChild`- oder `@ContentChildren`-Deklarationen im
+Anwendungscode. Einschließlich der vorher bereits modernen APIs sind es
+160 Signal-Inputs, 73 Outputs und 42 Signal-Queries. Alle API-Felder sind
+`readonly`; `output()` ist eine Ereignis-API, kein Zustandssignal.
+
+Die externe Benennung der Bindings und Ereignisse bleibt erhalten. Auch
+`ngOnChanges` mit den bisherigen Property-Namen bleibt für bestehende
+Initialisierungslogik erhalten. Nicht ausdrücklich verpflichtende Eingaben
+im CodeSelector erhalten weiterhin sichere Leer-/Optionalwerte; ein früheres
+Definite-Assignment-`!` wird dort nicht in eine neue Laufzeitpflicht umgedeutet.
+Die Angular-Migration hat den automatisch umstellbaren Teil übernommen;
+Schreibzugriffe, Setter und problematische Query-Lebensdauern wurden manuell
+angepasst. Test-Stubs verwenden dieselben APIs, Fixture-Inputs werden mit
+`componentRef.setInput()` gesetzt.
+
+ResponseFilters und CodeSelector bearbeiten per `linkedSignal()` einen lokalen
+Entwurf. Elternwerte bleiben unverändert; neue Input-Werte ersetzen den Entwurf.
+Filteränderungen schreiben neue Objekte, statt das Input-Objekt zu mutieren.
+Der eingebettete Schemer hält gemeldete Änderungen ebenfalls in einem lokalen
+`linkedSignal()` und erhält Variablen und Schematyp. Beim UnitPlayer bleiben
+die rohe JSON-Eingabe und die geparste Definition getrennt; die Startnachricht
+enthält weiterhin genau eine JSON-Kodierung. Ein Reset verwirft die alte
+geparste Definition und sendet keine alte oder undefinierte Definition.
+
+Bedingt gerenderte Tabellen nutzen optionale Queries. Effects verbinden
+Sortierung/Paginierung mit den tatsächlich vorhandenen Material-Instanzen
+auch nach verspäteten Antworten, Reload und erneutem Rendern. Die
+ViewChildren-/Wasserzeichen-Observer reagieren über `afterRenderEffect()` auf
+die Queries und werden beim Zerstören bereinigt. SearchFilter initialisiert
+seinen Wert vor dem Rendern und abonniert DOM-Ereignisse erst in
+`ngAfterViewInit`; VariableBundleDialog verbindet seine Filter ebenfalls
+nach der View-Initialisierung. Die ZIP-Auswahl setzt initiale Optionen direkt
+über `[selected]`, ohne einen nachlaufenden Timer. Auch die derzeit nicht
+über die Anwendung erreichbare CoderList wurde umgestellt: Der Ladezustand
+ist ein Signal, die Sortierung folgt der bedingt gerenderten Tabelle und
+ausstehende Lese-Subscriptions enden mit der Komponenten-Lebensdauer.
+
+Neue Regressionen prüfen unveränderte Eltern-Inputs und lokale Filter-/Notiz-
+Entwürfe, Schemer-Änderungen mit Variablenerhalt und Ersatz-Input, die
+Bereinigung der Schemer-Streams, Sortierung bei synchroner Erstantwort und
+nach einem Reload, Suchinitialisierung/Leeren/Debounce-Abbruch sowie die
+JSON-Kodierung und den Reset im UnitPlayer. Zwei native CoderList-Fälle
+prüfen verspätete Antworten, das Entfernen und erneute Erzeugen der Tabelle
+sowie den Abbruch beim Zerstören. Die regulären UnitPlayer- und
+CodeSelector-Reaktivitätssuiten sind zusätzlich Teil des nativen Zoneless-
+Targets. Die Inventarmatrix wurde auf die neuen Fingerprints aktualisiert;
+die risikobasierte Matrix verweist auf die ergänzten Fälle. Offen markierte
+Inventareinträge werden dadurch nicht als vollständig geprüft behauptet.
+
+### Lokale Abschlussprüfungen der Komponenten-API-Migration am 04.10.2026
+
+| Prüfung | Ergebnis |
+|---|---|
+| `frontend:lint` | bestanden |
+| `frontend:test --runInBand --cache=false` | 2.710 Tests / 259 Suites bestanden |
+| `frontend:test-zoneless --runInBand --cache=false` | 951 Tests / 66 Suites bestanden |
+| `frontend:build --configuration=production` | optimierter Produktionsbuild mit strenger Template-Typprüfung bestanden |
+| `frontend:e2e --configuration=production --cypressConfig=cypress.zoneless.config.ts --browser=electron` | vollständige Produktions-Browserregression: 133 Fälle / 24 Spezifikationen bestanden, keine Retries |
+| `frontend:zoneless-approval` | 8.748 Inventareinträge; sechs Bereiche, sieben Mechanismen und 46 korrigierte Befunde; Referenzen gültig |
+| AST- und Quellcodeprüfung | 160 `input()`-, 73 `output()`- und 42 Signal-Query-Deklarationen, alle API-Felder `readonly`; keine alten Input-/Output-/View-/Content-Query-Decorator-APIs im Anwendungscode oder aktiven Test-Stubs |
+
+Die regulären Tests verwenden `componentRef.setInput()` für Fixture-Eingaben
+und Angular-Renderzyklen für View-Queries. Der Test eines verzögerten
+Variablenfilters wartet auf die konkrete Folgeanfrage statt auf eine feste
+401-ms-Pause. Die neuen nativen Spezifikationen werden vom vorhandenen
+Test-Glob automatisch aufgenommen; UnitPlayer und CodeSelector-Reaktivität
+sind zusätzlich explizit im Zoneless-Target enthalten.
+
+Die Browserregressionen verwenden Electron 138, optimierte Produktionsbundles
+und kontrollierte HTTP-Antworten. Sie prüfen Darstellung, asynchrone Zustände,
+Dialoge, Rollenfälle und Request-Daten. Reale Backend-Persistenz und
+Autorisierung sind damit nicht belegt. Live-Backend-/Keycloak- und Replay-
+Targets wurden für diese Migration nicht erneut ausgeführt. Die nicht
+erreichbare CoderList hat native Komponentennachweise und keinen künstlich
+hinzugefügten Browserpfad. Remote-CI-Ergebnisse sind separat zu prüfen.
+
+Abgebrochene Läufe wegen vollem Jest-Transformcache beziehungsweise ohne
+Abschluss des Prüfprozesses werden nicht gezählt. Ein zusätzlicher Electron-
+Lauf blieb im Codebook-Fall stehen und wurde abgebrochen; der vollständige
+Wiederholungslauf am finalen Stand hat auch diesen Fall bestanden. Die Tabelle
+nennt ausschließlich vollständig bestandene Abschlussläufe.
