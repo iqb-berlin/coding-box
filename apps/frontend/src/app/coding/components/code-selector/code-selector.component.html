@@ -3,13 +3,13 @@
 @let variableManualInstructionValue = variableManualInstruction();
 @let legacySelectedCodeValue = legacySelectedCode();
 <div class="selector-content">
-  @if (showProgress) {
+  @if (showProgress()) {
     <div class="progress-compact">
       <span class="progress-label">{{ 'replay.coding-progress' | translate }}</span>
       <span class="progress-summary" [matTooltip]="progressTooltip">{{ progressSummary }}</span>
       <mat-progress-bar
         mode="determinate"
-        [value]="progressPercentage"
+        [value]="progressPercentage()"
         class="custom-progress-bar"
         [matTooltip]="progressTooltip">
       </mat-progress-bar>
@@ -19,7 +19,7 @@
       <div class="variable-selector-section">
         @if (navigationItems.length > 1) {
           <div class="variable-dropdown-wrapper">
-            <button class="variable-trigger-btn" (click)="toggleVariablePanel()" [disabled]="isNavigationDisabled" type="button">
+            <button class="variable-trigger-btn" (click)="toggleVariablePanel()" [disabled]="isNavigationDisabled()" type="button">
               <span class="variable-trigger-label">
                 @let activeItem = activeNavigationItem;
                 @if (activeItem) {
@@ -81,7 +81,7 @@
         }
         @if (shouldShowBundleVariableDropdown) {
           <div class="variable-dropdown-wrapper bundle-variable-dropdown-wrapper">
-            <button class="variable-trigger-btn" (click)="toggleBundleVariablePanel()" [disabled]="isNavigationDisabled" type="button">
+            <button class="variable-trigger-btn" (click)="toggleBundleVariablePanel()" [disabled]="isNavigationDisabled()" type="button">
               <span class="variable-trigger-label">
                 @let activeBundleVariable = activeBundleVariableNavigationItem;
                 @if (activeBundleVariable) {
@@ -128,7 +128,7 @@
     }
 
     <div class="progress-actions">
-      @if (unitsData) {
+      @if (unitsData()) {
         <div class="nav-controls">
           <button mat-icon-button [disabled]="!hasPreviousUnit()" (click)="previousUnit()" matTooltip="Vorherige Aufgabe"
             class="nav-button prev-button">
@@ -154,17 +154,17 @@
           matTooltip="{{ 'code-selector.my-coding-jobs' | translate }}">
           <mat-icon>home</mat-icon>
         </button>
-        <button mat-icon-button (click)="onNavigateClick()" [disabled]="isNavigationDisabled" class="navigate-button"
+        <button mat-icon-button (click)="onNavigateClick()" [disabled]="isNavigationDisabled()" class="navigate-button"
           matTooltip="{{ 'replay.navigate-dialog.title' | translate }}">
           <mat-icon>directions</mat-icon>
         </button>
-        <button mat-icon-button (click)="onCommentClick()" [disabled]="isReadOnly" class="comment-button"
+        <button mat-icon-button (click)="onCommentClick()" [disabled]="isReadOnly()" class="comment-button"
           matTooltip="{{ 'coding.comment-dialog.title' | translate }}">
           <mat-icon>comment</mat-icon>
         </button>
-        @if (hasCodingJob && !isCodingJobCompleted && !isCompletedJobReview) {
-          <button mat-icon-button (click)="onPauseClick()" [disabled]="isPausingJob || isReadOnly" class="pause-button"
-            matTooltip="{{ isPausingJob ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}">
+        @if (hasCodingJob() && !isCodingJobCompleted() && !isCompletedJobReview()) {
+          <button mat-icon-button (click)="onPauseClick()" [disabled]="isPausingJob() || isReadOnly()" class="pause-button"
+            matTooltip="{{ isPausingJob() ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}">
             <mat-icon>pause</mat-icon>
           </button>
         }
@@ -187,7 +187,7 @@
                 <span class="legacy-code-prefix">{{ 'code-selector.legacy-code-label' | translate }}</span>
                 <span class="code-token">
                   <span class="code-id">{{ legacySelectedCodeValue.id }}</span>
-                  @if (showScore && legacySelectedCodeValue.score !== undefined) {
+                  @if (showScore() && legacySelectedCodeValue.score !== undefined) {
                     <span class="code-score">
                       ({{ legacySelectedCodeValue.score }})
                     </span>
@@ -201,18 +201,18 @@
         @for (item of regularCodes(); track item.id) {
           <div class="code-row" [class.selected]="item.id === selectedCodeValue"
             [class.has-review-code-selection]="hasReviewCodeSelection(item.id)"
-            [class.with-score]="showScore && item.score !== undefined"
-            [class.read-only]="isReadOnly || isRegularSelectionDisabled()"
+            [class.with-score]="showScore() && item.score !== undefined"
+            [class.read-only]="isReadOnly() || isRegularSelectionDisabled()"
             [attr.data-code-id]="item.id"
-            [style.cursor]="(isReadOnly || isRegularSelectionDisabled()) ? 'not-allowed' : 'pointer'"
+            [style.cursor]="(isReadOnly() || isRegularSelectionDisabled()) ? 'not-allowed' : 'pointer'"
             [matTooltip]="getReviewCodeSelectionTooltip(item.id)"
             [matTooltipDisabled]="!hasReviewCodeSelection(item.id)"
-            (click)="(isReadOnly || isRegularSelectionDisabled()) ? null : onSelect(item.id)">
+            (click)="(isReadOnly() || isRegularSelectionDisabled()) ? null : onSelect(item.id)">
             <div class="code-content">
               <span class="code-info">
                 <span class="code-token">
                   <span class="code-id">{{ item.id }}</span>
-                  @if (showScore && item.score !== undefined) {
+                  @if (showScore() && item.score !== undefined) {
                     <span class="code-score">({{ item.score }})</span>
                   }
                 </span>
@@ -235,7 +235,7 @@
 
     @if (!regularCodes().length && !legacySelectedCodeValue) {
       <div>
-        <div class="hint">{{ 'code-selector.no-codes-found' | translate }} {{ variableId }}.</div>
+        <div class="hint">{{ 'code-selector.no-codes-found' | translate }} {{ variableId() }}.</div>
       </div>
     }
   </div>
@@ -280,13 +280,13 @@
       </div>
 
       <div class="deselect-container">
-        <button mat-button class="deselect-button" [disabled]="isReadOnly" (click)="deselectAll()">Auswahl entfernen</button>
+        <button mat-button class="deselect-button" [disabled]="isReadOnly()" (click)="deselectAll()">Auswahl entfernen</button>
       </div>
 
       @if (allowComments()) {
         <mat-form-field appearance="outline" class="notes-field">
-          <textarea #notesTextarea matInput [(ngModel)]="coderNotes" (input)="onNotesChanged()" (blur)="onNotesCommitted()"
-            [disabled]="isReadOnly" [attr.aria-invalid]="newCodeCommentValidationError() ? 'true' : null"
+          <textarea #notesTextarea matInput [(ngModel)]="draftCoderNotes" (input)="onNotesChanged()" (blur)="onNotesCommitted()"
+            [disabled]="isReadOnly()" [attr.aria-invalid]="newCodeCommentValidationError() ? 'true' : null"
           placeholder="{{ 'code-selector.coder-notes-placeholder' | translate }}" rows="3"></textarea>
         </mat-form-field>
         @if (newCodeCommentValidationError()) {

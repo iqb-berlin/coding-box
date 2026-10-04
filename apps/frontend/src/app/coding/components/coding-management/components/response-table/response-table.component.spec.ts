@@ -30,7 +30,7 @@ describe('ResponseTableComponent', () => {
     const testData = [
       { id: 1, unitname: 'Test Unit' } as Success
     ];
-    component.data = testData;
+    fixture.componentRef.setInput('data', testData);
     component.ngOnChanges({
       data: {
         currentValue: testData, previousValue: [], firstChange: false, isFirstChange: () => false
@@ -95,7 +95,7 @@ describe('ResponseTableComponent', () => {
   });
 
   it('should expose the selected version label for the table header', () => {
-    component.selectedVersion = 'v3';
+    fixture.componentRef.setInput('selectedVersion', 'v3');
 
     expect(component.getSelectedVersionLabel()).toBe('coding-management.statistics.second-autocode-run');
   });
@@ -132,19 +132,19 @@ describe('ResponseTableComponent', () => {
   });
 
   it('should return correct label for filter status', () => {
-    component.currentStatusFilter = '200';
+    fixture.componentRef.setInput('currentStatusFilter', '200');
     expect(component.getFilterStatusLabel()).toBeTruthy();
 
-    component.currentStatusFilter = 'null';
+    fixture.componentRef.setInput('currentStatusFilter', 'null');
     expect(component.getFilterStatusLabel()).toBe('');
 
-    component.currentStatusFilter = null;
+    fixture.componentRef.setInput('currentStatusFilter', null);
     expect(component.getFilterStatusLabel()).toBe('');
 
-    component.currentStatusFilter = 'invalid';
+    fixture.componentRef.setInput('currentStatusFilter', 'invalid');
     expect(component.getFilterStatusLabel()).toBe('invalid');
 
-    component.currentStatusFilter = '4abc';
+    fixture.componentRef.setInput('currentStatusFilter', '4abc');
     expect(component.getFilterStatusLabel()).toBe('4abc');
   });
 });

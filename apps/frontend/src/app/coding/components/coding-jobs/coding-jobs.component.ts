@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, OnDestroy, inject, Output, EventEmitter, Input, signal
+  Component, OnInit, OnDestroy, inject, signal, input, output
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -219,18 +219,18 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   private readonly windowFocusReloadThrottleMs = 10000;
   private lastWindowFocusReloadAt = 0;
 
-  @Output() jobsChanged = new EventEmitter<void>();
-  @Input() jobScope: CodingJobScope = 'all';
-  @Input() showTrainingFilter = true;
-  @Input() showComparisonActions = true;
-  @Input() showTransferAction = true;
-  @Input() showApplyActions = true;
-  @Input() showBulkDeleteAction = true;
-  @Input() showRefreshAction = true;
-  @Input() autoReloadOnFocus = false;
+  readonly jobsChanged = output<void>();
+  readonly jobScope = input<CodingJobScope>('all');
+  readonly showTrainingFilter = input(true);
+  readonly showComparisonActions = input(true);
+  readonly showTransferAction = input(true);
+  readonly showApplyActions = input(true);
+  readonly showBulkDeleteAction = input(true);
+  readonly showRefreshAction = input(true);
+  readonly autoReloadOnFocus = input(false);
 
   private handleWindowFocus = () => {
-    if (!this.autoReloadOnFocus || this.isLoading()) {
+    if (!this.autoReloadOnFocus() || this.isLoading()) {
       return;
     }
     const now = Date.now();
@@ -350,11 +350,11 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
   private getListOptions() {
     return {
-      scope: this.jobScope,
+      scope: this.jobScope(),
       status: this.selectedStatus() || undefined,
       coderId: this.selectedCoderId() || undefined,
       jobName: this.normalizeJobNameFilter(),
-      trainingId: this.showTrainingFilter ?
+      trainingId: this.showTrainingFilter() ?
         ((this.selectedTrainingId() ?? undefined) as
             | number
             | 'none'
@@ -762,7 +762,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   getPrimaryJobAction(job: CodingJob): JobPrimaryAction {
-    if (this.showApplyActions && this.canApplyCodingResults(job)) {
+    if (this.showApplyActions() && this.canApplyCodingResults(job)) {
       return 'apply';
     }
 
@@ -817,7 +817,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
   canApplyCodingResults(job: CodingJob): boolean {
     return (
-      this.showApplyActions &&
+      this.showApplyActions() &&
       this.canApplyResults() &&
       ['completed', 'review'].includes(job.status) &&
       this.isCodingJobFreshnessApplyable(job) &&

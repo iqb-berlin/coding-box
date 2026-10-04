@@ -7,7 +7,7 @@
 @let activeFreshnessJobIdValue = activeFreshnessJobId();
 @let activeFreshnessJobProgressValue = activeFreshnessJobProgress();
 <div class="coding-main-container">
-  @if (!hideActionButtons) {
+  @if (!hideActionButtons()) {
   <div>
     <div class="action-buttons-toolbar">
       <a mat-raised-button color="primary" (click)="onAutoCode()">
@@ -203,7 +203,7 @@
           [referenceVersion]="referenceVersionValue" [selectedVersion]="selectedStatisticsVersion()"
           [isLoading]="isLoadingStatistics()" [isDownloadInProgress]="isDownloadInProgress()"
           [statisticsLoaded]="statisticsLoaded()" [resetProgress]="resetProgressValue" [downloadProgress]="downloadProgressValue"
-          [hideResetButton]="hideActionButtons"
+          [hideResetButton]="hideActionButtons()"
           (versionChange)="onVersionChange($event)" (loadStatistics)="fetchCodingStatistics()"
           (downloadResults)="onDownloadResults()" (cancelDownloadResults)="onCancelDownloadResults()" (resetVersion)="onResetVersion()"
           (statusClick)="onStatusClick($event)" (derivedClick)="onDerivedClick()">

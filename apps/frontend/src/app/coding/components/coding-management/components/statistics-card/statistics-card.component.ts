@@ -1,9 +1,5 @@
 import {
-  Component,
-  Input,
-  Output,
-  EventEmitter,
-  ChangeDetectionStrategy
+  Component, ChangeDetectionStrategy, input, output
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatDivider } from '@angular/material/divider';
@@ -43,25 +39,25 @@ import { StatisticsVersion } from '../../../../services/coding-management.servic
   ]
 })
 export class StatisticsCardComponent {
-  @Input() codingStatistics: CodingStatistics = { totalResponses: 0, statusCounts: {} };
-  @Input() referenceStatistics: CodingStatistics | null = null;
-  @Input() referenceVersion: StatisticsVersion | null = null;
-  @Input() selectedVersion: 'v1' | 'v2' | 'v3' = 'v1';
-  @Input() isLoading = false;
-  @Input() isDownloadInProgress = false;
-  @Input() statisticsLoaded = false;
-  @Input() resetProgress: number | null = null;
-  @Input() downloadProgress: number | null = null;
-  @Input() hideActionButtons = false;
-  @Input() hideResetButton = false;
+  readonly codingStatistics = input<CodingStatistics>({ totalResponses: 0, statusCounts: {} });
+  readonly referenceStatistics = input<CodingStatistics | null>(null);
+  readonly referenceVersion = input<StatisticsVersion | null>(null);
+  readonly selectedVersion = input<'v1' | 'v2' | 'v3'>('v1');
+  readonly isLoading = input(false);
+  readonly isDownloadInProgress = input(false);
+  readonly statisticsLoaded = input(false);
+  readonly resetProgress = input<number | null>(null);
+  readonly downloadProgress = input<number | null>(null);
+  readonly hideActionButtons = input(false);
+  readonly hideResetButton = input(false);
 
-  @Output() versionChange = new EventEmitter<'v1' | 'v2' | 'v3'>();
-  @Output() loadStatistics = new EventEmitter<void>();
-  @Output() downloadResults = new EventEmitter<void>();
-  @Output() cancelDownloadResults = new EventEmitter<void>();
-  @Output() resetVersion = new EventEmitter<void>();
-  @Output() statusClick = new EventEmitter<string>();
-  @Output() derivedClick = new EventEmitter<void>();
+  readonly versionChange = output<'v1' | 'v2' | 'v3'>();
+  readonly loadStatistics = output<void>();
+  readonly downloadResults = output<void>();
+  readonly cancelDownloadResults = output<void>();
+  readonly resetVersion = output<void>();
+  readonly statusClick = output<string>();
+  readonly derivedClick = output<void>();
 
   private readonly ignoredStatuses = [
     '0', '1', '2', '3', '10',
@@ -83,21 +79,22 @@ export class StatisticsCardComponent {
   }
 
   get effectiveTotalResponses(): number {
-    if (!this.codingStatistics) return 0;
-    return this.codingStatistics.totalResponses;
+    const codingStatistics = this.codingStatistics();
+    if (!codingStatistics) return 0;
+    return codingStatistics.totalResponses;
   }
 
   get effectiveDerivedResponses(): number {
-    return this.codingStatistics?.derivedResponseCount || 0;
+    return this.codingStatistics()?.derivedResponseCount || 0;
   }
 
   get derivedAnswerCount(): number {
-    if (!this.codingStatistics) return 0;
+    if (!this.codingStatistics()) return 0;
     return this.effectiveDerivedResponses;
   }
 
   get derivedVariableCount(): number {
-    return this.codingStatistics?.derivedVariableCount || 0;
+    return this.codingStatistics()?.derivedVariableCount || 0;
   }
 
   get hasDerivedStatistics(): boolean {
@@ -109,20 +106,22 @@ export class StatisticsCardComponent {
   }
 
   get codingStatisticsEmptyTextKey(): string {
-    return this.codingStatistics.totalResponses > 0 ?
+    return this.codingStatistics().totalResponses > 0 ?
       'coding-management.statistics.only-raw-statuses-text' :
       'coding-management.statistics.no-coding-results-text';
   }
 
   get effectiveReferenceTotalResponses(): number {
-    if (!this.referenceStatistics) return 0;
-    return this.referenceStatistics.totalResponses;
+    const referenceStatistics = this.referenceStatistics();
+    if (!referenceStatistics) return 0;
+    return referenceStatistics.totalResponses;
   }
 
   getStatuses(): string[] {
-    const currentStatuses = Object.keys(this.codingStatistics.statusCounts).filter(s => !this.ignoredStatuses.includes(s));
-    if (this.referenceStatistics) {
-      const referenceStatuses = Object.keys(this.referenceStatistics.statusCounts).filter(s => !this.ignoredStatuses.includes(s));
+    const currentStatuses = Object.keys(this.codingStatistics().statusCounts).filter(s => !this.ignoredStatuses.includes(s));
+    const referenceStatistics = this.referenceStatistics();
+    if (referenceStatistics) {
+      const referenceStatuses = Object.keys(referenceStatistics.statusCounts).filter(s => !this.ignoredStatuses.includes(s));
       const allStatuses = new Set([...currentStatuses, ...referenceStatuses]);
       return Array.from(allStatuses);
     }
@@ -130,9 +129,11 @@ export class StatisticsCardComponent {
   }
 
   getStatusDifference(status: string): number | null {
+    const referenceStatistics = this.referenceStatistics();
+    const selectedVersion = this.selectedVersion();
     if (
-      !this.referenceStatistics ||
-      (this.selectedVersion !== 'v2' && this.selectedVersion !== 'v3')
+      !referenceStatistics ||
+      (selectedVersion !== 'v2' && selectedVersion !== 'v3')
     ) {
       return null;
     }
@@ -140,15 +141,16 @@ export class StatisticsCardComponent {
     if (this.effectiveTotalResponses === 0) {
       return null;
     }
-    const currentCount = this.codingStatistics.statusCounts[status] || 0;
-    const referenceCount = this.referenceStatistics.statusCounts[status] || 0;
+    const currentCount = this.codingStatistics().statusCounts[status] || 0;
+    const referenceCount = referenceStatistics.statusCounts[status] || 0;
     return currentCount - referenceCount;
   }
 
   getTotalResponsesDifference(): number | null {
+    const selectedVersion = this.selectedVersion();
     if (
-      !this.referenceStatistics ||
-      (this.selectedVersion !== 'v2' && this.selectedVersion !== 'v3')
+      !this.referenceStatistics() ||
+      (selectedVersion !== 'v2' && selectedVersion !== 'v3')
     ) {
       return null;
     }
@@ -160,10 +162,11 @@ export class StatisticsCardComponent {
   }
 
   getDifferenceTooltip(): string {
-    if (this.referenceVersion === 'v1') {
+    const referenceVersion = this.referenceVersion();
+    if (referenceVersion === 'v1') {
       return 'coding-management.statistics.difference-tooltip-v1';
     }
-    if (this.referenceVersion === 'v2') {
+    if (referenceVersion === 'v2') {
       return 'coding-management.statistics.difference-tooltip-v2';
     }
     return '';
@@ -178,11 +181,12 @@ export class StatisticsCardComponent {
 
   getStatusPercentage(status: string): number {
     const total = this.effectiveTotalResponses;
-    if (!total || !this.codingStatistics.statusCounts[status]) {
+    const codingStatistics = this.codingStatistics();
+    if (!total || !codingStatistics.statusCounts[status]) {
       return 0;
     }
     return Math.round(
-      (this.codingStatistics.statusCounts[status] / total) * 100
+      (codingStatistics.statusCounts[status] / total) * 100
     );
   }
 
@@ -215,12 +219,12 @@ export class StatisticsCardComponent {
   }
 
   get isManualCodingComplete(): boolean {
-    if (this.selectedVersion !== 'v2') {
+    if (this.selectedVersion() !== 'v2') {
       return false;
     }
     // CODING_INCOMPLETE = 8, INTENDED_INCOMPLETE = 12
-    const incompleteCount = (this.codingStatistics.statusCounts['8'] || 0) +
-      (this.codingStatistics.statusCounts['12'] || 0);
+    const incompleteCount = (this.codingStatistics().statusCounts['8'] || 0) +
+      (this.codingStatistics().statusCounts['12'] || 0);
     return incompleteCount === 0;
   }
 

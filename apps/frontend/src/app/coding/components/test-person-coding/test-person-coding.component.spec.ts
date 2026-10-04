@@ -98,6 +98,7 @@ describe('TestPersonCodingComponent', () => {
   });
 
   it('should keep freshness job polling active after a transient status error', () => {
+    fixture.componentRef.setInput('initialJobId', 'freshness-job-1');
     jest.useFakeTimers();
     try {
       const setJobRunningSpy = jest.spyOn(
@@ -109,7 +110,6 @@ describe('TestPersonCodingComponent', () => {
         progress: 100
       };
 
-      component.initialJobId = 'freshness-job-1';
       codingBackgroundJobsService.setJobRunning(
         1,
         'freshness-coding',

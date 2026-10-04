@@ -24,7 +24,7 @@ describe('ResponseFiltersComponent', () => {
   });
 
   it('should use all responses as the default response source', () => {
-    expect(component.filterParams.responseSource).toBe('all');
+    expect(component.draftFilterParams().responseSource).toBe('all');
     expect(component.responseSourceOptions[0].value).toBe('all');
   });
 
@@ -39,11 +39,11 @@ describe('ResponseFiltersComponent', () => {
   it('should emit text filter changes after debounce timeout', done => {
     jest.spyOn(component.filterChange, 'emit');
 
-    component.filterParams.unitName = 'Unit';
+    component.setFilterValue('unitName', 'Unit');
     component.onTextFilterChange();
 
     setTimeout(() => {
-      expect(component.filterChange.emit).toHaveBeenCalledWith(component.filterParams);
+      expect(component.filterChange.emit).toHaveBeenCalledWith(component.draftFilterParams());
       done();
     }, 600);
   });
@@ -51,43 +51,43 @@ describe('ResponseFiltersComponent', () => {
   it('should emit instant filter changes immediately', () => {
     jest.spyOn(component.filterChange, 'emit');
 
-    component.filterParams.codedStatus = '200';
+    component.setFilterValue('codedStatus', '200');
     component.onInstantFilterChange();
 
-    expect(component.filterChange.emit).toHaveBeenCalledWith(component.filterParams);
+    expect(component.filterChange.emit).toHaveBeenCalledWith(component.draftFilterParams());
   });
 
   it('should emit filterChange when response source changes', () => {
     jest.spyOn(component.filterChange, 'emit');
 
-    component.filterParams.codedStatus = '';
-    component.filterParams.responseSource = 'derived';
+    component.setFilterValue('codedStatus', '');
+    component.setFilterValue('responseSource', 'derived');
     component.onInstantFilterChange();
 
-    expect(component.filterChange.emit).toHaveBeenCalledWith(component.filterParams);
+    expect(component.filterChange.emit).toHaveBeenCalledWith(component.draftFilterParams());
   });
 
   it('should emit a copy of local filter params', () => {
     jest.spyOn(component.filterChange, 'emit');
 
-    component.filterParams.unitName = 'Unit';
+    component.setFilterValue('unitName', 'Unit');
     component.onInstantFilterChange();
 
     const emittedFilterParams = (component.filterChange.emit as jest.Mock).mock.calls[0][0];
-    expect(emittedFilterParams).toEqual(component.filterParams);
-    expect(emittedFilterParams).not.toBe(component.filterParams);
+    expect(emittedFilterParams).toEqual(component.draftFilterParams());
+    expect(emittedFilterParams).not.toBe(component.draftFilterParams());
   });
 
   it('should not mutate input filter params when a regex filter becomes invalid', () => {
     jest.spyOn(component.filterChange, 'emit');
     const parentFilterParams = {
-      ...component.filterParams,
+      ...component.draftFilterParams(),
       variableId: 'VAR_01'
     };
-    component.filterParams = parentFilterParams;
-    component.enableRegexSearch = true;
+    fixture.componentRef.setInput('filterParams', parentFilterParams);
+    fixture.componentRef.setInput('enableRegexSearch', true);
 
-    component.filterParams.variableId = '[';
+    component.setFilterValue('variableId', '[');
     component.onTextFilterChange();
 
     expect(parentFilterParams.variableId).toBe('VAR_01');
@@ -103,12 +103,12 @@ describe('ResponseFiltersComponent', () => {
   it('should switch GeoGebra searches from all to base responses', () => {
     jest.spyOn(component.filterChange, 'emit');
 
-    component.filterParams.responseSource = 'all';
-    component.filterParams.geogebra = true;
+    component.setFilterValue('responseSource', 'all');
+    component.setFilterValue('geogebra', true);
     component.onGeoGebraFilterChange();
 
-    expect(component.filterParams.responseSource).toBe('base');
-    expect(component.filterChange.emit).toHaveBeenCalledWith(component.filterParams);
+    expect(component.draftFilterParams().responseSource).toBe('base');
+    expect(component.filterChange.emit).toHaveBeenCalledWith(component.draftFilterParams());
   });
 
   it('should emit clearFilters when clear button is clicked', () => {

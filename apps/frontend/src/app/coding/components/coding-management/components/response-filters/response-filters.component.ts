@@ -1,10 +1,5 @@
 import {
-  Component,
-  Input,
-  Output,
-  EventEmitter,
-  ChangeDetectionStrategy,
-  OnDestroy
+  Component, ChangeDetectionStrategy, OnDestroy, input, output, linkedSignal
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -57,27 +52,23 @@ function createDefaultFilterParams(): FilterParams {
   ]
 })
 export class ResponseFiltersComponent implements OnDestroy {
-  private localFilterParams: FilterParams = createDefaultFilterParams();
+  readonly filterParams = input<FilterParams>(createDefaultFilterParams());
+  readonly draftFilterParams = linkedSignal(() => ({
+    ...createDefaultFilterParams(),
+    ...this.filterParams()
+  }));
 
-  @Input()
-  set filterParams(value: FilterParams) {
-    this.localFilterParams = {
-      ...createDefaultFilterParams(),
-      ...value
-    };
+  setFilterValue<K extends keyof FilterParams>(field: K, value: FilterParams[K]): void {
+    this.draftFilterParams.update(filters => ({ ...filters, [field]: value }));
   }
 
-  get filterParams(): FilterParams {
-    return this.localFilterParams;
-  }
+  readonly availableStatuses = input<string[]>([]);
+  readonly isLoading = input(false);
+  readonly isGeogebraAvailable = input(false);
+  readonly enableRegexSearch = input(false);
 
-  @Input() availableStatuses: string[] = [];
-  @Input() isLoading = false;
-  @Input() isGeogebraAvailable = false;
-  @Input() enableRegexSearch = false;
-
-  @Output() filterChange = new EventEmitter<FilterParams>();
-  @Output() clearFilters = new EventEmitter<void>();
+  readonly filterChange = output<FilterParams>();
+  readonly clearFilters = output<void>();
 
   private filterTimer?: ReturnType<typeof setTimeout>;
 
@@ -112,8 +103,8 @@ export class ResponseFiltersComponent implements OnDestroy {
   }
 
   onGeoGebraFilterChange(): void {
-    if (this.filterParams.geogebra && this.filterParams.responseSource === 'all') {
-      this.filterParams.responseSource = 'base';
+    if (this.draftFilterParams().geogebra && this.draftFilterParams().responseSource === 'all') {
+      this.setFilterValue('responseSource', 'base');
     }
     this.onInstantFilterChange();
   }
@@ -130,7 +121,7 @@ export class ResponseFiltersComponent implements OnDestroy {
   }
 
   private emitFilterChange(): void {
-    this.filterChange.emit({ ...this.filterParams });
+    this.filterChange.emit({ ...this.draftFilterParams() });
   }
 
   mapStatusToString(status: string): string {
@@ -138,7 +129,7 @@ export class ResponseFiltersComponent implements OnDestroy {
   }
 
   isRegexFilterInvalid(field: RegexFilterField): boolean {
-    return hasInvalidRegexFilter(this.filterParams[field], this.enableRegexSearch);
+    return hasInvalidRegexFilter(this.draftFilterParams()[field], this.enableRegexSearch());
   }
 
   private hasInvalidRegexFilters(): boolean {

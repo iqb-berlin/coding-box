@@ -15,10 +15,10 @@
   </div>
 
 
-  @if (isLoading) {
+  @if (isLoading()) {
     <mat-spinner></mat-spinner>
   }
-  @if (!isLoading) {
+  @if (!isLoading()) {
     <coding-box-search-filter
       [title]="'Kodierer filtern'"
       (valueChange)="applyFilter($event)">

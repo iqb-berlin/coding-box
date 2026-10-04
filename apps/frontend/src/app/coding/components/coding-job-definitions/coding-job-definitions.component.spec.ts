@@ -186,7 +186,7 @@ describe('CodingJobDefinitionsComponent', () => {
 
   it('separates delete from regular definition actions', async () => {
     component.isLoading.set(false);
-    component.selectionMode = false;
+    fixture.componentRef.setInput('selectionMode', false);
     component.jobDefinitions.set([{
       id: 6,
       status: 'approved',
@@ -213,7 +213,7 @@ describe('CodingJobDefinitionsComponent', () => {
 
   it('does not offer job creation again once jobs exist for a definition', () => {
     component.isLoading.set(false);
-    component.selectionMode = false;
+    fixture.componentRef.setInput('selectionMode', false);
     component.jobDefinitions.set([{
       id: 6,
       status: 'approved',
@@ -233,7 +233,7 @@ describe('CodingJobDefinitionsComponent', () => {
 
   it('opens definitions with known existing jobs editable and blocks delete while jobs still block deletion', async () => {
     component.isLoading.set(false);
-    component.selectionMode = false;
+    fixture.componentRef.setInput('selectionMode', false);
     const definition = {
       id: 6,
       status: 'approved' as const,
@@ -301,7 +301,7 @@ describe('CodingJobDefinitionsComponent', () => {
 
   it('blocks job creation when the created jobs count is missing', () => {
     component.isLoading.set(false);
-    component.selectionMode = false;
+    fixture.componentRef.setInput('selectionMode', false);
     component.jobDefinitions.set([{
       id: 6,
       status: 'approved',

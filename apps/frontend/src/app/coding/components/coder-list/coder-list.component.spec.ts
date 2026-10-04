@@ -42,10 +42,11 @@ describe('CoderListComponent', () => {
   });
 
   it('loads, filters, selects and edits coders', async () => {
-    component.ngOnInit();
-    component.ngAfterViewInit();
+    fixture.detectChanges();
+    await fixture.whenStable();
 
     expect(component.dataSource.data).toEqual(coders);
+    expect(component.dataSource.sort).toBe(component.sort());
     component.applyFilter('ONE');
     expect(component.dataSource.filter).toBe('one');
     expect(component.isAllSelected()).toBe(false);

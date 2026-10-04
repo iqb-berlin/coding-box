@@ -198,7 +198,7 @@ describe('MyCodingJobsComponent', () => {
     ) as unknown as {
       getCodingJobs: jest.Mock;
     };
-    component.workspaceId = 5;
+    fixture.componentRef.setInput('workspaceId', 5);
 
     component.loadMyCodingJobs([
       { id: 1, name: 'Other workspace' },
