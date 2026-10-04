@@ -120,12 +120,14 @@ describe('Zoneless asynchronous coding dialogs', () => {
   }
 
   it('shows a parsing error and allows a valid Excel upload retry without another interaction', () => {
+    const validationGate = createResponseGate();
     const combination = {
       unit_key: 'UNIT', login_name: 'synthetic-login', login_code: 'synthetic-code',
       booklet_id: 'BOOKLET', variable_id: 'VAR'
     };
-    cy.intercept({ method: 'POST', pathname: '/api/admin/workspace/5/coding/validate-completeness' }, request => {
+    cy.intercept({ method: 'POST', pathname: '/api/admin/workspace/5/coding/validate-completeness' }, async request => {
       expect(request.body).to.deep.equal({ expectedCombinations: [combination], page: 1, pageSize: 50 });
+      await validationGate.wait;
       request.reply({ delay: 800, body: {
         results: [{ combination, status: 'EXISTS', responseFound: true, issues: [] }],
         total: 1, missing: 0, currentPage: 1, pageSize: 50, totalPages: 1,
@@ -162,6 +164,7 @@ describe('Zoneless asynchronous coding dialogs', () => {
     });
     cy.get('@exportDialog').find('.validation-error-section').should('not.exist');
     cy.get('@exportDialog').find('.validation-progress-section').should('be.visible');
+    cy.then(() => { validationGate.release(); });
     cy.wait('@validationRetry');
     cy.get('coding-box-coding-validation-results-dialog').should('exist');
     cy.get('coding-box-coding-validation-results-dialog .results-table').should('be.visible');

@@ -100,6 +100,36 @@ describe('VariableBundleDialogComponent in zoneless mode', () => {
     expect(fixture.nativeElement.querySelectorAll('.variable-card')).toHaveLength(2);
   });
 
+  it('keeps a valid bundle open when applying, clearing or resetting filters', async () => {
+    await createComponent({ isEdit: false, preloadedIncompleteVariables: availableVariables });
+    fixture.nativeElement.querySelector<HTMLDivElement>('.variable-card').click();
+    await fixture.whenStable();
+    expect(fixture.componentInstance.bundleGroupForm.valid).toBe(true);
+
+    await filterBy('Filter nach Aufgaben-ID', 'FirstUnit');
+    buttonByText('Filter anwenden').click();
+    await fixture.whenStable();
+    expect(close).not.toHaveBeenCalled();
+    fixture.nativeElement.querySelector<HTMLButtonElement>('button[aria-label="Clear"]').click();
+    await fixture.whenStable();
+    expect(close).not.toHaveBeenCalled();
+
+    await filterBy('Filter nach Variablen-ID', 'V1');
+    fixture.nativeElement.querySelector<HTMLButtonElement>('button[aria-label="Clear"]').click();
+    await fixture.whenStable();
+    expect(close).not.toHaveBeenCalled();
+    buttonByText('Filter zurücksetzen').click();
+    await fixture.whenStable();
+    expect(close).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelectorAll('.variable-card')).toHaveLength(2);
+    expect(fixture.componentInstance.selectedVariables.selected).toEqual([availableVariables[0]]);
+
+    buttonByText('Erstellen').click();
+    await fixture.whenStable();
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledWith(expect.objectContaining({ variables: [availableVariables[0]] }));
+  });
+
   it('renders an empty state after a delayed empty response', async () => {
     await createComponent({ isEdit: false });
     variables.next([]);

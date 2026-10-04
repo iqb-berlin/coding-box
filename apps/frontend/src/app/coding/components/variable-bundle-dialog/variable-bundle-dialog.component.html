@@ -34,7 +34,7 @@
               <input #unitNameFilterInput matInput [(ngModel)]="unitNameFilter" [ngModelOptions]="{standalone: true}"
                 placeholder="Filter nach Aufgaben-ID">
               @if (unitNameFilter) {
-                <button matSuffix mat-icon-button aria-label="Clear"
+                <button matSuffix mat-icon-button type="button" aria-label="Clear"
                   (click)="unitNameFilter=''; unitNameFilterInput.value=''; applyFilter()">
                   <mat-icon>close</mat-icon>
                 </button>
@@ -46,7 +46,7 @@
               <input #variableIdFilterInput matInput [(ngModel)]="variableIdFilter"
                 [ngModelOptions]="{standalone: true}" placeholder="Filter nach Variablen-ID">
               @if (variableIdFilter) {
-                <button matSuffix mat-icon-button aria-label="Clear"
+                <button matSuffix mat-icon-button type="button" aria-label="Clear"
                   (click)="variableIdFilter=''; variableIdFilterInput.value=''; applyFilter()">
                   <mat-icon>close</mat-icon>
                 </button>
@@ -54,12 +54,12 @@
             </mat-form-field>
 
             <!-- Filter button is now optional since filtering happens automatically with debounce -->
-            <button mat-raised-button color="primary" (click)="applyFilter()">
+            <button mat-raised-button color="primary" type="button" (click)="applyFilter()">
               <mat-icon>filter_list</mat-icon>
               Filter anwenden
             </button>
 
-            <button mat-raised-button (click)="clearFilters()">
+            <button mat-raised-button type="button" (click)="clearFilters()">
               <mat-icon>clear</mat-icon>
               Filter zurücksetzen
             </button>
