@@ -21,6 +21,8 @@ describe('Export dialog validation without ZoneJS', () => {
   let validateCodingCompleteness: jest.Mock;
   let dialog: MatDialog;
   let openResults: jest.SpyInstance;
+  let closing: Subject<void>;
+  let workspace: { selectedWorkspaceId: number; selectedWorkspaceId$: Subject<number> };
 
   const results: ValidateCodingCompletenessResponseDto = {
     results: [],
@@ -62,6 +64,8 @@ describe('Export dialog validation without ZoneJS', () => {
   }
 
   beforeEach(async () => {
+    closing = new Subject<void>();
+    workspace = { selectedWorkspaceId: 1, selectedWorkspaceId$: new Subject<number>() };
     response = new Subject<ValidateCodingCompletenessResponseDto>();
     download = new Subject<Blob>();
     validateCodingCompleteness = jest.fn().mockReturnValue(response);
@@ -69,7 +73,7 @@ describe('Export dialog validation without ZoneJS', () => {
       imports: [ExportDialogComponent, MatSnackBarModule, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
-        { provide: MatDialogRef, useValue: { close: jest.fn() } },
+        { provide: MatDialogRef, useValue: { close: () => closing.next(), beforeClosed: () => closing } },
         {
           provide: TestPersonCodingService,
           useValue: {
@@ -77,11 +81,11 @@ describe('Export dialog validation without ZoneJS', () => {
             downloadValidationResultsAsExcel: jest.fn().mockReturnValue(download)
           }
         },
-        { provide: AppService, useValue: { selectedWorkspaceId: 1 } }
+        { provide: AppService, useValue: workspace }
       ]
     }).compileComponents();
-    state = TestBed.inject(ValidationStateService);
     fixture = TestBed.createComponent(ExportDialogComponent);
+    state = fixture.debugElement.injector.get(ValidationStateService);
     dialog = fixture.debugElement.injector.get(MatDialog);
     openResults = jest.spyOn(dialog, 'open');
     await fixture.whenStable();
@@ -177,5 +181,46 @@ describe('Export dialog validation without ZoneJS', () => {
     fixture.destroy();
     state.setValidationResults(results);
     expect(openResults).not.toHaveBeenCalled();
+  });
+  it.each(['close', 'destroy', 'workspace'])('ignores a delayed Excel parser promise on %s', async reason => {
+    const file = await codingListFile();
+    let release!: (workbook: ExcelJS.Workbook) => void;
+    const parsed = new Promise<ExcelJS.Workbook>(resolve => { release = resolve; });
+    const load = jest.fn(() => parsed);
+    const xlsx = jest.spyOn(ExcelJS.Workbook.prototype, 'xlsx', 'get').mockReturnValue({ load } as never);
+    try {
+      await selectFile(file);
+      await waitFor(() => load.mock.calls.length === 1);
+      if (reason === 'close') closing.next();
+      if (reason === 'destroy') fixture.destroy();
+      if (reason === 'workspace') {
+        workspace.selectedWorkspaceId = 2;
+        workspace.selectedWorkspaceId$.next(2);
+        workspace.selectedWorkspaceId = 1;
+        workspace.selectedWorkspaceId$.next(1);
+      }
+      expect(state.getValidationProgress().status).toBe('idle');
+      release(new ExcelJS.Workbook());
+      await parsed;
+      await Promise.resolve();
+      expect(validateCodingCompleteness).not.toHaveBeenCalled();
+      expect(state.getValidationProgress().status).toBe('idle');
+      expect(openResults).not.toHaveBeenCalled();
+    } finally { xlsx.mockRestore(); }
+  });
+
+  it('cancels a pending validation on close without publishing to a reopened dialog', async () => {
+    await selectFile(await codingListFile());
+    await waitFor(() => validateCodingCompleteness.mock.calls.length === 1);
+    closing.next();
+    expect(response.observed).toBe(false);
+    const reopened = TestBed.createComponent(ExportDialogComponent);
+    await reopened.whenStable();
+    const reopenedState = reopened.debugElement.injector.get(ValidationStateService);
+    response.next(results);
+    expect(reopenedState).not.toBe(state);
+    expect(reopenedState.getValidationResults()).toBeNull();
+    expect(reopenedState.getValidationProgress().status).toBe('idle');
+    reopened.destroy();
   });
 });

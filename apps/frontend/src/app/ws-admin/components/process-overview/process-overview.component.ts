@@ -1,6 +1,8 @@
+import { Subscription } from 'rxjs';
 import {
-  Component, OnInit, inject, AfterViewInit, signal, viewChild, ChangeDetectionStrategy
+  Component, OnInit, inject, AfterViewInit, signal, viewChild, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
@@ -235,6 +237,10 @@ const DETAIL_ORDER = [
   styleUrls: ['./process-overview.component.scss']
 })
 export class ProcessOverviewComponent implements OnInit, AfterViewInit {
+  private loadRequest?: Subscription;
+
+  private readonly destroyRef = inject(DestroyRef);
+
   private processesService = inject(WorkspaceProcessesService);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
@@ -312,9 +318,10 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
   }
 
   loadProcesses(): void {
+    this.loadRequest?.unsubscribe();
     if (!this.workspaceId) return;
     this.isLoading.set(true);
-    this.processesService.getProcesses(this.workspaceId).subscribe({
+    this.loadRequest = this.processesService.getProcesses(this.workspaceId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: data => {
         this.processes.data = data;
         this.availableTypes.set([...new Set(data.map(d => d.queueName))]
@@ -352,7 +359,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
       }
     });
 
-    dialogRef.afterClosed().subscribe((confirmed: boolean) => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((confirmed: boolean) => {
       if (confirmed) {
         this.confirmDeleteProcess(process, action);
       }
@@ -364,7 +371,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
 
     this.isLoading.set(true);
 
-    this.processesService.deleteProcess(this.workspaceId, process.queueName, process.id.toString()).subscribe({
+    this.processesService.deleteProcess(this.workspaceId, process.queueName, process.id.toString()).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: success => {
         if (success) {
           this.snackBar.open(this.getActionSuccessMessage(action), this.translateService.instant('close'), { duration: 3000 });

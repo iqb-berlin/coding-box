@@ -36,10 +36,10 @@ describe('EditMissingsProfilesDialogComponent', () => {
     }> = {},
     snackBar = { open: jest.fn() }
   ) => TestBed.runInInjectionContext(() => new EditMissingsProfilesDialogComponent(
-    { close: jest.fn() } as never,
+    { close: jest.fn(), beforeClosed: () => of() } as never,
     { workspaceId: 1 },
     missingsProfileService as never,
-    {} as never,
+    { selectedWorkspaceId: 1, selectedWorkspaceId$: of() } as never,
     snackBar as never,
     { instant: jest.fn(key => key) } as never
   ));

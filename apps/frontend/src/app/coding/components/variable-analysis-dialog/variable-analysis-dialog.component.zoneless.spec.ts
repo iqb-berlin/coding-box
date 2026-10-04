@@ -22,6 +22,9 @@ describe('Code/score distribution without Zone', () => {
   let requests: Subject<VariableAnalysisResponse>[];
   let getVariableAnalysis: jest.Mock;
   let openSnackBar: jest.Mock;
+  let closing: Subject<void>;
+  let workspaceChanges: Subject<number>;
+  let workspace: { selectedWorkspaceId: number; selectedWorkspaceId$: Subject<number> };
 
   async function waitForIdle(): Promise<void> {
     // Let initial Material notifications finish before simulating a network reply.
@@ -55,6 +58,9 @@ describe('Code/score distribution without Zone', () => {
 
   beforeEach(async () => {
     requests = [];
+    closing = new Subject<void>();
+    workspaceChanges = new Subject<number>();
+    workspace = { selectedWorkspaceId: 5, selectedWorkspaceId$: workspaceChanges };
     getVariableAnalysis = jest.fn(() => {
       const request = new Subject<VariableAnalysisResponse>();
       requests.push(request);
@@ -66,10 +72,10 @@ describe('Code/score distribution without Zone', () => {
       providers: [
         provideZonelessChangeDetection(),
         { provide: MAT_DIALOG_DATA, useValue: { workspaceId: 5 } },
-        { provide: MatDialogRef, useValue: { close: jest.fn() } },
+        { provide: MatDialogRef, useValue: { close: jest.fn(() => closing.next()), beforeClosed: () => closing } },
         { provide: CodingStatisticsService, useValue: { getVariableAnalysis } },
         { provide: WorkspaceSettingsService, useValue: { getEnableRegexSearch: () => of(false) } },
-        { provide: AppService, useValue: { selectedWorkspaceId: 5 } },
+        { provide: AppService, useValue: workspace },
         { provide: MatSnackBar, useValue: { open: openSnackBar } }
       ]
     }).compileComponents();
@@ -163,5 +169,65 @@ describe('Code/score distribution without Zone', () => {
 
     expect(loadingView()).toBeNull();
     expect(fixture.nativeElement.querySelector('.coding-table').textContent).toContain('UNIT_FILTERED');
+  });
+  it('cancels an older page and keeps the loading view until the latest reply', async () => {
+    fixture.componentInstance.fetchVariableAnalysis(2, 100);
+    await fixture.whenStable();
+    expect(requests[0].observed).toBe(false);
+    requests[0].next(response('STALE_PAGE'));
+    requests[0].error(new Error('late failure'));
+    await fixture.whenStable();
+    expect(loadingView()).not.toBeNull();
+    expect(openSnackBar).not.toHaveBeenCalled();
+    requests[1].next({ ...response('CURRENT_PAGE'), page: 2, limit: 100 });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('CURRENT_PAGE');
+    expect(fixture.nativeElement.textContent).not.toContain('STALE_PAGE');
+  });
+
+  it('debounces every filter change and cancels the old read immediately', async () => {
+    const component = fixture.componentInstance;
+    component.unitIdFilter = 'FIRST';
+    component.onVariableAnalysisFilterChange();
+    expect(requests[0].observed).toBe(false);
+    await new Promise(resolve => { setTimeout(resolve, 600); });
+    component.unitIdFilter = 'SECOND';
+    component.onVariableAnalysisFilterChange();
+    expect(requests[1].observed).toBe(false);
+    await new Promise(resolve => { setTimeout(resolve, 600); });
+    expect(getVariableAnalysis).toHaveBeenCalledTimes(3);
+    requests[2].next(response('SECOND'));
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('SECOND');
+  });
+
+  it('cancels a valid request when the replacement regex is invalid', async () => {
+    const component = fixture.componentInstance;
+    component.enableRegexSearch = true;
+    component.variableIdFilter = '[';
+    component.onVariableAnalysisFilterChange();
+    expect(requests[0].observed).toBe(false);
+    requests[0].next(response('OLD_REGEX'));
+    await fixture.whenStable();
+    expect(component.isLoadingVariableAnalysis).toBe(false);
+    expect(component.variableAnalysisData).toEqual([]);
+  });
+
+  it.each(['close', 'destroy', 'workspace'])('cancels pending reads and debounce on %s', async reason => {
+    fixture.componentInstance.onVariableAnalysisFilterChange();
+    if (reason === 'close') closing.next();
+    if (reason === 'destroy') fixture.destroy();
+    if (reason === 'workspace') {
+      workspace.selectedWorkspaceId = 6;
+      workspaceChanges.next(6);
+      workspace.selectedWorkspaceId = 5;
+      workspaceChanges.next(5);
+    }
+    expect(requests[0].observed).toBe(false);
+    requests[0].next(response('AFTER_CLOSE'));
+    requests[0].error(new Error('late failure'));
+    await new Promise(resolve => { setTimeout(resolve, 600); });
+    expect(getVariableAnalysis).toHaveBeenCalledTimes(1);
+    expect(openSnackBar).not.toHaveBeenCalled();
   });
 });

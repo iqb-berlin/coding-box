@@ -88,6 +88,77 @@ describe('Zoneless asynchronous coding dialogs', () => {
     cy.get('@dialog').find('.mat-mdc-paginator-range-label').should('contain.text', '201 - 201 von 201');
   });
 
+
+  function distribution(unitId: string) {
+    return {
+      data: [{ replayUrl: '/replay', unitId, variableId: 'VAR', derivation: '', code: '1',
+        description: 'Correct', score: 1, occurrenceCount: 3, totalCount: 4, relativeOccurrence: 0.75 }],
+      total: 1, page: 1, limit: 200
+    };
+  }
+
+  it('applies successive debounced filters while an older response is held', () => {
+    const old = createResponseGate();
+    let oldStarted = false;
+    let oldReleased = false;
+    cy.intercept({ method: 'GET', pathname: '/api/admin/workspace/5/coding/variable-analysis' }, async request => {
+      const unitId = String(request.query.unitId || 'INITIAL');
+      if (unitId === 'FIRST') {
+        oldStarted = true;
+        await old.wait;
+        request.reply({ body: distribution('STALE_FIRST') });
+        oldReleased = true;
+      } else {
+        request.alias = unitId === 'SECOND' ? 'latestFilter' : 'initialDistribution';
+        request.reply({ body: distribution(unitId) });
+      }
+    });
+    openManagement();
+    cy.contains('app-coding-management .action-buttons-toolbar a', 'Code-/Score-Verteilung').click();
+    cy.wait('@initialDistribution');
+    cy.get('coding-box-variable-analysis-dialog').as('dialog');
+    cy.get('@dialog').find('table').should('contain.text', 'INITIAL');
+    cy.get('@dialog').find('input[placeholder="Filter nach Aufgaben-ID"]').type('FIRST');
+    cy.wrap(null).should(() => { expect(oldStarted).to.equal(true); });
+    cy.get('@dialog').find('.loading-container').should('be.visible');
+    cy.get('@dialog').find('input[placeholder="Filter nach Aufgaben-ID"]').clear().type('SECOND');
+    cy.wait('@latestFilter').its('request.query.unitId').should('equal', 'SECOND');
+    cy.get('@dialog').find('table').should('contain.text', 'SECOND');
+    cy.then(() => old.release());
+    cy.wrap(null).should(() => { expect(oldReleased).to.equal(true); });
+    cy.get('@dialog').find('table').should('contain.text', 'SECOND').and('not.contain.text', 'STALE_FIRST');
+  });
+
+  it('keeps a reopened distribution dialog independent of the closed dialog request', () => {
+    const old = createResponseGate();
+    let requests = 0;
+    let oldReleased = false;
+    cy.intercept({ method: 'GET', pathname: '/api/admin/workspace/5/coding/variable-analysis' }, async request => {
+      requests += 1;
+      if (requests === 1) {
+        await old.wait;
+        request.reply({ body: distribution('CLOSED_DIALOG') });
+        oldReleased = true;
+      } else {
+        request.alias = 'reopenedDistribution';
+        request.reply({ body: distribution('REOPENED_DIALOG') });
+      }
+    });
+    openManagement();
+    cy.contains('app-coding-management .action-buttons-toolbar a', 'Code-/Score-Verteilung').click();
+    cy.get('coding-box-variable-analysis-dialog .loading-container').should('be.visible');
+    cy.wrap(null).should(() => { expect(requests).to.equal(1); });
+    cy.contains('coding-box-variable-analysis-dialog .dialog-actions button', 'Schließen').click();
+    cy.get('coding-box-variable-analysis-dialog').should('not.exist');
+    cy.contains('app-coding-management .action-buttons-toolbar a', 'Code-/Score-Verteilung').click();
+    cy.wait('@reopenedDistribution');
+    cy.get('coding-box-variable-analysis-dialog table').should('contain.text', 'REOPENED_DIALOG');
+    cy.then(() => old.release());
+    cy.wrap(null).should(() => { expect(oldReleased).to.equal(true); });
+    cy.get('coding-box-variable-analysis-dialog table')
+      .should('contain.text', 'REOPENED_DIALOG').and('not.contain.text', 'CLOSED_DIALOG');
+  });
+
   for (const outcome of ['loaded', 'failed']) {
     it(`settles the delayed ${outcome} Missing profiles and download button`, () => {
       const profilesGate = createResponseGate();

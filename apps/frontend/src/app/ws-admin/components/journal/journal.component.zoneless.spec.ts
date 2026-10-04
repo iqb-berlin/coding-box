@@ -4,7 +4,7 @@ import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { MatSelectHarness } from '@angular/material/select/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
 import { JournalService } from '../../../core/services/journal.service';
 import { JournalComponent } from './journal.component';
@@ -21,7 +21,7 @@ describe('Journal filters without ZoneJS', () => {
       imports: [JournalComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
-        { provide: AppService, useValue: { selectedWorkspaceId: 5 } },
+        { provide: AppService, useValue: { selectedWorkspaceId: 5, selectedWorkspaceId$: new Subject<number>() } },
         { provide: JournalService, useValue: { getJournalEntries } },
         { provide: MatSnackBar, useValue: { open: jest.fn() } }
       ]

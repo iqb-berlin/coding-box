@@ -36,7 +36,69 @@ describe('TestResultsComponent', () => {
   let component: TestResultsComponent;
   let fixture: ComponentFixture<TestResultsComponent>;
   let unitsReplayService: { getUnitsFromFileUpload: jest.Mock };
-  let appService: { selectedWorkspaceId: number; loggedUser: { sub: string }; createOwnToken: jest.Mock };
+  let appService: { selectedWorkspaceId: number; selectedWorkspaceId$: Subject<number>; loggedUser: { sub: string }; createOwnToken: jest.Mock };
+
+  it('keeps the latest person and cancels notes belonging to an earlier selection', async () => {
+    const oldPerson = new Subject<unknown[]>();
+    const secondPerson = new Subject<unknown[]>();
+    const latestPerson = new Subject<unknown[]>();
+    const oldNotes = new Subject<unknown>();
+    const results = TestBed.inject(TestResultService);
+    results.getPersonTestResults = jest.fn().mockReturnValueOnce(oldPerson)
+      .mockReturnValueOnce(secondPerson).mockReturnValueOnce(latestPerson);
+    TestBed.inject(UnitNoteService).getNotesForMultipleUnits = jest.fn(() => oldNotes) as never;
+    const row = (id: number) => ({
+      id, code: String(id), group: 'g', login: 'l', uploaded_at: new Date()
+    });
+    component.onRowClick(row(1));
+    component.onRowClick(row(2));
+    expect(oldPerson.observed).toBe(false);
+    oldPerson.next([{ id: 1, name: 'OLD', units: [] }]);
+    secondPerson.next([{ id: 2, name: 'SECOND', units: [{ id: 20 }] }]);
+    secondPerson.complete();
+    expect(oldNotes.observed).toBe(true);
+    component.onRowClick(row(3));
+    expect(oldNotes.observed).toBe(false);
+    oldNotes.next({ 20: [{ note: 'OLD NOTE' }] });
+    latestPerson.next([]);
+    latestPerson.complete();
+    await fixture.whenStable();
+    expect(component.testPerson()?.id).toBe(3);
+    expect(component.booklets()).toEqual([]);
+    expect(component.unitNotesMap().size).toBe(0);
+    expect(component.isLoadingBooklets()).toBe(false);
+  });
+
+  it('cancels a pending person read across a workspace change and return', async () => {
+    const response = new Subject<unknown[]>();
+    TestBed.inject(TestResultService).getPersonTestResults = jest.fn(() => response) as never;
+    component.onRowClick({
+      id: 1, code: 'p', group: 'g', login: 'l', uploaded_at: new Date()
+    });
+    appService.selectedWorkspaceId = 2;
+    appService.selectedWorkspaceId$.next(2);
+    appService.selectedWorkspaceId = 1;
+    appService.selectedWorkspaceId$.next(1);
+    expect(response.observed).toBe(false);
+    response.next([{ id: 1, name: 'OLD', units: [] }]);
+    await fixture.whenStable();
+    expect(component.booklets()).toEqual([]);
+    expect(component.testPerson()).toBeNull();
+  });
+
+  it('ignores an import choice from a dialog opened before a workspace change', () => {
+    const closed = new Subject<{ type: string }>();
+    jest.mocked(TestBed.inject(MatDialog).open).mockReturnValue({ afterClosed: () => closed } as never);
+    const startImport = jest.spyOn(component, 'testCenterImport').mockResolvedValue();
+    component.openImportDialog();
+    appService.selectedWorkspaceId = 2;
+    appService.selectedWorkspaceId$.next(2);
+    appService.selectedWorkspaceId = 1;
+    appService.selectedWorkspaceId$.next(1);
+    expect(closed.observed).toBe(false);
+    closed.next({ type: 'testcenter' });
+    expect(startImport).not.toHaveBeenCalled();
+  });
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -145,6 +207,7 @@ describe('TestResultsComponent', () => {
           provide: AppService,
           useValue: {
             selectedWorkspaceId: 1,
+            selectedWorkspaceId$: new Subject<number>(),
             loggedUser: { sub: 'user' },
             createOwnToken: jest.fn().mockReturnValue(of('token'))
           }
@@ -791,6 +854,62 @@ describe('TestResultsComponent', () => {
         })
       })
     }));
+  });
+
+  it.each(['destroy', 'workspace'])('cancels the initial Testcenter overview and never opens a late dialog on %s', async reason => {
+    const reply = new Subject<unknown>();
+    const service = TestBed.inject(TestResultService) as unknown as { getWorkspaceOverview: jest.Mock };
+    service.getWorkspaceOverview.mockReturnValue(reply);
+    const pending = component.testCenterImport();
+    expect(reply.observed).toBe(true);
+    if (reason === 'destroy') fixture.destroy();
+    if (reason === 'workspace') {
+      appService.selectedWorkspaceId = 2;
+      appService.selectedWorkspaceId$.next(2);
+      appService.selectedWorkspaceId = 1;
+      appService.selectedWorkspaceId$.next(1);
+    }
+    expect(reply.observed).toBe(false);
+    reply.next({ testPersons: 12 });
+    await pending;
+    expect(TestBed.inject(MatDialog).open).not.toHaveBeenCalled();
+  });
+
+  it('cancels the post-import overview and closes progress without opening late results', async () => {
+    const service = TestBed.inject(TestResultService) as unknown as { getWorkspaceOverview: jest.Mock };
+    const initial = {
+      testPersons: 1,
+      testGroups: 1,
+      uniqueBooklets: 1,
+      uniqueUnits: 1,
+      uniqueResponses: 1,
+      responseStatusCounts: {},
+      sessionBrowserCounts: {},
+      sessionOsCounts: {},
+      sessionScreenCounts: {}
+    };
+    const reply = new Subject<unknown>();
+    const closed = new Subject<unknown>();
+    const progressClose = jest.fn();
+    const importClose = jest.fn();
+    service.getWorkspaceOverview.mockReturnValueOnce(of(initial)).mockReturnValue(reply);
+    const dialog = TestBed.inject(MatDialog) as unknown as { open: jest.Mock };
+    dialog.open.mockImplementation((componentType: unknown) => {
+      if (componentType === TestCenterImportComponent) return { close: importClose, afterClosed: () => closed };
+      if (componentType === TestResultsImportProgressDialogComponent) return { close: progressClose };
+      return { close: jest.fn() };
+    });
+    await component.testCenterImport();
+    closed.next({ didImport: true, resultType: 'responses' });
+    expect(reply.observed).toBe(true);
+    fixture.destroy();
+    expect(reply.observed).toBe(false);
+    reply.next(initial);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(progressClose).toHaveBeenCalledTimes(1);
+    expect(dialog.open.mock.calls.some(([type]) => type === TestResultsUploadResultDialogComponent)).toBe(false);
   });
 
   it('should ignore zero-count coding freshness rows in the overview banner', () => {

@@ -1,6 +1,8 @@
+import { Subscription, finalize, takeUntil } from 'rxjs';
 import {
-  Component, Inject, OnInit, signal, ChangeDetectionStrategy
+  Component, Inject, OnInit, signal, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -20,6 +22,7 @@ import { MatTableModule } from '@angular/material/table';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MissingsProfileService } from '../../services/missings-profile.service';
+import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { AppService } from '../../../core/services/app.service';
 import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
 
@@ -47,6 +50,11 @@ import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/co
   ]
 })
 export class EditMissingsProfilesDialogComponent implements OnInit {
+  private profilesRequest?: Subscription;
+  private detailsRequest?: Subscription;
+
+  private readonly destroyRef = inject(DestroyRef);
+
   private readonly requiredMissingIds = ['mir', 'mci'];
 
   readonly missingsProfiles = signal<{
@@ -71,20 +79,25 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   ) { }
 
   ngOnInit(): void {
+    this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(id => {
+      if (id !== this.data.workspaceId) this.dialogRef.close();
+    });
     this.loadMissingsProfiles();
   }
 
   loadMissingsProfiles(): void {
+    this.profilesRequest?.unsubscribe();
+    this.detailsRequest?.unsubscribe();
     const workspaceId = this.data.workspaceId;
     if (workspaceId) {
       this.loading.set(true);
-      this.missingsProfileService.getMissingsProfiles(workspaceId).subscribe({
+      this.profilesRequest = this.missingsProfileService.getMissingsProfiles(workspaceId).pipe(finalize(() => { if (!this.destroyRef.destroyed && (!this.detailsRequest || this.detailsRequest.closed)) this.loading.set(false); }), takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntil(this.dialogRef.beforeClosed()), takeUntilDestroyed(this.destroyRef)).subscribe({
         next: profiles => {
           this.missingsProfiles.set(profiles);
           this.loading.set(false);
           // Auto-select IQB-Standard profile if it exists
           const iqbStandardProfile = profiles.find(p => p.label === 'IQB-Standard');
-          if (iqbStandardProfile) {
+          if (iqbStandardProfile && !this.selectedProfile() && !this.editMode()) {
             this.selectProfile('IQB-Standard');
           }
         },
@@ -97,19 +110,19 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   }
 
   selectProfile(label: string): void {
+    if (this.saving()) return;
+    this.detailsRequest?.unsubscribe();
+    this.selectedProfile.set(null);
+    this.editMode.set(false);
+    this.loading.set(false);
     const workspaceId = this.data.workspaceId;
     if (workspaceId) {
       const profile = this.missingsProfiles().find(p => p.label === label);
       if (profile) {
         this.loading.set(true);
-        this.missingsProfileService.getMissingsProfileDetails(workspaceId, profile.id).subscribe({
+        this.detailsRequest = this.missingsProfileService.getMissingsProfileDetails(workspaceId, profile.id).pipe(finalize(() => { if (!this.destroyRef.destroyed) this.loading.set(false); }), takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntil(this.dialogRef.beforeClosed()), takeUntilDestroyed(this.destroyRef)).subscribe({
           next: profileDetails => {
-            const missingsProfile = new MissingsProfilesDto();
-            if (profileDetails) {
-              missingsProfile.id = profileDetails.id;
-              missingsProfile.label = profileDetails.label;
-              missingsProfile.missings = profileDetails.missings;
-            }
+            const missingsProfile = profileDetails ? Object.assign(new MissingsProfilesDto(), profileDetails) : null;
             this.selectedProfile.set(missingsProfile);
             this.loading.set(false);
           },
@@ -123,6 +136,10 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   }
 
   createProfile(): void {
+    if (this.saving()) return;
+    this.profilesRequest?.unsubscribe();
+    this.detailsRequest?.unsubscribe();
+    this.loading.set(false);
     const profile = new MissingsProfilesDto();
     profile.label = '';
     const missings = this.createRequiredMissings();
@@ -133,6 +150,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   }
 
   editProfile(): void {
+    if (this.saving()) return;
     const selectedProfileValue = this.selectedProfile();
 
     if (selectedProfileValue) {
@@ -143,6 +161,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   }
 
   saveProfile(): void {
+    if (this.saving()) return;
     const currentProfile = this.selectedProfile();
     const workspaceId = this.data.workspaceId;
     if (workspaceId && currentProfile) {
@@ -172,7 +191,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
       }
 
       if (existingProfile) {
-        this.missingsProfileService.updateMissingsProfile(workspaceId, existingProfile.label, selectedProfile).subscribe({
+        this.missingsProfileService.updateMissingsProfile(workspaceId, existingProfile.label, selectedProfile).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntil(this.dialogRef.beforeClosed()), takeUntilDestroyed(this.destroyRef)).subscribe({
           next: profile => {
             if (!profile) {
               this.saving.set(false);
@@ -195,7 +214,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
           }
         });
       } else {
-        this.missingsProfileService.createMissingsProfile(workspaceId, selectedProfile).subscribe({
+        this.missingsProfileService.createMissingsProfile(workspaceId, selectedProfile).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntil(this.dialogRef.beforeClosed()), takeUntilDestroyed(this.destroyRef)).subscribe({
           next: profile => {
             if (!profile) {
               this.saving.set(false);
@@ -222,11 +241,12 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   }
 
   deleteProfile(): void {
+    if (this.saving()) return;
     const selectedProfile = this.selectedProfile();
     const workspaceId = this.data.workspaceId;
     if (workspaceId && selectedProfile) {
       this.saving.set(true);
-      this.missingsProfileService.deleteMissingsProfile(workspaceId, selectedProfile.label).subscribe({
+      this.missingsProfileService.deleteMissingsProfile(workspaceId, selectedProfile.label).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntil(this.dialogRef.beforeClosed()), takeUntilDestroyed(this.destroyRef)).subscribe({
         next: success => {
           if (success) {
             this.selectedProfile.set(null);
@@ -248,6 +268,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   }
 
   cancelEdit(): void {
+    if (this.saving()) return;
     this.editMode.set(false);
 
     // If this was a new profile, clear the selection
@@ -257,6 +278,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   }
 
   addMissing(): void {
+    if (this.saving()) return;
     const selectedProfileValue = this.selectedProfile();
 
     const missings = [...(this.editMode() ? this.editMissings() : (selectedProfileValue?.parseMissings() || []))];
@@ -279,6 +301,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   }
 
   removeMissing(index: number): void {
+    if (this.saving()) return;
     const selectedProfileValue = this.selectedProfile();
 
     if (this.editMode()) {
@@ -446,6 +469,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   }
 
   setMissingField(missing: MissingDto | number, key: keyof MissingDto, value: unknown): void {
+    if (this.saving()) return;
     this.editMissings.update(missings => {
       const index = typeof missing === 'number' ? missing : missings.indexOf(missing);
       return missings.map((candidate, candidateIndex) => (candidateIndex === index ?
@@ -462,6 +486,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   }
 
   setSelectedProfileField<K extends keyof MissingsProfilesDto>(key: K, value: MissingsProfilesDto[K]): void {
+    if (this.saving()) return;
     this.selectedProfile.update(current => (current ? Object.assign(new MissingsProfilesDto(), current, { [key]: value }) : current));
   }
 }

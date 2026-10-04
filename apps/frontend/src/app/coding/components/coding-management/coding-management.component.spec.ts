@@ -1736,7 +1736,7 @@ describe('CodingManagementComponent', () => {
     it('should handle show unit XML from table component', () => {
       component.onShowUnitXml(789);
 
-      expect(mockUiService.showUnitXmlDialog).toHaveBeenCalledWith(789);
+      expect(mockUiService.showUnitXmlDialog).toHaveBeenCalledWith(789, expect.anything());
     });
 
     it('should load all filtered responses before opening the review dialog', () => {

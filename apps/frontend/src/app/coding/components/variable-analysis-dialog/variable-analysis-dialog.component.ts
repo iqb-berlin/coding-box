@@ -1,6 +1,8 @@
+import { Subscription, finalize, Subject } from 'rxjs';
 import {
-  ChangeDetectorRef, Component, Inject, inject, OnInit, viewChild, effect, ChangeDetectionStrategy
+  ChangeDetectorRef, Component, Inject, inject, OnInit, viewChild, effect, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -19,12 +21,12 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
-import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
+import { debounceTime, takeUntil } from 'rxjs/operators';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
 import { VariableAnalysisItemDto } from '../../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { hasInvalidRegexFilter } from '../../../shared/utils/regex-filter.util';
 
 export interface VariableAnalysisDialogData {
@@ -87,6 +89,10 @@ function createVariableAnalysisPaginatorIntl(): MatPaginatorIntl {
   ]
 })
 export class VariableAnalysisDialogComponent implements OnInit {
+  private analysisRequest?: Subscription;
+
+  private readonly destroyRef = inject(DestroyRef);
+
   private readonly changeDetectorRef = inject(ChangeDetectorRef);
 
   readonly distributionRowsTooltip =
@@ -136,15 +142,18 @@ export class VariableAnalysisDialogComponent implements OnInit {
   ) { }
 
   ngOnInit(): void {
-    this.workspaceSettingsService.getEnableRegexSearch(this.data.workspaceId).subscribe(enabled => {
+    this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(id => {
+      if (id !== this.data.workspaceId) this.dialogRef.close();
+    });
+    this.workspaceSettingsService.getEnableRegexSearch(this.data.workspaceId).pipe(takeUntil(this.dialogRef.beforeClosed()), takeUntilDestroyed(this.destroyRef)).subscribe(enabled => {
       this.enableRegexSearch = enabled;
       this.changeDetectorRef.markForCheck();
     });
 
     this.variableAnalysisFilterChanged.pipe(
       debounceTime(500),
-      distinctUntilChanged()
-    ).subscribe(() => {
+      takeUntil(this.dialogRef.beforeClosed())
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
       this.fetchVariableAnalysis(1, this.variableAnalysisPageSize);
     });
 
@@ -160,7 +169,10 @@ export class VariableAnalysisDialogComponent implements OnInit {
   }
 
   fetchVariableAnalysis(page: number = 1, limit: number = 100): void {
+    this.analysisRequest?.unsubscribe();
     if (this.isVariableIdRegexInvalid()) {
+      this.isLoadingVariableAnalysis = false;
+      this.changeDetectorRef.markForCheck();
       return;
     }
 
@@ -171,7 +183,7 @@ export class VariableAnalysisDialogComponent implements OnInit {
     const unitId = this.unitIdFilter.trim() || undefined;
     const variableId = this.variableIdFilter.trim() || undefined;
 
-    this.statisticsService.getVariableAnalysis(
+    this.analysisRequest = this.statisticsService.getVariableAnalysis(
       workspaceId,
       page,
       limit,
@@ -179,7 +191,7 @@ export class VariableAnalysisDialogComponent implements OnInit {
       variableId,
       undefined,
       this.enableRegexSearch
-    )
+    ).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntil(this.dialogRef.beforeClosed()), takeUntilDestroyed(this.destroyRef), finalize(() => { if (!this.destroyRef.destroyed) { this.isLoadingVariableAnalysis = false; this.changeDetectorRef.markForCheck(); } }))
       .subscribe({
         next: response => {
           this.variableAnalysisData = response.data;
@@ -215,6 +227,9 @@ export class VariableAnalysisDialogComponent implements OnInit {
   }
 
   onVariableAnalysisFilterChange(): void {
+    // Cancel the previous text's request before the debounce or regex validation.
+    this.analysisRequest?.unsubscribe();
+    this.isLoadingVariableAnalysis = false;
     if (this.isVariableIdRegexInvalid()) {
       return;
     }

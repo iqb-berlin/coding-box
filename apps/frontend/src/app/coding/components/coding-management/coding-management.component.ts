@@ -1,6 +1,7 @@
 import {
-  Component, OnInit, OnDestroy, inject, signal, computed, input, ChangeDetectionStrategy
+  Component, OnInit, OnDestroy, inject, signal, computed, input, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import {
   concatMap,
@@ -117,6 +118,8 @@ import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
   styleUrls: ['./coding-management.component.scss']
 })
 export class CodingManagementComponent implements OnInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   readonly hideActionButtons = input(false);
 
   private appService = inject(AppService);
@@ -926,13 +929,13 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(codingSchemeRef => {
         if (codingSchemeRef) {
-          this.uiService.showCodingSchemeDialog(codingSchemeRef);
+          this.uiService.showCodingSchemeDialog(codingSchemeRef, this.destroyRef);
         }
       });
   }
 
   onShowUnitXml(unitId: number): void {
-    this.uiService.showUnitXmlDialog(unitId);
+    this.uiService.showUnitXmlDialog(unitId, this.destroyRef);
   }
 
   onReviewClick(): void {
@@ -1592,7 +1595,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       width: '500px'
     });
 
-    dialogRef.afterClosed().subscribe((result: { format: ExportFormat; trainingRequired?: boolean } | undefined) => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((result: { format: ExportFormat; trainingRequired?: boolean } | undefined) => {
       if (result && result.format) {
         this.codingManagementService.downloadCodingList(result.format, result.trainingRequired);
       }
@@ -1684,7 +1687,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((result: boolean | undefined) => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((result: boolean | undefined) => {
       if (result === true) {
         this.resetCodingVersion(this.selectedStatisticsVersion());
       }
@@ -1718,7 +1721,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((result: {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((result: {
       version: StatisticsVersion;
       format: CodingResultsExportFormat;
       includeReplayUrls: boolean;
