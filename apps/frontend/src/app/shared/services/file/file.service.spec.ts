@@ -57,6 +57,14 @@ describe('FileService', () => {
     expect(service).toBeTruthy();
   });
 
+  it('reads metadata through the restricted read-only endpoint', () => {
+    const response = { filename: 'UNIT.vomd', base64Data: 'e30=', mimeType: 'application/json' };
+    service.readMetadataFile(1, 7).subscribe(result => expect(result).toEqual(response));
+    const request = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/files/7/metadata`);
+    expect(request.request.method).toBe('GET');
+    request.flush(response);
+  });
+
   describe('getFilesList', () => {
     it('should get files list with parameters', () => {
       const mockResponse = {
