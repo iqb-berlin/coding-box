@@ -3,12 +3,12 @@
     <mat-label>{{ title() }}</mat-label>
     <input #filterInput
            matInput
-           [value]="value"
+           [value]="value()"
            [placeholder]="'search-filter.enter-filter' | translate">
     <button matSuffix
             mat-icon-button
             [attr.aria-label]="'search-filter.delete-filter' | translate"
-            [disabled]="!filterInput.value"
+            [disabled]="!value()"
             [matTooltip]="'search-filter.delete-filter' | translate"
             matTooltipPosition="above"
             (click)="clearFilter()">

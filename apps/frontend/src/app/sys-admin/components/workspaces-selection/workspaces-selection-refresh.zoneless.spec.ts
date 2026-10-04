@@ -30,6 +30,28 @@ describe('WorkspacesSelectionComponent refresh recovery', () => {
 
   afterEach(() => fixture?.destroy());
 
+  it('renders a delayed initial list and preselection without a parent output handler', async () => {
+    const response = new Subject<{ data: { id: number; name: string }[]; total: number; page: number; limit: number }>();
+    await TestBed.configureTestingModule({
+      imports: [WorkspacesSelectionComponent, TranslateModule.forRoot()],
+      providers: [provideZonelessChangeDetection(), { provide: WorkspaceBackendService, useValue: { getAllWorkspacesListOrFail: () => response } }]
+    }).compileComponents();
+    const directFixture = TestBed.createComponent(WorkspacesSelectionComponent);
+    directFixture.componentRef.setInput('selectedWorkspacesIds', [2]);
+    directFixture.componentRef.setInput('workspacesChanged', false);
+    await directFixture.whenStable();
+    response.next({
+      data: [{ id: 1, name: 'Alpha' }, { id: 2, name: 'Beta' }], total: 2, page: 1, limit: 20
+    });
+    await directFixture.whenStable();
+    const rows = directFixture.nativeElement.querySelectorAll('mat-row') as NodeListOf<HTMLElement>;
+    expect(rows).toHaveLength(2);
+    expect(rows[1].textContent).toContain('Beta');
+    expect((rows[1].querySelector('input[type="checkbox"]') as HTMLInputElement).checked).toBe(true);
+    directFixture.destroy();
+    expect(response.observed).toBe(false);
+  });
+
   it('connects sorting after a synchronous initial response and retains it after a reload', async () => {
     const page = {
       data: [{ id: 1, name: 'Zulu' }, { id: 2, name: 'Alpha' }], total: 2, page: 1, limit: 20

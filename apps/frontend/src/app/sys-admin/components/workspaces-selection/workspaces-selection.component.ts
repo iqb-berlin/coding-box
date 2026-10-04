@@ -12,7 +12,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  Component, OnInit, OnChanges, SimpleChanges, inject, DestroyRef, input, output, signal, viewChild, effect
+  Component, OnInit, OnChanges, SimpleChanges, inject, DestroyRef, input, output, signal, viewChild, effect, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
@@ -28,6 +28,7 @@ import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/work
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-workspaces-selection',
   templateUrl: './workspaces-selection.component.html',
   styleUrls: ['./workspaces-selection.component.scss'],
@@ -38,7 +39,7 @@ export class WorkspacesSelectionComponent implements OnInit, OnChanges {
   private workspaceBackendService = inject(WorkspaceBackendService);
   private destroyRef = inject(DestroyRef);
 
-  objectsDatasource = new MatTableDataSource<WorkspaceInListDto>();
+  readonly objectsDatasource = signal(new MatTableDataSource<WorkspaceInListDto>());
   displayedColumns = ['selectCheckbox', 'name'];
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
   tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
@@ -48,7 +49,7 @@ export class WorkspacesSelectionComponent implements OnInit, OnChanges {
 
   readonly sort = viewChild(MatSort);
   private readonly synchronizeSort = effect(() => {
-    this.objectsDatasource.sort = this.sort() ?? null;
+    this.objectsDatasource().sort = this.sort() ?? null;
   });
 
   readonly selectedWorkspacesIds = input.required<number[]>();
@@ -97,20 +98,20 @@ export class WorkspacesSelectionComponent implements OnInit, OnChanges {
   private applySelectedWorkspaceIds(): void {
     if (!this.workspaceListLoaded) return;
     this.tableSelectionCheckboxes.clear();
-    this.tableSelectionCheckboxes.select(...this.objectsDatasource.data
+    this.tableSelectionCheckboxes.select(...this.objectsDatasource().data
       .filter(workspace => this.selectedWorkspacesIds().includes(workspace.id)));
     this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
   }
 
   private setObjectsDatasource(groups: WorkspaceInListDto[]): void {
-    this.objectsDatasource = new MatTableDataSource(groups);
-    this.objectsDatasource
+    this.objectsDatasource.set(new MatTableDataSource(groups));
+    this.objectsDatasource()
       .filterPredicate = (groupList: WorkspaceInListDto, filter) => [
         'name'
       ].some(column => (groupList[column as keyof WorkspaceInListDto] as string || '')
         .toLowerCase()
         .includes(filter));
-    this.objectsDatasource.sort = this.sort() ?? null;
+    this.objectsDatasource().sort = this.sort() ?? null;
   }
 
   selectCheckbox(row: WorkspaceInListDto): void {
@@ -121,15 +122,15 @@ export class WorkspacesSelectionComponent implements OnInit, OnChanges {
 
   private isAllSelected(): boolean {
     const numSelected = this.tableSelectionCheckboxes.selected.length;
-    const numRows = this.objectsDatasource ? this.objectsDatasource.data.length : 0;
+    const numRows = this.objectsDatasource() ? this.objectsDatasource().data.length : 0;
     return numSelected === numRows;
   }
 
   masterToggle(): void {
     if (this.selectionDisabled()) return;
-    this.isAllSelected() || !this.objectsDatasource ?
+    this.isAllSelected() || !this.objectsDatasource() ?
       this.tableSelectionCheckboxes.clear() :
-      this.objectsDatasource.data.forEach(row => this.tableSelectionCheckboxes.select(row));
+      this.objectsDatasource().data.forEach(row => this.tableSelectionCheckboxes.select(row));
     this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
   }
 

@@ -47,4 +47,23 @@ describe('Search filter view initialization without Zone.js', () => {
     jest.advanceTimersByTime(500);
     expect(changed).not.toHaveBeenCalled();
   });
+
+  it('updates the clear button after a debounced keyboard event without another interaction', async () => {
+    const input = fixture.nativeElement.querySelector('input') as HTMLInputElement;
+    const clear = fixture.nativeElement.querySelector('button') as HTMLButtonElement;
+    clear.click();
+    await fixture.whenStable();
+    expect(clear.disabled).toBe(true);
+    const changed = jest.fn();
+    fixture.componentInstance.valueChange.subscribe(changed);
+    input.value = 'Delayed filter';
+    input.dispatchEvent(new KeyboardEvent('keyup', { key: 'r', bubbles: true }));
+    const deadline = Date.now() + 2000;
+    while (!changed.mock.calls.length && Date.now() < deadline) {
+      await new Promise(resolve => { setTimeout(resolve, 20); });
+    }
+    await fixture.whenStable();
+    expect(changed).toHaveBeenCalledWith('Delayed filter');
+    expect(clear.disabled).toBe(false);
+  });
 });

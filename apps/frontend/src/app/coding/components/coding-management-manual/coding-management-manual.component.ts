@@ -1,5 +1,5 @@
 import {
-  Component, OnDestroy, OnInit, inject, signal, computed, viewChild
+  ChangeDetectorRef, Component, OnDestroy, OnInit, inject, signal, computed, viewChild, ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule, DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -168,6 +168,7 @@ interface ManualFreshnessTarget {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coding-management-manual',
   templateUrl: './coding-management-manual.component.html',
   styleUrls: ['./coding-management-manual.component.scss'],
@@ -214,6 +215,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private missingsProfileService = inject(MissingsProfileService);
   private statisticsService = inject(CodingStatisticsService);
   private appService = inject(AppService);
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
   private sessionRecoveryService = inject(SessionRecoveryService);
   private snackBar = inject(MatSnackBar);
   private validationStateService = inject(ValidationStateService);
@@ -3631,6 +3633,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         finalize(() => {
           if (this.jobDefinitionsForExportWorkspaceId === workspaceId) {
             this.isLoadingJobDefinitionsForExport = false;
+            this.changeDetectorRef.markForCheck();
           }
         })
       )
@@ -3643,6 +3646,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.jobDefinitionsForExport = definitions;
           this.jobDefinitionsForExportWorkspaceId = workspaceId;
           this.hasLoadedJobDefinitionsForExport = true;
+          this.changeDetectorRef.markForCheck();
         },
         error: () => {
           if (this.appService.selectedWorkspaceId !== workspaceId) {
@@ -3652,6 +3656,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.jobDefinitionsForExport = [];
           this.jobDefinitionsForExportWorkspaceId = workspaceId;
           this.hasLoadedJobDefinitionsForExport = false;
+          this.changeDetectorRef.markForCheck();
         }
       });
   }

@@ -1,3 +1,4 @@
+import { TestBed } from '@angular/core/testing';
 import { UnitSearchDialogComponent } from './unit-search-dialog.component';
 
 describe('UnitSearchDialogComponent', () => {
@@ -10,7 +11,7 @@ describe('UnitSearchDialogComponent', () => {
       selectedWorkspaceId: 123
     };
 
-    const component = new UnitSearchDialogComponent(
+    const component = TestBed.runInInjectionContext(() => new UnitSearchDialogComponent(
       {} as never,
       { title: 'Unit search' },
       {} as never,
@@ -21,7 +22,7 @@ describe('UnitSearchDialogComponent', () => {
       router as never,
       {} as never,
       {} as never
-    );
+    ));
 
     return { component, router };
   }
