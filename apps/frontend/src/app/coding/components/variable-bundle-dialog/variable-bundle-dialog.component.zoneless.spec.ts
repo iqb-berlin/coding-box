@@ -102,7 +102,8 @@ describe('VariableBundleDialogComponent in zoneless mode', () => {
 
   it('keeps a valid bundle open when applying, clearing or resetting filters', async () => {
     await createComponent({ isEdit: false, preloadedIncompleteVariables: availableVariables });
-    fixture.nativeElement.querySelector<HTMLDivElement>('.variable-card').click();
+    const element: HTMLElement = fixture.nativeElement;
+    element.querySelector<HTMLDivElement>('.variable-card')!.click();
     await fixture.whenStable();
     expect(fixture.componentInstance.bundleGroupForm.valid).toBe(true);
 
@@ -110,12 +111,12 @@ describe('VariableBundleDialogComponent in zoneless mode', () => {
     buttonByText('Filter anwenden').click();
     await fixture.whenStable();
     expect(close).not.toHaveBeenCalled();
-    fixture.nativeElement.querySelector<HTMLButtonElement>('button[aria-label="Clear"]').click();
+    element.querySelector<HTMLButtonElement>('button[aria-label="Clear"]')!.click();
     await fixture.whenStable();
     expect(close).not.toHaveBeenCalled();
 
     await filterBy('Filter nach Variablen-ID', 'V1');
-    fixture.nativeElement.querySelector<HTMLButtonElement>('button[aria-label="Clear"]').click();
+    element.querySelector<HTMLButtonElement>('button[aria-label="Clear"]')!.click();
     await fixture.whenStable();
     expect(close).not.toHaveBeenCalled();
     buttonByText('Filter zurücksetzen').click();
