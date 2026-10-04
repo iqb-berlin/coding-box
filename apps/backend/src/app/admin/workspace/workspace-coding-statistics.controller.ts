@@ -2999,7 +2999,8 @@ export class WorkspaceCodingStatisticsController {
                      showScore?: boolean;
                      allowComments?: boolean;
                      suppressGeneralInstructions?: boolean;
-                   }
+                   },
+                   @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<DistributedCodingJobsResponse> {
     if (!body) {
       throw new BadRequestException('Request body is required');
@@ -3011,6 +3012,6 @@ export class WorkspaceCodingStatisticsController {
       );
     }
 
-    return this.codingJobService.createDistributedCodingJobs(workspace_id, body);
+    return this.codingJobService.createDistributedCodingJobs(workspace_id, body, undefined, ownershipRequest.user?.id);
   }
 }

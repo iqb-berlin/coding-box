@@ -227,7 +227,8 @@ export class CodingJobOperationsService {
       showScore?: boolean;
       allowComments?: boolean;
       suppressGeneralInstructions?: boolean;
-    }
+    },
+    actorUserId?: number
   ): Promise<{
       success: boolean;
       jobsCreated: number;
@@ -253,7 +254,9 @@ export class CodingJobOperationsService {
     }> {
     return this.codingJobService.createDistributedCodingJobs(
       workspaceId,
-      request
+      request,
+      undefined,
+      actorUserId
     );
   }
 }

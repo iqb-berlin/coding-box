@@ -5,13 +5,14 @@ import {
   DefaultValuePipe,
   Delete,
   Get,
-  NotFoundException,
+  HttpException,
   Param,
   ParseIntPipe,
   Post,
   Put,
   Query,
-  UseGuards
+  UseGuards,
+  Req
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -85,7 +86,7 @@ export class VariableBundleController {
         limit: result.limit
       };
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof HttpException) {
         throw error;
       }
       throw new BadRequestException(`Failed to retrieve variable bundles: ${error.message}`);
@@ -126,7 +127,7 @@ export class VariableBundleController {
       const variableBundle = await this.variableBundleService.getVariableBundle(id, workspaceId);
       return VariableBundleDto.fromEntity(variableBundle);
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof HttpException) {
         throw error;
       }
       throw new BadRequestException(`Failed to retrieve variable bundle: ${error.message}`);
@@ -155,12 +156,14 @@ export class VariableBundleController {
   })
   async createVariableBundle(
     @WorkspaceId() workspaceId: number,
-      @Body() createVariableBundleDto: CreateVariableBundleDto
+      @Body() createVariableBundleDto: CreateVariableBundleDto,
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<VariableBundleDto> {
     try {
       const variableBundle = await this.variableBundleService.createVariableBundle(
         workspaceId,
-        createVariableBundleDto
+        createVariableBundleDto,
+        ownershipRequest.user?.id
       );
       return VariableBundleDto.fromEntity(variableBundle);
     } catch (error) {
@@ -200,17 +203,19 @@ export class VariableBundleController {
   async updateVariableBundle(
     @WorkspaceId() workspaceId: number,
       @Param('id') id: number,
-      @Body() updateVariableBundleDto: UpdateVariableBundleDto
+      @Body() updateVariableBundleDto: UpdateVariableBundleDto,
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<VariableBundleDto> {
     try {
       const variableBundle = await this.variableBundleService.updateVariableBundle(
         id,
         workspaceId,
-        updateVariableBundleDto
+        updateVariableBundleDto,
+        ownershipRequest.user?.id
       );
       return VariableBundleDto.fromEntity(variableBundle);
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof HttpException) {
         throw error;
       }
       throw new BadRequestException(`Failed to update variable bundle: ${error.message}`);
@@ -250,12 +255,13 @@ export class VariableBundleController {
   })
   async deleteVariableBundle(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number
+      @Param('id') id: number,
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean }> {
     try {
-      return await this.variableBundleService.deleteVariableBundle(id, workspaceId);
+      return await this.variableBundleService.deleteVariableBundle(id, workspaceId, ownershipRequest.user?.id);
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof HttpException) {
         throw error;
       }
       throw new BadRequestException(`Failed to delete variable bundle: ${error.message}`);
@@ -294,17 +300,19 @@ export class VariableBundleController {
   async addVariableToBundle(
     @WorkspaceId() workspaceId: number,
       @Param('id') id: number,
-      @Body() variable: VariableDto
+      @Body() variable: VariableDto,
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<VariableBundleDto> {
     try {
       const variableBundle = await this.variableBundleService.addVariableToBundle(
         id,
         workspaceId,
-        variable
+        variable,
+        ownershipRequest.user?.id
       );
       return VariableBundleDto.fromEntity(variableBundle);
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof HttpException) {
         throw error;
       }
       throw new BadRequestException(`Failed to add variable to variable bundle: ${error.message}`);
@@ -353,18 +361,20 @@ export class VariableBundleController {
     @WorkspaceId() workspaceId: number,
       @Param('id') id: number,
       @Param('unitName') unitName: string,
-      @Param('variableId') variableId: string
+      @Param('variableId') variableId: string,
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<VariableBundleDto> {
     try {
       const variableBundle = await this.variableBundleService.removeVariableFromBundle(
         id,
         workspaceId,
         unitName,
-        variableId
+        variableId,
+        ownershipRequest.user?.id
       );
       return VariableBundleDto.fromEntity(variableBundle);
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof HttpException) {
         throw error;
       }
       throw new BadRequestException(`Failed to remove variable from variable bundle: ${error.message}`);

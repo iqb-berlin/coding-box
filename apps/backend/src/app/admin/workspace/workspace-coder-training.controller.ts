@@ -524,7 +524,8 @@ export class WorkspaceCoderTrainingController {
   }
 
   @Post(':workspace_id/coding/coder-training-jobs')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
@@ -650,7 +651,8 @@ export class WorkspaceCoderTrainingController {
                      showScore?: boolean;
                      allowComments?: boolean;
                      suppressGeneralInstructions?: boolean;
-                   }
+                   },
+                   @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{
         success: boolean;
         jobsCreated: number;
@@ -677,7 +679,8 @@ export class WorkspaceCoderTrainingController {
       body.referenceMode,
       body.showScore,
       body.allowComments,
-      body.suppressGeneralInstructions
+      body.suppressGeneralInstructions,
+      ownershipRequest.user?.id
     );
   }
 
@@ -808,7 +811,8 @@ export class WorkspaceCoderTrainingController {
   }
 
   @Post(':workspace_id/coding/coder-trainings/:trainingId/discussion-result')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({
@@ -943,7 +947,8 @@ export class WorkspaceCoderTrainingController {
   }
 
   @Put(':workspace_id/coding/coder-trainings/:trainingId')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({
@@ -1055,7 +1060,8 @@ export class WorkspaceCoderTrainingController {
         showScore?: boolean;
         allowComments?: boolean;
         suppressGeneralInstructions?: boolean;
-      }
+      },
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean; message: string; jobsCreated?: number }> {
     if (!trainingId || trainingId <= 0) {
       throw new Error('Valid training ID must be provided');
@@ -1076,7 +1082,8 @@ export class WorkspaceCoderTrainingController {
       body.referenceMode,
       body.showScore,
       body.allowComments,
-      body.suppressGeneralInstructions
+      body.suppressGeneralInstructions,
+      ownershipRequest.user?.id
     );
   }
 
@@ -1148,7 +1155,8 @@ export class WorkspaceCoderTrainingController {
   }
 
   @Delete(':workspace_id/coding/coder-trainings/:trainingId')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({
@@ -1171,7 +1179,8 @@ export class WorkspaceCoderTrainingController {
   })
   async deleteCoderTraining(
     @WorkspaceId() workspace_id: number,
-      @Param('trainingId') trainingId: number
+      @Param('trainingId') trainingId: number,
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean; message: string }> {
     if (!trainingId || trainingId <= 0) {
       throw new Error('Valid training ID must be provided');
@@ -1179,12 +1188,14 @@ export class WorkspaceCoderTrainingController {
 
     return this.coderTrainingService.deleteCoderTraining(
       workspace_id,
-      trainingId
+      trainingId,
+      ownershipRequest.user?.id
     );
   }
 
   @Put(':workspace_id/coding/coder-trainings/:trainingId/label')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({
@@ -1221,7 +1232,8 @@ export class WorkspaceCoderTrainingController {
   async updateCoderTrainingLabel(
     @WorkspaceId() workspace_id: number,
       @Param('trainingId') trainingId: number,
-      @Body() body: { label: string }
+      @Body() body: { label: string },
+      @Req() ownershipRequest: { user?: { id?: number } }
   ): Promise<{ success: boolean; message: string }> {
     if (!trainingId || trainingId <= 0) {
       throw new Error('Valid training ID must be provided');
@@ -1234,7 +1246,8 @@ export class WorkspaceCoderTrainingController {
     return this.coderTrainingService.updateCoderTrainingLabel(
       workspace_id,
       trainingId,
-      body.label.trim()
+      body.label.trim(),
+      ownershipRequest.user?.id
     );
   }
 

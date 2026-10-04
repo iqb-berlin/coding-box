@@ -2,6 +2,16 @@ import { BadRequestException } from '@nestjs/common';
 import { In } from 'typeorm';
 import type { DistributionVariableUsageByStatus } from '../coding/coding-job.service';
 import { JobDefinitionService } from './job-definition.service';
+// Domain fixtures isolate ownership, which is exercised with the real policy in coding-ownership-mutations.spec.ts.
+jest.mock('../shared/coding-ownership.policy', () => ({
+  ...jest.requireActual('../shared/coding-ownership.policy'),
+  assertCodingResourceCreation: jest.fn().mockResolvedValue(7),
+  assertCodingResourceMutation: jest.fn(async (_manager, workspaceId, _kind, id) => ({ id, workspace_id: workspaceId, creatorUserId: 7 })),
+  assertCodingReviewMutation: jest.fn().mockResolvedValue(undefined),
+  getCodingReviewCapabilities: jest.fn(async (_manager, _workspaceId, responseIds) => ({
+    canApplyResults: true, canEditDraft: new Map(responseIds.map(id => [id, true]))
+  }))
+}));
 
 jest.mock('../coding/coding-job.service', () => ({
   CodingJobService: jest.fn()
@@ -20,8 +30,9 @@ const createRepo = () => {
     remove: jest.fn(),
     manager: {
       transaction: jest.fn(async (callback: (manager: {
-        getRepository: jest.Mock;
+        query: jest.Mock; getRepository: jest.Mock;
       }) => Promise<unknown>) => callback({
+        query: jest.fn().mockResolvedValue([]),
         getRepository: jest.fn(() => repo)
       }))
     }
@@ -332,8 +343,10 @@ describe('JobDefinitionService', () => {
       name: 'Lesen Klasse 4',
       description: 'Erste Kodierwelle',
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
-      assignedCoders: [1]
-    }, 7)).resolves.toMatchObject({
+      assignedCoders: [1],
+      creatorUserId: 99
+    } as never, 7, 7)).resolves.toMatchObject({
+      creatorUserId: 7,
       name: 'Lesen Klasse 4',
       description: 'Erste Kodierwelle'
     });
@@ -1915,7 +1928,8 @@ describe('JobDefinitionService', () => {
       },
       expect.objectContaining({
         getRepository: expect.any(Function)
-      })
+      }),
+      undefined
     );
     expect(jobDefinitionRepository.manager.transaction).toHaveBeenCalledTimes(1);
     expect(jobDefinitionRepository.save).toHaveBeenCalled();
@@ -2350,7 +2364,8 @@ describe('JobDefinitionService', () => {
         maxCodingCases: 4,
         distributionSeed: 'seed-2'
       }),
-      expect.any(Function)
+      expect.any(Function),
+      undefined
     );
     expect(jobDefinitionRepository.save).toHaveBeenCalledWith(expect.objectContaining({
       id: 2,
@@ -2432,7 +2447,8 @@ describe('JobDefinitionService', () => {
         maxCodingCases: 4,
         distributionSeed: 'seed-2'
       }),
-      expect.any(Function)
+      expect.any(Function),
+      undefined
     );
   });
 
@@ -2994,7 +3010,8 @@ describe('JobDefinitionService', () => {
         allowComments: false,
         suppressGeneralInstructions: true
       },
-      expect.any(Function)
+      expect.any(Function),
+      undefined
     );
     expect(jobDefinitionRepository.save).toHaveBeenCalledWith(expect.objectContaining({
       distribution_snapshots: [
@@ -3258,7 +3275,8 @@ describe('JobDefinitionService', () => {
           caseOrderingMode: undefined
         }]
       }),
-      expect.any(Function)
+      expect.any(Function),
+      undefined
     );
   });
 

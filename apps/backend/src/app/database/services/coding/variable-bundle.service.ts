@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
+import { assertCodingResourceCreation, assertCodingResourceMutation } from '../shared/coding-ownership.policy';
 
 @Injectable()
 export class VariableBundleService {
@@ -59,62 +60,95 @@ export class VariableBundleService {
 
   async createVariableBundle(
     workspaceId: number,
-    data: { name: string; description?: string; variables: Array<{ unitName: string; variableId: string }> }
+    data: { name: string; description?: string; variables: Array<{ unitName: string; variableId: string }> },
+    actorUserId?: number
   ): Promise<VariableBundle> {
-    const variableBundle = this.variableBundleRepository.create({
-      ...data,
-      workspace_id: workspaceId,
-      codingJobVariableBundles: []
-    });
+    return this.variableBundleRepository.manager.transaction(async manager => {
+      const repository = manager.getRepository(VariableBundle);
 
-    return this.variableBundleRepository.save(variableBundle);
+      const variableBundle = repository.create({
+        name: data.name,
+        description: data.description,
+        variables: data.variables,
+        creatorUserId: await assertCodingResourceCreation(repository.manager, workspaceId, actorUserId),
+        workspace_id: workspaceId,
+        codingJobVariableBundles: []
+      });
+
+      return repository.save(variableBundle);
+    });
   }
 
   async updateVariableBundle(
     id: number,
     workspaceId: number,
-    data: Partial<Omit<VariableBundle, 'id' | 'workspace_id' | 'created_at' | 'updated_at'>>
+    data: Partial<Pick<VariableBundle, 'name' | 'description' | 'variables'>>,
+    actorUserId?: number
   ): Promise<VariableBundle> {
-    const variableBundle = await this.getVariableBundle(id, workspaceId);
-    Object.assign(variableBundle, data);
-    return this.variableBundleRepository.save(variableBundle);
+    return this.variableBundleRepository.manager.transaction(async manager => {
+      const repository = manager.getRepository(VariableBundle);
+
+      await assertCodingResourceMutation(manager, workspaceId, 'bundle', id, actorUserId);
+      const variableBundle = await repository.findOneOrFail({ where: { id, workspace_id: workspaceId } });
+      if (data.name !== undefined) variableBundle.name = data.name;
+      if (data.description !== undefined) variableBundle.description = data.description;
+      if (data.variables !== undefined) variableBundle.variables = data.variables;
+      return repository.save(variableBundle);
+    });
   }
 
-  async deleteVariableBundle(id: number, workspaceId: number): Promise<{ success: boolean }> {
-    const variableBundle = await this.getVariableBundle(id, workspaceId);
-    await this.variableBundleRepository.remove(variableBundle);
-    return { success: true };
+  async deleteVariableBundle(id: number, workspaceId: number, actorUserId?: number): Promise<{ success: boolean }> {
+    return this.variableBundleRepository.manager.transaction(async manager => {
+      const repository = manager.getRepository(VariableBundle);
+
+      await assertCodingResourceMutation(repository.manager, workspaceId, 'bundle', id, actorUserId);
+      const variableBundle = await repository.findOneOrFail({ where: { id, workspace_id: workspaceId } });
+      await repository.remove(variableBundle);
+      return { success: true };
+    });
   }
 
   async addVariableToBundle(
     id: number,
     workspaceId: number,
-    variable: { unitName: string; variableId: string }
+    variable: { unitName: string; variableId: string },
+    actorUserId?: number
   ): Promise<VariableBundle> {
-    const variableBundle = await this.getVariableBundle(id, workspaceId);
-    const variableExists = variableBundle.variables.some(
-      v => v.unitName === variable.unitName && v.variableId === variable.variableId
-    );
+    return this.variableBundleRepository.manager.transaction(async manager => {
+      const repository = manager.getRepository(VariableBundle);
 
-    if (!variableExists) {
-      variableBundle.variables.push(variable);
-      return this.variableBundleRepository.save(variableBundle);
-    }
+      await assertCodingResourceMutation(repository.manager, workspaceId, 'bundle', id, actorUserId);
+      const variableBundle = await repository.findOneOrFail({ where: { id, workspace_id: workspaceId } });
+      const variableExists = variableBundle.variables.some(
+        v => v.unitName === variable.unitName && v.variableId === variable.variableId
+      );
 
-    return variableBundle;
+      if (!variableExists) {
+        variableBundle.variables.push(variable);
+        return repository.save(variableBundle);
+      }
+
+      return variableBundle;
+    });
   }
 
   async removeVariableFromBundle(
     id: number,
     workspaceId: number,
     unitName: string,
-    variableId: string
+    variableId: string,
+    actorUserId?: number
   ): Promise<VariableBundle> {
-    const variableBundle = await this.getVariableBundle(id, workspaceId);
-    variableBundle.variables = variableBundle.variables.filter(
-      v => !(v.unitName === unitName && v.variableId === variableId)
-    );
+    return this.variableBundleRepository.manager.transaction(async manager => {
+      const repository = manager.getRepository(VariableBundle);
 
-    return this.variableBundleRepository.save(variableBundle);
+      await assertCodingResourceMutation(repository.manager, workspaceId, 'bundle', id, actorUserId);
+      const variableBundle = await repository.findOneOrFail({ where: { id, workspace_id: workspaceId } });
+      variableBundle.variables = variableBundle.variables.filter(
+        v => !(v.unitName === unitName && v.variableId === variableId)
+      );
+
+      return repository.save(variableBundle);
+    });
   }
 }
