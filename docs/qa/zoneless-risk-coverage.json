@@ -15,7 +15,10 @@
         "ZL-039",
         "ZL-043",
         "ZL-044",
-        "ZL-045"
+        "ZL-045",
+        "ZL-047",
+        "ZL-048",
+        "ZL-049"
       ],
       "tests": [
         "apps/frontend/src/app/coding/components/cohens-kappa-statistics/cohens-kappa-statistics.component.zoneless.spec.ts",
@@ -30,7 +33,10 @@
         "apps/frontend/src/app/coding/components/coding-results-comparison/coding-results-comparison.zoneless.spec.ts",
         "cypress/zoneless/training-comparison.cy.ts",
         "apps/frontend/src/app/coding/components/coding-management/components/response-filters/response-filters.component.zoneless.spec.ts",
-        "apps/frontend/src/app/coding/components/coder-list/coder-list.component.zoneless.spec.ts"
+        "apps/frontend/src/app/coding/components/coder-list/coder-list.component.zoneless.spec.ts",
+        "apps/frontend/src/app/coding/components/variable-bundle-manager/variable-bundle-manager.component.zoneless.spec.ts",
+        "apps/frontend/src/app/coding/components/edit-missings-profiles-dialog/edit-missings-profiles-dialog.component.zoneless.spec.ts",
+        "apps/frontend/src/app/shared/utils/workspace-request.operator.zoneless.spec.ts"
       ]
     },
     {
@@ -65,7 +71,9 @@
       "id": "coding-replay",
       "name": "Kodierung, Replay und Sitzungen",
       "risk": "Kodierungen und Kommentare müssen gespeichert werden; Navigation und Sitzungswiederherstellung dürfen Eingaben nicht verlieren.",
-      "findings": [],
+      "findings": [
+        "ZL-050"
+      ],
       "tests": [
         "apps/frontend/src/app/coding/components/code-selector/code-selector-reactivity.component.spec.ts",
         "apps/frontend/src/app/replay/services/replay-coding.service.spec.ts",
@@ -74,7 +82,8 @@
         "cypress/e2e/item-matrix-live.cy.ts",
         "cypress/auth/coding-session.cy.ts",
         "apps/frontend/src/app/replay/components/unit-player/unit-player.component.spec.ts",
-        "apps/frontend/src/app/coding/components/schemer/unit-schemer.component.zoneless.spec.ts"
+        "apps/frontend/src/app/coding/components/schemer/unit-schemer.component.zoneless.spec.ts",
+        "apps/frontend/src/app/replay/services/replay-coding-lifecycle.zoneless.spec.ts"
       ]
     },
     {
@@ -88,7 +97,8 @@
         "ZL-008",
         "ZL-011",
         "ZL-013",
-        "ZL-014"
+        "ZL-014",
+        "ZL-051"
       ],
       "tests": [
         "apps/frontend/src/app/ws-admin/components/validation-dialog/validation-dialog.zoneless.spec.ts",
@@ -101,7 +111,8 @@
         "cypress/zoneless/info-dialogs.cy.ts",
         "cypress/auth/coding-session.cy.ts",
         "apps/frontend/src/app/ws-admin/components/search-dialogs-onpush.zoneless.spec.ts",
-        "apps/frontend/src/app/ws-admin/components/variable-analysis-jobs-dialog/variable-analysis-jobs-dialog.component.zoneless.spec.ts"
+        "apps/frontend/src/app/ws-admin/components/variable-analysis-jobs-dialog/variable-analysis-jobs-dialog.component.zoneless.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/test-results/test-results-upload-result-dialog.component.spec.ts"
       ]
     },
     {
@@ -124,7 +135,8 @@
         "ZL-027",
         "ZL-029",
         "ZL-036",
-        "ZL-041"
+        "ZL-041",
+        "ZL-049"
       ],
       "tests": [
         "apps/frontend/src/app/coding/components/export-coding-book/export-coding-book.component.zoneless.spec.ts",
@@ -155,7 +167,8 @@
         "cypress/zoneless/async-coding-dialogs.cy.ts",
         "apps/frontend/src/app/coding/components/schemer/unit-schemer.component.zoneless.spec.ts",
         "apps/frontend/src/app/components/export-toast/export-toast.component.zoneless.spec.ts",
-        "apps/frontend/src/app/shared/search-filter/search-filter.component.zoneless.spec.ts"
+        "apps/frontend/src/app/shared/search-filter/search-filter.component.zoneless.spec.ts",
+        "apps/frontend/src/app/shared/dialogs/item-list-dialog/item-list-dialog.component.zoneless.spec.ts"
       ]
     },
     {
@@ -169,7 +182,10 @@
         "ZL-031",
         "ZL-032",
         "ZL-038",
-        "ZL-042"
+        "ZL-042",
+        "ZL-047",
+        "ZL-048",
+        "ZL-052"
       ],
       "tests": [
         "apps/frontend/src/app/ws-admin/components/replay-statistics-dialog/replay-statistics-dialog.component.zoneless.spec.ts",
@@ -196,7 +212,12 @@
         "apps/frontend/src/app/sys-admin/components/workspaces/workspaces.component.spec.ts",
         "cypress/zoneless/admin-forms.cy.ts",
         "apps/frontend/src/app/sys-admin/components/workspaces-selection/workspaces-selection-refresh.zoneless.spec.ts",
-        "apps/frontend/src/app/shared/components/error-message-display/error-message-display.component.zoneless.spec.ts"
+        "apps/frontend/src/app/shared/components/error-message-display/error-message-display.component.zoneless.spec.ts",
+        "apps/frontend/src/app/core/services/post-message.service.spec.ts",
+        "apps/frontend/src/app/core/services/system-notification.service.spec.ts",
+        "apps/frontend/src/app/shared/services/german-paginator-intl.service.spec.ts",
+        "apps/frontend/src/app/shared/services/response/variable-analysis.service.spec.ts",
+        "apps/frontend/src/app/core/utils/auth-data-refresh.spec.ts"
       ]
     }
   ],

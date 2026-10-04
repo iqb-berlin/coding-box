@@ -2415,3 +2415,134 @@ Spezifikationen `async-coding-dialogs`, `manual-preparation` und
 Die Bewertung des korrigierten Commits erfordert den Abschluss aller
 Remote-Pipeline-Jobs. Lokale Browserläufe mit kontrollierten API-/Keycloak-
 Antworten und statische CI-Konfiguration sind kein Live- oder Deploymentnachweis.
+
+## Lebensdauer und konkurrierende Antworten am 04.10.2026
+
+### ZL-047: Komponenten-Subscriptions enden nicht mit ihrer Ansicht
+
+Die bisher nicht an eine Zerstörung gebundenen Subscriptions wurden über
+`takeUntilDestroyed` an ihren Komponentenbesitzer gebunden. Vorhandene
+`takeUntil`-Signale und explizit in `ngOnDestroy` aufgeräumte Subscription-Sammlungen
+bleiben erhalten. Die Änderung erfasst auch HTTP- und Dialog-Abos in Komponenten,
+deren bisheriger Destroy-Hook nur Filter, Polling oder einzelne Anfragen aufräumte.
+Der Ressourcenpaket-Dialog war ein durch den neuen Destroy-Test bestätigtes Beispiel.
+
+Globale Hintergrundaufträge bleiben pro Workspace weiter aktiv, wenn nur ihre
+Ansicht geschlossen wird. Der globale Nachrichten-Listener, Benachrichtigungs-
+Poller und die Sprachsubscription des Paginators erhalten dagegen eine explizite
+Bereinigung bei der Zerstörung ihres jeweiligen Providers. Die verzögerten
+Workspace-Löschanzeigen und Upload-Viewport-Refreshs enden ebenfalls mit ihrer Ansicht.
+
+### ZL-048: Ältere Leseantworten überschreiben neuere Auswahlen
+
+Listenabrufe für Journal, Systemnachrichten, Prozesse, GitHub-Releases, Metadaten
+und Variablenbündel sowie Profil-Details, Code-/Score-Verteilung und Validierungsseiten
+brechen ihre vorherige Anfrage ab. Die Profil-Neuanlage verwirft zusätzlich noch
+laufende Detail- und Standardauswahl-Anfragen. Fehlende Profildetails ergeben eine
+leere Auswahl statt eines bearbeitbaren leeren Profils.
+
+Während Profil-Schreibanfragen laufen, sind Auswahl, neue Entwürfe und weitere
+Bearbeitungen gesperrt. Der gespeicherte Stand kann dadurch keinen inzwischen
+geänderten Entwurf ersetzen. Die Listenaktualisierung behält ein gespeichertes
+Profil ausgewählt; die Standardauswahl gilt nur bei noch leerer Auswahl.
+
+Bei den Verteilungsfiltern wird die ältere Anfrage bereits beim Ändern des Textes
+abgebrochen, auch während des Debounce-Intervalls oder bei einem ungültigen Regex.
+`distinctUntilChanged` auf `Subject<void>` entfällt: Es hatte nach dem ersten
+Filterereignis alle weiteren Ereignisse unterdrückt. Native Tests prüfen die
+zweite Filteränderung, leere Ergebnisse, verspätete Fehler und gegensätzlich
+geordnete Antworten; Browserregressionen verwenden gehaltene Antworten.
+
+### ZL-049: Workspace-Wechsel und Dialogschließung erhalten alte Fortsetzungen
+
+`takeUntilWorkspaceChanged` beendet eine Anfrage beim ersten Kontextwechsel und
+prüft den Kontext auch vor der Subscription. Damit bleibt eine alte Anfrage nach
+`A -> B -> A` ungültig. Journal und Bündelmanager leeren den alten sichtbaren
+Datensatz und laden den neuen Workspace. Der Bündelmanager schließt seine eigenen
+Dialoge; späte Bestätigungen können kein Bündel im inzwischen ausgewählten Workspace
+anlegen, ändern oder löschen.
+
+Profil-, Verteilungs-, Validierungs-, Export- und Metadatendialoge beenden ihre
+kritischen Anfragen bereits bei `beforeClosed`, bevor die Schließanimation die
+Komponente zerstört. Der Metadaten-Resolver erhält nach jedem `await` eine
+Generationsprüfung; seine nicht abbrechbaren Promises können weder einen neuen
+Dialog öffnen noch einen Fehler im neuen Kontext anzeigen.
+
+Der Excel-Exportdialog besitzt einen eigenen `ValidationStateService`. Eine neue
+Datei, das Schließen oder die Zerstörung verwirft Timer, FileReader und HTTP-
+Validierung. Nach dem Excel-Parser-Promise wird dessen Generation geprüft.
+Ein erneut geöffneter oder gleichzeitig vorhandener Dialog erhält keinen alten
+Validierungszustand. Laufende Downloads bleiben ebenfalls im ursprünglichen Kontext.
+
+### ZL-050: Replay-Fortschritt und Hintergrund-Polls können alte Zustände veröffentlichen
+
+Replay-Fortschritt, Notizen und Jobdaten werden zusammen gelesen und übernommen.
+Ein neuer Ladevorgang, `resetCodingData`, eine neue Replay-Session oder Provider-
+Zerstörung beendet alle alten Leseanfragen und lässt die wartende Promise still
+enden. Es wird kein teilweise geladener Fortschritt mit alten Notizen oder
+Job-Metadaten veröffentlicht. Bestehende Schreibwarteschlangen und ihre
+Kontextprüfungen bleiben erhalten.
+
+Der globale Variablenanalyse-Poller verfolgt neben Timern auch laufende Anfragen.
+Das Zurücksetzen einer Workspace-Sperre bricht deren Anfrage ab; eine alte Antwort
+kann weder den Cache erneut invalidieren noch den Poll-Timer wieder starten.
+Die Zerstörung des Providers beendet alle Workspace-Polls.
+
+### ZL-051: Testergebnisse und Import übernehmen Antworten aus alten Kontexten
+
+Vor dem Import und nach dessen Abschluss gelesene Übersichten gehören nun zu
+einem abbrechbaren Workflow. Eine neue Importaktion, die Zerstörung oder der erste
+Workspace-Wechsel beendet dessen Leseanfragen und Warte-Timer und schließt die
+noch eigenen Import-/Fortschrittsdialoge. Nach weiteren Promise-Fortsetzungen
+werden Ergebnisse nur im weiterhin aktiven Workflow übernommen. Native Tests
+prüfen den initialen Abruf und den verspäteten Abruf nach einem erfolgreichen Import.
+
+Personenwechsel im Ergebnisbrowser und in der Schnellsuche verwerfen zusätzlich
+ausstehende Testheft- und Notizantworten. Ein Workspace-Wechsel leert die Auswahl
+und bricht deren Anfragen auch bei einem anschließenden Zurückwechseln ab.
+Die Ladeanzeige endet bei Abbruch, Fehler und leerem Ergebnis.
+Auch Dialogentscheidungen dieser Ansicht bleiben an ihren ursprünglichen Workspace
+gebunden und lösen nach einem Wechsel keine verspätete Aktion aus.
+
+### ZL-052: Rechteänderungen müssen die globale Aktualisierung abschließen
+
+Die endliche Operation aus Rechteänderung und Auth-Datenaktualisierung bleibt
+nach dem Absenden aktiv, wenn die auslösende Ansicht geschlossen wird. Eine
+geteilte Subscription gehört zur Operation; die UI-Subscription endet weiterhin
+mit der Ansicht. So verhindert die neue Bereinigung, dass eine bereits serverseitig
+gespeicherte Rechteänderung die globale Aktualisierung auslässt. Bestehende
+Session- und Anfrageprüfungen im AppService bleiben erhalten.
+
+Bei abgebrochenen Benutzer-Schreibanfragen wird außerdem die globale Ladeanzeige
+freigegeben. Beginnt nach erfolgreichem Schreiben die Listenaktualisierung,
+übernimmt deren bestehender Finalizer die Anzeige.
+
+Die Referenzen und Ausführungsresultate unten unterscheiden lokale native Tests,
+Browserläufe mit kontrollierten API-Antworten und die Remote-Pipeline. Die statische
+Inventur bleibt ein Vollständigkeitswerkzeug; sie bestätigt keine vollständige
+Verhaltensprüfung sämtlicher UI-Kombinationen.
+
+
+### Lokale Validierung der Lebensdauer- und Antwortkorrekturen
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `frontend:lint --fix` | bestanden; abschließender Diff ohne Whitespace-Fehler |
+| `frontend:test --runInBand --cache=false --silent` | 266 Suiten, 2.801 Tests bestanden |
+| `frontend:test-zoneless --runInBand --cache=false --silent` | 73 Suiten, 1.031 Tests bestanden, einschließlich der neuen Kontext-/Dialogregressionen |
+| `frontend:build:production` | optimierter Produktionsbuild bestanden |
+| `frontend:e2e:zoneless --headless` | erster vollständiger Browserlauf: 136 Fälle in 24 Spezifikationen bestanden; vor der abschließenden Nachprüfung |
+| `frontend:e2e:production --cypressConfig=cypress.zoneless.config.ts --headless --browser=electron` | abschließender vollständiger Produktions-Browserlauf: 136 Fälle in 24 Spezifikationen bestanden, keine Retries |
+| `frontend:zoneless-inventory -- --update`, `frontend:zoneless-approval`, `frontend:zoneless-inventory-test` | bestanden; 8.774 Einträge aus 328 Quelldateien, 156 Komponenten; 52 Finding-Referenzen in 6 Risikobereichen geprüft |
+
+Die Browserläufe verwenden kontrollierte API- und Keycloak-Antworten und prüfen
+reale Routen und Templates ohne ZoneJS. Die native Suite und die reguläre Suite
+überschneiden sich; ihre Testzahlen sind getrennte Ausführungen und werden nicht
+als Anzahl einzigartiger Fälle addiert. Die endgültigen Korrekturen sind durch
+den abschließenden Produktions-Browserlauf abgesichert.
+
+Live-Backend-/Keycloak-E2E wurden für diese Korrekturen lokal nicht erneut
+aufgesetzt. Der Remote-CI-Nachweis muss zum neuen gepushten Head gehören;
+frühere grüne Pipelines bestätigen diesen Stand nicht. Merge, Deployment und
+Produktionsbetrieb sind separate Nachweise. Die dokumentierten Grenzen der
+Risikoabdeckung bleiben erhalten.
