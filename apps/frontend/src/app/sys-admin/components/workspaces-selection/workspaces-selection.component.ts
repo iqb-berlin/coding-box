@@ -12,7 +12,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  Component, OnInit, OnChanges, SimpleChanges, ViewChild, inject, DestroyRef, input, output, signal
+  Component, OnInit, OnChanges, SimpleChanges, inject, DestroyRef, input, output, signal, viewChild, effect
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
@@ -46,7 +46,11 @@ export class WorkspacesSelectionComponent implements OnInit, OnChanges {
   private workspaceListLoaded = false;
   readonly workspaceListReady = output<boolean>();
 
-  @ViewChild(MatSort) sort = new MatSort();
+  readonly sort = viewChild(MatSort);
+  private readonly synchronizeSort = effect(() => {
+    this.objectsDatasource.sort = this.sort() ?? null;
+  });
+
   readonly selectedWorkspacesIds = input.required<number[]>();
   readonly selectionDisabled = input(false);
   readonly workspaceSelectionChanged = output<WorkspaceInListDto[]>();
@@ -106,7 +110,7 @@ export class WorkspacesSelectionComponent implements OnInit, OnChanges {
       ].some(column => (groupList[column as keyof WorkspaceInListDto] as string || '')
         .toLowerCase()
         .includes(filter));
-    this.objectsDatasource.sort = this.sort;
+    this.objectsDatasource.sort = this.sort() ?? null;
   }
 
   selectCheckbox(row: WorkspaceInListDto): void {

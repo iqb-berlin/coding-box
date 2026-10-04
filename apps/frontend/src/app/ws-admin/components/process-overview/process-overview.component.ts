@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, inject, ViewChild, AfterViewInit, signal
+  Component, OnInit, inject, AfterViewInit, signal, viewChild
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -254,7 +254,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
   readonly availableTypes = signal<string[]>([]);
   statusOptions: ProcessStatus[] = ['active', 'waiting', 'delayed', 'completed', 'failed', 'paused', 'cancelled', 'unknown'];
 
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
+  readonly paginator = viewChild.required(MatPaginator);
 
   ngOnInit(): void {
     if (this.workspaceId) {
@@ -264,7 +264,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
   }
 
   ngAfterViewInit() {
-    this.processes.paginator = this.paginator;
+    this.processes.paginator = this.paginator();
   }
 
   setupFilterPredicate(): void {

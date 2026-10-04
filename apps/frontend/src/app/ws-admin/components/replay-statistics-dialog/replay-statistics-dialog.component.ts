@@ -1,12 +1,5 @@
 import {
-  AfterViewInit,
-  Component,
-  ElementRef,
-  OnDestroy,
-  OnInit,
-  ViewChild,
-  inject,
-  signal
+  AfterViewInit, Component, ElementRef, OnDestroy, OnInit, inject, signal, viewChild
 } from '@angular/core';
 
 import { MatDialogModule, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -471,8 +464,7 @@ implements OnInit, AfterViewInit, OnDestroy {
   private replayBackendService = inject(ReplayBackendService);
   private data = inject(MAT_DIALOG_DATA);
 
-  @ViewChild('dialogContent', { static: false })
-    dialogContent?: ElementRef<HTMLElement>;
+  readonly dialogContent = viewChild<ElementRef<HTMLElement>>('dialogContent');
 
   workspaceId: number;
   readonly loading = signal(true);
@@ -544,7 +536,7 @@ implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit(): void {
-    const el = this.dialogContent?.nativeElement;
+    const el = this.dialogContent()?.nativeElement;
     if (!el) {
       return;
     }

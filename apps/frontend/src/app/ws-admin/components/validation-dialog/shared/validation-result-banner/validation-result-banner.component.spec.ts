@@ -23,8 +23,8 @@ describe('ValidationResultBannerComponent', () => {
   });
 
   it('should display headline and subline', () => {
-    component.headline = 'Main Heading';
-    component.subline = 'Secondary text';
+    fixture.componentRef.setInput('headline', 'Main Heading');
+    fixture.componentRef.setInput('subline', 'Secondary text');
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('.headline')?.textContent).toContain('Main Heading');
@@ -33,22 +33,22 @@ describe('ValidationResultBannerComponent', () => {
 
   it('should apply the correct class based on status', () => {
     const compiled = fixture.nativeElement as HTMLElement;
-    component.status = 'success';
+    fixture.componentRef.setInput('status', 'success');
     fixture.detectChanges();
     expect(compiled.querySelector('.validation-result')?.classList).toContain('validation-success');
 
-    component.status = 'failed';
+    fixture.componentRef.setInput('status', 'failed');
     fixture.detectChanges();
     expect(compiled.querySelector('.validation-result')?.classList).toContain('validation-failed');
 
-    component.status = 'running';
+    fixture.componentRef.setInput('status', 'running');
     fixture.detectChanges();
     expect(compiled.querySelector('.validation-result')?.classList).toContain('validation-running');
   });
 
   it('should show recommendation when provided and status is failed', () => {
-    component.status = 'failed';
-    component.recommendation = 'Try again';
+    fixture.componentRef.setInput('status', 'failed');
+    fixture.componentRef.setInput('recommendation', 'Try again');
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('.recommendation')?.textContent).toContain('Try again');

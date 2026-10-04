@@ -1,6 +1,5 @@
 import {
-  Component, DestroyRef, inject, Input, Output, EventEmitter, OnInit, OnDestroy, signal,
-  computed
+  Component, DestroyRef, inject, OnInit, OnDestroy, signal, computed, input, output
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -105,9 +104,9 @@ export class ResponseStatusValidationPanelComponent
 implements OnInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
 
-  @Input() disabled = false;
-  @Output() validate = new EventEmitter<void>();
-  @Output() showUnitXml = new EventEmitter<string>();
+  readonly disabled = input(false);
+  readonly validate = output<void>();
+  readonly showUnitXml = output<string>();
 
   readonly isRunning = signal(false);
   readonly wasRun = signal(false);
@@ -190,7 +189,7 @@ implements OnInit, OnDestroy {
   readonly errorCount = computed<number>(() => this.totalInvalid());
 
   onValidate(): void {
-    if (this.isRunning() || this.disabled) {
+    if (this.isRunning() || this.disabled()) {
       return;
     }
 

@@ -200,7 +200,7 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should not include row log anomalies when the dashboard force is disabled by workspace setting', () => {
-    component.forceShowLogAnomalies = true;
+    fixture.componentRef.setInput('forceShowLogAnomalies', true);
     component.ngOnChanges({
       forceShowLogAnomalies: new SimpleChange(false, true, true)
     });
@@ -216,7 +216,7 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should include row log anomalies when the workspace setting enables the column', () => {
-    component.showWorkspaceLogAnomalies = true;
+    fixture.componentRef.setInput('showWorkspaceLogAnomalies', true);
 
     component.ngOnInit();
 
@@ -229,10 +229,10 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should expose the dashboard all-anomalies filter in the media filter UI', () => {
-    component.initialFilters = { logAnomalies: 'any' };
+    fixture.componentRef.setInput('initialFilters', { logAnomalies: 'any' });
 
     component.ngOnChanges({
-      initialFilters: new SimpleChange(null, component.initialFilters, true)
+      initialFilters: new SimpleChange(null, component.initialFilters(), true)
     });
 
     expect(component.flatFilters().logAnomalies).toBe('any');
@@ -255,14 +255,14 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should replace external table filters instead of keeping stale log filters', () => {
-    component.initialFilters = { logAnomalies: 'any' };
+    fixture.componentRef.setInput('initialFilters', { logAnomalies: 'any' });
     component.ngOnChanges({
-      initialFilters: new SimpleChange(null, component.initialFilters, true)
+      initialFilters: new SimpleChange(null, component.initialFilters(), true)
     });
 
-    component.initialFilters = { code: 'person-a' };
+    fixture.componentRef.setInput('initialFilters', { code: 'person-a' });
     component.ngOnChanges({
-      initialFilters: new SimpleChange({ logAnomalies: 'any' }, component.initialFilters, false)
+      initialFilters: new SimpleChange({ logAnomalies: 'any' }, component.initialFilters(), false)
     });
 
     expect(component.flatFilters().code).toBe('person-a');
@@ -271,7 +271,7 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should send the regex flag when the workspace setting is enabled', () => {
-    component.enableRegexSearch = true;
+    fixture.componentRef.setInput('enableRegexSearch', true);
 
     component.ngOnInit();
 
@@ -298,7 +298,7 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should not request data while a regex filter exceeds the limit', async () => {
-    component.enableRegexSearch = true;
+    fixture.componentRef.setInput('enableRegexSearch', true);
     component.ngOnInit();
     testResultService.getFlatResponses.mockClear();
     component.flatFilters.update(value => ({ ...value, response: 'a'.repeat(257) }));
@@ -311,7 +311,7 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should send PostgreSQL ARE syntax unsupported by JavaScript', async () => {
-    component.enableRegexSearch = true;
+    fixture.componentRef.setInput('enableRegexSearch', true);
     component.ngOnInit();
     testResultService.getFlatResponses.mockClear();
     component.flatFilters.update(value => ({ ...value, response: '(?i)^var$' }));
@@ -328,7 +328,7 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should disable autocomplete suggestions in regex mode', () => {
-    component.enableRegexSearch = true;
+    fixture.componentRef.setInput('enableRegexSearch', true);
     component.flatFilterOptions.update(value => ({ ...value, codes: ['P-01'] }));
     component.flatFilters.update(value => ({ ...value, code: '^P-' }));
 
@@ -336,7 +336,7 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should show a specific message when a regex query times out', () => {
-    component.enableRegexSearch = true;
+    fixture.componentRef.setInput('enableRegexSearch', true);
     testResultService.getFlatResponses.mockReturnValue(throwError(() => (
       new HttpErrorResponse({
         status: 400,
@@ -379,7 +379,7 @@ describe('TestResultsFlatTableComponent', () => {
   });
 
   it('should use the structured invalid regex error code', () => {
-    component.enableRegexSearch = true;
+    fixture.componentRef.setInput('enableRegexSearch', true);
     component.flatFilters.update(value => ({ ...value, response: '[' }));
     testResultService.getFlatResponses.mockReturnValue(throwError(() => (
       new HttpErrorResponse({
@@ -404,16 +404,18 @@ describe('TestResultsFlatTableComponent', () => {
 
   it('should ignore an invalid-regex error for an edited filter', async () => {
     const staleResponse = new Subject<FlatTestResultResponsesResponse>();
-    component.enableRegexSearch = true;
+    let resolveReload: () => void;
+    const reloadStarted = new Promise<void>(resolve => { resolveReload = resolve; });
+    fixture.componentRef.setInput('enableRegexSearch', true);
     component.flatFilters.update(value => ({ ...value, response: '[' }));
     testResultService.getFlatResponses
       .mockReturnValueOnce(staleResponse.asObservable())
-      .mockReturnValueOnce(of({
-        data: [],
-        total: 0,
-        page: 1,
-        limit: 100
-      }));
+      .mockImplementationOnce(() => {
+        resolveReload();
+        return of({
+          data: [], total: 0, page: 1, limit: 100
+        });
+      });
     fixture.detectChanges();
 
     component.flatFilters.update(value => ({ ...value, response: '[a]' }));
@@ -426,7 +428,8 @@ describe('TestResultsFlatTableComponent', () => {
         message: 'Invalid regular expression for response'
       }
     }));
-    await new Promise<void>(resolve => { setTimeout(resolve, 401); });
+    await reloadStarted;
+    await fixture.whenStable();
 
     expect(component.isRegexFilterInvalid('response')).toBe(false);
     expect(testResultService.getFlatResponses).toHaveBeenCalledTimes(2);
@@ -440,7 +443,7 @@ describe('TestResultsFlatTableComponent', () => {
   it('should ignore stale flat-response requests', () => {
     const firstResponse = new Subject<FlatTestResultResponsesResponse>();
     const secondResponse = new Subject<FlatTestResultResponsesResponse>();
-    component.showWorkspaceLogAnomalies = true;
+    fixture.componentRef.setInput('showWorkspaceLogAnomalies', true);
     testResultService.getFlatResponses
       .mockReturnValueOnce(firstResponse.asObservable())
       .mockReturnValueOnce(secondResponse.asObservable());

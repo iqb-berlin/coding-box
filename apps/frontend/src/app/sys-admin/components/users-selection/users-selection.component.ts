@@ -13,7 +13,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, OnInit, SimpleChanges, DestroyRef, ChangeDetectorRef, inject, input, output, signal
+  Component, OnInit, SimpleChanges, DestroyRef, ChangeDetectorRef, inject, input, output, signal, viewChild, effect
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
@@ -50,7 +50,11 @@ export class UsersSelectionComponent implements OnInit {
   readonly userWorkspaces = signal<WorkspaceInListDto[]>([]);
   readonly filteredUserWorkspaces = signal<WorkspaceInListDto[]>([]);
 
-  @ViewChild(MatSort) sort = new MatSort();
+  readonly sort = viewChild(MatSort);
+  private readonly synchronizeSort = effect(() => {
+    this.userObjectsDatasource.sort = this.sort() ?? null;
+  });
+
   readonly userSelectionChanged = output<UserFullDto[]>();
   readonly selectedUserIds = input.required<number[]>();
 
@@ -73,7 +77,7 @@ export class UsersSelectionComponent implements OnInit {
       ].some(column => (userList[column as keyof UserFullDto] as string || '')
         .toLowerCase()
         .includes(filter));
-    this.userObjectsDatasource.sort = this.sort;
+    this.userObjectsDatasource.sort = this.sort() ?? null;
   }
 
   updateUserList(): void {

@@ -1,7 +1,7 @@
 import { Clipboard } from '@angular/cdk/clipboard';
 
 import {
-  Component, Input, OnChanges, OnDestroy, signal
+  Component, OnChanges, OnDestroy, signal, input
 } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -26,7 +26,7 @@ type XmlFormatResult = {
   styleUrls: ['./xml-viewer.component.scss']
 })
 export class XmlViewerComponent implements OnChanges, OnDestroy {
-  @Input() xml: string | null | undefined = '';
+  readonly xml = input<string | null | undefined>('');
 
   readonly formattedXml = signal('');
   readonly hasParseError = signal(false);
@@ -40,7 +40,7 @@ export class XmlViewerComponent implements OnChanges, OnDestroy {
   constructor(private clipboard: Clipboard) {}
 
   ngOnChanges(): void {
-    this.rawXml = this.xml ?? '';
+    this.rawXml = this.xml() ?? '';
 
     const result = this.formatXml(this.rawXml);
 

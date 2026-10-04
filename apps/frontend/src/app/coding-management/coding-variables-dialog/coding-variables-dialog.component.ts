@@ -1,6 +1,5 @@
 import {
-  AfterViewInit, Component, Inject, OnInit, ViewChild, signal,
-  computed, WritableSignal
+  AfterViewInit, Component, Inject, OnInit, signal, computed, WritableSignal, viewChild, effect
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -103,7 +102,10 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
   availableTypes = ['string', 'integer', 'number', 'boolean', 'attachment', 'json'];
   readonly isLoading = signal(false);
 
-  @ViewChild(MatSort) sort!: MatSort;
+  readonly sort = viewChild(MatSort);
+  private readonly synchronizeSort = effect(() => {
+    this.dataSource.sort = this.sort() ?? null;
+  });
 
   constructor(
     public dialogRef: MatDialogRef<CodingVariablesDialogComponent>,
@@ -120,7 +122,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
   }
 
   ngAfterViewInit(): void {
-    this.dataSource.sort = this.sort;
+    this.dataSource.sort = this.sort() ?? null;
   }
 
   get hasVariables(): boolean {
@@ -257,8 +259,9 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
         });
 
         this.dataSource.data = flattenedData;
-        if (this.sort) {
-          this.dataSource.sort = this.sort;
+        const sort = this.sort();
+        if (sort) {
+          this.dataSource.sort = sort;
         }
         this.applyFilter();
         this.isLoading.set(false);

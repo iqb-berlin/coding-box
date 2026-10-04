@@ -8,11 +8,7 @@ import {
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of } from 'rxjs';
 import {
-  Component,
-  Input,
-  Output,
-  EventEmitter,
-  CUSTOM_ELEMENTS_SCHEMA
+  Component, CUSTOM_ELEMENTS_SCHEMA, input, output
 } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -41,10 +37,10 @@ import { ValidationResultBannerComponent } from './shared';
   standalone: true
 })
 class MockBannerComponent {
-  @Input() status: unknown;
-  @Input() headline: unknown;
-  @Input() subline: unknown;
-  @Input() recommendation: unknown;
+  readonly status = input<unknown>();
+  readonly headline = input<unknown>();
+  readonly subline = input<unknown>();
+  readonly recommendation = input<unknown>();
 }
 
 @Component({
@@ -53,8 +49,8 @@ class MockBannerComponent {
   standalone: true
 })
 class MockTestTakersPanel {
-  @Input() disabled: unknown;
-  @Output() validate = new EventEmitter<void>();
+  readonly disabled = input<unknown>();
+  readonly validate = output<void>();
 }
 
 @Component({
@@ -63,8 +59,8 @@ class MockTestTakersPanel {
   standalone: true
 })
 class MockVariablesPanel {
-  @Input() disabled: unknown;
-  @Output() validate = new EventEmitter<void>();
+  readonly disabled = input<unknown>();
+  readonly validate = output<void>();
 }
 
 @Component({
@@ -73,8 +69,8 @@ class MockVariablesPanel {
   standalone: true
 })
 class MockVariableTypesPanel {
-  @Input() disabled: unknown;
-  @Output() validate = new EventEmitter<void>();
+  readonly disabled = input<unknown>();
+  readonly validate = output<void>();
 }
 
 @Component({
@@ -83,8 +79,8 @@ class MockVariableTypesPanel {
   standalone: true
 })
 class MockResponseStatusPanel {
-  @Input() disabled: unknown;
-  @Output() validate = new EventEmitter<void>();
+  readonly disabled = input<unknown>();
+  readonly validate = output<void>();
 }
 
 @Component({
@@ -93,8 +89,8 @@ class MockResponseStatusPanel {
   standalone: true
 })
 class MockGroupResponsesPanel {
-  @Input() disabled: unknown;
-  @Output() validate = new EventEmitter<void>();
+  readonly disabled = input<unknown>();
+  readonly validate = output<void>();
 }
 
 @Component({
@@ -103,8 +99,8 @@ class MockGroupResponsesPanel {
   standalone: true
 })
 class MockDuplicateResponsesPanel {
-  @Input() disabled: unknown;
-  @Output() validate = new EventEmitter<void>();
+  readonly disabled = input<unknown>();
+  readonly validate = output<void>();
 }
 
 describe('ValidationDialogComponent', () => {

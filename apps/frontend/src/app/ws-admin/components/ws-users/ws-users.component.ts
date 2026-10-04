@@ -12,8 +12,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, DestroyRef, OnInit, inject,
-  output, signal
+  Component, DestroyRef, OnInit, inject, output, signal, viewChild, effect
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { finalize, timer } from 'rxjs';
@@ -70,7 +69,11 @@ export class WsUsersComponent implements OnInit {
   selectedUser: number[] = [];
   selectedRows!: UserFullDto[];
   checkedRows!: UserFullDto[];
-  @ViewChild(MatSort) sort = new MatSort();
+  readonly sort = viewChild(MatSort);
+  private readonly synchronizeSort = effect(() => {
+    this.userObjectsDatasource().sort = this.sort() ?? null;
+  });
+
   readonly userSelectionChanged = output<UserFullDto[]>();
 
   ngOnInit(): void {
@@ -88,7 +91,7 @@ export class WsUsersComponent implements OnInit {
       ].some(column => (userList[column as keyof UserFullDto] as string || '')
         .toLowerCase()
         .includes(filter));
-    datasource.sort = this.sort;
+    datasource.sort = this.sort() ?? null;
     this.userObjectsDatasource.set(datasource);
   }
 

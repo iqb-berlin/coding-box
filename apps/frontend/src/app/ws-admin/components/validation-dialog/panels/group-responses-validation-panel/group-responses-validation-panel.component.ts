@@ -1,6 +1,5 @@
 import {
-  Component, Input, Output, EventEmitter, OnInit, OnDestroy, signal,
-  computed
+  Component, OnInit, OnDestroy, signal, computed, input, output
 } from '@angular/core';
 
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -127,8 +126,8 @@ interface GroupResponsesValidationResult {
 })
 export class GroupResponsesValidationPanelComponent
 implements OnInit, OnDestroy {
-  @Input() disabled = false;
-  @Output() validate = new EventEmitter<void>();
+  readonly disabled = input(false);
+  readonly validate = output<void>();
 
   readonly isRunning = signal(false);
   readonly wasRun = signal(false);
@@ -204,7 +203,7 @@ implements OnInit, OnDestroy {
   readonly errorCount = computed<number>(() => this.result()?.totalGroupsWithoutResponses || 0);
 
   onValidate(): void {
-    if (this.isRunning() || this.disabled) {
+    if (this.isRunning() || this.disabled()) {
       return;
     }
 

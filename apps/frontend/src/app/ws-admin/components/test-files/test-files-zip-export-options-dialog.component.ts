@@ -1,5 +1,5 @@
 import {
-  Component, Inject, ViewChild, AfterViewInit
+  Component, Inject, viewChild
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -45,7 +45,7 @@ export type TestFilesZipExportOptionsDialogData = {
           (selectionChange)="onSelectionChange()"
         >
           @for (type of dialogData.availableFileTypes; track type) {
-          <mat-list-option [value]="type">{{ getFileTypeLabel(type) }}</mat-list-option>
+          <mat-list-option [value]="type" [selected]="data.fileTypes.includes(type)">{{ getFileTypeLabel(type) }}</mat-list-option>
           }
         </mat-selection-list>
       </div>
@@ -76,8 +76,8 @@ export type TestFilesZipExportOptionsDialogData = {
     `
   ]
 })
-export class TestFilesZipExportOptionsDialogComponent implements AfterViewInit {
-  @ViewChild('fileTypesList') fileTypesList!: MatSelectionList;
+export class TestFilesZipExportOptionsDialogComponent {
+  readonly fileTypesList = viewChild.required<MatSelectionList>('fileTypesList');
 
   data: TestFilesZipExportOptions = {
     fileTypes: []
@@ -95,31 +95,19 @@ export class TestFilesZipExportOptionsDialogComponent implements AfterViewInit {
     ];
   }
 
-  ngAfterViewInit(): void {
-    setTimeout(() => {
-      if (this.fileTypesList && this.data.fileTypes.length > 0) {
-        this.fileTypesList.options.forEach(option => {
-          if (this.data.fileTypes.includes(option.value)) {
-            option.selected = true;
-          }
-        });
-      }
-    });
-  }
-
   onSelectionChange(): void {
-    this.data.fileTypes = this.fileTypesList.selectedOptions.selected.map(
+    this.data.fileTypes = this.fileTypesList().selectedOptions.selected.map(
       option => option.value
     );
   }
 
   selectAll(): void {
-    this.fileTypesList.selectAll();
+    this.fileTypesList().selectAll();
     this.onSelectionChange();
   }
 
   deselectAll(): void {
-    this.fileTypesList.deselectAll();
+    this.fileTypesList().deselectAll();
     this.onSelectionChange();
   }
 

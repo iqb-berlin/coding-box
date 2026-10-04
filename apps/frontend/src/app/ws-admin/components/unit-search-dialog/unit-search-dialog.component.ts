@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, ViewChild
+  Component, Inject, OnInit
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -17,7 +17,7 @@ import { MatTableModule } from '@angular/material/table';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import {
-  MatPaginator, MatPaginatorModule, MatPaginatorIntl, PageEvent
+  MatPaginatorModule, MatPaginatorIntl, PageEvent
 } from '@angular/material/paginator';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
@@ -134,8 +134,6 @@ export class UnitSearchDialogComponent implements OnInit {
   pageSize: number = 10;
   pageIndex: number = 0;
   pageSizeOptions: number[] = [50, 100, 200, 500];
-
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
 
   constructor(
     private dialogRef: MatDialogRef<UnitSearchDialogComponent>,
