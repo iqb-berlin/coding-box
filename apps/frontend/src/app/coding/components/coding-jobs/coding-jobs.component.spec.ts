@@ -12,6 +12,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { of, Subject, throwError } from 'rxjs';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CodingJobsComponent } from './coding-jobs.component';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
@@ -80,6 +81,7 @@ describe('CodingJobsComponent', () => {
       ),
       getBulkCodingProgress: jest.fn().mockReturnValue(of({})),
       deleteCodingJob: jest.fn().mockReturnValue(of({ success: true })),
+      deleteCodingJobs: jest.fn().mockReturnValue(of({ success: true })),
       startCodingJob: jest.fn().mockReturnValue(of({ items: [], total: 0 })),
       prepareCodingJobReview: jest
         .fn()
@@ -160,6 +162,12 @@ describe('CodingJobsComponent', () => {
     await TestBed.configureTestingModule({
       imports: [TranslateModule.forRoot(), CodingJobsComponent],
       providers: [
+        {
+          provide: CodingPermissionsService,
+          useValue: {
+            load: jest.fn(), canCreate: true, canApply: true, canEdit: jest.fn(() => true)
+          }
+        },
         provideNoopAnimations(),
         {
           provide: CodingJobBackendService,
@@ -184,6 +192,12 @@ describe('CodingJobsComponent', () => {
       .overrideComponent(CodingJobsComponent, {
         add: {
           providers: [
+            {
+              provide: CodingPermissionsService,
+              useValue: {
+                load: jest.fn(), canCreate: true, canApply: true, canEdit: jest.fn(() => true)
+              }
+            },
             {
               provide: CodingJobBackendService,
               useValue: codingJobBackendServiceMock
@@ -848,9 +862,8 @@ describe('CodingJobsComponent', () => {
     tick(); // Dialog afterClosed
     flush(); // All deletions
 
-    expect(codingJobBackendServiceMock.deleteCodingJob).toHaveBeenCalledTimes(
-      1
-    );
+    expect(codingJobBackendServiceMock.deleteCodingJobs).toHaveBeenCalledWith(1, jobs.map(job => job.id));
+    expect(codingJobBackendServiceMock.deleteCodingJob).not.toHaveBeenCalled();
     expect(matSnackBarMock.open).toHaveBeenCalled();
   }));
 
@@ -858,6 +871,18 @@ describe('CodingJobsComponent', () => {
     const loadSpy = jest.spyOn(component, 'loadCodingJobs');
     window.dispatchEvent(new Event('focus'));
     expect(loadSpy).not.toHaveBeenCalled();
+  });
+
+  it('blocks mixed-owner bulk deletion before confirmation or a request', () => {
+    const permissions = component.permissions;
+    (permissions.canEdit as jest.Mock).mockImplementation(job => job.creatorUserId === 7);
+    const jobs = component.dataSource.data.map((job, index) => ({ ...job, id: index + 1, creatorUserId: index === 0 ? 7 : 8 }));
+    component.selection.clear();
+    component.selection.select(...jobs);
+    expect(component.canDeleteSelectedJobs()).toBe(false);
+    component.bulkDeleteCodingJobs();
+    expect(matDialogMock.open).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.deleteCodingJobs).not.toHaveBeenCalled();
   });
 
   it('should handle window focus when auto reload is enabled', () => {

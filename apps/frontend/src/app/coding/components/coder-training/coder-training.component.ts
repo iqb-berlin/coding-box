@@ -6,6 +6,8 @@ import {
   output,
   input,
   DestroyRef,
+  effect,
+  untracked,
   ChangeDetectionStrategy,
   ChangeDetectorRef
 } from '@angular/core';
@@ -36,6 +38,7 @@ import {
 import {
   map, startWith, Observable, combineLatest, BehaviorSubject, tap, catchError, of
 } from 'rxjs';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { JobDefinitionSelectionDialogComponent } from './job-definition-selection-dialog.component';
 import { CoderService } from '../../services/coder.service';
 import { VariableBundleService } from '../../services/variable-bundle.service';
@@ -142,6 +145,7 @@ interface BundleOrderingOverride {
   styleUrls: ['./coder-training.component.scss']
 })
 export class CoderTrainingComponent implements OnInit, OnDestroy {
+  readonly permissions = inject(CodingPermissionsService);
   readonly close = output<void>();
   readonly startTraining = output<{ selectedCoders: Coder[], variableConfigs: VariableConfig[] }>();
   readonly editTraining = input<CoderTraining | null>(null);
@@ -186,6 +190,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   private _availableVariables$ = new BehaviorSubject<Variable[]>([]);
 
   trainingForm: FormGroup;
+  get canEditTraining(): boolean {
+    const training = this.editTraining();
+    return training ? this.permissions.canEdit(training) : this.permissions.canCreate;
+  }
+
   variableFilterCtrl = new FormControl('');
   bundleFilterCtrl = new FormControl('');
   bundleSelection$ = new BehaviorSubject<number[]>([]);
@@ -219,6 +228,14 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     this.setupManualSelectSync();
     this.setupDerivedVariableSync();
     this.setupReferenceModeValidation();
+    effect(() => {
+      const editable = this.canEditTraining;
+      for (const control of [this.trainingForm, this.manualVariablesSelectControl]) {
+        if (editable && control.disabled) control.enable({ emitEvent: false });
+        if (!editable && control.enabled) control.disable({ emitEvent: false });
+      }
+      if (editable) untracked(() => this.restoreTrainingRecoveryDraft());
+    });
   }
 
   private setupManualSelectSync(): void {
@@ -315,6 +332,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    if (this.appService.selectedWorkspaceId) this.permissions.load(this.appService.selectedWorkspaceId);
     this.registerRecoveryProvider();
     this.sessionRecoveryService.restore$
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -533,7 +551,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   private restoreTrainingRecoveryDraft(): boolean {
-    if (this.hasRestoredRecoveryDraft || !this.availableVariablesLoaded || !this.availableBundlesLoaded) {
+    if (!this.canEditTraining || this.hasRestoredRecoveryDraft || !this.availableVariablesLoaded || !this.availableBundlesLoaded) {
       return false;
     }
 
@@ -929,6 +947,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   selectAllManualVariables(): void {
+    if (!this.canEditTraining) return;
     const selectedManualKeys = this.manualVariablesSelectControl.value || [];
     const selectableManualKeys = this.getSelectableManualVariableKeys();
     const nextSelection = Array.from(new Set([...selectedManualKeys, ...selectableManualKeys]));
@@ -939,6 +958,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   clearManualVariables(): void {
+    if (!this.canEditTraining) return;
     if (this.hasManualVariablesSelected()) {
       this.manualVariablesSelectControl.setValue([]);
     }
@@ -969,6 +989,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       includeDeriveError: [includeDeriveError]
     });
 
+    if (!this.canEditTraining) variableGroup.disable({ emitEvent: false });
     this.variablesFormArray.push(variableGroup);
     if (!skipUpdate) {
       this.updateGroupedVariables();
@@ -1099,6 +1120,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   onBundleSelectionChange(selectedBundleIds: number[]): void {
+    if (!this.canEditTraining) return;
     if (selectedBundleIds) {
       const currentSelectedIds = Array.from(this.selectedBundleIds);
       const newBundleIds = selectedBundleIds.filter(id => !this.selectedBundleIds.has(id));
@@ -1121,6 +1143,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   onVariablesSelectionChange(selectedVarKeys: string[]): void {
+    if (!this.canEditTraining) return;
     const currentManualKeys = this.variablesFormArray.controls
       .filter(c => !c.get('bundleId')?.value)
       .map(c => `${c.get('unitId')?.value}::${c.get('variableId')?.value}`)
@@ -1163,6 +1186,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   removeBundle(bundleId: number): void {
+    if (!this.canEditTraining) return;
     const bundle = this.availableBundles.find(b => b.id === bundleId);
     if (!bundle) return;
 
@@ -1185,6 +1209,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   toggleCoderSelection(coder: Coder): void {
+    if (!this.canEditTraining) return;
     if (this.selectedCoders.has(coder.id)) {
       this.selectedCoders.delete(coder.id);
     } else {
@@ -1198,11 +1223,13 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   selectAllCoders(): void {
+    if (!this.canEditTraining) return;
     this.coders.forEach(coder => this.selectedCoders.add(coder.id));
     this.changeDetectorRef.markForCheck();
   }
 
   deselectAllCoders(): void {
+    if (!this.canEditTraining) return;
     this.selectedCoders.clear();
     this.changeDetectorRef.markForCheck();
   }
@@ -1212,6 +1239,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   canStartTraining(): boolean {
+    if (!this.canEditTraining) return false;
     return this.hasTrainingLabel() &&
       this.hasSelectedCoders() &&
       this.trainingForm.valid &&
@@ -1400,6 +1428,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   updateBundleSampleCount(bundleId: number, newSampleCount: number | string): void {
+    if (!this.canEditTraining) return;
     const parsedSampleCount = Number(newSampleCount);
     if (Number.isNaN(parsedSampleCount) || parsedSampleCount < 1 || parsedSampleCount > 1000) {
       this.showError('Ungültige Stichprobenanzahl. Muss zwischen 1 und 1000 liegen.');
@@ -1424,6 +1453,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   updateBundleCaseOrderingMode(bundleId: number, mode: 'continuous' | 'alternating'): void {
+    if (!this.canEditTraining) return;
     const bundle = this.availableBundles.find(b => b.id === bundleId);
     if (bundle) {
       bundle.caseOrderingMode = mode;
@@ -1569,6 +1599,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   onStartTraining(): void {
+    if (!this.canEditTraining) return;
     if (!this.canStartTraining()) {
       this.showError(this.getFirstValidationMessage());
       return;

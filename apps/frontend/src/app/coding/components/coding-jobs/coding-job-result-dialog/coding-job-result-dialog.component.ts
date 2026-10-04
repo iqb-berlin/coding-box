@@ -167,7 +167,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
   constructor(
     public dialogRef: MatDialogRef<CodingJobResultDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: { codingJob: CodingJob; workspaceId: number; canApplyResults?: boolean }
+    @Inject(MAT_DIALOG_DATA) public data: { codingJob: CodingJob; workspaceId: number; canApplyResults?: boolean; canEdit?: boolean }
   ) { }
 
   ngOnInit(): void {
@@ -852,7 +852,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   }
 
   isCodingIssueReviewEnabled(): boolean {
-    return this.data.codingJob.status === 'review';
+    return this.data.canEdit === true && this.data.codingJob.status === 'review';
   }
 
   canReviewCodingResult(result: CodingResult): boolean {

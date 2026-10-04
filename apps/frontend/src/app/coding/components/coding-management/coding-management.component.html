@@ -1,7 +1,7 @@
 <div class="coding-main-container">
-  @if (!hideActionButtons) {
   <div>
     <div class="action-buttons-toolbar">
+      @if (!hideActionButtons && permissions.canApply) {
       <a mat-raised-button color="primary" (click)="onAutoCode()">
         <mat-icon>auto_fix_high</mat-icon>
         {{ 'coding-management.buttons.auto-code' | translate }}
@@ -11,6 +11,7 @@
         {{ 'coding-management.buttons.manual-code' | translate }}
       </a>
 
+      }
       @if (codingListDownloadProgress !== null) {
       <button mat-raised-button disabled class="progress-button">
         <mat-spinner diameter="20" class="inline-spinner"></mat-spinner>
@@ -44,7 +45,6 @@
       </a>
     </div>
   </div>
-  }
 
   <section class="coding-freshness-panel" [class.is-current]="!hasCodingFreshnessAttention">
     <div class="coding-freshness-main">
@@ -149,7 +149,7 @@
         {{ 'coding-management.readiness.retry' | translate }}
       </button>
     </div>
-    } @else if (isAutocodingReadinessBlocked) {
+    } @else if (isAutocodingReadinessBlocked && permissions.canApply) {
     <div class="coding-freshness-actions">
       <button mat-stroked-button color="primary" [disabled]="isLoadingAutocodingReadiness"
         (click)="refreshAutocodingReadiness()">
@@ -161,7 +161,7 @@
         {{ 'coding-management.readiness.check-test-files' | translate }}
       </button>
     </div>
-    } @else if (hasCodingFreshnessWarnings) {
+    } @else if (hasCodingFreshnessWarnings && !hideActionButtons && permissions.canApply) {
     <div class="coding-freshness-actions">
       @if (hasFreshnessAutoCodingWork('v1')) {
       <button mat-stroked-button color="primary" [disabled]="isStartingFreshnessCoding"
@@ -195,7 +195,7 @@
           [referenceVersion]="referenceVersion" [selectedVersion]="selectedStatisticsVersion"
           [isLoading]="isLoadingStatistics" [isDownloadInProgress]="isDownloadInProgress"
           [statisticsLoaded]="statisticsLoaded" [resetProgress]="resetProgress" [downloadProgress]="downloadProgress"
-          [hideResetButton]="hideActionButtons"
+          [hideResetButton]="hideActionButtons || !permissions.canApply"
           (versionChange)="onVersionChange($event)" (loadStatistics)="fetchCodingStatistics()"
           (downloadResults)="onDownloadResults()" (cancelDownloadResults)="onCancelDownloadResults()" (resetVersion)="onResetVersion()"
           (statusClick)="onStatusClick($event)" (derivedClick)="onDerivedClick()">

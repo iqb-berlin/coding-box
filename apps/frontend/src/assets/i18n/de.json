@@ -808,7 +808,7 @@
     "separation-hint": "Workspace-Zugriff steuert, welche Bereiche eine Person verwalten oder sehen darf. Kodierfähigkeit steuert separat, ob sie als Kodierer:in in Jobs eingesetzt werden darf.",
     "access-level-0": "Gast",
     "access-level-1": "Basiszugriff",
-    "access-level-2": "Kodierung-Manager:in",
+    "access-level-2": "Kodierungsmanager:in",
     "access-level-3": "Studienmanager:in",
     "access-level-4": "Admin",
     "can-code": "Darf kodieren",
@@ -1190,6 +1190,7 @@
     "close": "Schließen",
     "cancel": "Abbrechen",
     "edit": "Bearbeiten",
+    "view": "Ansehen",
     "delete": "Löschen",
     "actions": "Aktionen",
     "created": "Erstellt am"

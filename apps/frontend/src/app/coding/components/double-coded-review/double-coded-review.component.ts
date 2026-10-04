@@ -157,11 +157,13 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     @Optional() @Inject(MAT_DIALOG_DATA) public dialogData: unknown
   ) {}
 
+  private serverCanApplyResults = false;
+
   get canApplyReviewResults(): boolean {
     return (
       this.appService.authData.isAdmin ||
-      (this.dialogData as DoubleCodedReviewDialogData | null)
-        ?.canApplyResults === true
+      (this.serverCanApplyResults && (this.dialogData as DoubleCodedReviewDialogData | null)
+        ?.canApplyResults === true)
     );
   }
 
@@ -828,7 +830,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       mode: 'coding-decision',
       originResponseId: responseId,
       workspaceId: this.appService.selectedWorkspaceId,
-      decisionReadOnly: item?.isResolved || undefined,
+      decisionReadOnly: item?.isResolved || item?.canEditDraft !== true || undefined,
       reviewCodeSelections: item ?
         this.serializeReviewCodeSelections(item) :
         undefined
@@ -1064,6 +1066,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: response => {
+          this.serverCanApplyResults = response.canApplyResults === true;
           this.allData = response.data.map(item => ({
             ...item,
             availableCodes:
@@ -1126,6 +1129,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   applyReviewDecisions(): void {
+    if (!this.canApplyReviewResults) return;
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.translateService
@@ -1169,6 +1173,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   applySingleDecision(item: DoubleCodedItem): void {
+    if (!this.canApplyReviewResults) return;
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.translateService
@@ -1267,6 +1272,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     workspaceId: number,
     decisions: DoubleCodedResolutionDecisionDto[]
   ): void {
+    if (!this.canApplyReviewResults) return;
     this.isLoading = true;
     this.doubleCodedReviewApi
       .applyDoubleCodedResolutions(workspaceId, { decisions })

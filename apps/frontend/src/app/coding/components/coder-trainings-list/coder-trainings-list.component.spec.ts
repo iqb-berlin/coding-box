@@ -4,6 +4,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, Subject } from 'rxjs';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CoderTrainingsListComponent } from './coder-trainings-list.component';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { AppService } from '../../../core/services/app.service';
@@ -62,6 +63,12 @@ describe('CoderTrainingsListComponent', () => {
         TranslateModule.forRoot()
       ],
       providers: [
+        {
+          provide: CodingPermissionsService,
+          useValue: {
+            load: jest.fn(), canCreate: true, canApply: true, canEdit: jest.fn(() => true)
+          }
+        },
         {
           provide: CodingTrainingBackendService,
           useValue: codingTrainingBackendServiceMock

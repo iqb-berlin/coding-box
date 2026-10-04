@@ -23,6 +23,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSelectModule } from '@angular/material/select';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatMenuModule } from '@angular/material/menu';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { VariableBundleService, PaginatedBundles } from '../../services/variable-bundle.service';
 import { VariableBundleDialogComponent } from '../variable-bundle-dialog/variable-bundle-dialog.component';
@@ -63,6 +64,7 @@ import { CodingJobBackendService } from '../../services/coding-job-backend.servi
   ]
 })
 export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
+  readonly permissions = inject(CodingPermissionsService);
   private variableBundleGroupService = inject(VariableBundleService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
@@ -79,6 +81,7 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
   @ViewChild(MatSort) sort!: MatSort;
 
   ngOnInit(): void {
+    if (this.appService.selectedWorkspaceId) this.permissions.load(this.appService.selectedWorkspaceId);
     this.loadVariableBundleGroups();
   }
 
@@ -118,6 +121,7 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
   }
 
   createVariableBundleGroup(): void {
+    if (!this.permissions.canCreate) return;
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
@@ -168,12 +172,14 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
           data: {
             bundleGroup,
             isEdit: true,
+            readOnly: !this.permissions.canEdit(bundleGroup),
             preloadedIncompleteVariables: incompleteVariables
           }
         });
 
         dialogRef.afterClosed().subscribe(result => {
           if (result) {
+            if (!this.permissions.canEdit(bundleGroup)) return;
             this.variableBundleGroupService.updateBundle(bundleGroup.id, result).subscribe({
               next: updatedBundleGroup => {
                 if (updatedBundleGroup) {
@@ -195,6 +201,7 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
   }
 
   deleteVariableBundleGroup(bundleGroup: VariableBundle): void {
+    if (!this.permissions.canEdit(bundleGroup)) return;
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       data: {
         title: 'Variablenbündel löschen',

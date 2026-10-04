@@ -158,26 +158,30 @@
                     }
                     @if (selectedTrainingForWithin) {
                       <div class="training-apply-actions">
-                        <button
-                          mat-stroked-button
-                          type="button"
-                          color="primary"
-                          [disabled]="isLoading || isApplyingDiscussionResults"
-                          (click)="openApplyTrainingDiscussionResults('auto_agreement')"
-                          >
-                          <mat-icon>verified</mat-icon>
-                          Schulungsergebnisse ohne Abweichungen anwenden
-                        </button>
-                        <button
-                          mat-raised-button
-                          type="button"
-                          color="primary"
-                          [disabled]="isLoading || isApplyingDiscussionResults"
-                          (click)="openApplyTrainingDiscussionResults('manual')"
-                          >
-                          <mat-icon>rule</mat-icon>
-                          Diskussionsergebnisse anwenden
-                        </button>
+                        @if (permissions.canApply) {
+                          <button
+                            mat-stroked-button
+                            type="button"
+                            color="primary"
+                            [disabled]="isLoading || isApplyingDiscussionResults"
+                            (click)="openApplyTrainingDiscussionResults('auto_agreement')"
+                            >
+                            <mat-icon>verified</mat-icon>
+                            Schulungsergebnisse ohne Abweichungen anwenden
+                          </button>
+                        }
+                        @if (permissions.canApply) {
+                          <button
+                            mat-raised-button
+                            type="button"
+                            color="primary"
+                            [disabled]="isLoading || isApplyingDiscussionResults"
+                            (click)="openApplyTrainingDiscussionResults('manual')"
+                            >
+                            <mat-icon>rule</mat-icon>
+                            Diskussionsergebnisse anwenden
+                          </button>
+                        }
                         @if (isApplyingDiscussionResults) {
                           <mat-progress-spinner
                             mode="indeterminate"
@@ -961,7 +965,7 @@
                               <div class="discussion-cell">
                                 <mat-form-field appearance="outline" class="discussion-input">
                                   <mat-label>Code</mat-label>
-                                  <input
+                                  <input [readonly]="!canEditDiscussion"
                                     matInput
                     [value]="
                       discussionCodeByResponseId[comparison.responseId] || ''
@@ -987,7 +991,7 @@
                                       matInput
                                       rows="2"
                                       [placeholder]="'double-coded-review.comment-placeholder' | translate"
-                                      [value]="discussionNotesByResponseId[comparison.responseId] || ''"
+                                      [readonly]="!canEditDiscussion" [value]="discussionNotesByResponseId[comparison.responseId] || ''"
                     (input)="
                       onDiscussionNotesInput(
                         comparison,

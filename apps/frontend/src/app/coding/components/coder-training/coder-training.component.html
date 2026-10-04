@@ -7,6 +7,7 @@
   </div>
 
   <form [formGroup]="trainingForm" class="training-form">
+    <fieldset [disabled]="!canEditTraining" style="border: 0; padding: 0; margin: 0; min-width: 0;">
     <!-- Training Label Section -->
     <div class="section">
       <div class="section-header">
@@ -148,7 +149,7 @@
       <div class="coder-grid">
         @for (coder of coders; track trackByCoderId($index, coder)) {
           <div class="coder-item"
-            [class.selected]="isCoderSelected(coder)" role="button" tabindex="0"
+            [class.selected]="isCoderSelected(coder)" role="button" [attr.tabindex]="canEditTraining ? 0 : -1" [attr.aria-disabled]="!canEditTraining"
             [attr.aria-pressed]="isCoderSelected(coder)"
             (click)="toggleCoderSelection(coder)"
             (keydown.enter)="toggleCoderSelection(coder)"
@@ -237,7 +238,7 @@
           <div class="bundle-select-container">
             <mat-form-field appearance="outline" class="bundle-select-field">
               <mat-label>Variablenbündel auswählen</mat-label>
-              <mat-select placeholder="Variablenbündel auswählen" multiple [value]="selectedBundleArray"
+              <mat-select placeholder="Variablenbündel auswählen" multiple [value]="selectedBundleArray" [disabled]="!canEditTraining"
                 (selectionChange)="onBundleSelectionChange($event.value)">
                 <div class="select-search-container">
                   <mat-form-field appearance="fill" class="select-search-field">
@@ -299,7 +300,7 @@
                     <mat-form-field appearance="outline" class="bundle-case-ordering-field">
                       <mat-label>{{ 'coding-job-definition-dialog.case-ordering-mode.title' | translate }}</mat-label>
                       <mat-select
-                        [value]="bundleGroup.bundle.caseOrderingMode || trainingForm.get('caseOrderingMode')?.value"
+                        [value]="bundleGroup.bundle.caseOrderingMode || trainingForm.get('caseOrderingMode')?.value" [disabled]="!canEditTraining"
                         (selectionChange)="updateBundleCaseOrderingMode(bundleGroup.bundle.id, $event.value)">
                         <mat-option value="continuous">{{ 'coding-job-definition-dialog.case-ordering-mode.continuous' |
                         translate }}</mat-option>
@@ -500,6 +501,7 @@
         }
       </div>
     </div>
+    </fieldset>
   </form>
 
   <!-- Training Summary -->

@@ -755,31 +755,33 @@
                                   >
                                 </mat-paginator>
                                 <div class="analysis-actions">
-                                  <button
-                                    mat-stroked-button
-                                    color="primary"
-                                    (click)="onApplyEmptyResponseCoding()"
-                    [disabled]="
-                      isApplyingEmptyCoding ||
-                      responseAnalysis.isCalculating ||
-                      !hasUncodedEmptyResponses() ||
-                      !emptyResponseMissing
-                    "
-                                    [matTooltip]="getApplyEmptyResponseCodingTooltip()"
-                                    >
-                                    @if (!isApplyingEmptyCoding) {
-                                      <mat-icon>flash_on</mat-icon>
-                                    }
-                                    @if (isApplyingEmptyCoding) {
-                                      <mat-spinner
-                                        diameter="20"
-                                      ></mat-spinner>
-                                    }
-                                    {{
-                                    'coding-management-manual.response-analysis.apply-empty-coding-button'
-                                    | translate
-                                    }}
-                                  </button>
+                                  @if (canApplyCompletedJobResults()) {
+                                    <button
+                                      mat-stroked-button
+                                      color="primary"
+                                      (click)="onApplyEmptyResponseCoding()"
+                      [disabled]="
+                        isApplyingEmptyCoding ||
+                        responseAnalysis.isCalculating ||
+                        !hasUncodedEmptyResponses() ||
+                        !emptyResponseMissing
+                      "
+                                      [matTooltip]="getApplyEmptyResponseCodingTooltip()"
+                                      >
+                                      @if (!isApplyingEmptyCoding) {
+                                        <mat-icon>flash_on</mat-icon>
+                                      }
+                                      @if (isApplyingEmptyCoding) {
+                                        <mat-spinner
+                                          diameter="20"
+                                        ></mat-spinner>
+                                      }
+                                      {{
+                                      'coding-management-manual.response-analysis.apply-empty-coding-button'
+                                      | translate
+                                      }}
+                                    </button>
+                                  }
                                 </div>
                               </div>
                             }

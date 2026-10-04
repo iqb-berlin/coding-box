@@ -12,6 +12,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import {
   Observable, of, Subject, throwError
 } from 'rxjs';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CodingResultsComparisonComponent } from './coding-results-comparison.component';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -158,6 +159,12 @@ describe('CodingResultsComparisonComponent', () => {
       ],
       providers: [
         {
+          provide: CodingPermissionsService,
+          useValue: {
+            load: jest.fn(), canCreate: true, canApply: true, canEdit: jest.fn(() => true)
+          }
+        },
+        {
           provide: MatDialogRef,
           useValue: { close: jest.fn() }
         },
@@ -214,6 +221,42 @@ describe('CodingResultsComparisonComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('allows level 2 discussion edits only for its own training and never permits applying results', () => {
+    Object.assign(component.permissions, { canApply: false });
+    jest.mocked(component.permissions.canEdit).mockImplementation(training => training.creatorUserId === 7);
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    const row = {
+      responseId: 1,
+      unitName: 'UNIT',
+      variableId: 'VAR',
+      testperson: 'person',
+      discussionCode: null,
+      discussionScore: null,
+      discussionNotes: null,
+      discussionSource: null,
+      coders: [{
+        jobId: 1, coderName: 'Coder 1', code: '7', score: 2
+      }]
+    };
+    for (const creatorUserId of [null, 8]) {
+      component.availableTrainings = [{ id: 5, creatorUserId } as CoderTraining];
+      expect(component.canEditDiscussion).toBe(false);
+      component.onDiscussionCodeInput(row, '7');
+      component.onDiscussionNotesInput(row, 'Changed');
+      component.onDiscussionCodeBlur(row);
+      expect(codingTrainingBackendService.saveDiscussionResult).not.toHaveBeenCalled();
+    }
+    component.availableTrainings = [{ id: 5, creatorUserId: 7 } as CoderTraining];
+    expect(component.canEditDiscussion).toBe(true);
+    component.onDiscussionCodeInput(row, '7');
+    component.onDiscussionCodeBlur(row);
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalled();
+    component.openApplyTrainingDiscussionResults('manual');
+    expect(codingTrainingBackendService.previewApplyDiscussionResults).not.toHaveBeenCalled();
+    expect(codingTrainingBackendService.applyDiscussionResults).not.toHaveBeenCalled();
   });
 
   it('should initialize from the requested comparison mode', () => {
@@ -603,7 +646,7 @@ describe('CodingResultsComparisonComponent', () => {
     expect(appService.createOwnToken).not.toHaveBeenCalled();
     expect(codingStatisticsService.getReplayUrl).toHaveBeenCalledWith(1, 77);
     expect(openSpy).toHaveBeenCalledWith(
-      'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding-decision&originResponseId=77',
+      'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding-decision&decisionReadOnly=true&originResponseId=77',
       '_blank'
     );
   });
@@ -688,7 +731,7 @@ describe('CodingResultsComparisonComponent', () => {
     } as never);
 
     expect(openSpy).toHaveBeenCalledWith(
-      'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding-decision&originResponseId=77&showScore=true&allowComments=false&suppressGeneralInstructions=true',
+      'https://app.test/#/replay/login%40code%40booklet/UNIT_1/2/VAR_1?workspaceId=1&mode=coding-decision&decisionReadOnly=false&originResponseId=77&showScore=true&allowComments=false&suppressGeneralInstructions=true',
       '_blank'
     );
   });

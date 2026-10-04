@@ -54,6 +54,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { AppService } from '../../../core/services/app.service';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 import {
@@ -159,6 +160,7 @@ type CodingJobScope = 'all' | 'training' | 'productive';
   ]
 })
 export class CodingJobsComponent implements OnInit, OnDestroy {
+  readonly permissions = inject(CodingPermissionsService);
   appService = inject(AppService);
   codingJobBackendService = inject(CodingJobBackendService);
   codingTrainingBackendService = inject(CodingTrainingBackendService);
@@ -249,6 +251,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   };
 
   ngOnInit(): void {
+    if (this.appService.selectedWorkspaceId) this.permissions.load(this.appService.selectedWorkspaceId);
     this.coderService.getCoders()
       .pipe(takeUntil(this.destroy$))
       .subscribe(coders => {
@@ -612,6 +615,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   createCodingJob(): void {
+    if (!this.permissions.canCreate) return;
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', {
@@ -684,6 +688,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   deleteCodingJob(job: CodingJob): void {
+    if (!this.permissions.canEdit(job)) return;
     if (!this.canManageCodingJobs) {
       this.snackBar.open(
         'Keine Berechtigung zum Verwalten von Kodierjobs.',
@@ -838,6 +843,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   canRestartCodingJob(job: CodingJob): boolean {
+    if (!this.permissions.canEdit(job)) return false;
     return (
       this.canManageCodingJobs &&
       (job.totalUnits || 0) > 0 &&
@@ -1162,6 +1168,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (!this.permissions.canEdit(job)) return;
+
     const confirmMessage = `Möchten Sie den Kodierjob "${job.name}" wirklich neu starten? Alle Einheiten werden für eine Aktualisierung geöffnet und die Kodierungsvorschau wird geöffnet.`;
 
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
@@ -1175,7 +1183,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     });
 
     dialogRef.afterClosed().subscribe(result => {
-      if (result) {
+      if (result && this.permissions.canEdit(job)) {
         this.codingJobBackendService
           .restartCodingJobWithOpenUnits(workspaceId, job.id)
           .subscribe({
@@ -1266,7 +1274,8 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       data: {
         codingJob: job,
         workspaceId: workspaceId,
-        canApplyResults: this.canApplyResults
+        canApplyResults: this.canApplyResults,
+        canEdit: this.permissions.canEdit(job)
       }
     });
 
@@ -1399,7 +1408,12 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     });
   }
 
+  canDeleteSelectedJobs(): boolean {
+    return this.selection.selected.length > 0 && this.selection.selected.every(job => this.permissions.canEdit(job));
+  }
+
   bulkDeleteCodingJobs(): void {
+    if (!this.canDeleteSelectedJobs()) return;
     if (!this.canManageCodingJobs) {
       this.snackBar.open(
         'Keine Berechtigung zum Verwalten von Kodierjobs.',
@@ -1440,6 +1454,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   private async performBulkDelete(jobs: CodingJob[]): Promise<void> {
+    if (!jobs.every(job => this.permissions.canEdit(job))) return;
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', {
@@ -1458,21 +1473,13 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     let failureCount = 0;
     const failedJobs: string[] = [];
 
-    for (const job of jobs) {
-      try {
-        const response = await firstValueFrom(
-          this.codingJobBackendService.deleteCodingJob(workspaceId, job.id)
-        );
-        if (response?.success) {
-          successCount += 1;
-        } else {
-          failureCount += 1;
-          failedJobs.push(job.name);
-        }
-      } catch (error) {
-        failureCount += 1;
-        failedJobs.push(job.name);
-      }
+    try {
+      const response = await firstValueFrom(this.codingJobBackendService.deleteCodingJobs(workspaceId, jobs.map(job => job.id)));
+      if (response.success) successCount = jobs.length;
+      else { failureCount = jobs.length; failedJobs.push(...jobs.map(job => job.name)); }
+    } catch {
+      failureCount = jobs.length;
+      failedJobs.push(...jobs.map(job => job.name));
     }
 
     loadingSnack.dismiss();

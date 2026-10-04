@@ -8,6 +8,7 @@ import { FormGroup } from '@angular/forms';
 import {
   finalize, of, Subject, throwError
 } from 'rxjs';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CoderTrainingComponent } from './coder-training.component';
 import { CoderService } from '../../services/coder.service';
 import { VariableBundleService } from '../../services/variable-bundle.service';
@@ -101,6 +102,12 @@ describe('CoderTrainingComponent', () => {
         TranslateModule.forRoot()
       ],
       providers: [
+        {
+          provide: CodingPermissionsService,
+          useValue: {
+            load: jest.fn(), canCreate: true, canApply: true, canEdit: jest.fn(() => true)
+          }
+        },
         { provide: CoderService, useValue: coderService },
         { provide: VariableBundleService, useValue: variableBundleService },
         { provide: CodingJobBackendService, useValue: codingJobBackendService },
@@ -291,6 +298,64 @@ describe('CoderTrainingComponent', () => {
     sampleInput.dispatchEvent(new Event('input'));
     expect(component.variablesFormArray.at(0).get('sampleCount')?.value).toBe(4);
     expect(component.variablesFormArray.at(0).get('variableId')?.value).toBe('VAR2');
+  });
+
+  it('keeps a foreign training readable and prevents selection changes in its template', () => {
+    fixture.componentRef.setInput('editTraining', {
+      id: 99,
+      workspace_id: 1,
+      creatorUserId: 2,
+      label: 'Foreign training',
+      created_at: new Date(),
+      updated_at: new Date(),
+      jobsCount: 1,
+      assigned_coders: [1],
+      assigned_variables: [{ unitName: 'UNIT', variableId: 'VAR', sampleCount: 3 }]
+    });
+    jest.mocked(component.permissions.canEdit).mockReturnValue(false);
+    fixture.detectChanges();
+
+    expect(component.trainingForm.disabled).toBe(true);
+    expect(component.trainingForm.get('trainingLabel')?.value).toBe('Foreign training');
+    const codersBefore = [...component.selectedCoders];
+    const variablesBefore = component.variablesFormArray.getRawValue();
+    const card = fixture.nativeElement.querySelector('.coder-item') as HTMLElement;
+    expect(card.getAttribute('aria-disabled')).toBe('true');
+    expect(card.getAttribute('tabindex')).toBe('-1');
+    card.click();
+    card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    component.selectAllCoders();
+    component.deselectAllCoders();
+    component.onBundleSelectionChange([5]);
+    component.onVariablesSelectionChange(['UNIT2::VAR2']);
+    component.onStartTraining();
+
+    expect([...component.selectedCoders]).toEqual(codersBefore);
+    expect(component.variablesFormArray.getRawValue()).toEqual(variablesBefore);
+    expect(codingTrainingBackendService.updateCoderTraining).not.toHaveBeenCalled();
+    expect(codingTrainingBackendService.createCoderTrainingJobs).not.toHaveBeenCalled();
+  });
+
+  it('keeps asynchronously loaded foreign training variables disabled', () => {
+    const variables = new Subject<typeof component.availableVariables>();
+    codingJobBackendService.getCodingIncompleteVariables.mockReturnValue(variables);
+    fixture.componentRef.setInput('editTraining', {
+      id: 99,
+      workspace_id: 1,
+      creatorUserId: 2,
+      label: 'Foreign training',
+      assigned_variables: [{ unitName: 'UNIT', variableId: 'VAR', sampleCount: 3 }]
+    });
+    jest.mocked(component.permissions.canEdit).mockReturnValue(false);
+    fixture.detectChanges();
+    expect(component.trainingForm.disabled).toBe(true);
+
+    variables.next([{ unitName: 'UNIT', variableId: 'VAR', responseCount: 10 }]);
+    fixture.detectChanges();
+    expect(component.variablesFormArray).toHaveLength(1);
+    expect(component.variablesFormArray.at(0).disabled).toBe(true);
+    expect(component.trainingForm.disabled).toBe(true);
+    variables.complete();
   });
 
   it('renders coder selection as toggle cards without checkboxes', () => {
