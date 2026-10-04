@@ -3,7 +3,7 @@
     @if (showLoading) {
       <div class="workspace-state" role="status">
         <mat-spinner diameter="28"></mat-spinner>
-        <p>{{ 'home.loading-user-workspaces()' | translate }}</p>
+        <p>{{ 'home.loading-user-workspaces' | translate }}</p>
       </div>
     } @else if (showSessionExpired) {
       <div class="workspace-state workspace-state-error" role="alert">
@@ -36,7 +36,7 @@
       </div>
     } @else if (showEmptyWorkspaces) {
       <div>
-        <p>{{'home.no-user-workspaces()' | translate}}</p>
+        <p>{{'home.no-user-workspaces' | translate}}</p>
       </div>
     } @else if (workspaces().length > 0) {
       <div class="fx-column-start-stretch workspace-gap">

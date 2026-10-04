@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy
+  Component, Inject, OnInit, OnDestroy, ChangeDetectionStrategy
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef
@@ -43,6 +43,7 @@ import { ValidationBatchRunnerService } from '../../../shared/services/validatio
  * });
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-validation-dialog',
   templateUrl: './validation-dialog.component.html',
   standalone: true,

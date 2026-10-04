@@ -141,6 +141,7 @@ describe('UserWorkspacesComponent', () => {
   it('should show reauthentication inline when logged out after an expired session', () => {
     mockAuthService.isLoggedIn.mockReturnValue(false);
     mockAppService.needsReAuthentication = true;
+    fixture.componentRef.setInput('authBootstrapStatus', 'session-expired');
 
     fixture.detectChanges();
 

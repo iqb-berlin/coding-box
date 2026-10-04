@@ -1,5 +1,5 @@
 import {
-  ChangeDetectorRef, Component, Inject, OnInit
+  ChangeDetectorRef, Component, Inject, OnInit, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
@@ -24,6 +24,7 @@ export interface DownloadCodingResultsDialogData {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-download-coding-results-dialog',
   standalone: true,
   imports: [

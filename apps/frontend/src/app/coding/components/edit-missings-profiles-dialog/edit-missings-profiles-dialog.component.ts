@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, signal
+  Component, Inject, OnInit, signal, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
@@ -24,6 +24,7 @@ import { AppService } from '../../../core/services/app.service';
 import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-edit-missings-profiles-dialog',
   templateUrl: './edit-missings-profiles-dialog.component.html',
   styleUrls: ['./edit-missings-profiles-dialog.component.scss'],

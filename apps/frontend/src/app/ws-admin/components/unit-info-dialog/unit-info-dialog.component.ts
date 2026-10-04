@@ -1,4 +1,6 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import {
+  Component, Inject, OnInit, ChangeDetectionStrategy
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -10,6 +12,7 @@ import { UnitInfoDto } from '../../../../../../../api-dto/unit-info/unit-info.dt
 import { XmlViewerComponent } from '../../../shared/components/xml-viewer/xml-viewer.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-unit-info-dialog',
   templateUrl: './unit-info-dialog.component.html',
   styleUrls: ['./unit-info-dialog.component.scss'],

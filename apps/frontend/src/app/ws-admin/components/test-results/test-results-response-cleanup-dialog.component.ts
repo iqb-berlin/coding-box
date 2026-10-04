@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, signal
+  Component, Inject, OnInit, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -26,6 +26,7 @@ interface VariableOption {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-response-cleanup-dialog',
   standalone: true,
   imports: [

@@ -1,5 +1,5 @@
 import {
-  Component, Inject
+  Component, Inject, ChangeDetectionStrategy
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -28,6 +28,7 @@ export interface TransferCodingCasesDialogResult {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-transfer-coding-cases-dialog',
   standalone: true,
   templateUrl: './transfer-coding-cases-dialog.component.html',

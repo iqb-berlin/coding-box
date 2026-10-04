@@ -1,7 +1,7 @@
 import {
   Component, inject,
   input,
-  output
+  output, ChangeDetectionStrategy
 } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
@@ -25,6 +25,7 @@ import {
 } from '../../../shared/dialogs/confirm-dialog.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-users-menu',
   templateUrl: './users-menu.component.html',
   styleUrls: ['./users-menu.component.scss'],

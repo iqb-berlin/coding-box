@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
-  Component, DestroyRef, OnChanges, OnDestroy, OnInit, SimpleChanges, inject, signal, input, output
+  Component, DestroyRef, OnChanges, OnDestroy, OnInit, SimpleChanges, inject, signal, input, output, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -183,6 +183,7 @@ const SPECIFIC_LOG_MEDIA_FILTERS: FlatTableMediaFilter[] = [
 ];
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-flat-table',
   standalone: true,
   imports: [

@@ -1,5 +1,5 @@
 import {
-  Component, DestroyRef, inject, OnInit, OnDestroy, signal, computed, input, output
+  Component, DestroyRef, inject, OnInit, OnDestroy, signal, computed, input, output, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -34,6 +34,7 @@ interface ResponseStatusValidationResult {
  * Displays validation results for response status and allows deletion of invalid responses.
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-response-status-validation-panel',
   standalone: true,
   imports: [

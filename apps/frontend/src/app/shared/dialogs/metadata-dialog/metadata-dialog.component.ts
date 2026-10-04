@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy, ElementRef, inject, CUSTOM_ELEMENTS_SCHEMA, signal, viewChild
+  Component, Inject, OnInit, OnDestroy, ElementRef, inject, CUSTOM_ELEMENTS_SCHEMA, signal, viewChild, ChangeDetectionStrategy
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -60,6 +60,7 @@ export interface MetadataDialogData {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-metadata-dialog',
   standalone: true,
   schemas: [CUSTOM_ELEMENTS_SCHEMA],

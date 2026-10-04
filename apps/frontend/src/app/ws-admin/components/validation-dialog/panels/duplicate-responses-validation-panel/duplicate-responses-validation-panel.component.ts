@@ -1,5 +1,5 @@
 import {
-  Component, DestroyRef, inject, OnInit, OnDestroy, signal, computed, input, output
+  Component, DestroyRef, inject, OnInit, OnDestroy, signal, computed, input, output, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
@@ -30,6 +30,7 @@ import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
  * Displays duplicate responses and allows users to select which ones to keep.
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-duplicate-responses-validation-panel',
   standalone: true,
   imports: [

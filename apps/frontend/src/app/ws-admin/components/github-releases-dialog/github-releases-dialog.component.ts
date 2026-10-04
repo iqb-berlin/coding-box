@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, inject, signal
+  Component, Inject, OnInit, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -16,6 +16,7 @@ export interface GithubReleasesDialogData {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-github-releases-dialog',
   templateUrl: './github-releases-dialog.component.html',
   styleUrls: ['./github-releases-dialog.component.scss'],

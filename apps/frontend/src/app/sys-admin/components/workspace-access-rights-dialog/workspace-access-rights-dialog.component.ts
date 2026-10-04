@@ -1,5 +1,5 @@
 import {
-  Component, inject, signal
+  Component, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
@@ -12,6 +12,7 @@ import { UserBackendService } from '../../../shared/services/user/user-backend.s
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-workspace-access-rights-dialog',
   templateUrl: './workspace-access-rights-dialog.component.html',
   styleUrls: ['./workspace-access-rights-dialog.component.scss'],

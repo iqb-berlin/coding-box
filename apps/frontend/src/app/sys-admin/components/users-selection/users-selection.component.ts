@@ -13,7 +13,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  Component, OnInit, SimpleChanges, DestroyRef, ChangeDetectorRef, inject, input, output, signal, viewChild, effect
+  Component, OnInit, SimpleChanges, DestroyRef, ChangeDetectorRef, inject, input, output, signal, viewChild, effect, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
@@ -31,6 +31,7 @@ import { WorkspaceBackendService } from '../../../workspace/services/workspace-b
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-users-selection',
   templateUrl: './users-selection.component.html',
   styleUrls: ['./users-selection.component.scss'],

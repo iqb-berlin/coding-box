@@ -1,5 +1,5 @@
 import {
-  AfterViewInit, Component, ElementRef, OnChanges, OnDestroy, SimpleChange, SimpleChanges, inject, input, output, viewChild
+  AfterViewInit, Component, ElementRef, OnChanges, OnDestroy, SimpleChange, SimpleChanges, inject, input, output, viewChild, ChangeDetectionStrategy
 } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -20,6 +20,7 @@ import { normalizeMathTextReplayDataParts } from '../../utils/replay-data-parts-
 export type Progress = 'none' | 'some' | 'complete';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-unit-player',
   imports: [MatFormFieldModule, MatInputModule, MatButtonModule, ReactiveFormsModule,
     TranslateModule, SpinnerComponent],

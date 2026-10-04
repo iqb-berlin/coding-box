@@ -1,4 +1,4 @@
-import { provideZonelessChangeDetection } from '@angular/core';
+import { ChangeDetectorRef, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -168,7 +168,7 @@ describe('Coding comparison without Zone', () => {
       }]
     }];
     c.dataSource.data = c.withinTrainingData;
-    fixture.changeDetectorRef.markForCheck();
+    fixture.debugElement.injector.get(ChangeDetectorRef).markForCheck();
     await fixture.whenStable();
     return c;
   }
@@ -189,7 +189,7 @@ describe('Coding comparison without Zone', () => {
   it('renders invalid regex feedback when the workspace setting arrives after the filter', async () => {
     const c = await prepareWithinTraining();
     c.tableFilters.unitName = '[';
-    fixture.changeDetectorRef.markForCheck();
+    fixture.debugElement.injector.get(ChangeDetectorRef).markForCheck();
     await fixture.whenStable();
     expect(fixture.nativeElement.querySelector('.table-filters input')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('.regex-filter-invalid')).toBeNull();

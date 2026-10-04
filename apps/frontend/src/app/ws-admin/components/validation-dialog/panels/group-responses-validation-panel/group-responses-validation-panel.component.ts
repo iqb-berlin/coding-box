@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, OnDestroy, signal, computed, input, output
+  Component, OnInit, OnDestroy, signal, computed, input, output, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -35,6 +35,7 @@ interface GroupResponsesValidationResult {
  * Displays validation results showing which test person groups have responses.
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-group-responses-validation-panel',
   standalone: true,
   imports: [

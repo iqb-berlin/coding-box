@@ -1,5 +1,5 @@
 import {
-  Component, DestroyRef, inject, signal
+  Component, DestroyRef, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
@@ -86,6 +86,7 @@ export interface ImportFormValues {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-center-import',
   templateUrl: 'test-center-import.component.html',
   styleUrls: ['./test-center-import.component.scss'],

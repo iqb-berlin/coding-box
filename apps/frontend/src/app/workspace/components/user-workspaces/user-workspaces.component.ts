@@ -1,5 +1,5 @@
 import {
-  Component, DestroyRef, inject, signal, input
+  Component, DestroyRef, inject, signal, input, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
@@ -12,6 +12,7 @@ import { AuthService } from '../../../core/services/auth.service';
 import { AppService, AuthBootstrapStatus } from '../../../core/services/app.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-book-user-workspaces',
   templateUrl: './user-workspaces.component.html',
   styleUrls: ['./user-workspaces.component.scss'],

@@ -1,5 +1,5 @@
 import {
-  Component, inject, OnInit, signal
+  Component, inject, OnInit, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -21,6 +21,7 @@ export interface ExportOptions {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-export-options-dialog',
   standalone: true,
   imports: [

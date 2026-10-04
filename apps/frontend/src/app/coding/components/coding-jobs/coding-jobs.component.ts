@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, OnDestroy, inject, signal, input, output
+  Component, OnInit, OnDestroy, inject, signal, input, output, ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -115,6 +115,7 @@ type JobPrimaryAction =
 type CodingJobScope = 'all' | 'training' | 'productive';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coding-jobs',
   templateUrl: './coding-jobs.component.html',
   styleUrls: ['./coding-jobs.component.scss'],

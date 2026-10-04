@@ -1,5 +1,5 @@
 import {
-  Component, OnDestroy, OnInit, inject, signal, input, output
+  Component, OnDestroy, OnInit, inject, signal, input, output, ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -79,6 +79,7 @@ interface Coder {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coding-job-definitions',
   templateUrl: './coding-job-definitions.component.html',
   styleUrls: ['./coding-job-definitions.component.scss'],

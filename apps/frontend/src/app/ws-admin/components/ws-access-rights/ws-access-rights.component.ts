@@ -1,5 +1,5 @@
 import {
-  Component, inject, signal
+  Component, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -18,6 +18,7 @@ import {
 } from '../../../core/utils/auth-data-refresh';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-ws-access-rights',
   templateUrl: './ws-access-rights.component.html',
   styleUrls: ['./ws-access-rights.component.scss'],

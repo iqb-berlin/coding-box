@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, AfterViewInit, OnDestroy, inject, ElementRef, signal, viewChild
+  Component, Inject, OnInit, AfterViewInit, OnDestroy, inject, ElementRef, signal, viewChild, ChangeDetectionStrategy
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 
@@ -39,6 +39,7 @@ export interface VariableBundleGroupDialogData {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-variable-bundle-dialog',
   templateUrl: './variable-bundle-dialog.component.html',
   styleUrls: ['./variable-bundle-dialog.component.scss'],

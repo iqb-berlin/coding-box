@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, OnDestroy, Inject, Optional, inject, signal
+  Component, OnInit, OnDestroy, Inject, Optional, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
@@ -101,6 +101,7 @@ interface DoubleCodedReviewDialogData {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-double-coded-review',
   templateUrl: './double-coded-review.component.html',
   styleUrls: ['./double-coded-review.component.scss'],

@@ -1,4 +1,6 @@
-import { Component, OnInit, inject } from '@angular/core';
+import {
+  Component, OnInit, inject, ChangeDetectionStrategy
+} from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -10,6 +12,7 @@ import { MatList, MatListItem } from '@angular/material/list';
 import { MatButton } from '@angular/material/button';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-unit-logs-dialog',
   template: `
     <div class="dialog-header">

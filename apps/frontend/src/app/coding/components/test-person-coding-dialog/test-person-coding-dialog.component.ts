@@ -1,5 +1,5 @@
 import {
-  Component, OnDestroy, inject, viewChild
+  Component, OnDestroy, inject, viewChild, ChangeDetectionStrategy
 } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
@@ -21,6 +21,7 @@ export interface TestPersonCodingDialogResult {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-person-coding-dialog',
   templateUrl: './test-person-coding-dialog.component.html',
   styleUrls: ['./test-person-coding-dialog.component.scss'],

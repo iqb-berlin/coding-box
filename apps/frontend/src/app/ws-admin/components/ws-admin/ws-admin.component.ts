@@ -1,6 +1,6 @@
 import {
   Component, DestroyRef, OnInit, inject, signal,
-  computed
+  computed, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
@@ -22,6 +22,7 @@ interface WsAdminNavLink {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-ws-admin',
   standalone: true,
   templateUrl: './ws-admin.component.html',

@@ -1,6 +1,6 @@
 import { DatePipe } from '@angular/common';
 import {
-  Component, OnInit, inject, signal
+  Component, OnInit, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import {
   AbstractControl,
@@ -50,6 +50,7 @@ function trimmedRequiredValidator(control: AbstractControl): ValidationErrors | 
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-system-notifications-admin',
   imports: [
     DatePipe,
