@@ -2275,3 +2275,66 @@ Abschluss des Prüfprozesses werden nicht gezählt. Ein zusätzlicher Electron-
 Lauf blieb im Codebook-Fall stehen und wurde abgebrochen; der vollständige
 Wiederholungslauf am finalen Stand hat auch diesen Fall bestanden. Die Tabelle
 nennt ausschließlich vollständig bestandene Abschlussläufe.
+
+## Vollständige OnPush-Umstellung am 04.10.2026
+
+Die AST-Prüfung des aktuellen Anwendungscodes erfasst 156 Komponenten.
+Vor dieser Änderung waren acht explizit OnPush; die übrigen 148 verwenden
+jetzt ebenfalls `ChangeDetectionStrategy.OnPush`. Das umfasst Root, Shell,
+Administration, Testergebnisse, Kodierung, Replay, gemeinsame Komponenten
+und Dialoge. Test-Hosts und externe Bibliothekskomponenten gehören nicht
+zu dieser Zahl.
+
+Der debouncte Suchfilter hält seinen lokalen Wert in einem Signal; der
+Löschen-Button liest dieses Signal. Unit- und Booklet-Suchdialoge verwenden
+Signals für Ladezustand, Ergebnislisten und Trefferzahl. Analyse-Aufträge
+liegen in einem lokalen Signal, ohne die injizierten Daten des Aufrufers
+zu verändern. Neue Such- beziehungsweise Refresh-Anfragen brechen ihre
+Vorgänger ab; Subscriptions, Bestätigungen und Debounces enden beim
+Zerstören der Dialoge. Ein Wechsel des Suchmodus verwirft die aktive
+Anfrage und ignoriert Debounces des vorherigen Modus.
+
+Die Workspace-Auswahl hält den ersetzten `MatTableDataSource` in einem
+Signal. Dadurch werden auch der umgebende Suchfilter, die Vorauswahl und
+die Signal-Query für die Sortierung nach einer verzögerten Antwort erneut
+geprüft. Die manuelle Kodierverwaltung markiert nach einem asynchronen
+Laden der Exportdefinitionen ihre Ansicht. Die Definitionserstellung
+markiert ihre Ansicht zusätzlich beim Invalidieren der Vorschau aus
+Reactive Forms beziehungsweise SelectionModel. Bestehende RxJS-Ströme,
+Workspace-Prüfungen und Bibliotheks-Datenquellen bleiben erhalten.
+
+19 zusätzliche native Tests prüfen verzögerte Suchergebnisse aller drei
+Modi, Fehler, bestätigtes Löschen, überholte Antworten, Moduswechsel,
+Dialogschließung, gefilterte Analyse-Aufträge, Abbruch mit anschließendem
+Refresh, unveränderte Aufruferdaten, die debouncte Löschenschaltfläche und
+eine verspätete Workspace-Vorauswahl ohne Parent-Output-Handler. Die
+Vergleichstests markieren bei ihrer direkten synthetischen Vorbereitung
+die tatsächliche Komponentenansicht; die anschließenden asynchronen
+Antworten werden weiterhin ausschließlich über `whenStable()` geprüft.
+Der Reauthentifizierungstest ändert den Bootstrap-Input wie der echte
+Parent. Zwei bereits falsch geschriebene Übersetzungsschlüssel in der
+Workspace-Ansicht wurden beim Nachlauf korrigiert.
+
+Die UnitSearchDialog-, BookletSearchDialog- und
+VariableAnalysisJobsDialog-Komponenten haben aktuell keinen Aufrufer im
+Anwendungscode. Ihre zusätzlichen Tests rendern die echten Komponenten
+mit kontrollierten Antworten. Der erreichbare Schnellsuche-Einstieg wird
+weiterhin durch die vorhandene Browserregression geprüft. Die Umstellung
+belegt durch die Funktionsprüfungen keine gemessene CPU-Ersparnis und
+keine vollständige Fehlerfreiheit aller UI-Kombinationen.
+
+### Lokale Abschlussprüfungen der OnPush-Umstellung
+
+| Prüfung | Ergebnis |
+|---|---|
+| AST-Prüfung aller Anwendungskomponenten | 156 von 156 explizit OnPush; keine fehlende Deklaration |
+| Komponenten-API-Nachprüfung | 160 Inputs, 73 Outputs und 42 Signal-Queries weiterhin readonly; keine alten API-Decorator |
+| `frontend:lint --fix` | bestanden; Importformatierung an die vorhandenen Regeln angepasst |
+| `frontend:test --runInBand --cache=false` | 2.729 Tests / 261 Suites bestanden |
+| `frontend:test-zoneless --runInBand --cache=false` | 970 Tests / 68 Suites bestanden, ohne Zone.js |
+| `frontend:build --configuration=production` | optimierter Produktionsbuild mit strenger Template-Typprüfung bestanden |
+| `frontend:e2e --configuration=production --cypressConfig=cypress.zoneless.config.ts --skipServe=true --baseUrl=http://127.0.0.1:4260 --browser=electron` | 133 Fälle / 24 Spezifikationen bestanden, keine Retries; optimierte Bundles vom Produktionsbuild über lokalen SPA-Server |
+| `frontend:zoneless-approval` | 8.748 Inventareinträge; Referenzen für sechs Bereiche, sieben Mechanismen und 46 frühere korrigierte Befunde gültig |
+
+Die Nachweise sind lokale Abschlussläufe. Sie belegen keine erfolgreiche
+Remote-CI, keinen erneuten Live-Backend-/Keycloak-Lauf und kein Deployment.
