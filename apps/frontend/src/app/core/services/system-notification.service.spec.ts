@@ -51,6 +51,16 @@ describe('SystemNotificationService', () => {
     httpMock.verify();
   });
 
+  it('cancels an in-flight poll and stops its timer on service destruction', fakeAsync(() => {
+    service.startPolling(1000);
+    tick();
+    const pending = httpMock.expectOne('/api/system-notifications/active');
+    service.ngOnDestroy();
+    expect(pending.cancelled).toBe(true);
+    tick(5000);
+    httpMock.expectNone('/api/system-notifications/active');
+  }));
+
   it('uses the public endpoint for active notifications', () => {
     service.getActive().subscribe();
     const request = httpMock.expectOne('/api/system-notifications/active');

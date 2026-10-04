@@ -1,9 +1,11 @@
-import { Injectable } from '@angular/core';
+import { Injectable, OnDestroy } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { MatPaginatorIntl } from '@angular/material/paginator';
 import { TranslateService } from '@ngx-translate/core';
 
 @Injectable()
-export class GermanPaginatorIntl extends MatPaginatorIntl {
+export class GermanPaginatorIntl extends MatPaginatorIntl implements OnDestroy {
+  private readonly languageSubscription: Subscription;
   constructor(private translateService: TranslateService) {
     super();
 
@@ -13,7 +15,7 @@ export class GermanPaginatorIntl extends MatPaginatorIntl {
     this.firstPageLabel = this.translateService.instant('paginator.firstPageLabel');
     this.lastPageLabel = this.translateService.instant('paginator.lastPageLabel');
 
-    this.translateService.onLangChange.subscribe(() => {
+    this.languageSubscription = this.translateService.onLangChange.subscribe(() => {
       this.itemsPerPageLabel = this.translateService.instant('paginator.itemsPerPageLabel');
       this.nextPageLabel = this.translateService.instant('paginator.nextPageLabel');
       this.previousPageLabel = this.translateService.instant('paginator.previousPageLabel');
@@ -21,6 +23,10 @@ export class GermanPaginatorIntl extends MatPaginatorIntl {
       this.lastPageLabel = this.translateService.instant('paginator.lastPageLabel');
       this.changes.next();
     });
+  }
+
+  ngOnDestroy(): void {
+    this.languageSubscription.unsubscribe();
   }
 
   override getRangeLabel = (page: number, pageSize: number, length: number): string => {
