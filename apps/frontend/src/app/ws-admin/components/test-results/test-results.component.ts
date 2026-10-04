@@ -12,7 +12,7 @@ import {
   MatRow
 } from '@angular/material/table';
 import {
-  Component, DestroyRef, ElementRef, inject, OnDestroy, OnInit, ViewChild, signal, computed
+  Component, DestroyRef, ElementRef, inject, OnDestroy, OnInit, signal, computed, viewChild, effect
 } from '@angular/core';
 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -478,13 +478,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   readonly exportTypeInProgress = signal<'test-results' | 'test-logs' | null>(null);
   readonly uploadingMessage = signal('Ergebnisse werden hochgeladen...');
 
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
-  @ViewChild(MatSort) sort!: MatSort;
-  @ViewChild('hiddenResponsesFileInput')
-    hiddenResponsesFileInput!: ElementRef<HTMLInputElement>;
+  readonly paginator = viewChild(MatPaginator);
+  readonly sort = viewChild(MatSort);
+  private readonly synchronizeSort = effect(() => {
+    if (this.dataSource) this.dataSource.sort = this.sort() ?? null;
+  });
 
-  @ViewChild('hiddenLogsFileInput')
-    hiddenLogsFileInput!: ElementRef<HTMLInputElement>;
+  readonly hiddenResponsesFileInput = viewChild.required<ElementRef<HTMLInputElement>>('hiddenResponsesFileInput');
+
+  readonly hiddenLogsFileInput = viewChild.required<ElementRef<HTMLInputElement>>('hiddenLogsFileInput');
 
   ngOnInit(): void {
     this.searchSubscription = this.searchSubject
@@ -1947,7 +1949,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }));
     this.dataSource = new MatTableDataSource(mappedResults);
     this.totalRecords.set(total);
-    this.dataSource.sort = this.sort;
+    this.dataSource.sort = this.sort() ?? null;
   }
 
   openImportDialog(): void {
@@ -1962,10 +1964,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             await this.testCenterImport();
             break;
           case 'responses':
-            this.hiddenResponsesFileInput.nativeElement.click();
+            this.hiddenResponsesFileInput().nativeElement.click();
             break;
           case 'logs':
-            this.hiddenLogsFileInput.nativeElement.click();
+            this.hiddenLogsFileInput().nativeElement.click();
             break;
           default:
             break;

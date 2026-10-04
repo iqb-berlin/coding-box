@@ -1,11 +1,5 @@
 import {
-  Component,
-  Input,
-  Output,
-  EventEmitter,
-  AfterViewInit,
-  OnChanges,
-  SimpleChanges
+  Component, AfterViewInit, OnChanges, SimpleChanges, input, output
 } from '@angular/core';
 
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
@@ -35,15 +29,15 @@ export interface ValidationTableColumn {
     MatProgressBarModule
   ],
   template: `
-    <div class="table-container" [class.table-loading]="loading">
-      @if (loading) {
+    <div class="table-container" [class.table-loading]="loading()">
+      @if (loading()) {
         <mat-progress-bar
           mode="indeterminate"
           class="loading-progress"
         ></mat-progress-bar>
       }
       <table mat-table [dataSource]="dataSource">
-        @for (column of columns; track column.key) {
+        @for (column of columns(); track column.key) {
           <ng-container [matColumnDef]="column.key">
             <th mat-header-cell *matHeaderCellDef [style.width]="column.width">
               {{ column.label }}
@@ -54,15 +48,15 @@ export interface ValidationTableColumn {
                   type="checkbox"
                   [checked]="isSelected(element)"
                   (change)="toggleSelection(element)"
-                  [disabled]="!canSelect(element) || loading"
+                  [disabled]="!canSelect(element) || loading()"
                 />
               } @else if (column.type === 'link') {
                 <a
                   class="table-link"
-                  [class.disabled-link]="loading"
+                  [class.disabled-link]="loading()"
                   (click)="
                     $event.preventDefault();
-                    !loading && onLinkClick(element, column.key)
+                    !loading() && onLinkClick(element, column.key)
                   "
                 >
                   {{ getValue(element, column.key) }}
@@ -80,11 +74,11 @@ export interface ValidationTableColumn {
 
       <mat-paginator
         #paginator
-        [pageSize]="pageSize"
-        [pageSizeOptions]="pageSizeOptions"
-        [length]="totalItems"
-        [pageIndex]="currentPage - 1"
-        [disabled]="loading"
+        [pageSize]="pageSize()"
+        [pageSizeOptions]="pageSizeOptions()"
+        [length]="totalItems()"
+        [pageIndex]="currentPage() - 1"
+        [disabled]="loading()"
         (page)="onPageChange($event)"
         aria-label="Seite auswählen"
       >
@@ -136,19 +130,22 @@ export interface ValidationTableColumn {
 })
 export class ValidationDataTableComponent<T>
 implements AfterViewInit, OnChanges {
-  @Input() data: T[] = [];
-  @Input() columns: ValidationTableColumn[] = [];
-  @Input() totalItems = 0;
-  @Input() pageSize = 10;
-  @Input() currentPage = 1;
-  @Input() pageSizeOptions = [10, 25, 50, 100];
-  @Input() selectedItems: Set<unknown> = new Set();
-  @Input() selectionKey = 'id';
-  @Input() loading = false;
+  readonly data = input<T[]>([]);
+  readonly columns = input<ValidationTableColumn[]>([]);
+  readonly totalItems = input(0);
+  readonly pageSize = input(10);
+  readonly currentPage = input(1);
+  readonly pageSizeOptions = input([10, 25, 50, 100]);
+  readonly selectedItems = input<Set<unknown>>(new Set());
+  readonly selectionKey = input('id');
+  readonly loading = input(false);
 
-  @Output() pageChange = new EventEmitter<PageEvent>();
-  @Output() selectionChange = new EventEmitter<Set<unknown>>();
-  @Output() linkClick = new EventEmitter<{ item: T; columnKey: string }>();
+  readonly pageChange = output<PageEvent>();
+  readonly selectionChange = output<Set<unknown>>();
+  readonly linkClick = output<{
+    item: T;
+    columnKey: string;
+  }>();
 
   dataSource = new MatTableDataSource<T>([]);
 
@@ -163,7 +160,7 @@ implements AfterViewInit, OnChanges {
   }
 
   get displayedColumns(): string[] {
-    return this.columns.map(col => col.key);
+    return this.columns().map(col => col.key);
   }
 
   getValue(item: T, key: string): unknown {
@@ -171,22 +168,22 @@ implements AfterViewInit, OnChanges {
   }
 
   isSelected(item: T): boolean {
-    const itemKey = this.getValue(item, this.selectionKey);
-    return this.selectedItems.has(itemKey);
+    const itemKey = this.getValue(item, this.selectionKey());
+    return this.selectedItems().has(itemKey);
   }
 
   canSelect(item: T): boolean {
-    const itemKey = this.getValue(item, this.selectionKey);
+    const itemKey = this.getValue(item, this.selectionKey());
     return itemKey !== null && itemKey !== undefined;
   }
 
   toggleSelection(item: T): void {
-    const itemKey = this.getValue(item, this.selectionKey);
+    const itemKey = this.getValue(item, this.selectionKey());
     if (itemKey === null || itemKey === undefined) {
       return;
     }
 
-    const newSelection = new Set(this.selectedItems);
+    const newSelection = new Set(this.selectedItems());
     if (newSelection.has(itemKey)) {
       newSelection.delete(itemKey);
     } else {
@@ -205,6 +202,6 @@ implements AfterViewInit, OnChanges {
   }
 
   private updateDataSource(): void {
-    this.dataSource.data = this.data;
+    this.dataSource.data = this.data();
   }
 }

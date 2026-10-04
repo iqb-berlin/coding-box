@@ -1,6 +1,5 @@
 import {
-  Component, DestroyRef, inject, Input, Output, EventEmitter, OnInit, OnDestroy, signal,
-  computed
+  Component, DestroyRef, inject, OnInit, OnDestroy, signal, computed, input, output
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
@@ -186,8 +185,8 @@ export class DuplicateResponsesValidationPanelComponent
 implements OnInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
 
-  @Input() disabled = false;
-  @Output() validate = new EventEmitter<void>();
+  readonly disabled = input(false);
+  readonly validate = output<void>();
 
   readonly isRunning = signal(false);
   readonly wasRun = signal(false);
@@ -263,7 +262,7 @@ implements OnInit, OnDestroy {
   readonly errorCount = computed<number>(() => this.totalDuplicates());
 
   onValidate(): void {
-    if (this.isRunning() || this.disabled) {
+    if (this.isRunning() || this.disabled()) {
       return;
     }
 

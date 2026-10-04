@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
-  Component, DestroyRef, EventEmitter, Input, OnChanges, OnDestroy, OnInit, Output, SimpleChanges, inject, signal
+  Component, DestroyRef, OnChanges, OnDestroy, OnInit, SimpleChanges, inject, signal, input, output
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -349,11 +349,11 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
 
   private suppressNextFlatFilterChange = false;
 
-  @Input() initialFilters: Partial<FlatResponseFilters> | null = null;
-  @Input() showWorkspaceLogAnomalies = false;
-  @Input() forceShowLogAnomalies = false;
-  @Input() enableRegexSearch = false;
-  @Output() responseDeleted = new EventEmitter<void>();
+  readonly initialFilters = input<Partial<FlatResponseFilters> | null>(null);
+  readonly showWorkspaceLogAnomalies = input(false);
+  readonly forceShowLogAnomalies = input(false);
+  readonly enableRegexSearch = input(false);
+  readonly responseDeleted = output<void>();
 
   constructor() {
     try {
@@ -522,7 +522,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       this.backendInvalidRegexFields.clear();
       this.flatFilters.set({
         ...this.createDefaultFlatFilters(),
-        ...(this.initialFilters || {})
+        ...(this.initialFilters() || {})
       });
       this.processingDurationEnabled.set(false);
       this.processingDurationsFilters.set([]);
@@ -821,7 +821,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     value: string,
     disableForRegex = false
   ): string[] {
-    if (disableForRegex && this.enableRegexSearch) {
+    if (disableForRegex && this.enableRegexSearch()) {
       return [];
     }
     const v = (value || '').trim().toLowerCase();
@@ -894,11 +894,12 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   }
 
   isRegexFilterInvalid(field: RegexFlatResponseFilterField): boolean {
-    return this.enableRegexSearch && (
+    const enableRegexSearch = this.enableRegexSearch();
+    return enableRegexSearch && (
       this.backendInvalidRegexFields.has(field) ||
       hasInvalidPostgresRegexFilter(
         this.flatFilters()[field],
-        this.enableRegexSearch
+        enableRegexSearch
       )
     );
   }
@@ -1451,7 +1452,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   }
 
   private updateLogAnomalyTableVisibility(): boolean {
-    return this.setShowLogAnomaliesInTable(this.showWorkspaceLogAnomalies);
+    return this.setShowLogAnomaliesInTable(this.showWorkspaceLogAnomalies());
   }
 
   private setShowLogAnomaliesInTable(enabled: boolean): boolean {
@@ -1515,7 +1516,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         responseStatus: this.flatFilters().responseStatus,
         responseValue: this.flatFilters().responseValue,
         tags: this.flatFilters().tags,
-        regexSearch: this.enableRegexSearch,
+        regexSearch: this.enableRegexSearch(),
         geogebra: this.flatFilters().geogebra ? 'true' : '',
         audioLow: this.flatFilters().audioLow ? 'true' : '',
         hasValue: this.flatFilters().nonEmptyResponse ? 'true' : '',
@@ -1614,7 +1615,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       messageKey = this.flatFilters().responseValue.trim() ?
         'search-filter.response-value-timeout' :
         'search-filter.regex-timeout';
-    } else if (error.status === 400 && this.enableRegexSearch) {
+    } else if (error.status === 400 && this.enableRegexSearch()) {
       messageKey = 'search-filter.invalid-postgres-regex';
     }
 

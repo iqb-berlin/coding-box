@@ -2,12 +2,11 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, DestroyRef, OnInit, inject, signal
+  Component, DestroyRef, OnInit, inject, signal
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { finalize, timer } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatSort } from '@angular/material/sort';
 import { TranslateService } from '@ngx-translate/core';
 import { SelectionModel } from '@angular/cdk/collections';
 import { UsersSelectionComponent } from '../users-selection/users-selection.component';
@@ -45,8 +44,6 @@ export class UsersComponent implements OnInit {
   tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
   readonly userWorkspaces = signal<WorkspaceInListDto[]>([]);
 
-  @ViewChild(MatSort) sort = new MatSort();
-
   readonly authData = signal(AppService.defaultAuthData);
   ngOnInit(): void {
     this.appService.authData$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(
@@ -68,7 +65,6 @@ export class UsersComponent implements OnInit {
       ].some(column => (userList[column as keyof UserFullDto] as string || '')
         .toLowerCase()
         .includes(filter));
-    this.userObjectsDatasource.sort = this.sort;
   }
 
   updateUserList(): void {

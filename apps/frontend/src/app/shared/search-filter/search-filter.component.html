@@ -3,6 +3,7 @@
     <mat-label>{{ title() }}</mat-label>
     <input #filterInput
            matInput
+           [value]="value"
            [placeholder]="'search-filter.enter-filter' | translate">
     <button matSuffix
             mat-icon-button

@@ -1,5 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component, Inject, ViewChild } from '@angular/core';
+import {
+  Component, Inject, viewChild
+} from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTabsModule } from '@angular/material/tabs';
@@ -68,8 +70,7 @@ type ImportOutcomeMetric = { label: string; value: number };
   styleUrls: ['./test-results-upload-result-dialog.component.scss']
 })
 export class TestResultsUploadResultDialogComponent {
-  @ViewChild('issuesViewport')
-    issuesViewport?: CdkVirtualScrollViewport;
+  readonly issuesViewport = viewChild<CdkVirtualScrollViewport>('issuesViewport');
 
   private issueFilterText = '';
   private issueCategory: string | null = null;
@@ -662,9 +663,9 @@ export class TestResultsUploadResultDialogComponent {
   private scheduleIssueViewportRefresh(resetScroll = false): void {
     window.setTimeout(() => {
       if (resetScroll) {
-        this.issuesViewport?.scrollToIndex(0);
+        this.issuesViewport()?.scrollToIndex(0);
       }
-      this.issuesViewport?.checkViewportSize();
+      this.issuesViewport()?.checkViewportSize();
     });
   }
 

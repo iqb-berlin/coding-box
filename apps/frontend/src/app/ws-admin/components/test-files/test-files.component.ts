@@ -1,12 +1,10 @@
 import {
-  Component, DestroyRef, OnDestroy, OnInit, ViewChild, inject, signal,
-  computed
+  Component, DestroyRef, OnDestroy, OnInit, inject, signal, computed
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { FormsModule } from '@angular/forms';
-import { MatSort } from '@angular/material/sort';
 import {
   MatCell,
   MatCellDef,
@@ -230,7 +228,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   });
 
   readonly textFilterValue = signal<string>('');
-  @ViewChild(MatSort) sort!: MatSort;
 
   private textFilterChanged: Subject<string> = new Subject<string>();
   private textFilterSubscription: Subscription | undefined;
@@ -277,13 +274,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       maxWidth: '95vw',
       data
     });
-  }
-
-  get matSort(): MatSort {
-    if (this.dataSource) {
-      this.dataSource.sort = this.sort;
-    }
-    return this.sort;
   }
 
   readonly isBusy = computed<boolean>(() => (

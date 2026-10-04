@@ -30,6 +30,30 @@ describe('WorkspacesSelectionComponent refresh recovery', () => {
 
   afterEach(() => fixture?.destroy());
 
+  it('connects sorting after a synchronous initial response and retains it after a reload', async () => {
+    const page = {
+      data: [{ id: 1, name: 'Zulu' }, { id: 2, name: 'Alpha' }], total: 2, page: 1, limit: 20
+    };
+    const getList = jest.fn().mockReturnValue(of(page));
+    await TestBed.configureTestingModule({
+      imports: [WorkspaceRefreshHostComponent, TranslateModule.forRoot()],
+      providers: [provideZonelessChangeDetection(), { provide: WorkspaceBackendService, useValue: { getAllWorkspacesListOrFail: getList } }]
+    }).compileComponents();
+    fixture = TestBed.createComponent(WorkspaceRefreshHostComponent);
+    await fixture.whenStable();
+    const element = fixture.nativeElement as HTMLElement;
+    const firstRow = () => element.querySelector('mat-row')?.textContent;
+    expect(firstRow()).toContain('Zulu');
+    (element.querySelector('.mat-column-name .mat-sort-header-container') as HTMLElement).click();
+    await fixture.whenStable();
+    expect(firstRow()).toContain('Alpha');
+
+    (element.querySelector('button') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    expect(getList).toHaveBeenCalledTimes(2);
+    expect(firstRow()).toContain('Alpha');
+  });
+
   it('retries after a failed refresh while retaining the previous list and disabling access selection', async () => {
     const firstPage = {
       data: [{ id: 1, name: 'First workspace' }], total: 1, page: 1, limit: 20

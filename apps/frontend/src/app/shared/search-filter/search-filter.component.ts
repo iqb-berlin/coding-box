@@ -1,11 +1,5 @@
 import {
-  Component,
-  input,
-  output,
-  OnInit,
-  OnDestroy,
-  ViewChild,
-  ElementRef
+  Component, input, output, OnInit, AfterViewInit, OnDestroy, ElementRef, viewChild
 } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -42,8 +36,8 @@ import { WrappedIconComponent } from '../wrapped-icon/wrapped-icon.component';
     TranslateModule
   ]
 })
-export class SearchFilterComponent implements OnInit, OnDestroy {
-  @ViewChild('filterInput', { static: true }) filterInput!: ElementRef;
+export class SearchFilterComponent implements OnInit, AfterViewInit, OnDestroy {
+  readonly filterInput = viewChild.required<ElementRef<HTMLInputElement>>('filterInput');
 
   value: string = '';
   readonly title = input.required<string>();
@@ -57,22 +51,20 @@ export class SearchFilterComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   ngOnInit(): void {
-    // Set initial value if provided
-    const initialVal = this.initialValue();
-    if (initialVal) {
-      this.value = initialVal;
-      this.filterInput.nativeElement.value = initialVal;
-    }
+    this.value = this.initialValue();
+  }
 
+  ngAfterViewInit(): void {
+    const filterInput = this.filterInput();
     // Set up debounced input event
-    fromEvent(this.filterInput.nativeElement, 'keyup')
+    fromEvent(filterInput.nativeElement, 'keyup')
       .pipe(
         debounceTime(this.debounceTimeMs),
         distinctUntilChanged(),
         takeUntil(this.destroy$)
       )
       .subscribe(() => {
-        this.value = this.filterInput.nativeElement.value;
+        this.value = this.filterInput().nativeElement.value;
         this.valueChange.emit(this.value);
       });
   }
@@ -84,7 +76,7 @@ export class SearchFilterComponent implements OnInit, OnDestroy {
 
   clearFilter(): void {
     this.value = '';
-    this.filterInput.nativeElement.value = '';
+    this.filterInput().nativeElement.value = '';
     this.valueChange.emit(this.value);
   }
 }

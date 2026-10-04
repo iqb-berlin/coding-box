@@ -1,9 +1,8 @@
 import {
-  Component, ViewChild, computed, inject, signal
+  Component, computed, inject, signal
 } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSort } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { map } from 'rxjs';
@@ -37,8 +36,6 @@ export class WorkspacesComponent {
   readonly workspacesChanged = signal<boolean>(false);
   readonly isDeleting = signal<boolean>(false);
   readonly deleteStatus = signal<string>('');
-
-  @ViewChild(MatSort) sort = new MatSort();
 
   addWorkspace(result: EditWorkspaceForm): void {
     runMutationAndRefreshAuthData(

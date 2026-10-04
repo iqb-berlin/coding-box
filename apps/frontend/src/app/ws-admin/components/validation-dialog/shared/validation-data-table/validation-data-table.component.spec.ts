@@ -41,8 +41,8 @@ describe('ValidationDataTableComponent', () => {
 
     fixture = TestBed.createComponent(ValidationDataTableComponent<TestData>);
     component = fixture.componentInstance;
-    component.data = mockData;
-    component.columns = mockColumns;
+    fixture.componentRef.setInput('data', mockData);
+    fixture.componentRef.setInput('columns', mockColumns);
     fixture.detectChanges();
   });
 

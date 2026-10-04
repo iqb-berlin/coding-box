@@ -1,5 +1,5 @@
 import {
-  Component, DestroyRef, Input, inject, signal
+  Component, DestroyRef, inject, signal, input
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
@@ -22,33 +22,35 @@ export class UserWorkspacesComponent {
   private readonly destroyRef = inject(DestroyRef);
   authService = inject(AuthService);
   appService = inject(AppService);
-  @Input() workspaces!: WorkspaceFullDto[];
-  @Input() authBootstrapStatus: AuthBootstrapStatus = 'checking';
-  @Input() authDataLoaded = false;
+  readonly workspaces = input<WorkspaceFullDto[]>([]);
+  readonly authBootstrapStatus = input<AuthBootstrapStatus>('checking');
+  readonly authDataLoaded = input(false);
   readonly authDataReloadRunning = signal(false);
 
   get showLoading(): boolean {
+    const authBootstrapStatus = this.authBootstrapStatus();
     return this.authService.isLoggedIn() === true &&
-      !this.authDataLoaded &&
-      (this.authBootstrapStatus === 'checking' || this.authBootstrapStatus === 'backend-login-running');
+      !this.authDataLoaded() &&
+      (authBootstrapStatus === 'checking' || authBootstrapStatus === 'backend-login-running');
   }
 
   get showSessionExpired(): boolean {
     return this.authService.isLoggedIn() === true &&
-      !this.authDataLoaded &&
-      this.authBootstrapStatus === 'session-expired';
+      !this.authDataLoaded() &&
+      this.authBootstrapStatus() === 'session-expired';
   }
 
   get showAuthDataError(): boolean {
+    const authBootstrapStatus = this.authBootstrapStatus();
     return this.authService.isLoggedIn() === true &&
-      !this.authDataLoaded &&
-      (this.authBootstrapStatus === 'auth-data-failed' || this.authBootstrapStatus === 'ready');
+      !this.authDataLoaded() &&
+      (authBootstrapStatus === 'auth-data-failed' || authBootstrapStatus === 'ready');
   }
 
   get showEmptyWorkspaces(): boolean {
     return this.authService.isLoggedIn() === true &&
-      this.authDataLoaded &&
-      (this.workspaces || []).length === 0;
+      this.authDataLoaded() &&
+      (this.workspaces() || []).length === 0;
   }
 
   reloadAuthData(): void {
