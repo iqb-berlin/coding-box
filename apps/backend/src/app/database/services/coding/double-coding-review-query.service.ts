@@ -9,6 +9,7 @@ import { JobDefinition } from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { DoubleCodingReviewDecision } from '../../entities/double-coding-review-decision.entity';
 import { CodingStatisticsService } from './coding-statistics.service';
+import { getCodingReviewCapabilities } from '../shared/coding-ownership.policy';
 import {
   applyResolvedExclusionsToQuery,
   isExcludedByResolvedExclusions,
@@ -240,6 +241,29 @@ export class DoubleCodingReviewQueryService {
   }
 
   async getDoubleCodedVariablesForReview(
+    workspaceId: number,
+    filters: DoubleCodedReviewFilters = {},
+    actorUserId?: number
+  ): Promise<DoubleCodedReviewResponseDto> {
+    const result = await this.getDoubleCodedReviewData(workspaceId, filters);
+    const capabilities = await getCodingReviewCapabilities(
+      this.codingJobUnitRepository.manager,
+      workspaceId,
+      result.data.map(group => group.responseId),
+      actorUserId
+    );
+    return {
+      ...result,
+      canApplyResults: capabilities.canApplyResults,
+      data: result.data.map(group => ({
+        ...group,
+        canEditDraft: capabilities.canEditDraft.get(group.responseId) === true
+      }))
+    };
+  }
+
+  // Statistics reuse the read query without requiring UI-specific mutation capabilities.
+  private async getDoubleCodedReviewData(
     workspaceId: number,
     filters: DoubleCodedReviewFilters = {}
   ): Promise<DoubleCodedReviewResponseDto> {
@@ -1483,7 +1507,7 @@ export class DoubleCodingReviewQueryService {
       const uniqueCoders = new Set<number>();
 
       while (hasMore) {
-        const doubleCodedData = await this.getDoubleCodedVariablesForReview(
+        const doubleCodedData = await this.getDoubleCodedReviewData(
           workspaceId,
           {
             page: currentPage,

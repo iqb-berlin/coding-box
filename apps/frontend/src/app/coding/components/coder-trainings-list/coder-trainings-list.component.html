@@ -1,7 +1,7 @@
 <div class="coder-trainings-container">
   <div class="header-row">
     <div class="header-actions">
-      @if (showCreateButton) {
+      @if (showCreateButton && permissions.canCreate) {
         <button mat-stroked-button color="primary" (click)="createTraining()">
           <mat-icon>add</mat-icon>
           {{ 'coding.trainings.create.button' | translate }}
@@ -109,8 +109,8 @@
                 class="primary-row-action"
                 (click)="requestFullEdit(training)"
                 [attr.aria-label]="getTrainingActionAriaLabel('edit', training)">
-                <mat-icon>edit</mat-icon>
-                <span>{{ 'common.edit' | translate }}</span>
+                <mat-icon>{{ permissions.canEdit(training) ? 'edit' : 'visibility' }}</mat-icon>
+                <span>{{ (permissions.canEdit(training) ? 'common.edit' : 'common.view') | translate }}</span>
               </button>
               <button
                 mat-icon-button
@@ -134,7 +134,7 @@
                   mat-menu-item
                   type="button"
                   class="danger-menu-item"
-                  (click)="deleteTraining(training)"
+                  (click)="deleteTraining(training)" [disabled]="!permissions.canEdit(training)"
                   [attr.aria-label]="getTrainingActionAriaLabel('delete', training)">
                   <mat-icon>delete</mat-icon>
                   <span>{{ 'common.delete' | translate }}</span>

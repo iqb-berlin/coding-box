@@ -15,6 +15,9 @@ interface CodingJobIssueSummary {
  * DTO for a coding job
  */
 export class CodingJobDto {
+  @ApiProperty({ type: Number, nullable: true, readOnly: true })
+    creatorUserId: number | null;
+
   @ApiProperty({
     description: 'Unique identifier for the coding job',
     example: 1
@@ -393,6 +396,7 @@ export class CodingJobDto {
   ): CodingJobDto {
     const dto = new CodingJobDto();
     dto.id = entity.id;
+    dto.creatorUserId = entity.creatorUserId ?? null;
     dto.workspace_id = entity.workspace_id;
     dto.name = entity.name;
     dto.description = entity.description;

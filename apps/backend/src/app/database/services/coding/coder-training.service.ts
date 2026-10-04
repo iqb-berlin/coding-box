@@ -1,9 +1,13 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException, ForbiddenException, Injectable, Logger
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   Repository, In, IsNull, Not, Brackets
 } from 'typeorm';
 import { createHash } from 'crypto';
+import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { assertCodingResourceCreation, assertCodingResourceMutation } from '../shared/coding-ownership.policy';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
@@ -2485,106 +2489,113 @@ export class CoderTrainingService {
     code: number | null | undefined,
     notes?: string | null
   ): Promise<SaveDiscussionResultResponse> {
-    const training = await this.coderTrainingRepository.findOne({
-      where: {
-        id: trainingId,
-        workspace_id: workspaceId
-      },
-      relations: ['codingJobs', 'codingJobs.codingJobUnits', 'codingJobs.codingJobUnits.response']
-    });
+    return this.coderTrainingRepository.manager.transaction(async manager => {
+      await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+      await assertCodingResourceMutation(manager, workspaceId, 'training', trainingId, managerUserId);
+      const coderTrainingRepository = manager.getRepository(CoderTraining);
+      const coderTrainingDiscussionResultRepository = manager.getRepository(CoderTrainingDiscussionResult);
 
-    if (!training) {
-      throw new BadRequestException(`Training ${trainingId} not found in workspace ${workspaceId}`);
-    }
+      const training = await coderTrainingRepository.findOne({
+        where: {
+          id: trainingId,
+          workspace_id: workspaceId
+        },
+        relations: ['codingJobs', 'codingJobs.codingJobUnits', 'codingJobs.codingJobUnits.response']
+      });
 
-    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    const representativeUnit = this.findTrainingUnitForResponse(training, responseId, exclusions);
-
-    if (!representativeUnit) {
-      throw new BadRequestException(`Response ${responseId} is not part of training ${trainingId}`);
-    }
-
-    const existing = await this.coderTrainingDiscussionResultRepository.findOne({
-      where: {
-        workspace_id: workspaceId,
-        training_id: trainingId,
-        response_id: responseId
+      if (!training) {
+        throw new BadRequestException(`Training ${trainingId} not found in workspace ${workspaceId}`);
       }
-    });
 
-    if (code === null || code === undefined) {
-      const missingCodesByJobId = await this.buildMissingCodesByJobId(workspaceId, training.codingJobs || []);
-      const codersData = this.buildCoderResultsForResponse(
-        training,
-        responseId,
-        exclusions,
-        missingCodesByJobId
-      );
-      const automaticDiscussionResult = await this.deriveAutomaticDiscussionResultForResponse(
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+      const representativeUnit = this.findTrainingUnitForResponse(training, responseId, exclusions);
+
+      if (!representativeUnit) {
+        throw new BadRequestException(`Response ${responseId} is not part of training ${trainingId}`);
+      }
+
+      const existing = await coderTrainingDiscussionResultRepository.findOne({
+        where: {
+          workspace_id: workspaceId,
+          training_id: trainingId,
+          response_id: responseId
+        }
+      });
+
+      if (code === null || code === undefined) {
+        const missingCodesByJobId = await this.buildMissingCodesByJobId(workspaceId, training.codingJobs || []);
+        const codersData = this.buildCoderResultsForResponse(
+          training,
+          responseId,
+          exclusions,
+          missingCodesByJobId
+        );
+        const automaticDiscussionResult = await this.deriveAutomaticDiscussionResultForResponse(
+          workspaceId,
+          training,
+          responseId,
+          codersData,
+          exclusions
+        );
+
+        if (existing) {
+          await coderTrainingDiscussionResultRepository.delete(existing.id);
+        }
+        return {
+          success: true,
+          code: automaticDiscussionResult?.code ?? null,
+          score: automaticDiscussionResult?.score ?? null,
+          notes: null,
+          source: automaticDiscussionResult ? 'auto_agreement' : null,
+          managerUserId: null,
+          managerName: null
+        };
+      }
+
+      if (!Number.isInteger(code)) {
+        throw new BadRequestException('Discussion code must be an integer');
+      }
+
+      const resolvedCode = await this.resolveManualDiscussionCode(
         workspaceId,
         training,
         responseId,
-        codersData,
+        code,
         exclusions
       );
 
-      if (existing) {
-        await this.coderTrainingDiscussionResultRepository.delete(existing.id);
-      }
+      const derivedScore = await this.deriveDiscussionScore(
+        workspaceId,
+        training,
+        responseId,
+        resolvedCode,
+        representativeUnit,
+        exclusions
+      );
+
+      const discussionResult = existing || coderTrainingDiscussionResultRepository.create({
+        workspace_id: workspaceId,
+        training_id: trainingId,
+        response_id: responseId
+      });
+
+      discussionResult.code = resolvedCode;
+      discussionResult.score = derivedScore;
+      discussionResult.notes = notes?.trim() || null;
+      discussionResult.manager_user_id = managerUserId;
+      discussionResult.manager_name = managerName;
+
+      const saved = await coderTrainingDiscussionResultRepository.save(discussionResult);
       return {
         success: true,
-        code: automaticDiscussionResult?.code ?? null,
-        score: automaticDiscussionResult?.score ?? null,
-        notes: null,
-        source: automaticDiscussionResult ? 'auto_agreement' : null,
-        managerUserId: null,
-        managerName: null
+        code: saved.code,
+        score: saved.score,
+        notes: saved.notes ?? null,
+        source: 'manual',
+        managerUserId: saved.manager_user_id,
+        managerName: saved.manager_name
       };
-    }
-
-    if (!Number.isInteger(code)) {
-      throw new BadRequestException('Discussion code must be an integer');
-    }
-
-    const resolvedCode = await this.resolveManualDiscussionCode(
-      workspaceId,
-      training,
-      responseId,
-      code,
-      exclusions
-    );
-
-    const derivedScore = await this.deriveDiscussionScore(
-      workspaceId,
-      training,
-      responseId,
-      resolvedCode,
-      representativeUnit,
-      exclusions
-    );
-
-    const discussionResult = existing || this.coderTrainingDiscussionResultRepository.create({
-      workspace_id: workspaceId,
-      training_id: trainingId,
-      response_id: responseId
     });
-
-    discussionResult.code = resolvedCode;
-    discussionResult.score = derivedScore;
-    discussionResult.notes = notes?.trim() || null;
-    discussionResult.manager_user_id = managerUserId;
-    discussionResult.manager_name = managerName;
-
-    const saved = await this.coderTrainingDiscussionResultRepository.save(discussionResult);
-    return {
-      success: true,
-      code: saved.code,
-      score: saved.score,
-      notes: saved.notes ?? null,
-      source: 'manual',
-      managerUserId: saved.manager_user_id,
-      managerName: saved.manager_name
-    };
   }
 
   /**
@@ -3062,252 +3073,271 @@ export class CoderTrainingService {
     referenceMode?: ReferenceMode,
     showScore?: boolean,
     allowComments?: boolean,
-    suppressGeneralInstructions?: boolean
+    suppressGeneralInstructions?: boolean,
+    actorUserId?: number
   ): Promise<{ success: boolean; jobsCreated: number; message: string; jobs: TrainingJob[]; trainingId?: number }> {
+    await assertCodingResourceCreation(this.coderTrainingRepository.manager, workspaceId, actorUserId);
     try {
-      this.logger.log(`Creating coder training jobs for workspace ${workspaceId} with ${selectedCoders.length} coders and label '${trainingLabel}'`);
-      await this.codingJobService.assertCodersCanCodeInWorkspace(
-        selectedCoders.map(coder => coder.id),
-        workspaceId
-      );
-      const resolvedMissingsProfileId = await this.missingsProfilesService.resolveMissingsProfileId(
-        workspaceId,
-        missingsProfileId
-      );
-      const trainingVariableSelections = await this.buildTrainingVariableSelections(
-        workspaceId,
-        variableConfigs,
-        assignedVariables || [],
-        assignedVariableBundles || []
-      );
-      const trainingVariableConfigs = this.mapTrainingVariableSelectionsToConfigs(trainingVariableSelections);
+      return await this.coderTrainingRepository.manager.transaction(async manager => {
+        await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+        const creatorUserId = await assertCodingResourceCreation(manager, workspaceId, actorUserId);
+        const coderTrainingRepository = manager.getRepository(CoderTraining);
+        const coderTrainingVariableRepository = manager.getRepository(CoderTrainingVariable);
+        const coderTrainingBundleRepository = manager.getRepository(CoderTrainingBundle);
+        const coderTrainingCoderRepository = manager.getRepository(CoderTrainingCoder);
+        const codingJobRepository = manager.getRepository(CodingJob);
+        const codingJobUnitRepository = manager.getRepository(CodingJobUnit);
+        const codingJobVariableRepository = manager.getRepository(CodingJobVariable);
+        const codingJobCoderRepository = manager.getRepository(CodingJobCoder);
+        const codingJobVariableBundleRepository = manager.getRepository(CodingJobVariableBundle);
 
-      const coderTraining = new CoderTraining();
-      coderTraining.workspace_id = workspaceId;
-      coderTraining.label = trainingLabel;
-      coderTraining.case_ordering_mode = caseOrderingMode || 'continuous';
-      coderTraining.case_selection_mode = caseSelectionMode ?? 'oldest_first';
-      coderTraining.reference_training_ids = referenceTrainingIds?.length ? referenceTrainingIds : null;
-      coderTraining.reference_mode = referenceMode ?? null;
-      coderTraining.show_score = showScore ?? false;
-      coderTraining.allow_comments = allowComments ?? true;
-      coderTraining.suppress_general_instructions = suppressGeneralInstructions ?? false;
-      coderTraining.created_at = new Date();
-      coderTraining.updated_at = new Date();
+        this.logger.log(`Creating coder training jobs for workspace ${workspaceId} with ${selectedCoders.length} coders and label '${trainingLabel}'`);
+        await this.codingJobService.assertCodersCanCodeInWorkspace(
+          selectedCoders.map(coder => coder.id),
+          workspaceId
+        );
+        const resolvedMissingsProfileId = await this.missingsProfilesService.resolveMissingsProfileId(
+          workspaceId,
+          missingsProfileId
+        );
+        const trainingVariableSelections = await this.buildTrainingVariableSelections(
+          workspaceId,
+          variableConfigs,
+          assignedVariables || [],
+          assignedVariableBundles || []
+        );
+        const trainingVariableConfigs = this.mapTrainingVariableSelectionsToConfigs(trainingVariableSelections);
 
-      const savedTraining = await this.coderTrainingRepository.save(coderTraining);
-      const trainingId = savedTraining.id;
+        const coderTraining = new CoderTraining();
+        coderTraining.workspace_id = workspaceId;
+        coderTraining.creatorUserId = creatorUserId;
+        coderTraining.label = trainingLabel;
+        coderTraining.case_ordering_mode = caseOrderingMode || 'continuous';
+        coderTraining.case_selection_mode = caseSelectionMode ?? 'oldest_first';
+        coderTraining.reference_training_ids = referenceTrainingIds?.length ? referenceTrainingIds : null;
+        coderTraining.reference_mode = referenceMode ?? null;
+        coderTraining.show_score = showScore ?? false;
+        coderTraining.allow_comments = allowComments ?? true;
+        coderTraining.suppress_general_instructions = suppressGeneralInstructions ?? false;
+        coderTraining.created_at = new Date();
+        coderTraining.updated_at = new Date();
 
-      // Save selected variables, including variables that came from bundles.
-      for (const variable of trainingVariableSelections) {
-        const trainingVariable = new CoderTrainingVariable();
-        trainingVariable.coder_training_id = trainingId;
-        trainingVariable.variable_id = variable.variableId;
-        trainingVariable.unit_name = variable.unitName;
-        trainingVariable.sample_count = variable.sampleCount || 10;
-        trainingVariable.include_derive_error = variable.includeDeriveError === true;
-        await this.coderTrainingVariableRepository.save(trainingVariable);
-      }
+        const savedTraining = await coderTrainingRepository.save(coderTraining);
+        const trainingId = savedTraining.id;
 
-      // Save assigned bundles
-      if (assignedVariableBundles) {
-        for (const bundle of assignedVariableBundles) {
-          const trainingBundle = new CoderTrainingBundle();
-          trainingBundle.coder_training_id = trainingId;
-          trainingBundle.variable_bundle_id = bundle.id;
-          trainingBundle.sample_count = bundle.sampleCount || 10;
-          trainingBundle.case_ordering_mode = bundle.caseOrderingMode || null;
-          await this.coderTrainingBundleRepository.save(trainingBundle);
+        // Save selected variables, including variables that came from bundles.
+        for (const variable of trainingVariableSelections) {
+          const trainingVariable = new CoderTrainingVariable();
+          trainingVariable.coder_training_id = trainingId;
+          trainingVariable.variable_id = variable.variableId;
+          trainingVariable.unit_name = variable.unitName;
+          trainingVariable.sample_count = variable.sampleCount || 10;
+          trainingVariable.include_derive_error = variable.includeDeriveError === true;
+          await coderTrainingVariableRepository.save(trainingVariable);
         }
-      }
 
-      // Save assigned coders
-      for (const coder of selectedCoders) {
-        const trainingCoder = new CoderTrainingCoder();
-        trainingCoder.coder_training_id = trainingId;
-        trainingCoder.user_id = coder.id;
-        await this.coderTrainingCoderRepository.save(trainingCoder);
-      }
+        // Save assigned bundles
+        if (assignedVariableBundles) {
+          for (const bundle of assignedVariableBundles) {
+            const trainingBundle = new CoderTrainingBundle();
+            trainingBundle.coder_training_id = trainingId;
+            trainingBundle.variable_bundle_id = bundle.id;
+            trainingBundle.sample_count = bundle.sampleCount || 10;
+            trainingBundle.case_ordering_mode = bundle.caseOrderingMode || null;
+            await coderTrainingBundleRepository.save(trainingBundle);
+          }
+        }
 
-      this.logger.log(`Created coder training ${trainingId} with label '${trainingLabel}' and configuration`);
+        // Save assigned coders
+        for (const coder of selectedCoders) {
+          const trainingCoder = new CoderTrainingCoder();
+          trainingCoder.coder_training_id = trainingId;
+          trainingCoder.user_id = coder.id;
+          await coderTrainingCoderRepository.save(trainingCoder);
+        }
 
-      const trainingPackageOptions: {
-        caseSelectionMode: CaseSelectionMode;
-        referenceTrainingIds?: number[];
-        referenceMode?: ReferenceMode;
-        assignedVariableBundles?: JobDefinitionVariableBundle[];
-      } = {
-        caseSelectionMode: caseSelectionMode ?? 'oldest_first',
-        referenceTrainingIds,
-        referenceMode
-      };
-      if (assignedVariableBundles?.length) {
-        trainingPackageOptions.assignedVariableBundles = assignedVariableBundles;
-      }
+        this.logger.log(`Created coder training ${trainingId} with label '${trainingLabel}' and configuration`);
 
-      const trainingPackages = await this.generateCoderTrainingPackages(
-        workspaceId,
-        selectedCoders,
-        trainingVariableConfigs,
-        trainingPackageOptions
-      );
+        const trainingPackageOptions: {
+          caseSelectionMode: CaseSelectionMode;
+          referenceTrainingIds?: number[];
+          referenceMode?: ReferenceMode;
+          assignedVariableBundles?: JobDefinitionVariableBundle[];
+        } = {
+          caseSelectionMode: caseSelectionMode ?? 'oldest_first',
+          referenceTrainingIds,
+          referenceMode
+        };
+        if (assignedVariableBundles?.length) {
+          trainingPackageOptions.assignedVariableBundles = assignedVariableBundles;
+        }
 
-      // Build mapping from variable to bundle id and bundle sorting mode
-      const variableToBundleMap = new Map<string, number>();
-      const bundleSortingModeMap = new Map<number, 'continuous' | 'alternating'>();
-      this.logger.log(`Building bundle maps for ${assignedVariableBundles?.length || 0} bundles`);
-      if (assignedVariableBundles && assignedVariableBundles.length > 0) {
-        const bundleIds = this.getValidatedBundleIds(assignedVariableBundles);
-        if (bundleIds.length > 0) {
-          const fetchedBundlesById = await this.getWorkspaceVariableBundlesById(workspaceId, bundleIds);
-          for (const bundle of fetchedBundlesById.values()) {
+        const trainingPackages = await this.generateCoderTrainingPackages(
+          workspaceId,
+          selectedCoders,
+          trainingVariableConfigs,
+          trainingPackageOptions
+        );
+
+        // Build mapping from variable to bundle id and bundle sorting mode
+        const variableToBundleMap = new Map<string, number>();
+        const bundleSortingModeMap = new Map<number, 'continuous' | 'alternating'>();
+        this.logger.log(`Building bundle maps for ${assignedVariableBundles?.length || 0} bundles`);
+        if (assignedVariableBundles && assignedVariableBundles.length > 0) {
+          const bundleIds = this.getValidatedBundleIds(assignedVariableBundles);
+          if (bundleIds.length > 0) {
+            const fetchedBundlesById = await this.getWorkspaceVariableBundlesById(workspaceId, bundleIds);
+            for (const bundle of fetchedBundlesById.values()) {
             // Store the bundle's sorting mode (if set, otherwise null)
-            const bundleConfig = assignedVariableBundles.find(b => b.id === bundle.id);
-            const mode = bundleConfig?.caseOrderingMode || null;
-            bundleSortingModeMap.set(bundle.id, mode);
-            this.logger.log(`Bundle ${bundle.id} (${bundle.name}): mode=${mode}`);
-            if (bundle.variables) {
-              for (const v of bundle.variables) {
-                const key = `${v.unitName}::${v.variableId}`;
-                variableToBundleMap.set(key, bundle.id);
-                this.logger.debug(`  Variable mapping: ${key} -> bundle ${bundle.id}`);
+              const bundleConfig = assignedVariableBundles.find(b => b.id === bundle.id);
+              const mode = bundleConfig?.caseOrderingMode || null;
+              bundleSortingModeMap.set(bundle.id, mode);
+              this.logger.log(`Bundle ${bundle.id} (${bundle.name}): mode=${mode}`);
+              if (bundle.variables) {
+                for (const v of bundle.variables) {
+                  const key = `${v.unitName}::${v.variableId}`;
+                  variableToBundleMap.set(key, bundle.id);
+                  this.logger.debug(`  Variable mapping: ${key} -> bundle ${bundle.id}`);
+                }
               }
             }
           }
         }
-      }
 
-      const jobs: TrainingJob[] = [];
-      let jobsCreated = 0;
+        const jobs: TrainingJob[] = [];
+        let jobsCreated = 0;
 
-      for (const trainingPackage of trainingPackages) {
-        const coderId = trainingPackage.coderId;
-        const coderName = trainingPackage.coderName;
+        for (const trainingPackage of trainingPackages) {
+          const coderId = trainingPackage.coderId;
+          const coderName = trainingPackage.coderName;
 
-        this.logger.log(`Creating training job for coder ${coderName} (ID: ${coderId})`);
+          this.logger.log(`Creating training job for coder ${coderName} (ID: ${coderId})`);
 
-        const codingJob = new CodingJob();
-        codingJob.name = `${trainingLabel}-${coderName}`;
-        codingJob.workspace_id = workspaceId;
-        codingJob.description = '';
-        codingJob.training_id = trainingId;
-        codingJob.missings_profile_id = resolvedMissingsProfileId;
-        codingJob.case_ordering_mode = caseOrderingMode || 'continuous';
-        codingJob.showScore = showScore ?? false;
-        codingJob.allowComments = allowComments ?? true;
-        codingJob.suppressGeneralInstructions = suppressGeneralInstructions ?? false;
-        codingJob.created_at = new Date();
-        codingJob.updated_at = new Date();
+          const codingJob = new CodingJob();
+          codingJob.creatorUserId = savedTraining.creatorUserId;
+          codingJob.name = `${trainingLabel}-${coderName}`;
+          codingJob.workspace_id = workspaceId;
+          codingJob.description = '';
+          codingJob.training_id = trainingId;
+          codingJob.missings_profile_id = resolvedMissingsProfileId;
+          codingJob.case_ordering_mode = caseOrderingMode || 'continuous';
+          codingJob.showScore = showScore ?? false;
+          codingJob.allowComments = allowComments ?? true;
+          codingJob.suppressGeneralInstructions = suppressGeneralInstructions ?? false;
+          codingJob.created_at = new Date();
+          codingJob.updated_at = new Date();
 
-        const savedJob = await this.codingJobRepository.save(codingJob);
-        const jobId = savedJob.id;
+          const savedJob = await codingJobRepository.save(codingJob);
+          const jobId = savedJob.id;
 
-        jobsCreated += 1;
-        jobs.push({
-          coderId,
-          coderName,
-          jobId,
-          jobName: codingJob.name
-        });
+          jobsCreated += 1;
+          jobs.push({
+            coderId,
+            coderName,
+            jobId,
+            jobName: codingJob.name
+          });
 
-        const codingJobCoder = new CodingJobCoder();
-        codingJobCoder.coding_job_id = jobId;
-        codingJobCoder.user_id = coderId;
-        await this.codingJobCoderRepository.save(codingJobCoder);
+          const codingJobCoder = new CodingJobCoder();
+          codingJobCoder.coding_job_id = jobId;
+          codingJobCoder.user_id = coderId;
+          await codingJobCoderRepository.save(codingJobCoder);
 
-        // Save bundle configurations to CodingJobVariableBundle for display sorting
-        const seenBundleIdsForJob = new Set<number>();
-        for (const response of trainingPackage.responses) {
-          const bundleId = variableToBundleMap.get(`${response.unitName}::${response.variableId}`);
-          if (bundleId && !seenBundleIdsForJob.has(bundleId)) {
-            seenBundleIdsForJob.add(bundleId);
-            const bundleMode = bundleSortingModeMap.get(bundleId);
-            const jobVariableBundle = new CodingJobVariableBundle();
-            jobVariableBundle.coding_job_id = jobId;
-            jobVariableBundle.variable_bundle_id = bundleId;
-            jobVariableBundle.case_ordering_mode = bundleMode || null;
-            await this.codingJobVariableBundleRepository.save(jobVariableBundle);
-            this.logger.log(`Saved CodingJobVariableBundle: job=${jobId}, bundle=${bundleId}, mode=${bundleMode || 'null'}`);
+          // Save bundle configurations to CodingJobVariableBundle for display sorting
+          const seenBundleIdsForJob = new Set<number>();
+          for (const response of trainingPackage.responses) {
+            const bundleId = variableToBundleMap.get(`${response.unitName}::${response.variableId}`);
+            if (bundleId && !seenBundleIdsForJob.has(bundleId)) {
+              seenBundleIdsForJob.add(bundleId);
+              const bundleMode = bundleSortingModeMap.get(bundleId);
+              const jobVariableBundle = new CodingJobVariableBundle();
+              jobVariableBundle.coding_job_id = jobId;
+              jobVariableBundle.variable_bundle_id = bundleId;
+              jobVariableBundle.case_ordering_mode = bundleMode || null;
+              await codingJobVariableBundleRepository.save(jobVariableBundle);
+              this.logger.log(`Saved CodingJobVariableBundle: job=${jobId}, bundle=${bundleId}, mode=${bundleMode || 'null'}`);
+            }
           }
+
+          const processedVariables = new Set<string>();
+          for (const response of trainingPackage.responses) {
+            const variableKey = `${response.variableId}:${response.unitName}`;
+            if (!processedVariables.has(variableKey)) {
+              const codingJobVariable = new CodingJobVariable();
+              codingJobVariable.coding_job_id = jobId;
+              codingJobVariable.variable_id = response.variableId;
+              codingJobVariable.unit_name = response.unitName;
+              await codingJobVariableRepository.save(codingJobVariable);
+              processedVariables.add(variableKey);
+              this.logger.log(`Added variable ${response.variableId} for unit ${response.unitName} to training job ${jobId} for coder ${coderName}`);
+            }
+          }
+
+          // Sort responses with bundle-specific sorting modes
+          // Group responses by their effective sorting mode
+          const defaultMode = caseOrderingMode || 'continuous';
+          const alternatingResponses: CoderTrainingResponse[] = [];
+          const continuousResponses: CoderTrainingResponse[] = [];
+
+          for (const response of trainingPackage.responses) {
+            const bundleId = variableToBundleMap.get(`${response.unitName}::${response.variableId}`);
+            const bundleMode = bundleId !== undefined ? bundleSortingModeMap.get(bundleId) : undefined;
+            const effectiveMode = bundleMode || defaultMode;
+
+            this.logger.debug(`Response ${response.responseId} (${response.unitName}::${response.variableId}): bundleId=${bundleId}, bundleMode=${bundleMode}, effectiveMode=${effectiveMode}`);
+
+            if (effectiveMode === 'alternating') {
+              alternatingResponses.push(response);
+            } else {
+              continuousResponses.push(response);
+            }
+          }
+
+          this.logger.log(`Sorting: ${alternatingResponses.length} alternating, ${continuousResponses.length} continuous (default: ${defaultMode})`);
+
+          // Sort each group with its respective mode
+          const sortedAlternating = this.sortTrainingResponses(alternatingResponses, 'alternating');
+          const sortedContinuous = this.sortTrainingResponses(continuousResponses, 'continuous');
+
+          // Combine: alternating first, then continuous
+          const sortedResponses = [...sortedAlternating, ...sortedContinuous];
+
+          const codingJobUnits: CodingJobUnit[] = sortedResponses.map(response => {
+            const codingJobUnit = new CodingJobUnit();
+            codingJobUnit.coding_job_id = jobId;
+            codingJobUnit.workspace_id = workspaceId;
+            codingJobUnit.response_id = response.responseId;
+            codingJobUnit.unit_name = response.unitName;
+            codingJobUnit.unit_alias = response.unitAlias || null;
+            codingJobUnit.variable_id = response.variableId;
+            codingJobUnit.variable_anchor = response.variableId; // Same as variable_id
+            codingJobUnit.booklet_name = response.bookletName;
+            codingJobUnit.person_login = response.personLogin;
+            codingJobUnit.person_code = response.personCode;
+            codingJobUnit.person_group = response.personGroup;
+            codingJobUnit.is_open = true;
+            codingJobUnit.variable_bundle_id = variableToBundleMap.get(`${response.unitName}::${response.variableId}`) || null;
+            return codingJobUnit;
+          });
+          await codingJobUnitRepository.save(codingJobUnits);
+          this.logger.log(`Bulk-inserted ${codingJobUnits.length} coding job units to training job ${jobId} for coder ${coderName}`);
+
+          this.logger.log(`Successfully created training job ${jobId} with ${trainingPackage.responses.length} coding units for coder ${coderName}`);
         }
 
-        const processedVariables = new Set<string>();
-        for (const response of trainingPackage.responses) {
-          const variableKey = `${response.variableId}:${response.unitName}`;
-          if (!processedVariables.has(variableKey)) {
-            const codingJobVariable = new CodingJobVariable();
-            codingJobVariable.coding_job_id = jobId;
-            codingJobVariable.variable_id = response.variableId;
-            codingJobVariable.unit_name = response.unitName;
-            await this.codingJobVariableRepository.save(codingJobVariable);
-            processedVariables.add(variableKey);
-            this.logger.log(`Added variable ${response.variableId} for unit ${response.unitName} to training job ${jobId} for coder ${coderName}`);
-          }
-        }
+        const message = `Successfully created ${jobsCreated} coder training jobs`;
 
-        // Sort responses with bundle-specific sorting modes
-        // Group responses by their effective sorting mode
-        const defaultMode = caseOrderingMode || 'continuous';
-        const alternatingResponses: CoderTrainingResponse[] = [];
-        const continuousResponses: CoderTrainingResponse[] = [];
-
-        for (const response of trainingPackage.responses) {
-          const bundleId = variableToBundleMap.get(`${response.unitName}::${response.variableId}`);
-          const bundleMode = bundleId !== undefined ? bundleSortingModeMap.get(bundleId) : undefined;
-          const effectiveMode = bundleMode || defaultMode;
-
-          this.logger.debug(`Response ${response.responseId} (${response.unitName}::${response.variableId}): bundleId=${bundleId}, bundleMode=${bundleMode}, effectiveMode=${effectiveMode}`);
-
-          if (effectiveMode === 'alternating') {
-            alternatingResponses.push(response);
-          } else {
-            continuousResponses.push(response);
-          }
-        }
-
-        this.logger.log(`Sorting: ${alternatingResponses.length} alternating, ${continuousResponses.length} continuous (default: ${defaultMode})`);
-
-        // Sort each group with its respective mode
-        const sortedAlternating = this.sortTrainingResponses(alternatingResponses, 'alternating');
-        const sortedContinuous = this.sortTrainingResponses(continuousResponses, 'continuous');
-
-        // Combine: alternating first, then continuous
-        const sortedResponses = [...sortedAlternating, ...sortedContinuous];
-
-        const codingJobUnits: CodingJobUnit[] = sortedResponses.map(response => {
-          const codingJobUnit = new CodingJobUnit();
-          codingJobUnit.coding_job_id = jobId;
-          codingJobUnit.workspace_id = workspaceId;
-          codingJobUnit.response_id = response.responseId;
-          codingJobUnit.unit_name = response.unitName;
-          codingJobUnit.unit_alias = response.unitAlias || null;
-          codingJobUnit.variable_id = response.variableId;
-          codingJobUnit.variable_anchor = response.variableId; // Same as variable_id
-          codingJobUnit.booklet_name = response.bookletName;
-          codingJobUnit.person_login = response.personLogin;
-          codingJobUnit.person_code = response.personCode;
-          codingJobUnit.person_group = response.personGroup;
-          codingJobUnit.is_open = true;
-          codingJobUnit.variable_bundle_id = variableToBundleMap.get(`${response.unitName}::${response.variableId}`) || null;
-          return codingJobUnit;
-        });
-        await this.codingJobUnitRepository.save(codingJobUnits);
-        this.logger.log(`Bulk-inserted ${codingJobUnits.length} coding job units to training job ${jobId} for coder ${coderName}`);
-
-        this.logger.log(`Successfully created training job ${jobId} with ${trainingPackage.responses.length} coding units for coder ${coderName}`);
-      }
-
-      const message = `Successfully created ${jobsCreated} coder training jobs`;
-
-      this.logger.log(message);
-      return {
-        success: true,
-        jobsCreated,
-        message,
-        jobs,
-        trainingId
-      };
+        this.logger.log(message);
+        return {
+          success: true,
+          jobsCreated,
+          message,
+          jobs,
+          trainingId
+        };
+      });
     } catch (error) {
+      if (error instanceof ForbiddenException) throw error;
       const errorMessage = `Error creating coder training jobs: ${error.message}`;
       this.logger.error(errorMessage, error.stack);
       return {
@@ -3335,6 +3365,7 @@ export class CoderTrainingService {
       return {
         id: training.id,
         workspace_id: training.workspace_id,
+        creatorUserId: training.creatorUserId ?? null,
         label: training.label,
         created_at: training.created_at,
         updated_at: training.updated_at,
@@ -4442,121 +4473,140 @@ export class CoderTrainingService {
     referenceMode?: ReferenceMode,
     showScore?: boolean,
     allowComments?: boolean,
-    suppressGeneralInstructions?: boolean
+    suppressGeneralInstructions?: boolean,
+    actorUserId?: number
   ): Promise<{ success: boolean; message: string; jobsCreated?: number; jobs?: TrainingJob[] }> {
+    await assertCodingResourceMutation(this.coderTrainingRepository.manager, workspaceId, 'training', trainingId, actorUserId);
     try {
-      this.logger.log(`Updating coder training ${trainingId} in workspace ${workspaceId}`);
-      await this.codingJobService.assertCodersCanCodeInWorkspace(
-        selectedCoders.map(coder => coder.id),
-        workspaceId
-      );
+      return await this.coderTrainingRepository.manager.transaction(async manager => {
+        await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+        await assertCodingResourceMutation(manager, workspaceId, 'training', trainingId, actorUserId);
+        const coderTrainingRepository = manager.getRepository(CoderTraining);
+        const coderTrainingVariableRepository = manager.getRepository(CoderTrainingVariable);
+        const coderTrainingBundleRepository = manager.getRepository(CoderTrainingBundle);
+        const coderTrainingCoderRepository = manager.getRepository(CoderTrainingCoder);
+        const codingJobRepository = manager.getRepository(CodingJob);
+        const codingJobUnitRepository = manager.getRepository(CodingJobUnit);
+        const codingJobVariableRepository = manager.getRepository(CodingJobVariable);
+        const codingJobCoderRepository = manager.getRepository(CodingJobCoder);
+        const codingJobVariableBundleRepository = manager.getRepository(CodingJobVariableBundle);
 
-      const training = await this.coderTrainingRepository.findOne({
-        where: { id: trainingId, workspace_id: workspaceId },
-        relations: ['codingJobs', 'variables', 'bundles', 'bundles.bundle', 'coders']
-      });
+        this.logger.log(`Updating coder training ${trainingId} in workspace ${workspaceId}`);
+        await this.codingJobService.assertCodersCanCodeInWorkspace(
+          selectedCoders.map(coder => coder.id),
+          workspaceId
+        );
 
-      if (!training) {
-        return { success: false, message: 'Training nicht gefunden' };
-      }
+        const training = await coderTrainingRepository.findOne({
+          where: { id: trainingId, workspace_id: workspaceId },
+          relations: ['codingJobs', 'variables', 'bundles', 'bundles.bundle', 'coders']
+        });
 
-      const resolvedCurrentProfileIds = await Promise.all((training.codingJobs || [])
-        .map(job => this.missingsProfilesService.resolveMissingsProfileId(
+        if (!training) {
+          return { success: false, message: 'Training nicht gefunden' };
+        }
+
+        for (const job of training.codingJobs || []) {
+          await assertCodingResourceMutation(manager, workspaceId, 'job', job.id, actorUserId);
+        }
+
+        const resolvedCurrentProfileIds = await Promise.all((training.codingJobs || [])
+          .map(job => this.missingsProfilesService.resolveMissingsProfileId(
+            workspaceId,
+            job.missings_profile_id
+          )));
+        const currentProfileKeys = new Set(resolvedCurrentProfileIds);
+        const hasConflictingCurrentMissingsProfiles = currentProfileKeys.size > 1;
+        if (hasConflictingCurrentMissingsProfiles && missingsProfileId === undefined) {
+          throw new BadRequestException(`Conflicting missing profiles for training ${trainingId}`);
+        }
+        const currentMissingsProfileId = currentProfileKeys.size === 1 ?
+          Array.from(currentProfileKeys)[0] :
+          null;
+        const resolvedCurrentMissingsProfileId = await this.missingsProfilesService.resolveMissingsProfileId(
           workspaceId,
-          job.missings_profile_id
-        )));
-      const currentProfileKeys = new Set(resolvedCurrentProfileIds);
-      const hasConflictingCurrentMissingsProfiles = currentProfileKeys.size > 1;
-      if (hasConflictingCurrentMissingsProfiles && missingsProfileId === undefined) {
-        throw new BadRequestException(`Conflicting missing profiles for training ${trainingId}`);
-      }
-      const currentMissingsProfileId = currentProfileKeys.size === 1 ?
-        Array.from(currentProfileKeys)[0] :
-        null;
-      const resolvedCurrentMissingsProfileId = await this.missingsProfilesService.resolveMissingsProfileId(
-        workspaceId,
-        currentMissingsProfileId
-      );
-      const resolvedMissingsProfileId = missingsProfileId !== undefined ?
-        await this.missingsProfilesService.resolveMissingsProfileId(workspaceId, missingsProfileId) :
-        resolvedCurrentMissingsProfileId;
+          currentMissingsProfileId
+        );
+        const resolvedMissingsProfileId = missingsProfileId !== undefined ?
+          await this.missingsProfilesService.resolveMissingsProfileId(workspaceId, missingsProfileId) :
+          resolvedCurrentMissingsProfileId;
 
-      // Check if critical configuration changed (coders or variables)
-      const currentCoderIds = training.coders?.map(c => c.user_id).sort() || [];
-      const newCoderIds = selectedCoders.map(c => c.id).sort();
-      const codersChanged = JSON.stringify(currentCoderIds) !== JSON.stringify(newCoderIds);
+        // Check if critical configuration changed (coders or variables)
+        const currentCoderIds = training.coders?.map(c => c.user_id).sort() || [];
+        const newCoderIds = selectedCoders.map(c => c.id).sort();
+        const codersChanged = JSON.stringify(currentCoderIds) !== JSON.stringify(newCoderIds);
 
-      const currentAssignedVariables = this.mapTrainingVariables(training.variables || []);
+        const currentAssignedVariables = this.mapTrainingVariables(training.variables || []);
 
-      const currentCaseOrderingMode = training.case_ordering_mode || 'continuous';
-      const newCaseOrderingMode = caseOrderingMode ?? currentCaseOrderingMode;
+        const currentCaseOrderingMode = training.case_ordering_mode || 'continuous';
+        const newCaseOrderingMode = caseOrderingMode ?? currentCaseOrderingMode;
 
-      const currentAssignedVariableBundles = this.mapTrainingBundles(
-        training.bundles || [],
-        currentAssignedVariables
-      );
-      const currentTrainingVariables = await this.buildTrainingVariableSelections(
-        workspaceId,
-        [],
-        currentAssignedVariables,
-        currentAssignedVariableBundles
-      );
+        const currentAssignedVariableBundles = this.mapTrainingBundles(
+          training.bundles || [],
+          currentAssignedVariables
+        );
+        const currentTrainingVariables = await this.buildTrainingVariableSelections(
+          workspaceId,
+          [],
+          currentAssignedVariables,
+          currentAssignedVariableBundles
+        );
 
-      const effectiveAssignedVariables = assignedVariables ?? currentAssignedVariables;
-      const effectiveAssignedVariableBundles = assignedVariableBundles ?? currentAssignedVariableBundles;
-      const effectiveTrainingVariables = await this.buildTrainingVariableSelections(
-        workspaceId,
-        variableConfigs,
-        effectiveAssignedVariables,
-        effectiveAssignedVariableBundles
-      );
-      const effectiveTrainingVariableConfigs = this.mapTrainingVariableSelectionsToConfigs(effectiveTrainingVariables);
+        const effectiveAssignedVariables = assignedVariables ?? currentAssignedVariables;
+        const effectiveAssignedVariableBundles = assignedVariableBundles ?? currentAssignedVariableBundles;
+        const effectiveTrainingVariables = await this.buildTrainingVariableSelections(
+          workspaceId,
+          variableConfigs,
+          effectiveAssignedVariables,
+          effectiveAssignedVariableBundles
+        );
+        const effectiveTrainingVariableConfigs = this.mapTrainingVariableSelectionsToConfigs(effectiveTrainingVariables);
 
-      const currentVariables = currentTrainingVariables.map(v => ({
-        variableId: v.variableId,
-        unitName: v.unitName,
-        sampleCount: v.sampleCount || 10,
-        includeDeriveError: v.includeDeriveError === true
-      })).sort((a, b) => (a.variableId + a.unitName).localeCompare(b.variableId + b.unitName));
+        const currentVariables = currentTrainingVariables.map(v => ({
+          variableId: v.variableId,
+          unitName: v.unitName,
+          sampleCount: v.sampleCount || 10,
+          includeDeriveError: v.includeDeriveError === true
+        })).sort((a, b) => (a.variableId + a.unitName).localeCompare(b.variableId + b.unitName));
 
-      const newVariables = effectiveTrainingVariables.map(v => ({
-        variableId: v.variableId,
-        unitName: v.unitName,
-        sampleCount: v.sampleCount || 10,
-        includeDeriveError: v.includeDeriveError === true
-      })).sort((a, b) => (a.variableId + a.unitName).localeCompare(b.variableId + b.unitName));
+        const newVariables = effectiveTrainingVariables.map(v => ({
+          variableId: v.variableId,
+          unitName: v.unitName,
+          sampleCount: v.sampleCount || 10,
+          includeDeriveError: v.includeDeriveError === true
+        })).sort((a, b) => (a.variableId + a.unitName).localeCompare(b.variableId + b.unitName));
 
-      const variablesChanged = JSON.stringify(currentVariables) !== JSON.stringify(newVariables);
+        const variablesChanged = JSON.stringify(currentVariables) !== JSON.stringify(newVariables);
 
-      const currentBundles = currentAssignedVariableBundles.map(b => ({
-        id: b.id,
-        sampleCount: b.sampleCount || 10,
-        caseOrderingMode: b.caseOrderingMode ?? currentCaseOrderingMode
-      })).sort((a, b) => a.id - b.id);
+        const currentBundles = currentAssignedVariableBundles.map(b => ({
+          id: b.id,
+          sampleCount: b.sampleCount || 10,
+          caseOrderingMode: b.caseOrderingMode ?? currentCaseOrderingMode
+        })).sort((a, b) => a.id - b.id);
 
-      const newBundles = effectiveAssignedVariableBundles.map(b => ({
-        id: b.id,
-        sampleCount: b.sampleCount || 10,
-        caseOrderingMode: b.caseOrderingMode ?? newCaseOrderingMode
-      })).sort((a, b) => a.id - b.id);
+        const newBundles = effectiveAssignedVariableBundles.map(b => ({
+          id: b.id,
+          sampleCount: b.sampleCount || 10,
+          caseOrderingMode: b.caseOrderingMode ?? newCaseOrderingMode
+        })).sort((a, b) => a.id - b.id);
 
-      const bundlesChanged = JSON.stringify(currentBundles) !== JSON.stringify(newBundles);
-      const caseOrderingChanged = currentCaseOrderingMode !== newCaseOrderingMode;
-      const currentCaseSelectionMode = training.case_selection_mode || 'oldest_first';
-      const newCaseSelectionMode = caseSelectionMode ?? currentCaseSelectionMode;
-      const currentReferenceTrainingIds = [...(training.reference_training_ids ?? [])].sort((a, b) => a - b);
-      const effectiveReferenceTrainingIds = referenceTrainingIds ?? training.reference_training_ids ?? [];
-      const newReferenceTrainingIds = [...effectiveReferenceTrainingIds].sort((a, b) => a - b);
-      const currentReferenceMode = training.reference_mode ?? null;
-      const newReferenceMode = effectiveReferenceTrainingIds.length > 0 ?
-        referenceMode ?? currentReferenceMode :
-        null;
-      const caseSelectionChanged = currentCaseSelectionMode !== newCaseSelectionMode;
-      const referenceSelectionChanged = JSON.stringify(currentReferenceTrainingIds) !== JSON.stringify(newReferenceTrainingIds) ||
+        const bundlesChanged = JSON.stringify(currentBundles) !== JSON.stringify(newBundles);
+        const caseOrderingChanged = currentCaseOrderingMode !== newCaseOrderingMode;
+        const currentCaseSelectionMode = training.case_selection_mode || 'oldest_first';
+        const newCaseSelectionMode = caseSelectionMode ?? currentCaseSelectionMode;
+        const currentReferenceTrainingIds = [...(training.reference_training_ids ?? [])].sort((a, b) => a - b);
+        const effectiveReferenceTrainingIds = referenceTrainingIds ?? training.reference_training_ids ?? [];
+        const newReferenceTrainingIds = [...effectiveReferenceTrainingIds].sort((a, b) => a - b);
+        const currentReferenceMode = training.reference_mode ?? null;
+        const newReferenceMode = effectiveReferenceTrainingIds.length > 0 ?
+          referenceMode ?? currentReferenceMode :
+          null;
+        const caseSelectionChanged = currentCaseSelectionMode !== newCaseSelectionMode;
+        const referenceSelectionChanged = JSON.stringify(currentReferenceTrainingIds) !== JSON.stringify(newReferenceTrainingIds) ||
         currentReferenceMode !== newReferenceMode;
-      const missingsProfileChanged = hasConflictingCurrentMissingsProfiles ||
+        const missingsProfileChanged = hasConflictingCurrentMissingsProfiles ||
         resolvedCurrentMissingsProfileId !== resolvedMissingsProfileId;
-      const shouldRecreateJobs =
+        const shouldRecreateJobs =
         codersChanged ||
         variablesChanged ||
         bundlesChanged ||
@@ -4565,298 +4615,310 @@ export class CoderTrainingService {
         referenceSelectionChanged ||
         missingsProfileChanged;
 
-      if (shouldRecreateJobs) {
-        const jobIds = (training.codingJobs || []).map(job => job.id);
-        const [hasCodingProgress, hasDiscussionResults] = await Promise.all([
-          this.hasCodingProgressForJobs(jobIds),
-          this.hasDiscussionResultsForTraining(workspaceId, trainingId)
-        ]);
-        if (hasCodingProgress || hasDiscussionResults) {
-          return {
-            success: false,
-            message: 'Die Schulung wurde bereits bearbeitet. Änderungen an Fallauswahl, Fallreihenfolge, Referenzen, Missing-Profil, Kodierern oder Variablen würden bestehende Kodierungen löschen.'
-          };
+        if (shouldRecreateJobs) {
+          const jobIds = (training.codingJobs || []).map(job => job.id);
+          const [hasCodingProgress, hasDiscussionResults] = await Promise.all([
+            this.hasCodingProgressForJobs(jobIds),
+            this.hasDiscussionResultsForTraining(workspaceId, trainingId)
+          ]);
+          if (hasCodingProgress || hasDiscussionResults) {
+            return {
+              success: false,
+              message: 'Die Schulung wurde bereits bearbeitet. Änderungen an Fallauswahl, Fallreihenfolge, Referenzen, Missing-Profil, Kodierern oder Variablen würden bestehende Kodierungen löschen.'
+            };
+          }
         }
-      }
 
-      const resolvedSuppressGeneralInstructions = suppressGeneralInstructions ??
+        const resolvedSuppressGeneralInstructions = suppressGeneralInstructions ??
         training.suppress_general_instructions ??
         false;
-      const resolvedShowScore = showScore ??
+        const resolvedShowScore = showScore ??
         training.show_score ??
         false;
-      const resolvedAllowComments = allowComments ??
+        const resolvedAllowComments = allowComments ??
         training.allow_comments ??
         true;
 
-      training.label = trainingLabel;
-      training.case_ordering_mode = newCaseOrderingMode;
-      training.case_selection_mode = newCaseSelectionMode;
-      training.reference_training_ids = effectiveReferenceTrainingIds.length ? effectiveReferenceTrainingIds : null;
-      training.reference_mode = newReferenceMode;
-      training.show_score = resolvedShowScore;
-      training.allow_comments = resolvedAllowComments;
-      training.suppress_general_instructions = resolvedSuppressGeneralInstructions;
-      training.updated_at = new Date();
+        training.label = trainingLabel;
+        training.case_ordering_mode = newCaseOrderingMode;
+        training.case_selection_mode = newCaseSelectionMode;
+        training.reference_training_ids = effectiveReferenceTrainingIds.length ? effectiveReferenceTrainingIds : null;
+        training.reference_mode = newReferenceMode;
+        training.show_score = resolvedShowScore;
+        training.allow_comments = resolvedAllowComments;
+        training.suppress_general_instructions = resolvedSuppressGeneralInstructions;
+        training.updated_at = new Date();
 
-      await this.coderTrainingRepository.save(training);
+        await coderTrainingRepository.save(training);
 
-      if (shouldRecreateJobs) {
-        this.logger.log(`Configuration changed for training ${trainingId}. Recreating jobs.`);
+        if (shouldRecreateJobs) {
+          this.logger.log(`Configuration changed for training ${trainingId}. Recreating jobs.`);
 
-        // Delete existing configuration relations
-        await this.coderTrainingVariableRepository.delete({ coder_training_id: trainingId });
-        await this.coderTrainingBundleRepository.delete({ coder_training_id: trainingId });
-        await this.coderTrainingCoderRepository.delete({ coder_training_id: trainingId });
+          // Delete existing configuration relations
+          await coderTrainingVariableRepository.delete({ coder_training_id: trainingId });
+          await coderTrainingBundleRepository.delete({ coder_training_id: trainingId });
+          await coderTrainingCoderRepository.delete({ coder_training_id: trainingId });
 
-        // Save new configuration relations
-        for (const variable of effectiveTrainingVariables) {
-          const trainingVariable = new CoderTrainingVariable();
-          trainingVariable.coder_training_id = trainingId;
-          trainingVariable.variable_id = variable.variableId;
-          trainingVariable.unit_name = variable.unitName;
-          trainingVariable.sample_count = variable.sampleCount || 10;
-          trainingVariable.include_derive_error = variable.includeDeriveError === true;
-          await this.coderTrainingVariableRepository.save(trainingVariable);
-        }
+          // Save new configuration relations
+          for (const variable of effectiveTrainingVariables) {
+            const trainingVariable = new CoderTrainingVariable();
+            trainingVariable.coder_training_id = trainingId;
+            trainingVariable.variable_id = variable.variableId;
+            trainingVariable.unit_name = variable.unitName;
+            trainingVariable.sample_count = variable.sampleCount || 10;
+            trainingVariable.include_derive_error = variable.includeDeriveError === true;
+            await coderTrainingVariableRepository.save(trainingVariable);
+          }
 
-        for (const bundle of effectiveAssignedVariableBundles) {
-          const trainingBundle = new CoderTrainingBundle();
-          trainingBundle.coder_training_id = trainingId;
-          trainingBundle.variable_bundle_id = bundle.id;
-          trainingBundle.sample_count = bundle.sampleCount || 10;
-          trainingBundle.case_ordering_mode = bundle.caseOrderingMode ?? null;
-          await this.coderTrainingBundleRepository.save(trainingBundle);
-        }
+          for (const bundle of effectiveAssignedVariableBundles) {
+            const trainingBundle = new CoderTrainingBundle();
+            trainingBundle.coder_training_id = trainingId;
+            trainingBundle.variable_bundle_id = bundle.id;
+            trainingBundle.sample_count = bundle.sampleCount || 10;
+            trainingBundle.case_ordering_mode = bundle.caseOrderingMode ?? null;
+            await coderTrainingBundleRepository.save(trainingBundle);
+          }
 
-        for (const coder of selectedCoders) {
-          const trainingCoder = new CoderTrainingCoder();
-          trainingCoder.coder_training_id = trainingId;
-          trainingCoder.user_id = coder.id;
-          await this.coderTrainingCoderRepository.save(trainingCoder);
-        }
-        this.logger.log(`Configuration changed for training ${trainingId}. Recreating jobs.`);
+          for (const coder of selectedCoders) {
+            const trainingCoder = new CoderTrainingCoder();
+            trainingCoder.coder_training_id = trainingId;
+            trainingCoder.user_id = coder.id;
+            await coderTrainingCoderRepository.save(trainingCoder);
+          }
+          this.logger.log(`Configuration changed for training ${trainingId}. Recreating jobs.`);
 
-        // Delete existing jobs and their associations
-        for (const job of training.codingJobs || []) {
-          await this.codingJobUnitRepository.delete({ coding_job_id: job.id });
-          await this.codingJobVariableRepository.delete({ coding_job_id: job.id });
-          await this.codingJobCoderRepository.delete({ coding_job_id: job.id });
-          await this.codingJobRepository.delete(job.id);
-        }
+          // Delete existing jobs and their associations
+          for (const job of training.codingJobs || []) {
+            await codingJobUnitRepository.delete({ coding_job_id: job.id });
+            await codingJobVariableRepository.delete({ coding_job_id: job.id });
+            await codingJobCoderRepository.delete({ coding_job_id: job.id });
+            await codingJobRepository.delete(job.id);
+          }
 
-        // Generate and create new jobs
-        const trainingPackageOptions: {
-          caseSelectionMode: CaseSelectionMode;
-          referenceTrainingIds?: number[];
-          referenceMode?: ReferenceMode;
-          assignedVariableBundles?: JobDefinitionVariableBundle[];
-        } = {
-          caseSelectionMode: newCaseSelectionMode,
-          referenceTrainingIds: effectiveReferenceTrainingIds,
-          referenceMode: newReferenceMode ?? undefined
-        };
-        if (effectiveAssignedVariableBundles.length > 0) {
-          trainingPackageOptions.assignedVariableBundles = effectiveAssignedVariableBundles;
-        }
+          // Generate and create new jobs
+          const trainingPackageOptions: {
+            caseSelectionMode: CaseSelectionMode;
+            referenceTrainingIds?: number[];
+            referenceMode?: ReferenceMode;
+            assignedVariableBundles?: JobDefinitionVariableBundle[];
+          } = {
+            caseSelectionMode: newCaseSelectionMode,
+            referenceTrainingIds: effectiveReferenceTrainingIds,
+            referenceMode: newReferenceMode ?? undefined
+          };
+          if (effectiveAssignedVariableBundles.length > 0) {
+            trainingPackageOptions.assignedVariableBundles = effectiveAssignedVariableBundles;
+          }
 
-        const trainingPackages = await this.generateCoderTrainingPackages(
-          workspaceId,
-          selectedCoders,
-          effectiveTrainingVariableConfigs,
-          trainingPackageOptions
-        );
+          const trainingPackages = await this.generateCoderTrainingPackages(
+            workspaceId,
+            selectedCoders,
+            effectiveTrainingVariableConfigs,
+            trainingPackageOptions
+          );
 
-        // Build mapping from variable to bundle id and bundle sorting mode
-        const variableToBundleMap = new Map<string, number>();
-        const bundleSortingModeMap = new Map<number, 'continuous' | 'alternating' | null>();
-        this.logger.log(`[Update] Building bundle maps for ${effectiveAssignedVariableBundles.length} bundles`);
-        if (effectiveAssignedVariableBundles.length > 0) {
-          const bundleIds = this.getValidatedBundleIds(effectiveAssignedVariableBundles);
-          if (bundleIds.length > 0) {
-            const fetchedBundlesById = await this.getWorkspaceVariableBundlesById(workspaceId, bundleIds);
-            for (const bundle of fetchedBundlesById.values()) {
+          // Build mapping from variable to bundle id and bundle sorting mode
+          const variableToBundleMap = new Map<string, number>();
+          const bundleSortingModeMap = new Map<number, 'continuous' | 'alternating' | null>();
+          this.logger.log(`[Update] Building bundle maps for ${effectiveAssignedVariableBundles.length} bundles`);
+          if (effectiveAssignedVariableBundles.length > 0) {
+            const bundleIds = this.getValidatedBundleIds(effectiveAssignedVariableBundles);
+            if (bundleIds.length > 0) {
+              const fetchedBundlesById = await this.getWorkspaceVariableBundlesById(workspaceId, bundleIds);
+              for (const bundle of fetchedBundlesById.values()) {
               // Store the bundle's sorting mode (if set, otherwise null)
-              const bundleConfig = effectiveAssignedVariableBundles.find(b => b.id === bundle.id);
-              const mode = bundleConfig?.caseOrderingMode ?? null;
-              bundleSortingModeMap.set(bundle.id, mode);
-              this.logger.log(`[Update] Bundle ${bundle.id} (${bundle.name}): mode=${mode}`);
-              if (bundle.variables) {
-                for (const v of bundle.variables) {
-                  const key = `${v.unitName}::${v.variableId}`;
-                  variableToBundleMap.set(key, bundle.id);
-                  this.logger.debug(`[Update]   Variable mapping: ${key} -> bundle ${bundle.id}`);
+                const bundleConfig = effectiveAssignedVariableBundles.find(b => b.id === bundle.id);
+                const mode = bundleConfig?.caseOrderingMode ?? null;
+                bundleSortingModeMap.set(bundle.id, mode);
+                this.logger.log(`[Update] Bundle ${bundle.id} (${bundle.name}): mode=${mode}`);
+                if (bundle.variables) {
+                  for (const v of bundle.variables) {
+                    const key = `${v.unitName}::${v.variableId}`;
+                    variableToBundleMap.set(key, bundle.id);
+                    this.logger.debug(`[Update]   Variable mapping: ${key} -> bundle ${bundle.id}`);
+                  }
                 }
               }
             }
           }
+
+          const jobs: TrainingJob[] = [];
+          let jobsCreatedCount = 0;
+
+          for (const trainingPackage of trainingPackages) {
+            const coderId = trainingPackage.coderId;
+            const coderName = trainingPackage.coderName;
+
+            const codingJob = new CodingJob();
+            codingJob.creatorUserId = training.creatorUserId ?? null;
+            codingJob.name = `${trainingLabel}-${coderName}`;
+            codingJob.workspace_id = workspaceId;
+            codingJob.training_id = trainingId;
+            codingJob.missings_profile_id = resolvedMissingsProfileId;
+            codingJob.case_ordering_mode = newCaseOrderingMode;
+            codingJob.showScore = resolvedShowScore;
+            codingJob.allowComments = resolvedAllowComments;
+            codingJob.suppressGeneralInstructions = resolvedSuppressGeneralInstructions;
+            codingJob.created_at = new Date();
+            codingJob.updated_at = new Date();
+
+            const savedJob = await codingJobRepository.save(codingJob);
+            const jobId = savedJob.id;
+
+            jobsCreatedCount += 1;
+            jobs.push({
+              coderId,
+              coderName,
+              jobId,
+              jobName: codingJob.name
+            });
+
+            const codingJobCoder = new CodingJobCoder();
+            codingJobCoder.coding_job_id = jobId;
+            codingJobCoder.user_id = coderId;
+            await codingJobCoderRepository.save(codingJobCoder);
+
+            // Save bundle configurations to CodingJobVariableBundle for display sorting
+            const seenBundleIdsForJob = new Set<number>();
+            for (const response of trainingPackage.responses) {
+              const bundleId = variableToBundleMap.get(`${response.unitName}::${response.variableId}`);
+              if (bundleId && !seenBundleIdsForJob.has(bundleId)) {
+                seenBundleIdsForJob.add(bundleId);
+                const bundleMode = bundleSortingModeMap.get(bundleId);
+                const jobVariableBundle = new CodingJobVariableBundle();
+                jobVariableBundle.coding_job_id = jobId;
+                jobVariableBundle.variable_bundle_id = bundleId;
+                jobVariableBundle.case_ordering_mode = bundleMode ?? null;
+                await codingJobVariableBundleRepository.save(jobVariableBundle);
+                this.logger.log(`[Update] Saved CodingJobVariableBundle: job=${jobId}, bundle=${bundleId}, mode=${bundleMode || 'null'}`);
+              }
+            }
+
+            const processedVariables = new Set<string>();
+            for (const response of trainingPackage.responses) {
+              const variableKey = `${response.variableId}:${response.unitName}`;
+              if (!processedVariables.has(variableKey)) {
+                const codingJobVariable = new CodingJobVariable();
+                codingJobVariable.coding_job_id = jobId;
+                codingJobVariable.variable_id = response.variableId;
+                codingJobVariable.unit_name = response.unitName;
+                await codingJobVariableRepository.save(codingJobVariable);
+                processedVariables.add(variableKey);
+              }
+            }
+
+            // Sort responses with bundle-specific sorting modes
+            // Group responses by their effective sorting mode
+            const defaultMode = newCaseOrderingMode;
+            const alternatingResponses: CoderTrainingResponse[] = [];
+            const continuousResponses: CoderTrainingResponse[] = [];
+
+            for (const response of trainingPackage.responses) {
+              const bundleId = variableToBundleMap.get(`${response.unitName}::${response.variableId}`);
+              const bundleMode = bundleId !== undefined ? bundleSortingModeMap.get(bundleId) : undefined;
+              const effectiveMode = bundleMode || defaultMode;
+
+              this.logger.debug(`Response ${response.responseId} (${response.unitName}::${response.variableId}): bundleId=${bundleId}, bundleMode=${bundleMode}, effectiveMode=${effectiveMode}`);
+
+              if (effectiveMode === 'alternating') {
+                alternatingResponses.push(response);
+              } else {
+                continuousResponses.push(response);
+              }
+            }
+
+            this.logger.log(`Sorting: ${alternatingResponses.length} alternating, ${continuousResponses.length} continuous (default: ${defaultMode})`);
+
+            // Sort each group with its respective mode
+            const sortedAlternating = this.sortTrainingResponses(alternatingResponses, 'alternating');
+            const sortedContinuous = this.sortTrainingResponses(continuousResponses, 'continuous');
+
+            // Combine: alternating first, then continuous
+            const sortedResponses = [...sortedAlternating, ...sortedContinuous];
+
+            const codingJobUnits: CodingJobUnit[] = sortedResponses.map(response => {
+              const codingJobUnit = new CodingJobUnit();
+              codingJobUnit.coding_job_id = jobId;
+              codingJobUnit.workspace_id = workspaceId;
+              codingJobUnit.response_id = response.responseId;
+              codingJobUnit.unit_name = response.unitName;
+              codingJobUnit.unit_alias = response.unitAlias || null;
+              codingJobUnit.variable_id = response.variableId;
+              codingJobUnit.variable_anchor = response.variableId; // Same as variable_id
+              codingJobUnit.booklet_name = response.bookletName;
+              codingJobUnit.person_login = response.personLogin;
+              codingJobUnit.person_code = response.personCode;
+              codingJobUnit.person_group = response.personGroup;
+              codingJobUnit.is_open = true;
+              codingJobUnit.variable_bundle_id = variableToBundleMap.get(`${response.unitName}::${response.variableId}`) || null;
+              return codingJobUnit;
+            });
+            await codingJobUnitRepository.save(codingJobUnits);
+            this.logger.log(`Bulk-inserted ${codingJobUnits.length} coding job units to training job ${jobId} for coder ${coderName}`);
+          }
+
+          return {
+            success: true,
+            message: 'Training erfolgreich aktualisiert und neue Kodierungsaufträge erstellt',
+            jobsCreated: jobsCreatedCount,
+            jobs
+          };
         }
 
-        const jobs: TrainingJob[] = [];
-        let jobsCreatedCount = 0;
-
-        for (const trainingPackage of trainingPackages) {
-          const coderId = trainingPackage.coderId;
-          const coderName = trainingPackage.coderName;
-
-          const codingJob = new CodingJob();
-          codingJob.name = `${trainingLabel}-${coderName}`;
-          codingJob.workspace_id = workspaceId;
-          codingJob.training_id = trainingId;
-          codingJob.missings_profile_id = resolvedMissingsProfileId;
-          codingJob.case_ordering_mode = newCaseOrderingMode;
-          codingJob.showScore = resolvedShowScore;
-          codingJob.allowComments = resolvedAllowComments;
-          codingJob.suppressGeneralInstructions = resolvedSuppressGeneralInstructions;
-          codingJob.created_at = new Date();
-          codingJob.updated_at = new Date();
-
-          const savedJob = await this.codingJobRepository.save(codingJob);
-          const jobId = savedJob.id;
-
-          jobsCreatedCount += 1;
-          jobs.push({
-            coderId,
-            coderName,
-            jobId,
-            jobName: codingJob.name
-          });
-
-          const codingJobCoder = new CodingJobCoder();
-          codingJobCoder.coding_job_id = jobId;
-          codingJobCoder.user_id = coderId;
-          await this.codingJobCoderRepository.save(codingJobCoder);
-
-          // Save bundle configurations to CodingJobVariableBundle for display sorting
-          const seenBundleIdsForJob = new Set<number>();
-          for (const response of trainingPackage.responses) {
-            const bundleId = variableToBundleMap.get(`${response.unitName}::${response.variableId}`);
-            if (bundleId && !seenBundleIdsForJob.has(bundleId)) {
-              seenBundleIdsForJob.add(bundleId);
-              const bundleMode = bundleSortingModeMap.get(bundleId);
-              const jobVariableBundle = new CodingJobVariableBundle();
-              jobVariableBundle.coding_job_id = jobId;
-              jobVariableBundle.variable_bundle_id = bundleId;
-              jobVariableBundle.case_ordering_mode = bundleMode ?? null;
-              await this.codingJobVariableBundleRepository.save(jobVariableBundle);
-              this.logger.log(`[Update] Saved CodingJobVariableBundle: job=${jobId}, bundle=${bundleId}, mode=${bundleMode || 'null'}`);
-            }
-          }
-
-          const processedVariables = new Set<string>();
-          for (const response of trainingPackage.responses) {
-            const variableKey = `${response.variableId}:${response.unitName}`;
-            if (!processedVariables.has(variableKey)) {
-              const codingJobVariable = new CodingJobVariable();
-              codingJobVariable.coding_job_id = jobId;
-              codingJobVariable.variable_id = response.variableId;
-              codingJobVariable.unit_name = response.unitName;
-              await this.codingJobVariableRepository.save(codingJobVariable);
-              processedVariables.add(variableKey);
-            }
-          }
-
-          // Sort responses with bundle-specific sorting modes
-          // Group responses by their effective sorting mode
-          const defaultMode = newCaseOrderingMode;
-          const alternatingResponses: CoderTrainingResponse[] = [];
-          const continuousResponses: CoderTrainingResponse[] = [];
-
-          for (const response of trainingPackage.responses) {
-            const bundleId = variableToBundleMap.get(`${response.unitName}::${response.variableId}`);
-            const bundleMode = bundleId !== undefined ? bundleSortingModeMap.get(bundleId) : undefined;
-            const effectiveMode = bundleMode || defaultMode;
-
-            this.logger.debug(`Response ${response.responseId} (${response.unitName}::${response.variableId}): bundleId=${bundleId}, bundleMode=${bundleMode}, effectiveMode=${effectiveMode}`);
-
-            if (effectiveMode === 'alternating') {
-              alternatingResponses.push(response);
-            } else {
-              continuousResponses.push(response);
-            }
-          }
-
-          this.logger.log(`Sorting: ${alternatingResponses.length} alternating, ${continuousResponses.length} continuous (default: ${defaultMode})`);
-
-          // Sort each group with its respective mode
-          const sortedAlternating = this.sortTrainingResponses(alternatingResponses, 'alternating');
-          const sortedContinuous = this.sortTrainingResponses(continuousResponses, 'continuous');
-
-          // Combine: alternating first, then continuous
-          const sortedResponses = [...sortedAlternating, ...sortedContinuous];
-
-          const codingJobUnits: CodingJobUnit[] = sortedResponses.map(response => {
-            const codingJobUnit = new CodingJobUnit();
-            codingJobUnit.coding_job_id = jobId;
-            codingJobUnit.workspace_id = workspaceId;
-            codingJobUnit.response_id = response.responseId;
-            codingJobUnit.unit_name = response.unitName;
-            codingJobUnit.unit_alias = response.unitAlias || null;
-            codingJobUnit.variable_id = response.variableId;
-            codingJobUnit.variable_anchor = response.variableId; // Same as variable_id
-            codingJobUnit.booklet_name = response.bookletName;
-            codingJobUnit.person_login = response.personLogin;
-            codingJobUnit.person_code = response.personCode;
-            codingJobUnit.person_group = response.personGroup;
-            codingJobUnit.is_open = true;
-            codingJobUnit.variable_bundle_id = variableToBundleMap.get(`${response.unitName}::${response.variableId}`) || null;
-            return codingJobUnit;
-          });
-          await this.codingJobUnitRepository.save(codingJobUnits);
-          this.logger.log(`Bulk-inserted ${codingJobUnits.length} coding job units to training job ${jobId} for coder ${coderName}`);
+        for (const job of training.codingJobs || []) {
+          job.showScore = resolvedShowScore;
+          job.allowComments = resolvedAllowComments;
+          job.suppressGeneralInstructions = resolvedSuppressGeneralInstructions;
+          await codingJobRepository.save(job);
         }
 
-        return {
-          success: true,
-          message: 'Training erfolgreich aktualisiert und neue Kodierungsaufträge erstellt',
-          jobsCreated: jobsCreatedCount,
-          jobs
-        };
-      }
-
-      for (const job of training.codingJobs || []) {
-        job.showScore = resolvedShowScore;
-        job.allowComments = resolvedAllowComments;
-        job.suppressGeneralInstructions = resolvedSuppressGeneralInstructions;
-        await this.codingJobRepository.save(job);
-      }
-
-      return { success: true, message: 'Training erfolgreich aktualisiert' };
+        return { success: true, message: 'Training erfolgreich aktualisiert' };
+      });
     } catch (error) {
+      if (error instanceof ForbiddenException) throw error;
       this.logger.error(`Error updating coder training: ${error.message}`, error.stack);
       return { success: false, message: `Fehler beim Aktualisieren des Trainings: ${error.message}` };
     }
   }
 
-  async updateCoderTrainingLabel(workspaceId: number, trainingId: number, newLabel: string): Promise<{ success: boolean; message: string }> {
+  async updateCoderTrainingLabel(workspaceId: number, trainingId: number, newLabel: string,
+                                 actorUserId?: number): Promise<{ success: boolean; message: string }> {
+    await assertCodingResourceMutation(this.coderTrainingRepository.manager, workspaceId, 'training', trainingId, actorUserId);
     try {
-      this.logger.log(`Updating coder training ${trainingId} label to "${newLabel}" in workspace ${workspaceId}`);
+      return await this.coderTrainingRepository.manager.transaction(async manager => {
+        await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+        await assertCodingResourceMutation(manager, workspaceId, 'training', trainingId, actorUserId);
+        const coderTrainingRepository = manager.getRepository(CoderTraining);
 
-      const training = await this.coderTrainingRepository.findOne({
-        where: {
-          id: trainingId,
-          workspace_id: workspaceId
+        this.logger.log(`Updating coder training ${trainingId} label to "${newLabel}" in workspace ${workspaceId}`);
+
+        const training = await coderTrainingRepository.findOne({
+          where: {
+            id: trainingId,
+            workspace_id: workspaceId
+          }
+        });
+
+        if (!training) {
+          return {
+            success: false,
+            message: `Coder training with ID ${trainingId} not found in workspace ${workspaceId}`
+          };
         }
-      });
 
-      if (!training) {
+        training.label = newLabel;
+        training.updated_at = new Date();
+
+        await coderTrainingRepository.save(training);
+        this.logger.log(`Updated coder training ${trainingId} label to "${newLabel}"`);
+
         return {
-          success: false,
-          message: `Coder training with ID ${trainingId} not found in workspace ${workspaceId}`
+          success: true,
+          message: `Successfully updated coder training label to "${newLabel}"`
         };
-      }
-
-      training.label = newLabel;
-      training.updated_at = new Date();
-
-      await this.coderTrainingRepository.save(training);
-      this.logger.log(`Updated coder training ${trainingId} label to "${newLabel}"`);
-
-      return {
-        success: true,
-        message: `Successfully updated coder training label to "${newLabel}"`
-      };
+      });
     } catch (error) {
+      if (error instanceof ForbiddenException) throw error;
       const errorMessage = `Error updating coder training label: ${error.message}`;
       this.logger.error(errorMessage, error.stack);
       return {
@@ -4914,54 +4976,71 @@ export class CoderTrainingService {
     }));
   }
 
-  async deleteCoderTraining(workspaceId: number, trainingId: number): Promise<{ success: boolean; message: string }> {
+  async deleteCoderTraining(workspaceId: number, trainingId: number,
+                            actorUserId?: number): Promise<{ success: boolean; message: string }> {
+    await assertCodingResourceMutation(this.coderTrainingRepository.manager, workspaceId, 'training', trainingId, actorUserId);
     try {
-      this.logger.log(`Deleting coder training ${trainingId} in workspace ${workspaceId}`);
+      return await this.coderTrainingRepository.manager.transaction(async manager => {
+        await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+        await assertCodingResourceMutation(manager, workspaceId, 'training', trainingId, actorUserId);
+        const coderTrainingRepository = manager.getRepository(CoderTraining);
+        const codingJobRepository = manager.getRepository(CodingJob);
+        const codingJobUnitRepository = manager.getRepository(CodingJobUnit);
+        const codingJobVariableRepository = manager.getRepository(CodingJobVariable);
+        const codingJobCoderRepository = manager.getRepository(CodingJobCoder);
 
-      const training = await this.coderTrainingRepository.findOne({
-        where: {
-          id: trainingId,
-          workspace_id: workspaceId
-        },
-        relations: ['codingJobs', 'codingJobs.codingJobUnits']
-      });
+        this.logger.log(`Deleting coder training ${trainingId} in workspace ${workspaceId}`);
 
-      if (!training) {
+        const training = await coderTrainingRepository.findOne({
+          where: {
+            id: trainingId,
+            workspace_id: workspaceId
+          },
+          relations: ['codingJobs', 'codingJobs.codingJobUnits']
+        });
+
+        if (!training) {
+          return {
+            success: false,
+            message: `Coder training with ID ${trainingId} not found in workspace ${workspaceId}`
+          };
+        }
+
+        for (const job of training.codingJobs || []) {
+          await assertCodingResourceMutation(manager, workspaceId, 'job', job.id, actorUserId);
+        }
+
+        for (const job of training.codingJobs || []) {
+          await codingJobUnitRepository.delete({ coding_job_id: job.id });
+          this.logger.log(`Deleted ${job.codingJobUnits?.length || 0} coding job units for job ${job.id}`);
+        }
+
+        for (const job of training.codingJobs || []) {
+          await codingJobVariableRepository.delete({ coding_job_id: job.id });
+          this.logger.log(`Deleted coding job variables for job ${job.id}`);
+        }
+
+        for (const job of training.codingJobs || []) {
+          await codingJobCoderRepository.delete({ coding_job_id: job.id });
+          this.logger.log(`Deleted coding job coders for job ${job.id}`);
+        }
+
+        const jobsDeleted = training.codingJobs?.length || 0;
+        if (jobsDeleted > 0) {
+          await codingJobRepository.delete({ training_id: trainingId });
+          this.logger.log(`Deleted ${jobsDeleted} coding jobs for training ${trainingId}`);
+        }
+
+        await coderTrainingRepository.delete(trainingId);
+        this.logger.log(`Deleted coder training ${trainingId}`);
+
         return {
-          success: false,
-          message: `Coder training with ID ${trainingId} not found in workspace ${workspaceId}`
+          success: true,
+          message: `Successfully deleted coder training "${training.label}" with ${jobsDeleted} associated jobs`
         };
-      }
-
-      for (const job of training.codingJobs || []) {
-        await this.codingJobUnitRepository.delete({ coding_job_id: job.id });
-        this.logger.log(`Deleted ${job.codingJobUnits?.length || 0} coding job units for job ${job.id}`);
-      }
-
-      for (const job of training.codingJobs || []) {
-        await this.codingJobVariableRepository.delete({ coding_job_id: job.id });
-        this.logger.log(`Deleted coding job variables for job ${job.id}`);
-      }
-
-      for (const job of training.codingJobs || []) {
-        await this.codingJobCoderRepository.delete({ coding_job_id: job.id });
-        this.logger.log(`Deleted coding job coders for job ${job.id}`);
-      }
-
-      const jobsDeleted = training.codingJobs?.length || 0;
-      if (jobsDeleted > 0) {
-        await this.codingJobRepository.delete({ training_id: trainingId });
-        this.logger.log(`Deleted ${jobsDeleted} coding jobs for training ${trainingId}`);
-      }
-
-      await this.coderTrainingRepository.delete(trainingId);
-      this.logger.log(`Deleted coder training ${trainingId}`);
-
-      return {
-        success: true,
-        message: `Successfully deleted coder training "${training.label}" with ${jobsDeleted} associated jobs`
-      };
+      });
     } catch (error) {
+      if (error instanceof ForbiddenException) throw error;
       const errorMessage = `Error deleting coder training: ${error.message}`;
       this.logger.error(errorMessage, error.stack);
       return {

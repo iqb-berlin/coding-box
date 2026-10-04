@@ -6,7 +6,9 @@ import { OverlayContainer } from '@angular/cdk/overlay';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { By } from '@angular/platform-browser';
 import { TranslateModule } from '@ngx-translate/core';
-import { Observable, of, Subject } from 'rxjs';
+import {
+  firstValueFrom, Observable, of, Subject
+} from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
 import { CodingFacadeService } from '../../../services/facades/coding-facade.service';
@@ -74,6 +76,7 @@ describe('DoubleCodedReviewComponent', () => {
           provide: WorkspaceBackendService,
           useValue: {
             getWorkspaceCoders: jest.fn(() => of({
+              canApplyResults: true,
               data: [
                 { userId: 10, username: 'Coder A' },
                 { userId: 20, username: 'Coder B' }
@@ -94,6 +97,7 @@ describe('DoubleCodedReviewComponent', () => {
           provide: TestPersonCodingService,
           useValue: {
             getDoubleCodedVariablesForReview: jest.fn(() => of({
+              canApplyResults: true,
               data: [
                 {
                   responseId: 501,
@@ -104,6 +108,7 @@ describe('DoubleCodedReviewComponent', () => {
                   personCode: 'P001',
                   bookletName: 'Booklet 1',
                   givenAnswer: 'answer',
+                  canEditDraft: true,
                   isResolved: false,
                   appliedCode: null,
                   appliedScore: null,
@@ -143,6 +148,7 @@ describe('DoubleCodedReviewComponent', () => {
                   personCode: 'P002',
                   bookletName: 'Booklet 1',
                   givenAnswer: 'second answer',
+                  canEditDraft: true,
                   isResolved: false,
                   appliedCode: null,
                   appliedScore: null,
@@ -200,6 +206,7 @@ describe('DoubleCodedReviewComponent', () => {
                   personCode: 'P003',
                   bookletName: 'Booklet 2',
                   givenAnswer: 'third answer',
+                  canEditDraft: true,
                   isResolved: false,
                   appliedCode: null,
                   appliedScore: null,
@@ -238,6 +245,7 @@ describe('DoubleCodedReviewComponent', () => {
                   personCode: 'P004',
                   bookletName: 'Booklet 2',
                   givenAnswer: 'fourth answer',
+                  canEditDraft: true,
                   isResolved: true,
                   appliedCode: 2,
                   appliedScore: 1,
@@ -343,6 +351,7 @@ describe('DoubleCodedReviewComponent', () => {
   });
 
   it('allows applying decisions only with study-manager permission', () => {
+    fixture.detectChanges();
     component.dialogData = { canApplyResults: false };
     expect(component.canApplyReviewResults).toBe(false);
 
@@ -400,6 +409,30 @@ describe('DoubleCodedReviewComponent', () => {
       close: jest.fn()
     } as unknown as typeof component.dialogRef;
     expectRestoredPage();
+  });
+
+  it('renders foreign review cases read-only and does not persist selection or comment changes', async () => {
+    const service = TestBed.inject(DoubleCodedReviewApiService) as unknown as jest.Mocked<Pick<DoubleCodedReviewApiService, 'getDoubleCodedVariablesForReview' | 'saveDoubleCodedReviewDraft' | 'applyDoubleCodedResolutions'>>;
+    const response = await firstValueFrom(service.getDoubleCodedVariablesForReview(1));
+    response.canApplyResults = false;
+    response.data.forEach(item => { item.canEditDraft = false; });
+    jest.mocked(service.getDoubleCodedVariablesForReview).mockReturnValue(of(response));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(component.canApplyReviewResults).toBe(false);
+    const item = component.dataSource.data.find(candidate => candidate.responseId === 501)!;
+    const cell = fixture.debugElement.queryAll(By.directive(DoubleCodedDecisionCellComponent))
+      .find(debugElement => debugElement.componentInstance.item().responseId === item.responseId)!;
+    expect(cell.nativeElement.querySelector('mat-select').getAttribute('aria-disabled')).toBe('true');
+    expect(cell.nativeElement.querySelector('textarea').readOnly).toBe(true);
+    reviewFacade.select(item, 'code:2');
+    component.getCommentControl(item).setValue('Changed');
+    component.applyReviewDecisions();
+    component.applySingleDecision(item);
+    expect(service.applyDoubleCodedResolutions).not.toHaveBeenCalled();
+    fixture.destroy();
+    expect(service.saveDoubleCodedReviewDraft).not.toHaveBeenCalled();
   });
 
   it('renders the reusable decision cell and updates its selection through Material select', async () => {

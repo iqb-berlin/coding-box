@@ -6,6 +6,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { of, throwError } from 'rxjs';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
 
 import { CodingJobDefinitionsComponent } from './coding-job-definitions.component';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
@@ -36,6 +37,12 @@ describe('CodingJobDefinitionsComponent', () => {
 
     await TestBed.configureTestingModule({
       providers: [
+        {
+          provide: CodingPermissionsService,
+          useValue: {
+            load: jest.fn(), canCreate: true, canApply: true, canEdit: jest.fn(() => true)
+          }
+        },
         provideNoopAnimations(),
         { provide: SERVER_URL, useValue: environment.backendUrl },
         { provide: MatSnackBar, useValue: { open: jest.fn() } },
@@ -211,6 +218,115 @@ describe('CodingJobDefinitionsComponent', () => {
 
     expect(overlayElement.querySelector('.menu-section-divider')).toBeTruthy();
     expect(overlayElement.querySelector('.danger-menu-item')).toBeTruthy();
+  });
+
+  describe.each([
+    {
+      role: 'level 2 owner',
+      owner: 7,
+      level: 2,
+      isAdmin: false,
+      allowed: true
+    },
+    {
+      role: 'level 2 foreign owner',
+      owner: 8,
+      level: 2,
+      isAdmin: false,
+      allowed: false
+    },
+    {
+      role: 'level 2 legacy definition',
+      owner: null,
+      level: 2,
+      isAdmin: false,
+      allowed: false
+    },
+    {
+      role: 'level 3 legacy definition',
+      owner: null,
+      level: 3,
+      isAdmin: false,
+      allowed: true
+    },
+    {
+      role: 'admin foreign owner',
+      owner: 8,
+      level: 0,
+      isAdmin: true,
+      allowed: true
+    }
+  ])('approval actions for $role', ({
+    owner, level, isAdmin, allowed
+  }) => {
+    it.each(['submit-for-review', 'approve', 'reject'])('renders %s with matching permissions', async action => {
+      const permissions = TestBed.inject(CodingPermissionsService);
+      jest.mocked(permissions.canEdit).mockImplementation(definition => (
+        isAdmin || level >= 3 || (level === 2 && definition.creatorUserId === 7)
+      ));
+      component.jobDefinitions = [{
+        id: 42,
+        creatorUserId: owner,
+        status: action === 'submit-for-review' ? 'draft' : 'pending_review',
+        assignedVariables: [],
+        assignedVariableBundles: [],
+        assignedCoders: []
+      }];
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      let actionContainer = fixture.nativeElement as HTMLElement;
+      if (action === 'reject') {
+        (actionContainer.querySelector('.more-actions-button') as HTMLButtonElement).click();
+        fixture.detectChanges();
+        await fixture.whenStable();
+        actionContainer = overlayContainer.getContainerElement();
+      }
+      const button = actionContainer.querySelector(
+        `[aria-label^="coding-job-definitions.actions.${action}:"]`
+      ) as HTMLButtonElement;
+      expect(button).toBeTruthy();
+      expect(button.disabled).toBe(!allowed);
+      button.click();
+      fixture.detectChanges();
+
+      const backend = TestBed.inject(CodingJobBackendService);
+      if (!allowed) {
+        expect(backend.updateJobDefinition).not.toHaveBeenCalled();
+        expect(backend.approveJobDefinition).not.toHaveBeenCalled();
+      } else if (action === 'approve') {
+        expect(backend.approveJobDefinition).toHaveBeenCalledWith(1, 42, 'approved');
+      } else {
+        expect(backend.updateJobDefinition).toHaveBeenCalledWith(1, 42, {
+          status: action === 'submit-for-review' ? 'pending_review' : 'draft'
+        });
+      }
+    });
+  });
+
+  it('updates approval button state when edit permissions change', () => {
+    const permissions = TestBed.inject(CodingPermissionsService);
+    jest.mocked(permissions.canEdit).mockReturnValue(false);
+    component.jobDefinitions = [{
+      id: 42,
+      creatorUserId: 7,
+      status: 'draft',
+      assignedVariables: [],
+      assignedVariableBundles: [],
+      assignedCoders: []
+    }];
+    fixture.detectChanges();
+
+    const button = fixture.nativeElement.querySelector('.primary-row-action') as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+
+    jest.mocked(permissions.canEdit).mockReturnValue(true);
+    fixture.detectChanges();
+    expect(button.disabled).toBe(false);
+
+    jest.mocked(permissions.canEdit).mockReturnValue(false);
+    fixture.detectChanges();
+    expect(button.disabled).toBe(true);
   });
 
   it('does not offer job creation again once jobs exist for a definition', () => {

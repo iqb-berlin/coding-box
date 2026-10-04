@@ -27,6 +27,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-statistics';
@@ -120,6 +121,7 @@ import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
   styleUrls: ['./coding-management.component.scss']
 })
 export class CodingManagementComponent implements OnInit, OnDestroy {
+  readonly permissions = inject(CodingPermissionsService);
   @Input() hideActionButtons = false;
 
   private appService = inject(AppService);
@@ -225,6 +227,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private readonly automaticCodingStatusRefreshDebounceMs = 250;
 
   ngOnInit(): void {
+    if (this.appService.selectedWorkspaceId) this.permissions.load(this.appService.selectedWorkspaceId);
     const workspaceId = this.appService.selectedWorkspaceId;
     let pendingStatisticsVersion: StatisticsVersion | null = null;
 
@@ -731,6 +734,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   startFreshnessCoding(version: 'v1' | 'v3'): void {
+    if (this.hideActionButtons || !this.permissions.canApply) return;
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId || this.isStartingFreshnessCoding) {
       return;
@@ -1586,6 +1590,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   // Dialog Methods
   onAutoCode(): void {
+    if (this.hideActionButtons || !this.permissions.canApply) return;
     this.openTestPersonCodingDialog();
   }
 
@@ -1638,6 +1643,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   openManualCoding(focusManualFreshness = false): void {
+    if (this.hideActionButtons || !this.permissions.canApply) return;
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return;
@@ -1684,6 +1690,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   private openResetVersionDialog(): void {
+    if (this.hideActionButtons || !this.permissions.canApply) return;
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.snackBar.open(

@@ -14,6 +14,7 @@ import {
   throwError
 } from 'rxjs';
 import { PageEvent } from '@angular/material/paginator';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CodingManagementComponent } from './coding-management.component';
 import { CodingManagementService } from '../../services/coding-management.service';
 import { CodingManagementUiService } from './services/coding-management-ui.service';
@@ -202,6 +203,12 @@ describe('CodingManagementComponent', () => {
 
     await TestBed.configureTestingModule({
       providers: [
+        {
+          provide: CodingPermissionsService,
+          useValue: {
+            load: jest.fn(), canCreate: true, canApply: true, canEdit: jest.fn(() => true)
+          }
+        },
         provideHttpClient(),
         {
           provide: SERVER_URL,
@@ -303,6 +310,17 @@ describe('CodingManagementComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('keeps all five read-only overview actions visible for level 2', () => {
+    Object.assign(component.permissions, { canApply: false });
+    component.hideActionButtons = true;
+    fixture.detectChanges();
+    const icons = Array.from(fixture.nativeElement.querySelectorAll('.action-buttons-toolbar a mat-icon'))
+      .map(icon => (icon as HTMLElement).textContent?.trim());
+    expect(icons).toEqual(['list', 'book', 'list_alt', 'analytics', 'list_alt']);
+    expect(icons).not.toContain('auto_fix_high');
+    expect(icons).not.toContain('keyboard');
   });
 
   describe('Component Initialization', () => {

@@ -1,5 +1,5 @@
 <div class="dialog-container">
-  <h2 class="dialog-title">{{ data.isEdit ? 'Variablenbündel bearbeiten' : 'Neues Variablenbündel erstellen' }}</h2>
+  <h2 class="dialog-title">{{ data.readOnly ? data.bundleGroup?.name : (data.isEdit ? 'Variablenbündel bearbeiten' : 'Neues Variablenbündel erstellen') }}</h2>
   <mat-divider></mat-divider>
 
   <div class="dialog-content">
@@ -79,12 +79,12 @@
               {{ selectedVariables.selected.length }} von {{ dataSource.filteredData.length }} Variablen ausgewählt
             </div>
             <div class="selection-actions">
-              <button mat-button color="primary" type="button" (click)="selectAll()">
+              <button mat-button color="primary" type="button" (click)="selectAll()" [disabled]="!!data.readOnly">
                 <mat-icon>done_all</mat-icon>
                 Alle auswählen
               </button>
               <button mat-button type="button" (click)="deselectAll()"
-                [disabled]="selectedVariables.selected.length === 0">
+                [disabled]="!!data.readOnly || selectedVariables.selected.length === 0">
                 <mat-icon>remove_done</mat-icon>
                 Auswahl aufheben
               </button>
@@ -96,10 +96,10 @@
             <div class="variables-grid">
               @for (variable of dataSource.filteredData; track variable.unitName + variable.variableId) {
                 <div class="variable-card" [class.selected]="selectedVariables.isSelected(variable)"
-                  (click)="selectedVariables.toggle(variable)">
+                  (click)="toggleVariable(variable)">
                   <div class="variable-card-header">
                     <mat-checkbox [checked]="selectedVariables.isSelected(variable)" (click)="$event.stopPropagation()"
-                      (change)="$event ? selectedVariables.toggle(variable) : null">
+                      [disabled]="!!data.readOnly" (change)="toggleVariable(variable)">
                     </mat-checkbox>
                     <div class="variable-identifiers">
                       <div class="variable-id">
@@ -127,9 +127,11 @@
 
   <div class="dialog-actions">
     <button mat-button (click)="onCancel()">Abbrechen</button>
-    <button mat-raised-button color="primary" (click)="onSubmit()"
-      [disabled]="bundleGroupForm.invalid || selectedVariables.selected.length === 0">
-      {{ data.isEdit ? 'Speichern' : 'Erstellen' }}
-    </button>
+    @if (!data.readOnly) {
+      <button mat-raised-button color="primary" (click)="onSubmit()"
+        [disabled]="bundleGroupForm.invalid || selectedVariables.selected.length === 0">
+        {{ data.isEdit ? 'Speichern' : 'Erstellen' }}
+      </button>
+    }
   </div>
 </div>

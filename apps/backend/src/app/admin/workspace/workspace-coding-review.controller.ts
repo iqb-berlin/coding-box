@@ -352,11 +352,13 @@ export class WorkspaceCodingReviewController {
   })
   async getDoubleCodedVariablesForReview(
     @WorkspaceId() workspace_id: number,
-      @Query(requestValidationPipe) query: DoubleCodedReviewQueryDto
+      @Query(requestValidationPipe) query: DoubleCodedReviewQueryDto,
+      @Req() req: Request
   ): Promise<DoubleCodedReviewResponse> {
     return this.doubleCodingReviewQueryService.getDoubleCodedVariablesForReview(
       workspace_id,
-      query
+      query,
+      this.getRequestManager(req).userId
     );
   }
 

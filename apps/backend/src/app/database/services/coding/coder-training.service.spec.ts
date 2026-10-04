@@ -24,6 +24,16 @@ import User from '../../entities/user.entity';
 import { MissingsProfilesService } from './missings-profiles.service';
 import type { CaseSelectionMode, ReferenceMode } from '../../entities/coder-training.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
+// Domain fixtures isolate ownership, which is exercised with the real policy in coding-ownership-mutations.spec.ts.
+jest.mock('../shared/coding-ownership.policy', () => ({
+  ...jest.requireActual('../shared/coding-ownership.policy'),
+  assertCodingResourceCreation: jest.fn().mockResolvedValue(7),
+  assertCodingResourceMutation: jest.fn(async (_manager, workspaceId, _kind, id) => ({ id, workspace_id: workspaceId, creatorUserId: 7 })),
+  assertCodingReviewMutation: jest.fn().mockResolvedValue(undefined),
+  getCodingReviewCapabilities: jest.fn(async (_manager, _workspaceId, responseIds) => ({
+    canApplyResults: true, canEditDraft: new Map(responseIds.map(id => [id, true]))
+  }))
+}));
 
 jest.mock('../workspace/workspace-files.service', () => ({
   WorkspaceFilesService: class {}
@@ -162,6 +172,17 @@ describe('CoderTrainingService', () => {
       ]
     }).compile();
 
+    Object.assign(mockRepository, {
+      manager: {
+        transaction: jest.fn(async callback => callback({
+          query: jest.fn().mockResolvedValue([]),
+          getRepository: entity => module.get(getRepositoryToken(entity))
+        }))
+      }
+    });
+    for (const entity of [CoderTraining, CoderTrainingVariable, CoderTrainingBundle, CoderTrainingCoder, CodingJob, CodingJobUnit, CodingJobCoder, CodingJobVariable, CodingJobVariableBundle, CoderTrainingDiscussionResult]) {
+      Object.assign(module.get(getRepositoryToken(entity)), { manager: (mockRepository as unknown as { manager: unknown }).manager });
+    }
     service = module.get<CoderTrainingService>(CoderTrainingService);
     coderTrainingRepository = module.get<Repository<CoderTraining>>(getRepositoryToken(CoderTraining));
     codingJobRepository = module.get<Repository<CodingJob>>(getRepositoryToken(CodingJob));
@@ -337,6 +358,7 @@ describe('CoderTrainingService', () => {
         }
         return entity;
       });
+      (coderTrainingRepository.save as jest.Mock).mockImplementation(async entity => ({ ...entity, id: 1 }));
 
       const result = await service.createCoderTrainingJobs(
         1,
@@ -357,6 +379,12 @@ describe('CoderTrainingService', () => {
         variable_id: 'VAR',
         unit_name: 'UNIT',
         sample_count: 8
+      }));
+      expect(coderTrainingRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        creatorUserId: 7, workspace_id: 1, label: 'Mixed Training'
+      }));
+      expect(mockRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        creatorUserId: 7, workspace_id: 1, name: 'Mixed Training-Coder 1'
       }));
       expect(coderTrainingBundleRepository.save).toHaveBeenCalledWith(expect.objectContaining({
         variable_bundle_id: 5,

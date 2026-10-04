@@ -4,7 +4,8 @@ import {
   Injectable,
   Logger,
   OnModuleInit,
-  Optional
+  Optional,
+  NotFoundException
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -4443,5 +4444,19 @@ ${bookletRefs}
     this.logger.log(
       `Invalidated workspace files caches for workspace ${workspaceId} in Redis`
     );
+  }
+
+  async readMetadataFile(workspaceId: number, fileId: number): Promise<FileDownloadDto> {
+    const file = await this.fileUploadRepository.findOne({
+      where: { id: fileId, workspace_id: workspaceId, file_type: 'Resource' }
+    });
+    if (!file || !file.filename.toLowerCase().endsWith('.vomd')) {
+      throw new NotFoundException('Metadata resource not found');
+    }
+    return {
+      filename: file.filename,
+      base64Data: Buffer.from(file.data, 'utf8').toString('base64'),
+      mimeType: 'application/json'
+    };
   }
 }

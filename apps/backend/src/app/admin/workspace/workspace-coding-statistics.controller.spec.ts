@@ -157,13 +157,13 @@ describe('WorkspaceCodingStatisticsController', () => {
       selectedVariables: [],
       selectedCoders: [],
       jobDefinitionId: 42
-    } as never)).rejects.toBeInstanceOf(BadRequestException);
+    } as never, { user: { id: 7 } } as never)).rejects.toBeInstanceOf(BadRequestException);
 
     expect(codingJobService.createDistributedCodingJobs).not.toHaveBeenCalled();
   });
 
   it('rejects generic distributed job requests without a request body', async () => {
-    await expect(controller.createDistributedCodingJobs(5, undefined as never))
+    await expect(controller.createDistributedCodingJobs(5, undefined as never, { user: { id: 7 } } as never))
       .rejects.toBeInstanceOf(BadRequestException);
 
     expect(codingJobService.createDistributedCodingJobs).not.toHaveBeenCalled();
@@ -175,9 +175,9 @@ describe('WorkspaceCodingStatisticsController', () => {
       selectedCoders: [{ id: 1, name: 'Coder', username: 'coder' }]
     };
 
-    await controller.createDistributedCodingJobs(5, body);
+    await controller.createDistributedCodingJobs(5, body, { user: { id: 7 } } as never);
 
-    expect(codingJobService.createDistributedCodingJobs).toHaveBeenCalledWith(5, body);
+    expect(codingJobService.createDistributedCodingJobs).toHaveBeenCalledWith(5, body, undefined, 7);
   });
 
   it('runs distribution previews through the concurrency limiter', async () => {
