@@ -9,7 +9,7 @@ import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
 import {
-  Component, EventEmitter, Input, Output
+  Component, EventEmitter, input, output
 } from '@angular/core';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { SchemerConfig } from '../schemer/schemer-config.interface';
@@ -26,11 +26,11 @@ import { StandaloneUnitSchemerComponent } from '../schemer/unit-schemer.componen
   standalone: true
 })
 class MockStandaloneUnitSchemerComponent {
-  @Input() schemerHtml = '';
-  @Input() unitScheme?: UnitScheme;
-  @Input() schemerConfig?: SchemerConfig;
-  @Output() schemeChanged = new EventEmitter<UnitScheme>();
-  @Output() error = new EventEmitter<string>();
+  readonly schemerHtml = input('');
+  readonly unitScheme = input<UnitScheme>();
+  readonly schemerConfig = input<SchemerConfig>();
+  readonly schemeChanged = output<UnitScheme>();
+  readonly error = output<string>();
 }
 
 describe('SchemeEditorDialogComponent', () => {

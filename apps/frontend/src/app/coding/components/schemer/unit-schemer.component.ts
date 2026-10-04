@@ -1,5 +1,5 @@
 import {
-  AfterViewInit, Component, ElementRef, EventEmitter, Input, OnDestroy, Output, ViewChild, signal
+  AfterViewInit, Component, ElementRef, OnDestroy, signal, input, output, viewChild, linkedSignal
 } from '@angular/core';
 
 import { Subject, takeUntil } from 'rxjs';
@@ -20,23 +20,25 @@ import { SchemerMessage } from '../../../core/services/post-message-types';
   imports: []
 })
 export class StandaloneUnitSchemerComponent implements AfterViewInit, OnDestroy {
-  @ViewChild('hostingIframe') hostingIframe!: ElementRef;
-  @Input() schemerId = '';
-  @Input() schemerHtml = '';
-  @Input() unitScheme: UnitScheme = {
+  readonly hostingIframe = viewChild.required<ElementRef>('hostingIframe');
+  readonly schemerId = input('');
+  readonly schemerHtml = input('');
+  readonly unitScheme = input<UnitScheme>({
     scheme: '',
     schemeType: ''
-  };
+  });
 
-  @Input() schemerConfig: SchemerConfig = {
+  private readonly currentUnitScheme = linkedSignal(() => this.unitScheme());
+
+  readonly schemerConfig = input<SchemerConfig>({
     definitionReportPolicy: 'eager',
     role: 'editor'
-  };
+  });
 
-  @Output() schemeChanged = new EventEmitter<UnitScheme>();
-  @Output() error = new EventEmitter<string>();
-  @Output() ready = new EventEmitter<void>();
-  @Output() readNotification = new EventEmitter<VosReadNotification>();
+  readonly schemeChanged = output<UnitScheme>();
+  readonly error = output<string>();
+  readonly ready = output<void>();
+  readonly readNotification = output<VosReadNotification>();
 
   private iFrameElement: HTMLIFrameElement | undefined;
   private sessionId = '';
@@ -47,14 +49,16 @@ export class StandaloneUnitSchemerComponent implements AfterViewInit, OnDestroy 
   constructor(private postMessageService: PostMessageService) {}
 
   ngAfterViewInit(): void {
-    this.iFrameElement = this.hostingIframe.nativeElement;
+    this.iFrameElement = this.hostingIframe().nativeElement;
 
     this.subscribeToSchemerMessages();
 
-    if (this.schemerHtml) {
-      this.setupSchemerIFrame(this.schemerHtml);
-    } else if (this.schemerId) {
-      this.error.emit(`Schemer HTML content not provided for ID: ${this.schemerId}`);
+    const schemerHtml = this.schemerHtml();
+    const schemerId = this.schemerId();
+    if (schemerHtml) {
+      this.setupSchemerIFrame(schemerHtml);
+    } else if (schemerId) {
+      this.error.emit(`Schemer HTML content not provided for ID: ${schemerId}`);
     } else {
       this.error.emit('Neither schemer ID nor HTML content provided');
     }
@@ -78,10 +82,10 @@ export class StandaloneUnitSchemerComponent implements AfterViewInit, OnDestroy 
           if (event.message.codingScheme) {
             const updatedScheme: UnitScheme = {
               scheme: event.message.codingScheme,
-              schemeType: event.message.codingSchemeType || this.unitScheme.schemeType,
-              variables: this.unitScheme.variables
+              schemeType: event.message.codingSchemeType || this.currentUnitScheme().schemeType,
+              variables: this.currentUnitScheme().variables
             };
-            this.unitScheme = updatedScheme;
+            this.currentUnitScheme.set(updatedScheme);
             this.schemeChanged.emit(updatedScheme);
           }
         }
@@ -109,13 +113,13 @@ export class StandaloneUnitSchemerComponent implements AfterViewInit, OnDestroy 
 
   sendUnitScheme(): void {
     if (this.iFrameElement?.contentWindow) {
-      const variables = this.unitScheme.variables || [];
+      const variables = this.currentUnitScheme().variables || [];
       const message: VosStartCommand = {
         type: 'vosStartCommand',
         sessionId: this.sessionId,
-        schemerConfig: this.schemerConfig,
-        codingScheme: this.unitScheme.scheme || '',
-        codingSchemeType: this.unitScheme.schemeType || '',
+        schemerConfig: this.schemerConfig(),
+        codingScheme: this.currentUnitScheme().scheme || '',
+        codingSchemeType: this.currentUnitScheme().schemeType || '',
         variables: variables
       };
 

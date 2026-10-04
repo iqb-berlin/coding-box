@@ -9,6 +9,7 @@ describe('Embedded Schemer feedback without Zone.js', () => {
   let fixture: ComponentFixture<StandaloneUnitSchemerComponent>;
   let ready$: Subject<PostMessageEvent<SchemerMessage>>;
   let read$: Subject<PostMessageEvent<SchemerMessage>>;
+  let changes$: Subject<PostMessageEvent<SchemerMessage>>;
   let clearFeedback: (() => void) | undefined;
   let timeoutSpy: jest.SpyInstance;
 
@@ -16,7 +17,7 @@ describe('Embedded Schemer feedback without Zone.js', () => {
     clearFeedback = undefined;
     ready$ = new Subject();
     read$ = new Subject();
-    const changes$ = new Subject<PostMessageEvent<SchemerMessage>>();
+    changes$ = new Subject<PostMessageEvent<SchemerMessage>>();
     const originalSetTimeout = globalThis.setTimeout;
     timeoutSpy = jest.spyOn(globalThis, 'setTimeout').mockImplementation((handler, timeout, ...args) => {
       if (timeout === 3000 && typeof handler === 'function') {
@@ -68,6 +69,42 @@ describe('Embedded Schemer feedback without Zone.js', () => {
       }
     });
   }
+
+  it('keeps reported changes local, preserves variables and accepts a replacement input', async () => {
+    const variables: never[] = [];
+    const original = Object.freeze({ scheme: 'original', schemeType: 'type', variables });
+    fixture.componentRef.setInput('unitScheme', original);
+    const changed = jest.fn();
+    fixture.componentInstance.schemeChanged.subscribe(changed);
+    await fixture.whenStable();
+    const source = fixture.nativeElement.querySelector('iframe').contentWindow;
+    changes$.next({
+      source,
+      origin: '',
+      message: {
+        type: 'vosSchemeChangedNotification', sessionId: 'schemer-session', codingScheme: 'edited'
+      }
+    });
+    const sender = TestBed.inject(PostMessageService).sendMessageToIframe as jest.Mock;
+    fixture.componentInstance.sendUnitScheme();
+    expect(fixture.componentInstance.unitScheme()).toBe(original);
+    expect(original.scheme).toBe('original');
+    expect(changed).toHaveBeenCalledWith({ scheme: 'edited', schemeType: 'type', variables });
+    expect(sender).toHaveBeenLastCalledWith(expect.objectContaining({ codingScheme: 'edited', variables }), expect.anything());
+
+    fixture.componentRef.setInput('unitScheme', { scheme: 'replacement', schemeType: 'new-type' });
+    await fixture.whenStable();
+    fixture.componentInstance.sendUnitScheme();
+    expect(sender).toHaveBeenLastCalledWith(expect.objectContaining({ codingScheme: 'replacement', codingSchemeType: 'new-type' }), expect.anything());
+  });
+
+  it('unsubscribes from Schemer changes when the hosting view is destroyed', () => {
+    expect(changes$.observed).toBe(true);
+    fixture.destroy();
+    expect(changes$.observed).toBe(false);
+    expect(ready$.observed).toBe(false);
+    expect(read$.observed).toBe(false);
+  });
 
   it('renders the read notification without an unrelated Angular event', async () => {
     reportReadFeedback();
