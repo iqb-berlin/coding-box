@@ -463,7 +463,7 @@ implements OnInit, OnDestroy, OnChanges {
       ) :
       this.codingJobBackendService.startCodingJob(job.workspace_id, job.id);
 
-    replayRequest
+    replayRequest.pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           loadingSnack.dismiss();
@@ -576,13 +576,13 @@ implements OnInit, OnDestroy, OnChanges {
       }
     });
 
-    dialogRef.afterClosed().subscribe(confirmed => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(confirmed => {
       if (!confirmed) {
         return;
       }
 
       this.codingJobBackendService
-        .submitCodingJobForReview(job.workspace_id, job.id)
+        .submitCodingJobForReview(job.workspace_id, job.id).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: () => {
             this.snackBar.open(

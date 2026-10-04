@@ -507,7 +507,7 @@ export class FilesValidationDialogComponent implements OnInit {
       finalize(() => {
         this.isRefreshingValidation.set(false);
       })
-    ).subscribe({
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: response => {
         if (typeof response === 'boolean') {
           this.snackBar.open('Validierungsergebnisse konnten nicht aktualisiert werden', 'OK', { duration: 3000 });
@@ -569,7 +569,7 @@ export class FilesValidationDialogComponent implements OnInit {
       }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result === true) {
         this.refreshValidationData('GeoGebra-Ressourcenpakete wurden aktualisiert.');
       }
@@ -586,7 +586,7 @@ export class FilesValidationDialogComponent implements OnInit {
     this.fileService.installCompatibleAspectPlayer(this.data.workspaceId)
       .pipe(finalize(() => {
         this.isInstallingCompatibleAspectPlayer.set(false);
-      }))
+      })).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.refreshValidationData(
@@ -704,7 +704,7 @@ export class FilesValidationDialogComponent implements OnInit {
       }
     });
 
-    ref.afterClosed().subscribe(result => {
+    ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result?.unitId) {
         onSelect(result.unitId);
       }
@@ -763,7 +763,7 @@ export class FilesValidationDialogComponent implements OnInit {
 
   loadWorkspaceSettings(): void {
     if (!this.data.workspaceId) return;
-    this.workspaceService.getWorkspaceSettings(this.data.workspaceId).subscribe(settings => {
+    this.workspaceService.getWorkspaceSettings(this.data.workspaceId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(settings => {
       this.ignoredUnits.set(new Set((settings.ignoredUnits || []).map(u => u.toUpperCase())));
       this.ignoredBooklets.set(new Set((settings.ignoredBooklets || []).map(b => b.toUpperCase())));
       this.ignoredTestlets.set((settings.ignoredTestlets || []).map(t => ({ bookletId: t.bookletId.toUpperCase(), testletId: t.testletId.toUpperCase() })));
@@ -951,7 +951,7 @@ export class FilesValidationDialogComponent implements OnInit {
       next.add(bookletId);
       return next;
     });
-    this.fileService.getBookletInfo(this.data.workspaceId, bookletId).subscribe({
+    this.fileService.getBookletInfo(this.data.workspaceId, bookletId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: info => {
         this.bookletData.update(value => {
           const next = new Map(value);
@@ -981,7 +981,7 @@ export class FilesValidationDialogComponent implements OnInit {
       ignoredBooklets: Array.from(this.ignoredBooklets()),
       ignoredTestlets: this.ignoredTestlets()
     };
-    this.workspaceService.saveWorkspaceSettings(this.data.workspaceId, settings).subscribe({
+    this.workspaceService.saveWorkspaceSettings(this.data.workspaceId, settings).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: success => {
         if (success) {
           if (this.data.workspaceId) {
@@ -1168,7 +1168,7 @@ export class FilesValidationDialogComponent implements OnInit {
     this.isDeletingUnusedFiles.set(true);
     const idsToDelete = this.unusedFilesSelection.selected.map(f => f.id);
 
-    this.fileService.deleteFilesWithResult(this.data.workspaceId, idsToDelete)
+    this.fileService.deleteFilesWithResult(this.data.workspaceId, idsToDelete).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           this.isDeletingUnusedFiles.set(false);
@@ -1271,7 +1271,7 @@ export class FilesValidationDialogComponent implements OnInit {
     });
 
     // Call service to resolve duplicates
-    this.workspaceService.resolveDuplicateTestTakers(this.data.workspaceId, Object.fromEntries(resolutionMap))
+    this.workspaceService.resolveDuplicateTestTakers(this.data.workspaceId, Object.fromEntries(resolutionMap)).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: success => {
           if (success) {
@@ -1411,7 +1411,7 @@ export class FilesValidationDialogComponent implements OnInit {
         const batchItems = selectedItems.slice(startIndex, endIndex);
         const batchLogins = batchItems.map(item => item.login);
 
-        this.workspaceService.markTestTakersAsConsidered(this.data.workspaceId!, batchLogins)
+        this.workspaceService.markTestTakersAsConsidered(this.data.workspaceId!, batchLogins).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: success => {
               if (success) {
@@ -1449,7 +1449,7 @@ export class FilesValidationDialogComponent implements OnInit {
       const logins = this.selection.selected.map(item => item.login);
       this.consideringProgress.set(50);
 
-      this.workspaceService.markTestTakersAsConsidered(this.data.workspaceId!, logins)
+      this.workspaceService.markTestTakersAsConsidered(this.data.workspaceId!, logins).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: success => {
             if (success) {
@@ -1494,7 +1494,7 @@ export class FilesValidationDialogComponent implements OnInit {
         const batchLogins = batchItems.map(item => item.login);
 
         // Call service to mark this batch as excluded
-        this.workspaceService.markTestTakersAsExcluded(this.data.workspaceId!, batchLogins)
+        this.workspaceService.markTestTakersAsExcluded(this.data.workspaceId!, batchLogins).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: success => {
               if (success) {
@@ -1543,7 +1543,7 @@ export class FilesValidationDialogComponent implements OnInit {
       this.excludingProgress.set(50);
 
       // Call service to mark these test takers as excluded
-      this.workspaceService.markTestTakersAsExcluded(this.data.workspaceId!, logins)
+      this.workspaceService.markTestTakersAsExcluded(this.data.workspaceId!, logins).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: success => {
             if (success) {
@@ -1792,7 +1792,7 @@ export class FilesValidationDialogComponent implements OnInit {
       canceled$.next();
       loadingSnackBar.dismiss();
     };
-    const closingSubscription = this.dialogRef.beforeClosed().subscribe(cancel);
+    const closingSubscription = this.dialogRef.beforeClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(cancel);
     const unregisterDestroy = this.destroyRef.onDestroy(cancel);
     const waitFor = <T>(source: Observable<T>) => firstValueFrom(
       source.pipe(takeUntil(canceled$)), { defaultValue: undefined }

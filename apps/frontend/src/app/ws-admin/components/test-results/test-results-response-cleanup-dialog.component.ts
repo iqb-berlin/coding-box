@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnInit, signal, ChangeDetectionStrategy
+  Component, Inject, OnInit, signal, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -43,6 +44,8 @@ interface VariableOption {
   styleUrls: ['./test-results-response-cleanup-dialog.component.scss']
 })
 export class TestResultsResponseCleanupDialogComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+
   readonly availableUnits = signal<string[]>([]);
   private variableOptions: VariableOption[] = [];
   selectedUnitNames: string[] = [];
@@ -71,7 +74,7 @@ export class TestResultsResponseCleanupDialogComponent implements OnInit {
       unitVariables: this.fileBackendService.getUnitVariables(
         this.data.workspaceId
       )
-    }).subscribe({
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: ({ exportOptions, unitVariables }) => {
         this.availableUnits.set(Array.from(new Set((exportOptions.units || []).filter(Boolean))).sort((a, b) => a.localeCompare(b)));
         this.variableOptions = this.buildVariableOptions(unitVariables);

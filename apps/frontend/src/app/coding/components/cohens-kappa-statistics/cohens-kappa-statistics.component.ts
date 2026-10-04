@@ -1,6 +1,7 @@
 import {
-  Component, OnInit, Inject, Optional, computed, inject, signal, ChangeDetectionStrategy
+  Component, OnInit, Inject, Optional, computed, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
@@ -60,6 +61,8 @@ export interface CohensKappaStatisticsDialogData {
   ]
 })
 export class CohensKappaStatisticsComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+
   private testPersonCodingService = inject(TestPersonCodingService);
   private appService: AppService = inject(AppService);
   private translateService = inject(TranslateService);
@@ -178,7 +181,7 @@ export class CohensKappaStatisticsComponent implements OnInit {
         undefined,
         kappaScope,
         this.calculationLevel()
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: response => {
           if (requestId !== this.kappaStatisticsRequestId) {
@@ -236,7 +239,7 @@ export class CohensKappaStatisticsComponent implements OnInit {
       )
       .pipe(finalize(() => {
         this.exportInProgress.set(null);
-      }))
+      })).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: blob => {
           this.saveBlob(blob, `cohens-kappa-summary-${this.getDateString()}.csv`);
@@ -271,7 +274,7 @@ export class CohensKappaStatisticsComponent implements OnInit {
       )
       .pipe(finalize(() => {
         this.exportInProgress.set(null);
-      }))
+      })).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: blob => {
           this.saveBlob(blob, `cohens-kappa-${this.getDateString()}.xlsx`);
@@ -306,7 +309,7 @@ export class CohensKappaStatisticsComponent implements OnInit {
       )
       .pipe(finalize(() => {
         this.exportInProgress.set(null);
-      }))
+      })).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: blob => {
           this.saveBlob(blob, `cohens-kappa-details-${this.getDateString()}.csv`);

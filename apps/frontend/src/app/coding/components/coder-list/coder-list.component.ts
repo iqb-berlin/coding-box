@@ -137,7 +137,7 @@ export class CoderListComponent implements OnInit {
 
     const newCoder = this.coderForm.value;
 
-    this.coderService.createCoder(newCoder).subscribe({
+    this.coderService.createCoder(newCoder).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.snackBar.open('Kodierer erfolgreich erstellt', 'Schließen', { duration: 3000 });
         this.loadCoders();
@@ -173,7 +173,7 @@ export class CoderListComponent implements OnInit {
 
     const updatedCoder = this.coderForm.value;
 
-    this.coderService.updateCoder(this.editingCoderId, updatedCoder).subscribe({
+    this.coderService.updateCoder(this.editingCoderId, updatedCoder).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.snackBar.open('Kodierer erfolgreich aktualisiert', 'Schließen', { duration: 3000 });
         this.loadCoders();

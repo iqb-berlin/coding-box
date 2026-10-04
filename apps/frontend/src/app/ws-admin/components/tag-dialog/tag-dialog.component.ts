@@ -1,6 +1,7 @@
 import {
-  ChangeDetectorRef, Component, OnInit, inject, ChangeDetectionStrategy
+  ChangeDetectorRef, Component, OnInit, inject, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -226,6 +227,8 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
   standalone: true
 })
 export class TagDialogComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+
   dialogRef = inject<MatDialogRef<TagDialogComponent>>(MatDialogRef);
   data = inject<{
     unitId: number;
@@ -266,7 +269,7 @@ export class TagDialogComponent implements OnInit {
     this.unitTagService.createUnitTag(
       this.appService.selectedWorkspaceId,
       createTagDto
-    ).subscribe({
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: tag => {
         this.tags.push(tag);
         this.newTagText = ''; // Clear the input field
@@ -296,7 +299,7 @@ export class TagDialogComponent implements OnInit {
     this.unitTagService.deleteUnitTag(
       this.appService.selectedWorkspaceId,
       tagId
-    ).subscribe({
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: success => {
         if (success) {
           this.tags = this.tags.filter(tag => tag.id !== tagId);

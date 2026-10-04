@@ -1,6 +1,7 @@
 import {
-  ChangeDetectorRef, Component, OnDestroy, OnInit, inject, signal, computed, viewChild, ChangeDetectionStrategy
+  ChangeDetectorRef, Component, OnDestroy, OnInit, inject, signal, computed, viewChild, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule, DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
@@ -199,6 +200,8 @@ interface ManualFreshnessTarget {
   ]
 })
 export class CodingManagementManualComponent implements OnInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   readonly codingJobsComponent = viewChild(CodingJobsComponent);
 
   readonly productiveCodingJobsComponent = viewChild<CodingJobsComponent>('productiveCodingJobs');
@@ -1457,7 +1460,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.exportJobService.startJob(workspaceId, exportConfig)
       .pipe(finalize(() => {
         this.isStartingManualExport.set(false);
-      }))
+      })).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.showSuccess('Exportjob wurde gestartet.');
@@ -2507,7 +2510,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((dialogResult?: ApplyCodingResultsDialogResult | false) => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((dialogResult?: ApplyCodingResultsDialogResult | false) => {
       if (!dialogResult) {
         return;
       }
@@ -2587,7 +2590,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(confirmed => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(confirmed => {
       if (confirmed) {
         this.performBulkApplyCompletedJobResults(workspaceId);
       }
@@ -3600,7 +3603,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       data: { canApplyResults: this.canApplyManualCodingResults() }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result?.resultsApplied) {
         this.refreshAllStatistics();
         this.refreshCodingJobsAfterDataChange('productive');

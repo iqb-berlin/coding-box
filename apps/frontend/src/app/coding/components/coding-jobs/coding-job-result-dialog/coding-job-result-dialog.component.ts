@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnInit, OnDestroy, AfterViewInit, inject, HostListener, signal, viewChild, effect, ChangeDetectionStrategy
+  Component, Inject, OnInit, OnDestroy, AfterViewInit, inject, HostListener, signal, viewChild, effect, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   Subject, debounceTime, forkJoin, of, catchError, finalize, takeUntil, map, Observable, switchMap
 } from 'rxjs';
@@ -119,6 +120,8 @@ interface MissingPreviewLookup {
   ]
 })
 export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterViewInit {
+  private readonly destroyRef = inject(DestroyRef);
+
   readonly sort = viewChild(MatSort);
   readonly paginator = viewChild(MatPaginator);
 
@@ -630,7 +633,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       }
     });
 
-    dialogRef.afterClosed().subscribe((dialogResult?: ApplyCodingResultsDialogResult | false) => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((dialogResult?: ApplyCodingResultsDialogResult | false) => {
       if (!dialogResult) {
         return;
       }
@@ -639,7 +642,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
       this.codingJobBackendService.applyCodingResults(this.data.workspaceId, this.data.codingJob.id, {
         overwriteExisting: dialogResult.overwriteExisting
-      }).subscribe({
+      }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: result => {
           this.isLoading.set(false);
 
@@ -987,7 +990,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       return;
     }
 
-    this.fileService.getCodingSchemeFile(this.data.workspaceId, codingSchemeRef).subscribe({
+    this.fileService.getCodingSchemeFile(this.data.workspaceId, codingSchemeRef).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: schemeFile => {
         if (!schemeFile) {
           this.snackBar.open('Kodierungsschema-Datei nicht gefunden', 'Schließen', { duration: 3000 });
@@ -1008,7 +1011,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
           }
         });
 
-        dialogRef.afterClosed().subscribe(dialogResult => {
+        dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(dialogResult => {
           if (dialogResult === true) {
             this.snackBar.open('Kodierungsschema erfolgreich aktualisiert', 'Schließen', { duration: 3000 });
             this.loadCodingResults();

@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import {
-  Component, Inject, viewChild, ChangeDetectionStrategy
+  Component, Inject, viewChild, ChangeDetectionStrategy, OnDestroy
 } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -70,7 +70,14 @@ type ImportOutcomeMetric = { label: string; value: number };
   templateUrl: './test-results-upload-result-dialog.component.html',
   styleUrls: ['./test-results-upload-result-dialog.component.scss']
 })
-export class TestResultsUploadResultDialogComponent {
+export class TestResultsUploadResultDialogComponent implements OnDestroy {
+  private readonly viewportRefreshTimers = new Set<number>();
+
+  ngOnDestroy(): void {
+    this.viewportRefreshTimers.forEach(timeout => window.clearTimeout(timeout));
+    this.viewportRefreshTimers.clear();
+  }
+
   readonly issuesViewport = viewChild<CdkVirtualScrollViewport>('issuesViewport');
 
   private issueFilterText = '';
@@ -662,12 +669,14 @@ export class TestResultsUploadResultDialogComponent {
   }
 
   private scheduleIssueViewportRefresh(resetScroll = false): void {
-    window.setTimeout(() => {
+    const timeout = window.setTimeout(() => {
+      this.viewportRefreshTimers.delete(timeout);
       if (resetScroll) {
         this.issuesViewport()?.scrollToIndex(0);
       }
       this.issuesViewport()?.checkViewportSize();
     });
+    this.viewportRefreshTimers.add(timeout);
   }
 
   private getIssueExportFileName(): string {

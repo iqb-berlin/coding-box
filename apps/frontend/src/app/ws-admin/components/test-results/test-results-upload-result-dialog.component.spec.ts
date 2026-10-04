@@ -367,4 +367,17 @@ describe('TestResultsUploadResultDialogComponent', () => {
       'Dabei werden 5098 Antwortwerte berücksichtigt.'
     );
   });
+  it('cancels queued viewport refreshes when its dialog is destroyed', () => {
+    jest.useFakeTimers();
+    const viewport = { scrollToIndex: jest.fn(), checkViewportSize: jest.fn() };
+    const query = jest.spyOn(component, 'issuesViewport').mockReturnValue(viewport as never);
+    try {
+      component.filterText = 'missing';
+      component.selectedCategory = 'unit_not_found';
+      fixture.destroy();
+      jest.runOnlyPendingTimers();
+      expect(viewport.scrollToIndex).not.toHaveBeenCalled();
+      expect(viewport.checkViewportSize).not.toHaveBeenCalled();
+    } finally { query.mockRestore(); jest.useRealTimers(); }
+  });
 });

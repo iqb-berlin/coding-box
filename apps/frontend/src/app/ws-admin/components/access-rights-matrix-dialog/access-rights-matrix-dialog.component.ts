@@ -1,6 +1,7 @@
 import {
-  Component, inject, OnInit, signal, ChangeDetectionStrategy
+  Component, inject, OnInit, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -36,6 +37,8 @@ interface MatrixRow {
   ]
 })
 export class AccessRightsMatrixDialogComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+
   private workspaceService = inject(WorkspaceService);
 
   readonly matrix = signal<AccessRightsMatrixDto | null>(null);
@@ -45,7 +48,7 @@ export class AccessRightsMatrixDialogComponent implements OnInit {
   readonly levels = signal<AccessLevelDto[]>([]);
 
   ngOnInit(): void {
-    this.workspaceService.getAccessRightsMatrix().subscribe(matrix => {
+    this.workspaceService.getAccessRightsMatrix().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(matrix => {
       this.matrix.set(matrix);
       this.levels.set(matrix.levels);
       this.displayedColumns.set(['feature', ...matrix.levels.map((l: AccessLevelDto) => `level-${l.level}`)]);

@@ -747,7 +747,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     let completedBatches = 0;
     batches.forEach(batch => {
       this.testResultService
-        .getFlatResponseFrequencies(this.appService.selectedWorkspaceId, batch)
+        .getFlatResponseFrequencies(this.appService.selectedWorkspaceId, batch).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: (resp: FlatResponseFrequenciesResponse) => {
             this.frequenciesByComboKey.update(current => {
@@ -1036,7 +1036,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     }
 
     this.testResultService
-      .getBookletLogsForUnit(this.appService.selectedWorkspaceId, row.unitId)
+      .getBookletLogsForUnit(this.appService.selectedWorkspaceId, row.unitId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (result: BookletLogsForUnitResponse | null) => {
           if (!result || !result.logs || result.logs.length === 0) {
@@ -1078,7 +1078,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     });
 
     this.unitNoteService
-      .getUnitNotes(this.appService.selectedWorkspaceId, row.unitId)
+      .getUnitNotes(this.appService.selectedWorkspaceId, row.unitId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: notes => {
           loadingSnackBar.dismiss();
@@ -1107,7 +1107,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     }
 
     this.testResultService
-      .getUnitLogs(this.appService.selectedWorkspaceId, row.unitId)
+      .getUnitLogs(this.appService.selectedWorkspaceId, row.unitId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: logs => {
           if (!logs || logs.length === 0) {
@@ -1303,7 +1303,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     }
 
     this.testResultService
-      .getFlatResponseFilterOptions(this.appService.selectedWorkspaceId, {})
+      .getFlatResponseFilterOptions(this.appService.selectedWorkspaceId, {}).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(opts => {
         const currentBrowsers = this.sessionBrowsersAllowlist()
           .split(',')
@@ -1362,7 +1362,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
           }
         });
 
-        ref.afterClosed().subscribe(result => {
+        ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
           if (!result) {
             return;
           }
@@ -1446,7 +1446,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     }
 
     this.testResultService
-      .getFlatResponseFilterOptions(this.appService.selectedWorkspaceId, {})
+      .getFlatResponseFilterOptions(this.appService.selectedWorkspaceId, {}).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(opts => {
         this.flatFilterOptions.set(opts);
       });
@@ -1697,7 +1697,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     }
 
     this.unitNoteService
-      .getNotesForMultipleUnits(this.appService.selectedWorkspaceId, unitIds)
+      .getNotesForMultipleUnits(this.appService.selectedWorkspaceId, unitIds).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: notesByUnitId => {
           const nextSet = new Set<number>();
@@ -1724,7 +1724,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     });
 
     this.statisticsService
-      .getReplayUrl(this.appService.selectedWorkspaceId, row.responseId)
+      .getReplayUrl(this.appService.selectedWorkspaceId, row.responseId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           loadingSnackBar.dismiss();
@@ -1760,10 +1760,10 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       }
     });
 
-    dialogRef.afterClosed().subscribe(confirmed => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(confirmed => {
       if (confirmed) {
         this.responseService
-          .deleteResponse(this.appService.selectedWorkspaceId, row.responseId)
+          .deleteResponse(this.appService.selectedWorkspaceId, row.responseId).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: result => {
               if (result.success) {

@@ -1,6 +1,7 @@
 import {
-  Component, OnInit, OnDestroy, inject, signal, input, output, ChangeDetectionStrategy
+  Component, OnInit, OnDestroy, inject, signal, input, output, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -154,6 +155,8 @@ type CodingJobScope = 'all' | 'training' | 'productive';
   ]
 })
 export class CodingJobsComponent implements OnInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   appService = inject(AppService);
   codingJobBackendService = inject(CodingJobBackendService);
   codingTrainingBackendService = inject(CodingTrainingBackendService);
@@ -620,7 +623,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     }
 
     this.codingJobBackendService
-      .getCodingIncompleteVariables(workspaceId)
+      .getCodingIncompleteVariables(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: variables => {
           this.preloadedVariables = variables;
@@ -647,7 +650,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       } as CodingJobDefinitionDialogData
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
         const newId = this.getNextId();
         const now = new Date();
@@ -699,7 +702,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
         const workspaceId = this.appService.selectedWorkspaceId;
         if (!workspaceId) {
@@ -710,7 +713,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         }
 
         this.codingJobBackendService
-          .deleteCodingJob(workspaceId, job.id)
+          .deleteCodingJob(workspaceId, job.id).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: response => {
               if (response.success) {
@@ -893,7 +896,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     );
 
     this.codingJobBackendService
-      .startCodingJob(workspaceId, selectedJob.id)
+      .startCodingJob(workspaceId, selectedJob.id).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: startResult => {
           loadingSnack.dismiss();
@@ -958,7 +961,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     );
 
     this.codingJobBackendService
-      .prepareCodingJobReview(workspaceId, selectedJob.id)
+      .prepareCodingJobReview(workspaceId, selectedJob.id).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: reviewResult => {
           loadingSnack.dismiss();
@@ -1168,10 +1171,10 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
         this.codingJobBackendService
-          .restartCodingJobWithOpenUnits(workspaceId, job.id)
+          .restartCodingJobWithOpenUnits(workspaceId, job.id).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: restartedJob => {
               const loadingSnack = this.snackBar.open(
@@ -1181,7 +1184,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
               );
 
               this.codingJobBackendService
-                .startCodingJob(workspaceId, restartedJob.id)
+                .startCodingJob(workspaceId, restartedJob.id).pipe(takeUntilDestroyed(this.destroyRef))
                 .subscribe({
                   next: restartResult => {
                     loadingSnack.dismiss();
@@ -1264,17 +1267,17 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.backdropClick().subscribe(() => {
+    dialogRef.backdropClick().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
       dialogRef.componentInstance.closeDialog();
     });
 
     dialogRef.keydownEvents()
-      .pipe(filter(event => event.key === 'Escape'))
+      .pipe(filter(event => event.key === 'Escape')).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         dialogRef.componentInstance.closeDialog();
       });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result?.resultsApplied) {
         this.notifyCodingResultsApplied(workspaceId);
         this.loadCodingJobs();
@@ -1311,7 +1314,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       data: { canApplyResults: this.canApplyResults() }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result?.resultsApplied) {
         this.jobsChanged.emit();
       }
@@ -1350,7 +1353,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     });
 
     dialogRef
-      .afterClosed()
+      .afterClosed().pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((result?: TransferCodingCasesDialogResult) => {
         if (!result) {
           return;
@@ -1361,7 +1364,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
             workspaceId,
             result.sourceCoderId,
             result.targetCoderId
-          )
+          ).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: transferResult => {
               this.snackBar.open(
@@ -1426,7 +1429,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
         this.performBulkDelete(selectedJobs);
       }
@@ -1519,7 +1522,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     });
 
     dialogRef
-      .afterClosed()
+      .afterClosed().pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((dialogResult?: ApplyCodingResultsDialogResult | false) => {
         if (!dialogResult) {
           return;
@@ -1534,7 +1537,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
         this.codingJobBackendService
           .applyCodingResults(workspaceId, job.id, {
             overwriteExisting: dialogResult.overwriteExisting
-          })
+          }).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: result => {
               loadingSnack.dismiss();
@@ -1664,7 +1667,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
         this.performBulkApply();
       }
@@ -1686,7 +1689,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       { duration: 3000 }
     );
 
-    this.codingJobBackendService.bulkApplyCodingResults(workspaceId).subscribe({
+    this.codingJobBackendService.bulkApplyCodingResults(workspaceId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: result => {
         loadingSnack.dismiss();
         if (result.success) {

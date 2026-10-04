@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnInit, OnDestroy, signal, ChangeDetectionStrategy
+  Component, Inject, OnInit, OnDestroy, signal, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   MAT_DIALOG_DATA, MatDialogModule, MatDialogRef
 } from '@angular/material/dialog';
@@ -463,6 +464,8 @@ export interface ImportComparisonData {
   `]
 })
 export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   displayedColumns: string[] = [
     'unitAlias',
     'variableId',
@@ -647,7 +650,7 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
         scoreMode: this.data.scoreMode,
         existingCodingMode: this.data.existingCodingMode
       }
-    ).subscribe({
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: ({ jobId }) => {
         this.pollImportJob(this.data.workspaceId!, jobId);
       },
@@ -704,7 +707,7 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
   }
 
   private fetchImportResult(workspaceId: number, jobId: string): void {
-    this.testPersonCodingService.getExternalCodingImportResult(workspaceId, jobId).subscribe({
+    this.testPersonCodingService.getExternalCodingImportResult(workspaceId, jobId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: result => {
         this.isLoading.set(false);
         this.applyProgress.set(-1);

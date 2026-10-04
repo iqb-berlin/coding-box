@@ -1,6 +1,7 @@
 import {
-  Component, OnDestroy, OnChanges, OnInit, inject, SimpleChanges, signal, input, output, ChangeDetectionStrategy
+  Component, OnDestroy, OnChanges, OnInit, inject, SimpleChanges, signal, input, output, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -68,6 +69,8 @@ interface TrainingNameFilterOption {
   styleUrls: ['./coder-trainings-list.component.scss']
 })
 export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   private codingTrainingBackendService = inject(CodingTrainingBackendService);
   private appService = inject(AppService);
   private dialog = inject(MatDialog);
@@ -390,7 +393,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
       data: { training }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
         this.performDelete(training);
       }
