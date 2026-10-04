@@ -28,7 +28,9 @@
         "cypress/zoneless/review-notifications.cy.ts",
         "apps/frontend/src/app/coding/components/coding-results-comparison/coding-results-comparison.component.spec.ts",
         "apps/frontend/src/app/coding/components/coding-results-comparison/coding-results-comparison.zoneless.spec.ts",
-        "cypress/zoneless/training-comparison.cy.ts"
+        "cypress/zoneless/training-comparison.cy.ts",
+        "apps/frontend/src/app/coding/components/coding-management/components/response-filters/response-filters.component.zoneless.spec.ts",
+        "apps/frontend/src/app/coding/components/coder-list/coder-list.component.zoneless.spec.ts"
       ]
     },
     {
@@ -70,7 +72,9 @@
         "apps/frontend/src/app/coding-management/coding-variables-dialog/coding-variables-dialog.component.zoneless.spec.ts",
         "cypress/e2e/replay-live.cy.ts",
         "cypress/e2e/item-matrix-live.cy.ts",
-        "cypress/auth/coding-session.cy.ts"
+        "cypress/auth/coding-session.cy.ts",
+        "apps/frontend/src/app/replay/components/unit-player/unit-player.component.spec.ts",
+        "apps/frontend/src/app/coding/components/schemer/unit-schemer.component.zoneless.spec.ts"
       ]
     },
     {
@@ -148,7 +152,8 @@
         "apps/frontend/src/app/coding/components/export-dialog/export-dialog.component.zoneless.spec.ts",
         "cypress/zoneless/async-coding-dialogs.cy.ts",
         "apps/frontend/src/app/coding/components/schemer/unit-schemer.component.zoneless.spec.ts",
-        "apps/frontend/src/app/components/export-toast/export-toast.component.zoneless.spec.ts"
+        "apps/frontend/src/app/components/export-toast/export-toast.component.zoneless.spec.ts",
+        "apps/frontend/src/app/shared/search-filter/search-filter.component.zoneless.spec.ts"
       ]
     },
     {
@@ -187,7 +192,8 @@
         "apps/frontend/src/app/workspace/components/edit-workspace/edit-workspace.component.spec.ts",
         "apps/frontend/src/app/sys-admin/components/workspaces-menu/workspaces-menu.component.spec.ts",
         "apps/frontend/src/app/sys-admin/components/workspaces/workspaces.component.spec.ts",
-        "cypress/zoneless/admin-forms.cy.ts"
+        "cypress/zoneless/admin-forms.cy.ts",
+        "apps/frontend/src/app/sys-admin/components/workspaces-selection/workspaces-selection-refresh.zoneless.spec.ts"
       ]
     }
   ],
