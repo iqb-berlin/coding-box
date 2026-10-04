@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, ViewChild, AfterViewInit, inject, signal
+  Component, OnInit, inject, signal, viewChild, effect
 } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
@@ -62,7 +62,7 @@ import { CodingJobBackendService } from '../../services/coding-job-backend.servi
     MatMenuModule
   ]
 })
-export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
+export class VariableBundleManagerComponent implements OnInit {
   private variableBundleGroupService = inject(VariableBundleService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
@@ -76,15 +76,15 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
   readonly selectedName = signal<string | null>(null);
   readonly originalData = signal<VariableBundle[]>([]);
 
-  @ViewChild(MatSort) sort!: MatSort;
+  readonly sort = viewChild(MatSort);
 
   ngOnInit(): void {
     this.loadVariableBundleGroups();
   }
 
-  ngAfterViewInit(): void {
-    this.dataSource.sort = this.sort;
-  }
+  private readonly synchronizeSort = effect(() => {
+    this.dataSource.sort = this.sort() ?? null;
+  });
 
   loadVariableBundleGroups(): void {
     this.isLoading.set(true);

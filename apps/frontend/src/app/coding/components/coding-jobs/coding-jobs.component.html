@@ -49,7 +49,7 @@
             </mat-select>
           </mat-form-field>
 
-          @if (showTrainingFilter) {
+          @if (showTrainingFilter()) {
             <mat-form-field
               appearance="outline"
               class="filter-field"
@@ -75,7 +75,7 @@
 
         <div class="actions-row">
           <div class="actions-group primary-actions">
-            @if (canApplyResults() && showApplyActions) {
+            @if (canApplyResults() && showApplyActions()) {
               <button
                 mat-button
                 (click)="bulkApplyCodingResults()"
@@ -85,13 +85,13 @@
                 Alle Ergebnisse anwenden
               </button>
             }
-            @if (canManageCodingJobs() && showTransferAction) {
+            @if (canManageCodingJobs() && showTransferAction()) {
               <button mat-button (click)="openTransferCodingCasesDialog()">
                 <mat-icon>swap_horiz</mat-icon>
                 Fälle übertragen
               </button>
             }
-            @if (showComparisonActions) {
+            @if (showComparisonActions()) {
               <button mat-button (click)="openDoubleCodedReviewDialog()">
                 <mat-icon>compare</mat-icon>
                 Doppelkodierungsreview
@@ -104,13 +104,13 @@
           </div>
 
           <div class="actions-group utility-actions">
-            @if (showRefreshAction) {
+            @if (showRefreshAction()) {
               <button mat-button (click)="loadCodingJobs()">
                 <mat-icon>refresh</mat-icon>
                 Aktualisieren
               </button>
             }
-            @if (canManageCodingJobs() && showBulkDeleteAction) {
+            @if (canManageCodingJobs() && showBulkDeleteAction()) {
               <button
                 mat-raised-button
                 color="warn"
@@ -313,7 +313,7 @@
                   </button>
                 }
                 @if (
-                  showApplyActions &&
+                  showApplyActions() &&
                   canApplyResults() &&
                   getPrimaryJobAction(element) !== 'apply'
                   ) {
@@ -328,7 +328,7 @@
                     <span>Ergebnisse anwenden</span>
                   </button>
                 }
-                @if (canManageCodingJobs() && showBulkDeleteAction) {
+                @if (canManageCodingJobs() && showBulkDeleteAction()) {
                   <mat-divider class="menu-section-divider"></mat-divider>
                   <button
                     mat-menu-item

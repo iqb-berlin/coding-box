@@ -156,6 +156,8 @@ describe('CodeSelectorComponent', () => {
 
     fixture = TestBed.createComponent(CodeSelectorComponent);
     component = fixture.componentInstance;
+    fixture.componentRef.setInput('variableId', 'test-variable');
+    fixture.componentRef.setInput('codingScheme', '');
     fixture.detectChanges();
   });
 
@@ -286,8 +288,8 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('filters regular codes without manual instructions from manual selection', () => {
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
 
     component.ngOnChanges({
       codingScheme: new SimpleChange(null, mixedCodingScheme, false),
@@ -299,8 +301,8 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('keeps available coding issue options and general instructions visible without regular manual codes', () => {
-    component.codingScheme = issueOnlyCodingScheme;
-    component.variableId = 'VAR2';
+    fixture.componentRef.setInput('codingScheme', issueOnlyCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR2');
     const emitSpy = jest.spyOn(component.codeSelected, 'emit');
 
     component.ngOnChanges({
@@ -328,8 +330,8 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('hides comment-bound coding issue options when comments are disabled', () => {
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
     fixture.componentRef.setInput('allowComments', false);
     const emitSpy = jest.spyOn(component.codeSelected, 'emit');
 
@@ -350,11 +352,11 @@ describe('CodeSelectorComponent', () => {
 
   it('does not preselect hidden comment-bound coding issue options when comments are disabled', () => {
     jest.useFakeTimers();
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
     fixture.componentRef.setInput('allowComments', false);
-    component.preSelectedCodeId = -2;
-    component.preSelectedCodingIssueOptionId = -2;
+    fixture.componentRef.setInput('preSelectedCodeId', -2);
+    fixture.componentRef.setInput('preSelectedCodingIssueOptionId', -2);
 
     component.ngOnChanges({
       codingScheme: new SimpleChange(null, mixedCodingScheme, false),
@@ -374,10 +376,10 @@ describe('CodeSelectorComponent', () => {
 
   it('clears selected comment-bound coding issue options when comments are disabled later', () => {
     jest.useFakeTimers();
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
-    component.preSelectedCodeId = -2;
-    component.preSelectedCodingIssueOptionId = -2;
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.componentRef.setInput('preSelectedCodeId', -2);
+    fixture.componentRef.setInput('preSelectedCodingIssueOptionId', -2);
 
     component.ngOnChanges({
       codingScheme: new SimpleChange(null, mixedCodingScheme, false),
@@ -401,8 +403,8 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('requires a regular code before selecting code-assignment-uncertain', () => {
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
     const emitSpy = jest.spyOn(component.codeSelected, 'emit');
 
     component.ngOnChanges({
@@ -428,8 +430,8 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('keeps manual codes selectable when mixed with empty manual instructions', () => {
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
     const emitSpy = jest.spyOn(component.codeSelected, 'emit');
 
     component.ngOnChanges({
@@ -494,8 +496,8 @@ describe('CodeSelectorComponent', () => {
     };
     const emitSpy = jest.spyOn(component.codeSelected, 'emit');
 
-    component.codingScheme = collisionCodingScheme;
-    component.variableId = '04';
+    fixture.componentRef.setInput('codingScheme', collisionCodingScheme);
+    fixture.componentRef.setInput('variableId', '04');
     component.ngOnChanges({
       codingScheme: new SimpleChange(null, collisionCodingScheme, false),
       variableId: new SimpleChange(null, '04', false)
@@ -520,14 +522,14 @@ describe('CodeSelectorComponent', () => {
     translateService.setDefaultLang('de');
     translateService.use('de');
 
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
-    component.reviewCodeSelections = [
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.componentRef.setInput('reviewCodeSelections', [
       { code: 1, coderNames: ['Coder A', 'Coder B'] },
       { code: 2, coderNames: ['Coder C'] },
       { code: -3, coderNames: ['Coder F', 'Coder G'] },
       { code: -2, coderNames: ['Coder D', 'Coder E'] }
-    ];
+    ]);
 
     component.ngOnChanges({
       codingScheme: new SimpleChange(null, mixedCodingScheme, false),
@@ -566,9 +568,9 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('shows a stored legacy code without making it regularly selectable', () => {
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
-    component.preSelectedCodeId = 2;
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.componentRef.setInput('preSelectedCodeId', 2);
 
     component.ngOnChanges({
       codingScheme: new SimpleChange(null, mixedCodingScheme, false),
@@ -584,13 +586,13 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('shows a stored code missing from the current coding scheme', () => {
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
-    component.preSelectedCodeId = 99;
-    component.unitsData = {
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.componentRef.setInput('preSelectedCodeId', 99);
+    fixture.componentRef.setInput('unitsData', {
       ...interleavedUnitsData,
       currentUnitIndex: 0
-    };
+    });
     const emitSpy = jest.spyOn(component.unitChanged, 'emit');
 
     component.ngOnChanges({
@@ -613,17 +615,17 @@ describe('CodeSelectorComponent', () => {
       'code-selector.legacy-code-missing-note'
     );
     expect(component.hasNextUnit()).toBe(true);
-    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData().units[1]);
   });
 
   it('counts a stored legacy code as current selection for navigation', () => {
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
-    component.preSelectedCodeId = 2;
-    component.unitsData = {
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.componentRef.setInput('preSelectedCodeId', 2);
+    fixture.componentRef.setInput('unitsData', {
       ...interleavedUnitsData,
       currentUnitIndex: 0
-    };
+    });
     const emitSpy = jest.spyOn(component.unitChanged, 'emit');
 
     component.ngOnChanges({
@@ -634,13 +636,13 @@ describe('CodeSelectorComponent', () => {
     component.nextUnit();
 
     expect(component.hasNextUnit()).toBe(true);
-    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData().units[1]);
   });
 
   it('clears stored legacy code when selecting a current manual code', () => {
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
-    component.preSelectedCodeId = 2;
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.componentRef.setInput('preSelectedCodeId', 2);
 
     component.ngOnChanges({
       codingScheme: new SimpleChange(null, mixedCodingScheme, false),
@@ -654,9 +656,9 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('clears stored legacy code when selecting a standalone coding issue option', () => {
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
-    component.preSelectedCodeId = 2;
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.componentRef.setInput('preSelectedCodeId', 2);
     const emitSpy = jest.spyOn(component.codeSelected, 'emit');
 
     component.ngOnChanges({
@@ -676,9 +678,9 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('clears a coding issue option when a regular code resolves an issue review', () => {
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
-    component.clearCodingIssueOnRegularSelection = true;
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.componentRef.setInput('clearCodingIssueOnRegularSelection', true);
     const emitSpy = jest.spyOn(component.codeSelected, 'emit');
 
     component.ngOnChanges({
@@ -698,9 +700,9 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('clears stored legacy code when removing the selection', () => {
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
-    component.preSelectedCodeId = 2;
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.componentRef.setInput('preSelectedCodeId', 2);
     const emitSpy = jest.spyOn(component.codeSelected, 'emit');
 
     component.ngOnChanges({
@@ -719,9 +721,9 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('clears the local selection when the coding case changes', () => {
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
-    component.codingCaseKey = 'case-1';
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.componentRef.setInput('codingCaseKey', 'case-1');
     component.ngOnChanges({
       codingScheme: new SimpleChange(null, mixedCodingScheme, false),
       variableId: new SimpleChange(null, 'VAR1', false),
@@ -729,7 +731,7 @@ describe('CodeSelectorComponent', () => {
     });
     component.onSelect(1);
 
-    component.codingCaseKey = 'case-2';
+    fixture.componentRef.setInput('codingCaseKey', 'case-2');
     component.ngOnChanges({
       codingCaseKey: new SimpleChange('case-1', 'case-2', false)
     });
@@ -740,25 +742,25 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('nextUnit should navigate to immediate next case for interleaved variables', () => {
-    component.unitsData = {
+    fixture.componentRef.setInput('unitsData', {
       ...interleavedUnitsData,
       currentUnitIndex: 0
-    };
+    });
     component.selectedCode.set(1);
     const emitSpy = jest.spyOn(component.unitChanged, 'emit');
 
     component.nextUnit();
 
-    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData().units[1]);
   });
 
   it('blocks nextUnit until the current selection has been saved', () => {
     const isUnitCoded = jest.fn().mockReturnValue(false);
-    component.codingService = { isUnitCoded } as never;
-    component.unitsData = {
+    fixture.componentRef.setInput('codingService', { isUnitCoded } as never);
+    fixture.componentRef.setInput('unitsData', {
       ...interleavedUnitsData,
       currentUnitIndex: 0
-    };
+    });
     component.selectedCode.set(1);
     const emitSpy = jest.spyOn(component.unitChanged, 'emit');
 
@@ -770,19 +772,19 @@ describe('CodeSelectorComponent', () => {
 
     expect(component.hasNextUnit()).toBe(true);
     component.nextUnit();
-    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData().units[1]);
   });
 
   it('blocks nextUnit while an updated selection is still being saved', () => {
     const isUnitSavePending = jest.fn().mockReturnValue(true);
-    component.codingService = {
+    fixture.componentRef.setInput('codingService', {
       isUnitCoded: jest.fn().mockReturnValue(true),
       isUnitSavePending
-    } as never;
-    component.unitsData = {
+    } as never);
+    fixture.componentRef.setInput('unitsData', {
       ...interleavedUnitsData,
       currentUnitIndex: 0
-    };
+    });
     component.selectedCode.set(1);
     const emitSpy = jest.spyOn(component.unitChanged, 'emit');
 
@@ -794,22 +796,23 @@ describe('CodeSelectorComponent', () => {
 
     expect(component.hasNextUnit()).toBe(true);
     component.nextUnit();
-    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData().units[1]);
   });
 
   it('blocks nextUnit and focuses notes when new-code-needed has no comment', () => {
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
-    component.unitsData = {
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.componentRef.setInput('unitsData', {
       ...interleavedUnitsData,
       currentUnitIndex: 0
-    };
+    });
     const emitSpy = jest.spyOn(component.unitChanged, 'emit');
 
     component.ngOnChanges({
       codingScheme: new SimpleChange(null, mixedCodingScheme, false),
       variableId: new SimpleChange(null, 'VAR1', false)
     });
+    fixture.detectChanges();
     component.onSelect(-2);
     fixture.detectChanges();
 
@@ -825,24 +828,24 @@ describe('CodeSelectorComponent', () => {
     );
     expect(focusSpy).toHaveBeenCalled();
 
-    component.coderNotes = 'needs a new code';
+    fixture.componentRef.setInput('coderNotes', 'needs a new code');
     component.onNotesChanged();
     component.nextUnit();
 
     expect(component.newCodeCommentValidationError()).toBe(false);
-    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData().units[1]);
   });
 
   it('previousUnit should navigate to immediate previous case for interleaved variables', () => {
-    component.unitsData = {
+    fixture.componentRef.setInput('unitsData', {
       ...interleavedUnitsData,
       currentUnitIndex: 2
-    };
+    });
     const emitSpy = jest.spyOn(component.unitChanged, 'emit');
 
     component.previousUnit();
 
-    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData().units[1]);
   });
 
   it('focuses the active variable after rendering the opened panel', async () => {
@@ -862,10 +865,10 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('hides the pause button for completed job reviews', () => {
-    component.showProgress = true;
-    component.hasCodingJob = true;
-    component.isCodingJobCompleted = false;
-    component.isCompletedJobReview = true;
+    fixture.componentRef.setInput('showProgress', true);
+    fixture.componentRef.setInput('hasCodingJob', true);
+    fixture.componentRef.setInput('isCodingJobCompleted', false);
+    fixture.componentRef.setInput('isCompletedJobReview', true);
 
     fixture.detectChanges();
 
@@ -874,7 +877,7 @@ describe('CodeSelectorComponent', () => {
 
   it('emits when the compact home button is clicked', () => {
     const openCodingJobsSpy = jest.spyOn(component.openCodingJobs, 'emit');
-    component.showProgress = true;
+    fixture.componentRef.setInput('showProgress', true);
 
     fixture.detectChanges();
     const homeButton = fixture.nativeElement.querySelector('.home-button') as HTMLButtonElement;
@@ -885,8 +888,8 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('keeps general codes and notes expanded by default and lets users collapse them', () => {
-    component.codingScheme = mixedCodingScheme;
-    component.variableId = 'VAR1';
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
     fixture.componentRef.setInput('allowComments', true);
 
     component.ngOnChanges({
@@ -959,7 +962,7 @@ describe('CodeSelectorComponent', () => {
     const focusSpy = jest.spyOn(notes, 'focus');
     component.selectedCodingIssueOption.set(-2);
     expect(component.canLeaveCurrentUnit()).toBe(false);
-    component.coderNotes = 'New code proposal';
+    fixture.componentRef.setInput('coderNotes', 'New code proposal');
     component.onNotesChanged();
     await fixture.whenStable();
 
@@ -968,11 +971,11 @@ describe('CodeSelectorComponent', () => {
 
   it('disables and ignores pause while read-only', () => {
     const pauseSpy = jest.spyOn(component.pauseCodingJob, 'emit');
-    component.showProgress = true;
-    component.hasCodingJob = true;
-    component.isCodingJobCompleted = false;
-    component.isCompletedJobReview = false;
-    component.isReadOnly = true;
+    fixture.componentRef.setInput('showProgress', true);
+    fixture.componentRef.setInput('hasCodingJob', true);
+    fixture.componentRef.setInput('isCodingJobCompleted', false);
+    fixture.componentRef.setInput('isCompletedJobReview', false);
+    fixture.componentRef.setInput('isReadOnly', true);
 
     fixture.detectChanges();
     component.onPauseClick();
@@ -985,9 +988,9 @@ describe('CodeSelectorComponent', () => {
   it('disables and ignores navigation while navigation is blocked', () => {
     const unitChangedSpy = jest.spyOn(component.unitChanged, 'emit');
     const navigateSpy = jest.spyOn(component.openNavigateDialog, 'emit');
-    component.showProgress = true;
-    component.isNavigationDisabled = true;
-    component.unitsData = {
+    fixture.componentRef.setInput('showProgress', true);
+    fixture.componentRef.setInput('isNavigationDisabled', true);
+    fixture.componentRef.setInput('unitsData', {
       id: 1,
       name: 'Job',
       currentUnitIndex: 0,
@@ -1007,7 +1010,7 @@ describe('CodeSelectorComponent', () => {
           variableId: 'VAR2'
         }
       ]
-    };
+    });
 
     fixture.detectChanges();
     component.toggleVariablePanel();
@@ -1028,11 +1031,11 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('renders small alternating bundle variables as chips including auto-coded variables', () => {
-    component.showProgress = true;
-    component.codingService = {
+    fixture.componentRef.setInput('showProgress', true);
+    fixture.componentRef.setInput('codingService', {
       isUnitCoded: jest.fn().mockReturnValue(false)
-    } as never;
-    component.unitsData = {
+    } as never);
+    fixture.componentRef.setInput('unitsData', {
       id: 1,
       name: 'Job',
       currentUnitIndex: 0,
@@ -1075,7 +1078,7 @@ describe('CodeSelectorComponent', () => {
           }
         }
       ]
-    };
+    });
 
     fixture.detectChanges();
 
@@ -1118,7 +1121,7 @@ describe('CodeSelectorComponent', () => {
         }
       ]
     };
-    component.unitsData = {
+    fixture.componentRef.setInput('unitsData', {
       id: 1,
       name: 'Job',
       currentUnitIndex: 0,
@@ -1142,7 +1145,7 @@ describe('CodeSelectorComponent', () => {
           bundleContext
         }
       ]
-    };
+    });
 
     const secondVariable = component.bundleVariableNavigationItems[1];
 
@@ -1151,10 +1154,10 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('keeps the navigation dropdown visible for bundle jobs and lists one entry per bundle', () => {
-    component.showProgress = true;
-    component.codingService = {
+    fixture.componentRef.setInput('showProgress', true);
+    fixture.componentRef.setInput('codingService', {
       isUnitCoded: jest.fn().mockReturnValue(false)
-    } as never;
+    } as never);
     const bundleContext = {
       bundleId: 9,
       bundleName: 'Bundle A',
@@ -1185,7 +1188,7 @@ describe('CodeSelectorComponent', () => {
         }
       ]
     };
-    component.unitsData = {
+    fixture.componentRef.setInput('unitsData', {
       id: 1,
       name: 'Job',
       currentUnitIndex: 0,
@@ -1216,7 +1219,7 @@ describe('CodeSelectorComponent', () => {
           variableId: 'VAR3'
         }
       ]
-    };
+    });
 
     fixture.detectChanges();
 
@@ -1237,10 +1240,10 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('renders continuous bundle variables up to eight as chips', () => {
-    component.showProgress = true;
-    component.codingService = {
+    fixture.componentRef.setInput('showProgress', true);
+    fixture.componentRef.setInput('codingService', {
       isUnitCoded: jest.fn().mockReturnValue(false)
-    } as never;
+    } as never);
     const variables = ['VAR1', 'VAR2', 'VAR3', 'VAR4', 'VAR5', 'VAR6', 'VAR7', 'VAR8'].map((variableId, index) => ({
       responseId: index + 1,
       unitName: 'UNIT_1',
@@ -1259,7 +1262,7 @@ describe('CodeSelectorComponent', () => {
       caseOrderingMode: 'continuous' as const,
       variables
     };
-    component.unitsData = {
+    fixture.componentRef.setInput('unitsData', {
       id: 1,
       name: 'Job',
       currentUnitIndex: 0,
@@ -1272,7 +1275,7 @@ describe('CodeSelectorComponent', () => {
         variableBundleId: 9,
         bundleContext
       }))
-    };
+    });
 
     fixture.detectChanges();
 
@@ -1283,10 +1286,10 @@ describe('CodeSelectorComponent', () => {
   });
 
   it('shows a bundle variable dropdown above eight variables', () => {
-    component.showProgress = true;
-    component.codingService = {
+    fixture.componentRef.setInput('showProgress', true);
+    fixture.componentRef.setInput('codingService', {
       isUnitCoded: jest.fn().mockReturnValue(false)
-    } as never;
+    } as never);
     const variables = ['VAR1', 'VAR2', 'VAR3', 'VAR4', 'VAR5', 'VAR6', 'VAR7', 'VAR8', 'VAR9'].map((variableId, index) => ({
       responseId: index + 1,
       unitName: 'UNIT_1',
@@ -1305,7 +1308,7 @@ describe('CodeSelectorComponent', () => {
       caseOrderingMode: 'continuous' as const,
       variables
     };
-    component.unitsData = {
+    fixture.componentRef.setInput('unitsData', {
       id: 1,
       name: 'Job',
       currentUnitIndex: 0,
@@ -1318,7 +1321,7 @@ describe('CodeSelectorComponent', () => {
         variableBundleId: 9,
         bundleContext
       }))
-    };
+    });
 
     fixture.detectChanges();
 
@@ -1345,14 +1348,14 @@ describe('CodeSelectorComponent', () => {
     const emitSpy = jest.spyOn(component.unitChanged, 'emit');
     component.selectBundleVariable('UNIT_1::VAR9', false);
 
-    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[8]);
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData().units[8]);
   });
 
   it('keeps bundle variable navigation within the current bundle case', () => {
-    component.showProgress = true;
-    component.codingService = {
+    fixture.componentRef.setInput('showProgress', true);
+    fixture.componentRef.setInput('codingService', {
       isUnitCoded: jest.fn().mockReturnValue(false)
-    } as never;
+    } as never);
     const variables = ['VAR1', 'VAR2', 'VAR3', 'VAR4', 'VAR5'].map((variableId, index) => ({
       responseId: index + 1,
       unitName: 'UNIT_1',
@@ -1391,7 +1394,7 @@ describe('CodeSelectorComponent', () => {
         bundleContext
       }))
     );
-    component.unitsData = {
+    fixture.componentRef.setInput('unitsData', {
       id: 1,
       name: 'Job',
       currentUnitIndex: 5,
@@ -1399,21 +1402,21 @@ describe('CodeSelectorComponent', () => {
         ...createCaseUnits('person-1@code@group@booklet', firstCaseContext, 1),
         ...createCaseUnits('person-2@code@group@booklet', secondCaseContext, 6)
       ]
-    };
+    });
 
     const emitSpy = jest.spyOn(component.unitChanged, 'emit');
 
     component.selectBundleVariable('UNIT_1::VAR5', false);
 
-    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[9]);
-    expect(emitSpy).not.toHaveBeenCalledWith(component.unitsData.units[4]);
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData().units[9]);
+    expect(emitSpy).not.toHaveBeenCalledWith(component.unitsData().units[4]);
   });
 
   it('navigates to the first uncoded unit of a selected bundle navigation item', () => {
-    component.codingService = {
+    fixture.componentRef.setInput('codingService', {
       isUnitCoded: jest.fn((unit: { variableId?: string }) => unit.variableId === 'VAR1')
-    } as never;
-    component.unitsData = {
+    } as never);
+    fixture.componentRef.setInput('unitsData', {
       id: 1,
       name: 'Job',
       currentUnitIndex: 0,
@@ -1449,11 +1452,11 @@ describe('CodeSelectorComponent', () => {
           variableId: 'VAR3'
         }
       ]
-    };
+    });
     const emitSpy = jest.spyOn(component.unitChanged, 'emit');
 
     component.jumpToNavigationItem('bundle:9');
 
-    expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
+    expect(emitSpy).toHaveBeenCalledWith(component.unitsData().units[1]);
   });
 });

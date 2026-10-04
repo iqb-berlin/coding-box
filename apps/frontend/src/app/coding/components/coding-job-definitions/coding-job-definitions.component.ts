@@ -1,5 +1,5 @@
 import {
-  Component, OnDestroy, OnInit, inject, Output, EventEmitter, Input, signal
+  Component, OnDestroy, OnInit, inject, signal, input, output
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -131,10 +131,10 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     'bundlesCount'
   ];
 
-  @Output() bulkCreationCompleted = new EventEmitter<void>();
-  @Output() jobDefinitionChanged = new EventEmitter<void>();
-  @Input() selectionMode = false;
-  @Output() definitionSelected = new EventEmitter<JobDefinition>();
+  readonly bulkCreationCompleted = output<void>();
+  readonly jobDefinitionChanged = output<void>();
+  readonly selectionMode = input(false);
+  readonly definitionSelected = output<JobDefinition>();
 
   ngOnInit(): void {
     this.loadCoders();
@@ -551,7 +551,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   selectDefinition(definition: JobDefinition): void {
-    if (this.selectionMode) {
+    if (this.selectionMode()) {
       this.definitionSelected.emit(definition);
     }
   }
@@ -592,7 +592,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   private restoreRecoveredDefinitionDialog(): void {
-    if (this.selectionMode || this.definitionDialogOpen) {
+    if (this.selectionMode() || this.definitionDialogOpen) {
       return;
     }
 

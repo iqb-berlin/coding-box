@@ -1,6 +1,5 @@
 import {
-  Component, Inject, inject, OnInit,
-  ViewChild, computed, signal
+  Component, Inject, inject, OnInit, computed, signal, viewChild, effect
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
@@ -265,12 +264,16 @@ interface ModalValueDisplay {
   ]
 })
 export class CodingResultsComparisonComponent implements OnInit {
-  @ViewChild(MatSort) sort!: MatSort;
-  @ViewChild(MatPaginator) set matPaginator(mp: MatPaginator) {
-    if (mp) {
-      this.paginator = mp;
+  readonly sort = viewChild(MatSort);
+  private readonly synchronizeSort = effect(() => {
+    const sort = this.sort();
+    if (sort) {
+      sort.active = this.sortBy;
+      sort.direction = this.sortDirection;
     }
-  }
+  });
+
+  readonly matPaginator = viewChild(MatPaginator);
 
   private codingTrainingBackendService = inject(CodingTrainingBackendService);
   private translate = inject(TranslateService);
@@ -289,7 +292,6 @@ export class CodingResultsComparisonComponent implements OnInit {
   private comparisonRequestId = 0;
   private kappaRequestId = 0;
   private coderTrainingsRequestId = 0;
-  private paginator?: MatPaginator;
   private hasInitializedBetweenCoderSelection = false;
   private hasInitializedWithinCoderSelection = false;
   private unregisterRecoveryProvider: (() => void) | null = null;
@@ -482,9 +484,10 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   ngAfterViewInit(): void {
-    if (this.sort) {
-      this.sort.active = this.sortBy;
-      this.sort.direction = this.sortDirection;
+    const sort = this.sort();
+    if (sort) {
+      sort.active = this.sortBy;
+      sort.direction = this.sortDirection;
     }
   }
 
@@ -1890,8 +1893,9 @@ export class CodingResultsComparisonComponent implements OnInit {
 
   private reloadComparisonFirstPage(): void {
     this.pageIndex = 0;
-    if (this.paginator) {
-      this.paginator.pageIndex = 0;
+    const paginator = this.matPaginator();
+    if (paginator) {
+      paginator.pageIndex = 0;
     }
 
     if (this.canLoadCurrentComparison()) {

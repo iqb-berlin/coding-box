@@ -177,7 +177,7 @@ describe('Test person coding delayed responses without Zone.js', () => {
   });
 
   it('does not repeat a polling error when the independent job list succeeds', async () => {
-    fixture.componentInstance.initialJobId = 'freshness-job';
+    fixture.componentRef.setInput('initialJobId', 'freshness-job');
     fixture.componentInstance.startJobStatusPolling('freshness-job');
     status.next({ error: 'temporary status error' });
     await fixture.whenStable();

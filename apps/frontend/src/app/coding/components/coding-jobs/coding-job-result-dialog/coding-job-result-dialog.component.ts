@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy, AfterViewInit, ViewChild, inject, HostListener, signal
+  Component, Inject, OnInit, OnDestroy, AfterViewInit, inject, HostListener, signal, viewChild, effect
 } from '@angular/core';
 import {
   Subject, debounceTime, forkJoin, of, catchError, finalize, takeUntil, map, Observable, switchMap
@@ -118,8 +118,8 @@ interface MissingPreviewLookup {
   ]
 })
 export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterViewInit {
-  @ViewChild(MatSort) sort!: MatSort;
-  @ViewChild(MatPaginator) paginator?: MatPaginator;
+  readonly sort = viewChild(MatSort);
+  readonly paginator = viewChild(MatPaginator);
 
   private codingJobBackendService = inject(CodingJobBackendService);
   private missingsProfileService = inject(MissingsProfileService);
@@ -196,9 +196,12 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     this.refreshSubject.next();
   }
 
+  private readonly synchronizeTable = effect(() => {
+    this.dataSource.sort = this.sort() ?? null;
+    this.dataSource.paginator = this.paginator() ?? null;
+  });
+
   ngAfterViewInit(): void {
-    this.dataSource.sort = this.sort;
-    this.dataSource.paginator = this.paginator || null;
     this.dataSource.sortingDataAccessor = this.createSortingDataAccessor();
     this.dataSource.filterPredicate = this.createFilterPredicate();
     this.applyFilters();
@@ -238,7 +241,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
         ));
         this.isMissingProfileUnavailable.set(this.getUnresolvedMissingCount() > 0);
         this.applyFilters();
-        this.paginator?.firstPage();
+        this.paginator()?.firstPage();
       },
       error: () => {
         this.dataSource.data = [];
@@ -492,7 +495,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       testPerson: this.testPersonFilter()
     };
     this.dataSource.filter = JSON.stringify(filterObj);
-    this.paginator?.firstPage();
+    this.paginator()?.firstPage();
   }
 
   onUnitNameFilterChange(): void {

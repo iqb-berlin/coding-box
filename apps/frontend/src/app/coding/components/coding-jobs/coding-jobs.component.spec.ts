@@ -599,7 +599,7 @@ describe('CodingJobsComponent', () => {
   });
 
   it('hides the refresh action when manual refresh is not available', () => {
-    component.showRefreshAction = false;
+    fixture.componentRef.setInput('showRefreshAction', false);
     fixture.detectChanges();
 
     expect(
@@ -617,12 +617,12 @@ describe('CodingJobsComponent', () => {
       'apply'
     );
 
-    component.showApplyActions = false;
+    fixture.componentRef.setInput('showApplyActions', false);
     expect(component.getPrimaryJobAction(mockCodingJobs[1] as CodingJob)).toBe(
       'review'
     );
 
-    component.showApplyActions = true;
+    fixture.componentRef.setInput('showApplyActions', true);
     component.canApplyResults.set(false);
     expect(component.getPrimaryJobAction(mockCodingJobs[1] as CodingJob)).toBe(
       'review'
@@ -862,7 +862,7 @@ describe('CodingJobsComponent', () => {
   });
 
   it('should handle window focus when auto reload is enabled', () => {
-    component.autoReloadOnFocus = true;
+    fixture.componentRef.setInput('autoReloadOnFocus', true);
     const loadSpy = jest.spyOn(component, 'loadCodingJobs');
     window.dispatchEvent(new Event('focus'));
     expect(loadSpy).toHaveBeenCalled();

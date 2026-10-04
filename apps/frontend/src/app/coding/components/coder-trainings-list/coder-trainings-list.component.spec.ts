@@ -187,9 +187,9 @@ describe('CoderTrainingsListComponent', () => {
       workspaceId === 1 ? workspace1$.asObservable() : of(workspace2Trainings)
     ));
 
-    component.workspaceId = 1;
+    fixture.componentRef.setInput('workspaceId', 1);
     component.ngOnInit();
-    component.workspaceId = 2;
+    fixture.componentRef.setInput('workspaceId', 2);
     component.ngOnChanges({
       workspaceId: {
         currentValue: 2,

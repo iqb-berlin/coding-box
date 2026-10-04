@@ -1,10 +1,5 @@
 import {
-  ChangeDetectorRef,
-  Component,
-  Inject,
-  inject,
-  OnInit,
-  ViewChild
+  ChangeDetectorRef, Component, Inject, inject, OnInit, viewChild, effect
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -123,9 +118,12 @@ export class VariableAnalysisDialogComponent implements OnInit {
   isLoadingVariableAnalysis = false;
   variableAnalysisFilterChanged = new Subject<void>();
 
-  @ViewChild(MatSort) sort!: MatSort;
+  readonly sort = viewChild(MatSort);
+  private readonly synchronizeSort = effect(() => {
+    this.variableAnalysisDataSource.sort = this.sort() ?? null;
+  });
 
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
+  readonly paginator = viewChild(MatPaginator);
 
   constructor(
     public dialogRef: MatDialogRef<VariableAnalysisDialogComponent>,
@@ -188,12 +186,6 @@ export class VariableAnalysisDialogComponent implements OnInit {
           this.totalVariableAnalysisRecords = response.total;
           this.variableAnalysisPageIndex = response.page - 1; // MatPaginator uses 0-based index
           this.variableAnalysisPageSize = response.limit;
-
-          setTimeout(() => {
-            if (this.sort) {
-              this.variableAnalysisDataSource.sort = this.sort;
-            }
-          });
 
           this.isLoadingVariableAnalysis = false;
           this.changeDetectorRef.markForCheck();

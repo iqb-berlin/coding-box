@@ -1,5 +1,5 @@
 import {
-  Component, OnDestroy, OnChanges, OnInit, inject, Input, Output, EventEmitter, SimpleChanges, signal
+  Component, OnDestroy, OnChanges, OnInit, inject, SimpleChanges, signal, input, output
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -76,10 +76,10 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
   private destroy$ = new Subject<void>();
   private loadRequestId = 0;
 
-  @Input() showCreateButton = true;
-  @Input() workspaceId?: number;
-  @Output() onCreateTraining = new EventEmitter<void>();
-  @Output() onEditTraining = new EventEmitter<CoderTraining>(); // New
+  readonly showCreateButton = input(true);
+  readonly workspaceId = input<number>();
+  readonly onCreateTraining = output<void>();
+  readonly onEditTraining = output<CoderTraining>(); // New
 
   readonly coderTrainings = signal<CoderTraining[]>([]);
   readonly originalData = signal<CoderTraining[]>([]);
@@ -109,7 +109,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
   }
 
   private getCurrentWorkspaceId(): number {
-    return this.workspaceId || this.appService.selectedWorkspaceId;
+    return this.workspaceId() || this.appService.selectedWorkspaceId;
   }
 
   private clearTrainingState(options: { resetFilters?: boolean } = {}): void {

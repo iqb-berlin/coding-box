@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy, inject, ViewChild, ElementRef, signal
+  Component, Inject, OnInit, AfterViewInit, OnDestroy, inject, ElementRef, signal, viewChild
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 
@@ -62,9 +62,9 @@ export interface VariableBundleGroupDialogData {
     MatTooltipModule
   ]
 })
-export class VariableBundleDialogComponent implements OnInit, OnDestroy {
-  @ViewChild('unitNameFilterInput') unitNameFilterInput!: ElementRef;
-  @ViewChild('variableIdFilterInput') variableIdFilterInput!: ElementRef;
+export class VariableBundleDialogComponent implements OnInit, AfterViewInit, OnDestroy {
+  readonly unitNameFilterInput = viewChild.required<ElementRef>('unitNameFilterInput');
+  readonly variableIdFilterInput = viewChild.required<ElementRef>('variableIdFilterInput');
 
   private fb = inject(FormBuilder);
   private codingJobBackendService = inject(CodingJobBackendService);
@@ -113,8 +113,10 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
         return true;
       }
     };
+  }
 
-    setTimeout(() => this.setupFilterDebounce(), 0);
+  ngAfterViewInit(): void {
+    this.setupFilterDebounce();
   }
 
   ngOnDestroy(): void {
@@ -124,28 +126,30 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
   }
 
   private setupFilterDebounce(): void {
-    if (!this.unitNameFilterInput || !this.variableIdFilterInput) {
+    const unitNameFilterInput = this.unitNameFilterInput();
+    const variableIdFilterInput = this.variableIdFilterInput();
+    if (!unitNameFilterInput || !variableIdFilterInput) {
       return;
     }
-    fromEvent(this.unitNameFilterInput.nativeElement, 'input')
+    fromEvent(unitNameFilterInput.nativeElement, 'input')
       .pipe(
         debounceTime(this.debounceTimeMs),
         distinctUntilChanged(),
         takeUntil(this.destroy$)
       )
       .subscribe(() => {
-        this.unitNameFilter = this.unitNameFilterInput.nativeElement.value;
+        this.unitNameFilter = this.unitNameFilterInput().nativeElement.value;
         this.applyFilter();
       });
 
-    fromEvent(this.variableIdFilterInput.nativeElement, 'input')
+    fromEvent(variableIdFilterInput.nativeElement, 'input')
       .pipe(
         debounceTime(this.debounceTimeMs),
         distinctUntilChanged(),
         takeUntil(this.destroy$)
       )
       .subscribe(() => {
-        this.variableIdFilter = this.variableIdFilterInput.nativeElement.value;
+        this.variableIdFilter = this.variableIdFilterInput().nativeElement.value;
         this.applyFilter();
       });
   }
@@ -278,11 +282,13 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
     this.unitNameFilter = '';
     this.variableIdFilter = '';
 
-    if (this.unitNameFilterInput) {
-      this.unitNameFilterInput.nativeElement.value = '';
+    const unitNameFilterInput = this.unitNameFilterInput();
+    if (unitNameFilterInput) {
+      unitNameFilterInput.nativeElement.value = '';
     }
-    if (this.variableIdFilterInput) {
-      this.variableIdFilterInput.nativeElement.value = '';
+    const variableIdFilterInput = this.variableIdFilterInput();
+    if (variableIdFilterInput) {
+      variableIdFilterInput.nativeElement.value = '';
     }
 
     this.applyFilter();

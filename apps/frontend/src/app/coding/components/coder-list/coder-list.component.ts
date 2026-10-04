@@ -1,6 +1,7 @@
 import {
-  Component, OnInit, ViewChild, AfterViewInit, inject
+  Component, OnInit, inject, viewChild, effect, signal, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatSort, MatSortModule } from '@angular/material/sort';
 import {
@@ -55,20 +56,21 @@ import { Coder } from '../../models/coder.model';
     MatButton
   ]
 })
-export class CoderListComponent implements OnInit, AfterViewInit {
+export class CoderListComponent implements OnInit {
   private coderService = inject(CoderService);
+  private readonly destroyRef = inject(DestroyRef);
   private snackBar = inject(MatSnackBar);
   private fb = inject(FormBuilder);
 
   displayedColumns: string[] = ['selectCheckbox', 'name', 'displayName', 'email', 'assignedJobs'];
   dataSource = new MatTableDataSource<Coder>([]);
   selection = new SelectionModel<Coder>(true, []);
-  isLoading = false;
+  readonly isLoading = signal(false);
   coderForm: FormGroup;
   isEditing = false;
   editingCoderId: number | null = null;
 
-  @ViewChild(MatSort) sort!: MatSort;
+  readonly sort = viewChild(MatSort);
   constructor() {
     this.coderForm = this.fb.group({
       name: ['', Validators.required],
@@ -81,21 +83,21 @@ export class CoderListComponent implements OnInit, AfterViewInit {
     this.loadCoders();
   }
 
-  ngAfterViewInit(): void {
-    this.dataSource.sort = this.sort;
-  }
+  private readonly synchronizeSort = effect(() => {
+    this.dataSource.sort = this.sort() ?? null;
+  });
 
   loadCoders(): void {
-    this.isLoading = true;
+    this.isLoading.set(true);
 
-    this.coderService.getCoders().subscribe({
+    this.coderService.getCoders().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: coders => {
         this.dataSource.data = coders;
-        this.isLoading = false;
+        this.isLoading.set(false);
       },
       error: () => {
         this.snackBar.open('Fehler beim Laden der Kodierer', 'Schließen', { duration: 3000 });
-        this.isLoading = false;
+        this.isLoading.set(false);
       }
     });
   }

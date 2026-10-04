@@ -1,6 +1,5 @@
 import {
-  Component, OnInit, OnDestroy, Input, inject, signal,
-  computed
+  Component, OnInit, OnDestroy, inject, signal, computed, input
 } from '@angular/core';
 
 import {
@@ -117,7 +116,7 @@ import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
   styleUrls: ['./coding-management.component.scss']
 })
 export class CodingManagementComponent implements OnInit, OnDestroy {
-  @Input() hideActionButtons = false;
+  readonly hideActionButtons = input(false);
 
   private appService = inject(AppService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);

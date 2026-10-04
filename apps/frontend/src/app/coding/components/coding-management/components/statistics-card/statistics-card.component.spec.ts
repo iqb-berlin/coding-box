@@ -25,8 +25,8 @@ describe('StatisticsCardComponent', () => {
 
   it('should emit loadStatistics when load button is clicked', () => {
     jest.spyOn(component.loadStatistics, 'emit');
-    component.statisticsLoaded = false;
-    component.isLoading = false;
+    fixture.componentRef.setInput('statisticsLoaded', false);
+    fixture.componentRef.setInput('isLoading', false);
     fixture.detectChanges();
 
     component.onLoadStatistics();
@@ -40,19 +40,19 @@ describe('StatisticsCardComponent', () => {
   });
 
   it('should calculate status percentage correctly', () => {
-    component.codingStatistics = {
+    fixture.componentRef.setInput('codingStatistics', {
       totalResponses: 100,
       statusCounts: { 200: 25, 300: 75 }
-    };
+    });
     expect(component.getStatusPercentage('200')).toBe(25);
     expect(component.getStatusPercentage('300')).toBe(75);
   });
 
   it('should return 0 percentage for missing status', () => {
-    component.codingStatistics = {
+    fixture.componentRef.setInput('codingStatistics', {
       totalResponses: 100,
       statusCounts: { 200: 25 }
-    };
+    });
     expect(component.getStatusPercentage('999')).toBe(0);
   });
 
@@ -64,22 +64,22 @@ describe('StatisticsCardComponent', () => {
   });
 
   it('should calculate total responses difference', () => {
-    component.selectedVersion = 'v2';
-    component.codingStatistics = { totalResponses: 150, statusCounts: {} };
-    component.referenceStatistics = { totalResponses: 100, statusCounts: {} };
+    fixture.componentRef.setInput('selectedVersion', 'v2');
+    fixture.componentRef.setInput('codingStatistics', { totalResponses: 150, statusCounts: {} });
+    fixture.componentRef.setInput('referenceStatistics', { totalResponses: 100, statusCounts: {} });
 
     expect(component.getTotalResponsesDifference()).toBe(50);
   });
 
   it('should use backend-provided coding-relevant totals without UI subtraction', () => {
-    component.codingStatistics = {
+    fixture.componentRef.setInput('codingStatistics', {
       totalResponses: 10,
       baseResponseCount: 7,
       derivedResponseCount: 3,
       derivedVariableCount: 2,
       statusCounts: { 5: 10 },
       derivedStatusCounts: { 5: 3 }
-    };
+    });
 
     expect(component.effectiveTotalResponses).toBe(10);
     expect(component.effectiveDerivedResponses).toBe(3);
@@ -89,7 +89,7 @@ describe('StatisticsCardComponent', () => {
   });
 
   it('should not infer derived answers from derived variable definitions', () => {
-    component.codingStatistics = {
+    fixture.componentRef.setInput('codingStatistics', {
       totalResponses: 2926,
       baseResponseCount: 2926,
       derivedResponseCount: 0,
@@ -101,7 +101,7 @@ describe('StatisticsCardComponent', () => {
         8: 865
       },
       derivedStatusCounts: {}
-    };
+    });
 
     expect(component.effectiveTotalResponses).toBe(2926);
     expect(component.derivedAnswerCount).toBe(0);
@@ -110,14 +110,14 @@ describe('StatisticsCardComponent', () => {
   });
 
   it('should not show derived answers after the run was reset', () => {
-    component.codingStatistics = {
+    fixture.componentRef.setInput('codingStatistics', {
       totalResponses: 0,
       baseResponseCount: 0,
       derivedResponseCount: 0,
       derivedVariableCount: 2,
       statusCounts: {},
       derivedStatusCounts: {}
-    };
+    });
 
     expect(component.effectiveTotalResponses).toBe(0);
     expect(component.derivedAnswerCount).toBe(0);
@@ -128,10 +128,10 @@ describe('StatisticsCardComponent', () => {
   });
 
   it('should not subtract raw statuses in the UI for legacy cached statistics', () => {
-    component.codingStatistics = {
+    fixture.componentRef.setInput('codingStatistics', {
       totalResponses: 4,
       statusCounts: { 1: 2, 2: 2 }
-    };
+    });
 
     expect(component.effectiveTotalResponses).toBe(4);
     expect(component.getStatuses()).toEqual([]);
@@ -159,9 +159,9 @@ describe('StatisticsCardComponent', () => {
   });
 
   it('should return null for difference when no reference statistics', () => {
-    component.selectedVersion = 'v2';
-    component.codingStatistics = { totalResponses: 150, statusCounts: {} };
-    component.referenceStatistics = null;
+    fixture.componentRef.setInput('selectedVersion', 'v2');
+    fixture.componentRef.setInput('codingStatistics', { totalResponses: 150, statusCounts: {} });
+    fixture.componentRef.setInput('referenceStatistics', null);
 
     expect(component.getTotalResponsesDifference()).toBeNull();
   });

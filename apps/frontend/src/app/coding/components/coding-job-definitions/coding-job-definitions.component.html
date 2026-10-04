@@ -1,5 +1,5 @@
 <div class="job-definitions-container">
-  @if (!selectionMode) {
+  @if (!selectionMode()) {
     <div class="header-actions">
       <div class="definitions-heading">
         <h3>{{ 'coding-job-definitions.title' | translate }}</h3>
@@ -83,7 +83,7 @@
         <ng-container matColumnDef="actions">
           <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.actions' | translate }}</th>
           <td mat-cell *matCellDef="let definition" class="actions-cell">
-            @if (!selectionMode) {
+            @if (!selectionMode()) {
               <div class="action-buttons">
                 @if (canCreateCodingJobs(definition)) {
                   <button
@@ -212,7 +212,7 @@
                 </mat-menu>
               </div>
             }
-            @if (selectionMode) {
+            @if (selectionMode()) {
               <div class="action-buttons">
                 <button mat-button color="primary" type="button" (click)="selectDefinition(definition)">
                   <mat-icon>download</mat-icon> Importieren
@@ -301,7 +301,7 @@
       <mat-icon class="empty-state-icon">assignment_add</mat-icon>
       <h4>{{ 'coding-job-definitions.empty.title' | translate }}</h4>
       <p>{{ 'coding-job-definitions.empty.description' | translate }}</p>
-      @if (!selectionMode) {
+      @if (!selectionMode()) {
         <button
           mat-raised-button
           color="primary"

@@ -1,6 +1,5 @@
 import {
-  Component, OnDestroy, OnInit, inject, ViewChild, signal,
-  computed
+  Component, OnDestroy, OnInit, inject, signal, computed, viewChild
 } from '@angular/core';
 import { CommonModule, DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -199,19 +198,15 @@ interface ManualFreshnessTarget {
   ]
 })
 export class CodingManagementManualComponent implements OnInit, OnDestroy {
-  @ViewChild(CodingJobsComponent) codingJobsComponent?: CodingJobsComponent;
+  readonly codingJobsComponent = viewChild(CodingJobsComponent);
 
-  @ViewChild('productiveCodingJobs')
-    productiveCodingJobsComponent?: CodingJobsComponent;
+  readonly productiveCodingJobsComponent = viewChild<CodingJobsComponent>('productiveCodingJobs');
 
-  @ViewChild('trainingCodingJobs')
-    trainingCodingJobsComponent?: CodingJobsComponent;
+  readonly trainingCodingJobsComponent = viewChild<CodingJobsComponent>('trainingCodingJobs');
 
-  @ViewChild(CodingJobDefinitionsComponent)
-    codingJobDefinitionsComponent?: CodingJobDefinitionsComponent;
+  readonly codingJobDefinitionsComponent = viewChild(CodingJobDefinitionsComponent);
 
-  @ViewChild(CoderTrainingsListComponent)
-    coderTrainingsListComponent?: CoderTrainingsListComponent;
+  readonly coderTrainingsListComponent = viewChild(CoderTrainingsListComponent);
 
   private testPersonCodingService = inject(TestPersonCodingService);
   private doubleCodedReviewApi = inject(DoubleCodedReviewApiService);
@@ -602,8 +597,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.loadResponseAnalysis();
         this.refreshCodingJobsAfterDataChange('rendered');
         this.loadJobDefinitionsForExport();
-        if (this.codingJobDefinitionsComponent) {
-          this.codingJobDefinitionsComponent.refresh();
+        const codingJobDefinitionsComponent = this.codingJobDefinitionsComponent();
+        if (codingJobDefinitionsComponent) {
+          codingJobDefinitionsComponent.refresh();
         }
       });
 
@@ -1283,8 +1279,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   openTrainingComparison(): void {
-    if (this.coderTrainingsListComponent) {
-      this.coderTrainingsListComponent.openResultsComparison(undefined, 'between-trainings');
+    const coderTrainingsListComponent = this.coderTrainingsListComponent();
+    if (coderTrainingsListComponent) {
+      coderTrainingsListComponent.openResultsComparison(undefined, 'between-trainings');
       return;
     }
 
@@ -1315,8 +1312,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private openTrainingWithinComparison(): void {
-    if (this.coderTrainingsListComponent) {
-      this.coderTrainingsListComponent.openResultsComparison(undefined, 'within-training');
+    const coderTrainingsListComponent = this.coderTrainingsListComponent();
+    if (coderTrainingsListComponent) {
+      coderTrainingsListComponent.openResultsComparison(undefined, 'within-training');
       return;
     }
 
@@ -1606,9 +1604,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private getCoderTrainingsForExport(): CoderTraining[] {
-    return this.coderTrainingsListComponent?.originalData().length ?
-      this.coderTrainingsListComponent.originalData() :
-      this.coderTrainingsListComponent?.coderTrainings() ?? [];
+    const coderTrainingsListComponent = this.coderTrainingsListComponent();
+    return coderTrainingsListComponent?.originalData().length ?
+      coderTrainingsListComponent.originalData() :
+      coderTrainingsListComponent?.coderTrainings() ?? [];
   }
 
   private getJobDefinitionExportOptions(): { id: number; label: string }[] {
@@ -1626,7 +1625,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private getJobDefinitionsForManualScope(): JobDefinition[] {
-    const renderedDefinitions = this.codingJobDefinitionsComponent?.jobDefinitions();
+    const renderedDefinitions = this.codingJobDefinitionsComponent()?.jobDefinitions();
     if (renderedDefinitions?.length) {
       return renderedDefinitions;
     }
@@ -1646,7 +1645,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     if (
       (this.hasLoadedJobDefinitionsForExport &&
         this.jobDefinitionsForExportWorkspaceId === workspaceId) ||
-      this.codingJobDefinitionsComponent
+      this.codingJobDefinitionsComponent()
     ) {
       return true;
     }
@@ -1733,9 +1732,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.pendingCodingJobsReloadScopes.add(scope);
       }
     });
+    const coderTrainingsListComponent = this.coderTrainingsListComponent();
     if (this.shouldReloadCoderTrainings(reloadScope) &&
-      this.coderTrainingsListComponent) {
-      this.coderTrainingsListComponent.loadCoderTrainings();
+      coderTrainingsListComponent) {
+      coderTrainingsListComponent.loadCoderTrainings();
     }
   }
 
@@ -1773,8 +1773,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       this.reloadCodingJobsList('active');
     }
 
-    if (this.codingJobDefinitionsComponent) {
-      this.codingJobDefinitionsComponent.refresh();
+    const codingJobDefinitionsComponent = this.codingJobDefinitionsComponent();
+    if (codingJobDefinitionsComponent) {
+      codingJobDefinitionsComponent.refresh();
     }
   }
 
@@ -2004,13 +2005,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private getProductiveCodingJobsComponent(): CodingJobsComponent | undefined {
-    return this.productiveCodingJobsComponent ??
-      (this.activeManualTab === 'execution' ? this.codingJobsComponent : undefined);
+    return this.productiveCodingJobsComponent() ??
+      (this.activeManualTab === 'execution' ? this.codingJobsComponent() : undefined);
   }
 
   private getTrainingCodingJobsComponent(): CodingJobsComponent | undefined {
-    return this.trainingCodingJobsComponent ??
-      (this.activeManualTab === 'training' ? this.codingJobsComponent : undefined);
+    return this.trainingCodingJobsComponent() ??
+      (this.activeManualTab === 'training' ? this.codingJobsComponent() : undefined);
   }
 
   private getExecutionCodingJobsComponent(): CodingJobsComponent | undefined {
@@ -3197,8 +3198,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.refreshCodingJobsAfterDataChange('rendered');
     this.loadJobDefinitionsForExport();
 
-    if (this.codingJobDefinitionsComponent) {
-      this.codingJobDefinitionsComponent.refresh();
+    const codingJobDefinitionsComponent = this.codingJobDefinitionsComponent();
+    if (codingJobDefinitionsComponent) {
+      codingJobDefinitionsComponent.refresh();
     }
   }
 

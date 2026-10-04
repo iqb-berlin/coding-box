@@ -1,5 +1,5 @@
 import {
-  ChangeDetectorRef, Component, Inject, OnInit, inject, ViewChildren, QueryList, ElementRef, AfterViewInit, OnDestroy
+  ChangeDetectorRef, Component, Inject, OnInit, inject, ElementRef, AfterViewInit, OnDestroy, viewChildren, afterRenderEffect
 } from '@angular/core';
 
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -47,7 +47,8 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
   private inViewIndices = new Set<number>();
   private isAnyItemLoading = false;
 
-  @ViewChildren('reviewItemRef') reviewItemRefs!: QueryList<ElementRef>;
+  readonly reviewItemRefs = viewChildren<ElementRef<HTMLElement>>('reviewItemRef');
+  private readonly synchronizeObserver = afterRenderEffect(() => this.updateObserver());
 
   constructor(
     public dialogRef: MatDialogRef<ReviewListDialogComponent>,
@@ -113,16 +114,14 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
       });
     }, options);
 
-    this.reviewItemRefs.changes.subscribe(() => {
-      this.updateObserver();
-    });
-
     this.updateObserver();
   }
 
   private updateObserver(): void {
+    const items = this.reviewItemRefs();
     if (this.observer) {
-      this.reviewItemRefs.forEach(ref => {
+      this.observer.disconnect();
+      items.forEach(ref => {
         this.observer?.observe(ref.nativeElement);
       });
     }

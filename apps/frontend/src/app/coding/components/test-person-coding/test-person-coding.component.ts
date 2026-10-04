@@ -1,10 +1,5 @@
 import {
-  Component,
-  DestroyRef,
-  Input,
-  OnInit,
-  inject,
-  signal
+  Component, DestroyRef, OnInit, inject, signal, input
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
@@ -87,8 +82,8 @@ export class TestPersonCodingComponent implements OnInit {
   private backendMessageTranslator = inject(BackendMessageTranslatorService);
   private dialog = inject(MatDialog);
   private codingBackgroundJobsService = inject(CodingBackgroundJobsService);
-  @Input() initialJobId: string | null = null;
-  @Input() initialAutoCoderRun: 1 | 2 | null = null;
+  readonly initialJobId = input<string | null>(null);
+  readonly initialAutoCoderRun = input<1 | 2 | null>(null);
 
   Math = Math;
   get workspaceId(): number {
@@ -145,14 +140,16 @@ export class TestPersonCodingComponent implements OnInit {
   private lastNotifiedCompletedJobId: string | null = null;
 
   ngOnInit(): void {
-    if (this.initialAutoCoderRun) {
-      this.autoCoderRun = this.initialAutoCoderRun;
+    const initialAutoCoderRun = this.initialAutoCoderRun();
+    if (initialAutoCoderRun) {
+      this.autoCoderRun = initialAutoCoderRun;
     }
 
-    if (this.initialJobId) {
-      this.activeJobId.set(this.initialJobId);
-      this.setFreshnessCodingGuard(this.initialJobId, true);
-      this.startJobStatusPolling(this.initialJobId);
+    const initialJobId = this.initialJobId();
+    if (initialJobId) {
+      this.activeJobId.set(initialJobId);
+      this.setFreshnessCodingGuard(initialJobId, true);
+      this.startJobStatusPolling(initialJobId);
     }
 
     this.loadAllJobs();
@@ -491,7 +488,7 @@ export class TestPersonCodingComponent implements OnInit {
   }
 
   private isFreshnessCodingJob(jobId: string, status?: JobStatus): boolean {
-    return jobId === this.initialJobId || status?.source === 'coding-freshness';
+    return jobId === this.initialJobId() || status?.source === 'coding-freshness';
   }
 
   private setFreshnessCodingGuard(jobId: string, isRunning: boolean): void {
