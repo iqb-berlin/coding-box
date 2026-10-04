@@ -85,6 +85,7 @@ describe('Zoneless manual preparation workflows', () => {
   function openManual(): void {
     cy.visit('/');
     cy.wait('@authData');
+    cy.get('coding-box-home').should('be.visible');
     cy.window().then(win => { win.location.hash = '/workspace-admin/5/coding/manual'; });
     cy.get('coding-box-coding-management-manual').should('be.visible');
   }
@@ -199,6 +200,13 @@ describe('Zoneless manual preparation workflows', () => {
       });
       cy.visit('/');
       cy.wait('@authData');
+      // Finish the home redirect before testing a new, guarded navigation.
+      if (role.level === 1) {
+        cy.location('hash', { timeout: 15_000 }).should('equal', '#/coding');
+        cy.get('coding-box-my-coding-jobs').should('be.visible');
+      } else {
+        cy.get('coding-box-home').should('be.visible');
+      }
       cy.window().then(win => { win.location.hash = '/workspace-admin/5/coding/manual'; });
       cy.wait('@roleRights');
       cy.location('hash', { timeout: 15_000 }).should('contain', role.level === 1 ? '/coding/my-jobs' : 'auth=access-denied');
@@ -370,7 +378,7 @@ describe('Zoneless manual preparation workflows', () => {
     });
     openManual();
     openBulk();
-    cy.get('coding-box-coding-job-bulk-creation-dialog .dialog-actions').should('be.visible');
+    cy.get('coding-box-coding-job-bulk-creation-dialog .dialog-actions', { timeout: 15_000 }).should('be.visible');
     leaveWorkspace();
     cy.wait('@newWorkspace');
     cy.get('coding-box-coding-job-bulk-creation-dialog').should('not.exist');

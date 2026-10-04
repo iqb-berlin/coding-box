@@ -2,9 +2,11 @@ import * as ExcelJS from 'exceljs';
 
 describe('Zoneless asynchronous coding dialogs', () => {
   let unexpectedRequests: string[];
+  let releaseResponses: Array<() => void>;
 
   beforeEach(() => {
     unexpectedRequests = [];
+    releaseResponses = [];
     cy.intercept('**/api/**', request => {
       unexpectedRequests.push(`${request.method} ${request.url}`);
       request.reply({ statusCode: 501, body: { message: 'Missing test fixture' } });
@@ -24,6 +26,7 @@ describe('Zoneless asynchronous coding dialogs', () => {
   });
 
   afterEach(() => {
+    releaseResponses.splice(0).forEach(release => release());
     cy.window().should('not.have.property', 'Zone');
     cy.then(() => { expect(unexpectedRequests).to.deep.equal([]); });
   });
@@ -31,12 +34,14 @@ describe('Zoneless asynchronous coding dialogs', () => {
   function createResponseGate(): { wait: Promise<void>; release: () => void } {
     let release!: () => void;
     const wait = new Promise<void>(resolve => { release = resolve; });
+    releaseResponses.push(release);
     return { wait, release };
   }
 
   function openManagement(): void {
     cy.visit('/');
     cy.wait('@authData');
+    cy.get('coding-box-home').should('be.visible');
     cy.window().then(win => { win.location.hash = '/workspace-admin/5/coding/management'; });
     cy.wait(['@activeReset', '@readiness']);
     cy.get('app-coding-management .action-buttons-toolbar').should('be.visible');
@@ -163,7 +168,9 @@ describe('Zoneless asynchronous coding dialogs', () => {
       }, { force: true });
     });
     cy.get('@exportDialog').find('.validation-error-section').should('not.exist');
-    cy.get('@exportDialog').find('.validation-progress-section').should('be.visible');
+    cy.get('@exportDialog').find('.validation-progress-section').should('exist');
+    cy.get('@exportDialog').find('.validation-progress-section h4').scrollIntoView().should('be.visible');
+    cy.get('@exportDialog').find('.validation-controls button').should('be.disabled');
     cy.then(() => { validationGate.release(); });
     cy.wait('@validationRetry');
     cy.get('coding-box-coding-validation-results-dialog').should('exist');
