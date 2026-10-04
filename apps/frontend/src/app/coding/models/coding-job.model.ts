@@ -3,6 +3,7 @@ import { CodingJobFreshnessStatus } from '../../../../../../api-dto/coding/job-r
 import { CoderTraining } from './coder-training.model';
 
 export interface CodingJob {
+  creatorUserId?: number | null;
   id: number;
   workspace_id: number;
   name: string;
@@ -86,6 +87,7 @@ export interface Variable {
 }
 
 export interface VariableBundle {
+  creatorUserId?: number | null;
   id: number;
   name: string;
   description?: string;

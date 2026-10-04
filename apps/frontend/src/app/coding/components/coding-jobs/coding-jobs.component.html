@@ -115,7 +115,7 @@
                 mat-raised-button
                 color="warn"
                 (click)="bulkDeleteCodingJobs()"
-                [disabled]="selection.selected.length === 0"
+                [disabled]="selection.selected.length === 0 || !canDeleteSelectedJobs()"
                 class="bulk-delete-button"
                 >
                 <mat-icon>delete_sweep</mat-icon>
@@ -334,7 +334,7 @@
                     mat-menu-item
                     type="button"
                     class="danger-menu-item"
-                    (click)="deleteCodingJob(element)"
+                    (click)="deleteCodingJob(element)" [disabled]="!permissions.canEdit(element)"
                     [attr.aria-label]="getJobActionAriaLabel('delete', element)"
                     >
                     <mat-icon>delete</mat-icon>

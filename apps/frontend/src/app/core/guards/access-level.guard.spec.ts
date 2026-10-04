@@ -79,6 +79,22 @@ describe('Access Level Guard', () => {
   });
 
   describe('Guard Implementation', () => {
+    it.each([2, 3])('handles the former coding export URL at level %s', async level => {
+      const { canActivateCodingExport } = await import('./access-level.guard');
+      const route = { paramMap: convertToParamMap({ ws: '123' }) } as ActivatedRouteSnapshot;
+      const state = { url: '/workspace-admin/123/coding/export' } as RouterStateSnapshot;
+      authDataSubject.next({ ...defaultAuthData, userId: 42 });
+      mockAuthService.getRoles.mockReturnValue([]);
+      mockUserService.getUsers.mockReturnValue(of([{
+        id: 42, name: 'Manager', isAdmin: false, accessLevel: level
+      }]));
+      const redirect = {} as UrlTree;
+      mockRouter.createUrlTree.mockReturnValue(redirect);
+      const result = await TestBed.runInInjectionContext(() => canActivateCodingExport()(route, state));
+      expect(result).toBe(level === 2 ? redirect : true);
+      if (level === 2) expect(mockRouter.createUrlTree).toHaveBeenCalledWith(['/workspace-admin/123/coding/manual']);
+      else expect(mockRouter.createUrlTree).not.toHaveBeenCalled();
+    });
     it('should be defined and importable', async () => {
       const { canActivateAccessLevel } = await import('./access-level.guard');
       expect(canActivateAccessLevel).toBeDefined();

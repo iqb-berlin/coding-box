@@ -203,6 +203,15 @@ export function canActivateCodingManagement(): CanActivateFn {
   );
 }
 
+export function canActivateCodingExport(): CanActivateFn {
+  return createWorkspaceAccessGuard(
+    context => hasMinimumWorkspaceAccess(context.currentUser, 3),
+    context => (context.userAccessLevel === 2 ?
+      context.router.createUrlTree([`/workspace-admin/${context.workspaceId}/coding/manual`]) :
+      createAccessDeniedUrlTree(context.router, context.state.url))
+  );
+}
+
 export function canActivateCodingJobs(): CanActivateFn {
   return createWorkspaceAccessGuard(
     async context => getEffectiveCanCode(context.currentUser) || await hasAssignedCodingJobs(context),

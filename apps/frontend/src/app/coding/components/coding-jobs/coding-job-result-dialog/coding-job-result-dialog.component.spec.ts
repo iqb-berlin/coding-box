@@ -24,6 +24,7 @@ describe('CodingJobResultDialogComponent', () => {
   };
 
   const mockDialogData = {
+    canEdit: true,
     codingJob: { id: 1, name: 'Test Job' },
     workspaceId: 123
   };
@@ -75,6 +76,7 @@ describe('CodingJobResultDialogComponent', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     mockDialogData.codingJob = { id: 1, name: 'Test Job' };
+    mockDialogData.canEdit = true;
     mockCodingJobBackendService.getCodingJobUnits.mockReturnValue(of([]));
     mockCodingJobBackendService.getCodingProgress.mockReturnValue(of({}));
     mockCodingJobBackendService.getCodingNotes.mockReturnValue(of({}));

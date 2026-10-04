@@ -76,6 +76,14 @@ describe('CodingJobBackendService', () => {
     expect(service).toBeTruthy();
   });
 
+  it('submits bulk deletion as one workspace-scoped request', () => {
+    service.deleteCodingJobs(5, [1, 2]).subscribe(result => expect(result.success).toBe(true));
+    const request = httpMock.expectOne(`${mockServerUrl}wsg-admin/workspace/5/coding-job/bulk-delete`);
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({ ids: [1, 2] });
+    request.flush({ success: true });
+  });
+
   describe('keepalive fetch authentication', () => {
     beforeEach(() => {
       fetchMock = jest.fn().mockResolvedValue({

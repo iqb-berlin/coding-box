@@ -6,7 +6,7 @@
   }
   @if (!isLoading) {
     <div class="fx-row-center-center-stretch fx-gap-16 header-row">
-      <button mat-stroked-button color="primary" (click)="createVariableBundleGroup()">
+      <button mat-stroked-button color="primary" (click)="createVariableBundleGroup()" *ngIf="permissions.canCreate">
         <mat-icon>add</mat-icon>
         Variablenbündel erstellen
       </button>
@@ -75,7 +75,7 @@
               color="primary"
               (click)="$event.stopPropagation(); editVariableBundleGroup(element)"
               [attr.aria-label]="getVariableBundleActionAriaLabel('edit', element)">
-              <mat-icon>edit</mat-icon>
+              <mat-icon>{{ permissions.canEdit(element) ? 'edit' : 'visibility' }}</mat-icon>
               <span>Bearbeiten</span>
             </button>
 
@@ -94,7 +94,7 @@
                 mat-menu-item
                 type="button"
                 class="danger-menu-item"
-                (click)="deleteVariableBundleGroup(element)"
+                (click)="deleteVariableBundleGroup(element)" [disabled]="!permissions.canEdit(element)"
                 [attr.aria-label]="getVariableBundleActionAriaLabel('delete', element)">
                 <mat-icon>delete</mat-icon>
                 <span>Löschen</span>

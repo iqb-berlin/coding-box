@@ -4,6 +4,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of } from 'rxjs';
+import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { VariableBundleManagerComponent } from './variable-bundle-manager.component';
 import { VariableBundleService } from '../../services/variable-bundle.service';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
@@ -33,6 +34,12 @@ describe('VariableBundleManagerComponent', () => {
         TranslateModule.forRoot()
       ],
       providers: [
+        {
+          provide: CodingPermissionsService,
+          useValue: {
+            load: jest.fn(), canCreate: true, canApply: true, canEdit: jest.fn(() => true)
+          }
+        },
         {
           provide: VariableBundleService,
           useValue: {

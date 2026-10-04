@@ -132,6 +132,7 @@
         <textarea
           matInput
           [formControl]="commentControl"
+        [readonly]="item().canEditDraft !== true"
           rows="2"
           [placeholder]="'double-coded-review.comment-placeholder' | translate"
         ></textarea>

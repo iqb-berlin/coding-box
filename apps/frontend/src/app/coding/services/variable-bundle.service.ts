@@ -43,6 +43,7 @@ export class VariableBundleService {
     interface BackendVariableBundle {
       id: number;
       workspace_id: number;
+      creatorUserId?: number | null;
       name: string;
       description?: string;
       variables: Array<{ unitName: string; variableId: string }>;
@@ -59,6 +60,7 @@ export class VariableBundleService {
 
         const bundles = bundleData.map(bundle => ({
           id: bundle.id,
+          creatorUserId: bundle.creatorUserId ?? null,
           name: bundle.name,
           description: bundle.description,
           createdAt: new Date(bundle.created_at),
@@ -96,6 +98,7 @@ export class VariableBundleService {
     interface BackendVariableBundle {
       id: number;
       workspace_id: number;
+      creatorUserId?: number | null;
       name: string;
       description?: string;
       variables: Array<{ unitName: string; variableId: string }>;
@@ -113,6 +116,7 @@ export class VariableBundleService {
       map(response => {
         const newBundle: VariableBundle = {
           id: response.id,
+          creatorUserId: response.creatorUserId ?? null,
           name: response.name,
           description: response.description,
           createdAt: new Date(response.created_at),
@@ -149,6 +153,7 @@ export class VariableBundleService {
     interface BackendVariableBundle {
       id: number;
       workspace_id: number;
+      creatorUserId?: number | null;
       name: string;
       description?: string;
       variables: Array<{ unitName: string; variableId: string }>;
@@ -160,6 +165,7 @@ export class VariableBundleService {
       map(response => {
         const updatedBundleGroup: VariableBundle = {
           id: response.id,
+          creatorUserId: response.creatorUserId ?? null,
           name: response.name,
           description: response.description,
           createdAt: new Date(response.created_at),
