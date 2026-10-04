@@ -16,8 +16,7 @@ import { MatFormField, MatHint, MatLabel } from '@angular/material/form-field';
 import {
   FormsModule,
   ReactiveFormsModule,
-  UntypedFormBuilder,
-  UntypedFormGroup,
+  NonNullableFormBuilder,
   Validators
 } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
@@ -132,7 +131,7 @@ export class TestCenterImportComponent {
   }>(MAT_DIALOG_DATA);
 
   private workspaceAdminService = inject(WorkspaceAdminService);
-  private fb = inject(UntypedFormBuilder);
+  private fb = inject(NonNullableFormBuilder);
   private appService = inject(AppService);
   private dialog = inject(MatDialog);
 
@@ -176,8 +175,27 @@ export class TestCenterImportComponent {
   selectedRows: TestGroupsInfoDto[] = [];
   readonly testGroups = signal<TestGroupsInfoDto[]>([]);
   readonly workspaces = signal<WorkspaceAdmin[]>([]);
-  loginForm: UntypedFormGroup;
-  importFilesForm: UntypedFormGroup;
+  readonly loginForm = this.fb.group({
+    name: this.fb.control('', [Validators.required, Validators.minLength(1)]),
+    pw: this.fb.control('', [Validators.required, Validators.minLength(1)]),
+    testCenter: this.fb.control<number | ''>('', [Validators.required]),
+    testCenterIndividual: this.fb.control({ value: '', disabled: true }, [Validators.required])
+  });
+
+  readonly importFilesForm = this.fb.group({
+    workspace: this.fb.control('', [Validators.required]),
+    responses: this.fb.control(false),
+    definitions: this.fb.control(false),
+    units: this.fb.control(false),
+    player: this.fb.control(false),
+    codings: this.fb.control(false),
+    logs: this.fb.control(false),
+    responseOverwriteMode: this.fb.control<TestResultsOverwriteMode>('skip'),
+    testTakers: this.fb.control(false),
+    booklets: this.fb.control(false),
+    metadata: this.fb.control(false)
+  });
+
   readonly authenticationError = signal<boolean>(false);
   readonly filesSelectionError = signal<boolean>(false);
   readonly testGroupsLoadError = signal<string | null>(null);
@@ -202,32 +220,8 @@ export class TestCenterImportComponent {
   private testGroupsProgressPollingSub?: Subscription;
   private testGroupsLoadStartedAt: number | null = null;
 
-  constructor() {
-    this.loginForm = this.fb.group({
-      name: this.fb.control('', [Validators.required, Validators.minLength(1)]),
-      pw: this.fb.control('', [Validators.required, Validators.minLength(1)]),
-      testCenter: this.fb.control('', [Validators.required]),
-      testCenterIndividual: this.fb.control({ value: '', disabled: true }, [
-        Validators.required
-      ])
-    });
-    this.importFilesForm = this.fb.group({
-      workspace: this.fb.control('', [Validators.required]),
-      responses: this.fb.control(false),
-      definitions: this.fb.control(false),
-      units: this.fb.control(false),
-      player: this.fb.control(false),
-      codings: this.fb.control(false),
-      logs: this.fb.control(false),
-      responseOverwriteMode: this.fb.control('skip'),
-      testTakers: this.fb.control(false),
-      booklets: this.fb.control(false),
-      metadata: this.fb.control(false)
-    });
-  }
-
   selectAllImportOptions(): void {
-    let optionControls: string[];
+    let optionControls: (keyof ImportOptions)[];
 
     if (this.data.importType === 'testResults') {
       // For results import, only responses and logs are relevant
@@ -246,14 +240,14 @@ export class TestCenterImportComponent {
     }
 
     optionControls.forEach(name => {
-      this.importFilesForm.get(name)?.setValue(true);
+      this.importFilesForm.controls[name].setValue(true);
     });
 
     this.filesSelectionError.set(false);
   }
 
   clearAllImportOptions(): void {
-    const optionControls: string[] = [
+    const optionControls: (keyof ImportOptions)[] = [
       'responses',
       'definitions',
       'units',
@@ -266,7 +260,7 @@ export class TestCenterImportComponent {
     ];
 
     optionControls.forEach(name => {
-      this.importFilesForm.get(name)?.setValue(false);
+      this.importFilesForm.controls[name].setValue(false);
     });
   }
 
@@ -286,10 +280,10 @@ export class TestCenterImportComponent {
       const storedServer = this.workspaceAdminService.getLastServer();
       const storedUrl = this.workspaceAdminService.getLastUrl();
       if (storedServer) {
-        this.loginForm.get('testCenter')?.setValue(parseInt(storedServer, 10));
+        this.loginForm.controls.testCenter.setValue(parseInt(storedServer, 10));
         if (storedUrl) {
-          this.loginForm.get('testCenterIndividual')?.setValue(storedUrl);
-          this.loginForm.get('testCenterIndividual')?.enable();
+          this.loginForm.controls.testCenterIndividual.setValue(storedUrl);
+          this.loginForm.controls.testCenterIndividual.enable();
         }
       }
     }
@@ -323,16 +317,22 @@ export class TestCenterImportComponent {
   }
 
   authenticate(): void {
+    const {
+      name, pw, testCenter, testCenterIndividual: url
+    } = this.loginForm.getRawValue();
+    if (this.loginForm.invalid || testCenter === '') {
+      this.loginForm.markAllAsTouched();
+      return;
+    }
     this.authenticationRequestId += 1;
     const requestId = this.authenticationRequestId;
-    const name = this.loginForm.get('name')?.value;
-    const pw = this.loginForm.get('pw')?.value;
-    const url: string = this.loginForm.get('testCenterIndividual')?.value;
     this.testCenterInstance.set(this.testCenters.filter(
-      testcenter => testcenter.id === this.loginForm.get('testCenter')?.value
+      testcenter => testcenter.id === testCenter
     ));
+    // The backend selects a custom URL only when no numbered server is sent.
+    const server = testCenter === 6 ? '' : testCenter.toString();
     this.userBackendService
-      .authenticate(name, pw, this.testCenterInstance()[0]?.id.toString(), url)
+      .authenticate(name, pw, server, url)
       .pipe(
         catchError(() => {
           if (requestId === this.authenticationRequestId) this.authenticationError.set(true);
@@ -350,7 +350,7 @@ export class TestCenterImportComponent {
         this.authenticationError.set(false);
         this.workspaceAdminService.setLastAuthToken(response.token);
         this.workspaceAdminService.setLastServer(
-          this.testCenterInstance()[0]?.id.toString()
+          testCenter.toString()
         );
         this.workspaceAdminService.setLastUrl(url);
         this.workspaceAdminService.setClaims(response.claims.workspaceAdmin);
@@ -377,18 +377,18 @@ export class TestCenterImportComponent {
 
   isIndividualTcSelected(value: number): void {
     if (value !== 6) {
-      this.loginForm.get('testCenterIndividual')?.disable();
+      this.loginForm.controls.testCenterIndividual.disable();
     } else {
-      this.loginForm.get('testCenterIndividual')?.enable();
+      this.loginForm.controls.testCenterIndividual.enable();
     }
   }
 
   getTestGroups(): void {
     const formValues = {
-      testCenter: this.loginForm.get('testCenter')?.value,
-      workspace: this.importFilesForm.get('workspace')?.value,
+      testCenter: this.loginForm.controls.testCenter.value,
+      workspace: this.importFilesForm.controls.workspace.value,
       testCenterIndividual:
-        this.loginForm.get('testCenterIndividual')?.value || ''
+        this.loginForm.controls.testCenterIndividual.value || ''
     };
 
     // Use stored server and url if available, otherwise fall back to form values
@@ -483,24 +483,15 @@ export class TestCenterImportComponent {
   }
 
   getTestData(): void {
-    const formValues = {
-      testCenter: this.loginForm.get('testCenter')?.value,
-      workspace: this.importFilesForm.get('workspace')?.value,
-      testCenterIndividual:
-        this.loginForm.get('testCenterIndividual')?.value || '',
-      importOptions: {
-        definitions: this.importFilesForm.get('definitions')?.value,
-        responses: this.importFilesForm.get('responses')?.value,
-        units: this.importFilesForm.get('units')?.value,
-        player: this.importFilesForm.get('player')?.value,
-        codings: this.importFilesForm.get('codings')?.value,
-        logs: this.importFilesForm.get('logs')?.value,
-        testTakers: this.importFilesForm.get('testTakers')?.value,
-        booklets: this.importFilesForm.get('booklets')?.value,
-        metadata: this.importFilesForm.get('metadata')?.value
-      },
-      responseOverwriteMode:
-        this.importFilesForm.get('responseOverwriteMode')?.value || 'skip'
+    const { testCenter, testCenterIndividual } = this.loginForm.getRawValue();
+    if (testCenter === '') return;
+    const { workspace, responseOverwriteMode, ...importOptions } = this.importFilesForm.getRawValue();
+    const formValues: ImportFormValues = {
+      testCenter,
+      workspace,
+      testCenterIndividual,
+      importOptions,
+      responseOverwriteMode
     };
 
     this.uploadData.set(null);

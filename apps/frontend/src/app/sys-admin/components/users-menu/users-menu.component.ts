@@ -3,12 +3,12 @@ import {
   input,
   output
 } from '@angular/core';
-import { UntypedFormGroup } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
-import { EditUserComponent } from '../edit-user/edit-user.component';
+import { EditUserComponent, EditUserData } from '../edit-user/edit-user.component';
+import { CreateUserForm, EditUserForm } from '../../models/user-form.model';
 
 import {
   WorkspaceAccessRightsDialogComponent
@@ -40,11 +40,11 @@ export class UsersMenuComponent {
   readonly selectedUser = input.required<number[]>();
   readonly selectedRows = input.required<UserFullDto[]>();
   readonly checkedRows = input.required<UserFullDto[]>();
-  readonly userAdded = output<UntypedFormGroup>();
+  readonly userAdded = output<CreateUserForm>();
   readonly usersDeleted = output<UserFullDto[]>();
   readonly userEdited = output<{
     selection: UserFullDto[];
-    user: UntypedFormGroup;
+    user: EditUserForm;
   }>();
 
   readonly setUserWorkspaceAccessRights = output<number[]>();
@@ -64,7 +64,7 @@ export class UsersMenuComponent {
         }
       });
     } else {
-      const dialogRef = this.editUserDialog.open(EditUserComponent, {
+      const dialogRef = this.editUserDialog.open<EditUserComponent, EditUserData, EditUserForm | false>(EditUserComponent, {
         width: '600px',
         data: {
           username: selectedRows[0].username,
@@ -73,10 +73,8 @@ export class UsersMenuComponent {
       });
 
       dialogRef.afterClosed().subscribe(result => {
-        if (typeof result !== 'undefined') {
-          if (result !== false) {
-            this.userEdited.emit({ selection: selectedRows, user: result as UntypedFormGroup });
-          }
+        if (result) {
+          this.userEdited.emit({ selection: selectedRows, user: result });
         }
       });
     }

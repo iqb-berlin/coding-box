@@ -3,12 +3,13 @@ import {
   input,
   output
 } from '@angular/core';
-import { UntypedFormGroup } from '@angular/forms';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatButton } from '@angular/material/button';
-import { EditWorkspaceComponent } from '../../../workspace/components/edit-workspace/edit-workspace.component';
+import {
+  EditWorkspaceComponent, EditWorkspaceData, EditWorkspaceForm
+} from '../../../workspace/components/edit-workspace/edit-workspace.component';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import {
@@ -33,22 +34,22 @@ export class WorkspacesMenuComponent {
   readonly selectedRows = input.required<WorkspaceInListDto[]>();
   readonly checkedRows = input.required<WorkspaceInListDto[]>();
   readonly downloadWorkspacesReport = output<boolean>();
-  readonly workspaceAdded = output<UntypedFormGroup>();
+  readonly workspaceAdded = output<EditWorkspaceForm>();
   readonly workspaceDeleted = output<number[]>();
   readonly workspaceSettingsEdited = output();
   readonly workspaceAccessRightsChanged = output();
   readonly workspaceEdited = output<{
     selection: number[];
-    formData: UntypedFormGroup;
+    formData: EditWorkspaceForm;
   }>();
 
   readonly setWorkspaceUsersAccessRight = output<number[]>();
 
   addWorkspace(): void {
-    const dialogRef = this.editWorkspaceDialog.open(EditWorkspaceComponent, {
+    const dialogRef = this.editWorkspaceDialog.open<EditWorkspaceComponent, EditWorkspaceData, EditWorkspaceForm | false>(EditWorkspaceComponent, {
       width: '600px',
       data: {
-        wsg: {
+        ws: {
           name: ''
         },
         title: this.translateService.instant('admin.new-workspace'),
@@ -56,32 +57,30 @@ export class WorkspacesMenuComponent {
       }
     });
 
-    dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
-      if (typeof result !== 'undefined') {
-        if (result !== false) {
-          this.workspaceAdded.emit(result as UntypedFormGroup);
-        }
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.workspaceAdded.emit(result);
       }
     });
   }
 
   editWorkspace(): void {
     const selectedWorkspaces = this.selectedWorkspaces();
-    if (selectedWorkspaces.length) {
-      const dialogRef = this.editWorkspaceDialog.open(EditWorkspaceComponent, {
+    const selectedWorkspace = [...this.selectedRows(), ...this.checkedRows()]
+      .find(workspace => workspace.id === selectedWorkspaces[0]);
+    if (selectedWorkspace) {
+      const dialogRef = this.editWorkspaceDialog.open<EditWorkspaceComponent, EditWorkspaceData, EditWorkspaceForm | false>(EditWorkspaceComponent, {
         width: '600px',
         data: {
-          ws: selectedWorkspaces[0],
+          ws: selectedWorkspace,
           title: this.translateService.instant('admin.edit-workspace'),
           saveButtonLabel: this.translateService.instant('save')
 
         }
       });
       dialogRef.afterClosed().subscribe(result => {
-        if (typeof result !== 'undefined') {
-          if (result !== false) {
-            this.workspaceEdited.emit({ selection: this.selectedWorkspaces(), formData: result });
-          }
+        if (result) {
+          this.workspaceEdited.emit({ selection: selectedWorkspaces, formData: result });
         }
       });
     }

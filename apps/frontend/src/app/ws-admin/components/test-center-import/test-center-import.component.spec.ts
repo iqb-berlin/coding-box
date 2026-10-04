@@ -387,6 +387,7 @@ describe('TestCenterImportComponent', () => {
       flags: { mode: 'full' }
     }]);
     component.testCenterInstance.set([{ id: 1, label: 'Testcenter 1' }]);
+    component.loginForm.patchValue({ testCenter: 1 });
 
     fixture.detectChanges();
 
@@ -493,6 +494,7 @@ describe('TestCenterImportComponent', () => {
       testCenter: 6, // 6 = Individual URL
       testCenterIndividual: 'https://my-custom-tc.com'
     });
+    component.isIndividualTcSelected(6);
 
     userBackendService.authenticate.mockReturnValue(of({
       success: true,
@@ -510,6 +512,8 @@ describe('TestCenterImportComponent', () => {
     component.authenticate();
     fixture.detectChanges();
 
+    expect(userBackendService.authenticate).toHaveBeenCalledWith('testuser', 'testpass', '', 'https://my-custom-tc.com');
+    expect(workspaceAdminService.setLastServer).toHaveBeenCalledWith('6');
     expect(component.authenticated()).toBe(true);
     // The component sets testCenterInstance based on the ID 6, which doesn't exist in the hardcoded list.
     // So component.testCenterInstance[0] will be undefined.
@@ -520,5 +524,29 @@ describe('TestCenterImportComponent', () => {
     const userInfo = compiled.querySelector('.user-info h3');
     expect(userInfo?.textContent).toContain('Angemeldet in');
     expect(userInfo?.textContent).toContain('https://my-custom-tc.com');
+  });
+
+  it('does not authenticate an incomplete form submitted with Enter', () => {
+    component.loginForm.patchValue({ name: 'testuser', pw: 'testpass' });
+    component.authenticate();
+    expect(userBackendService.authenticate).not.toHaveBeenCalled();
+    expect(component.loginForm.controls.testCenter.touched).toBe(true);
+
+    component.loginForm.controls.testCenter.setValue(6);
+    component.isIndividualTcSelected(6);
+    component.authenticate();
+    expect(userBackendService.authenticate).not.toHaveBeenCalled();
+    expect(component.loginForm.controls.testCenterIndividual.touched).toBe(true);
+  });
+
+  it('resets checkbox and overwrite values to their non-null defaults', () => {
+    component.importFilesForm.patchValue({ workspace: 'tc-study', responses: true, responseOverwriteMode: 'replace' });
+    component.importFilesForm.reset();
+    const values = component.importFilesForm.getRawValue();
+    expect(values.workspace).toBe('');
+    expect(values.responses).toBe(false);
+    expect(values.logs).toBe(false);
+    expect(values.responseOverwriteMode).toBe('skip');
+    expect(component.importFilesForm.invalid).toBe(true);
   });
 });

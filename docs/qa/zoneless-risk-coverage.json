@@ -181,7 +181,13 @@
         "apps/frontend/src/app/ws-admin/components/ws-users/ws-users.component.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/components/journal/journal.component.zoneless.spec.ts",
         "cypress/zoneless/manual-preparation.cy.ts",
-        "apps/frontend/src/app/shared/components/vertical-bar-chart/vertical-bar-chart.component.zoneless.spec.ts"
+        "apps/frontend/src/app/shared/components/vertical-bar-chart/vertical-bar-chart.component.zoneless.spec.ts",
+        "apps/frontend/src/app/sys-admin/components/edit-user/edit-user.component.spec.ts",
+        "apps/frontend/src/app/sys-admin/components/users/users.component.spec.ts",
+        "apps/frontend/src/app/workspace/components/edit-workspace/edit-workspace.component.spec.ts",
+        "apps/frontend/src/app/sys-admin/components/workspaces-menu/workspaces-menu.component.spec.ts",
+        "apps/frontend/src/app/sys-admin/components/workspaces/workspaces.component.spec.ts",
+        "cypress/zoneless/admin-forms.cy.ts"
       ]
     }
   ],
