@@ -14,8 +14,9 @@ import {
 import {
   Subject,
   fromEvent,
-  debounceTime,
-  distinctUntilChanged,
+  switchMap,
+  tap,
+  timer,
   takeUntil
 } from 'rxjs';
 import { WrappedIconComponent } from '../wrapped-icon/wrapped-icon.component';
@@ -50,6 +51,7 @@ export class SearchFilterComponent implements OnInit, AfterViewInit, OnDestroy {
   // Debounce time in milliseconds
   private readonly debounceTimeMs = 300;
   private destroy$ = new Subject<void>();
+  private readonly clear$ = new Subject<void>();
 
   ngOnInit(): void {
     this.value.set(this.initialValue());
@@ -57,15 +59,13 @@ export class SearchFilterComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     const filterInput = this.filterInput();
-    // Set up debounced input event
-    fromEvent(filterInput.nativeElement, 'keyup')
+    fromEvent(filterInput.nativeElement, 'input')
       .pipe(
-        debounceTime(this.debounceTimeMs),
-        distinctUntilChanged(),
+        tap(() => this.value.set(filterInput.nativeElement.value)),
+        switchMap(() => timer(this.debounceTimeMs).pipe(takeUntil(this.clear$))),
         takeUntil(this.destroy$)
       )
       .subscribe(() => {
-        this.value.set(this.filterInput().nativeElement.value);
         this.valueChange.emit(this.value());
       });
   }
@@ -73,9 +73,11 @@ export class SearchFilterComponent implements OnInit, AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    this.clear$.complete();
   }
 
   clearFilter(): void {
+    this.clear$.next();
     this.value.set('');
     this.filterInput().nativeElement.value = '';
     this.valueChange.emit(this.value());

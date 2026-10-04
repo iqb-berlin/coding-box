@@ -66,6 +66,26 @@ describe('Zoneless file list', () => {
     cy.get('coding-box-test-files .busy-overlay').should('not.exist');
   });
 
+  it('filters pasted text without keyup and clears it through the enabled button', () => {
+    cy.intercept('GET', '**/api/admin/workspace/5/files?*', request => {
+      const search = new URL(request.url).searchParams.get('searchText');
+      request.alias = search ? 'pastedSearch' : 'clearedSearch';
+      request.reply({ body: filesBody(search ? 'pasted-file.xml' : 'cleared-file.xml') });
+    });
+    cy.get('coding-box-search-filter button').should('be.disabled');
+    cy.get('coding-box-search-filter input').focus().invoke('val', 'pasted').trigger('input');
+    cy.get('coding-box-search-filter button').should('be.enabled');
+    cy.wait('@pastedSearch').then(({ request }) => {
+      expect(new URL(request.url).searchParams.get('searchText')).to.equal('pasted');
+    });
+    cy.get('coding-box-test-files mat-row').should('contain.text', 'pasted-file.xml');
+    cy.get('coding-box-search-filter button').click();
+    cy.get('coding-box-search-filter input').should('have.value', '');
+    cy.get('coding-box-search-filter button').should('be.disabled');
+    cy.wait('@clearedSearch');
+    cy.get('coding-box-test-files mat-row').should('contain.text', 'cleared-file.xml');
+  });
+
   it('releases the list after HTTP 500 and renders a successful retry', () => {
     let requests = 0;
     cy.intercept('GET', '**/api/admin/workspace/5/files?*', request => {

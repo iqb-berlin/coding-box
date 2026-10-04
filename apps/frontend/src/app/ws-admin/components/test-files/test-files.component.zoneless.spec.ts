@@ -670,7 +670,7 @@ describe('File validation without Zone', () => {
       const loads = fileService.getFilesList.mock.calls.length;
       const input = fixture.nativeElement.querySelector('coding-box-search-filter input') as HTMLInputElement;
       input.value = 'debounced-file';
-      input.dispatchEvent(new KeyboardEvent('keyup', { key: 'e', bubbles: true }));
+      input.dispatchEvent(new Event('input', { bubbles: true }));
       await jest.advanceTimersByTimeAsync(300);
       await fixture.whenStable();
       expect(fileService.getFilesList).toHaveBeenCalledTimes(loads);
@@ -697,7 +697,7 @@ describe('File validation without Zone', () => {
       const loads = fileService.getFilesList.mock.calls.length;
       const input = fixture.nativeElement.querySelector('coding-box-search-filter input') as HTMLInputElement;
       input.value = 'abandoned-search';
-      input.dispatchEvent(new KeyboardEvent('keyup', { key: 'h', bubbles: true }));
+      input.dispatchEvent(new Event('input', { bubbles: true }));
       await jest.advanceTimersByTimeAsync(elapsed);
       await fixture.whenStable();
       fixture.destroy();

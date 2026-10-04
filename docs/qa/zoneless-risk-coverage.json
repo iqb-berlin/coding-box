@@ -195,7 +195,8 @@
         "apps/frontend/src/app/sys-admin/components/workspaces-menu/workspaces-menu.component.spec.ts",
         "apps/frontend/src/app/sys-admin/components/workspaces/workspaces.component.spec.ts",
         "cypress/zoneless/admin-forms.cy.ts",
-        "apps/frontend/src/app/sys-admin/components/workspaces-selection/workspaces-selection-refresh.zoneless.spec.ts"
+        "apps/frontend/src/app/sys-admin/components/workspaces-selection/workspaces-selection-refresh.zoneless.spec.ts",
+        "apps/frontend/src/app/shared/components/error-message-display/error-message-display.component.zoneless.spec.ts"
       ]
     }
   ],
@@ -246,9 +247,10 @@
       "areas": [
         "coding-replay",
         "files-exports-metadata",
-        "jobs"
+        "jobs",
+        "administration"
       ],
-      "evidence": "Debouncing, Initialisierungstimer, Resolver-Promises und Sitzungswiederherstellung; native verspätete Bulk-/Trainingsfortsetzungen, Browserfilter mit echtem Debounce sowie verzögerte Schulungs- und Variablenlisten über erreichbare Menüs."
+      "evidence": "Debouncing, Initialisierungstimer, Resolver-Promises und Sitzungswiederherstellung; native verspätete Bulk-/Trainingsfortsetzungen, Browserfilter mit echtem Debounce sowie verzögerte Schulungs- und Variablenlisten über erreichbare Menüs. Native Tests prüfen Einfügen ohne keyup, sofortige Aktualisierung der Löschenschaltfläche, zusammengefasste Eingaben und das Abbrechen einer ausstehenden Filterausgabe beim Löschen. Sitzungs- und Anmeldehinweise aktualisieren sich nach abgeschlossener Navigation bei unverändertem Auth-Zustand; Redirects und abgebrochene Navigationen sind nativ abgesichert."
     },
     {
       "id": "browser-libraries",

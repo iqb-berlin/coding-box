@@ -2338,3 +2338,43 @@ keine vollständige Fehlerfreiheit aller UI-Kombinationen.
 
 Die Nachweise sind lokale Abschlussläufe. Sie belegen keine erfolgreiche
 Remote-CI, keinen erneuten Live-Backend-/Keycloak-Lauf und kein Deployment.
+
+## OnPush-Nachlauf am 04.10.2026: Navigation und native Eingaben
+
+Zwei Regressionen aus dem anschließenden Review sind korrigiert.
+`ErrorMessageDisplayComponent` leitet die abgeschlossene Router-URL mit
+`toSignal()` aus `NavigationEnd.urlAfterRedirects` ab. Sitzungswarnung und
+Anmeldehinweis aktualisieren sich damit beim Wechsel zwischen Home und
+anderen Routen auch bei unverändertem Auth-Zustand. Der initiale Wert
+stammt aus `router.url`; die Subscription endet mit der Komponente.
+
+Der gemeinsame Suchfilter verarbeitet `input` anstelle von `keyup` und
+setzt seinen lokalen Signal-Wert sofort. Der Löschen-Button funktioniert
+damit auch nach Einfügen ohne Tastaturereignis. Die Ausgabe bleibt um
+300 ms verzögert; neuere Eingaben ersetzen den wartenden Timer. Löschen
+bricht die ausstehende Ausgabe ab und meldet sofort den leeren Wert.
+Der zusätzliche Debounce in der Dateiliste bleibt erhalten.
+
+Sechs neue native Fälle sind vor der Korrektur fehlgeschlagen und danach
+grün: beide globalen Auth-Hinweise bei Routenwechseln in beide Richtungen,
+Redirects und abgebrochene Navigationen, Einfügen ohne `keyup`, Löschen
+während des Debounce sowie zusammengefasste Eingaben und ein Leerwert.
+Die Routenfälle verwenden einen echten Router und eine persistente Shell;
+die UI-Prüfungen warten auf `whenStable()` ohne erzwungenes
+`detectChanges()`. Bestehende Router-Mocks senden jetzt Navigationsereignisse,
+und Dateilisten-Tests erzeugen wie echte Texteingaben ein `input`-Ereignis.
+Ein neuer Browserfall prüft Einfügen und Löschen im erreichbaren
+Dateilisten-UI einschließlich der Such- und Zurücksetzungsanfragen.
+
+| Lokale Prüfung | Ergebnis |
+|---|---|
+| `frontend:lint` | bestanden |
+| `frontend:test --runInBand --cache=false` | 2.735 Tests / 262 Suites bestanden |
+| `frontend:test-zoneless --runInBand --cache=false` | 976 Tests / 69 Suites bestanden, ohne Zone.js |
+| `frontend:build --configuration=production` | Produktionsbuild mit strenger Template-Typprüfung bestanden |
+| Produktions-Cypress mit `cypress.zoneless.config.ts`, `file-list.cy.ts` und `app.cy.ts` | 23 Fälle / 2 Spezifikationen bestanden, keine Retries; lokaler SPA-Server mit optimierten Bundles und kontrollierten API-/Keycloak-Antworten |
+| `frontend:zoneless-approval` | 8.748 Inventareinträge; Referenzen für sechs Bereiche, sieben Mechanismen und 46 frühere korrigierte Befunde gültig |
+
+Dieser Nachlauf führt gezielte Browserfälle aus; die übrigen Browser-Spezifikationen
+und die Live-Backend-/Keycloak-Suites wurden dabei nicht erneut ausgeführt.
+Die lokale Prüfung ersetzt weder Remote-CI noch einen Deploymentnachweis.
