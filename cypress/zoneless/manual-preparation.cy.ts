@@ -230,8 +230,11 @@ describe('Zoneless manual preparation workflows', () => {
     cy.then(() => variablesGate.release());
     cy.wait('@bundleVariables');
     cy.get('coding-box-variable-bundle-dialog').as('bundle');
+    // Let Material finish its initial focus before typing into another control.
+    cy.get('@bundle').find('input[formControlName="name"]').should('be.focused');
     cy.get('@bundle').find('.variable-card').should('have.length', 3);
     cy.get('@bundle').find('input[placeholder="Filter nach Aufgaben-ID"]').focus().type('UNIT_A');
+    cy.get('@bundle').find('input[placeholder="Filter nach Aufgaben-ID"]').should('have.value', 'UNIT_A');
     cy.get('@bundle').find('.variable-card').should('have.length', 2);
     cy.get('@bundle').find('.selection-count').should('contain.text', '0 von 2');
     cy.get('@bundle').find('input[placeholder="Filter nach Variablen-ID"]').focus().type('missing');
@@ -243,6 +246,7 @@ describe('Zoneless manual preparation workflows', () => {
     cy.get('@bundle').contains('button', 'Filter zurücksetzen').click();
     cy.get('@bundle').find('.variable-card').should('have.length', 3);
     cy.get('@bundle').find('.variable-card.selected').should('have.length', 1);
+    cy.get('@bundle').find('.dialog-actions').should('be.visible');
     cy.get('@bundle').find('.dialog-actions').contains('button', 'Erstellen').click();
     cy.wait('@saveBundle').then(({ request, response }) => {
       expect(response?.statusCode).to.equal(200);

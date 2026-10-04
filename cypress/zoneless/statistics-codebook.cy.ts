@@ -184,11 +184,14 @@ describe('Zoneless replay statistics and codebook export', () => {
 
   for (const outcome of ['completed', 'failed']) {
     it(`renders delayed codebook progress and the ${outcome} status`, () => {
+      let releaseUnits!: () => void;
+      const unitsGate = new Promise<void>(resolve => { releaseUnits = resolve; });
       cy.intercept('GET', '**/api/admin/workspace/5/coding/job-definitions', { body: [] });
       cy.intercept('GET', '**/api/admin/workspace/5/variable-bundle?*', { body: { data: [], total: 0 } });
       cy.intercept('GET', '**/api/admin/workspace/5/coding/missings-profiles', { body: [] });
-      cy.intercept('GET', '**/api/admin/workspace/5/files/units-with-file-ids', {
-        delay: 600, body: [{ id: 1, unitId: 'UNIT', fileName: 'UNIT.vocs', data: '{}' }]
+      cy.intercept('GET', '**/api/admin/workspace/5/files/units-with-file-ids', async request => {
+        await unitsGate;
+        request.reply({ body: [{ id: 1, unitId: 'UNIT', fileName: 'UNIT.vocs', data: '{}' }] });
       }).as('units');
       cy.intercept('POST', '**/api/admin/workspace/5/coding/codebook/job', request => {
         expect(request.body.unitList).to.deep.equal([1]);
@@ -210,6 +213,7 @@ describe('Zoneless replay statistics and codebook export', () => {
       cy.get('app-coding-management .action-buttons-toolbar a').contains('Codebook').click();
       cy.get('shared-export-coding-book').as('dialog');
       cy.get('@dialog').find('mat-spinner').should('be.visible');
+      cy.then(() => { releaseUnits(); });
       cy.wait('@units');
       cy.get('@dialog').find('mat-spinner').should('not.exist');
       cy.get('@dialog').find('.select-all-container input').check();

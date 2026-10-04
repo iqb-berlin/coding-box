@@ -2378,3 +2378,40 @@ Dateilisten-UI einschließlich der Such- und Zurücksetzungsanfragen.
 Dieser Nachlauf führt gezielte Browserfälle aus; die übrigen Browser-Spezifikationen
 und die Live-Backend-/Keycloak-Suites wurden dabei nicht erneut ausgeführt.
 Die lokale Prüfung ersetzt weder Remote-CI noch einen Deploymentnachweis.
+
+
+## Pipeline-Reparatur am 04.10.2026
+
+Die abgeschlossene Pipeline 102850 für `efb8d401` hatte drei fehlgeschlagene
+Jobs: `audit-app`, `test-browser-zoneless` und `test-browser-production`.
+Beide Browserläufe führten 134 Fälle aus; jeweils vier Fälle in den drei
+Spezifikationen `async-coding-dialogs`, `manual-preparation` und
+`statistics-codebook` scheiterten. Die Live-Replay- und Live-Auth-Jobs bestanden.
+
+- Die vier Filter-Schaltflächen innerhalb des Variablenbündel-Formulars erhalten
+  `type="button"`. Ohne den Typ lösen sie die Formularübermittlung aus und
+  schließen ein gültiges Bündel vor dem ausdrücklichen Erstellen. Ein nativer
+  Zoneless-Test mit ausgewählter Variable und gültigem Namen belegt den Fehler
+  vor der Korrektur und prüft danach Anwenden, beide Lösch-Schaltflächen,
+  Zurücksetzen und genau eine ausdrückliche Übermittlung.
+- Die Browserprüfung wartet auf den initialen Material-Fokus, bevor sie einen
+  anderen Eingabekontrollwert tippt. Damit kann der Dialog-Autofokus die Eingabe
+  auf langsameren Rechnern nicht in das Namensfeld umleiten. Filter, erhaltene
+  Auswahl und exakter Speicher-Payload bleiben geprüft.
+- Die Excel-Validierungsantwort und die Codebook-Aufgabenliste werden durch
+  Antwort-Gates bis nach der sichtbaren Ladeprüfung gehalten. Ein kurzer
+  Antwort-Delay allein garantiert auf einem ausgelasteten CI-Rechner keinen
+  sichtbaren Zwischenzustand. Die Prüfungen für Fortschritt, Erfolg, Fehler
+  und erneute Freigabe der Bedienelemente bleiben erhalten; Retries bleiben 0.
+- `http-cache-semantics` wird auf 4.3.0 aktualisiert. Für `braces` wird der noch
+  unveröffentlichte Upstream-Patch gegen CVE-2026-93687 lokal eingebunden.
+  Herkunft, unveränderte Quelldateien, Lizenz und Ablösung sind in
+  `vendor/braces/README.md` dokumentiert. npm audit bewertet die lokale Quelle
+  nicht; deshalb prüft `frontend:test-dependency-patches` alle installierten
+  Verbraucher und die Sicherheitseigenschaften vor dem weiter verbindlichen
+  Audit. Der Live-Test-Dockerbuild kopiert diese Quelle vor `npm ci`, und Nx
+  berücksichtigt sie bei der Cache-Berechnung.
+
+Die Bewertung des korrigierten Commits erfordert den Abschluss aller
+Remote-Pipeline-Jobs. Lokale Browserläufe mit kontrollierten API-/Keycloak-
+Antworten und statische CI-Konfiguration sind kein Live- oder Deploymentnachweis.
