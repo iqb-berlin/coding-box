@@ -4,25 +4,25 @@
 
   <div class="dialog-content">
     <div class="actions-container">
-      <button mat-raised-button color="primary" (click)="refreshJobs()" [disabled]="isLoading">
+      <button mat-raised-button color="primary" (click)="refreshJobs()" [disabled]="isLoading()">
         <mat-icon>refresh</mat-icon>
         Aktualisieren
       </button>
     </div>
 
-    @if (isLoading) {
+    @if (isLoading()) {
       <div class="loading-container">
         <mat-spinner diameter="40"></mat-spinner>
         <p>Lade Aufträge...</p>
       </div>
-    } @else if (data.jobs.length === 0) {
+    } @else if (jobs().length === 0) {
       <div class="empty-state">
         <mat-icon class="empty-icon">info</mat-icon>
         <p>Keine Antwortwertanalyse-Aufträge gefunden.</p>
       </div>
     } @else {
       <div class="table-container">
-        <table mat-table [dataSource]="data.jobs" class="jobs-table">
+        <table mat-table [dataSource]="jobs()" class="jobs-table">
           <!-- ID Column -->
           <ng-container matColumnDef="id">
             <th mat-header-cell *matHeaderCellDef>ID</th>

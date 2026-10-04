@@ -10,16 +10,16 @@
     </div>
 
     <div class="results-container">
-      <div *ngIf="isLoading" class="loading-container">
+      <div *ngIf="isLoading()" class="loading-container">
         <mat-spinner diameter="40"></mat-spinner>
         <p>Suche läuft...</p>
       </div>
 
-      <div *ngIf="!isLoading && bookletSearchResults.length === 0 && bookletSearchText" class="no-results">
+      <div *ngIf="!isLoading() && bookletSearchResults().length === 0 && bookletSearchText" class="no-results">
         <p>Keine Booklets gefunden.</p>
       </div>
 
-      <div *ngIf="!isLoading && bookletSearchResults.length > 0" class="results-table-container">
+      <div *ngIf="!isLoading() && bookletSearchResults().length > 0" class="results-table-container">
         <div class="table-actions">
           <button mat-raised-button color="warn" (click)="deleteAllBooklets()">
             <mat-icon>delete_sweep</mat-icon>
@@ -27,7 +27,7 @@
           </button>
         </div>
 
-        <table mat-table [dataSource]="bookletSearchResults" class="results-table">
+        <table mat-table [dataSource]="bookletSearchResults()" class="results-table">
           <!-- Booklet Name Column -->
           <ng-container matColumnDef="bookletName">
             <th mat-header-cell *matHeaderCellDef>Booklet Name</th>
@@ -76,7 +76,7 @@
         </table>
 
         <mat-paginator
-          [length]="totalResults"
+          [length]="totalResults()"
           [pageSize]="pageSize"
           [pageSizeOptions]="[5, 10, 25, 50]"
           (page)="onPageChange($event)">
