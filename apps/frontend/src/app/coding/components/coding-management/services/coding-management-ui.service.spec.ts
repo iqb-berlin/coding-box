@@ -1,7 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
+import { DestroyRef } from '@angular/core';
 import { CodingManagementUiService } from './coding-management-ui.service';
 import { AppService } from '../../../../core/services/app.service';
 import { FileService } from '../../../../shared/services/file/file.service';
@@ -12,7 +13,7 @@ import { SchemeEditorDialogComponent } from '../../scheme-editor-dialog/scheme-e
 describe('CodingManagementUiService', () => {
   let service: CodingManagementUiService;
   let mockAppService: jest.Mocked<Partial<AppService>>;
-  let mockFileService: jest.Mocked<Partial<FileService>>;
+  let mockFileService: Partial<jest.Mocked<FileService>>;
   let mockStatisticsService: jest.Mocked<Partial<CodingStatisticsService>>;
   let mockDialog: jest.Mocked<Partial<MatDialog>>;
   let mockSnackBar: jest.Mocked<Partial<MatSnackBar>>;
@@ -21,12 +22,13 @@ describe('CodingManagementUiService', () => {
     mockAppService = {
       createOwnToken: jest.fn().mockReturnValue(of('test-token')),
       selectedWorkspaceId: 1,
+      selectedWorkspaceId$: new Subject<number>(),
       loggedUser: { sub: 'test-user' }
     } as unknown as jest.Mocked<Partial<AppService>>;
     mockFileService = {
       getUnitContentXml: jest.fn(),
       getCodingSchemeFile: jest.fn()
-    } as unknown as jest.Mocked<Partial<FileService>>;
+    } as unknown as Partial<jest.Mocked<FileService>>;
     mockStatisticsService = {
       getReplayUrl: jest.fn()
     } as unknown as jest.Mocked<Partial<CodingStatisticsService>>;
@@ -122,5 +124,38 @@ describe('CodingManagementUiService', () => {
       },
       panelClass: 'scheme-editor-dialog-container'
     });
+  });
+  it('cancels a pending XML dialog request when its owning view is destroyed', () => {
+    const reply = new Subject<string>();
+    mockFileService.getUnitContentXml!.mockReturnValue(reply);
+    const callbacks: Array<() => void> = [];
+    const owner = {
+      destroyed: false,
+      onDestroy: (callback: () => void) => {
+        callbacks.push(callback);
+        return () => callbacks.splice(callbacks.indexOf(callback), 1);
+      }
+    } as DestroyRef;
+    service.showUnitXmlDialog(7, owner);
+    expect(reply.observed).toBe(true);
+    callbacks.forEach(callback => callback());
+    expect(reply.observed).toBe(false);
+    reply.next('<Unit/>');
+    expect(mockDialog.open).not.toHaveBeenCalled();
+    expect(mockSnackBar.open).not.toHaveBeenCalled();
+  });
+
+  it('does not open a late scheme dialog after a workspace round trip', () => {
+    const reply = new Subject<{ base64Data: string }>();
+    mockFileService.getCodingSchemeFile!.mockReturnValue(reply as never);
+    service.showCodingSchemeDialog('scheme.vocs');
+    mockAppService.selectedWorkspaceId = 2;
+    (mockAppService.selectedWorkspaceId$ as Subject<number>).next(2);
+    mockAppService.selectedWorkspaceId = 1;
+    (mockAppService.selectedWorkspaceId$ as Subject<number>).next(1);
+    expect(reply.observed).toBe(false);
+    reply.next({ base64Data: btoa('{}') });
+    expect(mockDialog.open).not.toHaveBeenCalled();
+    expect(mockSnackBar.open).not.toHaveBeenCalled();
   });
 });

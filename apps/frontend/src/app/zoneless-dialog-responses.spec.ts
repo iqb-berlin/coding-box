@@ -97,9 +97,9 @@ async function createDialog(c: DialogCase) {
       provideZonelessChangeDetection(), provideHttpClient(), provideHttpClientTesting(),
       { provide: SERVER_URL, useValue: '/api/' },
       { provide: MAT_DIALOG_DATA, useValue: { workspaceId: 1, unitId: 'UNIT', selectedWorkspace: [1] } },
-      { provide: MatDialogRef, useValue: { close: jest.fn() } },
+      { provide: MatDialogRef, useValue: { close: jest.fn(), beforeClosed: () => of() } },
       { provide: MatSnackBar, useValue: { open: jest.fn(() => ({ dismiss: jest.fn() })) } },
-      { provide: AppService, useValue: { selectedWorkspaceId: 1 } },
+      { provide: AppService, useValue: { selectedWorkspaceId: 1, selectedWorkspaceId$: of() } },
       { provide: CodingJobBackendService, useValue: {} },
       { provide: WorkspaceBackendService, useValue: ws },
       { provide: UserBackendService, useValue: { getUsersFull: () => of([{ id: 7, username: 'Audit user' }]), getWorkspacesByUserList: () => of([]) } },
@@ -115,6 +115,13 @@ async function createDialog(c: DialogCase) {
 }
 
 describe('Dialog server responses with zoneless change detection', () => {
+  it.each(cases)('$name cancels its delayed response on destroy', async c => {
+    const { fixture, response } = await createDialog(c);
+    fixture.destroy();
+    expect(response.observed).toBe(false);
+    response.next(c.result);
+    response.complete();
+  });
   it.each(cases)('$name renders a delayed response', async c => {
     const { fixture, response } = await createDialog(c);
     response.next(c.result);

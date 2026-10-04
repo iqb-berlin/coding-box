@@ -51,7 +51,7 @@ describe('VariableBundleManagerComponent', () => {
             getCodingIncompleteVariables: jest.fn().mockReturnValue(of([]))
           }
         },
-        { provide: AppService, useValue: { selectedWorkspaceId: 1 } },
+        { provide: AppService, useValue: { selectedWorkspaceId: 1, selectedWorkspaceId$: of() } },
         { provide: MatSnackBar, useValue: { open: jest.fn() } },
         { provide: MatDialog, useValue: { open: jest.fn(() => ({ afterClosed: () => of(null) })) } }
       ]

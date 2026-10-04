@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, throwError, Subject } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
 import { SERVER_ERROR_MESSAGE } from '../../../core/interceptors/app-http-error.class';
 import { JournalService } from '../../../core/services/journal.service';
@@ -15,7 +15,7 @@ describe('JournalComponent', () => {
     getJournalEntries: jest.Mock;
     downloadJournalEntriesAsCsv: jest.Mock;
   };
-  let appService: { selectedWorkspaceId: number };
+  let appService: { selectedWorkspaceId: number; selectedWorkspaceId$: Subject<number> };
 
   beforeEach(async () => {
     journalService = {
@@ -27,7 +27,7 @@ describe('JournalComponent', () => {
       })),
       downloadJournalEntriesAsCsv: jest.fn()
     };
-    appService = { selectedWorkspaceId: 5 };
+    appService = { selectedWorkspaceId: 5, selectedWorkspaceId$: new Subject<number>() };
 
     await TestBed.configureTestingModule({
       imports: [

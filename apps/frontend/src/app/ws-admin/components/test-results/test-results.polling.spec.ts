@@ -69,7 +69,7 @@ describe('TestResultsComponent Polling', () => {
         { provide: UnitService, useValue: { getUnits: jest.fn().mockReturnValue(of([])) } },
         { provide: CodingStatisticsService, useValue: { getCodingStatistics: jest.fn().mockReturnValue(of({})) } },
         { provide: VariableAnalysisService, useValue: { getVariableAnalysis: jest.fn().mockReturnValue(of([])) } },
-        { provide: AppService, useValue: { selectedWorkspaceId: 1, loggedUser: { sub: 'user' } } },
+        { provide: AppService, useValue: { selectedWorkspaceId: 1, selectedWorkspaceId$: of(), loggedUser: { sub: 'user' } } },
         {
           provide: WorkspaceSettingsService,
           useValue: {

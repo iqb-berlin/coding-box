@@ -1,6 +1,8 @@
+import { Subscription } from 'rxjs';
 import {
-  Component, OnInit, inject, signal, ChangeDetectionStrategy
+  Component, OnInit, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -18,6 +20,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AppService } from '../../../core/services/app.service';
 import { AppHttpError } from '../../../core/interceptors/app-http-error.class';
 import { JournalFilters, JournalService, JournalEntry } from '../../../core/services/journal.service';
+import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import {
   auditEventResults,
   auditEventTypes
@@ -44,6 +47,10 @@ import {
   ]
 })
 export class JournalComponent implements OnInit {
+  private loadRequest?: Subscription;
+
+  private readonly destroyRef = inject(DestroyRef);
+
   private appService = inject(AppService);
   private journalService = inject(JournalService);
   private snackBar = inject(MatSnackBar);
@@ -73,10 +80,16 @@ export class JournalComponent implements OnInit {
   readonly filters = signal<JournalFilters>({});
 
   ngOnInit(): void {
+    this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.journalEntries.set([]);
+      this.pageIndex.set(0);
+      this.loadJournalEntries();
+    });
     this.loadJournalEntries();
   }
 
   loadJournalEntries(): void {
+    this.loadRequest?.unsubscribe();
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.journalEntries.set([]);
@@ -84,6 +97,7 @@ export class JournalComponent implements OnInit {
       this.loadError.set(false);
       this.loadErrorMessage.set('');
       this.loadErrorRequestId.set('');
+      this.loading.set(false);
       return;
     }
 
@@ -92,13 +106,13 @@ export class JournalComponent implements OnInit {
     this.loadErrorMessage.set('');
     this.loadErrorRequestId.set('');
 
-    this.journalService.getJournalEntries(
+    this.loadRequest = this.journalService.getJournalEntries(
       workspaceId,
       this.pageIndex() + 1,
       this.pageSize(),
       this.filters(),
       { suppressGlobalError: true }
-    )
+    ).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: response => {
           this.journalEntries.set(response.data);
@@ -143,7 +157,7 @@ export class JournalComponent implements OnInit {
       return;
     }
 
-    this.journalService.downloadJournalEntriesAsCsv(workspaceId, { suppressGlobalError: true })
+    this.journalService.downloadJournalEntriesAsCsv(workspaceId, { suppressGlobalError: true }).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: blob => {
           const url = window.URL.createObjectURL(blob);

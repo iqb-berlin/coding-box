@@ -2,6 +2,7 @@ import {
   Component, computed, DestroyRef, inject, OnInit, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { Subscription, takeUntil } from 'rxjs';
 import { MatDialogRef, MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatRadioModule } from '@angular/material/radio';
@@ -14,6 +15,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import * as ExcelJS from 'exceljs';
 import { finalize } from 'rxjs/operators';
 import { MatButtonToggle, MatButtonToggleGroup } from '@angular/material/button-toggle';
+import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { ValidationStateService } from '../../services/validation-state.service';
 import { AppService } from '../../../core/services/app.service';
@@ -44,7 +46,8 @@ export type ExportFormat = 'json' | 'csv' | 'excel';
     MatButtonToggle
   ],
   providers: [
-    DatePipe
+    DatePipe,
+    ValidationStateService
   ]
 })
 export class ExportDialogComponent implements OnInit {
@@ -55,6 +58,13 @@ export class ExportDialogComponent implements OnInit {
   private translate = inject(TranslateService);
   private matDialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly workspaceId = this.appService.selectedWorkspaceId;
+  private fileRunId = 0;
+  private closed = false;
+  private fileReadTimer: ReturnType<typeof setTimeout> | null = null;
+  private fileReader: FileReader | null = null;
+  private validationRequest?: Subscription;
+  private resultsDialogRef?: MatDialogRef<CodingValidationResultsDialogComponent>;
   private readonly isDownloadingValidation = signal(false);
 
   selectedFormat: ExportFormat = 'json';
@@ -70,9 +80,42 @@ export class ExportDialogComponent implements OnInit {
   expectedCombinations: ExpectedCombinationDto[] = [];
   private readonly maxDisplayedMappingErrors = 5;
 
+  constructor() {
+    this.destroyRef.onDestroy(() => this.cancelValidation());
+  }
+
+  private cancelValidation(): void {
+    this.fileRunId += 1;
+    if (this.fileReadTimer !== null) clearTimeout(this.fileReadTimer);
+    this.fileReadTimer = null;
+    if (this.fileReader) {
+      this.fileReader.onload = null;
+      this.fileReader.onerror = null;
+      if (this.fileReader.readyState === FileReader.LOADING) this.fileReader.abort();
+      this.fileReader = null;
+    }
+    this.validationRequest?.unsubscribe();
+    const resultsDialogRef = this.resultsDialogRef;
+    this.resultsDialogRef = undefined;
+    resultsDialogRef?.close();
+    this.validationStateService.resetValidation();
+  }
+
+  private isCurrentFile(runId: number): boolean {
+    return !this.closed && !this.destroyRef.destroyed && runId === this.fileRunId &&
+      this.workspaceId === this.appService.selectedWorkspaceId;
+  }
+
   ngOnInit(): void {
+    this.dialogRef.beforeClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.closed = true;
+      this.cancelValidation();
+    });
+    this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(id => {
+      if (id !== this.workspaceId) this.dialogRef.close();
+    });
     this.validationStateService.validationResults$
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(takeUntil(this.dialogRef.beforeClosed()), takeUntilDestroyed(this.destroyRef))
       .subscribe(results => {
         if (results) {
           // Open validation results dialog when validation completes
@@ -95,6 +138,7 @@ export class ExportDialogComponent implements OnInit {
 
   // Validation methods
   onValidationFileSelected(event: Event): void {
+    if (this.closed || this.destroyRef.destroyed) return;
     const input = event.target as HTMLInputElement;
 
     if (!input.files || input.files.length === 0) {
@@ -102,14 +146,17 @@ export class ExportDialogComponent implements OnInit {
     }
 
     const file = input.files[0];
+    this.cancelValidation();
+    const runId = this.fileRunId;
     if (!this.isExcelFile(file)) {
       this.validationStateService.setValidationError(this.translate.instant('export-dialog.validation.invalid-file-type'));
       return;
     }
 
     this.validationStateService.startValidation();
-    setTimeout(() => {
-      this.readExcelFile(file);
+    this.fileReadTimer = setTimeout(() => {
+      this.fileReadTimer = null;
+      if (this.isCurrentFile(runId)) this.readExcelFile(file, runId);
     }, 0);
   }
 
@@ -117,15 +164,18 @@ export class ExportDialogComponent implements OnInit {
     return file.name.toLowerCase().endsWith('.xlsx');
   }
 
-  private readExcelFile(file: File): void {
+  private readExcelFile(file: File, runId: number): void {
     const workbook = new ExcelJS.Workbook();
     const reader = new FileReader();
+    this.fileReader = reader;
 
     reader.onload = async (e: ProgressEvent<FileReader>) => {
+      if (!this.isCurrentFile(runId)) return;
       try {
         const buffer = e.target?.result as ArrayBuffer;
         this.validationStateService.updateProgress(10, this.translate.instant('export-dialog.validation.file-loading'));
         await workbook.xlsx.load(buffer);
+        if (!this.isCurrentFile(runId)) return;
         this.validationStateService.updateProgress(30, 'Excel-Datei wird verarbeitet...');
         const worksheet = workbook.getWorksheet(1);
         if (!worksheet || worksheet.rowCount <= 1) {
@@ -182,12 +232,12 @@ export class ExportDialogComponent implements OnInit {
         this.validationStateService.updateProgress(70, 'Validierung wird durchgeführt...');
         this.validateCodingCompleteness(expectedCombinations);
       } catch (error) {
-        this.validationStateService.setValidationError('Fehler beim Parsen der Excel-Datei');
+        if (this.isCurrentFile(runId)) this.validationStateService.setValidationError('Fehler beim Parsen der Excel-Datei');
       }
     };
 
     reader.onerror = () => {
-      this.validationStateService.setValidationError('Fehler beim Lesen der Datei');
+      if (this.isCurrentFile(runId)) this.validationStateService.setValidationError('Fehler beim Lesen der Datei');
     };
 
     reader.readAsArrayBuffer(file);
@@ -290,7 +340,7 @@ export class ExportDialogComponent implements OnInit {
   }
 
   private loadValidationPage(page: number): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
+    const workspaceId = this.workspaceId;
 
     if (!workspaceId) {
       this.validationStateService.setValidationError('Kein Arbeitsbereich ausgewählt');
@@ -300,12 +350,13 @@ export class ExportDialogComponent implements OnInit {
     this.validationStateService.updateProgress(80, `Validierung wird durchgeführt (Seite ${page})...`);
     this.validationCurrentPage = page;
 
-    this.testPersonCodingService.validateCodingCompleteness(
+    this.validationRequest?.unsubscribe();
+    this.validationRequest = this.testPersonCodingService.validateCodingCompleteness(
       workspaceId,
       this.expectedCombinations,
       page,
       50
-    ).subscribe({
+    ).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntil(this.dialogRef.beforeClosed()), takeUntilDestroyed(this.destroyRef)).subscribe({
       next: results => {
         this.validationStateService.setValidationResults(results);
       },
@@ -316,7 +367,7 @@ export class ExportDialogComponent implements OnInit {
   }
 
   downloadValidationExcel(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
+    const workspaceId = this.workspaceId;
 
     const validationCacheKey = this.validationCacheKey();
     if (!workspaceId || !validationCacheKey) {
@@ -329,6 +380,8 @@ export class ExportDialogComponent implements OnInit {
       workspaceId,
       validationCacheKey
     ).pipe(
+      takeUntilWorkspaceChanged(this.appService, workspaceId),
+      takeUntil(this.dialogRef.beforeClosed()),
       takeUntilDestroyed(this.destroyRef),
       finalize(() => this.isDownloadingValidation.set(false))
     ).subscribe({
@@ -348,7 +401,7 @@ export class ExportDialogComponent implements OnInit {
   }
 
   openValidationResultsDialog(results: ValidateCodingCompletenessResponseDto): void {
-    this.matDialog.open(CodingValidationResultsDialogComponent, {
+    this.resultsDialogRef = this.matDialog.open(CodingValidationResultsDialogComponent, {
       width: '90vw',
       maxWidth: '1400px',
       maxHeight: '90vh',

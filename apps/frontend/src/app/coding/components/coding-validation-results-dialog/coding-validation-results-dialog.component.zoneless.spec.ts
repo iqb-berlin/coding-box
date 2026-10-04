@@ -13,6 +13,8 @@ describe('CodingValidationResultsDialogComponent without ZoneJS', () => {
   let fixture: ComponentFixture<CodingValidationResultsDialogComponent>;
   let pageResponse: Subject<ValidateCodingCompletenessResponseDto>;
   let downloadResponse: Subject<Blob>;
+  let closing: Subject<void>;
+  let workspace: { selectedWorkspaceId: number; selectedWorkspaceId$: Subject<number> };
   let service: { validateCodingCompleteness: jest.Mock; downloadValidationResultsAsExcel: jest.Mock };
 
   const page = (currentPage: number, empty = false): ValidateCodingCompletenessResponseDto => ({
@@ -49,6 +51,8 @@ describe('CodingValidationResultsDialogComponent without ZoneJS', () => {
   };
 
   beforeEach(async () => {
+    closing = new Subject<void>();
+    workspace = { selectedWorkspaceId: 5, selectedWorkspaceId$: new Subject<number>() };
     pageResponse = new Subject<ValidateCodingCompletenessResponseDto>();
     downloadResponse = new Subject<Blob>();
     service = {
@@ -60,9 +64,9 @@ describe('CodingValidationResultsDialogComponent without ZoneJS', () => {
       providers: [
         provideZonelessChangeDetection(),
         { provide: MAT_DIALOG_DATA, useValue: { validationResults: page(1), validationCacheKey: 'cache-1', expectedCombinations: [] } },
-        { provide: MatDialogRef, useValue: { close: jest.fn() } },
+        { provide: MatDialogRef, useValue: { close: jest.fn(() => closing.next()), beforeClosed: () => closing } },
         { provide: MatSnackBar, useValue: { open: jest.fn() } },
-        { provide: AppService, useValue: { selectedWorkspaceId: 5 } },
+        { provide: AppService, useValue: workspace },
         { provide: TestPersonCodingService, useValue: service }
       ]
     }).compileComponents();
@@ -147,5 +151,38 @@ describe('CodingValidationResultsDialogComponent without ZoneJS', () => {
     expect(click).toHaveBeenCalledTimes(outcome === 'success' ? 1 : 0);
     expect(service.downloadValidationResultsAsExcel).toHaveBeenCalledWith(5, 'cache-1');
     if (outcome === 'success') expect(revokeObjectURL).toHaveBeenCalledWith('blob:validation-results');
+  });
+  it('cancels the older page size request and keeps the latest cache key', async () => {
+    fixture.componentInstance.changePageSize(100);
+    const oldPage = pageResponse;
+    pageResponse = new Subject<ValidateCodingCompletenessResponseDto>();
+    fixture.componentInstance.changePageSize(200);
+    expect(oldPage.observed).toBe(false);
+    oldPage.next(page(2));
+    oldPage.error(new Error('late failure'));
+    await fixture.whenStable();
+    expect(button('download-button').disabled).toBe(true);
+    pageResponse.next({ ...page(1), cacheKey: 'latest-cache', pageSize: 200 });
+    pageResponse.complete();
+    await fixture.whenStable();
+    expect(fixture.componentInstance.validationCacheKey).toBe('latest-cache');
+    expect(fixture.nativeElement.querySelector('.pagination-info').textContent).toContain('Seite 1 von 2');
+  });
+
+  it.each(['close', 'destroy', 'workspace'])('cancels the pending Excel response on %s', async reason => {
+    const createObjectURL = jest.fn();
+    Object.defineProperty(window.URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+    fixture.componentInstance.downloadExcel();
+    if (reason === 'close') closing.next();
+    if (reason === 'destroy') fixture.destroy();
+    if (reason === 'workspace') {
+      workspace.selectedWorkspaceId = 6;
+      workspace.selectedWorkspaceId$.next(6);
+      workspace.selectedWorkspaceId = 5;
+      workspace.selectedWorkspaceId$.next(5);
+    }
+    expect(downloadResponse.observed).toBe(false);
+    downloadResponse.next(new Blob(['late']));
+    expect(createObjectURL).not.toHaveBeenCalled();
   });
 });
