@@ -91,6 +91,7 @@ export interface JobDefinitionDistributionSnapshot {
 }
 
 @Entity({ name: 'job_definitions' })
+@Index(['workspace_id', 'creatorUserId'])
 export class JobDefinition {
   @PrimaryGeneratedColumn()
     id: number;
@@ -98,6 +99,9 @@ export class JobDefinition {
   @Column({ type: 'int' })
   @Index()
     workspace_id: number;
+
+  @Column({ name: 'creator_user_id', type: 'integer', nullable: true })
+    creatorUserId: number | null;
 
   @Column({ type: 'varchar', length: 255 })
     name: string;

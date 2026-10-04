@@ -4,7 +4,8 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  OneToMany
+  OneToMany,
+  Index
 } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { CodingJob } from './coding-job.entity';
@@ -30,12 +31,16 @@ export type ReferenceMode = 'same' | 'different';
  * A coder training contains multiple coding jobs for different coders
  */
 @Entity({ name: 'coder_training' })
+@Index(['workspace_id', 'creatorUserId'])
 export class CoderTraining {
   @PrimaryGeneratedColumn()
     id: number;
 
   @Column()
     workspace_id: number;
+
+  @Column({ name: 'creator_user_id', type: 'integer', nullable: true })
+    creatorUserId: number | null;
 
   @Column()
     label: string;
