@@ -1,9 +1,9 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
+import { Event as RouterEvent, NavigationEnd, Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { LogoService } from '../../../core/services/logo.service';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -26,7 +26,12 @@ describe('ErrorMessageDisplayComponent', () => {
     requireReAuthentication: jest.Mock;
   };
   let authService: { login: jest.Mock; getValidToken: jest.Mock };
-  let router: { url: string };
+  let router: { url: string; events: Subject<RouterEvent> };
+
+  const navigate = (url: string) => {
+    router.url = url;
+    router.events.next(new NavigationEnd(1, url, url));
+  };
 
   beforeEach(async () => {
     appService = {
@@ -44,7 +49,7 @@ describe('ErrorMessageDisplayComponent', () => {
       login: jest.fn(),
       getValidToken: jest.fn().mockResolvedValue('token')
     };
-    router = { url: '/home?auth=session-expired' };
+    router = { url: '/home?auth=session-expired', events: new Subject<RouterEvent>() };
 
     await TestBed.configureTestingModule({
       imports: [ErrorMessageDisplayComponent, TranslateModule.forRoot()],
@@ -65,14 +70,14 @@ describe('ErrorMessageDisplayComponent', () => {
   });
 
   it('should show the global reauthentication message outside the home route', () => {
-    router.url = '/coding';
+    navigate('/coding');
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('error.reauthentication_title');
   });
 
   it('should elevate priority errors while the global reauthentication message is visible', () => {
-    router.url = '/coding';
+    navigate('/coding');
     fixture.detectChanges();
 
     const priorityErrors = fixture.nativeElement.querySelector('.priority-errors') as HTMLElement;
@@ -80,7 +85,7 @@ describe('ErrorMessageDisplayComponent', () => {
   });
 
   it('should not offer dismissing the global reauthentication message', () => {
-    router.url = '/coding';
+    navigate('/coding');
     fixture.detectChanges();
 
     const reauthenticationMessage = fixture.nativeElement.querySelector('.re-authentication') as HTMLElement;
@@ -94,7 +99,7 @@ describe('ErrorMessageDisplayComponent', () => {
   });
 
   it('should show an idle session warning outside the home route', () => {
-    router.url = '/coding';
+    navigate('/coding');
     appService.needsReAuthentication = false;
     appService.sessionExpiryWarning = true;
 
@@ -112,7 +117,7 @@ describe('ErrorMessageDisplayComponent', () => {
   });
 
   it('should require reauthentication when extending the session fails', async () => {
-    router.url = '/coding';
+    navigate('/coding');
     authService.getValidToken.mockRejectedValue(new Error('refresh failed'));
 
     await fixture.componentInstance.handleExtendSession();
@@ -217,7 +222,7 @@ describe('ErrorMessageDisplayComponent zoneless session warning', () => {
         { provide: SERVER_URL, useValue: '/api/' },
         { provide: LogoService, useValue: { getLogoSettings: () => of(null) } },
         { provide: AuthService, useValue: { getValidToken: jest.fn().mockResolvedValue('token') } },
-        { provide: Router, useValue: { url: '/coding' } }
+        { provide: Router, useValue: { url: '/coding', events: new Subject<RouterEvent>() } }
       ]
     }).compileComponents();
     fixture = TestBed.createComponent(ErrorMessageDisplayComponent);

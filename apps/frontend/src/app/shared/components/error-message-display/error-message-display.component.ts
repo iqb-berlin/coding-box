@@ -2,10 +2,12 @@ import {
   Component, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { TranslateModule } from '@ngx-translate/core';
-import { Router } from '@angular/router';
+import { NavigationEnd, Router } from '@angular/router';
+import { filter, map } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
 import { AuthService } from '../../../core/services/auth.service';
 import {
@@ -25,6 +27,11 @@ export class ErrorMessageDisplayComponent {
   appService: AppService = inject(AppService);
   authService = inject(AuthService);
   private router = inject(Router);
+  private readonly routeUrl = toSignal(this.router.events.pipe(
+    filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+    map(event => event.urlAfterRedirects)
+  ), { initialValue: this.router.url });
+
   readonly expandedErrorIds = signal(new Set<number>());
 
   get showGlobalReAuthenticationMessage(): boolean {
@@ -136,6 +143,7 @@ export class ErrorMessageDisplayComponent {
   }
 
   private isHomeRoute(): boolean {
-    return this.router.url === '/home' || this.router.url.startsWith('/home?');
+    const url = this.routeUrl();
+    return url === '/home' || url.startsWith('/home?');
   }
 }
