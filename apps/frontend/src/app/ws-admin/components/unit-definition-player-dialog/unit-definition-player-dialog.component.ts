@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, signal
+  Component, Inject, OnInit, signal, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -15,6 +15,7 @@ import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import { UnitPlayerComponent } from '../../../replay/components/unit-player/unit-player.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-unit-definition-player-dialog',
   templateUrl: './unit-definition-player-dialog.component.html',
   styleUrls: ['./unit-definition-player-dialog.component.scss'],

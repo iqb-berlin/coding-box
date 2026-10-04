@@ -1,5 +1,5 @@
 import {
-  Component, Inject, inject, OnInit, computed, signal, viewChild, effect
+  Component, Inject, inject, OnInit, computed, signal, viewChild, effect, ChangeDetectionStrategy
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
@@ -238,6 +238,7 @@ interface ModalValueDisplay {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coding-results-comparison',
   templateUrl: './coding-results-comparison.component.html',
   styleUrls: ['./coding-results-comparison.component.scss'],

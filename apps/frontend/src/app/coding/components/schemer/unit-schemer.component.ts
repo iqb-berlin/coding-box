@@ -1,5 +1,5 @@
 import {
-  AfterViewInit, Component, ElementRef, OnDestroy, signal, input, output, viewChild, linkedSignal
+  AfterViewInit, Component, ElementRef, OnDestroy, signal, input, output, viewChild, linkedSignal, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { Subject, takeUntil } from 'rxjs';
@@ -13,6 +13,7 @@ import { PostMessageService } from '../../../core/services/post-message.service'
 import { SchemerMessage } from '../../../core/services/post-message-types';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'unit-schemer-standalone',
   templateUrl: './unit-schemer.component.html',
   styleUrls: ['./unit-schemer.component.scss'],

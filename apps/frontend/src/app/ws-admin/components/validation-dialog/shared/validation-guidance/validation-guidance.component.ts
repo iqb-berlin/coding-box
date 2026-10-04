@@ -1,5 +1,5 @@
 import {
-  Component, input
+  Component, input, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { MatIconModule } from '@angular/material/icon';
@@ -8,6 +8,7 @@ import { MatIconModule } from '@angular/material/icon';
  * Component for displaying validation guidance with "why" and "how to fix" information
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-validation-guidance',
   standalone: true,
   imports: [MatIconModule],

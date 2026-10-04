@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, inject, AfterViewInit, signal, viewChild
+  Component, OnInit, inject, AfterViewInit, signal, viewChild, ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -213,6 +213,7 @@ const DETAIL_ORDER = [
 ];
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-process-overview-dialog',
   imports: [
     CommonModule,

@@ -1,5 +1,5 @@
 import {
-  Component, computed, inject, signal
+  Component, computed, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -19,6 +19,7 @@ import {
 } from '../../../core/utils/auth-data-refresh';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-workspaces',
   templateUrl: './workspaces.component.html',
   styleUrls: ['./workspaces.component.scss'],

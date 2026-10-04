@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy, AfterViewInit, inject, HostListener, signal, viewChild, effect
+  Component, Inject, OnInit, OnDestroy, AfterViewInit, inject, HostListener, signal, viewChild, effect, ChangeDetectionStrategy
 } from '@angular/core';
 import {
   Subject, debounceTime, forkJoin, of, catchError, finalize, takeUntil, map, Observable, switchMap
@@ -96,6 +96,7 @@ interface MissingPreviewLookup {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coding-job-result-dialog',
   templateUrl: './coding-job-result-dialog.component.html',
   styleUrls: ['./coding-job-result-dialog.component.scss'],

@@ -1,5 +1,5 @@
 import {
-  Component, ElementRef, OnChanges, OnDestroy, OnInit, SimpleChanges, HostListener, inject, input, signal, computed, viewChild, afterRenderEffect
+  Component, ElementRef, OnChanges, OnDestroy, OnInit, SimpleChanges, HostListener, inject, input, signal, computed, viewChild, afterRenderEffect, ChangeDetectionStrategy
 } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -98,6 +98,7 @@ interface ReplayRecoveryDraft {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [ReplayCodingService, ReplaySessionLoaderService],
   selector: 'coding-box-replay',
   imports: [

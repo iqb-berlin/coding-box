@@ -1,5 +1,5 @@
 import {
-  Component, DestroyRef, OnInit, inject, signal, input
+  Component, DestroyRef, OnInit, inject, signal, input, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
@@ -45,6 +45,7 @@ import { BackendMessageTranslatorService } from '../../services/backend-message-
 import { TestPersonCodingJobResultDialogComponent } from '../test-person-coding-job-result-dialog/test-person-coding-job-result-dialog.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-person-coding',
   templateUrl: './test-person-coding.component.html',
   styleUrls: ['./test-person-coding.component.scss'],

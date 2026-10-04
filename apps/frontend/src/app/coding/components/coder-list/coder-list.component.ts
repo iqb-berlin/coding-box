@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, inject, viewChild, effect, signal, DestroyRef
+  Component, OnInit, inject, viewChild, effect, signal, DestroyRef, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
@@ -30,6 +30,7 @@ import { CoderService } from '../../services/coder.service';
 import { Coder } from '../../models/coder.model';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coder-list',
   templateUrl: './coder-list.component.html',
   styleUrls: ['./coder-list.component.scss'],

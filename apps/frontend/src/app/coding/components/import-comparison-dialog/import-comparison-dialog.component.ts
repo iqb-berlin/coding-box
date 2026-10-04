@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy, signal
+  Component, Inject, OnInit, OnDestroy, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA, MatDialogModule, MatDialogRef
@@ -58,6 +58,7 @@ export interface ImportComparisonData {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-import-comparison-dialog',
   standalone: true,
   imports: [

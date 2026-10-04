@@ -1,5 +1,5 @@
 import {
-  ChangeDetectorRef, Component, OnInit, inject
+  ChangeDetectorRef, Component, OnInit, inject, ChangeDetectionStrategy
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -22,6 +22,7 @@ import { AppService } from '../../../core/services/app.service';
 import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-unit-tag.dto';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-tag-dialog',
   template: `
     <div class="dialog-header">

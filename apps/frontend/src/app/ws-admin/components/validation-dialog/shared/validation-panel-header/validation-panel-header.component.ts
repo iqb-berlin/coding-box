@@ -1,5 +1,5 @@
 import {
-  Component, input
+  Component, input, ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
@@ -10,6 +10,7 @@ export type ValidationStatus = 'not-run' | 'running' | 'success' | 'failed';
  * Reusable component for displaying validation panel headers with status indicators
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-validation-panel-header',
   standalone: true,
   imports: [CommonModule, MatIconModule],

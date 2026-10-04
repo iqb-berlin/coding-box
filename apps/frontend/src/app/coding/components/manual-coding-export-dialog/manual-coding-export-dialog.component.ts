@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -44,6 +44,7 @@ export interface ManualCodingExportDialogResult {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-manual-coding-export-dialog',
   templateUrl: './manual-coding-export-dialog.component.html',
   styleUrls: ['./manual-coding-export-dialog.component.scss'],

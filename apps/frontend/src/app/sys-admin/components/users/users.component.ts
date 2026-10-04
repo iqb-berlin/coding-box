@@ -2,7 +2,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  Component, DestroyRef, OnInit, inject, signal
+  Component, DestroyRef, OnInit, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { finalize, timer } from 'rxjs';
@@ -24,6 +24,7 @@ import {
 } from '../../../core/utils/auth-data-refresh';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-users',
   templateUrl: './users.component.html',
   styleUrls: ['./users.component.scss'],

@@ -1,7 +1,7 @@
 import {
   Component, inject,
   input,
-  output
+  output, ChangeDetectionStrategy
 } from '@angular/core';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
@@ -19,6 +19,7 @@ import {
 import { UserAccessRightsDialogComponent } from '../user-access-rights-dialog/user-access-rights-dialog.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-workspaces-menu',
   templateUrl: './workspaces-menu.component.html',
   styleUrls: ['./workspaces-menu.component.scss'],

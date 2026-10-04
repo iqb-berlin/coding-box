@@ -1,5 +1,5 @@
 import {
-  Component, computed, DestroyRef, inject, OnInit, signal
+  Component, computed, DestroyRef, inject, OnInit, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MatDialogRef, MatDialogModule, MatDialog } from '@angular/material/dialog';
@@ -26,6 +26,7 @@ import { CodingValidationResultsDialogComponent } from '../coding-validation-res
 export type ExportFormat = 'json' | 'csv' | 'excel';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-export-dialog',
   templateUrl: './export-dialog.component.html',
   styleUrls: ['./export-dialog.component.scss'],

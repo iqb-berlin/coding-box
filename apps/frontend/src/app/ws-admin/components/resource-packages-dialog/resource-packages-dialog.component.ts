@@ -1,6 +1,6 @@
 import {
   Component, OnDestroy, OnInit, inject, signal,
-  computed
+  computed, ChangeDetectionStrategy
 } from '@angular/core';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import {
@@ -38,6 +38,7 @@ export interface ResourcePackagesDialogData {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-resource-packages-dialog',
   templateUrl: './resource-packages-dialog.component.html',
   styleUrls: ['./resource-packages-dialog.component.scss'],
