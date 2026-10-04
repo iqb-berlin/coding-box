@@ -117,6 +117,7 @@
       "{workspaceRoot}/.nvmrc",
       "{workspaceRoot}/package.json",
       "{workspaceRoot}/package-lock.json",
+      "{workspaceRoot}/vendor/**/*",
       "{workspaceRoot}/tsconfig.base.json"
     ],
     "sharedApiDto": [

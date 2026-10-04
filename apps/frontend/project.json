@@ -143,6 +143,13 @@
         }
       }
     },
+    "test-dependency-patches": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node --test scripts/qa/dependency-patches.test.mjs"
+      }
+    },
     "test-e2e-harness": {
       "executor": "nx:run-commands",
       "cache": false,

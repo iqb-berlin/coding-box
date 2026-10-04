@@ -1,0 +1,14 @@
+{
+  "name": "@coding-box/braces-patched",
+  "version": "3.0.3-patch.1",
+  "private": true,
+  "description": "Local braces 3.0.3 security patch for CVE-2026-93687",
+  "license": "MIT",
+  "main": "index.js",
+  "dependencies": {
+    "fill-range": "^7.1.1"
+  },
+  "engines": {
+    "node": ">=8"
+  }
+}
