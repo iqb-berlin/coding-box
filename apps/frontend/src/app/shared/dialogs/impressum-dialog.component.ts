@@ -2,8 +2,9 @@ import {
   MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose
 } from '@angular/material/dialog';
 import {
-  Component, OnInit, SecurityContext, inject, signal, ChangeDetectionStrategy
+  Component, OnInit, SecurityContext, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DomSanitizer } from '@angular/platform-browser';
 import { MatButton } from '@angular/material/button';
 import { catchError, of } from 'rxjs';
@@ -46,6 +47,8 @@ import { SystemSettingsService } from '../../core/services/system-settings.servi
   imports: [MatDialogTitle, MatDialogContent, MatDialogActions, MatButton, MatDialogClose]
 })
 export class ImpressumDialogComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+
   private readonly systemSettingsService = inject(SystemSettingsService);
 
   private readonly sanitizer = inject(DomSanitizer);
@@ -54,7 +57,7 @@ export class ImpressumDialogComponent implements OnInit {
 
   ngOnInit(): void {
     this.systemSettingsService.getLegalNotice()
-      .pipe(catchError(() => of({ html: defaultLegalNoticeHtml, isDefault: true })))
+      .pipe(catchError(() => of({ html: defaultLegalNoticeHtml, isDefault: true }))).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(legalNotice => {
         this.legalNoticeHtml.set(this.sanitizeHtml(legalNotice.html));
       });

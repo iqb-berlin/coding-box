@@ -1,6 +1,7 @@
 import {
-  Component, OnDestroy, OnInit, inject, signal, input, output, ChangeDetectionStrategy
+  Component, OnDestroy, OnInit, inject, signal, input, output, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatTableModule } from '@angular/material/table';
@@ -99,6 +100,8 @@ interface Coder {
   ]
 })
 export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   private codingJobBackendService = inject(CodingJobBackendService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
@@ -655,7 +658,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     this.codingJobBackendService
       .updateJobDefinition(workspaceId, definition.id, {
         status: 'pending_review'
-      })
+      }).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.snackBar.open(
@@ -693,7 +696,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     }
 
     this.codingJobBackendService
-      .approveJobDefinition(workspaceId, definition.id, 'approved')
+      .approveJobDefinition(workspaceId, definition.id, 'approved').pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.snackBar.open(
@@ -731,7 +734,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     }
 
     this.codingJobBackendService
-      .updateJobDefinition(workspaceId, definition.id, { status: 'draft' })
+      .updateJobDefinition(workspaceId, definition.id, { status: 'draft' }).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.snackBar.open(
@@ -774,7 +777,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     }
 
     this.codingJobBackendService
-      .deleteJobDefinition(workspaceId, definition.id)
+      .deleteJobDefinition(workspaceId, definition.id).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.snackBar.open(

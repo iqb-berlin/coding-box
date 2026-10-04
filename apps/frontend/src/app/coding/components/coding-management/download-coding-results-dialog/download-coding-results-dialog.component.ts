@@ -1,6 +1,7 @@
 import {
-  ChangeDetectorRef, Component, Inject, OnInit, ChangeDetectionStrategy
+  ChangeDetectorRef, Component, Inject, OnInit, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -394,6 +395,8 @@ export interface DownloadCodingResultsDialogData {
   `]
 })
 export class DownloadCodingResultsDialogComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+
   selectedVersion: 'v1' | 'v2' | 'v3' = 'v1';
   selectedFormat: CodingResultsExportFormat = 'csv';
   includeReplayUrls: boolean = false;
@@ -443,7 +446,7 @@ export class DownloadCodingResultsDialogComponent implements OnInit {
     this.isLoadingMissingsProfiles = true;
     this.changeDetectorRef.markForCheck();
     this.missingsProfileService
-      .getExportMissingsProfilesOrThrow(this.data.workspaceId)
+      .getExportMissingsProfilesOrThrow(this.data.workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: profiles => {
           this.missingsProfiles = profiles.filter(profile => (

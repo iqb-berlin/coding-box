@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnDestroy, inject, signal, ChangeDetectionStrategy
+  Component, Inject, OnDestroy, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import {
   MAT_DIALOG_DATA,
@@ -58,6 +59,8 @@ export interface ContentPoolUploadDialogResult {
   ]
 })
 export class ContentPoolUploadDialogComponent implements OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   private readonly contentPoolIntegrationService = inject(
     ContentPoolIntegrationService
   );
@@ -102,7 +105,7 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
     this.acps.set([]);
 
     this.contentPoolIntegrationService
-      .listAccessibleAcps(this.data.workspaceId)
+      .listAccessibleAcps(this.data.workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: response => {
           this.isLoadingAcps.set(false);

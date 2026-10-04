@@ -1,6 +1,7 @@
 import {
-  ChangeDetectorRef, Component, Inject, OnInit, inject, ElementRef, AfterViewInit, OnDestroy, viewChildren, afterRenderEffect, ChangeDetectionStrategy
+  ChangeDetectorRef, Component, Inject, OnInit, inject, ElementRef, AfterViewInit, OnDestroy, viewChildren, afterRenderEffect, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -39,6 +40,8 @@ interface ReviewItem {
   ]
 })
 export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   private readonly changeDetectorRef = inject(ChangeDetectorRef);
   private sanitizer = inject(DomSanitizer);
   private uiService = inject(CodingManagementUiService);
@@ -158,7 +161,7 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
     this.isAnyItemLoading = true;
     this.changeDetectorRef.markForCheck();
 
-    this.uiService.openReplayForResponse(item.response).subscribe({
+    this.uiService.openReplayForResponse(item.response).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: url => {
         item.isLoading = false;
         if (url) {

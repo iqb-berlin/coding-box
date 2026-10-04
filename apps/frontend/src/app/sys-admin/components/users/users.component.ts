@@ -89,6 +89,7 @@ export class UsersComponent implements OnInit {
 
   addUser(userData: CreateUserForm): void {
     this.appService.dataLoading = true;
+    let refreshingUsers = false;
     const {
       name: username, isAdmin, firstName, lastName, email
     } = userData.getRawValue();
@@ -99,8 +100,12 @@ export class UsersComponent implements OnInit {
       lastName,
       email
     };
-    this.userBackendService.addUser(user).subscribe(
+    this.userBackendService.addUser(user).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => { if (!refreshingUsers) this.appService.dataLoading = false; })
+    ).subscribe(
       respOk => {
+        refreshingUsers = true;
         this.updateUserList();
         if (respOk) {
           this.snackBar.open(
@@ -125,12 +130,17 @@ export class UsersComponent implements OnInit {
 
   editUser(value: { selection: UserFullDto[], user: EditUserForm }): void {
     this.appService.dataLoading = true;
+    let refreshingUsers = false;
     const changedData: UserFullDto = {
       id: value.selection[0].id,
       ...value.user.getRawValue()
     };
-    this.userBackendService.changeUserData(this.authData().userId, changedData).subscribe(
+    this.userBackendService.changeUserData(this.authData().userId, changedData).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => { if (!refreshingUsers) this.appService.dataLoading = false; })
+    ).subscribe(
       respOk => {
+        refreshingUsers = true;
         this.updateUserList();
         if (respOk) {
           this.snackBar.open(
@@ -150,15 +160,20 @@ export class UsersComponent implements OnInit {
 
   deleteUsers(users: UserFullDto[]): void {
     this.appService.dataLoading = true;
+    let refreshingUsers = false;
     const usersToDelete: number[] = [];
     users.forEach((r: UserFullDto) => usersToDelete.push(r.id));
-    this.userBackendService.deleteUsers(usersToDelete).subscribe(
+    this.userBackendService.deleteUsers(usersToDelete).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => { if (!refreshingUsers) this.appService.dataLoading = false; })
+    ).subscribe(
       respOk => {
         if (respOk) {
           this.snackBar.open(
             this.translateService.instant('admin.users-deleted'),
             '',
             { duration: 1000 });
+          refreshingUsers = true;
           this.updateUserList();
         } else {
           this.snackBar.open(
@@ -175,7 +190,7 @@ export class UsersComponent implements OnInit {
     runMutationAndRefreshAuthData(
       this.appService,
       this.userBackendService.setUserWorkspaceAccessRight(this.selectedUsers()[0], workspaces)
-    )
+    ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(
         result => {
           if (hasCurrentAuthDataAfterMutation(result)) {

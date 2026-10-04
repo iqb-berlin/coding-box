@@ -1,6 +1,7 @@
 import {
-  Component, OnInit, OnDestroy, computed, signal, ChangeDetectionStrategy
+  Component, OnInit, OnDestroy, computed, signal, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
@@ -83,6 +84,8 @@ interface CodebookUnitOption {
   ]
 })
 export class ExportCodingBookComponent implements OnInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   readonly unitList = signal<number[]>([]);
   readonly availableUnits = signal<CodebookUnitOption[]>([]);
 
@@ -163,7 +166,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
       .pipe(
         debounceTime(300),
         distinctUntilChanged()
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(event => {
         this.applyFilter(event);
       });
@@ -197,7 +200,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     if (workspaceId) {
       this.isLoading.set(true);
 
-      this.fileService.getUnitsWithFileIds(workspaceId).subscribe({
+      this.fileService.getUnitsWithFileIds(workspaceId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: units => {
           if (units && units.length > 0) {
             this.availableUnits.set(units.map((unit: { id: number; unitId: string; fileName: string; data: string }) => ({
@@ -302,7 +305,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
       maxHeight: '88vh',
       autoFocus: false,
       data: dialogData
-    }).afterClosed().subscribe(jobDefinitionId => {
+    }).afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(jobDefinitionId => {
       if (jobDefinitionId !== undefined) {
         this.onJobDefinitionFilterChange(jobDefinitionId);
       }
@@ -356,7 +359,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingJobDefinitions.set(true);
-    this.codingJobBackendService.getJobDefinitions(workspaceId).subscribe({
+    this.codingJobBackendService.getJobDefinitions(workspaceId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: jobDefinitions => {
         this.availableJobDefinitions.set(jobDefinitions
           .filter(jobDefinition => jobDefinition.id !== undefined)
@@ -380,7 +383,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingVariableBundles.set(true);
-    this.codingJobBackendService.getVariableBundles(workspaceId).subscribe({
+    this.codingJobBackendService.getVariableBundles(workspaceId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: variableBundles => {
         this.availableVariableBundles.set(variableBundles
           .filter(variableBundle => variableBundle.id !== undefined)
@@ -677,7 +680,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   private loadMissingsProfiles(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
-      this.missingsProfileService.getMissingsProfiles(workspaceId).subscribe({
+      this.missingsProfileService.getMissingsProfiles(workspaceId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: profiles => {
           this.missingsProfiles.set([{ id: 0, label: '' }, ...profiles.map((profile: { label: string; id: number }) => ({ id: profile.id ?? 0, label: profile.label }))]);
           this.selectedMissingsProfile.set(0);
@@ -712,7 +715,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
       this.contentOptions().missingsProfile,
       this.contentOptions(),
       this.unitList()
-    ).subscribe({
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: response => {
         this.codebookJobId.set(response.jobId);
         this.startCodebookPolling(workspaceId, response.jobId);
@@ -773,7 +776,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   }
 
   private downloadCodebookResult(workspaceId: number, jobId: string): void {
-    this.exportService.downloadCodebookFile(workspaceId, jobId).subscribe({
+    this.exportService.downloadCodebookFile(workspaceId, jobId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: blob => {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');

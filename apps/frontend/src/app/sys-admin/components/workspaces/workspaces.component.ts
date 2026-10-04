@@ -1,11 +1,14 @@
 import {
-  Component, computed, inject, signal, ChangeDetectionStrategy
+  Component, computed, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { map } from 'rxjs';
+import {
+  map, take, timer, finalize
+} from 'rxjs';
 import { WorkspacesMenuComponent } from '../workspaces-menu/workspaces-menu.component';
 import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
@@ -26,6 +29,8 @@ import {
   imports: [WorkspacesMenuComponent, FormsModule, TranslateModule, WorkspacesSelectionComponent, MatProgressSpinnerModule]
 })
 export class WorkspacesComponent {
+  private readonly destroyRef = inject(DestroyRef);
+
   private appService = inject(AppService);
   private workspaceBackendService = inject(WorkspaceBackendService);
   private snackBar = inject(MatSnackBar);
@@ -45,7 +50,7 @@ export class WorkspacesComponent {
         name: result.controls.name.value,
         settings: {}
       }).pipe(map(workspaceId => workspaceId !== null))
-    ).subscribe(
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(
       mutationResult => {
         if (mutationResult.mutationSucceeded) {
           this.showMutationSuccess('admin.workspace-created', mutationResult);
@@ -67,7 +72,7 @@ export class WorkspacesComponent {
         id: value.selection[0],
         name: value.formData.controls.name.value
       })
-    )
+    ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(
         result => {
           if (result.mutationSucceeded) {
@@ -85,6 +90,7 @@ export class WorkspacesComponent {
   }
 
   deleteWorkspace(workspace_ids: number[]): void {
+    if (this.isDeleting()) return;
     this.isDeleting.set(true);
 
     const deleteSteps = [
@@ -94,33 +100,25 @@ export class WorkspacesComponent {
       'admin.deleting-workspace-finish'
     ];
 
-    let stepIndex = 0;
-    const interval = setInterval(() => {
-      if (stepIndex < deleteSteps.length) {
-        this.deleteStatus.set(this.translateService.instant(deleteSteps[stepIndex]));
-
-        // eslint-disable-next-line no-plusplus
-        stepIndex++;
-      } else {
-        clearInterval(interval);
-      }
-    }, 1000);
+    const progress = timer(1000, 1000).pipe(
+      take(deleteSteps.length), takeUntilDestroyed(this.destroyRef)
+    ).subscribe(stepIndex => this.deleteStatus.set(this.translateService.instant(deleteSteps[stepIndex])));
 
     runMutationAndRefreshAuthData(
       this.appService,
       this.workspaceBackendService.deleteWorkspace(workspace_ids)
-    )
+    ).pipe(finalize(() => progress.unsubscribe()), takeUntilDestroyed(this.destroyRef))
       .subscribe(
         result => {
-          clearInterval(interval);
+          progress.unsubscribe();
           if (result.mutationSucceeded) {
             this.deleteStatus.set(this.translateService.instant('admin.deleting-workspace-success'));
 
-            setTimeout(() => {
+            timer(1000).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
               this.showMutationSuccess('admin.workspace-deleted', result);
               this.workspacesChanged.set(true);
               this.isDeleting.set(false);
-            }, 1000);
+            });
           } else {
             this.snackBar.open(
               this.translateService.instant('admin.workspace-not-deleted'),
@@ -144,7 +142,7 @@ export class WorkspacesComponent {
     runMutationAndRefreshAuthData(
       this.appService,
       this.workspaceBackendService.setWorkspaceUsersAccessRight(this.selectedWorkspaces()[0], users)
-    )
+    ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(
         result => {
           if (result.mutationSucceeded) {

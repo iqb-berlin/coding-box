@@ -1,8 +1,9 @@
 import {
   Component, inject,
   input,
-  output, ChangeDetectionStrategy
+  output, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -32,6 +33,8 @@ import {
   imports: [MatButton, MatTooltip, WrappedIconComponent, TranslateModule, WrappedIconComponent]
 })
 export class UsersMenuComponent {
+  private readonly destroyRef = inject(DestroyRef);
+
   private editUserDialog = inject(MatDialog);
   private messageDialog = inject(MatDialog);
   private editUserAccessRightsDialog = inject(MatDialog);
@@ -73,7 +76,7 @@ export class UsersMenuComponent {
         }
       });
 
-      dialogRef.afterClosed().subscribe(result => {
+      dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
         if (result) {
           this.userEdited.emit({ selection: selectedRows, user: result });
         }
@@ -109,7 +112,7 @@ export class UsersMenuComponent {
         }
       });
 
-      dialogRef.afterClosed().subscribe((result: boolean) => {
+      dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((result: boolean) => {
         if (result) {
           this.usersDeleted.emit(selectedRows);
         }
@@ -139,7 +142,7 @@ export class UsersMenuComponent {
           selectedUser: this.selectedRows()
         }
       });
-      dialogRef.afterClosed().subscribe((result: number[]) => {
+      dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((result: number[]) => {
         if (result) {
           this.setUserWorkspaceAccessRights.emit(result);
         }

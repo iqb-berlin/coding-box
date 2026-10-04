@@ -1,8 +1,9 @@
 import {
   Component, inject,
   input,
-  output, ChangeDetectionStrategy
+  output, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -26,6 +27,8 @@ import { UserAccessRightsDialogComponent } from '../user-access-rights-dialog/us
   imports: [MatButton, MatTooltip, WrappedIconComponent, TranslateModule]
 })
 export class WorkspacesMenuComponent {
+  private readonly destroyRef = inject(DestroyRef);
+
   private editWorkspaceDialog = inject(MatDialog);
   private UserAccessRightsToWorkspaceDialog = inject(MatDialog);
   private deleteConfirmDialog = inject(MatDialog);
@@ -58,7 +61,7 @@ export class WorkspacesMenuComponent {
       }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
         this.workspaceAdded.emit(result);
       }
@@ -79,7 +82,7 @@ export class WorkspacesMenuComponent {
 
         }
       });
-      dialogRef.afterClosed().subscribe(result => {
+      dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
         if (result) {
           this.workspaceEdited.emit({ selection: selectedWorkspaces, formData: result });
         }
@@ -103,7 +106,7 @@ export class WorkspacesMenuComponent {
         }
       });
 
-      dialogRef.afterClosed().subscribe(result => {
+      dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
         if (result === true) {
           this.workspaceDeleted.emit(this.selectedWorkspaces());
         }
@@ -120,7 +123,7 @@ export class WorkspacesMenuComponent {
       }
     });
 
-    dialogRef.afterClosed().subscribe((result: number[]) => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((result: number[]) => {
       if (typeof result !== 'undefined') {
         if (result.length > 0) {
           this.setWorkspaceUsersAccessRight.emit(result as number[]);

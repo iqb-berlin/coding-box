@@ -1,6 +1,7 @@
 import {
-  Component, inject, signal, ChangeDetectionStrategy
+  Component, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -25,6 +26,8 @@ import {
   imports: [MatCheckbox, MatButton, MatTooltip, FormsModule, TranslateModule, MatIcon]
 })
 export class WsAccessRightsComponent {
+  private readonly destroyRef = inject(DestroyRef);
+
   private userBackendService = inject(UserBackendService);
   appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
@@ -37,7 +40,7 @@ export class WsAccessRightsComponent {
 
   createUserList(): void {
     this.workspaceUsers.set(new WorkspaceUserToCheckCollection([]));
-    this.userBackendService.getUsers(this.appService.selectedWorkspaceId)
+    this.userBackendService.getUsers(this.appService.selectedWorkspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(users => {
         if (users.length > 0) {
           this.workspaceUsers.set(new WorkspaceUserToCheckCollection(users));
@@ -49,7 +52,7 @@ export class WsAccessRightsComponent {
     runMutationAndRefreshAuthData(
       this.appService,
       this.userBackendService.saveUsers(this.appService.selectedWorkspaceId, this.workspaceUsers().getChecks())
-    )
+    ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(result => {
         if (hasCurrentAuthDataAfterMutation(result)) {
           this.snackBar.open(

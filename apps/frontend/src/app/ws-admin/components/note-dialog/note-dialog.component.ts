@@ -1,6 +1,7 @@
 import {
-  ChangeDetectorRef, Component, OnInit, inject, ChangeDetectionStrategy
+  ChangeDetectorRef, Component, OnInit, inject, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -253,6 +254,8 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
   standalone: true
 })
 export class NoteDialogComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+
   dialogRef = inject<MatDialogRef<NoteDialogComponent>>(MatDialogRef);
   data = inject<{
     unitId: number;
@@ -308,7 +311,7 @@ export class NoteDialogComponent implements OnInit {
     this.unitNoteService.createUnitNote(
       this.appService.selectedWorkspaceId,
       createNoteDto
-    ).subscribe({
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: note => {
         this.notes.unshift(note); // Add to the beginning of the array
         this.newNoteText = ''; // Clear the input field
@@ -338,7 +341,7 @@ export class NoteDialogComponent implements OnInit {
     this.unitNoteService.deleteUnitNote(
       this.appService.selectedWorkspaceId,
       noteId
-    ).subscribe({
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: success => {
         if (success) {
           this.notes = this.notes.filter(note => note.id !== noteId);

@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnInit, OnDestroy, ChangeDetectionStrategy
+  Component, Inject, OnInit, OnDestroy, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef
 } from '@angular/material/dialog';
@@ -91,6 +92,8 @@ import { ValidationBatchRunnerService } from '../../../shared/services/validatio
   `]
 })
 export class ValidationDialogComponent implements OnInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   private subscriptions: Subscription[] = [];
 
   constructor(
@@ -137,7 +140,7 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
   showUnitXml(fileName: string): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
-    const subscription = this.fileService.getUnitContentXml(workspaceId, fileName).subscribe(xmlContent => {
+    const subscription = this.fileService.getUnitContentXml(workspaceId, fileName).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(xmlContent => {
       if (!xmlContent) {
         this.snackBar.open(
           `Fehler beim Abrufen der Unit-XML für ${fileName}`,

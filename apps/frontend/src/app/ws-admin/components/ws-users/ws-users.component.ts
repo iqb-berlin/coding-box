@@ -196,7 +196,7 @@ export class WsUsersComponent implements OnInit {
         }
       });
 
-      dialogRef.afterClosed().subscribe((result: boolean) => {
+      dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((result: boolean) => {
         if (result) {
           // this.usersDeleted.emit(selectedRows);
         }

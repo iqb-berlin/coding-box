@@ -273,7 +273,7 @@ export class SchemeEditorDialogComponent implements OnInit {
         }
       });
 
-      confirmRef.afterClosed().subscribe(result => {
+      confirmRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
         if (result === true) {
           this.dialogRef.close(false);
         }
@@ -290,7 +290,7 @@ export class SchemeEditorDialogComponent implements OnInit {
     }
 
     const schemeFilename = this.data.fileName;
-    this.fileService.getFilesList(this.data.workspaceId, 1, 10000, 'Resource')
+    this.fileService.getFilesList(this.data.workspaceId, 1, 10000, 'Resource').pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: response => {
           const existingFile = response.data?.find(file => file.filename === schemeFilename && file.file_type === 'Resource');
@@ -322,7 +322,7 @@ export class SchemeEditorDialogComponent implements OnInit {
       formData,
       overwriteExisting,
       overwriteFileIds
-    )
+    ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(result => {
         const conflicts = result.conflicts || [];
         const ok = result.failed === 0 && conflicts.length === 0;
@@ -372,7 +372,7 @@ export class SchemeEditorDialogComponent implements OnInit {
   private navigateToCodingStatusOnAction(
     snackBarRef: ReturnType<MatSnackBar['open']> | undefined
   ): void {
-    snackBarRef?.onAction().subscribe(() => {
+    snackBarRef?.onAction().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
       this.router.navigate(
         [`/workspace-admin/${this.data.workspaceId}/coding/management`],
         { queryParams: { refreshCodingFreshness: '1' } }

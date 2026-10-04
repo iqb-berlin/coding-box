@@ -1,6 +1,7 @@
 import {
-  AfterViewInit, Component, ElementRef, OnDestroy, OnInit, inject, signal, viewChild, ChangeDetectionStrategy
+  AfterViewInit, Component, ElementRef, OnDestroy, OnInit, inject, signal, viewChild, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { MatDialogModule, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -462,6 +463,8 @@ interface ReplayFrequencyData {
 })
 export class ReplayStatisticsDialogComponent
 implements OnInit, AfterViewInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   private replayBackendService = inject(ReplayBackendService);
   private data = inject(MAT_DIALOG_DATA);
 
@@ -616,7 +619,7 @@ implements OnInit, AfterViewInit, OnDestroy {
     };
 
     this.replayBackendService
-      .getReplaySourceSummary(this.workspaceId, options)
+      .getReplaySourceSummary(this.workspaceId, options).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: data => {
           this.sourceSummary.set(data);
@@ -630,7 +633,7 @@ implements OnInit, AfterViewInit, OnDestroy {
 
   private loadReplayFrequency(options: { lastDays: number; limit: number }): void {
     this.replayBackendService
-      .getReplayFrequencyByUnit(this.workspaceId, options)
+      .getReplayFrequencyByUnit(this.workspaceId, options).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (data: Record<string, number>) => {
           this.frequencyData.set(this.toTopNWithOther(
@@ -650,7 +653,7 @@ implements OnInit, AfterViewInit, OnDestroy {
 
   private loadDayDistribution(options: { lastDays: number }): void {
     this.replayBackendService
-      .getReplayDistributionByDay(this.workspaceId, options)
+      .getReplayDistributionByDay(this.workspaceId, options).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (data: Record<string, number>) => {
           this.dayDistributionData.set(Object.entries(data).map(
@@ -672,7 +675,7 @@ implements OnInit, AfterViewInit, OnDestroy {
 
   private loadHourDistribution(options: { lastDays: number }): void {
     this.replayBackendService
-      .getReplayDistributionByHour(this.workspaceId, options)
+      .getReplayDistributionByHour(this.workspaceId, options).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (data: Record<string, number>) => {
           this.hourDistributionData.set(Object.entries(data).map(
@@ -698,7 +701,7 @@ implements OnInit, AfterViewInit, OnDestroy {
 
   private loadDurationStatistics(options: { lastDays: number }): void {
     this.replayBackendService
-      .getReplayDurationStatistics(this.workspaceId, undefined, options)
+      .getReplayDurationStatistics(this.workspaceId, undefined, options).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (data: {
           min: number;
@@ -746,7 +749,7 @@ implements OnInit, AfterViewInit, OnDestroy {
 
   private loadErrorStatistics(options: { lastDays: number }): void {
     this.replayBackendService
-      .getReplayErrorStatistics(this.workspaceId, options)
+      .getReplayErrorStatistics(this.workspaceId, options).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (data: {
           successRate: number;
@@ -770,7 +773,7 @@ implements OnInit, AfterViewInit, OnDestroy {
   private loadFailureDistributions(options: { lastDays: number }): void {
     // Load failure distribution by unit
     this.replayBackendService
-      .getFailureDistributionByUnit(this.workspaceId, options)
+      .getFailureDistributionByUnit(this.workspaceId, options).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (data: Record<string, number>) => {
           this.failureByUnitData.set(this.toTopNWithOther(
@@ -789,7 +792,7 @@ implements OnInit, AfterViewInit, OnDestroy {
 
   private loadFailureDistributionByDay(options: { lastDays: number }): void {
     this.replayBackendService
-      .getFailureDistributionByDay(this.workspaceId, options)
+      .getFailureDistributionByDay(this.workspaceId, options).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (data: Record<string, number>) => {
           this.failureByDayData.set(Object.entries(data).map(([day, count]) => ({
@@ -807,7 +810,7 @@ implements OnInit, AfterViewInit, OnDestroy {
 
   private loadFailureDistributionByHour(options: { lastDays: number }): void {
     this.replayBackendService
-      .getFailureDistributionByHour(this.workspaceId, options)
+      .getFailureDistributionByHour(this.workspaceId, options).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (data: Record<string, number>) => {
           this.failureByHourData.set(Object.entries(data).map(

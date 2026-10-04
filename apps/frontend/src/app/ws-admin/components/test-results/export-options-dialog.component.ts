@@ -1,6 +1,7 @@
 import {
-  Component, inject, OnInit, signal, ChangeDetectionStrategy
+  Component, inject, OnInit, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -142,6 +143,8 @@ export interface ExportOptions {
   `]
 })
 export class ExportOptionsDialogComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+
   readonly dialogRef = inject(MatDialogRef<ExportOptionsDialogComponent>);
   readonly testResultBackendService = inject(TestResultBackendService);
   readonly dialogData = inject(MAT_DIALOG_DATA);
@@ -173,7 +176,7 @@ export class ExportOptionsDialogComponent implements OnInit {
 
   ngOnInit(): void {
     if (this.dialogData && this.dialogData.workspaceId) {
-      this.testResultBackendService.getExportOptions(this.dialogData.workspaceId).subscribe((options: ReturnType<typeof this.availableOptions>) => {
+      this.testResultBackendService.getExportOptions(this.dialogData.workspaceId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe((options: ReturnType<typeof this.availableOptions>) => {
         this.availableOptions.set(options);
       });
     }

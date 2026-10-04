@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnInit, OnDestroy, signal, ChangeDetectionStrategy
+  Component, Inject, OnInit, OnDestroy, signal, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   MAT_DIALOG_DATA,
   MatDialogRef,
@@ -200,6 +201,8 @@ type VariableAnalysisExportFormat = 'csv' | 'xlsx';
   ]
 })
 export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+
   readonly isLoading = signal(false);
   readonly variableFrequencies = signal<{
     [key: string]: VariableFrequency[];
@@ -312,7 +315,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     this.isInitializing.set(true);
     this.isJobsLoading.set(true);
 
-    this.variableAnalysisService.getAllJobs(this.data.workspaceId).subscribe({
+    this.variableAnalysisService.getAllJobs(this.data.workspaceId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (jobs: VariableAnalysisJobDto[]) => {
         this.isJobsLoading.set(false);
         this.isInitializing.set(false);
@@ -333,7 +336,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     this.refreshSubscription = timer(
       this.POLLING_INTERVAL,
       this.POLLING_INTERVAL
-    ).subscribe(() => this.refreshJobs(false));
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refreshJobs(false));
   }
 
   private stopPolling(): void {
@@ -852,7 +855,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     if (this.isStartingJob() || this.isInitializing()) return;
     this.isJobsLoading.set(showError);
 
-    this.variableAnalysisService.getAllJobs(this.data.workspaceId).subscribe({
+    this.variableAnalysisService.getAllJobs(this.data.workspaceId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (jobs: VariableAnalysisJobDto[]) => {
         this.isJobsLoading.set(false);
         this.applyJobs(jobs);
@@ -886,7 +889,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       .createAnalysisJob(
         this.data.workspaceId,
         this.data.unitId // Optional unit ID, may be undefined
-      )
+      ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (job: VariableAnalysisJobDto) => {
           this.isStartingJob.set(false);
@@ -932,7 +935,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   cancelJob(jobId: number | string): void {
     this.isJobsLoading.set(true);
     this.variableAnalysisService
-      .cancelJob(this.data.workspaceId, jobId)
+      .cancelJob(this.data.workspaceId, jobId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (result: JobCancelResult) => {
           if (result.success) {
@@ -985,14 +988,14 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       data: dialogData
     });
 
-    confirmRef.afterClosed().subscribe((confirmed: boolean) => {
+    confirmRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((confirmed: boolean) => {
       if (!confirmed) {
         return;
       }
 
       this.isJobsLoading.set(true);
       this.variableAnalysisService
-        .deleteJob(this.data.workspaceId, jobId)
+        .deleteJob(this.data.workspaceId, jobId).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: (result: JobCancelResult) => {
             if (result.success) {
@@ -1045,11 +1048,11 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       } as ConfirmDialogData
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
         this.isJobsLoading.set(true);
         this.variableAnalysisService
-          .deleteAllJobs(this.data.workspaceId)
+          .deleteAllJobs(this.data.workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: () => {
               this.snackBar.open(
@@ -1119,7 +1122,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         options
       );
 
-    request.subscribe({
+    request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: blob => {
         this.saveBlob(blob, this.createExportFileName(format));
         this.isExporting.set(false);
@@ -1183,7 +1186,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         includeSchemaCodes: this.includeSchemaCodes(),
         sortBy: this.sortBy(),
         sortDirection: this.sortDirection()
-      })
+      }).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (results: VariableAnalysisResultPageDto) => {
           if (requestId !== this.latestResultsRequestId) {
