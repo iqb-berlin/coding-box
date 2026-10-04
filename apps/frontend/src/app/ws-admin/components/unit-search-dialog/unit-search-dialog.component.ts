@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnInit, ViewChild
+  Component, Inject, OnInit, ChangeDetectionStrategy, signal, DestroyRef, inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -17,12 +18,14 @@ import { MatTableModule } from '@angular/material/table';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import {
-  MatPaginator, MatPaginatorModule, MatPaginatorIntl, PageEvent
+  MatPaginatorModule, MatPaginatorIntl, PageEvent
 } from '@angular/material/paginator';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { Router } from '@angular/router';
-import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
+import {
+  Subject, debounceTime, distinctUntilChanged, takeUntil
+} from 'rxjs';
 import { FileService } from '../../../shared/services/file/file.service';
 import { UnitService } from '../../../shared/services/unit/unit.service';
 import { ResponseService } from '../../../shared/services/response/response.service';
@@ -81,6 +84,7 @@ interface BookletSearchResult {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-unit-search-dialog',
   templateUrl: './unit-search-dialog.component.html',
   styleUrls: ['./unit-search-dialog.component.scss'],
@@ -104,6 +108,8 @@ interface BookletSearchResult {
   ]
 })
 export class UnitSearchDialogComponent implements OnInit {
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly searchCancel$ = new Subject<void>();
   searchText: string = '';
   searchValue: string = '';
   searchVariableId: string = '';
@@ -115,12 +121,12 @@ export class UnitSearchDialogComponent implements OnInit {
 
   searchMode: 'unit' | 'response' | 'booklet' = 'unit';
 
-  unitSearchResults: UnitSearchResult[] = [];
-  responseSearchResults: ResponseSearchResult[] = [];
-  bookletSearchResults: BookletSearchResult[] = [];
+  readonly unitSearchResults = signal<UnitSearchResult[]>([]);
+  readonly responseSearchResults = signal<ResponseSearchResult[]>([]);
+  readonly bookletSearchResults = signal<BookletSearchResult[]>([]);
   bookletSearchText: string = '';
 
-  isLoading: boolean = false;
+  readonly isLoading = signal<boolean>(false);
   unitDisplayedColumns: string[] = ['unitName', 'unitAlias', 'bookletName', 'personLogin', 'personCode', 'personGroup', 'tags', 'responseValue', 'actions'];
   responseDisplayedColumns: string[] = ['variableId', 'value', 'status', 'codedStatus', 'unitName', 'unitAlias', 'bookletName', 'personLogin', 'personCode', 'personGroup', 'actions'];
   bookletDisplayedColumns: string[] = ['bookletName', 'personCode', 'personLogin', 'personGroup', 'unitCount', 'actions'];
@@ -130,12 +136,10 @@ export class UnitSearchDialogComponent implements OnInit {
   private bookletSearchSubject = new Subject<string>();
   private readonly SEARCH_DEBOUNCE_TIME = 500;
 
-  totalItems: number = 0;
+  readonly totalItems = signal<number>(0);
   pageSize: number = 10;
   pageIndex: number = 0;
   pageSizeOptions: number[] = [50, 100, 200, 500];
-
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
 
   constructor(
     private dialogRef: MatDialogRef<UnitSearchDialogComponent>,
@@ -153,24 +157,30 @@ export class UnitSearchDialogComponent implements OnInit {
   ngOnInit(): void {
     this.unitSearchSubject.pipe(
       debounceTime(this.SEARCH_DEBOUNCE_TIME),
-      distinctUntilChanged()
+      distinctUntilChanged(),
+      takeUntilDestroyed(this.destroyRef)
     ).subscribe(searchText => {
+      if (this.searchMode !== 'unit') return;
       this.pageIndex = 0;
       this.searchUnits(searchText);
     });
 
     this.responseSearchSubject.pipe(
       debounceTime(this.SEARCH_DEBOUNCE_TIME),
-      distinctUntilChanged((prev, curr) => prev.value === curr.value && prev.variableId === curr.variableId && prev.unitName === curr.unitName && prev.status === curr.status && prev.codedStatus === curr.codedStatus && prev.group === curr.group && prev.code === curr.code)
+      distinctUntilChanged((prev, curr) => prev.value === curr.value && prev.variableId === curr.variableId && prev.unitName === curr.unitName && prev.status === curr.status && prev.codedStatus === curr.codedStatus && prev.group === curr.group && prev.code === curr.code),
+      takeUntilDestroyed(this.destroyRef)
     ).subscribe(searchParams => {
+      if (this.searchMode !== 'response') return;
       this.pageIndex = 0;
       this.searchResponses(searchParams);
     });
 
     this.bookletSearchSubject.pipe(
       debounceTime(this.SEARCH_DEBOUNCE_TIME),
-      distinctUntilChanged()
+      distinctUntilChanged(),
+      takeUntilDestroyed(this.destroyRef)
     ).subscribe(searchText => {
+      if (this.searchMode !== 'booklet') return;
       this.pageIndex = 0;
       this.searchBooklets(searchText);
     });
@@ -226,50 +236,54 @@ export class UnitSearchDialogComponent implements OnInit {
       return;
     }
 
+    this.searchCancel$.next();
+    this.isLoading.set(false);
     this.searchMode = mode;
     this.pageIndex = 0;
-    this.totalItems = 0;
-    this.unitSearchResults = [];
-    this.responseSearchResults = [];
-    this.bookletSearchResults = [];
+    this.totalItems.set(0);
+    this.unitSearchResults.set([]);
+    this.responseSearchResults.set([]);
+    this.bookletSearchResults.set([]);
   }
 
   searchUnits(unitName: string): void {
+    this.searchCancel$.next();
     if (!unitName || unitName.trim().length < 3) {
-      this.unitSearchResults = [];
-      this.totalItems = 0;
-      this.isLoading = false;
+      this.unitSearchResults.set([]);
+      this.totalItems.set(0);
+      this.isLoading.set(false);
       return;
     }
 
-    this.isLoading = true;
+    this.isLoading.set(true);
     this.testResultService.searchUnitsByName(
       this.appService.selectedWorkspaceId,
       unitName,
       this.pageIndex + 1,
       this.pageSize
-    ).subscribe({
+    ).pipe(takeUntil(this.searchCancel$), takeUntilDestroyed(this.destroyRef)).subscribe({
       next: response => {
-        this.unitSearchResults = response.data;
-        this.totalItems = response.total;
-        this.isLoading = false;
+        this.unitSearchResults.set(response.data);
+        this.totalItems.set(response.total);
+        this.isLoading.set(false);
       },
       error: () => {
-        this.unitSearchResults = [];
-        this.totalItems = 0;
-        this.isLoading = false;
+        this.unitSearchResults.set([]);
+        this.totalItems.set(0);
+        this.isLoading.set(false);
       }
     });
   }
 
   searchResponses(searchParams: { value?: string; variableId?: string; unitName?: string; status?: string; codedStatus?: string; group?: string; code?: string }): void {
-    this.isLoading = true;
+    this.searchCancel$.next();
+    this.isLoading.set(true);
     this.testResultService.getFlatResponses(
       this.appService.selectedWorkspaceId,
       { ...searchParams, page: this.pageIndex + 1, limit: this.pageSize }
-    ).subscribe({
+    ).pipe(takeUntil(this.searchCancel$), takeUntilDestroyed(this.destroyRef)).subscribe({
       next: response => {
-        this.responseSearchResults = response.data.map(r => ({
+        this.responseSearchResults.set(response.data.map(r => ({
           responseId: r.responseId,
           variableId: r.response,
           value: r.responseValue,
@@ -283,42 +297,43 @@ export class UnitSearchDialogComponent implements OnInit {
           personLogin: r.login,
           personCode: r.code,
           personGroup: r.group
-        }));
-        this.totalItems = response.total;
-        this.isLoading = false;
+        })));
+        this.totalItems.set(response.total);
+        this.isLoading.set(false);
       },
       error: () => {
-        this.responseSearchResults = [];
-        this.totalItems = 0;
-        this.isLoading = false;
+        this.responseSearchResults.set([]);
+        this.totalItems.set(0);
+        this.isLoading.set(false);
       }
     });
   }
 
   searchBooklets(bookletName: string): void {
+    this.searchCancel$.next();
     if (!bookletName || bookletName.trim().length < 3) {
-      this.bookletSearchResults = [];
-      this.totalItems = 0;
-      this.isLoading = false;
+      this.bookletSearchResults.set([]);
+      this.totalItems.set(0);
+      this.isLoading.set(false);
       return;
     }
 
-    this.isLoading = true;
+    this.isLoading.set(true);
     this.testResultService.searchBookletsByName(
       this.appService.selectedWorkspaceId,
       bookletName,
       this.pageIndex + 1,
       this.pageSize
-    ).subscribe({
+    ).pipe(takeUntil(this.searchCancel$), takeUntilDestroyed(this.destroyRef)).subscribe({
       next: response => {
-        this.bookletSearchResults = response.data;
-        this.totalItems = response.total;
-        this.isLoading = false;
+        this.bookletSearchResults.set(response.data);
+        this.totalItems.set(response.total);
+        this.isLoading.set(false);
       },
       error: () => {
-        this.bookletSearchResults = [];
-        this.totalItems = 0;
-        this.isLoading = false;
+        this.bookletSearchResults.set([]);
+        this.totalItems.set(0);
+        this.isLoading.set(false);
       }
     });
   }
@@ -348,18 +363,18 @@ export class UnitSearchDialogComponent implements OnInit {
       } as ConfirmDialogData
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
-        this.isLoading = true;
+        this.isLoading.set(true);
         this.unitService.deleteUnit(
           this.appService.selectedWorkspaceId,
           unit.unitId
-        ).subscribe({
+        ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
           next: response => {
-            this.isLoading = false;
+            this.isLoading.set(false);
             if (response.success) {
-              this.unitSearchResults = this.unitSearchResults.filter(u => u.unitId !== unit.unitId);
-              this.totalItems -= 1;
+              this.unitSearchResults.set(this.unitSearchResults().filter(u => u.unitId !== unit.unitId));
+              this.totalItems.update(total => total - 1);
               this.snackBar.open(
                 `Unit erfolgreich gelöscht. Unit ID: ${response.report.deletedUnit}`,
                 'Schließen',
@@ -374,7 +389,7 @@ export class UnitSearchDialogComponent implements OnInit {
             }
           },
           error: () => {
-            this.isLoading = false;
+            this.isLoading.set(false);
             this.snackBar.open(
               'Fehler beim Löschen der Unit. Bitte versuchen Sie es später erneut.',
               'Fehler',
@@ -397,18 +412,18 @@ export class UnitSearchDialogComponent implements OnInit {
       } as ConfirmDialogData
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
-        this.isLoading = true;
+        this.isLoading.set(true);
         this.responseService.deleteResponse(
           this.appService.selectedWorkspaceId,
           response.responseId
-        ).subscribe({
+        ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
           next: apiResponse => {
-            this.isLoading = false;
+            this.isLoading.set(false);
             if (apiResponse.success) {
-              this.responseSearchResults = this.responseSearchResults.filter(r => r.responseId !== response.responseId);
-              this.totalItems -= 1;
+              this.responseSearchResults.set(this.responseSearchResults().filter(r => r.responseId !== response.responseId));
+              this.totalItems.update(total => total - 1);
               this.snackBar.open(
                 `Antwort erfolgreich gelöscht. Antwort ID: ${apiResponse.report.deletedResponse}`,
                 'Schließen',
@@ -423,7 +438,7 @@ export class UnitSearchDialogComponent implements OnInit {
             }
           },
           error: () => {
-            this.isLoading = false;
+            this.isLoading.set(false);
             this.snackBar.open(
               'Fehler beim Löschen der Antwort. Bitte versuchen Sie es später erneut.',
               'Fehler',
@@ -436,7 +451,7 @@ export class UnitSearchDialogComponent implements OnInit {
   }
 
   deleteAllUnits(): void {
-    if (this.unitSearchResults.length === 0) {
+    if (this.unitSearchResults().length === 0) {
       this.snackBar.open(
         'Keine Aufgaben zum Löschen gefunden.',
         'Info',
@@ -449,27 +464,27 @@ export class UnitSearchDialogComponent implements OnInit {
       width: '400px',
       data: {
         title: 'Alle gefilterten Aufgaben löschen',
-        content: `Sind Sie sicher, dass Sie alle ${this.unitSearchResults.length} gefilterten Aufgaben löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
+        content: `Sind Sie sicher, dass Sie alle ${this.unitSearchResults().length} gefilterten Aufgaben löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
         confirmButtonLabel: 'Alle löschen',
         showCancel: true
       } as ConfirmDialogData
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
-        this.isLoading = true;
-        const unitIds = this.unitSearchResults.map(unit => unit.unitId);
+        this.isLoading.set(true);
+        const unitIds = this.unitSearchResults().map(unit => unit.unitId);
 
         this.unitService.deleteMultipleUnits(
           this.appService.selectedWorkspaceId,
           unitIds
-        ).subscribe({
+        ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
           next: response => {
-            this.isLoading = false;
+            this.isLoading.set(false);
             if (response.success) {
               const deletedCount = response.report.deletedUnits.length;
-              this.unitSearchResults = [];
-              this.totalItems = 0;
+              this.unitSearchResults.set([]);
+              this.totalItems.set(0);
               this.snackBar.open(
                 `${deletedCount} Aufgaben erfolgreich gelöscht.`,
                 'Schließen',
@@ -484,7 +499,7 @@ export class UnitSearchDialogComponent implements OnInit {
             }
           },
           error: () => {
-            this.isLoading = false;
+            this.isLoading.set(false);
             this.snackBar.open(
               'Fehler beim Löschen der Aufgaben. Bitte versuchen Sie es später erneut.',
               'Fehler',
@@ -497,7 +512,7 @@ export class UnitSearchDialogComponent implements OnInit {
   }
 
   deleteAllResponses(): void {
-    if (this.responseSearchResults.length === 0) {
+    if (this.responseSearchResults().length === 0) {
       this.snackBar.open(
         'Keine Antworten zum Löschen gefunden.',
         'Info',
@@ -510,21 +525,21 @@ export class UnitSearchDialogComponent implements OnInit {
       width: '400px',
       data: {
         title: 'Alle gefilterten Antworten löschen',
-        content: `Sind Sie sicher, dass Sie alle ${this.responseSearchResults.length} gefilterten Antworten löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
+        content: `Sind Sie sicher, dass Sie alle ${this.responseSearchResults().length} gefilterten Antworten löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
         confirmButtonLabel: 'Alle löschen',
         showCancel: true
       } as ConfirmDialogData
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
-        const responseIds = this.responseSearchResults.map(response => response.responseId);
+        const responseIds = this.responseSearchResults().map(response => response.responseId);
         let successCount = 0;
         let failCount = 0;
-        this.isLoading = true;
+        this.isLoading.set(true);
         const processNextResponse = (index: number) => {
           if (index >= responseIds.length) {
-            this.isLoading = false;
+            this.isLoading.set(false);
             this.snackBar.open(
               `${successCount} Antworten gelöscht, ${failCount} fehlgeschlagen.`,
               'OK',
@@ -545,7 +560,7 @@ export class UnitSearchDialogComponent implements OnInit {
           this.responseService.deleteResponse(
             this.appService.selectedWorkspaceId,
             responseIds[index]
-          ).subscribe({
+          ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
             next: response => {
               if (response.success) {
                 successCount += 1;
@@ -575,7 +590,7 @@ export class UnitSearchDialogComponent implements OnInit {
     this.fileService.getBookletInfo(
       this.appService.selectedWorkspaceId,
       booklet.bookletName
-    ).subscribe({
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (bookletInfo: BookletInfoDto) => {
         loadingSnackBar.dismiss();
 
@@ -612,19 +627,19 @@ export class UnitSearchDialogComponent implements OnInit {
       } as ConfirmDialogData
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
-        this.isLoading = true;
+        this.isLoading.set(true);
         this.testResultService.deleteBooklet(
           this.appService.selectedWorkspaceId,
           booklet.bookletId
-        ).subscribe({
+        ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
           next: (response: { success: boolean; report: { warnings: string[] } }) => {
             if (response.success) {
-              this.bookletSearchResults = this.bookletSearchResults.filter(
+              this.bookletSearchResults.set(this.bookletSearchResults().filter(
                 b => b.bookletId !== booklet.bookletId
-              );
-              this.totalItems -= 1;
+              ));
+              this.totalItems.update(total => total - 1);
 
               this.snackBar.open(
                 `Booklet "${booklet.bookletName}" wurde erfolgreich gelöscht.`,
@@ -638,7 +653,7 @@ export class UnitSearchDialogComponent implements OnInit {
                 { duration: 5000 }
               );
             }
-            this.isLoading = false;
+            this.isLoading.set(false);
           },
           error: () => {
             this.snackBar.open(
@@ -646,7 +661,7 @@ export class UnitSearchDialogComponent implements OnInit {
               'OK',
               { duration: 5000 }
             );
-            this.isLoading = false;
+            this.isLoading.set(false);
           }
         });
       }
@@ -654,7 +669,7 @@ export class UnitSearchDialogComponent implements OnInit {
   }
 
   deleteAllBooklets(): void {
-    if (this.bookletSearchResults.length === 0) {
+    if (this.bookletSearchResults().length === 0) {
       this.snackBar.open(
         'Keine Booklets zum Löschen gefunden.',
         'Info',
@@ -667,21 +682,21 @@ export class UnitSearchDialogComponent implements OnInit {
       width: '400px',
       data: {
         title: 'Alle gefilterten Booklets löschen',
-        content: `Sind Sie sicher, dass Sie alle ${this.bookletSearchResults.length} gefilterten Booklets löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
+        content: `Sind Sie sicher, dass Sie alle ${this.bookletSearchResults().length} gefilterten Booklets löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
         confirmButtonLabel: 'Alle löschen',
         showCancel: true
       } as ConfirmDialogData
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result) {
-        const bookletIds = this.bookletSearchResults.map(booklet => booklet.bookletId);
+        const bookletIds = this.bookletSearchResults().map(booklet => booklet.bookletId);
         let successCount = 0;
         let failCount = 0;
-        this.isLoading = true;
+        this.isLoading.set(true);
         const processNextBooklet = (index: number) => {
           if (index >= bookletIds.length) {
-            this.isLoading = false;
+            this.isLoading.set(false);
             this.snackBar.open(
               `${successCount} Booklets gelöscht, ${failCount} fehlgeschlagen.`,
               'OK',
@@ -694,7 +709,7 @@ export class UnitSearchDialogComponent implements OnInit {
           this.testResultService.deleteBooklet(
             this.appService.selectedWorkspaceId,
             bookletIds[index]
-          ).subscribe({
+          ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
             next: (response: { success: boolean }) => {
               if (response.success) {
                 successCount += 1;
