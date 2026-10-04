@@ -4,7 +4,8 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  OneToMany
+  OneToMany,
+  Index
 } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { CodingJobVariableBundle } from './coding-job-variable-bundle.entity';
@@ -14,12 +15,16 @@ import { CodingJobVariableBundle } from './coding-job-variable-bundle.entity';
  * A variable bundle is a collection of variables that can be used together
  */
 @Entity({ name: 'variable_bundle' })
+@Index(['workspace_id', 'creatorUserId'])
 export class VariableBundle {
   @PrimaryGeneratedColumn()
     id: number;
 
   @Column()
     workspace_id: number;
+
+  @Column({ name: 'creator_user_id', type: 'integer', nullable: true })
+    creatorUserId: number | null;
 
   @Column()
     name: string;
