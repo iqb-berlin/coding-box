@@ -99,7 +99,9 @@
         "cypress/zoneless/validation-access.cy.ts",
         "cypress/zoneless/test-results-view.cy.ts",
         "cypress/zoneless/info-dialogs.cy.ts",
-        "cypress/auth/coding-session.cy.ts"
+        "cypress/auth/coding-session.cy.ts",
+        "apps/frontend/src/app/ws-admin/components/search-dialogs-onpush.zoneless.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/variable-analysis-jobs-dialog/variable-analysis-jobs-dialog.component.zoneless.spec.ts"
       ]
     },
     {
@@ -224,9 +226,10 @@
       "areas": [
         "management",
         "files-exports-metadata",
-        "jobs"
+        "jobs",
+        "results-validation"
       ],
-      "evidence": "Vertauschte Listen-/Statistikantworten, Such- und Seitenwechsel sowie beide Abschlussreihenfolgen unabhängiger Anfragen."
+      "evidence": "Vertauschte Listen-/Statistikantworten, Such- und Seitenwechsel sowie beide Abschlussreihenfolgen unabhängiger Anfragen. Native OnPush-Tests verwerfen überholte Unit-/Booklet-Suchen und Analyse-Auftragsrefreshes."
     },
     {
       "id": "lifecycle",
@@ -270,6 +273,7 @@
   "unresolvedFindings": [],
   "residualLimits": [
     "Chart.js ist in JSDOM mit simulierter Canvas-API und im Electron-Browser mit echten gezeichneten Pixeln, Animationen und Beschriftungen geprüft. Ein vollständiges Screenreader-Gutachten, visuelle Identität zu ngx-charts und sämtliche Browser sind nicht nachgewiesen.",
+    "Alle 156 Anwendungskomponenten sind explizit OnPush. Die zusätzlich nativ geprüften UnitSearchDialog-, BookletSearchDialog- und VariableAnalysisJobsDialog-Komponenten haben aktuell keinen Aufrufer im Anwendungscode; diese Fälle belegen ihre realen Templates, keinen erreichbaren Browser-Einstieg. Die vorhandene Browser-Suite prüft die aktive Schnellsuche und andere erreichbare Abläufe. Ein CPU- oder Laufzeitvergleich ist nicht Bestandteil der Funktionsprüfung.",
     "Nicht jedes UI-Element, jede Template-Bindung oder jede Kombination von Aktionen ist einzeln nachgewiesen. Das detaillierte Inventar bleibt eine Suchhilfe.",
     "Nicht alle Dialogeinbettungen, Rollen je Einzelaktion, Trainingsvarianten und Metadatenfeldtypen sind im Browser geprüft.",
     "Browsernachweise prüfen verzögerte Schulungslisten, Auswahl und Filter sowie den erreichbaren Bulk-Definitionsablauf mit fertiger Serververteilung. Die zusätzliche interne asynchrone Bulk-Berechnung (ZL-034) hat weiterhin keinen Template-Einstieg und bleibt nativ geprüft. Der Schulungsvergleich übernimmt am erreichbaren Einstieg die bereits gecachte Liste; sein separater verspäteter Listenabruf (ZL-035) bleibt nativ geprüft. Browser-Anmeldung und API-Antworten dieser zusätzlichen Fälle sind synthetisch und belegen keine reale Backend-Persistenz oder Autorisierung.",
