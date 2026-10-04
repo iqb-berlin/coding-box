@@ -1466,7 +1466,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           metadataValues: vomdData,
           resolver: resolver,
           language: 'de',
-          mode: 'readonly'
+          mode: 'edit'
         }
       });
 
