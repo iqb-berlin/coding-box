@@ -2,8 +2,8 @@
   <div class="object-list fx-column-start-stretch fx-flex-row-50">
     <coding-box-workspaces-menu
       [selectedWorkspaces]="selectedWorkspaces()"
-      [selectedRows]="tableSelectionRow.selected"
-      [checkedRows]="tableSelectionCheckboxes.selected"
+      [selectedRows]="selectedWorkspaceRows()"
+      [checkedRows]="selectedWorkspaceRows()"
       (workspaceAdded)="addWorkspace($event)"
       (workspaceEdited)="editWorkspace($event)"
       (workspaceDeleted)="deleteWorkspace($event)"

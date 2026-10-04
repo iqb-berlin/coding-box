@@ -8,7 +8,6 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { finalize, timer } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSort } from '@angular/material/sort';
-import { UntypedFormGroup } from '@angular/forms';
 import { TranslateService } from '@ngx-translate/core';
 import { SelectionModel } from '@angular/cdk/collections';
 import { UsersSelectionComponent } from '../users-selection/users-selection.component';
@@ -18,6 +17,7 @@ import { UserBackendService } from '../../../shared/services/user/user-backend.s
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
 import { AppService } from '../../../core/services/app.service';
 import { CreateUserDto } from '../../../../../../../api-dto/user/create-user-dto';
+import { CreateUserForm, EditUserForm } from '../../models/user-form.model';
 import { UsersMenuComponent } from '../users-menu/users-menu.component';
 import {
   hasCurrentAuthDataAfterMutation,
@@ -90,14 +90,17 @@ export class UsersComponent implements OnInit {
     );
   }
 
-  addUser(userData: UntypedFormGroup): void {
+  addUser(userData: CreateUserForm): void {
     this.appService.dataLoading = true;
+    const {
+      name: username, isAdmin, firstName, lastName, email
+    } = userData.getRawValue();
     const user: CreateUserDto = {
-      username: userData.get('name')?.value,
-      isAdmin: userData.get('isAdmin')?.value,
-      firstName: userData.get('firstName')?.value,
-      lastName: userData.get('lastName')?.value,
-      email: userData.get('email')?.value
+      username,
+      isAdmin,
+      firstName,
+      lastName,
+      email
     };
     this.userBackendService.addUser(user).subscribe(
       respOk => {
@@ -123,12 +126,11 @@ export class UsersComponent implements OnInit {
     this.selectedRows.set(userData);
   }
 
-  editUser(value: { selection: UserFullDto[], user: UntypedFormGroup }): void {
+  editUser(value: { selection: UserFullDto[], user: EditUserForm }): void {
     this.appService.dataLoading = true;
     const changedData: UserFullDto = {
       id: value.selection[0].id,
-      username: value.user.get('username')?.value,
-      isAdmin: value.user.get('isAdmin')?.value
+      ...value.user.getRawValue()
     };
     this.userBackendService.changeUserData(this.authData().userId, changedData).subscribe(
       respOk => {

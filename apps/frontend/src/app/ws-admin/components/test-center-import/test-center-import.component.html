@@ -90,7 +90,7 @@
         Angemeldet in
         {{
           this.testCenterInstance()[0]?.label ||
-            this.loginForm.get('testCenterIndividual')?.value
+            loginForm.controls.testCenterIndividual.value
         }}
       </h3>
     </div>
@@ -145,7 +145,7 @@
                 Importiert Testergebnisse der Teilnehmenden
               </div>
             </div>
-            @if (importFilesForm.get('responses')?.value) {
+            @if (importFilesForm.controls.responses.value) {
             <mat-form-field appearance="outline">
               <mat-label>Umgang mit vorhandenen Antworten</mat-label>
               <mat-select formControlName="responseOverwriteMode">

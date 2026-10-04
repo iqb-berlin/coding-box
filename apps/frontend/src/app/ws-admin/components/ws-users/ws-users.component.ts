@@ -36,7 +36,8 @@ import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
 import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 import { MessageDialogComponent, MessageDialogData, MessageType } from '../../../shared/dialogs/message-dialog.component';
-import { EditUserComponent } from '../../../sys-admin/components/edit-user/edit-user.component';
+import { EditUserComponent, EditUserData } from '../../../sys-admin/components/edit-user/edit-user.component';
+import { EditUserForm } from '../../../sys-admin/models/user-form.model';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 import {
   WorkspaceAccessRightsDialogComponent
@@ -153,19 +154,11 @@ export class WsUsersComponent implements OnInit {
         }
       });
     } else {
-      const dialogRef = this.editUserDialog.open(EditUserComponent, {
+      this.editUserDialog.open<EditUserComponent, EditUserData, EditUserForm | false>(EditUserComponent, {
         width: '600px',
         data: {
-          name: selectedRows[0].username,
+          username: selectedRows[0].username,
           isAdmin: selectedRows[0].isAdmin
-        }
-      });
-
-      dialogRef.afterClosed().subscribe(result => {
-        if (typeof result !== 'undefined') {
-          if (result !== false) {
-            // this.userEdited.emit({ selection: selectedRows, user: result as UntypedFormGroup });
-          }
         }
       });
     }

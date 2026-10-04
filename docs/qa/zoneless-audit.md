@@ -2116,3 +2116,68 @@ Live-Backend-/Keycloak- und Replay-Targets wurden für diese Änderung nicht
 nochmals ausgeführt. Die vorhandenen CI-Browserjobs übernehmen die erweiterte
 Spezifikation automatisch; ihre Ergebnisse für den neuen Commit sind separat
 zu prüfen.
+
+
+### Typisierte Reactive Forms am 04.10.2026
+
+Basis: PR-Head `fe5caf6a718cb89e098f63e6e8e8aa8de43148cb`.
+Der Anwendungscode enthält keine `UntypedFormGroup`, `UntypedFormBuilder`
+oder `UntypedFormControl` mehr. Die vier aktiven Formulargruppen für
+Benutzerbearbeitung, Workspace-Bearbeitung und Testcenter-Anmeldung/-Import
+verwenden `NonNullableFormBuilder`, konkrete Control-Typen beziehungsweise
+vollständig inferierte Control-Maps. Optionale Felder des weiterhin vorhandenen
+Benutzeranlage-Vertrags sind als optionale Controls modelliert. Es gibt keinen
+Ersatz durch `FormGroup<any>` oder Typbehauptungen auf untypisierte Formulare.
+
+Textfelder und Checkboxen setzen sich auf ihre Anfangswerte zurück, statt
+bei `reset()` zu `null` zu werden. Die Testcenter-Auswahl ist `number | ''`,
+mit leerem Anfangswert und bestehender Pflichtfeldprüfung; der Überschreibmodus
+ist ausdrücklich `TestResultsOverwriteMode`. `getRawValue()` und konkrete
+Controls erhalten auch deaktivierte Feldwerte und boolesches `false` bei der
+DTO-Übergabe. Dialogdaten, Ergebnisse und Menü-Outputs sind für Benutzer- und
+Workspace-Editoren typisiert; Abbruch und Schließen lösen keine Mutation aus.
+
+Die typisierten Dialogdaten deckten fehlerhafte Workspace-Übergaben auf:
+Der Anlagepfad übergab `wsg` statt `ws`, der Bearbeitungspfad nur eine ID
+statt eines Workspace-Datensatzes. Der über die Tabelle ausgewählte Datensatz
+wird jetzt bis zum Editor übergeben. `selectedWorkspaceRows` ist die einzige
+Auswahlquelle im übergeordneten Baustein; IDs werden daraus mit `computed`
+abgeleitet. Die beim Öffnen gewählte ID wird beim Speichern verwendet, auch
+wenn sich die Auswahl während eines geöffneten Dialogs ändert. Browserfälle
+belegen Pflichtfeld-/Mindestlängenprüfung, Vorbefüllung, Anlegen, Umbenennen
+und Abbruch; ein Menütest prüft den zwischenzeitlichen Auswahlwechsel.
+
+Testcenter-Importoptionen bleiben im Frontend boolesch. Erst der unveränderte
+HTTP-Adapter serialisiert sie in die bestehenden String-Queryparameter.
+Shared DTOs und Backend-Implementierung sind unverändert. Der Formulartyp
+verhindert, dass String-Flags versehentlich als wahr interpretiert werden.
+Für individuelle Testcenter-URLs bleibt Auswahl-ID 6 im Formular und im
+Auswahlcache; bei der Anmeldung wird das vom vorhandenen Backend benötigte
+leere Serverfeld gesendet. Ein unvollständiges Login per Enter sendet keine
+Anmeldeanfrage. Die Browserregression prüft Standard-Testcenter und individuelle
+URL einschließlich Request-Body, Importparametern, verzögerter Antwort,
+Fehleranzeige und Wiederholung.
+
+Veraltete FormGroup-Rückgabealternativen der Importdialog-Aufrufer sind
+bereinigt; deren vorhandene Ergebnis-/Refreshpfade bleiben erhalten.
+
+### Lokale Abschlussprüfungen der Formularmigration am 04.10.2026
+
+| Prüfung | Ergebnis |
+|---|---|
+| `frontend:lint` | bestanden |
+| `frontend:test --runInBand` | 2.699 Tests / 256 Suites bestanden |
+| `frontend:test-zoneless --runInBand` | 920 Tests / 61 Suites bestanden |
+| `frontend:build` | optimierter Produktionsbuild mit strenger Formular-/Template-Typprüfung bestanden |
+| Cypress, gezielte Produktions-Browserregressionen | 14 Fälle / drei Spezifikationen bestanden, keine Retries: `admin-forms`, `testcenter-import`, `workspace-access-rights` |
+| `frontend:zoneless-approval` | 8.750 Inventareinträge; sechs Bereiche, sieben Mechanismen und 46 korrigierte Befunde; Referenzen gültig |
+| Quellcodeprüfung | keine `UntypedFormGroup`-/`UntypedFormBuilder`-/`UntypedFormControl`-Verwendungen oder `FormGroup<any>` im Anwendungscode |
+
+Die Browserregressionen verwenden Electron 138, optimierte Produktionsbundles
+über einen lokalen HTTP-Server und kontrollierte API-Antworten. Sie prüfen die
+Formularzustände, Request-Daten und verzögerte Darstellung; reale Backend-
+Persistenz und Autorisierung sind damit nicht belegt. Live-Backend-/Keycloak-
+und Replay-Targets wurden für diese Änderung nicht erneut ausgeführt. Die
+vollständige Produktions-Browsersuite wurde für die Formularmigration nicht
+wiederholt. Der bestehende CI-Browserjob nimmt die neue Spezifikation über
+sein Glob automatisch auf; Remote-CI-Ergebnisse sind separat zu prüfen.

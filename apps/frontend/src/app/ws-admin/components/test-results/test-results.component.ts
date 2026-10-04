@@ -17,7 +17,7 @@ import {
 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
-import { FormsModule, UntypedFormGroup } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   MatPaginator,
@@ -2086,7 +2086,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           resultType?: 'logs' | 'responses';
         }
         | boolean
-        | UntypedFormGroup
         | undefined;
 
       if (
@@ -2248,7 +2247,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         })();
       }
 
-      if (result instanceof UntypedFormGroup || result) {
+      if (result) {
         if (workspaceId) {
           this.testResultService.invalidateCache(workspaceId);
         }

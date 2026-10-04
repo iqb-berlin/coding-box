@@ -1,11 +1,10 @@
 import {
-  Component, ViewChild, inject, signal
+  Component, ViewChild, computed, inject, signal
 } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSort } from '@angular/material/sort';
-import { FormsModule, UntypedFormGroup } from '@angular/forms';
-import { SelectionModel } from '@angular/cdk/collections';
+import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { map } from 'rxjs';
 import { WorkspacesMenuComponent } from '../workspaces-menu/workspaces-menu.component';
@@ -13,17 +12,12 @@ import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
-import { CreateWorkspaceDto } from '../../../../../../../api-dto/workspaces/create-workspace-dto';
+import { EditWorkspaceForm } from '../../../workspace/components/edit-workspace/edit-workspace.component';
 import {
   MutationAuthDataRefreshResult,
   hasCurrentAuthDataAfterMutation,
   runMutationAndRefreshAuthData
 } from '../../../core/utils/auth-data-refresh';
-
-type WorkspaceData = {
-  id: number;
-  name: string;
-};
 
 @Component({
   selector: 'coding-box-workspaces',
@@ -37,21 +31,20 @@ export class WorkspacesComponent {
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
 
-  tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
-  tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
   readonly initialSelectedWorkspaceIds: number[] = [];
-  readonly selectedWorkspaces = signal<number[]>([]);
+  readonly selectedWorkspaceRows = signal<WorkspaceInListDto[]>([]);
+  readonly selectedWorkspaces = computed(() => this.selectedWorkspaceRows().map(workspace => workspace.id));
   readonly workspacesChanged = signal<boolean>(false);
   readonly isDeleting = signal<boolean>(false);
   readonly deleteStatus = signal<string>('');
 
   @ViewChild(MatSort) sort = new MatSort();
 
-  addWorkspace(result: UntypedFormGroup): void {
+  addWorkspace(result: EditWorkspaceForm): void {
     runMutationAndRefreshAuthData(
       this.appService,
-      this.workspaceBackendService.addWorkspace(<CreateWorkspaceDto>{
-        name: (<UntypedFormGroup>result).get('name')?.value,
+      this.workspaceBackendService.addWorkspace({
+        name: result.controls.name.value,
         settings: {}
       }).pipe(map(workspaceId => workspaceId !== null))
     ).subscribe(
@@ -69,12 +62,12 @@ export class WorkspacesComponent {
     );
   }
 
-  editWorkspace(value: { selection: number[], formData: UntypedFormGroup }): void {
+  editWorkspace(value: { selection: number[], formData: EditWorkspaceForm }): void {
     runMutationAndRefreshAuthData(
       this.appService,
       this.workspaceBackendService.changeWorkspace({
         id: value.selection[0],
-        name: value.formData.get('name')?.value
+        name: value.formData.controls.name.value
       })
     )
       .subscribe(
@@ -145,8 +138,8 @@ export class WorkspacesComponent {
     this.workspacesChanged.set(false);
   }
 
-  workspaceSelectionChanged(workspaceData: WorkspaceData[]): void {
-    this.selectedWorkspaces.set(workspaceData.map(workspace => workspace.id));
+  workspaceSelectionChanged(workspaceData: WorkspaceInListDto[]): void {
+    this.selectedWorkspaceRows.set([...workspaceData]);
   }
 
   setWorkspaceUsersAccessRight(users: number[]): void {

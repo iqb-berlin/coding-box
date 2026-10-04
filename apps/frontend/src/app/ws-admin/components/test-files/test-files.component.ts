@@ -5,7 +5,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
-import { UntypedFormGroup, FormsModule } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { MatSort } from '@angular/material/sort';
 import {
   MatCell,
@@ -886,7 +886,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           overwriteSelectedCount?: number;
         }
         | boolean
-        | UntypedFormGroup
         | undefined;
 
       if (
@@ -926,7 +925,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         return;
       }
 
-      if (result instanceof UntypedFormGroup || result) {
+      if (result) {
         this.loadTestFiles();
       }
     });
