@@ -1,5 +1,5 @@
 import {
-  ChangeDetectorRef, Component, Inject, OnInit, OnDestroy, computed, inject, signal
+  ChangeDetectorRef, Component, Inject, OnInit, OnDestroy, computed, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
@@ -172,6 +172,7 @@ interface DistributionPreviewSummary {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coding-job-definition-dialog',
   templateUrl: './coding-job-definition-dialog.component.html',
   styleUrls: ['./coding-job-definition-dialog.component.scss'],
@@ -635,6 +636,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     this.distributionPreviewSummary = null;
+    this.changeDetectorRef.markForCheck();
     this.distributionPreviewRefresh$.next();
   }
 

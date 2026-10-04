@@ -1,5 +1,5 @@
 import {
-  Component, input, output, OnInit, AfterViewInit, OnDestroy, ElementRef, viewChild
+  Component, input, output, OnInit, AfterViewInit, OnDestroy, ElementRef, viewChild, ChangeDetectionStrategy, signal
 } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -21,6 +21,7 @@ import {
 import { WrappedIconComponent } from '../wrapped-icon/wrapped-icon.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-search-filter',
   templateUrl: './search-filter.component.html',
   styleUrls: ['./search-filter.component.scss'],
@@ -39,7 +40,7 @@ import { WrappedIconComponent } from '../wrapped-icon/wrapped-icon.component';
 export class SearchFilterComponent implements OnInit, AfterViewInit, OnDestroy {
   readonly filterInput = viewChild.required<ElementRef<HTMLInputElement>>('filterInput');
 
-  value: string = '';
+  readonly value = signal<string>('');
   readonly title = input.required<string>();
   readonly initialValue = input<string>('');
   readonly invalid = input<boolean>(false);
@@ -51,7 +52,7 @@ export class SearchFilterComponent implements OnInit, AfterViewInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   ngOnInit(): void {
-    this.value = this.initialValue();
+    this.value.set(this.initialValue());
   }
 
   ngAfterViewInit(): void {
@@ -64,8 +65,8 @@ export class SearchFilterComponent implements OnInit, AfterViewInit, OnDestroy {
         takeUntil(this.destroy$)
       )
       .subscribe(() => {
-        this.value = this.filterInput().nativeElement.value;
-        this.valueChange.emit(this.value);
+        this.value.set(this.filterInput().nativeElement.value);
+        this.valueChange.emit(this.value());
       });
   }
 
@@ -75,8 +76,8 @@ export class SearchFilterComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   clearFilter(): void {
-    this.value = '';
+    this.value.set('');
     this.filterInput().nativeElement.value = '';
-    this.valueChange.emit(this.value);
+    this.valueChange.emit(this.value());
   }
 }
