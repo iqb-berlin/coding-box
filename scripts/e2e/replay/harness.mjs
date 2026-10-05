@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import AdmZip from 'adm-zip';
+import { findComposeContainer } from './compose-container.mjs';
 
 const REQUIRED_ENV = [
   'REPLAY_E2E_API_URL',
@@ -35,7 +36,19 @@ export function createReplayHarness(environment = process.env) {
       }
 
       activeState = await setupReplayWorkspace(config);
+      if (environment.REPLAY_E2E_AUTH === 'true') {
+        const { setupCodingFixture } = await import('./auth-fixture.mjs');
+        Object.assign(activeState.browser, await setupCodingFixture(activeState, environment));
+      }
       return activeState.browser;
+    },
+
+    async prepareImportedCoding() {
+      if (!activeState || environment.REPLAY_E2E_AUTH !== 'true') {
+        throw new Error('Imported coding setup requires the isolated authentication fixture.');
+      }
+      const { prepareImportedCoding } = await import('./workflow-fixture.mjs');
+      return prepareImportedCoding(activeState);
     },
 
     async verifyItemMatrix() {
@@ -427,10 +440,11 @@ async function seedIncompleteItemMatrixFixture(config, workspaceId) {
     )
     SELECT COUNT(*) FROM updated_responses;
   `;
+  const dbContainer = await findComposeContainer(config.composeProject, 'db');
   const output = await runCapture('docker', [
     'exec',
     '-i',
-    `${config.composeProject}-db-1`,
+    dbContainer,
     'psql',
     '--username=replay_e2e',
     '--dbname=replay_e2e',
@@ -703,7 +717,7 @@ function createAdminToken(config) {
   const now = Math.floor(Date.now() / 1000);
   return signHs256(
     {
-      iss: ISSUER,
+      iss: config.issuer || ISSUER,
       sub: `replay-e2e-admin-${config.runId}`,
       aud: CLIENT_ID,
       azp: CLIENT_ID,
@@ -750,6 +764,7 @@ function readConfig(environment) {
   }
 
   return {
+    issuer: environment.REPLAY_E2E_OIDC_ISSUER,
     apiUrl: environment.REPLAY_E2E_API_URL,
     baseUrl: environment.REPLAY_E2E_BASE_URL,
     cacheDir: path.resolve(environment.REPLAY_E2E_CACHE_DIR),
