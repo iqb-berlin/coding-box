@@ -2925,7 +2925,7 @@ describe('CodingManagementManualComponent', () => {
     );
   });
 
-  it('should show a specific error when replay export auth token creation fails', () => {
+  it('releases manual export startup without duplicating replay token error feedback', () => {
     const exportJobService = TestBed.inject(ExportJobService) as unknown as {
       startJob: jest.Mock;
     };
@@ -2958,14 +2958,8 @@ describe('CodingManagementManualComponent', () => {
       jobDefinitionIds: [11]
     });
 
-    expect(snackBar.open).toHaveBeenCalledWith(
-      'Replay-Links konnten nicht vorbereitet werden, weil kein Auth-Token erstellt werden konnte. Exportjob wurde nicht gestartet.',
-      'Schließen',
-      {
-        duration: 5000,
-        panelClass: ['error-snackbar']
-      }
-    );
+    expect(snackBar.open).not.toHaveBeenCalled();
+    expect(component.isStartingManualExport()).toBe(false);
   });
 
   it('should wait for coder scope before opening execution export dialog', () => {

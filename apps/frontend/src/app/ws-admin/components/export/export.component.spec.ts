@@ -888,16 +888,12 @@ describe('ExportComponent', () => {
     expect(component.psychometricMappingIssueDetails()).toBe('');
   });
 
-  it('shows an error when the export job cannot be started', () => {
+  it('releases startup state without duplicating the service error notification', () => {
     startJob.mockReturnValueOnce(throwError(() => new Error('start failed')));
 
     component.onExport();
 
-    expect(snackOpen).toHaveBeenCalledWith(
-      'Datenexport konnte nicht gestartet werden',
-      'Schließen',
-      { duration: 5000 }
-    );
+    expect(snackOpen).not.toHaveBeenCalled();
     expect(component.isStartingExport()).toBe(false);
   });
   it('renders a delayed server response without another user action', async () => {
