@@ -10,7 +10,7 @@ import {
 import { MatButton } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import {
-  of, catchError, finalize, map, switchMap
+  of, catchError, finalize, map, switchMap, take, takeUntil
 } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDivider } from '@angular/material/divider';
@@ -372,9 +372,12 @@ export class SchemeEditorDialogComponent implements OnInit {
   private navigateToCodingStatusOnAction(
     snackBarRef: ReturnType<MatSnackBar['open']> | undefined
   ): void {
-    snackBarRef?.onAction().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
-      this.router.navigate(
-        [`/workspace-admin/${this.data.workspaceId}/coding/management`],
+    if (!snackBarRef) return;
+    const workspaceId = this.data.workspaceId;
+    const router = this.router;
+    snackBarRef.onAction().pipe(take(1), takeUntil(snackBarRef.afterDismissed())).subscribe(() => {
+      router.navigate(
+        [`/workspace-admin/${workspaceId}/coding/management`],
         { queryParams: { refreshCodingFreshness: '1' } }
       );
     });

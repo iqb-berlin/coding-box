@@ -68,7 +68,8 @@ describe('SchemeEditorDialogComponent', () => {
     snackBarAction$ = new Subject<void>();
     mockSnackBar = {
       open: jest.fn().mockReturnValue({
-        onAction: () => snackBarAction$.asObservable()
+        onAction: () => snackBarAction$.asObservable(),
+        afterDismissed: () => new Subject<void>().asObservable()
       })
     };
 

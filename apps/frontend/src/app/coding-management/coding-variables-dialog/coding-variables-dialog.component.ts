@@ -24,7 +24,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
-import { forkJoin } from 'rxjs';
+import { finalize, forkJoin } from 'rxjs';
 import { FileService } from '../../shared/services/file/file.service';
 import {
   FileBackendService,
@@ -418,10 +418,10 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
       { duration: 0 }
     );
 
-    this.fileService.getUnitInfo(this.data.workspaceId, unitId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+    this.fileService.getUnitInfo(this.data.workspaceId, unitId).pipe(
+      takeUntilDestroyed(this.destroyRef), finalize(() => loadingSnackBar.dismiss())
+    ).subscribe({
       next: (unitInfo: UnitInfoDto) => {
-        loadingSnackBar.dismiss();
-
         this.dialog.open(UnitInfoDialogComponent, {
           width: '1200px',
           height: '80vh',
@@ -446,10 +446,10 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
       { duration: 0 }
     );
 
-    this.fileService.getCodingSchemeFile(this.data.workspaceId, codingSchemeRef).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+    this.fileService.getCodingSchemeFile(this.data.workspaceId, codingSchemeRef).pipe(
+      takeUntilDestroyed(this.destroyRef), finalize(() => loadingSnackBar.dismiss())
+    ).subscribe({
       next: (schemeFile: FileDownloadDto | null) => {
-        loadingSnackBar.dismiss();
-
         if (!schemeFile) {
           this.snackBar.open(
             'Kodierungsschema-Datei nicht gefunden',

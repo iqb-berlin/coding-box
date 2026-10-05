@@ -46,6 +46,7 @@ describe('Schemer preview without Zone.js', () => {
   let mockTranslateService: Partial<TranslateService>;
   let mockRouter: Partial<Router>;
   let snackBarAction$: Subject<void>;
+  let snackBarDismissed$: Subject<void>;
 
   const mockData: SchemeEditorDialogData = {
     workspaceId: 1,
@@ -81,9 +82,11 @@ describe('Schemer preview without Zone.js', () => {
     };
 
     snackBarAction$ = new Subject<void>();
+    snackBarDismissed$ = new Subject<void>();
     mockSnackBar = {
       open: jest.fn().mockReturnValue({
-        onAction: () => snackBarAction$.asObservable()
+        onAction: () => snackBarAction$.asObservable(),
+        afterDismissed: () => snackBarDismissed$.asObservable()
       })
     };
 
@@ -134,6 +137,36 @@ describe('Schemer preview without Zone.js', () => {
     filesResponse$.next({ data: files });
     filesResponse$.complete();
   }
+
+  it('keeps the coding status action usable after a successful save closes the editor', async () => {
+    await createPreview();
+    list([]);
+    component.onSchemeChanged({ scheme: '{"updated":true}', schemeType: 'iqb@3.0' });
+    jest.mocked(mockFileService.getFilesList!).mockReturnValueOnce(of({ data: [] }) as never);
+    component.save();
+    expect(mockDialogRef.close).toHaveBeenCalledWith(true);
+    fixture.destroy();
+    snackBarAction$.next();
+    expect(mockRouter.navigate).toHaveBeenCalledWith(
+      ['/workspace-admin/1/coding/management'],
+      { queryParams: { refreshCodingFreshness: '1' } }
+    );
+    snackBarAction$.next();
+    expect(mockRouter.navigate).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases a dismissed coding status action without retaining its editor', async () => {
+    await createPreview();
+    list([]);
+    component.onSchemeChanged({ scheme: '{"updated":true}', schemeType: 'iqb@3.0' });
+    jest.mocked(mockFileService.getFilesList!).mockReturnValueOnce(of({ data: [] }) as never);
+    component.save();
+    fixture.destroy();
+    snackBarDismissed$.next();
+    expect(snackBarAction$.observed).toBe(false);
+    snackBarAction$.next();
+    expect(mockRouter.navigate).not.toHaveBeenCalled();
+  });
 
   it('renders the referenced Schemer after a delayed list and download without another click', async () => {
     await createPreview();
