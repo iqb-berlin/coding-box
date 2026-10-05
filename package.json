@@ -145,6 +145,7 @@
     "jest": "30.5.2",
     "jest-canvas-mock": "2.5.8",
     "jest-environment-jsdom": "30.5.2",
+    "jest-junit": "17.0.0",
     "jest-preset-angular": "16.2.0",
     "nx": "22.7.12",
     "prisma": "^5.10.2",

@@ -6,7 +6,7 @@ import { MatPaginator } from '@angular/material/paginator';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { By } from '@angular/platform-browser';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Observable, of, Subject } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
@@ -344,6 +344,69 @@ describe('DoubleCodedReviewComponent', () => {
   afterEach(() => {
     overlayContainer.ngOnDestroy();
     sessionStorage.clear();
+  });
+
+  it('keeps GeoGebra answers compact in review rows', () => {
+    for (const value of ['UEsDBAoAAAAAA', 'data:application/zip;base64,UEsDBAoAAAAAA']) {
+      expect(component.isGeoGebraAnswer(value)).toBe(true);
+      expect(component.getAnswerDisplay(value)).toBe('double-coded-review.values.geogebra-answer');
+      expect(component.getAnswerTooltip(value)).toBe('double-coded-review.values.geogebra-tooltip');
+    }
+  });
+
+  it('selects the newest active definition and omits scopes without jobs', async () => {
+    const facade = TestBed.inject(CodingFacadeService);
+    jest.spyOn(facade, 'getJobDefinitions').mockReturnValue(of([
+      { id: 1, status: 'approved', createdJobsCount: 0 },
+      { id: 3, status: 'approved', createdJobsCount: 2 },
+      { id: 2, status: 'pending_review', createdJobsCount: 1 }
+    ]));
+    jest.spyOn(facade, 'getCoderTrainings').mockReturnValue(of([5, 6].map(id => ({
+      id,
+      workspace_id: 1,
+      label: id === 5 ? 'Training A' : 'Training B',
+      jobsCount: id === 5 ? 0 : 1,
+      created_at: new Date(),
+      updated_at: new Date()
+    }))));
+    jest.spyOn(TestBed.inject(TranslateService), 'instant').mockImplementation(key => ({
+      'coding-job-definition-dialog.status.definition.approved': 'Genehmigt',
+      'coding-job-definition-dialog.status.definition.pending-review': 'Warten auf Genehmigung',
+      'double-coded-review.filter.job-count-singular': 'Kodierjob',
+      'double-coded-review.filter.job-count-plural': 'Kodierjobs'
+    }[String(key)] || key));
+    component.scopeControl.setValue(['job_99'], { emitEvent: false });
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(component.scopeControl.value).toEqual(['job_3']);
+    expect(component.availableJobDefinitions()).toEqual([
+      { id: 3, label: 'Definition #3 (Genehmigt), 2 Kodierjobs' },
+      { id: 2, label: 'Definition #2 (Warten auf Genehmigung), 1 Kodierjob' }
+    ]);
+    expect(component.availableCoderTrainings()).toEqual([
+      { id: 6, label: 'Training B (1 Kodierjob)' }
+    ]);
+  });
+
+  it('does not request review data when no scopes have jobs', async () => {
+    const facade = TestBed.inject(CodingFacadeService);
+    jest.spyOn(facade, 'getJobDefinitions').mockReturnValue(of([
+      { id: 1, status: 'approved', createdJobsCount: 0 }
+    ]));
+    const api = TestBed.inject(DoubleCodedReviewApiService);
+    const request = jest.spyOn(api, 'getDoubleCodedVariablesForReview');
+    component.scopeControl.setValue(['job_99'], { emitEvent: false });
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(component.scopeControl.value).toEqual([]);
+    expect(component.hasScopeOptions()).toBe(false);
+    expect(component.allData()).toEqual([]);
+    expect(component.dataSource.data).toEqual([]);
+    expect(component.totalItems()).toBe(0);
+    expect(component.getScopeSelectionSummary()).toBe('double-coded-review.filter.scope-none');
+    expect(request).not.toHaveBeenCalled();
   });
 
   it('allows applying decisions only with study-manager permission', () => {
