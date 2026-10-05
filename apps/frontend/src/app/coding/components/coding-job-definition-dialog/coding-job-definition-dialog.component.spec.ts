@@ -1,3 +1,6 @@
+import { MAT_TABS_CONFIG } from '@angular/material/tabs';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
+import { MatTabGroupHarness } from '@angular/material/tabs/testing';
 import {
   ComponentFixture, TestBed, fakeAsync, tick
 } from '@angular/core/testing';
@@ -779,6 +782,27 @@ describe('CodingJobDefinitionDialogComponent', () => {
         includeDeriveError: true
       }]
     }));
+  });
+
+  it('preserves the Space default of the nested DERIVE_ERROR checkbox', async () => {
+    TestBed.overrideProvider(MAT_TABS_CONFIG, { useValue: { animationDuration: '0ms' } });
+    createComponent(undefined, true);
+    component.selectedVariables().select(mockVariables[0]);
+    const tabs = await TestbedHarnessEnvironment.loader(fixture).getHarness(MatTabGroupHarness);
+    await tabs.selectTab({ label: 'Einzelne Variablen' });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const checkbox = fixture.nativeElement.querySelector('.derive-error-option input[type="checkbox"]') as HTMLInputElement;
+    expect(checkbox).not.toBeNull();
+    expect(checkbox.disabled).toBe(false);
+    const event = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+    checkbox.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(component.isVariableSelected(mockVariables[0])).toBe(true);
+    checkbox.click();
+    await fixture.whenStable();
+    expect(component.isDeriveErrorIncluded(component.variables()[0])).toBe(true);
   });
 
   it('should show the DERIVE_ERROR opt-in only for variables with DERIVE_ERROR responses', () => {

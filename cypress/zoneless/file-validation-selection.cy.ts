@@ -35,7 +35,7 @@ describe('Zoneless TestTaker selection batches', () => {
     cy.wait('@authData');
     cy.window().then(win => { win.location.hash = '/workspace-admin/5/test-files'; });
     cy.wait('@files');
-    cy.get('coding-box-test-files').contains('a', 'Validieren').click();
+    cy.get('coding-box-test-files').contains('button', 'Validieren').click();
     cy.wait('@validation');
     cy.get('files-validation-dialog').contains('mat-expansion-panel-header', 'TestTaker zum Filtern').click();
   });

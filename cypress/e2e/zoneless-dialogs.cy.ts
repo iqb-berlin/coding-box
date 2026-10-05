@@ -33,7 +33,7 @@ describe('Zoneless asynchronous dialogs', () => {
     cy.wait('@authData');
     cy.window().then(win => { win.location.hash = '/workspace-admin/5/test-files'; });
     cy.wait('@files');
-    cy.contains('a', 'ACP aus Content Pool').should('be.visible').and('not.have.attr', 'aria-disabled', 'true').click();
+    cy.contains('button', 'ACP aus Content Pool').should('be.visible').and('be.enabled').click();
     cy.get('coding-box-content-pool-import-dialog').as('dialog');
     cy.get('@dialog').contains('button', 'ACPs laden').click();
     cy.get('@dialog').should('contain.text', 'Lade ACPs...');

@@ -98,7 +98,11 @@
     </div>
     }
     @if (hasDerivedStatistics) {
-    <div class="statistic-item clickable" (click)="onDerivedClick()">
+    <div class="statistic-item clickable" (click)="onDerivedClick()"
+      role="button"
+      tabindex="0"
+      (keydown.enter)="onActionKeydown($event)"
+      (keydown.space)="onActionKeydown($event)">
       <span class="statistic-label">{{ 'coding-management.statistics.derived-answers' | translate }}</span>
       <span class="statistic-value" [matTooltip]="'coding-management.statistics.derived-answers-tooltip' | translate:{count: derivedVariableCount}">
         {{ derivedAnswerCount }}
@@ -106,7 +110,11 @@
     </div>
     }
     @for (status of getStatuses(); track status) {
-    <div class="statistic-item clickable" (click)="onStatusClick(status)">
+    <div class="statistic-item clickable" (click)="onStatusClick(status)"
+      role="button"
+      tabindex="0"
+      (keydown.enter)="onActionKeydown($event)"
+      (keydown.space)="onActionKeydown($event)">
       <span class="statistic-label">
         @if (status === 'null') {
         {{ 'coding-management.statistics.uncoded-responses' | translate }}

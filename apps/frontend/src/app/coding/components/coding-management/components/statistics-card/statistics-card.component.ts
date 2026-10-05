@@ -11,6 +11,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { TranslateModule } from '@ngx-translate/core';
+import { activateOnKeyboard } from '../../../../../shared/utils/keyboard-activation.util';
 import { CodingStatistics } from '../../../../../../../../../api-dto/coding/coding-statistics';
 import {
   getResponseStatusLabel,
@@ -39,6 +40,8 @@ import { StatisticsVersion } from '../../../../services/coding-management.servic
   ]
 })
 export class StatisticsCardComponent {
+  readonly onActionKeydown = activateOnKeyboard;
+
   readonly codingStatistics = input<CodingStatistics>({ totalResponses: 0, statusCounts: {} });
   readonly referenceStatistics = input<CodingStatistics | null>(null);
   readonly referenceVersion = input<StatisticsVersion | null>(null);

@@ -45,7 +45,8 @@ export interface ExportSelectionDialogResult {
         <mat-tab label="Jobdefinitionen">
           <div class="section">
             <div class="list">
-              <mat-expansion-panel *ngFor="let def of data.jobDefinitions" class="definition-panel">
+              @for (def of data.jobDefinitions; track def.id) {
+              <mat-expansion-panel class="definition-panel">
                 <mat-expansion-panel-header>
                   <mat-panel-title>
                     <mat-checkbox
@@ -77,8 +78,11 @@ export interface ExportSelectionDialogResult {
                   </div>
                 </div>
               </mat-expansion-panel>
+              }
 
-              <div *ngIf="!data.jobDefinitions?.length" class="empty">Keine Jobdefinitionen vorhanden.</div>
+              @if (!data.jobDefinitions?.length) {
+                <div class="empty">Keine Jobdefinitionen vorhanden.</div>
+              }
             </div>
           </div>
         </mat-tab>
@@ -86,14 +90,18 @@ export interface ExportSelectionDialogResult {
         <mat-tab label="Coder-Trainings">
           <div class="section">
             <div class="list">
-              <div *ngFor="let training of data.coderTrainings" class="training-row">
+              @for (training of data.coderTrainings; track training.id) {
+              <div class="training-row">
                 <mat-checkbox
                   [checked]="isSelected(trainingValue(training))"
                   (change)="toggle(trainingValue(training))">
                   {{ training.label || ('Training #' + training.id) }}
                 </mat-checkbox>
               </div>
-              <div *ngIf="!data.coderTrainings?.length" class="empty">Keine Coder-Trainings vorhanden.</div>
+              }
+              @if (!data.coderTrainings?.length) {
+                <div class="empty">Keine Coder-Trainings vorhanden.</div>
+              }
             </div>
           </div>
         </mat-tab>

@@ -248,7 +248,18 @@ describe('Zoneless manual preparation workflows', () => {
     cy.get('@bundle').find('input[placeholder="Filter nach Variablen-ID"]').focus().type('missing');
     cy.get('@bundle').find('.variable-card').should('not.exist');
     cy.get('@bundle').find('input[placeholder="Filter nach Variablen-ID"]').clear().type('VAR_2');
-    cy.get('@bundle').find('.variable-card').should('have.length', 1).and('contain.text', 'UNIT_A_VAR_2').click();
+    cy.get('@bundle').find('.variable-card').should('have.length', 1).and('contain.text', 'UNIT_A_VAR_2')
+      .focus().should('have.focus');
+    cy.press(Cypress.Keyboard.Keys.ENTER);
+    cy.get('@bundle').find('.selection-count').should('contain.text', '1 von 1');
+    cy.press(Cypress.Keyboard.Keys.SPACE);
+    cy.get('@bundle').find('.selection-count').should('contain.text', '0 von 1');
+    cy.press(Cypress.Keyboard.Keys.SPACE);
+    cy.get('@bundle').find('.selection-count').should('contain.text', '1 von 1');
+    cy.get('@bundle').find('.variable-card input[type="checkbox"]').focus().should('have.focus');
+    cy.press(Cypress.Keyboard.Keys.SPACE);
+    cy.get('@bundle').find('.selection-count').should('contain.text', '0 von 1');
+    cy.press(Cypress.Keyboard.Keys.SPACE);
     cy.get('@bundle').find('.selection-count').should('contain.text', '1 von 1');
     cy.get('@bundle').find('input[formControlName="name"]').focus().clear().type('Filtered bundle');
     cy.get('@bundle').contains('button', 'Filter zurücksetzen').click();

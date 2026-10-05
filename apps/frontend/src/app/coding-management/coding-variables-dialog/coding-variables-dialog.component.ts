@@ -25,6 +25,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { finalize, forkJoin } from 'rxjs';
+import { activateOnKeyboard } from '../../shared/utils/keyboard-activation.util';
 import { FileService } from '../../shared/services/file/file.service';
 import {
   FileBackendService,
@@ -89,6 +90,8 @@ export interface FlattenedVariable {
   ]
 })
 export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
+  readonly onActionKeydown = activateOnKeyboard;
+
   private readonly destroyRef = inject(DestroyRef);
 
   dataSource = new MatTableDataSource<FlattenedVariable>([]);

@@ -28,6 +28,7 @@ import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDivider } from '@angular/material/divider';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { activateOnKeyboard } from '../../../../../shared/utils/keyboard-activation.util';
 import { Success } from '../../../../models/success.model';
 import { extractGeoGebraBase64 } from '../../../../utils/geogebra-value.util';
 import { getResponseStatusLabel } from '../../../../../shared/utils/response-status-metadata.util';
@@ -63,6 +64,8 @@ import { CodingResponseSortBy } from '../../../../../models/coding-interfaces';
   ]
 })
 export class ResponseTableComponent implements OnChanges {
+  readonly onActionKeydown = activateOnKeyboard;
+
   readonly data = input<Success[]>([]);
   readonly displayedColumns = input<string[]>([]);
   readonly totalRecords = input(0);

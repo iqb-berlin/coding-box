@@ -73,7 +73,7 @@ describe('Zoneless asynchronous coding dialogs', () => {
     }).as('analysis');
 
     openManagement();
-    cy.contains('app-coding-management .action-buttons-toolbar a', 'Code-/Score-Verteilung').click();
+    cy.contains('app-coding-management .action-buttons-toolbar button', 'Code-/Score-Verteilung').click();
     cy.get('coding-box-variable-analysis-dialog').as('dialog');
     cy.get('@dialog').find('.loading-container').should('be.visible');
     cy.wait('@analysis').its('request.query.page').should('equal', '1');
@@ -114,7 +114,7 @@ describe('Zoneless asynchronous coding dialogs', () => {
       }
     });
     openManagement();
-    cy.contains('app-coding-management .action-buttons-toolbar a', 'Code-/Score-Verteilung').click();
+    cy.contains('app-coding-management .action-buttons-toolbar button', 'Code-/Score-Verteilung').click();
     cy.wait('@initialDistribution');
     cy.get('coding-box-variable-analysis-dialog').as('dialog');
     cy.get('@dialog').find('table').should('contain.text', 'INITIAL');
@@ -145,12 +145,12 @@ describe('Zoneless asynchronous coding dialogs', () => {
       }
     });
     openManagement();
-    cy.contains('app-coding-management .action-buttons-toolbar a', 'Code-/Score-Verteilung').click();
+    cy.contains('app-coding-management .action-buttons-toolbar button', 'Code-/Score-Verteilung').click();
     cy.get('coding-box-variable-analysis-dialog .loading-container').should('be.visible');
     cy.wrap(null).should(() => { expect(requests).to.equal(1); });
     cy.contains('coding-box-variable-analysis-dialog .dialog-actions button', 'Schließen').click();
     cy.get('coding-box-variable-analysis-dialog').should('not.exist');
-    cy.contains('app-coding-management .action-buttons-toolbar a', 'Code-/Score-Verteilung').click();
+    cy.contains('app-coding-management .action-buttons-toolbar button', 'Code-/Score-Verteilung').click();
     cy.wait('@reopenedDistribution');
     cy.get('coding-box-variable-analysis-dialog table').should('contain.text', 'REOPENED_DIALOG');
     cy.then(() => old.release());
@@ -212,7 +212,7 @@ describe('Zoneless asynchronous coding dialogs', () => {
     }).as('validationRetry');
 
     openManagement();
-    cy.contains('app-coding-management .action-buttons-toolbar a', 'Kodierliste').click();
+    cy.contains('app-coding-management .action-buttons-toolbar button', 'Kodierliste').click();
     cy.get('app-export-dialog').as('exportDialog');
     cy.get('@exportDialog').find('input[type="file"]').selectFile({
       contents: Cypress.Buffer.from('Invalid workbook'), fileName: 'invalid.xlsx',
@@ -271,7 +271,7 @@ describe('Zoneless asynchronous coding dialogs', () => {
     }).as('validation');
 
     openManagement();
-    cy.contains('app-coding-management .action-buttons-toolbar a', 'Kodierliste').click();
+    cy.contains('app-coding-management .action-buttons-toolbar button', 'Kodierliste').click();
     cy.then(async () => {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Coding list');

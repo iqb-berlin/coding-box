@@ -161,6 +161,39 @@ describe('CodeSelectorComponent', () => {
     fixture.detectChanges();
   });
 
+  it.each(['Enter', ' '])('selects a code with %p without triggering window navigation', key => {
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.detectChanges();
+    const row = fixture.nativeElement.querySelector('.code-row[data-code-id="1"]') as HTMLElement;
+    const select = jest.spyOn(component, 'onSelect');
+    const globalKeydown = jest.fn();
+    window.addEventListener('keydown', globalKeydown);
+    try {
+      row.focus();
+      expect(document.activeElement).toBe(row);
+      row.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      expect(select).toHaveBeenCalledTimes(1);
+      expect(select).toHaveBeenCalledWith(1);
+      expect(globalKeydown).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('keydown', globalKeydown);
+    }
+  });
+
+  it('does not select a read-only code through the keyboard', () => {
+    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+    fixture.componentRef.setInput('variableId', 'VAR1');
+    fixture.componentRef.setInput('isReadOnly', true);
+    fixture.detectChanges();
+    const select = jest.spyOn(component, 'onSelect');
+    const row = fixture.nativeElement.querySelector('.code-row[data-code-id="1"]') as HTMLElement;
+    for (const key of ['Enter', ' ']) {
+      row.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    }
+    expect(select).not.toHaveBeenCalled();
+  });
+
   it('should create', () => {
     expect(component).toBeTruthy();
   });

@@ -593,7 +593,7 @@
                             class="analysis-progress-text"
                             >
                             Berechnung läuft...
-                            @if (responseAnalysisValue?.progress != null) {
+                            @if (responseAnalysisValue?.progress !== null && responseAnalysisValue?.progress !== undefined) {
                               <span
                                 >({{ responseAnalysisValue?.progress }}%)</span
                                 >
@@ -2149,8 +2149,8 @@
                                 <coding-box-coder-trainings-list
                                   [showCreateButton]="false"
                                   [workspaceId]="workspaceId"
-                                  (onCreateTraining)="openCoderTraining()"
-                                  (onEditTraining)="openTrainingEdit($event)"
+                                  (trainingCreationRequested)="openCoderTraining()"
+                                  (trainingEditRequested)="openTrainingEdit($event)"
                                   >
                                 </coding-box-coder-trainings-list>
                               }
@@ -2250,7 +2250,7 @@
                           <div class="coder-training-modal">
                             <coding-box-coder-training
                               [editTraining]="editTrainingValue"
-                              (close)="closeCoderTraining()"
+                              (trainingClosed)="closeCoderTraining()"
                               (startTraining)="onTrainingStart($event)"
                               >
                             </coding-box-coder-training>

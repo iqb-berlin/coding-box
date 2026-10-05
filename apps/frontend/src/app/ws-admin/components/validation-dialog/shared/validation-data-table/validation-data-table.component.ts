@@ -54,6 +54,11 @@ export interface ValidationTableColumn {
               } @else if (column.type === 'link') {
                 <a
                   class="table-link"
+                  role="button"
+                  tabindex="0"
+                  [attr.aria-disabled]="loading()"
+                  (keydown.enter)="$event.stopPropagation(); !loading() && onLinkClick(element, column.key)"
+                  (keydown.space)="$event.stopPropagation(); $event.preventDefault(); !loading() && onLinkClick(element, column.key)"
                   [class.disabled-link]="loading()"
                   (click)="
                     $event.preventDefault();

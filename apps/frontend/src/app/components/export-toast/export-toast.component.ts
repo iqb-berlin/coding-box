@@ -13,6 +13,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { take } from 'rxjs/operators';
+import { activateOnKeyboard } from '../../shared/utils/keyboard-activation.util';
 import {
   ExportJob,
   ExportJobService
@@ -45,6 +46,8 @@ import { ItemMatrixDiagnosticsDialogComponent } from './item-matrix-diagnostics-
   styleUrls: ['./export-toast.component.scss']
 })
 export class ExportToastComponent {
+  readonly onActionKeydown = activateOnKeyboard;
+
   private exportJobService = inject(ExportJobService);
   private translateService = inject(TranslateService);
   private dialog = inject(MatDialog);

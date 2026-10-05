@@ -179,7 +179,7 @@ describe('CoderTrainingComponent', () => {
     const trainingStarted = jest.fn();
     const closed = jest.fn();
     component.startTraining.subscribe(trainingStarted);
-    component.close.subscribe(closed);
+    component.trainingClosed.subscribe(closed);
     component.ngOnInit();
     component.addVariable('VAR', 'UNIT', 3);
     component.onVariableChange('VAR2', 0);

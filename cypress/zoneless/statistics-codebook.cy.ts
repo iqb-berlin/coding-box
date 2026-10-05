@@ -210,7 +210,7 @@ describe('Zoneless replay statistics and codebook export', () => {
       cy.visit('/');
       cy.wait('@authData');
       cy.window().then(win => { win.location.hash = '/workspace-admin/5/coding/management'; });
-      cy.get('app-coding-management .action-buttons-toolbar a').contains('Codebook').click();
+      cy.get('app-coding-management .action-buttons-toolbar button').contains('Codebook').click();
       cy.get('shared-export-coding-book').as('dialog');
       cy.get('@dialog').find('mat-spinner').should('be.visible');
       cy.then(() => { releaseUnits(); });

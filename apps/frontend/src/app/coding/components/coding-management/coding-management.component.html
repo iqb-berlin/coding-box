@@ -10,14 +10,14 @@
   @if (!hideActionButtons()) {
   <div>
     <div class="action-buttons-toolbar">
-      <a mat-raised-button color="primary" (click)="onAutoCode()">
+      <button type="button" mat-raised-button color="primary" (click)="onAutoCode()">
         <mat-icon>auto_fix_high</mat-icon>
         {{ 'coding-management.buttons.auto-code' | translate }}
-      </a>
-      <a mat-raised-button color="primary" (click)="openManualCoding()">
+      </button>
+      <button type="button" mat-raised-button color="primary" (click)="openManualCoding()">
         <mat-icon>keyboard</mat-icon>
         {{ 'coding-management.buttons.manual-code' | translate }}
-      </a>
+      </button>
 
       @if (codingListDownloadProgressValue !== null) {
       <button mat-raised-button disabled class="progress-button">
@@ -29,27 +29,27 @@
         <mat-icon>cancel</mat-icon>
       </button>
       } @else {
-      <a mat-raised-button color="primary" (click)="fetchCodingList()">
+      <button type="button" mat-raised-button color="primary" (click)="fetchCodingList()">
         <mat-icon>list</mat-icon>
         {{ 'coding-management.buttons.coding-list' | translate }}
-      </a>
+      </button>
       }
-      <a mat-raised-button color="primary" (click)="openExportCodingBook()">
+      <button type="button" mat-raised-button color="primary" (click)="openExportCodingBook()">
         <mat-icon>book</mat-icon>
         {{ 'coding-management.buttons.codebook' | translate }}
-      </a>
-      <a mat-raised-button color="primary" (click)="openItemListDialog()">
+      </button>
+      <button type="button" mat-raised-button color="primary" (click)="openItemListDialog()">
         <mat-icon>list_alt</mat-icon>
         {{ 'Itemliste' }}
-      </a>
-      <a mat-raised-button color="primary" (click)="fetchVariableAnalysis()">
+      </button>
+      <button type="button" mat-raised-button color="primary" (click)="fetchVariableAnalysis()">
         <mat-icon>analytics</mat-icon>
         {{ 'coding-management.buttons.item-variable-analysis' | translate }}
-      </a>
-      <a mat-raised-button color="primary" (click)="fetchUnitVariables()">
+      </button>
+      <button type="button" mat-raised-button color="primary" (click)="fetchUnitVariables()">
         <mat-icon>list_alt</mat-icon>
         {{ 'coding-management.buttons.coding-variables' | translate }}
-      </a>
+      </button>
     </div>
   </div>
   }

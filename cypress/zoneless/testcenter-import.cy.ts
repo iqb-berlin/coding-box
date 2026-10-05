@@ -58,7 +58,7 @@ describe('zoneless Testcenter import with delayed responses', () => {
       cy.wait('@authData');
       cy.window().then(window => { window.location.hash = '/workspace-admin/5/test-files'; });
       cy.wait('@files');
-      cy.get('coding-box-test-files').contains('a', 'Testcenter Import').click();
+      cy.get('coding-box-test-files').contains('button', 'Testcenter Import').click();
       cy.get('coding-box-test-center-import input[formControlName="name"]').type('user');
       cy.get('coding-box-test-center-import input[formControlName="pw"]').type('password');
       cy.get('coding-box-test-center-import mat-select[formControlName="testCenter"]').click();

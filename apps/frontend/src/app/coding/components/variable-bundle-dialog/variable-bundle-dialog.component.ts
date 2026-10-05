@@ -28,6 +28,7 @@ import {
   distinctUntilChanged,
   takeUntil, fromEvent
 } from 'rxjs';
+import { activateOnKeyboard } from '../../../shared/utils/keyboard-activation.util';
 import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { AppService } from '../../../core/services/app.service';
@@ -64,6 +65,8 @@ export interface VariableBundleGroupDialogData {
   ]
 })
 export class VariableBundleDialogComponent implements OnInit, AfterViewInit, OnDestroy {
+  readonly onActionKeydown = activateOnKeyboard;
+
   readonly unitNameFilterInput = viewChild.required<ElementRef>('unitNameFilterInput');
   readonly variableIdFilterInput = viewChild.required<ElementRef>('variableIdFilterInput');
 

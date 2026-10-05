@@ -37,7 +37,7 @@ export class StandaloneUnitSchemerComponent implements AfterViewInit, OnDestroy 
   });
 
   readonly schemeChanged = output<UnitScheme>();
-  readonly error = output<string>();
+  readonly schemerError = output<string>();
   readonly ready = output<void>();
   readonly readNotification = output<VosReadNotification>();
 
@@ -59,9 +59,9 @@ export class StandaloneUnitSchemerComponent implements AfterViewInit, OnDestroy 
     if (schemerHtml) {
       this.setupSchemerIFrame(schemerHtml);
     } else if (schemerId) {
-      this.error.emit(`Schemer HTML content not provided for ID: ${schemerId}`);
+      this.schemerError.emit(`Schemer HTML content not provided for ID: ${schemerId}`);
     } else {
-      this.error.emit('Neither schemer ID nor HTML content provided');
+      this.schemerError.emit('Neither schemer ID nor HTML content provided');
     }
   }
 

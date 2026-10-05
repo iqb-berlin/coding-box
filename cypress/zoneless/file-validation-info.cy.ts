@@ -25,7 +25,7 @@ describe('Zoneless information from file validation', () => {
     cy.wait('@authData');
     cy.window().then(win => { win.location.hash = '/workspace-admin/5/test-files'; });
     cy.wait('@files');
-    cy.get('coding-box-test-files').contains('a', 'Validieren').click();
+    cy.get('coding-box-test-files').contains('button', 'Validieren').click();
     cy.wait('@validation');
     cy.get('files-validation-dialog').contains('[role="tab"]', 'TESTTAKER_ZL').click();
   });
@@ -48,7 +48,7 @@ describe('Zoneless information from file validation', () => {
       request.reply({ delay: 100, body: { id: 701, status: polls === 1 ? 'processing' : 'completed',
         progress: polls === 1 ? 55 : 100, progress_message: 'Kontrollierter Prüfschritt' } });
     }).as('progressPoll');
-    cy.get('coding-box-test-files').contains('a', 'Validieren').dblclick();
+    cy.get('coding-box-test-files').contains('button', 'Validieren').dblclick();
     cy.wait('@progressTask');
     cy.get('.validation-busy-percent').should('contain.text', '10%');
     cy.wait('@progressPoll');
@@ -78,7 +78,7 @@ describe('Zoneless information from file validation', () => {
         pendingStarted = true;
         request.reply({ delay: 1000, body: { testTakersFound: true, validationResults: [] } });
       }).as('oldResults');
-      cy.get('coding-box-test-files').contains('a', 'Validieren').click();
+      cy.get('coding-box-test-files').contains('button', 'Validieren').click();
       cy.wrap(null).should(() => { expect(pendingStarted).to.equal(true); });
       cy.window().then(win => { win.location.hash = '/'; });
       cy.get('coding-box-home').should('be.visible');
@@ -113,13 +113,13 @@ describe('Zoneless information from file validation', () => {
     cy.intercept('GET', '**/api/admin/workspace/5/files?*', {
       delay: 300, body: { data: [], total: 0, page: 1, limit: 100, fileTypes: [] }
     }).as('dummyRefresh');
-    cy.get('coding-box-test-files').contains('a', 'Validieren').click();
+    cy.get('coding-box-test-files').contains('button', 'Validieren').click();
     cy.wait('@dummyValidation');
     cy.get('tc-confirm-dialog').should('contain.text', 'Keine Testtaker gefunden').contains('button', 'Ja').click();
     cy.wait('@dummyCreation').its('response.statusCode').should('equal', 500);
     cy.get('mat-snack-bar-container').should('contain.text', 'Fehler beim Erstellen');
     cy.get('coding-box-test-files .busy-overlay').should('not.exist');
-    cy.get('coding-box-test-files').contains('a', 'Validieren').click();
+    cy.get('coding-box-test-files').contains('button', 'Validieren').click();
     cy.wait('@dummyValidation');
     cy.get('tc-confirm-dialog').contains('button', 'Ja').click();
     cy.wait('@dummyCreation').its('response.statusCode').should('equal', 200);
@@ -147,7 +147,7 @@ describe('Zoneless information from file validation', () => {
       creations += 1;
       request.reply({ body: true });
     });
-    cy.get('coding-box-test-files').contains('a', 'Validieren').click();
+    cy.get('coding-box-test-files').contains('button', 'Validieren').click();
     cy.wait('@missingTesttakers');
     cy.get('tc-confirm-dialog').contains('button', 'Abbrechen').click();
     cy.get('tc-confirm-dialog').should('not.exist');

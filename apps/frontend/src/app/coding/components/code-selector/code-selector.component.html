@@ -38,7 +38,10 @@
                 @for (item of navigationItems; track item.key) {
                   @let prog = getProgressForNavigationItem(item);
                   <div class="variable-panel-item" [class.active]="item.key === activeNavigationKey" (click)="selectNavigationItem(item.key)"
-                    tabindex="-1">
+                    tabindex="0"
+                    role="button"
+                    (keydown.enter)="onActionKeydown($event)"
+                    (keydown.space)="onActionKeydown($event)">
                     <div class="variable-panel-header">
                       <span class="variable-panel-name">
                         {{ item.label }}
@@ -103,7 +106,10 @@
                     [class.disabled]="item.disabled"
                     [matTooltip]="item.tooltip"
                     (click)="selectBundleVariable(item.key, item.disabled)"
-                    tabindex="-1">
+                    tabindex="0"
+                    role="button"
+                    (keydown.enter)="onActionKeydown($event)"
+                    (keydown.space)="onActionKeydown($event)">
                     <div class="variable-panel-header">
                       <span class="variable-panel-name">{{ item.label }}</span>
                       @if (item.status === 'auto-coded') {
@@ -207,7 +213,11 @@
             [style.cursor]="(isReadOnly() || isRegularSelectionDisabled()) ? 'not-allowed' : 'pointer'"
             [matTooltip]="getReviewCodeSelectionTooltip(item.id)"
             [matTooltipDisabled]="!hasReviewCodeSelection(item.id)"
-            (click)="(isReadOnly() || isRegularSelectionDisabled()) ? null : onSelect(item.id)">
+            (click)="(isReadOnly() || isRegularSelectionDisabled()) ? null : onSelect(item.id)"
+            role="button"
+            tabindex="0"
+            (keydown.enter)="onActionKeydown($event)"
+            (keydown.space)="onActionKeydown($event)">
             <div class="code-content">
               <span class="code-info">
                 <span class="code-token">
@@ -262,7 +272,11 @@
             [attr.aria-disabled]="isCodingIssueOptionDisabled(item)"
             [matTooltip]="getCodingIssueOptionRowTooltip(item)"
             [matTooltipDisabled]="!getCodingIssueOptionRowTooltip(item)"
-            (click)="isCodingIssueOptionDisabled(item) ? null : onSelect(item.id)">
+            (click)="isCodingIssueOptionDisabled(item) ? null : onSelect(item.id)"
+            role="button"
+            tabindex="0"
+            (keydown.enter)="onActionKeydown($event)"
+            (keydown.space)="onActionKeydown($event)">
             <div class="code-content">
               @if (getShortcutLabel(item.id)) {
                 <span class="shortcut-icon">{{ getShortcutLabel(item.id) }}</span>

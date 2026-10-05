@@ -29,7 +29,7 @@ class MockStandaloneUnitSchemerComponent {
   readonly unitScheme = input<UnitScheme>();
   readonly schemerConfig = input<SchemerConfig>();
   readonly schemeChanged = output<UnitScheme>();
-  readonly error = output<string>();
+  readonly schemerError = output<string>();
 }
 
 describe('Schemer preview without Zone.js', () => {

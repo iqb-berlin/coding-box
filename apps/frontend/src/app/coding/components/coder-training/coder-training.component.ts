@@ -134,7 +134,7 @@ interface BundleOrderingOverride {
   styleUrls: ['./coder-training.component.scss']
 })
 export class CoderTrainingComponent implements OnInit, OnDestroy {
-  readonly close = output<void>();
+  readonly trainingClosed = output<void>();
   readonly startTraining = output<{ selectedCoders: Coder[], variableConfigs: VariableConfig[] }>();
   readonly editTraining = input<CoderTraining | null>(null);
 
@@ -1713,7 +1713,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   onClose(): void {
     this.clearTrainingRecoveryDraft();
-    this.close.emit();
+    this.trainingClosed.emit();
   }
 
   openImportDialog(): void {

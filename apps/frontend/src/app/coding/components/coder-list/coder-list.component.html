@@ -1,17 +1,17 @@
 <div class="fx-column-start-start fx-gap-10 container">
   <div class="fx-row-center-center-stretch fx-gap-20 action-buttons">
-    <a mat-raised-button color="primary" (click)="createCoder()">
+    <button type="button" mat-raised-button color="primary" (click)="createCoder()">
       <mat-icon>add</mat-icon>
       Kodierer erstellen
-    </a>
-    <a mat-raised-button color="primary" (click)="startEditCoder(selection.selected[0])" [disabled]="selection.selected.length !== 1">
+    </button>
+    <button type="button" mat-raised-button color="primary" (click)="startEditCoder(selection.selected[0])" [disabled]="selection.selected.length !== 1">
       <mat-icon>edit</mat-icon>
       Kodierer bearbeiten
-    </a>
-    <a mat-raised-button color="primary" [disabled]="selection.selected.length === 0" (click)="deleteCoders()">
+    </button>
+    <button type="button" mat-raised-button color="primary" [disabled]="selection.selected.length === 0" (click)="deleteCoders()">
       <mat-icon>delete</mat-icon>
       Kodierer löschen
-    </a>
+    </button>
   </div>
 
 
