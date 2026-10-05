@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
@@ -233,16 +232,10 @@ export class WorkspaceTestResultsAnalysisController {
     @Param('workspace_id') workspaceId: number,
       @Body(new JsonSchemaValidationPipe(requestBodySchemas.FlatResponseFrequenciesRequest)) body: FlatResponseFrequenciesRequest
   ): Promise<Record<string, { total: number; values: Array<{ value: string; count: number; p: number }> }>> {
-    try {
-      return await this.workspaceTestResultsService.findFlatResponseFrequencies(
-        workspaceId,
-        body?.combos || []
-      );
-    } catch (error) {
-      throw new BadRequestException(
-        `Failed to retrieve frequencies. ${error.message}`
-      );
-    }
+    return this.workspaceTestResultsService.findFlatResponseFrequencies(
+      workspaceId,
+      body?.combos || []
+    );
   }
 
   @Get(':workspace_id/test-results/flat-responses/filter-options')

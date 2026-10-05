@@ -2,7 +2,7 @@ import {
   BadRequestException,
   ExecutionContext,
   INestApplication,
-  InternalServerErrorException
+  ForbiddenException
 } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -222,10 +222,17 @@ describe('WorkspaceUsersController', () => {
   });
 
   describe('findUsers', () => {
-    it('throws when workspace users cannot be retrieved', async () => {
-      workspaceUsersService.findUsers.mockRejectedValue(new Error('database unavailable'));
+    it('passes the original server failure to the global filter', async () => {
+      const error = new Error('database unavailable');
+      workspaceUsersService.findUsers.mockRejectedValue(error);
 
-      await expect(controller.findUsers(3, 1, 500)).rejects.toThrow(InternalServerErrorException);
+      await expect(controller.findUsers(3, 1, 500)).rejects.toBe(error);
+    });
+
+    it('preserves workspace access errors', async () => {
+      const error = new ForbiddenException('Workspace access denied');
+      workspaceUsersService.findUsers.mockRejectedValue(error);
+      await expect(controller.findUsers(3, 1, 500)).rejects.toBe(error);
     });
 
     it('parses the workspace id from the route before retrieving users', async () => {

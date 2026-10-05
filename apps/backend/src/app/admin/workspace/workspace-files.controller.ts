@@ -146,9 +146,7 @@ export class WorkspaceFilesController {
         throw regexError;
       }
 
-      throw new BadRequestException(
-        `An error occurred while fetching files for workspace ${workspace_id}: ${error.message} `
-      );
+      throw error;
     }
   }
 
@@ -371,9 +369,7 @@ export class WorkspaceFilesController {
       );
     } catch (error) {
       this.logger.error(`'Error downloading test file:' ${error} `);
-      throw new InternalServerErrorException(
-        'Unable to download the file. Please try again later.'
-      );
+      throw error;
     }
   }
 
@@ -476,35 +472,7 @@ export class WorkspaceFilesController {
       );
 
       // Re-throw generic exceptions if needed, though they aren't caught locally anymore.
-      if (
-        error instanceof BadRequestException ||
-        error instanceof InternalServerErrorException
-      ) {
-        throw error;
-      }
-
-      // Handle specific error types
-      if (error instanceof Error) {
-        if (error.message.includes('ENOENT')) {
-          throw new InternalServerErrorException(
-            'One or more files could not be found.'
-          );
-        }
-        if (error.message.includes('EACCES')) {
-          throw new InternalServerErrorException(
-            'Permission denied accessing files.'
-          );
-        }
-        if (error.message.includes('ENOMEM')) {
-          throw new InternalServerErrorException(
-            'Insufficient memory to create ZIP file.'
-          );
-        }
-      }
-
-      throw new InternalServerErrorException(
-        'Unable to create ZIP file. Please try again later.'
-      );
+      throw error;
     }
 
     // Validate ZIP buffer outside try/catch

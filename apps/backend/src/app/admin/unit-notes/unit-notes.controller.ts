@@ -1,10 +1,8 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
-  NotFoundException,
   Param,
   Patch,
   Post,
@@ -62,14 +60,7 @@ export class UnitNotesController {
     @WorkspaceId() workspaceId: number,
       @Body(new JsonSchemaValidationPipe(requestBodySchemas.CreateUnitNoteDto)) createUnitNoteDto: CreateUnitNoteDto
   ): Promise<UnitNoteDto> {
-    try {
-      return await this.unitNoteService.create(createUnitNoteDto);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to create note: ${error.message}`);
-    }
+    return this.unitNoteService.create(createUnitNoteDto);
   }
 
   @Get('unit/:unitId')
@@ -102,14 +93,7 @@ export class UnitNotesController {
     @WorkspaceId() workspaceId: number,
       @Param('unitId') unitId: number
   ): Promise<UnitNoteDto[]> {
-    try {
-      return await this.unitNoteService.findAllByUnitId(unitId);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve notes: ${error.message}`);
-    }
+    return this.unitNoteService.findAllByUnitId(unitId);
   }
 
   @Post('units/notes')
@@ -136,11 +120,7 @@ export class UnitNotesController {
     @WorkspaceId() workspaceId: number,
       @Body(new JsonSchemaValidationPipe(requestBodySchemas.UnitNotesController_findAllByUnitIds)) { unitIds }: { unitIds: number[] }
   ): Promise<{ [unitId: number]: UnitNoteDto[] }> {
-    try {
-      return await this.unitNoteService.findAllByUnitIds(unitIds);
-    } catch (error) {
-      throw new BadRequestException(`Failed to retrieve notes: ${error.message}`);
-    }
+    return this.unitNoteService.findAllByUnitIds(unitIds);
   }
 
   @Get(':id')
@@ -173,14 +153,7 @@ export class UnitNotesController {
     @WorkspaceId() workspaceId: number,
       @Param('id') id: number
   ): Promise<UnitNoteDto> {
-    try {
-      return await this.unitNoteService.findOne(id);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve note: ${error.message}`);
-    }
+    return this.unitNoteService.findOne(id);
   }
 
   @Patch(':id')
@@ -217,14 +190,7 @@ export class UnitNotesController {
       @Param('id') id: number,
       @Body(new JsonSchemaValidationPipe(requestBodySchemas.UpdateUnitNoteDto)) updateUnitNoteDto: UpdateUnitNoteDto
   ): Promise<UnitNoteDto> {
-    try {
-      return await this.unitNoteService.update(id, updateUnitNoteDto);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to update note: ${error.message}`);
-    }
+    return this.unitNoteService.update(id, updateUnitNoteDto);
   }
 
   @Delete(':id')
@@ -257,13 +223,6 @@ export class UnitNotesController {
     @WorkspaceId() workspaceId: number,
       @Param('id') id: number
   ): Promise<boolean> {
-    try {
-      return await this.unitNoteService.remove(id);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to delete note: ${error.message}`);
-    }
+    return this.unitNoteService.remove(id);
   }
 }

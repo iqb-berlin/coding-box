@@ -1,10 +1,12 @@
 import {
   ArgumentsHost,
+  BadRequestException,
   Catch,
   ExceptionFilter,
   HttpException,
   HttpStatus,
-  Logger
+  Logger,
+  PayloadTooLargeException
 } from '@nestjs/common';
 import { Response } from 'express';
 import {
@@ -26,7 +28,8 @@ interface ErrorResponseBody {
 export class GlobalHttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalHttpExceptionFilter.name);
 
-  catch(exception: unknown, host: ArgumentsHost): void {
+  catch(caughtException: unknown, host: ArgumentsHost): void {
+    const exception = this.normalizeBodyParserError(caughtException);
     const context = host.switchToHttp();
     const request = context.getRequest<RequestWithRequestId>();
     const response = context.getResponse<Response>();
@@ -47,6 +50,20 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
     }
 
     response.status(status).json(this.createResponseBody(exception, request, status, requestId));
+  }
+
+  private normalizeBodyParserError(exception: unknown): unknown {
+    if (!(exception instanceof Error)) {
+      return exception;
+    }
+    const parserError = exception as Error & { type?: string; status?: number };
+    if (parserError.type === 'entity.parse.failed' && parserError.status === 400) {
+      return new BadRequestException('Malformed JSON request body');
+    }
+    if (parserError.type === 'entity.too.large' && parserError.status === 413) {
+      return new PayloadTooLargeException('Request body too large');
+    }
+    return exception;
   }
 
   private getStatus(exception: unknown): number {
@@ -115,9 +132,11 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
   ): void {
     const message = exception instanceof Error ? exception.message : String(exception);
     const stack = exception instanceof Error ? exception.stack : undefined;
+    // Queries can contain Testcenter credentials; keep only the request path.
+    const requestPath = (request.originalUrl || request.url || '/').split('?', 1)[0];
 
     this.logger.error(
-      `[${requestId}] ${request.method} ${request.originalUrl || request.url} failed with ${status}: ${message}`,
+      `[${requestId}] ${request.method} ${requestPath} failed with ${status}: ${message}`,
       stack
     );
   }

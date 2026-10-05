@@ -87,17 +87,13 @@ export class WorkspaceController {
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 20
   ): Promise<{ data: WorkspaceInListDto[]; total: number; page: number; limit: number }> {
-    try {
-      const [workspaces, total] = await this.workspaceCoreService.findAll({ page, limit });
-      return {
-        data: workspaces,
-        total,
-        page,
-        limit
-      };
-    } catch (error) {
-      throw new BadRequestException('Failed to retrieve admin workspaces. Please try again later.');
-    }
+    const [workspaces, total] = await this.workspaceCoreService.findAll({ page, limit });
+    return {
+      data: workspaces,
+      total,
+      page,
+      limit
+    };
   }
 
   @Get('access-rights-matrix')
@@ -135,15 +131,11 @@ export class WorkspaceController {
     if (!id || id <= 0) {
       throw new BadRequestException('Invalid workspace ID.');
     }
-    try {
-      const workspace = await this.workspaceCoreService.findOne(id);
-      if (!workspace) {
-        this.logger.error('Admin workspace not found.');
-      }
-      return workspace;
-    } catch (error) {
-      throw new BadRequestException(`Failed to retrieve workspace: ${error.message}`);
+    const workspace = await this.workspaceCoreService.findOne(id);
+    if (!workspace) {
+      this.logger.error('Admin workspace not found.');
     }
+    return workspace;
   }
 
   @Delete()

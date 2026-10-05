@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Controller,
   Get,
   Param,
@@ -81,14 +80,8 @@ export class WorkspaceTestResultsStatisticsController {
         sessionOsCounts: Record<string, number>;
         sessionScreenCounts: Record<string, number>;
       }> {
-    try {
-      return await this.workspaceTestResultsService.getWorkspaceTestResultsOverview(
-        workspaceId
-      );
-    } catch (error) {
-      throw new BadRequestException(
-        `Failed to retrieve overview. ${error.message}`
-      );
-    }
+    return this.workspaceTestResultsService.getWorkspaceTestResultsOverview(
+      workspaceId
+    );
   }
 }
