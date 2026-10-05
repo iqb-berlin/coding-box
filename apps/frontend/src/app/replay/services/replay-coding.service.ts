@@ -751,17 +751,14 @@ export class ReplayCodingService {
     const selectionRevisionAtStart = this.latestSelectionRevisionByKey.get(compositeKey) ?? 0;
     const saveFailureKey = this.getSaveFailureKey('notes', compositeKey);
     const trimmedNotes = notes.trim();
+    // Keep the form model current while older HTTP writes wait in the queue.
+    this.updateLocalNotes(testPerson, unitId, variableId, notes);
     if (!jobId || !workspaceId) {
-      this.updateLocalNotes(testPerson, unitId, variableId, notes);
       return;
     }
 
     await this.enqueueRowMutation(compositeKey, async () => {
       try {
-        if (this.isCurrentCodingContext(contextSnapshot)) {
-          this.updateLocalNotes(testPerson, unitId, variableId, notes);
-        }
-
         await firstValueFrom(
           this.codingJobBackendService.saveCodingNotes(workspaceId, jobId, {
             testPerson,
