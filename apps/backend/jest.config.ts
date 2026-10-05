@@ -13,5 +13,9 @@ export default {
   },
   moduleFileExtensions: ['ts', 'js', 'html'],
   transformIgnorePatterns: ['node_modules/(?!mathml2omml|@types/passport|@nestjs/passport)'],
-  coverageDirectory: '../../coverage/apps/backend'
+  coverageDirectory: '../../coverage/apps/backend',
+  reporters: [
+    'default',
+    ['<rootDir>/../../scripts/qa/junit-reporter.cjs', { project: 'backend' }]
+  ]
 };
