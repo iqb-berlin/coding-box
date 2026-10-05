@@ -8,6 +8,8 @@ import {
   UseGuards
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
+import { requestBodySchemas } from '../../http/request-body.schemas';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import {
   AccessLevelGuard,
@@ -66,7 +68,7 @@ export class WorkspaceContentPoolController {
   })
   async importAcp(
   @Param('workspace_id', ParseIntPipe) workspaceId: number,
-    @Body() body: ImportAcpDto
+    @Body(new JsonSchemaValidationPipe(requestBodySchemas.ImportAcpDto)) body: ImportAcpDto
   ) {
     return this.contentPoolIntegrationService.importAcpFilesToWorkspace({
       workspaceId,
@@ -83,7 +85,7 @@ export class WorkspaceContentPoolController {
   })
   async startImportAcp(
   @Param('workspace_id', ParseIntPipe) workspaceId: number,
-    @Body() body: ImportAcpDto
+    @Body(new JsonSchemaValidationPipe(requestBodySchemas.ImportAcpDto)) body: ImportAcpDto
   ) {
     return this.contentPoolIntegrationService.startAcpImportToWorkspace({
       workspaceId,
@@ -109,7 +111,7 @@ export class WorkspaceContentPoolController {
   })
   async startUploadFilesToAcp(
   @Param('workspace_id', ParseIntPipe) workspaceId: number,
-    @Body() body: UploadFilesToAcpDto
+    @Body(new JsonSchemaValidationPipe(requestBodySchemas.UploadFilesToAcpDto)) body: UploadFilesToAcpDto
   ) {
     return this.contentPoolIntegrationService.startUploadWorkspaceFilesToAcp({
       workspaceId,

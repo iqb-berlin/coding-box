@@ -21,6 +21,8 @@ import {
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import * as fastCsv from 'fast-csv';
+import { requestBodySchemas } from '../../http/request-body.schemas';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
@@ -388,7 +390,7 @@ export class WorkspaceCoderTrainingController {
   })
   async generateCoderTrainingPackages(
     @WorkspaceId() workspace_id: number,
-      @Body()
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCoderTrainingController_generateCoderTrainingPackages))
                    body: {
                      selectedCoders: { id: number; name: string }[];
                      variableConfigs: {
@@ -630,7 +632,7 @@ export class WorkspaceCoderTrainingController {
   })
   async createCoderTrainingJobs(
     @WorkspaceId() workspace_id: number,
-      @Body()
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCoderTrainingController_createCoderTrainingJobs))
                    body: {
                      trainingLabel: string;
                      missingsProfileId?: number;
@@ -836,7 +838,7 @@ export class WorkspaceCoderTrainingController {
   async saveDiscussionResult(
     @WorkspaceId() workspace_id: number,
       @Param('trainingId') trainingId: number,
-      @Body() body: { responseId: number; code: number | null; score: number | null; notes?: string | null },
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCoderTrainingController_saveDiscussionResult)) body: { responseId: number; code: number | null; score: number | null; notes?: string | null },
       @Req() req: Request
   ): Promise<{
         success: boolean;
@@ -890,7 +892,7 @@ export class WorkspaceCoderTrainingController {
   async previewApplyDiscussionResults(
     @WorkspaceId() workspace_id: number,
       @Param('trainingId') trainingId: number,
-      @Body('source') source: TrainingDiscussionApplySource
+      @Body('source', new JsonSchemaValidationPipe(requestBodySchemas.TrainingDiscussionApplySource)) source: TrainingDiscussionApplySource
   ): Promise<TrainingDiscussionApplyPreviewDto> {
     return this.coderTrainingResultsApplyService.previewTrainingDiscussionResults(
       workspace_id,
@@ -933,7 +935,7 @@ export class WorkspaceCoderTrainingController {
   async applyDiscussionResults(
     @WorkspaceId() workspace_id: number,
       @Param('trainingId') trainingId: number,
-      @Body() body: ApplyTrainingDiscussionResultsRequestDto
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.ApplyTrainingDiscussionResultsRequestDto)) body: ApplyTrainingDiscussionResultsRequestDto
   ): Promise<ApplyTrainingDiscussionResultsResultDto> {
     return this.coderTrainingResultsApplyService.applyTrainingDiscussionResults(
       workspace_id,
@@ -1036,7 +1038,7 @@ export class WorkspaceCoderTrainingController {
   async updateCoderTraining(
     @WorkspaceId() workspace_id: number,
       @Param('trainingId') trainingId: number,
-      @Body() body: {
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCoderTrainingController_updateCoderTraining)) body: {
         label: string;
         missingsProfileId?: number;
         selectedCoders: { id: number; name: string }[];
@@ -1221,7 +1223,7 @@ export class WorkspaceCoderTrainingController {
   async updateCoderTrainingLabel(
     @WorkspaceId() workspace_id: number,
       @Param('trainingId') trainingId: number,
-      @Body() body: { label: string }
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCoderTrainingController_updateCoderTrainingLabel)) body: { label: string }
   ): Promise<{ success: boolean; message: string }> {
     if (!trainingId || trainingId <= 0) {
       throw new Error('Valid training ID must be provided');

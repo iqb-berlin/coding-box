@@ -30,6 +30,8 @@ import {
 } from '@nestjs/swagger';
 import { Repository } from 'typeorm';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { requestBodySchemas } from '../../http/request-body.schemas';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -185,7 +187,7 @@ export class WorkspaceFilesController {
   })
   async excludePersons(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: { logins: string[] }
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceFilesController_excludePersons)) body: { logins: string[] }
   ): Promise<boolean> {
     if (!workspaceId) {
       throw new BadRequestException('Workspace ID is required.');
@@ -233,7 +235,7 @@ export class WorkspaceFilesController {
   @ApiOkResponse({ description: 'Persons marked as considered', type: Boolean })
   async considerPersons(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: { logins: string[] }
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceFilesController_considerPersons)) body: { logins: string[] }
   ): Promise<boolean> {
     if (!workspaceId) {
       throw new BadRequestException('Workspace ID is required.');
@@ -402,7 +404,7 @@ export class WorkspaceFilesController {
   })
   async downloadWorkspaceFilesAsZip(
     @Param('workspace_id') workspaceId: string,
-      @Body() body?: { fileTypes?: string[] }
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceFilesController_downloadWorkspaceFilesAsZip, true)) body?: { fileTypes?: string[] }
   ): Promise<StreamableFile> {
     const startTime = Date.now();
     const MAX_ZIP_SIZE = 500 * 1024 * 1024; // 500MB limit
@@ -554,7 +556,7 @@ export class WorkspaceFilesController {
   })
   async updateIgnoredUnits(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: { ignoredUnits: string[] }
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceFilesController_updateIgnoredUnits)) body: { ignoredUnits: string[] }
   ): Promise<void> {
     if (!body || !Array.isArray(body.ignoredUnits)) {
       throw new BadRequestException('ignoredUnits must be an array of strings');
@@ -581,7 +583,7 @@ export class WorkspaceFilesController {
   })
   async updateWorkspaceSettings(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: WorkspaceSettingsDto
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceSettingsDto)) body: WorkspaceSettingsDto
   ): Promise<void> {
     if (!body) {
       throw new BadRequestException('Request body is required');

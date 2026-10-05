@@ -13,6 +13,8 @@ import {
 
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
+import { requestBodySchemas } from './http/request-body.schemas';
+import { JsonSchemaValidationPipe } from './http/json-schema-validation.pipe';
 import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
 import { UsersService } from './database/services/users';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
@@ -76,7 +78,7 @@ export class AppController {
 
   @Post('tc_authentication')
   async authenticateTestCenter(
-    @Body() credentials: { username: string, password: string, server: string, url: string }
+    @Body(new JsonSchemaValidationPipe(requestBodySchemas.AppController_authenticateTestCenter)) credentials: { username: string, password: string, server: string, url: string }
   ): Promise<Record<string, unknown>> {
     return this.testCenterService.authenticate(credentials);
   }

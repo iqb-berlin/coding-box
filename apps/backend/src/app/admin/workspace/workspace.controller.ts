@@ -24,6 +24,8 @@ import {
   ApiQuery,
   ApiTags
 } from '@nestjs/swagger';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
+import { requestBodySchemas } from '../../http/request-body.schemas';
 import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
@@ -186,7 +188,7 @@ export class WorkspaceController {
   @ApiBadRequestResponse({ description: 'Invalid workspace data' })
   @ApiNotFoundResponse({ description: 'Workspace not found' })
   @ApiTags('admin workspaces')
-  async patch(@Body() workspaces: WorkspaceFullDto) {
+  async patch(@Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceFullDto)) workspaces: WorkspaceFullDto) {
     return this.workspaceCoreService.patch(workspaces);
   }
 
@@ -204,7 +206,7 @@ export class WorkspaceController {
   })
   @ApiBadRequestResponse({ description: 'Invalid workspace data' })
   @ApiTags('admin workspaces')
-  async create(@Body() createWorkspaceDto: CreateWorkspaceDto, @Req() request: RequestWithUser) {
+  async create(@Body(new JsonSchemaValidationPipe(requestBodySchemas.CreateWorkspaceDto)) createWorkspaceDto: CreateWorkspaceDto, @Req() request: RequestWithUser) {
     return this.workspaceCoreService.create(createWorkspaceDto, Number(request.user.id));
   }
 }

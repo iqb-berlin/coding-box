@@ -16,6 +16,8 @@ import {
   ApiConflictResponse
 } from '@nestjs/swagger';
 import { Request } from 'express';
+import { requestBodySchemas } from '../../http/request-body.schemas';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -100,7 +102,7 @@ export class WorkspaceCodingVersionController {
   })
   async resetCodingVersion(
     @WorkspaceId() workspace_id: number,
-      @Body()
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCodingVersionController_resetCodingVersion))
                    body: {
                      version: 'v1' | 'v2' | 'v3';
                      unitFilters?: string[];

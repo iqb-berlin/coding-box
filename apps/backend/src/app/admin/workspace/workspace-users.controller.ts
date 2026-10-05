@@ -10,6 +10,8 @@ import {
   ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation,
   ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
+import { requestBodySchemas } from '../../http/request-body.schemas';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
@@ -236,7 +238,7 @@ export class WorkspaceUsersController {
   })
   @ApiBadRequestResponse({ description: 'Invalid user IDs or workspace ID' })
   @ApiTags('admin users')
-  async setWorkspaceUsers(@Body() userIds: number[],
+  async setWorkspaceUsers(@Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceUsersController_setWorkspaceUsers)) userIds: number[],
     @Param('workspace_id', ParseIntPipe) workspaceId: number) {
     return this.workspaceUsersService.setWorkspaceUsers(workspaceId, userIds);
   }

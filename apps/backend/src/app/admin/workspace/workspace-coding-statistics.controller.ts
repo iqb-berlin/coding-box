@@ -21,6 +21,8 @@ import {
 import { Request, Response } from 'express';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
+import { requestBodySchemas } from '../../http/request-body.schemas';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
@@ -1136,7 +1138,7 @@ export class WorkspaceCodingStatisticsController {
   })
   async codeFreshnessScope(
     @WorkspaceId() workspace_id: number,
-      @Body() body: StartCodingFreshnessJobDto
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.StartCodingFreshnessJobDto)) body: StartCodingFreshnessJobDto
   ): Promise<CodingFreshnessJobResultDto> {
     await this.jobQueueService.assertNoDependencyConflicts('test-person-coding', workspace_id);
 
@@ -2765,7 +2767,7 @@ export class WorkspaceCodingStatisticsController {
   })
   async calculateDistribution(
     @WorkspaceId() workspace_id: number,
-      @Body()
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCodingStatisticsController_calculateDistribution))
                    body: {
                      selectedVariables: { unitName: string; variableId: string; includeDeriveError?: boolean }[];
                      selectedVariableBundles?: {
@@ -2975,7 +2977,7 @@ export class WorkspaceCodingStatisticsController {
   })
   async createDistributedCodingJobs(
     @WorkspaceId() workspace_id: number,
-      @Body()
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCodingStatisticsController_createDistributedCodingJobs))
                    body: {
                      selectedVariables: { unitName: string; variableId: string; includeDeriveError?: boolean }[];
                      selectedVariableBundles?: {

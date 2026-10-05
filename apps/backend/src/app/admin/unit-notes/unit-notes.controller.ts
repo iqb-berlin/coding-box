@@ -20,6 +20,8 @@ import {
   ApiParam,
   ApiTags
 } from '@nestjs/swagger';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
+import { requestBodySchemas } from '../../http/request-body.schemas';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../workspace/workspace.guard';
 import { WorkspaceId } from '../workspace/workspace.decorator';
@@ -58,7 +60,7 @@ export class UnitNotesController {
   })
   async create(
     @WorkspaceId() workspaceId: number,
-      @Body() createUnitNoteDto: CreateUnitNoteDto
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.CreateUnitNoteDto)) createUnitNoteDto: CreateUnitNoteDto
   ): Promise<UnitNoteDto> {
     try {
       return await this.unitNoteService.create(createUnitNoteDto);
@@ -132,7 +134,7 @@ export class UnitNotesController {
   })
   async findAllByUnitIds(
     @WorkspaceId() workspaceId: number,
-      @Body() { unitIds }: { unitIds: number[] }
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.UnitNotesController_findAllByUnitIds)) { unitIds }: { unitIds: number[] }
   ): Promise<{ [unitId: number]: UnitNoteDto[] }> {
     try {
       return await this.unitNoteService.findAllByUnitIds(unitIds);
@@ -213,7 +215,7 @@ export class UnitNotesController {
   async update(
     @WorkspaceId() workspaceId: number,
       @Param('id') id: number,
-      @Body() updateUnitNoteDto: UpdateUnitNoteDto
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.UpdateUnitNoteDto)) updateUnitNoteDto: UpdateUnitNoteDto
   ): Promise<UnitNoteDto> {
     try {
       return await this.unitNoteService.update(id, updateUnitNoteDto);

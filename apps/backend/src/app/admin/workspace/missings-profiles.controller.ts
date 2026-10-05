@@ -1,6 +1,8 @@
 import {
   Controller, Get, Post, Body, Param, Delete, Put, UseGuards
 } from '@nestjs/common';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
+import { requestBodySchemas } from '../../http/request-body.schemas';
 import { MissingsProfilesService } from '../../database/services/coding';
 import { MissingsProfilesDto } from '../../../../../../api-dto/coding/missings-profiles.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -36,7 +38,7 @@ export class MissingsProfilesController {
   @RequireAccessLevel(3)
   async createMissingsProfile(
   @WorkspaceId() workspaceId: number,
-    @Body() profile: MissingsProfilesDto
+    @Body(new JsonSchemaValidationPipe(requestBodySchemas.MissingsProfilesDto)) profile: MissingsProfilesDto
   ) {
     return this.missingsProfilesService.createMissingsProfile(workspaceId, profile);
   }
@@ -47,7 +49,7 @@ export class MissingsProfilesController {
   async updateMissingsProfile(
   @WorkspaceId() workspaceId: number,
     @Param('label') label: string,
-    @Body() profile: MissingsProfilesDto
+    @Body(new JsonSchemaValidationPipe(requestBodySchemas.MissingsProfilesDto)) profile: MissingsProfilesDto
   ) {
     return this.missingsProfilesService.updateMissingsProfile(workspaceId, label, profile);
   }

@@ -23,6 +23,8 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import * as fs from 'fs';
 import * as path from 'path';
+import { requestBodySchemas } from '../../http/request-body.schemas';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AdminGuard } from '../admin.guard';
 import { AppLogoDto } from '../../../../../../api-dto/app-logo-dto';
@@ -122,7 +124,7 @@ export class LogoController {
   @ApiOperation({ summary: 'Save logo settings', description: 'Saves logo settings like background color' })
   @ApiBody({ type: AppLogoDto })
   @ApiOkResponse({ description: 'Logo settings saved successfully', type: Boolean })
-  async saveLogoSettings(@Body() logoSettings: AppLogoDto): Promise<{ success: boolean }> {
+  async saveLogoSettings(@Body(new JsonSchemaValidationPipe(requestBodySchemas.AppLogoDto)) logoSettings: AppLogoDto): Promise<{ success: boolean }> {
     try {
       const dataDir = path.join(process.cwd(), 'apps', 'frontend', 'src', 'assets', 'data');
       const settingsPath = path.join(dataDir, 'logo-settings.json');

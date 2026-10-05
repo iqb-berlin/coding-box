@@ -20,6 +20,8 @@ import {
   ApiTags,
   ApiBadRequestResponse
 } from '@nestjs/swagger';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
+import { requestBodySchemas } from '../../http/request-body.schemas';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -206,7 +208,7 @@ export class WorkspaceTestResultsManagementController {
   })
   async previewDeleteTestResults(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Body() request: TestResultsDeleteRequestDto
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.TestResultsDeleteRequestDto)) request: TestResultsDeleteRequestDto
   ): Promise<TestResultsDeletePreviewDto> {
     return this.workspaceTestResultsService.previewDeleteTestResults(
       workspaceId,
@@ -224,7 +226,7 @@ export class WorkspaceTestResultsManagementController {
   })
   async createDeleteTestResultsJob(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Body() request: TestResultsDeleteRequestDto,
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.TestResultsDeleteRequestDto)) request: TestResultsDeleteRequestDto,
       @Req() req: RequestWithUser
   ): Promise<ValidationTaskDto> {
     await this.jobQueueService.assertNoDependencyConflicts(
@@ -254,7 +256,7 @@ export class WorkspaceTestResultsManagementController {
   })
   async previewDeleteTestResultResponses(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Body() request: TestResultsResponseCleanupRequestDto
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.TestResultsResponseCleanupRequestDto)) request: TestResultsResponseCleanupRequestDto
   ): Promise<TestResultsDeletePreviewDto> {
     return this.workspaceTestResultsService.previewDeleteTestResultResponses(
       workspaceId,
@@ -272,7 +274,7 @@ export class WorkspaceTestResultsManagementController {
   })
   async createDeleteTestResultResponsesJob(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Body() request: TestResultsResponseCleanupRequestDto,
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.TestResultsResponseCleanupRequestDto)) request: TestResultsResponseCleanupRequestDto,
       @Req() req: RequestWithUser
   ): Promise<ValidationTaskDto> {
     await this.jobQueueService.assertNoDependencyConflicts(
@@ -302,7 +304,7 @@ export class WorkspaceTestResultsManagementController {
   })
   async previewDeleteTestLogs(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Body() request: TestResultsDeleteRequestDto
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.TestResultsDeleteRequestDto)) request: TestResultsDeleteRequestDto
   ): Promise<TestResultsDeletePreviewDto> {
     return this.workspaceTestResultsService.previewDeleteTestLogs(
       workspaceId,
@@ -320,7 +322,7 @@ export class WorkspaceTestResultsManagementController {
   })
   async createDeleteTestLogsJob(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Body() request: TestResultsDeleteRequestDto,
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.TestResultsDeleteRequestDto)) request: TestResultsDeleteRequestDto,
       @Req() req: RequestWithUser
   ): Promise<ValidationTaskDto> {
     await this.jobQueueService.assertNoDependencyConflicts(

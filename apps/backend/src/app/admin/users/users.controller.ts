@@ -6,6 +6,8 @@ import {
   ApiBadRequestResponse, ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiMethodNotAllowedResponse,
   ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
+import { requestBodySchemas } from '../../http/request-body.schemas';
 import { UsersService } from '../../database/services/users';
 import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
@@ -49,7 +51,7 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid workspace ID or user data' })
   @ApiNotFoundResponse({ description: 'Workspace or users not found' })
   @ApiTags('users access')
-  async updateUsersAccess(@Param('workspaceId', ParseIntPipe) workspaceId: number, @Body() users: UserInListDto[]): Promise<boolean> {
+  async updateUsersAccess(@Param('workspaceId', ParseIntPipe) workspaceId: number, @Body(new JsonSchemaValidationPipe(requestBodySchemas.UsersController_updateUsersAccess)) users: UserInListDto[]): Promise<boolean> {
     return this.usersService.updateUsersAccess(workspaceId, users);
   }
 
@@ -77,7 +79,7 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid user ID or data' })
   @ApiNotFoundResponse({ description: 'User not found' })
   @ApiTags('admin users')
-  async updateUser(@Param('userId', ParseIntPipe) userId: number, @Body() userData: UserFullDto): Promise<UserFullDto> {
+  async updateUser(@Param('userId', ParseIntPipe) userId: number, @Body(new JsonSchemaValidationPipe(requestBodySchemas.UserFullDto)) userData: UserFullDto): Promise<UserFullDto> {
     return this.usersService.updateUser(userId, userData);
   }
 
@@ -177,7 +179,7 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid user ID or workspace IDs' })
   @ApiNotFoundResponse({ description: 'User or workspaces not found' })
   @ApiTags('admin users')
-  async assignUserWorkspaces(@Body() workspaceIds: number[],
+  async assignUserWorkspaces(@Body(new JsonSchemaValidationPipe(requestBodySchemas.UsersController_assignUserWorkspaces)) workspaceIds: number[],
     @Param('userId', ParseIntPipe) userId: number) {
     return this.usersService.assignUserWorkspaces(userId, workspaceIds);
   }
@@ -199,7 +201,7 @@ export class UsersController {
   })
   @ApiBadRequestResponse({ description: 'Invalid user data' })
   @ApiTags('admin users')
-  async create(@Body() createUserDto: CreateUserDto) {
+  async create(@Body(new JsonSchemaValidationPipe(requestBodySchemas.CreateUserDto)) createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
 }

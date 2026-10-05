@@ -7,6 +7,8 @@ import {
   UseGuards
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
+import { requestBodySchemas } from '../../http/request-body.schemas';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
@@ -30,7 +32,7 @@ export class GithubReleasesController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async installRelease(
     @WorkspaceId() workspaceId: number,
-      @Body() body: { url: string }
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.GithubReleasesController_installRelease)) body: { url: string }
   ): Promise<boolean> {
     return this.githubReleasesService.downloadAndInstall(workspaceId, body.url);
   }

@@ -2,6 +2,8 @@ import {
   Body, Controller, Get, Post, Put, UseGuards
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
+import { requestBodySchemas } from '../../http/request-body.schemas';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AdminGuard } from '../admin.guard';
 import {
@@ -30,7 +32,7 @@ export class ContentPoolSettingsController {
   @Put()
   @ApiOperation({ summary: 'Update Content-Pool integration settings' })
   async updateSettings(
-    @Body() body: UpdateContentPoolSettingsInput
+    @Body(new JsonSchemaValidationPipe(requestBodySchemas.UpdateContentPoolSettingsInput)) body: UpdateContentPoolSettingsInput
   ): Promise<ContentPoolSettings> {
     return this.contentPoolIntegrationService.updateSettings(body);
   }
@@ -38,7 +40,7 @@ export class ContentPoolSettingsController {
   @Post('test')
   @ApiOperation({ summary: 'Test Content-Pool integration settings' })
   async testConnection(
-    @Body() body: TestContentPoolConnectionInput
+    @Body(new JsonSchemaValidationPipe(requestBodySchemas.TestContentPoolConnectionInput, true)) body: TestContentPoolConnectionInput
   ): Promise<ContentPoolConnectionTestResult> {
     return this.contentPoolIntegrationService.testConnection(body);
   }

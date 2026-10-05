@@ -8,6 +8,8 @@ import {
   ApiOperation,
   ApiTags
 } from '@nestjs/swagger';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
+import { requestBodySchemas } from '../../http/request-body.schemas';
 import { LegalNoticeDto, UpdateLegalNoticeDto } from '../../../../../../api-dto/legal-notice/legal-notice.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AdminGuard } from '../admin.guard';
@@ -34,7 +36,7 @@ export class LegalNoticeController {
   @ApiBody({ type: UpdateLegalNoticeDto })
   @ApiOkResponse({ description: 'Imprint/privacy text updated', type: LegalNoticeDto })
   async updateLegalNotice(
-    @Body() body: UpdateLegalNoticeDto
+    @Body(new JsonSchemaValidationPipe(requestBodySchemas.UpdateLegalNoticeDto)) body: UpdateLegalNoticeDto
   ): Promise<LegalNoticeDto> {
     return this.legalNoticeService.updateLegalNotice(body);
   }
