@@ -342,6 +342,59 @@ describe('DoubleCodedReviewComponent', () => {
     sessionStorage.clear();
   });
 
+  it('keeps GeoGebra answers compact without altering ordinary answers', () => {
+    expect(component.isGeoGebraAnswer('UEsDBAoAAAAAA')).toBe(true);
+    expect(component.isGeoGebraAnswer('data:application/zip;base64,UEsDBAoAAAAAA')).toBe(true);
+    expect(component.getAnswerDisplay('UEsDBAoAAAAAA')).toBe('double-coded-review.values.geogebra-answer');
+    expect(component.getAnswerTooltip('UEsDBAoAAAAAA')).toBe('double-coded-review.values.geogebra-tooltip');
+    expect(component.getAnswerDisplay('ordinary answer')).toBe('ordinary answer');
+  });
+
+  it('defaults review to the newest active definition and excludes empty scopes', () => {
+    const facade = TestBed.inject(CodingFacadeService);
+    (facade.getJobDefinitions as jest.Mock).mockReturnValue(of([
+      { id: 1, status: 'approved', createdJobsCount: 0 },
+      { id: 3, status: 'approved', createdJobsCount: 2 },
+      { id: 2, status: 'pending_review', createdJobsCount: 1 }
+    ]));
+    (facade.getCoderTrainings as jest.Mock).mockReturnValue(of([
+      { id: 5, label: 'Empty training', jobsCount: 0 },
+      { id: 6, label: 'Active training', jobsCount: 1 }
+    ]));
+    component.scopeControl.setValue(['job_99'], { emitEvent: false });
+    component.ngOnInit();
+    expect(component.scopeControl.value).toEqual(['job_3']);
+    expect(component.availableJobDefinitions.map(definition => definition.id)).toEqual([3, 2]);
+    expect(component.availableCoderTrainings.map(training => training.id)).toEqual([6]);
+    expect(component.hasScopeOptions()).toBe(true);
+    expect(TestBed.inject(TestPersonCodingService).getDoubleCodedVariablesForReview)
+      .toHaveBeenCalledWith(1, expect.objectContaining({ jobDefinitionIds: [3] }));
+  });
+
+  it('clears existing review rows and does not request data when no active scope exists', () => {
+    component.loadData();
+    expect(component.dataSource.data).toHaveLength(4);
+    const reviewApi = TestBed.inject(TestPersonCodingService);
+    (reviewApi.getDoubleCodedVariablesForReview as jest.Mock).mockClear();
+    const facade = TestBed.inject(CodingFacadeService);
+    (facade.getJobDefinitions as jest.Mock).mockReturnValue(of([
+      { id: 1, status: 'approved', createdJobsCount: 0 }
+    ]));
+    (facade.getCoderTrainings as jest.Mock).mockReturnValue(of([
+      { id: 5, label: 'Empty training', jobsCount: 0 }
+    ]));
+    component.scopeControl.setValue(['job_99'], { emitEvent: false });
+    component.ngOnInit();
+    expect(component.scopeControl.value).toEqual([]);
+    expect(component.hasScopeOptions()).toBe(false);
+    expect(component.allData).toEqual([]);
+    expect(component.dataSource.data).toEqual([]);
+    expect(component.totalItems).toBe(0);
+    expect(component.isLoading).toBe(false);
+    expect(component.getScopeSelectionSummary()).toBe('double-coded-review.filter.scope-none');
+    expect(reviewApi.getDoubleCodedVariablesForReview).not.toHaveBeenCalled();
+  });
+
   it('allows applying decisions only with study-manager permission', () => {
     component.dialogData = { canApplyResults: false };
     expect(component.canApplyReviewResults).toBe(false);
