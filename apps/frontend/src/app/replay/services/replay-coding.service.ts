@@ -500,19 +500,15 @@ export class ReplayCodingService implements OnDestroy {
     const authTokenArg = this.authTokenArg;
     this.resetLoadedCodingState();
 
-    try {
-      const saved = await firstValueFrom(forkJoin({
-        progress: this.codingJobBackendService.getCodingProgress(workspaceId, jobId, ...authTokenArg),
-        notes: this.codingJobBackendService.getCodingNotes(workspaceId, jobId, ...authTokenArg),
-        job: this.codingJobBackendService.getCodingJob(workspaceId, jobId, ...authTokenArg)
-      }).pipe(takeUntil(this.progressLoadCancelled)), { defaultValue: null });
-      if (!saved || runId !== this.progressLoadRunId) return;
-      this.applySavedProgress(saved.progress as Record<string, SavedCode>);
-      this.applySavedNotes(saved.notes ?? {});
-      this.setCodingJobMetadata(saved.job);
-    } catch (error) {
-      // Ignore errors when loading saved coding progress
-    }
+    const saved = await firstValueFrom(forkJoin({
+      progress: this.codingJobBackendService.getCodingProgress(workspaceId, jobId, ...authTokenArg),
+      notes: this.codingJobBackendService.getCodingNotes(workspaceId, jobId, ...authTokenArg),
+      job: this.codingJobBackendService.getCodingJob(workspaceId, jobId, ...authTokenArg)
+    }).pipe(takeUntil(this.progressLoadCancelled)), { defaultValue: null });
+    if (!saved || runId !== this.progressLoadRunId) return;
+    this.applySavedProgress(saved.progress as Record<string, SavedCode>);
+    this.applySavedNotes(saved.notes ?? {});
+    this.setCodingJobMetadata(saved.job);
   }
 
   applyReplayCodingSession(session: ReplayCodingSessionDto): void {
