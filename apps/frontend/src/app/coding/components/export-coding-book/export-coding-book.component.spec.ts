@@ -724,7 +724,10 @@ describe('ExportCodingBookComponent', () => {
   it.each(['required', 'not-required'] as const)('preserves %s from filter change through the rendered shared form to job start', trainingRequirement => {
     fixture.detectChanges();
     const shared = fixture.debugElement.query(By.directive(CodebookExportComponent)).componentInstance as CodebookExportComponent;
-    component.onTrainingRequirementChange(trainingRequirement);
+    shared.contentOptions.trainingRequirement = trainingRequirement;
+    expect(shared.showGroupColumn).toBe(false);
+    expect(fixture.nativeElement.textContent).not.toContain('coding.variable-bundle-filter');
+    expect(fixture.nativeElement.querySelector('mat-select[multiple]')).toBeNull();
     fixture.detectChanges();
     shared.toggleAll();
     exportService.startCodebookJob.mockReturnValue(new Subject());

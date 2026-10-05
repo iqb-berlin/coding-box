@@ -3,7 +3,7 @@ import { CodebookGenerator as SharedCodebookGenerator, CodebookGenerationError }
 import type { UnitPropertiesForCodebook as SharedUnit } from '@iqb/ngx-coding-components/codebook-models';
 import { CodeBookContentSetting, Missing, UnitPropertiesForCodebook } from './codebook.interfaces';
 
-/** Host adapter: training scope and imported metadata, never rendering/filter semantics. */
+/** Host adapter for imported metadata; shared filters and rendering belong to the library. */
 export class CodebookGenerator {
   static async generateCodebook(units: UnitPropertiesForCodebook[], options: CodeBookContentSetting, missings: Missing[]): Promise<Buffer> {
     const normalized: SharedUnit[] = units.map(unit => {
@@ -27,12 +27,6 @@ export class CodebookGenerator {
             item[variableId] !== undefined || item[variableId.replace(/\./g, '_')] !== undefined;
         }).map((variable: { id: string; alias?: string }) => ({ id: String(id), variableId: variable.alias || variable.id }));
       });
-      if (scheme && options.trainingRequirement && options.trainingRequirement !== 'all') {
-        scheme.variableCodings = codings.filter((variable: { processing?: string[] }) => {
-          const required = variable.processing?.includes('CODER_TRAINING_REQUIRED') ?? false;
-          return options.trainingRequirement === 'required' ? required : !required;
-        });
-      }
       return {
         ...unit,
         key: unit.key.replace(/\.vocs$/i, ''),

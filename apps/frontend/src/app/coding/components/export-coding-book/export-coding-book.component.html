@@ -1,21 +1,10 @@
 <ngx-codebook-export [availableUnits]="sharedUnits" [missingsProfiles]="sharedMissingsProfiles"
   [selectedUnitIds]="unitList" [selectedMissingsProfileId]="selectedMissingsProfile"
-  [defaultContentOptions]="contentOptions" [loading]="isLoading" [busy]="isExportBusy"
+  [showGroupColumn]="false" [defaultContentOptions]="contentOptions" [loading]="isLoading" [busy]="isExportBusy"
   (selectionChanged)="unitList = $event" (exportRequested)="onSharedExport($event)" (cancel)="closeDialog()">
         <!-- Quick filters section -->
         <div codebookFilters class="settings-section">
           <h3>{{'coding.codebook-quick-filters' | translate}}</h3>
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>{{'coding.training-requirement-filter' | translate}}</mat-label>
-            <mat-select
-              [(ngModel)]="contentOptions.trainingRequirement"
-              (selectionChange)="onTrainingRequirementChange($event.value)">
-              <mat-option value="all">{{'coding.training-requirement-all' | translate}}</mat-option>
-              <mat-option value="required">{{'coding.training-requirement-required' | translate}}</mat-option>
-              <mat-option value="not-required">{{'coding.training-requirement-not-required' | translate}}</mat-option>
-            </mat-select>
-          </mat-form-field>
-
           <div class="job-definition-filter">
             <span class="job-definition-filter-label">{{'coding.job-definition-filter' | translate}}</span>
             <div class="job-definition-selection-card">
@@ -60,23 +49,6 @@
             </div>
           </div>
 
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>{{'coding.variable-bundle-filter' | translate}}</mat-label>
-            <mat-select
-              multiple
-              [(ngModel)]="selectedVariableBundleIds"
-              (selectionChange)="onVariableBundleFilterChange($event.value)"
-              [disabled]="isLoadingVariableBundles">
-              @for (variableBundle of availableVariableBundles; track variableBundle.id) {
-                <mat-option [value]="variableBundle.id">
-                  {{ variableBundle.name }}
-                </mat-option>
-              }
-              @if (!isLoadingVariableBundles && availableVariableBundles.length === 0) {
-                <mat-option disabled>{{'coding.variable-bundle-none' | translate}}</mat-option>
-              }
-            </mat-select>
-          </mat-form-field>
         </div>
 
 

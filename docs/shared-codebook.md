@@ -5,7 +5,12 @@ Die Codebook-UI und der JSON-/DOCX-Generator kommen aus
 Die vollständigen Regeln und Referenztests stehen in
 `coding-components/docs/shared-codebook.md`.
 
-Der Kodierbox-Wrapper ergänzt Schulungsbedarf, Job-Definition und Variablenbündel.
+Schulungsbedarf wird in beiden Anwendungen im gemeinsamen Formular ausgewählt
+und im gemeinsamen Generator anhand von CODER_TRAINING_REQUIRED gefiltert.
+Der Kodierbox-Wrapper ergänzt den Jobdefinitionsfilter. Die Gruppenspalte und
+der zusätzliche Variablenbündel-Filter werden hier nicht angezeigt (Issue #176).
+Der bestehende serverseitige Variablenbündel-Vertrag bleibt erhalten; Bündeldaten
+werden weiterhin zur korrekten Auflösung von Jobdefinitionen geladen.
 Workspace-Prüfung und serverseitige Schnittmengenbildung bleiben bestehen.
 Sowohl synchroner Export als auch Queue-Prozessor verwenden über den vorhandenen
 Generation-Service denselben gemeinsamen Generator. Jobstart, Statusabfrage,
