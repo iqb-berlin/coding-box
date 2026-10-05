@@ -1,162 +1,123 @@
 import { provideZonelessChangeDetection } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import {
+  ComponentFixture, TestBed, fakeAsync, tick
+} from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
-import { BehaviorSubject, of, Subject } from 'rxjs';
+import { CodebookExportComponent } from '@iqb/ngx-coding-components/codebook-export';
+import { of, Subject } from 'rxjs';
 import { ExportCodingBookComponent } from './export-coding-book.component';
 import { CodingExportService } from '../../services/coding-export.service';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { MissingsProfileService } from '../../services/missings-profile.service';
-import { ValidationStateService } from '../../services/validation-state.service';
 import { FileService } from '../../../shared/services/file/file.service';
 import { AppService } from '../../../core/services/app.service';
+import { ValidationStateService } from '../../services/validation-state.service';
 
-type ObservableValue<T> = T extends import('rxjs').Observable<infer V> ? V : never;
-type JobStatus = ObservableValue<ReturnType<CodingExportService['getCodebookJobStatus']>>;
-type JobStart = ObservableValue<ReturnType<CodingExportService['startCodebookJob']>>;
-type Units = ObservableValue<ReturnType<FileService['getUnitsWithFileIds']>>;
-
-describe('Codebook export with delayed responses without Zone', () => {
+describe('shared codebook with zoneless change detection', () => {
   let fixture: ComponentFixture<ExportCodingBookComponent>;
-  let units: Subject<Units>;
-  let start: Subject<JobStart>;
-  let status: Subject<JobStatus>;
+  let units: Subject<{ id: number; unitId: string; fileName: string; data: string }[]>;
+  let status: Subject<{ status: string; progress: number }>;
   let download: Subject<Blob>;
-  let downloadCodebookFile: jest.Mock;
+  const start = jest.fn();
+  const getStatus = jest.fn();
+  const downloadFile = jest.fn();
 
   beforeEach(async () => {
-    jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'requestAnimationFrame'] });
-    units = new Subject<Units>();
-    start = new Subject<JobStart>();
-    status = new Subject<JobStatus>();
-    download = new Subject<Blob>();
-    downloadCodebookFile = jest.fn(() => download);
-    const progress = new BehaviorSubject({ status: 'idle', progress: 0, message: '' });
+    units = new Subject();
+    status = new Subject();
+    download = new Subject();
+    start.mockReset().mockReturnValue(of({ jobId: 'job-1' }));
+    getStatus.mockReset().mockReturnValue(status);
+    downloadFile.mockReset().mockReturnValue(download);
     await TestBed.configureTestingModule({
       imports: [ExportCodingBookComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
+        { provide: MatDialogRef, useValue: { close: jest.fn() } },
+        { provide: MatDialog, useValue: { open: jest.fn() } },
+        { provide: AppService, useValue: { selectedWorkspaceId: 1 } },
+        { provide: FileService, useValue: { getUnitsWithFileIds: () => units } },
+        {
+          provide: CodingJobBackendService,
+          useValue: { getJobDefinitions: () => of([]), getVariableBundles: () => of([]) }
+        },
+        { provide: MissingsProfileService, useValue: { getMissingsProfiles: () => of([]) } },
         {
           provide: CodingExportService,
-          useValue: {
-            startCodebookJob: () => start,
-            getCodebookJobStatus: () => status,
-            downloadCodebookFile
-          }
+          useValue: { startCodebookJob: start, getCodebookJobStatus: getStatus, downloadCodebookFile: downloadFile }
         },
-        { provide: CodingJobBackendService, useValue: { getJobDefinitions: () => of([]), getVariableBundles: () => of([]) } },
-        { provide: MissingsProfileService, useValue: { getMissingsProfiles: () => of([]) } },
-        { provide: FileService, useValue: { getUnitsWithFileIds: () => units } },
-        { provide: AppService, useValue: { selectedWorkspaceId: 1 } },
         {
           provide: ValidationStateService,
           useValue: {
-            validationProgress$: progress,
+            validationProgress$: of({ status: 'idle', progress: 0, message: '' }),
             validationResults$: of(null),
-            getValidationProgress: () => progress.value,
+            getValidationProgress: () => ({ status: 'idle', progress: 0, message: '' }),
             getValidationResults: () => null
           }
         }
       ]
     }).compileComponents();
     fixture = TestBed.createComponent(ExportCodingBookComponent);
-    fixture.autoDetectChanges();
-    await fixture.whenStable();
   });
 
-  afterEach(() => {
+  function loadUnits(): CodebookExportComponent {
+    fixture.detectChanges();
+    tick();
+    units.next([{
+      id: 1, unitId: 'UNIT', fileName: 'Aufgabe.vocs', data: '{}'
+    }]);
+    tick();
+    return fixture.debugElement.query(By.directive(CodebookExportComponent)).componentInstance as CodebookExportComponent;
+  }
+
+  it('renders asynchronously loaded tasks and the common training filter without a manual refresh', fakeAsync(() => {
+    const shared = loadUnits();
+    expect(fixture.nativeElement.textContent).toContain('Aufgabe');
+    expect(shared.loading).toBe(false);
+    expect(shared.showGroupColumn).toBe(false);
+    expect(fixture.nativeElement.querySelector('.codebook-training-filter')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).not.toContain('coding.variable-bundle-filter');
+    expect(fixture.nativeElement.querySelector('mat-select[multiple]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.mat-column-group')).toBeNull();
+  }));
+
+  it('renders delayed progress and download errors and keeps exports locked until download ends', fakeAsync(() => {
+    const shared = loadUnits();
+    shared.toggleAll();
+    shared.exportCodingBook();
+    tick();
+    expect(shared.busy).toBe(true);
+    tick(1500);
+    status.next({ status: 'processing', progress: 37 });
+    tick();
+    expect(fixture.nativeElement.querySelector('.progress-percentage').textContent).toContain('37%');
+    status.next({ status: 'completed', progress: 100 });
+    tick();
+    expect(shared.busy).toBe(true);
+    shared.exportCodingBook();
+    expect(start).toHaveBeenCalledTimes(1);
+    download.error(new Error('download failed'));
+    tick();
+    expect(fixture.nativeElement.querySelector('.failed').textContent).toContain('Failed to download');
+    expect(shared.busy).toBe(false);
+  }));
+
+  it('renders loading errors and stops outstanding status requests when destroyed', fakeAsync(() => {
+    fixture.detectChanges();
+    tick();
+    units.error(new Error('load failed'));
+    tick();
+    const shared = fixture.debugElement.query(By.directive(CodebookExportComponent)).componentInstance as CodebookExportComponent;
+    expect(shared.loading).toBe(false);
+    fixture.componentInstance.unitList = [1];
+    fixture.componentInstance.exportCodingBook();
+    tick(1500);
+    expect(status.observed).toBe(true);
     fixture.destroy();
-    jest.useRealTimers();
-  });
-
-  function exportButton(): HTMLButtonElement {
-    return fixture.nativeElement.querySelector('button[type="submit"]');
-  }
-
-  async function selectUnitAndExport(): Promise<void> {
-    units.next([{
-      id: 1, unitId: 'UNIT', fileName: 'UNIT.vocs', data: '{}'
-    }]);
-    await fixture.whenStable();
-    const selectAll: HTMLInputElement = fixture.nativeElement.querySelector('.select-all-container input');
-    selectAll.click();
-    await fixture.whenStable();
-    expect(exportButton().disabled).toBe(false);
-    exportButton().click();
-    await fixture.whenStable();
-    start.next({ jobId: 'job-1', message: 'Started' });
-    await fixture.whenStable();
-    jest.advanceTimersByTime(1500);
-  }
-
-  it('ends loading and displays selectable units after a delayed response', async () => {
-    expect(fixture.nativeElement.querySelector('mat-spinner')).not.toBeNull();
-    units.next([{
-      id: 1, unitId: 'UNIT', fileName: 'UNIT.vocs', data: '{}'
-    }]);
-    await fixture.whenStable();
-    expect(fixture.nativeElement.querySelector('mat-spinner')).toBeNull();
-    expect(fixture.nativeElement.querySelector('table').textContent).toContain('UNIT');
-    expect(fixture.nativeElement.querySelector('.selection-count').textContent).toContain('0 / 1');
-  });
-
-  it('ends loading after a delayed unit-list failure', async () => {
-    units.error(new Error('Units failed'));
-    await fixture.whenStable();
-    expect(fixture.nativeElement.querySelector('mat-spinner')).toBeNull();
-    expect(exportButton().disabled).toBe(true);
-  });
-
-  it('updates progress and enables export again when the job completes', async () => {
-    await selectUnitAndExport();
-    expect(exportButton().disabled).toBe(true);
-    status.next({ status: 'processing', progress: 64 });
-    await fixture.whenStable();
-    expect(fixture.nativeElement.querySelector('.progress-percentage').textContent).toContain('64%');
-    expect(fixture.nativeElement.querySelector('mat-progress-bar').getAttribute('aria-valuenow')).toBe('64');
-
-    jest.advanceTimersByTime(1500);
-    status.next({ status: 'completed', progress: 100 });
-    await fixture.whenStable();
-    expect(fixture.nativeElement.querySelector('.progress-container.completed')).not.toBeNull();
-    expect(exportButton().disabled).toBe(false);
-    expect(downloadCodebookFile).toHaveBeenCalledWith(1, 'job-1');
-  });
-
-  it('renders delayed polling errors and resets through the bound button', async () => {
-    await selectUnitAndExport();
-    status.error(new Error('Polling failed'));
-    await fixture.whenStable();
-    expect(fixture.nativeElement.querySelector('.progress-container.failed').textContent).toContain('Failed to get job status');
-    expect(exportButton().disabled).toBe(false);
-    const reset: HTMLButtonElement = fixture.nativeElement.querySelector('.progress-container.failed button');
-    reset.click();
-    await fixture.whenStable();
-    expect(fixture.nativeElement.querySelector('.codebook-progress-section')).toBeNull();
-  });
-
-  it('renders a delayed start failure and enables retry', async () => {
-    units.next([{
-      id: 1, unitId: 'UNIT', fileName: 'UNIT.vocs', data: '{}'
-    }]);
-    await fixture.whenStable();
-    const selectAll: HTMLInputElement = fixture.nativeElement.querySelector('.select-all-container input');
-    selectAll.click();
-    await fixture.whenStable();
-    exportButton().click();
-    await fixture.whenStable();
-    start.error(new Error('Start failed'));
-    await fixture.whenStable();
-    expect(fixture.nativeElement.querySelector('.progress-container.failed').textContent).toContain('Failed to start codebook generation job');
-    expect(exportButton().disabled).toBe(false);
-  });
-
-  it('renders a delayed download failure after job completion', async () => {
-    await selectUnitAndExport();
-    status.next({ status: 'completed', progress: 100 });
-    await fixture.whenStable();
-    download.error(new Error('Download failed'));
-    await fixture.whenStable();
-    expect(fixture.nativeElement.querySelector('.progress-container.failed').textContent).toContain('Failed to download codebook file');
-    expect(exportButton().disabled).toBe(false);
-  });
+    expect(status.observed).toBe(false);
+    tick(3000);
+    expect(getStatus).toHaveBeenCalledTimes(1);
+  }));
 });
