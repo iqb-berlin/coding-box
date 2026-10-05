@@ -80,7 +80,7 @@ interface DialogData {
             <ng-container matColumnDef="status">
               <th mat-header-cell *matHeaderCellDef>{{ 'coding.jobs.table.status' | translate }}</th>
               <td mat-cell *matCellDef="let job">
-                <span [ngClass]="getStatusClass(job.status)">{{getStatusText(job.status)}}</span>
+                <span [class]="getStatusClass(job.status)">{{getStatusText(job.status)}}</span>
               </td>
             </ng-container>
             <ng-container matColumnDef="unitsCount">
@@ -203,20 +203,20 @@ interface DialogData {
 })
 export class TrainingJobsDialogComponent {
   private dialogRef = inject(MatDialogRef<TrainingJobsDialogComponent>);
-  data: DialogData = inject(MAT_DIALOG_DATA);
+  protected data: DialogData = inject(MAT_DIALOG_DATA);
 
-  displayedColumns: string[] = ['name', 'coder', 'status', 'unitsCount', 'created_at'];
+  protected displayedColumns: string[] = ['name', 'coder', 'status', 'unitsCount', 'created_at'];
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 
-  formatDate(date: Date): string {
+  protected formatDate(date: Date): string {
     const d = new Date(date);
     return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   }
 
-  getStatusClass(status: string): string {
+  protected getStatusClass(status: string): string {
     switch (status) {
       case 'active':
         return 'status-active';
@@ -231,7 +231,7 @@ export class TrainingJobsDialogComponent {
     }
   }
 
-  getStatusText(status: string): string {
+  protected getStatusText(status: string): string {
     switch (status) {
       case 'active':
         return 'Aktiv';
@@ -246,7 +246,7 @@ export class TrainingJobsDialogComponent {
     }
   }
 
-  getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
+  protected getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
         return 'Älteste Fälle zuerst';
@@ -263,7 +263,7 @@ export class TrainingJobsDialogComponent {
     }
   }
 
-  getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
+  protected getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
         return 'Nimmt pro Variable die ältesten verfügbaren Fälle.';
@@ -280,7 +280,7 @@ export class TrainingJobsDialogComponent {
     }
   }
 
-  getCaseOrderingModeLabel(mode?: 'continuous' | 'alternating' | null): string {
+  protected getCaseOrderingModeLabel(mode?: 'continuous' | 'alternating' | null): string {
     return mode === 'alternating' ? 'Abwechselnd' : 'Fortlaufend';
   }
 }

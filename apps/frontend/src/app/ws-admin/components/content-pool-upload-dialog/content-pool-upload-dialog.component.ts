@@ -69,19 +69,19 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
     MatDialogRef<ContentPoolUploadDialogComponent>
   );
 
-  readonly changelog = signal('');
+  protected readonly changelog = signal('');
 
-  readonly acps = signal<ContentPoolAcpSummary[]>([]);
+  protected readonly acps = signal<ContentPoolAcpSummary[]>([]);
 
   readonly selectedAcpId = signal('');
 
-  readonly isLoadingAcps = signal(false);
+  protected readonly isLoadingAcps = signal(false);
 
-  readonly isUploading = signal(false);
+  protected readonly isUploading = signal(false);
 
-  readonly hasLoadedAcps = signal(false);
+  protected readonly hasLoadedAcps = signal(false);
 
-  readonly errorMessage = signal('');
+  protected readonly errorMessage = signal('');
 
   readonly uploadProgress = signal<ContentPoolUploadFilesProgress | undefined>(undefined);
 
@@ -97,7 +97,7 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
     this.uploadSubscription?.unsubscribe();
   }
 
-  loadAcps(): void {
+  protected loadAcps(): void {
     this.errorMessage.set('');
     this.isLoadingAcps.set(true);
     this.hasLoadedAcps.set(false);
@@ -122,7 +122,7 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
       });
   }
 
-  uploadFiles(): void {
+  protected uploadFiles(): void {
     if (!this.selectedAcpId()) {
       this.errorMessage.set('Bitte ein ACP auswählen.');
       return;
@@ -175,18 +175,18 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
       });
   }
 
-  get uploadProgressMode(): 'determinate' | 'indeterminate' {
+  protected get uploadProgressMode(): 'determinate' | 'indeterminate' {
     return this.uploadProgress()?.totalFiles || this.uploadProgress()?.progress ?
       'determinate' :
       'indeterminate';
   }
 
-  get uploadProgressValue(): number {
+  protected get uploadProgressValue(): number {
     const progress = this.uploadProgress()?.progress || 0;
     return Math.max(0, Math.min(100, progress));
   }
 
-  get uploadProgressText(): string {
+  protected get uploadProgressText(): string {
     const uploadProgressSnapshot = this.uploadProgress();
 
     if (!uploadProgressSnapshot) {
@@ -206,7 +206,7 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
     return uploadProgressSnapshot.message;
   }
 
-  cancel(): void {
+  protected cancel(): void {
     this.dialogRef.close({ success: false });
   }
 

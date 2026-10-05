@@ -204,7 +204,7 @@ interface DistributionPreviewSummary {
   ]
 })
 export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
-  readonly onActionKeydown = activateOnKeyboard;
+  protected readonly onActionKeydown = activateOnKeyboard;
 
   private readonly destroyRef = inject(DestroyRef);
 
@@ -234,7 +234,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
   codingJobForm!: FormGroup;
   readonly isLoading = signal(false);
-  readonly isSaving = signal(false);
+  protected readonly isSaving = signal(false);
 
   get isReadOnly(): boolean {
     return this.data.readOnly === true;
@@ -269,7 +269,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   readonly isLoadingCoders = signal(false);
   readonly availableCoders = signal<Coder[]>([]);
   selectedCoders = this.createCoderSelectionModel();
-  readonly isLoadingAvailableCoders = signal(false);
+  protected readonly isLoadingAvailableCoders = signal(false);
   private readonly defaultCoderCapacityPercent = 100;
   private readonly minCoderCapacityPercent = 10;
   private readonly maxCoderCapacityPercent = 300;
@@ -277,20 +277,20 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   // Variable bundles
   readonly variableBundles = signal<VariableBundle[]>([]);
   selectedVariableBundles = this.createBundleSelectionModel();
-  bundlesDataSource = new MatTableDataSource<VariableBundle>([]);
-  readonly isLoadingBundles = signal(false);
+  protected bundlesDataSource = new MatTableDataSource<VariableBundle>([]);
+  protected readonly isLoadingBundles = signal(false);
 
   // Variable analysis items
-  readonly isLoadingVariableAnalysis = signal(false);
+  protected readonly isLoadingVariableAnalysis = signal(false);
   readonly totalVariableAnalysisRecords = signal(0);
 
   // Missing profiles
-  readonly missingsProfiles = signal<{
+  protected readonly missingsProfiles = signal<{
     label: string;
     id: number;
   }[]>([{ id: 0, label: 'IQB-Standard' }]);
 
-  readonly isLoadingMissingsProfiles = signal(false);
+  protected readonly isLoadingMissingsProfiles = signal(false);
 
   // Filters
   readonly unitNameFilter = signal('');
@@ -308,7 +308,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private readonly distributionPreviewDebounceMs = 300;
   private selectionPreviewSubscription = new Subscription();
   readonly existingJobDefinitions = signal<JobDefinition[]>([]);
-  readonly manualCodingScopeSummary = signal<ManualCodingScopeSummary | null>(null);
+  protected readonly manualCodingScopeSummary = signal<ManualCodingScopeSummary | null>(null);
   readonly includeDeriveErrorInManualCoding = signal(false);
 
   constructor(
@@ -1421,7 +1421,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     this.dataSource.data = filteredData;
   }
 
-  applyBundleFilter(): void {
+  protected applyBundleFilter(): void {
     if (this.bundleNameFilter()) {
       this.bundlesDataSource.filter = this.bundleNameFilter().trim().toLowerCase();
     } else {
@@ -1437,7 +1437,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     this.loadCodingIncompleteVariables();
   }
 
-  clearBundleFilter(): void {
+  protected clearBundleFilter(): void {
     this.bundleNameFilter.set('');
     this.bundlesDataSource.filter = '';
   }
@@ -1473,7 +1473,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     );
   }
 
-  getVariableDisabledReason(variable: Variable): string {
+  protected getVariableDisabledReason(variable: Variable): string {
     if (this.getVariableSelectableAvailableCases(variable) === 0) {
       const effectiveTotal = this.getVariableSelectableEffectiveCases(variable);
       return `Alle ${effectiveTotal} Fälle bereits verteilt`;
@@ -1491,7 +1491,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     return 'Bereits in anderen Definitionen verwendet';
   }
 
-  getVariableCount(bundle: VariableBundle): number {
+  protected getVariableCount(bundle: VariableBundle): number {
     return bundle.variables.length;
   }
 
@@ -1899,12 +1899,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     return `${min}:${sec.toString().padStart(2, '0')}`;
   }
 
-  onAvailabilityChange(event: { value: 'all' | 'full' | 'partial' | 'none' }): void {
+  protected onAvailabilityChange(event: { value: 'all' | 'full' | 'partial' | 'none' }): void {
     this.availabilityFilter.set(event.value);
     this.applyAvailabilityFilter();
   }
 
-  getAvailabilityClass(variable: Variable): string {
+  protected getAvailabilityClass(variable: Variable): string {
     const effectiveTotal = this.getVariableEffectiveCases(variable);
     const availableCases = this.getVariableAvailableCases(variable);
     if (effectiveTotal === undefined) {
@@ -1983,7 +1983,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     this.queueDistributionPreviewRefresh();
   }
 
-  isBundleVariableDeriveErrorIncluded(variable: Variable): boolean {
+  protected isBundleVariableDeriveErrorIncluded(variable: Variable): boolean {
     return variable.includeDeriveError === true;
   }
 
@@ -2005,7 +2005,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     this.queueDistributionPreviewRefresh();
   }
 
-  getBundlePreviewVariables(bundle: VariableBundle): Variable[] {
+  protected getBundlePreviewVariables(bundle: VariableBundle): Variable[] {
     if (this.selectedVariableBundles.isSelected(bundle)) {
       return bundle.variables;
     }
@@ -2038,7 +2038,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     })) as VariableBundle[];
   }
 
-  isAllCodersSelected(): boolean {
+  protected isAllCodersSelected(): boolean {
     const numSelected = this.selectedCoders.selected.length;
     const numRows = this.availableCoders().length;
     return numSelected === numRows && numRows > 0;
@@ -2412,19 +2412,19 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     this.setDoubleCodingMode(this.doubleCodingMode() === 'absolute' ? 'percentage' : 'absolute');
   }
 
-  get currentDoubleCodingControl(): FormControl {
+  protected get currentDoubleCodingControl(): FormControl {
     const controlName = this.doubleCodingMode() === 'absolute' ? 'doubleCodingAbsolute' : 'doubleCodingPercentage';
     return this.codingJobForm.get(controlName) as FormControl;
   }
 
-  getDoubleCodingLabel(): string {
+  protected getDoubleCodingLabel(): string {
     if (this.doubleCodingMode() === 'absolute') {
       return this.translateService.instant('coding-job-definition-dialog.double-coding.labels.absolute');
     }
     return this.translateService.instant('coding-job-definition-dialog.double-coding.labels.percentage');
   }
 
-  getDoubleCodingPlaceholder(): string {
+  protected getDoubleCodingPlaceholder(): string {
     if (this.doubleCodingMode() === 'absolute') {
       return this.translateService.instant('coding-job-definition-dialog.double-coding.placeholders.absolute');
     }
@@ -2845,7 +2845,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     });
   }
 
-  onCancel(): void {
+  protected onCancel(): void {
     if (this.isSaving()) {
       return;
     }

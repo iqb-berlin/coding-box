@@ -194,7 +194,7 @@
                         track responseDuplicate.responseId
                       ) {
                         <tr
-                          [ngClass]="{
+                          [class]="{
                             'duplicate-row-selected': isDuplicateRowSelected(
                               duplicate,
                               responseDuplicate.responseId
@@ -222,7 +222,7 @@
                           </td>
                           <td>{{ responseDuplicate.responseId }}</td>
                           <td
-                            [ngClass]="{
+                            [class]="{
                               'duplicate-cell-conflict':
                                 isDuplicateValueConflicting(
                                   duplicate,
@@ -237,7 +237,7 @@
                             {{ responseDuplicate.value }}
                           </td>
                           <td
-                            [ngClass]="{
+                            [class]="{
                               'duplicate-cell-conflict':
                                 isDuplicateStatusConflicting(
                                   duplicate,

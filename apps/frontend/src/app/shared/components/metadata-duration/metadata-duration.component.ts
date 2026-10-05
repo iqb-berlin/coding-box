@@ -1,5 +1,5 @@
 import {
-  Component, DestroyRef, inject, signal, ChangeDetectionStrategy
+  Component, DestroyRef, inject, signal, ChangeDetectionStrategy, OnInit
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
@@ -9,6 +9,7 @@ import { FormlyDurationComponent } from '@iqb/metadata-components';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // ProfileFormComponent reads duration values through closest('iqb-formly-duration').
   selector: 'iqb-formly-duration',
   standalone: true,
   imports: [TranslateModule, MatFormFieldModule, MatInputModule],
@@ -36,12 +37,12 @@ import { FormlyDurationComponent } from '@iqb/metadata-components';
     mat-form-field { width: 88px; }
   `]
 })
-export class MetadataDurationComponent extends FormlyDurationComponent {
+export class MetadataDurationComponent extends FormlyDurationComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
 
-  readonly minutes = signal('');
-  readonly seconds = signal('');
-  readonly editing = signal(false);
+  protected readonly minutes = signal('');
+  protected readonly seconds = signal('');
+  protected readonly editing = signal(false);
 
   override ngOnInit(): void {
     super.ngOnInit();
@@ -52,11 +53,11 @@ export class MetadataDurationComponent extends FormlyDurationComponent {
       });
   }
 
-  setMinutes(event: Event): void {
+  protected setMinutes(event: Event): void {
     this.minutes.set((event.target as HTMLInputElement).value);
   }
 
-  setSeconds(event: Event): void {
+  protected setSeconds(event: Event): void {
     this.seconds.set((event.target as HTMLInputElement).value);
   }
 
@@ -66,7 +67,7 @@ export class MetadataDurationComponent extends FormlyDurationComponent {
   }
 
   // Normalize after editing, keeping library model echoes from moving the caret.
-  normalizeDuration(): void {
+  protected normalizeDuration(): void {
     this.editing.set(false);
     this.duration = { minutes: this.minutes(), seconds: this.seconds() };
     super.durationChange();

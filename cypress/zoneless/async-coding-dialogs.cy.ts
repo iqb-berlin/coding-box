@@ -44,7 +44,7 @@ describe('Zoneless asynchronous coding dialogs', () => {
     cy.get('coding-box-home').should('be.visible');
     cy.window().then(win => { win.location.hash = '/workspace-admin/5/coding/management'; });
     cy.wait(['@activeReset', '@readiness']);
-    cy.get('app-coding-management .action-buttons-toolbar').should('be.visible');
+    cy.get('coding-box-coding-management .action-buttons-toolbar').should('be.visible');
   }
 
   function loadStatistics(): void {
@@ -54,9 +54,9 @@ describe('Zoneless asynchronous coding dialogs', () => {
     cy.intercept({ method: 'GET', pathname: '/api/admin/workspace/5/coding/statistics' }, {
       delay: 300, body: { totalResponses: 1, statusCounts: { CODING_COMPLETE: 1 } }
     }).as('statistics');
-    cy.get('app-statistics-card .statistics-load-button').click();
+    cy.get('coding-box-statistics-card .statistics-load-button').click();
     cy.wait('@statistics');
-    cy.get('app-statistics-card .statistics-card').should('be.visible');
+    cy.get('coding-box-statistics-card .statistics-card').should('be.visible');
   }
 
   it('renders delayed distribution rows and updates the page without another interaction', () => {
@@ -73,7 +73,7 @@ describe('Zoneless asynchronous coding dialogs', () => {
     }).as('analysis');
 
     openManagement();
-    cy.contains('app-coding-management .action-buttons-toolbar button', 'Code-/Score-Verteilung').click();
+    cy.contains('coding-box-coding-management .action-buttons-toolbar button', 'Code-/Score-Verteilung').click();
     cy.get('coding-box-variable-analysis-dialog').as('dialog');
     cy.get('@dialog').find('.loading-container').should('be.visible');
     cy.wait('@analysis').its('request.query.page').should('equal', '1');
@@ -114,7 +114,7 @@ describe('Zoneless asynchronous coding dialogs', () => {
       }
     });
     openManagement();
-    cy.contains('app-coding-management .action-buttons-toolbar button', 'Code-/Score-Verteilung').click();
+    cy.contains('coding-box-coding-management .action-buttons-toolbar button', 'Code-/Score-Verteilung').click();
     cy.wait('@initialDistribution');
     cy.get('coding-box-variable-analysis-dialog').as('dialog');
     cy.get('@dialog').find('table').should('contain.text', 'INITIAL');
@@ -145,12 +145,12 @@ describe('Zoneless asynchronous coding dialogs', () => {
       }
     });
     openManagement();
-    cy.contains('app-coding-management .action-buttons-toolbar button', 'Code-/Score-Verteilung').click();
+    cy.contains('coding-box-coding-management .action-buttons-toolbar button', 'Code-/Score-Verteilung').click();
     cy.get('coding-box-variable-analysis-dialog .loading-container').should('be.visible');
     cy.wrap(null).should(() => { expect(requests).to.equal(1); });
     cy.contains('coding-box-variable-analysis-dialog .dialog-actions button', 'Schließen').click();
     cy.get('coding-box-variable-analysis-dialog').should('not.exist');
-    cy.contains('app-coding-management .action-buttons-toolbar button', 'Code-/Score-Verteilung').click();
+    cy.contains('coding-box-coding-management .action-buttons-toolbar button', 'Code-/Score-Verteilung').click();
     cy.wait('@reopenedDistribution');
     cy.get('coding-box-variable-analysis-dialog table').should('contain.text', 'REOPENED_DIALOG');
     cy.then(() => old.release());
@@ -175,8 +175,8 @@ describe('Zoneless asynchronous coding dialogs', () => {
 
       openManagement();
       loadStatistics();
-      cy.get('app-statistics-card .download-results-button').click();
-      cy.get('app-download-coding-results-dialog').as('dialog');
+      cy.get('coding-box-statistics-card .download-results-button').click();
+      cy.get('coding-box-download-coding-results-dialog').as('dialog');
       cy.get('@dialog').find('.profile-hint').scrollIntoView().should('be.visible');
       cy.get('@dialog').find('mat-select').should('have.attr', 'aria-disabled', 'true');
       cy.get('@dialog').contains('button', 'Herunterladen').should('be.disabled');
@@ -212,8 +212,8 @@ describe('Zoneless asynchronous coding dialogs', () => {
     }).as('validationRetry');
 
     openManagement();
-    cy.contains('app-coding-management .action-buttons-toolbar button', 'Kodierliste').click();
-    cy.get('app-export-dialog').as('exportDialog');
+    cy.contains('coding-box-coding-management .action-buttons-toolbar button', 'Kodierliste').click();
+    cy.get('coding-box-export-dialog').as('exportDialog');
     cy.get('@exportDialog').find('input[type="file"]').selectFile({
       contents: Cypress.Buffer.from('Invalid workbook'), fileName: 'invalid.xlsx',
       mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -271,7 +271,7 @@ describe('Zoneless asynchronous coding dialogs', () => {
     }).as('validation');
 
     openManagement();
-    cy.contains('app-coding-management .action-buttons-toolbar button', 'Kodierliste').click();
+    cy.contains('coding-box-coding-management .action-buttons-toolbar button', 'Kodierliste').click();
     cy.then(async () => {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Coding list');
@@ -279,7 +279,7 @@ describe('Zoneless asynchronous coding dialogs', () => {
       combinations.forEach(combination => worksheet.addRow(Object.values(combination)));
       return Cypress.Buffer.from(await workbook.xlsx.writeBuffer());
     }).then(contents => {
-      cy.get('app-export-dialog input[type="file"]').selectFile({
+      cy.get('coding-box-export-dialog input[type="file"]').selectFile({
         contents, fileName: 'synthetic-coding-list.xlsx',
         mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       }, { force: true });
@@ -322,10 +322,10 @@ describe('Zoneless asynchronous coding dialogs', () => {
     });
 
     openManagement();
-    cy.get('app-response-filters .filter-checkbox input').check();
+    cy.get('coding-box-response-filters .filter-checkbox input').check();
     cy.wait('@responses');
-    cy.contains('app-response-table button', 'Review').click();
-    cy.get('app-review-list-dialog').as('dialog');
+    cy.contains('coding-box-response-table button', 'Review').click();
+    cy.get('coding-box-review-list-dialog').as('dialog');
     cy.get('@dialog').find('.review-item').first().scrollIntoView();
     cy.get('@dialog').find('.review-item').first().find('.loading-overlay').should('exist');
     cy.then(() => { firstReplayGate.release(); });

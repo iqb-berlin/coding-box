@@ -26,7 +26,7 @@ export interface DownloadCodingResultsDialogData {
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'app-download-coding-results-dialog',
+  selector: 'coding-box-download-coding-results-dialog',
   standalone: true,
   imports: [
     MatDialogModule,
@@ -398,20 +398,20 @@ export class DownloadCodingResultsDialogComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
 
   selectedVersion: 'v1' | 'v2' | 'v3' = 'v1';
-  selectedFormat: CodingResultsExportFormat = 'csv';
-  includeReplayUrls: boolean = false;
-  includeResponseValues: boolean = true;
-  includeGeoGebraFiles: boolean = false;
-  includeGeoGebraResponseValues: boolean = false;
-  missingsProfiles: { label: string; id: number }[] = [];
+  protected selectedFormat: CodingResultsExportFormat = 'csv';
+  protected includeReplayUrls: boolean = false;
+  protected includeResponseValues: boolean = true;
+  protected includeGeoGebraFiles: boolean = false;
+  protected includeGeoGebraResponseValues: boolean = false;
+  protected missingsProfiles: { label: string; id: number }[] = [];
   selectedMissingsProfileId: number | null = null;
   isLoadingMissingsProfiles = false;
-  missingsProfilesError = false;
+  protected missingsProfilesError = false;
   private hasLoadedMissingsProfiles = false;
 
   constructor(
     public dialogRef: MatDialogRef<DownloadCodingResultsDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: DownloadCodingResultsDialogData,
+    @Inject(MAT_DIALOG_DATA) protected data: DownloadCodingResultsDialogData,
     private readonly missingsProfileService: MissingsProfileService,
     private readonly changeDetectorRef: ChangeDetectorRef
   ) {
@@ -469,15 +469,15 @@ export class DownloadCodingResultsDialogComponent implements OnInit {
       });
   }
 
-  onIncludeResponseValuesChange(): void {
+  protected onIncludeResponseValuesChange(): void {
     this.clearUnsupportedGeoGebraOption();
   }
 
-  onSelectedFormatChange(): void {
+  protected onSelectedFormatChange(): void {
     this.clearUnsupportedGeoGebraOption();
   }
 
-  onIncludeGeoGebraFilesChange(): void {
+  protected onIncludeGeoGebraFilesChange(): void {
     this.clearUnsupportedGeoGebraOption();
   }
 
@@ -507,7 +507,7 @@ export class DownloadCodingResultsDialogComponent implements OnInit {
     });
   }
 
-  onCancel(): void {
+  protected onCancel(): void {
     this.dialogRef.close();
   }
 }

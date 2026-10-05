@@ -127,7 +127,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
   private userBackendService = inject(UserBackendService);
   private importService = inject(ImportService);
   private dialogRef = inject(MatDialogRef<TestCenterImportComponent>);
-  data = inject<{
+  protected data = inject<{
     importType: string;
   }>(MAT_DIALOG_DATA);
 
@@ -136,7 +136,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
   private appService = inject(AppService);
   private dialog = inject(MatDialog);
 
-  testCenters: Testcenter[] = [
+  protected testCenters: Testcenter[] = [
     {
       id: 1,
       label: 'Testcenter 1'
@@ -161,7 +161,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
 
   private authenticationRequestId = 0;
   authToken: string = '';
-  displayedColumns: string[] = [
+  protected displayedColumns: string[] = [
     'select',
     'groupName',
     'groupLabel',
@@ -198,30 +198,30 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
   });
 
   readonly authenticationError = signal<boolean>(false);
-  readonly filesSelectionError = signal<boolean>(false);
-  readonly testGroupsLoadError = signal<string | null>(null);
-  readonly uploadError = signal<string | null>(null);
+  protected readonly filesSelectionError = signal<boolean>(false);
+  protected readonly testGroupsLoadError = signal<string | null>(null);
+  protected readonly uploadError = signal<string | null>(null);
   readonly authenticated = signal<boolean>(false);
   readonly isLoadingTestGroups = signal<boolean>(false);
-  readonly isUploadingTestFiles = signal<boolean>(false);
+  protected readonly isUploadingTestFiles = signal<boolean>(false);
   readonly isUploadingTestResults = signal<boolean>(false);
   readonly uploadData = signal<Result | null>(null);
   private firstTestFilesImportData: Result | null = null;
   readonly testCenterInstance = signal<Testcenter[]>([]);
   readonly showTestGroups = signal<boolean>(false);
   readonly importingTestGroups = signal<string[]>([]);
-  readonly importProgressPercent = signal<number>(0);
-  readonly totalUploadsExpected = signal<number>(0);
-  readonly completedUploads = signal<number>(0);
+  protected readonly importProgressPercent = signal<number>(0);
+  protected readonly totalUploadsExpected = signal<number>(0);
+  protected readonly completedUploads = signal<number>(0);
   importRunId: string | null = null;
-  readonly uploadProgressDetails = signal<ImportWorkspaceFilesProgressDto | null>(null);
-  readonly testGroupsLoadProgress = signal<TestGroupsLoadProgressDto | null>(null);
-  readonly testGroupsLoadElapsedSeconds = signal<number>(0);
+  protected readonly uploadProgressDetails = signal<ImportWorkspaceFilesProgressDto | null>(null);
+  protected readonly testGroupsLoadProgress = signal<TestGroupsLoadProgressDto | null>(null);
+  protected readonly testGroupsLoadElapsedSeconds = signal<number>(0);
   private progressPollingSub?: Subscription;
   private testGroupsProgressPollingSub?: Subscription;
   private testGroupsLoadStartedAt: number | null = null;
 
-  selectAllImportOptions(): void {
+  protected selectAllImportOptions(): void {
     let optionControls: (keyof ImportOptions)[];
 
     if (this.data.importType === 'testResults') {
@@ -247,7 +247,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
     this.filesSelectionError.set(false);
   }
 
-  clearAllImportOptions(): void {
+  protected clearAllImportOptions(): void {
     const optionControls: (keyof ImportOptions)[] = [
       'responses',
       'definitions',
@@ -304,7 +304,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
     }
   }
 
-  isAllSelected(): boolean {
+  protected isAllSelected(): boolean {
     return this.testGroups().length > 0 &&
       this.selectedRows.length === this.testGroups().length;
   }
@@ -441,7 +441,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
       });
   }
 
-  goBackToOptions(): void {
+  protected goBackToOptions(): void {
     this.showTestGroups.set(false);
     this.selectedRows = [];
   }
@@ -540,9 +540,9 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
     }
   }
 
-  readonly loadingMessage = signal('Testresultate werden hochgeladen...');
+  protected readonly loadingMessage = signal('Testresultate werden hochgeladen...');
 
-  readonly optionLabels: Record<ImportWorkspaceOptionKey, string> = {
+  protected readonly optionLabels: Record<ImportWorkspaceOptionKey, string> = {
     definitions: 'Aufgabendefinitionen',
     units: 'Aufgaben (Units-XML)',
     player: 'Player',
@@ -850,7 +850,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
     return detail ? `${fallback} (${detail})` : fallback;
   }
 
-  get uploadProgressPercent(): number {
+  protected get uploadProgressPercent(): number {
     if (this.totalUploadsExpected() <= 0) return 0;
     return Math.round((this.completedUploads() / this.totalUploadsExpected()) * 100);
   }
@@ -872,7 +872,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
       'Testgruppen werden vom Testcenter abgerufen.';
   }
 
-  get testGroupsLoadElapsedText(): string {
+  protected get testGroupsLoadElapsedText(): string {
     if (this.testGroupsLoadElapsedSeconds() < 60) {
       return `${this.testGroupsLoadElapsedSeconds()} s`;
     }
@@ -981,7 +981,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
     this.progressPollingSub = undefined;
   }
 
-  get visibleOptionProgress(): NonNullable<ImportWorkspaceFilesProgressDto['options']> {
+  protected get visibleOptionProgress(): NonNullable<ImportWorkspaceFilesProgressDto['options']> {
     return (this.uploadProgressDetails()?.options || []).filter(option => option.planned > 0);
   }
 }

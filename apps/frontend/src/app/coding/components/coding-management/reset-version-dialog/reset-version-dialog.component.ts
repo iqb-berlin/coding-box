@@ -15,7 +15,7 @@ export interface ResetVersionDialogData {
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'app-reset-version-dialog',
+  selector: 'coding-box-reset-version-dialog',
   standalone: true,
   imports: [
     MatDialogModule,
@@ -341,9 +341,9 @@ export interface ResetVersionDialogData {
   `]
 })
 export class ResetVersionDialogComponent {
-  versionLabel: string;
-  cascadeVersions: string[] = [];
-  resetVersions: string[] = [];
+  protected versionLabel: string;
+  protected cascadeVersions: string[] = [];
+  protected resetVersions: string[] = [];
   resultImpactKey: string;
 
   constructor(
@@ -356,7 +356,7 @@ export class ResetVersionDialogComponent {
     this.resultImpactKey = `coding-management.reset-dialog.result-impact.${data.version}`;
   }
 
-  onCancel(): void {
+  protected onCancel(): void {
     this.dialogRef.close(false);
   }
 

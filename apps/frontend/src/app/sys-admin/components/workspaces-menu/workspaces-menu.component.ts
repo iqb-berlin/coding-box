@@ -90,7 +90,7 @@ export class WorkspacesMenuComponent {
     }
   }
 
-  deleteWorkspace(): void {
+  protected deleteWorkspace(): void {
     const selectedWorkspaces = this.selectedWorkspaces();
     if (selectedWorkspaces.length) {
       const content = (selectedWorkspaces.length === 1) ?
@@ -114,7 +114,7 @@ export class WorkspacesMenuComponent {
     }
   }
 
-  editUserAccessRightsToWorkspace(): void {
+  protected editUserAccessRightsToWorkspace(): void {
     const dialogRef = this.UserAccessRightsToWorkspaceDialog.open(UserAccessRightsDialogComponent, {
       width: '600px',
       minHeight: '600px',

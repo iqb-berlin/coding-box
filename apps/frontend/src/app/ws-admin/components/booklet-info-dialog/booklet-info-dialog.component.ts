@@ -30,12 +30,12 @@ import { XmlViewerComponent } from '../../../shared/components/xml-viewer/xml-vi
   ]
 })
 export class BookletInfoDialogComponent implements OnInit {
-  isLoading = true;
-  errorMessage: string | null = null;
+  protected isLoading = true;
+  protected errorMessage: string | null = null;
 
   constructor(
     public dialogRef: MatDialogRef<BookletInfoDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: {
+    @Inject(MAT_DIALOG_DATA) protected data: {
       bookletInfo: BookletInfoDto;
       bookletId: string;
     }
@@ -47,7 +47,7 @@ export class BookletInfoDialogComponent implements OnInit {
     }
   }
 
-  get unitsOutsideTestlets(): BookletUnitDto[] {
+  protected get unitsOutsideTestlets(): BookletUnitDto[] {
     const info = this.data.bookletInfo;
 
     if (!info || !info.units || info.units.length === 0) {
@@ -68,11 +68,11 @@ export class BookletInfoDialogComponent implements OnInit {
     return info.units.filter((unit: BookletUnitDto) => !unitsInTestlets.has(unit.id));
   }
 
-  get hasUnitsTab(): boolean {
+  protected get hasUnitsTab(): boolean {
     return this.unitsOutsideTestlets.length > 0;
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 }

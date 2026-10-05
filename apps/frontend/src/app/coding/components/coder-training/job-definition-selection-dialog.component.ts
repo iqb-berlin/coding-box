@@ -73,17 +73,17 @@ import { JobDefinition } from '../../services/coding-job-backend.service';
 export class JobDefinitionSelectionDialogComponent {
   private dialogRef = inject(MatDialogRef<JobDefinitionSelectionDialogComponent>);
 
-  defaultSampleCountControl = new FormControl(10, [
+  protected defaultSampleCountControl = new FormControl(10, [
     Validators.required,
     Validators.min(1),
     Validators.max(1000)
   ]);
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 
-  onSelect(definition: JobDefinition): void {
+  protected onSelect(definition: JobDefinition): void {
     if (this.defaultSampleCountControl.valid) {
       this.dialogRef.close({
         jobDefinition: definition,

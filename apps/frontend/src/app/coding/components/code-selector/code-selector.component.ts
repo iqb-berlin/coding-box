@@ -61,7 +61,7 @@ interface IndexedReplayUnit {
 }
 
 @Component({
-  selector: 'app-code-selector',
+  selector: 'coding-box-code-selector',
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   imports: [FormsModule, MatListModule, MatButtonModule, MatDividerModule, MatFormFieldModule, MatInputModule, MatIconModule, MatTooltipModule, MatProgressBarModule, TranslateModule],
@@ -73,7 +73,7 @@ interface IndexedReplayUnit {
   }
 })
 export class CodeSelectorComponent implements OnChanges {
-  readonly onActionKeydown = activateOnKeyboard;
+  protected readonly onActionKeydown = activateOnKeyboard;
 
   private readonly injector = inject(Injector);
 
@@ -87,7 +87,7 @@ export class CodeSelectorComponent implements OnChanges {
   readonly preSelectedCodeId = input<number | null>(null);
   readonly preSelectedCodingIssueOptionId = input<number | null>(null);
   readonly coderNotes = input('');
-  readonly draftCoderNotes = linkedSignal(() => this.coderNotes());
+  protected readonly draftCoderNotes = linkedSignal(() => this.coderNotes());
   readonly showProgress = input<boolean>(false);
   readonly completedCount = input<number>(0);
   readonly totalUnits = input<number>(0);
@@ -135,7 +135,7 @@ export class CodeSelectorComponent implements OnChanges {
   readonly selectedCode = signal<number | null>(null);
   readonly selectedCodingIssueOption = signal<number | null>(null);
   readonly newCodeCommentValidationError = signal(false);
-  readonly variableManualInstruction = signal<string | null>(null);
+  protected readonly variableManualInstruction = signal<string | null>(null);
   readonly legacySelectedCode = signal<SelectableItem | null>(null);
   readonly isSupportSectionExpanded = signal(true);
   private allRegularCodeItems: SelectableItem[] = [];
@@ -308,7 +308,7 @@ export class CodeSelectorComponent implements OnChanges {
     }
   }
 
-  getSafeHtml(instructions: string): SafeHtml {
+  protected getSafeHtml(instructions: string): SafeHtml {
     const html = instructions || '';
     const cached = this.safeHtmlCache.get(html);
     if (cached) return cached;
@@ -327,7 +327,7 @@ export class CodeSelectorComponent implements OnChanges {
     };
   }
 
-  readonly legacyCodeNoteTranslationKey = computed<string>(() => (this.legacySelectedCode()?.type === 'missingLegacyCode' ?
+  protected readonly legacyCodeNoteTranslationKey = computed<string>(() => (this.legacySelectedCode()?.type === 'missingLegacyCode' ?
     'code-selector.legacy-code-missing-note' :
     'code-selector.legacy-code-note'));
 
@@ -391,7 +391,7 @@ export class CodeSelectorComponent implements OnChanges {
     return this.getReviewCodeSelection(codeId)?.coderNames.length || 0;
   }
 
-  getReviewCodeSelectionTooltip(codeId: number): string {
+  protected getReviewCodeSelectionTooltip(codeId: number): string {
     const selection = this.getReviewCodeSelection(codeId);
     if (!selection) {
       return '';
@@ -409,13 +409,13 @@ export class CodeSelectorComponent implements OnChanges {
     ));
   }
 
-  get hasVariableManualInstruction(): boolean {
+  protected get hasVariableManualInstruction(): boolean {
     return !this.suppressGeneralInstructions() && !!this.variableManualInstruction()?.trim();
   }
 
-  readonly isRegularSelectionDisabled = computed<boolean>(() => this.selectedCodingIssueOption() === -3 || this.selectedCodingIssueOption() === -4);
+  protected readonly isRegularSelectionDisabled = computed<boolean>(() => this.selectedCodingIssueOption() === -3 || this.selectedCodingIssueOption() === -4);
 
-  isCodingIssueOptionDisabled(item: SelectableItem): boolean {
+  protected isCodingIssueOptionDisabled(item: SelectableItem): boolean {
     if (this.isReadOnly()) return true;
     return item.id === this.codeAssignmentUncertainOptionId && this.selectedCode() === null;
   }
@@ -475,12 +475,12 @@ export class CodeSelectorComponent implements OnChanges {
     this.openNavigateDialog.emit();
   }
 
-  onCommentClick(): void {
+  protected onCommentClick(): void {
     if (this.isReadOnly()) return;
     this.openCommentDialog.emit();
   }
 
-  onCodingJobsClick(): void {
+  protected onCodingJobsClick(): void {
     this.openCodingJobs.emit();
   }
 
@@ -495,7 +495,7 @@ export class CodeSelectorComponent implements OnChanges {
     this.notesChanged.emit(this.draftCoderNotes());
   }
 
-  onNotesCommitted(): void {
+  protected onNotesCommitted(): void {
     if (this.isReadOnly()) return;
     this.notesCommitted.emit(this.draftCoderNotes());
   }
@@ -573,7 +573,7 @@ export class CodeSelectorComponent implements OnChanges {
     return hasNext && this.hasSavedCurrentSelection() && !this.hasSaveError();
   }
 
-  hasPreviousUnit(): boolean {
+  protected hasPreviousUnit(): boolean {
     const data = this.unitsData();
     if (this.isNavigationDisabled()) return false;
     if (!data) return false;
@@ -624,7 +624,7 @@ export class CodeSelectorComponent implements OnChanges {
     }
   }
 
-  getShortcutLabel(id: number): string {
+  protected getShortcutLabel(id: number): string {
     switch (id) {
       case -1: return '÷'; // Display for Divide
       case -3: return '×'; // Display for Multiply
@@ -634,11 +634,11 @@ export class CodeSelectorComponent implements OnChanges {
     }
   }
 
-  get progressSummary(): string {
+  protected get progressSummary(): string {
     return `${this.completedCount()}/${this.totalUnits()} (${this.progressPercentage()}%)`;
   }
 
-  get progressTooltip(): string {
+  protected get progressTooltip(): string {
     return this.translateService.instant('code-selector.progress-tooltip', {
       completed: this.completedCount(),
       total: this.totalUnits(),
@@ -647,7 +647,7 @@ export class CodeSelectorComponent implements OnChanges {
     });
   }
 
-  get supportSectionTitle(): string {
+  protected get supportSectionTitle(): string {
     if (!this.allowComments()) {
       return this.translateService.instant('code-selector.general-codes');
     }
@@ -655,7 +655,7 @@ export class CodeSelectorComponent implements OnChanges {
     return this.translateService.instant('code-selector.general-codes-and-notes');
   }
 
-  toggleSupportSection(): void {
+  protected toggleSupportSection(): void {
     this.isSupportSectionExpanded.set(!this.isSupportSectionExpanded());
   }
 
@@ -676,11 +676,11 @@ export class CodeSelectorComponent implements OnChanges {
     return this.codingIssueOptionCodes().some(item => item.id === codeId);
   }
 
-  get totalNavigationUnits(): number {
+  protected get totalNavigationUnits(): number {
     return this.unitsData()?.units.length || 0;
   }
 
-  get currentNavigationIndex(): number {
+  protected get currentNavigationIndex(): number {
     return (this.unitsData()?.currentUnitIndex || 0) + 1;
   }
 
@@ -700,7 +700,7 @@ export class CodeSelectorComponent implements OnChanges {
     }
   }
 
-  toggleBundleVariablePanel(): void {
+  protected toggleBundleVariablePanel(): void {
     if (this.isNavigationDisabled()) return;
     this.isBundleVariablePanelOpen.set(!this.isBundleVariablePanelOpen());
     if (this.isBundleVariablePanelOpen()) {
@@ -722,7 +722,7 @@ export class CodeSelectorComponent implements OnChanges {
     this.jumpToVariable(key);
   }
 
-  selectNavigationItem(key: string): void {
+  protected selectNavigationItem(key: string): void {
     if (this.isNavigationDisabled()) return;
     this.closeVariablePanel();
     this.jumpToNavigationItem(key);
@@ -748,7 +748,7 @@ export class CodeSelectorComponent implements OnChanges {
     return this.getProgressForUnits(units);
   }
 
-  getProgressForNavigationItem(item: NavigationItem): { coded: number; total: number; percentage: number } {
+  protected getProgressForNavigationItem(item: NavigationItem): { coded: number; total: number; percentage: number } {
     if (!this.unitsData()?.units || !this.codingService()) return { coded: 0, total: 0, percentage: 0 };
     if (item.type === 'bundle') {
       this.ensureUnitIndexes();
@@ -839,13 +839,13 @@ export class CodeSelectorComponent implements OnChanges {
     return !this.shouldShowBundleVariableChips && this.bundleVariableNavigationItems.length > 1;
   }
 
-  get shouldShowVariableSelectorSection(): boolean {
+  protected get shouldShowVariableSelectorSection(): boolean {
     return this.navigationItems.length > 1 ||
       this.shouldShowBundleVariableChips ||
       this.shouldShowBundleVariableDropdown;
   }
 
-  get bundleVariableChips(): BundleVariableNavigationItem[] {
+  protected get bundleVariableChips(): BundleVariableNavigationItem[] {
     return this.bundleVariableNavigationItems;
   }
 
@@ -921,7 +921,7 @@ export class CodeSelectorComponent implements OnChanges {
     return unit === currentUnit;
   }
 
-  get activeBundleVariableNavigationItem(): BundleVariableNavigationItem | null {
+  protected get activeBundleVariableNavigationItem(): BundleVariableNavigationItem | null {
     return this.bundleVariableNavigationItems.find(item => item.active) || null;
   }
 
@@ -958,7 +958,7 @@ export class CodeSelectorComponent implements OnChanges {
     return `${unit.alias || unit.name}::${unit.variableId}`;
   }
 
-  get activeNavigationKey(): string {
+  protected get activeNavigationKey(): string {
     const unitsData = this.unitsData();
     if (!unitsData?.units) return '';
     const unit = unitsData.units[unitsData.currentUnitIndex];
@@ -972,7 +972,7 @@ export class CodeSelectorComponent implements OnChanges {
     return '';
   }
 
-  get activeNavigationItem(): NavigationItem | null {
+  protected get activeNavigationItem(): NavigationItem | null {
     return this.navigationItems.find(item => item.key === this.activeNavigationKey) || null;
   }
 

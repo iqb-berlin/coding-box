@@ -46,7 +46,7 @@ import { ItemMatrixDiagnosticsDialogComponent } from './item-matrix-diagnostics-
   styleUrls: ['./export-toast.component.scss']
 })
 export class ExportToastComponent {
-  readonly onActionKeydown = activateOnKeyboard;
+  protected readonly onActionKeydown = activateOnKeyboard;
 
   private exportJobService = inject(ExportJobService);
   private translateService = inject(TranslateService);
@@ -241,7 +241,7 @@ export class ExportToastComponent {
     this.exportJobService.cancelJob(job);
   }
 
-  isItemMatrixResolutionError(
+  protected isItemMatrixResolutionError(
     job: ExportJob
   ): job is ExportJob & ItemMatrixExportJobErrorDto {
     return job.errorCode === ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE;

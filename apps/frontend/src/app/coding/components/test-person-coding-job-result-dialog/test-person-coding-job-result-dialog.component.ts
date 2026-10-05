@@ -21,13 +21,13 @@ interface DialogData {
   styleUrls: ['./test-person-coding-job-result-dialog.component.scss']
 })
 export class TestPersonCodingJobResultDialogComponent {
-  displayedColumns = ['status', 'count'];
-  statusRows: { status: string; count: number }[] = [];
+  protected displayedColumns = ['status', 'count'];
+  protected statusRows: { status: string; count: number }[] = [];
   warnings: string[] = [];
-  effectiveTotal = 0;
+  protected effectiveTotal = 0;
 
   constructor(
-    @Inject(MAT_DIALOG_DATA) public data: DialogData,
+    @Inject(MAT_DIALOG_DATA) protected data: DialogData,
     private dialogRef: MatDialogRef<TestPersonCodingJobResultDialogComponent>
   ) {
     const result = data.job.result;
@@ -49,7 +49,7 @@ export class TestPersonCodingJobResultDialogComponent {
     }
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 }

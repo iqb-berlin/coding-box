@@ -9,7 +9,6 @@ import {
   MatDialogRef,
   MatDialogTitle
 } from '@angular/material/dialog';
-import { NgStyle } from '@angular/common';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
@@ -24,7 +23,7 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'app-tag-dialog',
+  selector: 'coding-box-tag-dialog',
   template: `
     <div class="dialog-header">
       <h1 mat-dialog-title>{{ data.title || 'Unit Tags' }}</h1>
@@ -42,11 +41,11 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
         <div class="tags-container">
           <div class="tags-list">
             @for (tag of tags; track tag) {
-              <div class="tag-item" [ngStyle]="{'background-color': tag.color || '#e3f2fd'}">
-                <span class="tag-text" [ngStyle]="{'color': getContrastColor(tag.color)}">{{ tag.tag }}</span>
+              <div class="tag-item" [style.background-color]="tag.color || '#e3f2fd'">
+                <span class="tag-text" [style.color]="getContrastColor(tag.color)">{{ tag.tag }}</span>
                 <div class="tag-actions">
                   <button mat-icon-button (click)="deleteTag(tag.id)" class="tag-action-button" matTooltip="Tag löschen">
-                    <mat-icon [ngStyle]="{'color': getContrastColor(tag.color)}">close</mat-icon>
+                    <mat-icon [style.color]="getContrastColor(tag.color)">close</mat-icon>
                   </button>
                 </div>
               </div>
@@ -217,7 +216,6 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
     MatButton,
     MatIconButton,
     MatIcon,
-    NgStyle,
     MatFormField,
     MatLabel,
     MatInput,
@@ -230,7 +228,7 @@ export class TagDialogComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
 
   dialogRef = inject<MatDialogRef<TagDialogComponent>>(MatDialogRef);
-  data = inject<{
+  protected data = inject<{
     unitId: number;
     tags: UnitTagDto[];
     title?: string;
@@ -242,7 +240,7 @@ export class TagDialogComponent implements OnInit {
   private cdr = inject(ChangeDetectorRef);
 
   tags: UnitTagDto[] = [];
-  newTagText: string = '';
+  protected newTagText: string = '';
 
   ngOnInit(): void {
     this.tags = [...this.data.tags];
@@ -251,7 +249,7 @@ export class TagDialogComponent implements OnInit {
   /**
    * Add a new tag to the unit
    */
-  addTag(): void {
+  protected addTag(): void {
     if (!this.newTagText.trim()) {
       this.snackBar.open(
         'Bitte geben Sie einen Tag-Text ein',
@@ -295,7 +293,7 @@ export class TagDialogComponent implements OnInit {
    * Delete a tag from the unit
    * @param tagId The ID of the tag to delete
    */
-  deleteTag(tagId: number): void {
+  protected deleteTag(tagId: number): void {
     this.unitTagService.deleteUnitTag(
       this.appService.selectedWorkspaceId,
       tagId
@@ -333,7 +331,7 @@ export class TagDialogComponent implements OnInit {
    * @param backgroundColor The background color in any valid CSS format (hex, rgb, etc.)
    * @returns Either 'black' or 'white' depending on the background brightness
    */
-  getContrastColor(backgroundColor?: string): string {
+  protected getContrastColor(backgroundColor?: string): string {
     // If no color is provided, return black (for default light backgrounds)
     if (!backgroundColor) {
       return '#000000';
@@ -389,7 +387,7 @@ export class TagDialogComponent implements OnInit {
   /**
    * Closes the dialog and returns the updated tags
    */
-  closeDialog(): void {
+  protected closeDialog(): void {
     this.dialogRef.close(this.tags);
   }
 }

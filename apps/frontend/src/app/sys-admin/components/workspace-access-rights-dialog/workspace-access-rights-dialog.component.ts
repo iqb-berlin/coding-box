@@ -31,7 +31,7 @@ export class WorkspaceAccessRightsDialogComponent {
 
   readonly selectedWorkspacesIds = signal<number[]>([]);
   readonly isLoadingUserWorkspaces = signal(false);
-  readonly workspaceListReady = signal(false);
+  protected readonly workspaceListReady = signal(false);
   readonly userWorkspacesLoadingFailed = signal(false);
   readonly result = signal<number[]>([]);
   constructor() {
@@ -54,7 +54,7 @@ export class WorkspaceAccessRightsDialogComponent {
     }
   }
 
-  setWorkspacesSelection(result: WorkspaceInListDto[]): void {
+  protected setWorkspacesSelection(result: WorkspaceInListDto[]): void {
     if (result && Array.isArray(result)) {
       this.result.set(result.map(workspace => workspace.id));
     } else {

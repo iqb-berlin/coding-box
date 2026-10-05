@@ -43,10 +43,10 @@ export class GithubReleasesDialogComponent implements OnInit {
   private snackBar = inject(MatSnackBar);
   translate = inject(TranslateService);
 
-  readonly releases = signal<GithubReleaseShort[]>([]);
-  readonly isLoading = signal(false);
-  displayedColumns = ['name', 'version', 'published_at', 'actions'];
-  readonly selectedType = signal<'aspect-player' | 'schemer'>('aspect-player');
+  protected readonly releases = signal<GithubReleaseShort[]>([]);
+  protected readonly isLoading = signal(false);
+  protected displayedColumns = ['name', 'version', 'published_at', 'actions'];
+  protected readonly selectedType = signal<'aspect-player' | 'schemer'>('aspect-player');
 
   constructor(
     public dialogRef: MatDialogRef<GithubReleasesDialogComponent>,
@@ -57,7 +57,7 @@ export class GithubReleasesDialogComponent implements OnInit {
     this.loadReleases();
   }
 
-  setType(type: 'aspect-player' | 'schemer'): void {
+  protected setType(type: 'aspect-player' | 'schemer'): void {
     this.selectedType.set(type);
     this.loadReleases();
   }
@@ -78,7 +78,7 @@ export class GithubReleasesDialogComponent implements OnInit {
       });
   }
 
-  install(release: GithubReleaseShort): void {
+  protected install(release: GithubReleaseShort): void {
     this.isLoading.set(true);
     this.fileService.installGithubRelease(this.data.workspaceId, release.url).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
@@ -98,7 +98,7 @@ export class GithubReleasesDialogComponent implements OnInit {
       });
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 }

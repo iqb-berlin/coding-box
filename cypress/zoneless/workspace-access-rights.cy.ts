@@ -39,7 +39,7 @@ describe('zoneless users in workspace access rights', () => {
       cy.wait('@saveRightsRetry').its('response.statusCode').should('eq', 500);
       cy.get('@rights').contains('tr', 'Workspace user').find('input[type="checkbox"]').eq(2).should('be.checked');
       cy.get('@rights').find('button').should('be.enabled');
-      cy.get('app-error-message-display .close-button').click();
+      cy.get('coding-box-error-message-display .close-button').click();
       cy.get('@rights').find('button').click();
       cy.wait('@saveRightsRetry').its('response.statusCode').should('eq', 200);
       cy.get('@rights').find('button').should('be.disabled');

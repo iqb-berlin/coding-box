@@ -95,30 +95,30 @@ export class VariableAnalysisDialogComponent implements OnInit {
 
   private readonly changeDetectorRef = inject(ChangeDetectorRef);
 
-  readonly distributionRowsTooltip =
+  protected readonly distributionRowsTooltip =
     'Eine Verteilungszeile entspricht einer Kombination aus Aufgaben-ID, Variablen-ID und Code.';
 
-  readonly occurrenceCountTooltip =
+  protected readonly occurrenceCountTooltip =
     'Wie oft dieser konkrete Code bei dieser Aufgabe und Variable vorkommt.';
 
-  readonly totalCountTooltip =
+  protected readonly totalCountTooltip =
     'Alle Antworten zu dieser Aufgabe und Variable, unabhängig vom Code.';
 
-  readonly relativeOccurrenceTooltip =
+  protected readonly relativeOccurrenceTooltip =
     'Vorkommen dieses Codes geteilt durch die Antworten gesamt zu dieser Aufgabe und Variable.';
 
   variableAnalysisData: VariableAnalysisItemDto[] = [];
-  variableAnalysisDataSource = new MatTableDataSource<VariableAnalysisItemDto>([]);
-  variableAnalysisColumns: string[] = [
+  protected variableAnalysisDataSource = new MatTableDataSource<VariableAnalysisItemDto>([]);
+  protected variableAnalysisColumns: string[] = [
     'replayUrl', 'unitId', 'variableId',
     'code', 'score', 'occurrenceCount',
     'totalCount', 'relativeOccurrence'
   ];
 
-  totalVariableAnalysisRecords = 0;
-  variableAnalysisPageIndex = 0;
-  variableAnalysisPageSize = 200;
-  variableAnalysisPageSizeOptions = [100, 200, 500];
+  protected totalVariableAnalysisRecords = 0;
+  protected variableAnalysisPageIndex = 0;
+  protected variableAnalysisPageSize = 200;
+  protected variableAnalysisPageSizeOptions = [100, 200, 500];
   unitIdFilter = '';
   variableIdFilter = '';
   enableRegexSearch = false;
@@ -214,13 +214,13 @@ export class VariableAnalysisDialogComponent implements OnInit {
       });
   }
 
-  onVariableAnalysisPaginatorChange(event: PageEvent): void {
+  protected onVariableAnalysisPaginatorChange(event: PageEvent): void {
     const page = event.pageIndex + 1; // Convert from 0-based to 1-based index
     const limit = event.pageSize;
     this.fetchVariableAnalysis(page, limit);
   }
 
-  clearVariableAnalysisFilters(): void {
+  protected clearVariableAnalysisFilters(): void {
     this.unitIdFilter = '';
     this.variableIdFilter = '';
     this.fetchVariableAnalysis(1, this.variableAnalysisPageSize);
@@ -237,11 +237,11 @@ export class VariableAnalysisDialogComponent implements OnInit {
     this.variableAnalysisFilterChanged.next();
   }
 
-  isVariableIdRegexInvalid(): boolean {
+  protected isVariableIdRegexInvalid(): boolean {
     return hasInvalidRegexFilter(this.variableIdFilter, this.enableRegexSearch);
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 }

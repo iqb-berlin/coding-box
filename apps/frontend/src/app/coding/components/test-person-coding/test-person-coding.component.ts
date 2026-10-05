@@ -109,7 +109,7 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
     'actions'
   ];
 
-  readonly isLoading = signal(false);
+  protected readonly isLoading = signal(false);
 
   currentPage = 1;
   pageSize = 20;
@@ -129,15 +129,15 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
   private jobStatusRequestId = 0;
   private latestAppliedJobStatusRequestId = 0;
 
-  readonly allJobs = signal<JobInfo[]>([]);
-  readonly jobsLoading = signal(false);
+  protected readonly allJobs = signal<JobInfo[]>([]);
+  protected readonly jobsLoading = signal(false);
   jobsRefreshInterval: number | null = null;
 
-  readonly availableGroups = signal<WorkspaceGroupCodingStats[]>([]);
-  selectedGroups: string[] = [];
-  readonly groupsLoading = signal(false);
+  protected readonly availableGroups = signal<WorkspaceGroupCodingStats[]>([]);
+  protected selectedGroups: string[] = [];
+  protected readonly groupsLoading = signal(false);
 
-  autoCoderRun: 1 | 2 = 1;
+  protected autoCoderRun: 1 | 2 = 1;
   private lastNotifiedCompletedJobId: string | null = null;
 
   ngOnInit(): void {
@@ -501,7 +501,7 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
     );
   }
 
-  cancelJob(jobId?: string): void {
+  protected cancelJob(jobId?: string): void {
     const idToCancel = jobId || this.activeJobId();
     if (!idToCancel) return;
 
@@ -534,7 +534,7 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
       });
   }
 
-  deleteJob(jobId: string): void {
+  protected deleteJob(jobId: string): void {
     if (!jobId) return;
 
     this.testPersonCodingService
@@ -566,7 +566,7 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
       });
   }
 
-  restartJob(jobId: string): void {
+  protected restartJob(jobId: string): void {
     if (!jobId) return;
 
     this.testPersonCodingService
@@ -637,7 +637,7 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
     });
   }
 
-  codeAllTestPersons(): void {
+  protected codeAllTestPersons(): void {
     if (this.availableGroups().length > 0) {
       this.selectedGroups = this.availableGroups().map(
         group => group.groupName
@@ -702,7 +702,7 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
       });
   }
 
-  formatDuration(durationMs: number): string {
+  protected formatDuration(durationMs: number): string {
     if (!durationMs) return '-';
     if (durationMs < 1000) {
       return `${Math.round(durationMs)}ms`;
@@ -727,15 +727,15 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
     return parts.join(' ');
   }
 
-  deselectAllGroups(): void {
+  protected deselectAllGroups(): void {
     this.selectedGroups = [];
   }
 
-  selectAllGroups(): void {
+  protected selectAllGroups(): void {
     this.selectedGroups = this.availableGroups().map(group => group.groupName);
   }
 
-  truncateText(text: string, maxLength: number): string {
+  protected truncateText(text: string, maxLength: number): string {
     if (!text) return '';
     return text.length > maxLength ? `${text.substring(0, maxLength)}...` : text;
   }

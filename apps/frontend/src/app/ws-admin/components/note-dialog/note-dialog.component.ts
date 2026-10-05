@@ -24,7 +24,7 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'app-note-dialog',
+  selector: 'coding-box-note-dialog',
   template: `
     <div class="dialog-header">
       <h1 mat-dialog-title>{{ data.title || 'Unit Notizen' }}</h1>
@@ -257,7 +257,7 @@ export class NoteDialogComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
 
   dialogRef = inject<MatDialogRef<NoteDialogComponent>>(MatDialogRef);
-  data = inject<{
+  protected data = inject<{
     unitId: number;
     notes: UnitNoteDto[];
     title?: string;
@@ -269,7 +269,7 @@ export class NoteDialogComponent implements OnInit {
   private cdr = inject(ChangeDetectorRef);
 
   notes: UnitNoteDto[] = [];
-  newNoteText: string = '';
+  protected newNoteText: string = '';
 
   ngOnInit(): void {
     this.notes = [...this.data.notes];
@@ -280,7 +280,7 @@ export class NoteDialogComponent implements OnInit {
    * @param date The date to format
    * @returns A formatted date string
    */
-  formatDate(date: Date): string {
+  protected formatDate(date: Date): string {
     return new Date(date).toLocaleString('de-DE', {
       year: 'numeric',
       month: '2-digit',
@@ -293,7 +293,7 @@ export class NoteDialogComponent implements OnInit {
   /**
    * Add a new note to the unit
    */
-  addNote(): void {
+  protected addNote(): void {
     if (!this.newNoteText.trim()) {
       this.snackBar.open(
         'Bitte geben Sie einen Notiz-Text ein',
@@ -337,7 +337,7 @@ export class NoteDialogComponent implements OnInit {
    * Delete a note from the unit
    * @param noteId The ID of the note to delete
    */
-  deleteNote(noteId: number): void {
+  protected deleteNote(noteId: number): void {
     this.unitNoteService.deleteUnitNote(
       this.appService.selectedWorkspaceId,
       noteId
@@ -373,7 +373,7 @@ export class NoteDialogComponent implements OnInit {
   /**
    * Closes the dialog and returns the updated notes
    */
-  closeDialog(): void {
+  protected closeDialog(): void {
     this.dialogRef.close(this.notes);
   }
 }

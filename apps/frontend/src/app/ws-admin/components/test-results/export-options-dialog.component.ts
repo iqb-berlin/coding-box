@@ -147,9 +147,9 @@ export class ExportOptionsDialogComponent implements OnInit {
 
   readonly dialogRef = inject(MatDialogRef<ExportOptionsDialogComponent>);
   readonly testResultBackendService = inject(TestResultBackendService);
-  readonly dialogData = inject(MAT_DIALOG_DATA);
+  protected readonly dialogData = inject(MAT_DIALOG_DATA);
 
-  data: ExportOptions = {
+  protected data: ExportOptions = {
     groupNames: [],
     bookletNames: [],
     unitNames: [],
@@ -157,7 +157,7 @@ export class ExportOptionsDialogComponent implements OnInit {
     includeLogAnomalies: false
   };
 
-  readonly availableOptions = signal<{
+  protected readonly availableOptions = signal<{
     testPersons: {
       id: number;
       code: string;
@@ -182,7 +182,7 @@ export class ExportOptionsDialogComponent implements OnInit {
     }
   }
 
-  onNoClick(): void {
+  protected onNoClick(): void {
     this.dialogRef.close();
   }
 }

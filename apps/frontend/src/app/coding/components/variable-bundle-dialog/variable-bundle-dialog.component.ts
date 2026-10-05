@@ -65,10 +65,10 @@ export interface VariableBundleGroupDialogData {
   ]
 })
 export class VariableBundleDialogComponent implements OnInit, AfterViewInit, OnDestroy {
-  readonly onActionKeydown = activateOnKeyboard;
+  protected readonly onActionKeydown = activateOnKeyboard;
 
-  readonly unitNameFilterInput = viewChild.required<ElementRef>('unitNameFilterInput');
-  readonly variableIdFilterInput = viewChild.required<ElementRef>('variableIdFilterInput');
+  protected readonly unitNameFilterInput = viewChild.required<ElementRef>('unitNameFilterInput');
+  protected readonly variableIdFilterInput = viewChild.required<ElementRef>('variableIdFilterInput');
 
   private fb = inject(FormBuilder);
   private codingJobBackendService = inject(CodingJobBackendService);
@@ -79,17 +79,17 @@ export class VariableBundleDialogComponent implements OnInit, AfterViewInit, OnD
   readonly isLoading = signal(false);
 
   // Variables
-  readonly availableVariables = signal<Variable[]>([]);
+  protected readonly availableVariables = signal<Variable[]>([]);
   selectedVariables = new SelectionModel<Variable>(true, []);
   displayedColumns: string[] = ['select', 'unitName', 'variableId'];
   readonly dataSource = new MatTableDataSource<Variable>([]);
-  readonly filteredVariables = toSignal(this.dataSource.connect(), { initialValue: [] as Variable[] });
+  protected readonly filteredVariables = toSignal(this.dataSource.connect(), { initialValue: [] as Variable[] });
 
   readonly isLoadingVariableAnalysis = signal(false);
 
   // Filters
-  unitNameFilter = '';
-  variableIdFilter = '';
+  protected unitNameFilter = '';
+  protected variableIdFilter = '';
   private readonly debounceTimeMs = 300;
 
   // Name auto-generation tracking
@@ -99,7 +99,7 @@ export class VariableBundleDialogComponent implements OnInit, AfterViewInit, OnD
 
   constructor(
     public dialogRef: MatDialogRef<VariableBundleDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: VariableBundleGroupDialogData
+    @Inject(MAT_DIALOG_DATA) protected data: VariableBundleGroupDialogData
   ) { }
 
   ngOnInit(): void {
@@ -265,24 +265,24 @@ export class VariableBundleDialogComponent implements OnInit, AfterViewInit, OnD
     }
   }
 
-  applyFilter(): void {
+  protected applyFilter(): void {
     this.dataSource.filter = JSON.stringify({
       unitName: this.unitNameFilter || '',
       variableId: this.variableIdFilter || ''
     });
   }
 
-  selectAll(): void {
+  protected selectAll(): void {
     this.dataSource.filteredData.forEach(variable => {
       this.selectedVariables.select(variable);
     });
   }
 
-  deselectAll(): void {
+  protected deselectAll(): void {
     this.selectedVariables.clear();
   }
 
-  clearFilters(): void {
+  protected clearFilters(): void {
     this.unitNameFilter = '';
     this.variableIdFilter = '';
 
@@ -316,7 +316,7 @@ export class VariableBundleDialogComponent implements OnInit, AfterViewInit, OnD
     this.dialogRef.close(bundleGroup);
   }
 
-  onCancel(): void {
+  protected onCancel(): void {
     this.dialogRef.close();
   }
 }

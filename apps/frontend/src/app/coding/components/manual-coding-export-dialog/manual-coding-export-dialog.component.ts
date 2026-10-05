@@ -67,23 +67,23 @@ export class ManualCodingExportDialogComponent {
   exportMode: ManualCodingExportMode = 'review';
   reportExportType: Exclude<ManualCodingExportType, 'aggregated'> = 'detailed';
   doubleCodingMethod: 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent' = 'most-frequent';
-  outputCommentsInsteadOfCodes = false;
-  includeComments = true;
-  includeModalValue = true;
+  protected outputCommentsInsteadOfCodes = false;
+  protected includeComments = true;
+  protected includeModalValue = true;
   includeReplayUrl = false;
   includeResponseValues = false;
-  anonymizeCoders = false;
-  usePseudoCoders = false;
+  protected anonymizeCoders = false;
+  protected usePseudoCoders = false;
   selectedJobDefinitionIds: number[] = [];
   selectedCoderTrainingIds: number[] = [];
-  selectedCoderIds: number[] = [];
+  protected selectedCoderIds: number[] = [];
 
   constructor(
     public dialogRef: MatDialogRef<ManualCodingExportDialogComponent, ManualCodingExportDialogResult>,
-    @Inject(MAT_DIALOG_DATA) public data: ManualCodingExportDialogData
+    @Inject(MAT_DIALOG_DATA) protected data: ManualCodingExportDialogData
   ) { }
 
-  get contextSubtitleKey(): string {
+  protected get contextSubtitleKey(): string {
     return this.data.context === 'training' ?
       'manual-coding-export.subtitle-training' :
       'manual-coding-export.subtitle-execution';

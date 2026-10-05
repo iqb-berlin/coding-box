@@ -13,7 +13,7 @@ import { AppService, AuthBootstrapStatus } from '../../../core/services/app.serv
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'coding-book-user-workspaces',
+  selector: 'coding-box-user-workspaces',
   templateUrl: './user-workspaces.component.html',
   styleUrls: ['./user-workspaces.component.scss'],
   imports: [MatAnchor, RouterLink, TranslateModule, MatButton, MatIcon, MatProgressSpinner]
@@ -21,34 +21,34 @@ import { AppService, AuthBootstrapStatus } from '../../../core/services/app.serv
 
 export class UserWorkspacesComponent {
   private readonly destroyRef = inject(DestroyRef);
-  authService = inject(AuthService);
-  appService = inject(AppService);
+  protected authService = inject(AuthService);
+  protected appService = inject(AppService);
   readonly workspaces = input<WorkspaceFullDto[]>([]);
   readonly authBootstrapStatus = input<AuthBootstrapStatus>('checking');
   readonly authDataLoaded = input(false);
-  readonly authDataReloadRunning = signal(false);
+  protected readonly authDataReloadRunning = signal(false);
 
-  get showLoading(): boolean {
+  protected get showLoading(): boolean {
     const authBootstrapStatus = this.authBootstrapStatus();
     return this.authService.isLoggedIn() === true &&
       !this.authDataLoaded() &&
       (authBootstrapStatus === 'checking' || authBootstrapStatus === 'backend-login-running');
   }
 
-  get showSessionExpired(): boolean {
+  protected get showSessionExpired(): boolean {
     return this.authService.isLoggedIn() === true &&
       !this.authDataLoaded() &&
       this.authBootstrapStatus() === 'session-expired';
   }
 
-  get showAuthDataError(): boolean {
+  protected get showAuthDataError(): boolean {
     const authBootstrapStatus = this.authBootstrapStatus();
     return this.authService.isLoggedIn() === true &&
       !this.authDataLoaded() &&
       (authBootstrapStatus === 'auth-data-failed' || authBootstrapStatus === 'ready');
   }
 
-  get showEmptyWorkspaces(): boolean {
+  protected get showEmptyWorkspaces(): boolean {
     return this.authService.isLoggedIn() === true &&
       this.authDataLoaded() &&
       (this.workspaces() || []).length === 0;

@@ -84,7 +84,7 @@ describe('real Keycloak coding session', () => {
       replay.hash = `${route}?${params}`;
       cy.visit(replay.toString(), { log: false });
     });
-    cy.get('app-code-selector [data-code-id="1"]').should('be.visible');
+    cy.get('coding-box-code-selector [data-code-id="1"]').should('be.visible');
     // Advance only browser timeout callbacks; Keycloak and the backend retain real time.
     cy.clock(Date.now(), ['setTimeout', 'clearTimeout']);
     cy.window().then(win => win.dispatchEvent(new Event('mousemove')));
@@ -98,29 +98,29 @@ describe('real Keycloak coding session', () => {
     cy.wait('@extendSession').its('response.statusCode').should('eq', 200);
     cy.get('.session-expiry-warning').should('not.exist');
     cy.get('.re-authentication').should('not.exist');
-    cy.get('app-code-selector [data-code-id="1"]').click();
+    cy.get('coding-box-code-selector [data-code-id="1"]').click();
     cy.intercept('POST', '**/coding-job/*/notes', (request) => {
       if (request.body.notes === 'Persisted live note') {
         request.alias = 'persistedNote';
       }
     });
-    cy.get('app-code-selector textarea')
+    cy.get('coding-box-code-selector textarea')
       .clear()
       .type('Persisted live note')
       .blur();
-    cy.get('app-code-selector textarea').should(
+    cy.get('coding-box-code-selector textarea').should(
       'have.value',
       'Persisted live note'
     );
 
     cy.wait('@persistedNote').its('response.statusCode').should('eq', 201);
-    cy.get('app-code-selector .next-button').should('not.be.disabled');
+    cy.get('coding-box-code-selector .next-button').should('not.be.disabled');
     cy.reload();
-    cy.get('app-code-selector [data-code-id="1"]').should(
+    cy.get('coding-box-code-selector [data-code-id="1"]').should(
       'have.class',
       'selected'
     );
-    cy.get('app-code-selector textarea').should(
+    cy.get('coding-box-code-selector textarea').should(
       'have.value',
       'Persisted live note'
     );
@@ -136,16 +136,16 @@ describe('real Keycloak coding session', () => {
         releaseProgress = () => { request.continue(); resolve(); };
       });
     });
-    cy.get('app-code-selector [data-code-id="0"]').click();
+    cy.get('coding-box-code-selector [data-code-id="0"]').click();
     cy.wrap(null).should(() => { expect(releaseProgress).to.be.a('function'); });
-    cy.get('app-code-selector [data-code-id="-2"]').click();
+    cy.get('coding-box-code-selector [data-code-id="-2"]').click();
     cy.then(() => releaseProgress!());
     cy.wait('@newCodeNeeded').its('response.statusCode').should('eq', 201);
     cy.reload();
-    cy.get('app-code-selector [data-code-id="-2"]').should('have.class', 'selected');
-    cy.get('app-code-selector .deselect-button').click();
-    cy.get('app-code-selector [data-code-id="1"]').click();
-    cy.get('app-code-selector .next-button').should('not.be.disabled');
+    cy.get('coding-box-code-selector [data-code-id="-2"]').should('have.class', 'selected');
+    cy.get('coding-box-code-selector .deselect-button').click();
+    cy.get('coding-box-code-selector [data-code-id="1"]').click();
+    cy.get('coding-box-code-selector .next-button').should('not.be.disabled');
 
     let failNotes = true;
     cy.intercept('POST', '**/coding-job/*/notes', (request) => {
@@ -156,7 +156,7 @@ describe('real Keycloak coding session', () => {
         });
       else request.continue();
     });
-    cy.get('app-code-selector textarea')
+    cy.get('coding-box-code-selector textarea')
       .clear()
       .type('Recovered live draft')
       .blur();
@@ -173,7 +173,7 @@ describe('real Keycloak coding session', () => {
     // A refresh can race with the server-side session revocation. Arm its observer first.
     cy.then(() => { rejectExpiredRefresh = true; });
     cy.task('coding:expire-session', null, { log: false });
-    cy.get('app-code-selector textarea').then((textarea) => {
+    cy.get('coding-box-code-selector textarea').then((textarea) => {
       const field = textarea[0] as HTMLTextAreaElement;
       if (!field.disabled) {
         const InputEvent = field.ownerDocument.defaultView?.Event;
@@ -213,11 +213,11 @@ describe('real Keycloak coding session', () => {
         cy.get('#kc-login').click();
       }
     );
-    cy.get('app-code-selector textarea').should(
+    cy.get('coding-box-code-selector textarea').should(
       'have.value',
       'Recovered live draft'
     );
-    cy.get('app-code-selector .next-button').should('not.be.disabled');
+    cy.get('coding-box-code-selector .next-button').should('not.be.disabled');
     cy.window().should((win) => {
       const drafts = Object.keys(win.sessionStorage).filter((key) =>
         key.startsWith('coding-box-session-recovery:')
@@ -225,7 +225,7 @@ describe('real Keycloak coding session', () => {
       expect(drafts, 'persisted recovery drafts are cleared').to.have.length(0);
     });
     cy.reload();
-    cy.get('app-code-selector textarea').should(
+    cy.get('coding-box-code-selector textarea').should(
       'have.value',
       'Recovered live draft'
     );
@@ -233,31 +233,31 @@ describe('real Keycloak coding session', () => {
     cy.intercept('PUT', '**/coding-job/*', (request) => {
       if (request.body.comment === 'Live job comment') request.alias = 'jobComment';
     });
-    cy.get('app-code-selector .comment-button').click();
+    cy.get('coding-box-code-selector .comment-button').click();
     cy.get('coding-box-coding-job-comment-dialog textarea').type('Live job comment');
     cy.get('coding-box-coding-job-comment-dialog').contains('button', 'Speichern').click();
     cy.wait('@jobComment').its('response.statusCode').should('be.oneOf', [200, 201]);
     cy.reload();
-    cy.get('app-code-selector .comment-button').click();
+    cy.get('coding-box-code-selector .comment-button').click();
     cy.get('coding-box-coding-job-comment-dialog textarea')
       .should('have.value', 'Live job comment');
     cy.get('coding-box-coding-job-comment-dialog').contains('button', 'Abbrechen').click();
 
     cy.intercept('POST', '**/coding-job/*/pause').as('pause');
     cy.intercept('POST', '**/coding-job/*/resume').as('resume');
-    cy.get('app-code-selector .pause-button').click();
+    cy.get('coding-box-code-selector .pause-button').click();
     cy.wait('@pause').its('response.statusCode').should('eq', 201);
     cy.get('.pause-overlay .resume-button').should('be.visible').click();
     cy.wait('@resume').its('response.statusCode').should('eq', 201);
     cy.get('.pause-overlay').should('not.exist');
-    cy.get('app-code-selector .next-button').click();
-    cy.get('app-code-selector .current-position').should('have.text', '2');
-    cy.get('app-code-selector .prev-button').click();
-    cy.get('app-code-selector .current-position').should('have.text', '1');
-    cy.get('app-code-selector [data-code-id="1"]').should('have.class', 'selected');
-    cy.get('app-code-selector .next-button').click();
-    cy.get('app-code-selector .current-position').should('have.text', '2');
-    cy.get('app-code-selector [data-code-id="0"]').click();
+    cy.get('coding-box-code-selector .next-button').click();
+    cy.get('coding-box-code-selector .current-position').should('have.text', '2');
+    cy.get('coding-box-code-selector .prev-button').click();
+    cy.get('coding-box-code-selector .current-position').should('have.text', '1');
+    cy.get('coding-box-code-selector [data-code-id="1"]').should('have.class', 'selected');
+    cy.get('coding-box-code-selector .next-button').click();
+    cy.get('coding-box-code-selector .current-position').should('have.text', '2');
+    cy.get('coding-box-code-selector [data-code-id="0"]').click();
     cy.intercept('POST', '**/coding-job/*/submit').as('submit');
     // Production opens replay in a separate window; keep the Cypress tab alive.
     cy.window().then((win) => {
@@ -382,7 +382,7 @@ describe('real Keycloak coding session', () => {
     cy.contains('coding-box-workspaces-selection mat-row', 'Zoneless workspace')
       .find('mat-checkbox').click();
     cy.get('coding-box-workspaces-menu button').eq(1).click();
-    cy.get('tc-confirm-dialog')
+    cy.get('coding-box-confirm-dialog')
       .should('contain.text', 'Arbeitsbereich')
       .contains('button', 'Löschen').click();
     cy.wait('@deleteWorkspace').its('response.statusCode').should('eq', 200);
@@ -432,7 +432,7 @@ describe('real Keycloak coding session', () => {
       .should('contain.text', 'Zoneless Live Test');
     cy.get('coding-box-system-notifications-admin button[aria-label="Hinweis löschen"]')
       .click();
-    cy.get('tc-confirm-dialog')
+    cy.get('coding-box-confirm-dialog')
       .should('contain.text', 'Zoneless Live Test')
       .contains('button', 'Löschen').click();
     cy.wait('@deleteNotification').its('response.statusCode').should('eq', 204);
@@ -571,7 +571,7 @@ describe('real Keycloak coding session', () => {
       replay.hash = `${route}?${params}`;
       cy.visit(replay.toString());
     });
-    cy.get('app-code-selector [data-code-id="1"]').click();
+    cy.get('coding-box-code-selector [data-code-id="1"]').click();
     cy.intercept('POST', '**/coding-job/*/submit').as('submitCreatedJob');
     cy.window().then(win => { cy.stub(win, 'close'); });
     cy.get('.completion-overlay .submit-button').should('not.be.disabled').click();
@@ -603,7 +603,7 @@ describe('real Keycloak coding session', () => {
       expect(reviewUrl).to.include('mode=coding-review');
       cy.visit(reviewUrl);
     });
-    cy.get('app-code-selector [data-code-id="1"]')
+    cy.get('coding-box-code-selector [data-code-id="1"]')
       .should('have.class', 'selected')
       .and('have.class', 'read-only');
     cy.intercept('GET', '**/api/auth-data*').as('reviewReturnAuthData');

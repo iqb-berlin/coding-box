@@ -182,62 +182,62 @@ export class ExportSelectionDialogComponent {
 
   constructor(
     public dialogRef: MatDialogRef<ExportSelectionDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: ExportSelectionDialogData
+    @Inject(MAT_DIALOG_DATA) protected data: ExportSelectionDialogData
   ) {
     for (const id of data.selectedCombinedJobIds ?? []) {
       this.selected.add(id);
     }
   }
 
-  jobValue(def: JobDefinition): string {
+  protected jobValue(def: JobDefinition): string {
     return `job_${def.id}`;
   }
 
-  getDefinitionLabel(definition: JobDefinition): string {
+  protected getDefinitionLabel(definition: JobDefinition): string {
     return getJobDefinitionDisplayLabel(definition);
   }
 
-  trainingValue(training: CoderTraining): string {
+  protected trainingValue(training: CoderTraining): string {
     return `training_${training.id}`;
   }
 
-  isSelected(value: string): boolean {
+  protected isSelected(value: string): boolean {
     return this.selected.has(value);
   }
 
-  toggle(value: string): void {
+  protected toggle(value: string): void {
     if (this.selected.has(value)) this.selected.delete(value);
     else this.selected.add(value);
   }
 
-  clear(): void {
+  protected clear(): void {
     this.selected.clear();
   }
 
-  cancel(): void {
+  protected cancel(): void {
     this.dialogRef.close();
   }
 
-  apply(): void {
+  protected apply(): void {
     const result: ExportSelectionDialogResult = {
       selectedCombinedJobIds: Array.from(this.selected)
     };
     this.dialogRef.close(result);
   }
 
-  getDefinitionSummary(def: JobDefinition): string {
+  protected getDefinitionSummary(def: JobDefinition): string {
     const varsCount = def.assignedVariables?.length ?? 0;
     const bundlesCount = def.assignedVariableBundles?.length ?? 0;
     const codersCount = def.assignedCoders?.length ?? 0;
     return `${varsCount} Variablen, ${bundlesCount} Bündel, ${codersCount} Kodierer`;
   }
 
-  getDefinitionVariables(def: JobDefinition): string {
+  protected getDefinitionVariables(def: JobDefinition): string {
     const vars = def.assignedVariables ?? [];
     return vars.map(v => `${v.unitName}_${v.variableId}`).join(', ');
   }
 
-  getDefinitionBundles(def: JobDefinition): string {
+  protected getDefinitionBundles(def: JobDefinition): string {
     const bundles = def.assignedVariableBundles ?? [];
     return bundles
       .map(b => {
@@ -247,7 +247,7 @@ export class ExportSelectionDialogComponent {
       .join(', ');
   }
 
-  getDefinitionCoders(def: JobDefinition): string {
+  protected getDefinitionCoders(def: JobDefinition): string {
     const coderIds = def.assignedCoders ?? [];
     const codersById = new Map<number, Coder>();
     for (const coder of this.data.coders ?? []) {

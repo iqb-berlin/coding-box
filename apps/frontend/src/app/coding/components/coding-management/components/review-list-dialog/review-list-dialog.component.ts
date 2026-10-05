@@ -27,7 +27,7 @@ interface ReviewItem {
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'app-review-list-dialog',
+  selector: 'coding-box-review-list-dialog',
   templateUrl: './review-list-dialog.component.html',
   styleUrls: ['./review-list-dialog.component.scss'],
   standalone: true,
@@ -56,7 +56,7 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
 
   constructor(
     public dialogRef: MatDialogRef<ReviewListDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: ReviewListDialogData
+    @Inject(MAT_DIALOG_DATA) protected data: ReviewListDialogData
   ) { }
 
   ngOnInit(): void {
@@ -80,7 +80,7 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
     });
   }
 
-  getResolvedCode(response: Success): number | null {
+  protected getResolvedCode(response: Success): number | null {
     if (response.code_v3 !== undefined && response.code_v3 !== null) return response.code_v3;
     if (response.code_v2 !== undefined && response.code_v2 !== null) return response.code_v2;
     if (response.code_v1 !== undefined && response.code_v1 !== null) return response.code_v1;
@@ -90,7 +90,7 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
     return Number.isNaN(genericCode as number) ? null : genericCode;
   }
 
-  getResolvedStatus(response: Success): string {
+  protected getResolvedStatus(response: Success): string {
     if (response.status_v3 && response.status_v3 !== 'UNSET') return response.status_v3;
     if (response.status_v2 && response.status_v2 !== 'UNSET') return response.status_v2;
     if (response.status_v1 && response.status_v1 !== 'UNSET') return response.status_v1;
@@ -192,7 +192,7 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
     this.loadReplay(index);
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 }

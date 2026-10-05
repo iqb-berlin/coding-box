@@ -24,7 +24,7 @@ import { takeUntilWorkspaceChanged } from '../../utils/workspace-request.operato
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'app-item-list-dialog',
+  selector: 'coding-box-item-list-dialog',
   standalone: true,
   imports: [
     MatDialogModule,
@@ -40,7 +40,7 @@ import { takeUntilWorkspaceChanged } from '../../utils/workspace-request.operato
   styleUrls: ['./item-list-dialog.component.scss']
 })
 export class ItemListDialogComponent implements OnInit {
-  readonly onActionKeydown = activateOnKeyboard;
+  protected readonly onActionKeydown = activateOnKeyboard;
 
   private itemsRequest?: Subscription;
 
@@ -69,14 +69,14 @@ export class ItemListDialogComponent implements OnInit {
     metadataDialogRef?.close();
   }
 
-  readonly itemGroups = signal<{
+  protected readonly itemGroups = signal<{
     fileId: string;
     id: number;
     items: string[];
   }[]>([]);
 
-  readonly isLoading = signal(true);
-  readonly error = signal('');
+  protected readonly isLoading = signal(true);
+  protected readonly error = signal('');
 
   ngOnInit(): void {
     this.dialogRef.beforeClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.cancelMetadataRequest());
@@ -87,7 +87,7 @@ export class ItemListDialogComponent implements OnInit {
     this.loadItemIds();
   }
 
-  loadItemIds(): void {
+  protected loadItemIds(): void {
     this.itemsRequest?.unsubscribe();
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
@@ -201,7 +201,7 @@ export class ItemListDialogComponent implements OnInit {
     }
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 }

@@ -12,7 +12,7 @@ import { MatTabNav, MatTabLink, MatTabNavPanel } from '@angular/material/tabs';
   imports: [MatTabNav, MatTabLink, RouterLinkActive, RouterLink, MatTabNavPanel, RouterOutlet, TranslateModule]
 })
 export class AdminComponent {
-  navLinks = [
+  protected navLinks = [
     'users',
     'workspaces',
     'notifications',

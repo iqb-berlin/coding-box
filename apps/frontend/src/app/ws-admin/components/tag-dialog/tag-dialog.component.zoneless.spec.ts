@@ -72,7 +72,7 @@ describe('TagDialogComponent zoneless mutations', () => {
 
   it('renders a delayed added tag and clears the input without another interaction', async () => {
     const dialogRef = await openDialog();
-    const input = document.querySelector('app-tag-dialog input') as HTMLInputElement;
+    const input = document.querySelector('coding-box-tag-dialog input') as HTMLInputElement;
     input.value = tag.tag;
     input.dispatchEvent(new Event('input', { bubbles: true }));
     await fixture.whenStable();

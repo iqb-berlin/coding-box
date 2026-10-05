@@ -471,11 +471,11 @@ implements OnInit, AfterViewInit, OnDestroy {
   readonly dialogContent = viewChild<ElementRef<HTMLElement>>('dialogContent');
 
   workspaceId: number;
-  readonly loading = signal(true);
-  readonly selectedTabIndex = signal(0);
+  protected readonly loading = signal(true);
+  protected readonly selectedTabIndex = signal(0);
 
-  readonly wideView = signal<[number, number]>([900, 520]);
-  readonly halfView = signal<[number, number]>([440, 380]);
+  protected readonly wideView = signal<[number, number]>([900, 520]);
+  protected readonly halfView = signal<[number, number]>([440, 380]);
 
   private readonly defaultLastDays = 30;
   private readonly topUnitsCount = 25;
@@ -484,19 +484,19 @@ implements OnInit, AfterViewInit, OnDestroy {
   private rafPending = false;
 
   // Chart data
-  readonly frequencyData = signal<ReplayFrequencyData[]>([]);
-  readonly durationDistributionData = signal<{ name: string; value: number }[]>([]);
-  readonly unitDurationData = signal<ReplayFrequencyData[]>([]);
-  readonly dayDistributionData = signal<ReplayFrequencyData[]>([]);
-  readonly hourDistributionData = signal<ReplayFrequencyData[]>([]);
+  protected readonly frequencyData = signal<ReplayFrequencyData[]>([]);
+  protected readonly durationDistributionData = signal<{ name: string; value: number }[]>([]);
+  protected readonly unitDurationData = signal<ReplayFrequencyData[]>([]);
+  protected readonly dayDistributionData = signal<ReplayFrequencyData[]>([]);
+  protected readonly hourDistributionData = signal<ReplayFrequencyData[]>([]);
 
   // Failure distribution data
-  readonly failureByUnitData = signal<ReplayFrequencyData[]>([]);
-  readonly failureByDayData = signal<ReplayFrequencyData[]>([]);
-  readonly failureByHourData = signal<ReplayFrequencyData[]>([]);
+  protected readonly failureByUnitData = signal<ReplayFrequencyData[]>([]);
+  protected readonly failureByDayData = signal<ReplayFrequencyData[]>([]);
+  protected readonly failureByHourData = signal<ReplayFrequencyData[]>([]);
 
   // Error statistics data
-  readonly errorStats = signal({
+  protected readonly errorStats = signal({
     successRate: 0,
     totalReplays: 0,
     successfulReplays: 0,
@@ -504,20 +504,20 @@ implements OnInit, AfterViewInit, OnDestroy {
     commonErrors: [] as Array<{ message: string; count: number }>
   });
 
-  readonly sourceSummary = signal<ReplaySourceSummaryResponse>({
+  protected readonly sourceSummary = signal<ReplaySourceSummaryResponse>({
     internal: 0,
     external: 0,
     total: 0
   });
 
   // Duration statistics
-  readonly durationStats = signal({
+  protected readonly durationStats = signal({
     min: 0,
     max: 0,
     average: 0
   });
 
-  formatMilliseconds(milliseconds: number): string {
+  protected formatMilliseconds(milliseconds: number): string {
     // Convert to seconds with 2 decimal places for better readability
     return `${(milliseconds / 1000).toFixed(2)} s`;
   }
@@ -529,7 +529,7 @@ implements OnInit, AfterViewInit, OnDestroy {
     return value;
   }
 
-  readonly formatXAxisTick = (value: string): string => this.formatXAxisLabel(value);
+  protected readonly formatXAxisTick = (value: string): string => this.formatXAxisLabel(value);
 
   constructor() {
     this.workspaceId = this.data.workspaceId;

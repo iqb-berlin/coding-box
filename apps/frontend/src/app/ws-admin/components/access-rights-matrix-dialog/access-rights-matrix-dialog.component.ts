@@ -41,11 +41,11 @@ export class AccessRightsMatrixDialogComponent implements OnInit {
 
   private workspaceService = inject(WorkspaceService);
 
-  readonly matrix = signal<AccessRightsMatrixDto | null>(null);
-  readonly loading = signal(true);
-  readonly displayedColumns = signal<string[]>([]);
-  readonly dataSource = signal<MatrixRow[]>([]);
-  readonly levels = signal<AccessLevelDto[]>([]);
+  protected readonly matrix = signal<AccessRightsMatrixDto | null>(null);
+  protected readonly loading = signal(true);
+  protected readonly displayedColumns = signal<string[]>([]);
+  protected readonly dataSource = signal<MatrixRow[]>([]);
+  protected readonly levels = signal<AccessLevelDto[]>([]);
 
   ngOnInit(): void {
     this.workspaceService.getAccessRightsMatrix().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(matrix => {
@@ -90,7 +90,7 @@ export class AccessRightsMatrixDialogComponent implements OnInit {
     return rows;
   }
 
-  hasPermission(row: MatrixRow, level: number): boolean {
+  protected hasPermission(row: MatrixRow, level: number): boolean {
     return row.permissions[level] || false;
   }
 }

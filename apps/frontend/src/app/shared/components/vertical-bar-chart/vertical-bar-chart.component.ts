@@ -32,10 +32,10 @@ export class VerticalBarChartComponent {
   readonly rotateXAxisTicks = input(false);
   readonly xAxisTickFormatting = input<(value: string) => string>(value => value);
 
-  readonly tableToggleId: string;
-  readonly width = computed(() => Math.max(320, this.view()[0], this.results().length * 28 + 96));
-  readonly height = computed(() => Math.max(240, this.view()[1]));
-  readonly rows = computed(() => this.results().map(datum => ({
+  protected readonly tableToggleId: string;
+  protected readonly width = computed(() => Math.max(320, this.view()[0], this.results().length * 28 + 96));
+  protected readonly height = computed(() => Math.max(240, this.view()[1]));
+  protected readonly rows = computed(() => this.results().map(datum => ({
     name: datum.name,
     value: Number.isFinite(datum.value) ? Math.max(0, datum.value) : 0
   })));
