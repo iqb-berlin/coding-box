@@ -454,7 +454,7 @@ test-db:
 test-app:
   stage: test-units
   interruptible: true
-  allow_failure: true
+  allow_failure: false
   extends: .distributed
   rules:
     - !reference [ .default_rules, rules ]
@@ -508,7 +508,7 @@ lint-app:
   stage: lint
   extends: .distributed
   interruptible: true
-  allow_failure: true
+  allow_failure: false
   rules:
     - !reference [ .default_rules, rules ]
   image: ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
@@ -636,6 +636,8 @@ build-develop-commit-backend-image:
   rules:
     - !reference [ .develop_commit_rules, rules ]
   needs:
+    - job: quality-checks
+      artifacts: false
     - build-develop-commit-base-image
   image: ${DOCKER_IMAGE}
   services:
@@ -678,6 +680,8 @@ build-develop-commit-frontend-image:
   rules:
     - !reference [ .develop_commit_rules, rules ]
   needs:
+    - job: quality-checks
+      artifacts: false
     - build-develop-commit-base-image
   image: ${DOCKER_IMAGE}
   services:
@@ -1011,6 +1015,8 @@ build-pre-release:
   rules:
     - !reference [ .pre-release_rules, rules ]
   needs:
+    - job: quality-checks
+      artifacts: false
     - job: scan-main-commit-db-image
       artifacts: false
     - job: scan-main-commit-liquibase-image
