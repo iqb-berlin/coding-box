@@ -13,7 +13,7 @@ import {
   throwError
 } from 'rxjs';
 import {
-  finalize, map, switchMap, takeUntil, tap
+  finalize, map, shareReplay, switchMap, take, takeUntil, tap
 } from 'rxjs/operators';
 import {
   CodingExportEstimate,
@@ -168,7 +168,11 @@ export class ExportJobService implements OnDestroy {
       tap(job => {
         this.addJob(job);
         this.startPollingForJob(workspaceId, job.jobId);
-      })
+      }),
+      take(1),
+      takeUntil(this.stopPolling$),
+      // The submitted operation registers its job even after its starting view closes.
+      shareReplay({ bufferSize: 1, refCount: false })
     );
   }
 

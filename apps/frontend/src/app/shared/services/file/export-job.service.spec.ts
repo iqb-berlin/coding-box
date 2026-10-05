@@ -111,6 +111,26 @@ describe('ExportJobService', () => {
   });
 
   describe('startJob', () => {
+    it('registers and polls an accepted job after the starting view unsubscribes', fakeAsync(() => {
+      const accepted = new Subject<{ jobId: string; message: string }>();
+      codingJobBackendServiceMock.startExportJob.mockReturnValue(accepted);
+      codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'completed', progress: 100 }));
+      const request = service.startJob(47, { exportType: 'aggregated', userId: 1 });
+      request.subscribe().unsubscribe();
+      expect(accepted.observed).toBe(true);
+
+      accepted.next({ jobId: 'accepted', message: 'started' });
+      accepted.complete();
+      expect(service.activeJobs).toEqual([expect.objectContaining({ jobId: 'accepted', workspaceId: 47 })]);
+      request.subscribe();
+      expect(codingJobBackendServiceMock.startExportJob).toHaveBeenCalledTimes(1);
+      expect(service.activeJobs).toHaveLength(1);
+      tick(2000);
+      expect(codingJobBackendServiceMock.getExportJobStatus).toHaveBeenCalledWith(47, 'accepted');
+      expect(service.completedJobs).toHaveLength(1);
+      service.ngOnDestroy();
+    }));
+
     it('should start job and poll', fakeAsync(() => {
       codingJobBackendServiceMock.startExportJob.mockReturnValue(of({ jobId: 'j1', message: 'Job started' }));
       codingJobBackendServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'completed', progress: 100 }));

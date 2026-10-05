@@ -31,6 +31,7 @@ import { TestResultService } from '../../../shared/services/test-result/test-res
 import { ValidationTaskStateService } from '../../../shared/services/validation/validation-task-state.service';
 import { UnitsReplayService } from '../../../replay/services/units-replay.service';
 import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
+import { TestResultsUploadStateService } from '../../services/test-results-upload-state.service';
 
 describe('TestResultsComponent', () => {
   let component: TestResultsComponent;
@@ -98,6 +99,56 @@ describe('TestResultsComponent', () => {
     expect(closed.observed).toBe(false);
     closed.next({ type: 'testcenter' });
     expect(startImport).not.toHaveBeenCalled();
+  });
+
+  it('hands accepted chunked upload jobs to the root tracker after its view closes', () => {
+    const acceptedJobs = new Subject<unknown[]>();
+    TestBed.inject(FileService).uploadTestResultsChunked = jest.fn(() => acceptedJobs) as never;
+    const optionsClosed = new Subject<unknown>();
+    const progressRef = { close: jest.fn() };
+    jest.mocked(TestBed.inject(MatDialog).open)
+      .mockReturnValueOnce({ afterClosed: () => optionsClosed } as never)
+      .mockReturnValueOnce(progressRef as never);
+    const registerBatch = jest.spyOn(TestBed.inject(TestResultsUploadStateService), 'registerBatch')
+      .mockImplementation(() => undefined);
+    const input = document.createElement('input');
+    Object.defineProperty(input, 'files', { value: [new File(['data'], 'results.csv')] });
+    component.onFileSelected(input, 'responses');
+    optionsClosed.next({ overwriteMode: 'skip', scope: 'person' });
+    optionsClosed.complete();
+    fixture.destroy();
+    appService.selectedWorkspaceId = 2;
+    appService.selectedWorkspaceId$.next(2);
+    expect(acceptedJobs.observed).toBe(true);
+    acceptedJobs.next([{ jobId: 'accepted-job' }]);
+    acceptedJobs.complete();
+    expect(registerBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: 1, jobIds: ['accepted-job'] }),
+      expect.objectContaining({ dialogRef: progressRef })
+    );
+  });
+
+  it('cleans up a failed background upload even after the starting view closes', () => {
+    const acceptedJobs = new Subject<unknown[]>();
+    TestBed.inject(FileService).uploadTestResultsChunked = jest.fn(() => acceptedJobs) as never;
+    const progressRef = { close: jest.fn() };
+    const dialog = TestBed.inject(MatDialog);
+    jest.mocked(dialog.open)
+      .mockReturnValueOnce({ afterClosed: () => of({ overwriteMode: 'skip', scope: 'person' }) } as never)
+      .mockReturnValueOnce(progressRef as never);
+    const input = document.createElement('input');
+    Object.defineProperty(input, 'files', { value: [new File(['data'], 'results.csv')] });
+    component.onFileSelected(input, 'responses');
+    const progressState = (jest.mocked(dialog.open).mock.calls[1][1]?.data as {
+      state$: Subject<unknown>;
+    }).state$;
+    fixture.destroy();
+    acceptedJobs.error(new Error('Upload failed'));
+    expect(progressRef.close).toHaveBeenCalled();
+    expect(progressState.isStopped).toBe(true);
+    expect(TestBed.inject(MatSnackBar).open).toHaveBeenCalledWith(
+      'Fehler beim Upload-Start: Upload failed', 'Fehler', { duration: 5000 }
+    );
   });
 
   beforeEach(async () => {
