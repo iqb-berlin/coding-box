@@ -16,27 +16,6 @@ const collectRuntimeFiles = (directory: string): string[] => fs
   });
 
 describe('frontend components', () => {
-  const preventUnhandled = (event: Event): void => event.preventDefault();
-
-  beforeAll(() => {
-    window.addEventListener('error', preventUnhandled);
-    window.addEventListener('unhandledrejection', preventUnhandled);
-  });
-
-  afterAll(() => {
-    window.removeEventListener('error', preventUnhandled);
-    window.removeEventListener('unhandledrejection', preventUnhandled);
-  });
-
-  beforeEach(() => {
-    jest.spyOn(console, 'error').mockImplementation(() => undefined);
-    jest.spyOn(console, 'log').mockImplementation(() => undefined);
-  });
-
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
-
   it('loads every component module used by the application', async () => {
     const componentFiles = collectRuntimeFiles(appRoot)
       .filter(file => file.endsWith('.component.ts'));

@@ -1,0 +1,112 @@
+# Run the complete suites for the exact revision that is reviewed or published.
+# Shared rules prevent tag and direct main/develop pipelines from bypassing tests.
+.quality_gate_rules:
+  rules:
+    - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
+    - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "main"
+    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "develop"
+    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"
+    - if: "$CI_COMMIT_TAG =~ $PRERELEASE_RULES_REGEX"
+    - if: "$CI_COMMIT_TAG =~ $RELEASE_RULES_REGEX"
+    - if: $CI_COMMIT_BRANCH && $CI_PIPELINE_SOURCE != "external_pull_request_event"
+    - when: never
+
+.unit_quality_gate:
+  stage: test-units
+  interruptible: true
+  allow_failure: false
+  image: ${DOCKER_HUB_PROXY}node:22-bookworm
+  variables:
+    FORCE_COLOR: "0"
+  rules:
+    - !reference [ .quality_gate_rules, rules ]
+
+test-backend:
+  extends: .unit_quality_gate
+  needs:
+    - install-dependencies
+  script:
+    - node --test scripts/qa/junit-reporter.test.cjs
+    - npx nx test backend --ci --codeCoverage --skipNxCache --maxWorkers=2 --passWithNoTests=false
+  coverage: '/All files[^|]*\|\s+([\d.]+)/'
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - reports/junit/backend.xml
+      - coverage/apps/backend/
+    reports:
+      junit: reports/junit/backend.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/apps/backend/cobertura-coverage.xml
+
+test-frontend:
+  extends: .unit_quality_gate
+  needs:
+    - job: install-dependencies
+    - job: test-backend
+      artifacts: false
+  script:
+    - npx nx test frontend --ci --codeCoverage --skipNxCache --maxWorkers=2 --passWithNoTests=false
+  coverage: '/All files[^|]*\|\s+([\d.]+)/'
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - reports/junit/frontend.xml
+      - coverage/apps/frontend/
+    reports:
+      junit: reports/junit/frontend.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/apps/frontend/cobertura-coverage.xml
+
+.live_quality_gate:
+  stage: test-replay
+  interruptible: true
+  allow_failure: false
+  image: ${CYPRESS_IMAGE}
+  variables:
+    # The Docker service publishes ports in its own network namespace.
+    REPLAY_E2E_CONNECT_HOST: docker
+    REPLAY_E2E_PUBLISH_HOST: 0.0.0.0
+  rules:
+    - !reference [ .quality_gate_rules, rules ]
+  services:
+    - name: ${DOCKER_SERVICE}
+      variables:
+        HEALTHCHECK_TCP_PORT: "2375"
+      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh ${DOCKER_DAEMON_OPTIONS}" ]
+      alias: docker
+  before_script:
+    - apt-get update
+    - apt-get install --yes --no-install-recommends docker.io docker-compose
+    - until docker info > /dev/null 2>&1; do sleep 1; done
+    - npx cypress install
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - cypress/replay-artifacts/screenshots
+      - cypress/replay-artifacts/videos
+      - tmp/replay-e2e-artifacts
+
+test-replay-live:
+  extends: .live_quality_gate
+  needs:
+    - job: install-dependencies
+    - job: test-frontend
+      artifacts: false
+  script:
+    - npx nx run frontend:e2e-replay-live
+
+test-workflows-live:
+  extends: .live_quality_gate
+  needs:
+    - job: install-dependencies
+    - job: test-replay-live
+      artifacts: false
+  script:
+    - npx nx run frontend:test-e2e-harness
+    - npx nx run frontend:e2e-workflows

@@ -53,6 +53,29 @@ describe('UserBackendService', () => {
     });
   });
 
+  describe('getUsersForWorkspaceSelection', () => {
+    it('uses the study-manager directory for the selected workspace', () => {
+      const users = [{ id: 7, username: 'coder' }];
+      service.getUsersForWorkspaceSelection(3).subscribe(result => {
+        expect(result).toEqual(users);
+      });
+
+      const request = httpMock.expectOne(`${mockServerUrl}admin/users/directory/3`);
+      expect(request.request.method).toBe('GET');
+      request.flush(users);
+    });
+
+    it('does not fall back to the global directory when permission is denied', () => {
+      service.getUsersForWorkspaceSelection(3).subscribe(result => {
+        expect(result).toEqual([]);
+      });
+
+      httpMock.expectOne(`${mockServerUrl}admin/users/directory/3`)
+        .flush('Denied', { status: 401, statusText: 'Unauthorized' });
+      httpMock.expectNone(`${mockServerUrl}admin/users/full`);
+    });
+  });
+
   describe('getWorkspacesByUserList', () => {
     it('should fall back to an empty list on loading errors', () => {
       service.getWorkspacesByUserList(5).subscribe(res => {

@@ -103,11 +103,7 @@ describe('TestPersonCodingService', () => {
     } else {
       delete (globalThis as { fetch?: unknown }).fetch;
     }
-    try {
-      httpMock.verify();
-    } catch (error) {
-      // Error in httpMock.verify() handled
-    }
+    httpMock.verify();
   });
 
   it('should be created', () => {

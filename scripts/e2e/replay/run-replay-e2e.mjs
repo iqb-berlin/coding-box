@@ -1,9 +1,11 @@
 import { randomBytes } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import { prepareAuthEnvironment } from './auth-environment.mjs';
+import { startLoopbackForwarders } from './loopback-forwarders.mjs';
 import {
   cleanupReplayWorkspaceFromState,
   redactReplayArtifactLog
@@ -18,21 +20,31 @@ const projectName = `coding-box-replay-${runId}`
 const runDir = path.join(repoDir, 'tmp', 'replay-e2e', runId);
 const artifactDir = path.join(repoDir, 'tmp', 'replay-e2e-artifacts', runId);
 const composeFile = path.join(scriptDir, 'docker-compose.replay.yml');
-const [apiPort, frontendPort] = await Promise.all([
-  reservePort(),
-  reservePort()
-]);
+const authMode = process.argv.includes('--auth') || process.env.REPLAY_E2E_AUTH === 'true';
+const dockerConnectHost = process.env.REPLAY_E2E_CONNECT_HOST || '127.0.0.1';
+const connectHost = authMode ? '127.0.0.1' : dockerConnectHost;
+const publishHost = process.env.REPLAY_E2E_PUBLISH_HOST || '127.0.0.1';
+const [apiPort, frontendPort, keycloakPort, ...authDockerPorts] = await Promise.all(
+  Array.from({ length: authMode ? 6 : 3 }, () => reservePort())
+);
+const [dockerApiPort, dockerFrontendPort, dockerKeycloakPort] = authMode ?
+  authDockerPorts : [apiPort, frontendPort, keycloakPort];
 const jwtSecret = randomBytes(48).toString('hex');
 const compose = await findComposeCommand();
 
 await mkdir(runDir, { recursive: true });
 await mkdir(artifactDir, { recursive: true });
 
+const composeFiles = ['--file', composeFile, ...(authMode ? ['--file', path.join(scriptDir, 'docker-compose.auth.yml')] : []), ...(process.env.REPLAY_E2E_COMPOSE_OVERRIDE ? ['--file', path.resolve(process.env.REPLAY_E2E_COMPOSE_OVERRIDE)] : [])];
+const authEnvironment = authMode ? await prepareAuthEnvironment(runDir, keycloakPort, frontendPort, connectHost) : {};
 const replayEnvironment = {
   ...process.env,
-  REPLAY_E2E_API_PORT: String(apiPort),
-  REPLAY_E2E_API_URL: `http://127.0.0.1:${apiPort}`,
-  REPLAY_E2E_BASE_URL: `http://127.0.0.1:${frontendPort}`,
+  ...authEnvironment,
+  REPLAY_E2E_CONNECT_HOST: connectHost,
+  REPLAY_E2E_API_PORT: String(dockerApiPort),
+  REPLAY_E2E_API_URL: `http://${connectHost}:${apiPort}`,
+  REPLAY_E2E_BASE_URL: `http://${connectHost}:${frontendPort}`,
+  REPLAY_E2E_PUBLISH_HOST: publishHost,
   REPLAY_E2E_CACHE_DIR: path.join(repoDir, 'cache', 'replay-player'),
   REPLAY_E2E_COMPOSE_PROJECT: projectName,
   REPLAY_E2E_FIXTURE_DIR: path.join(
@@ -42,7 +54,8 @@ const replayEnvironment = {
     'replay-datasets',
     'two-person-multipage'
   ),
-  REPLAY_E2E_FRONTEND_PORT: String(frontendPort),
+  REPLAY_E2E_FRONTEND_PORT: String(dockerFrontendPort),
+  REPLAY_E2E_KEYCLOAK_PORT: String(dockerKeycloakPort),
   REPLAY_E2E_JWT_SECRET: jwtSecret,
   REPLAY_E2E_REDIS_PREFIX: `replay-e2e:${runId}`,
   REPLAY_E2E_REPO_DIR: repoDir,
@@ -51,15 +64,23 @@ const replayEnvironment = {
 };
 
 let exitCode = 1;
+let forwarders;
 try {
+  if (authMode) {
+    forwarders = await startLoopbackForwarders(dockerConnectHost,
+      [
+        { localPort: apiPort, remotePort: dockerApiPort },
+        { localPort: frontendPort, remotePort: dockerFrontendPort },
+        { localPort: keycloakPort, remotePort: dockerKeycloakPort }
+      ]);
+  }
   await run(
     compose.command,
     [
       ...compose.prefix,
       '--project-name',
       projectName,
-      '--file',
-      composeFile,
+      ...composeFiles,
       'up',
       '--detach',
       '--build',
@@ -67,6 +88,8 @@ try {
     ],
     replayEnvironment
   );
+
+  if (authMode) await waitForHttp(`${authEnvironment.REPLAY_E2E_OIDC_ISSUER}/.well-known/openid-configuration`, 180_000);
 
   await waitForHttp(
     `${replayEnvironment.REPLAY_E2E_API_URL}/api/health`,
@@ -80,7 +103,7 @@ try {
       'cypress',
       'run',
       '--config-file',
-      'cypress.replay.config.ts',
+      process.env.REPLAY_E2E_CYPRESS_CONFIG || (authMode ? 'cypress.workflows.config.ts' : 'cypress.replay.config.ts'),
       '--browser',
       'electron'
     ],
@@ -92,7 +115,7 @@ try {
   await captureLogs(
     compose,
     projectName,
-    composeFile,
+    composeFiles,
     replayEnvironment,
     artifactDir
   );
@@ -110,8 +133,7 @@ try {
       ...compose.prefix,
       '--project-name',
       projectName,
-      '--file',
-      composeFile,
+      ...composeFiles,
       'down',
       '--volumes',
       '--rmi',
@@ -126,6 +148,15 @@ try {
     process.stderr.write(`Replay stack cleanup failed: ${error.message}\n`);
     exitCode = 1;
   });
+
+  await forwarders?.close().catch(error => {
+    process.stderr.write(`Auth loopback forwarding cleanup failed: ${error.message}\n`);
+    exitCode = 1;
+  });
+
+  if (authMode) {
+    await rm(path.join(runDir, 'coding-e2e-realm.json'), { force: true });
+  }
 
   const leftovers = await inspectComposeLeftovers(projectName);
   if (leftovers) {
@@ -183,7 +214,7 @@ async function waitForHttp(url, timeoutMs) {
   let lastStatus = 'unreachable';
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
       lastStatus = `HTTP ${response.status}`;
       if (response.ok) {
         return;
@@ -201,7 +232,7 @@ async function waitForHttp(url, timeoutMs) {
 async function captureLogs(
   composeCommand,
   project,
-  file,
+  files,
   environment,
   outputDir
 ) {
@@ -212,8 +243,7 @@ async function captureLogs(
         ...composeCommand.prefix,
         '--project-name',
         project,
-        '--file',
-        file,
+        ...files,
         'logs',
         '--no-color'
       ],
