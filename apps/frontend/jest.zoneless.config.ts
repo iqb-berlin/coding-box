@@ -30,5 +30,9 @@ export default {
     '<rootDir>/src/app/ws-admin/components/test-results/test-results-flat-table.component.spec.ts',
     '<rootDir>/src/app/ws-admin/components/variable-analysis-dialog/variable-analysis-dialog.component.spec.ts',
   ],
-  coverageDirectory: '../../coverage/apps/frontend-zoneless'
+  coverageDirectory: '../../coverage/apps/frontend-zoneless',
+  reporters: [
+    'default',
+    ['jest-junit', { outputDirectory: '<rootDir>/../../coverage/apps/frontend-zoneless', outputName: 'junit.xml' }]
+  ]
 };

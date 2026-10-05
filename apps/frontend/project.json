@@ -124,7 +124,13 @@
       ],
       "options": {
         "jestConfig": "apps/frontend/jest.config.ts",
-        "passWithNoTests": true
+        "passWithNoTests": false
+      },
+      "configurations": {
+        "ci": {
+          "ci": true,
+          "codeCoverage": true
+        }
       }
     },
     "e2e": {
@@ -142,6 +148,13 @@
           "devServerTarget": "frontend:serve:zoneless",
           "cypressConfig": "cypress.zoneless.config.ts"
         }
+      }
+    },
+    "test-quality-gates": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node --test scripts/qa/frontend-quality-gates.test.mjs"
       }
     },
     "test-dependency-patches": {

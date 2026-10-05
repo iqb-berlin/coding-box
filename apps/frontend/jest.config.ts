@@ -29,5 +29,10 @@ export default {
     '^@iqb/metadata-resolver$': '<rootDir>/../../node_modules/@iqb/metadata-resolver/dist/index.mjs',
     '^@iqb/metadata-resolver/(.*)$': '<rootDir>/../../node_modules/@iqb/metadata-resolver/dist/$1'
   },
-  coverageDirectory: '../../coverage/apps/frontend'
+  coverageDirectory: '../../coverage/apps/frontend',
+  coverageReporters: ['text-summary', 'html', 'lcov', 'json', 'cobertura'],
+  reporters: [
+    'default',
+    ['jest-junit', { outputDirectory: '<rootDir>/../../coverage/apps/frontend', outputName: 'junit.xml' }]
+  ]
 };
