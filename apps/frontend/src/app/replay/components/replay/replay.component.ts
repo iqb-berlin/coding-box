@@ -730,7 +730,17 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
                 const jobId = this.codingService.codingJobId;
                 const jobKey = `${this.workspaceId()}:${jobId}`;
                 if (this.codingProgressLoadedForJobKey !== jobKey) {
-                  await this.codingService.loadSavedCodingProgress(this.workspaceId(), jobId);
+                  try {
+                    await this.codingService.loadSavedCodingProgress(this.workspaceId(), jobId);
+                  } catch (error) {
+                    if (!this.isCurrentRouterRun(routerRunId)) return;
+                    this.unitsData.set(null);
+                    this.totalUnits.set(0);
+                    this.codingProgressLoadedForJobKey = null;
+                    this.setIsLoaded();
+                    this.catchError(error as HttpErrorResponse);
+                    return;
+                  }
                   if (!this.isCurrentRouterRun(routerRunId)) {
                     return;
                   }

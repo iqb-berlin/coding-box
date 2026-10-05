@@ -1034,6 +1034,45 @@ describe('ReplayComponent', () => {
     jest.useRealTimers();
   });
 
+  it('does not mark a failed progress load as loaded and allows a later retry', async () => {
+    const unitsData = {
+      id: 77,
+      name: 'Coding job',
+      currentUnitIndex: 0,
+      units: [{
+        id: 1, name: 'unit-123', alias: 'Unit 123', bookletId: 0, variableId: 'VAR1'
+      }]
+    };
+    routeQueryParams = {
+      auth: 'valid-token',
+      workspaceId: '47',
+      mode: 'coding',
+      unitsData: utf8ToBase64(JSON.stringify(unitsData))
+    };
+    codingJobBackendServiceMock.getCodingProgress.mockReturnValue(of({ saved: { id: 7, label: 'SAVED' } }));
+    codingJobBackendServiceMock.getCodingNotes
+      .mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 503 })))
+      .mockReturnValue(of({}));
+    const updateStatus = jest.spyOn(component.codingService, 'updateCodingJobStatus');
+    const privateComponent = component as unknown as {
+      unitsData: WritableSignal<typeof unitsData | null>;
+      codingProgressLoadedForJobKey: string | null;
+    };
+
+    component.subscribeRouter();
+    await new Promise<void>(resolve => { setTimeout(resolve, 0); });
+    expect(privateComponent.unitsData()).toBeNull();
+    expect(privateComponent.codingProgressLoadedForJobKey).toBeNull();
+    expect(updateStatus).not.toHaveBeenCalled();
+    expect(snackBar.open).toHaveBeenCalled();
+
+    component.subscribeRouter();
+    await new Promise<void>(resolve => { setTimeout(resolve, 0); });
+    expect(codingJobBackendServiceMock.getCodingNotes).toHaveBeenCalledTimes(2);
+    expect(privateComponent.codingProgressLoadedForJobKey).toBe('47:77');
+    expect(component.codingService.selectedCodes.get('saved')?.label).toBe('SAVED');
+  });
+
   it('should load units data for booklet-view mode without coding job side effects', async () => {
     const unitsData = {
       id: 0,

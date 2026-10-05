@@ -358,10 +358,14 @@ describe('ReplayCodingService', () => {
       expect(codingJobBackendServiceMock.getCodingJob).toHaveBeenCalledWith(1, 100, 'replay-token');
     });
 
-    it('should handle errors gracefully', async () => {
-      codingJobBackendServiceMock.getCodingProgress.mockReturnValue(of({}));
-      await service.loadSavedCodingProgress(1, 100);
+    it('propagates read failures so the replay view can report and retry them', async () => {
+      const failure = new Error('Progress request failed');
+      codingJobBackendServiceMock.getCodingProgress.mockReturnValue(throwError(() => failure));
+      codingJobBackendServiceMock.getCodingNotes.mockReturnValue(of({}));
+      codingJobBackendServiceMock.getCodingJob.mockReturnValue(of({} as CodingJob));
+      await expect(service.loadSavedCodingProgress(1, 100)).rejects.toBe(failure);
       expect(service.selectedCodes.size).toBe(0);
+      expect(service.notes.size).toBe(0);
     });
   });
 

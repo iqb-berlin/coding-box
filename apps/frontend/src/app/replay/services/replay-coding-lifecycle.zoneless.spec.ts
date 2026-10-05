@@ -47,6 +47,24 @@ describe('Replay progress request ownership without ZoneJS', () => {
     reply.job.complete();
   }
 
+  it.each(['notes', 'job'] as const)('rejects a failed %s read instead of reporting an empty job as loaded', async endpoint => {
+    const pending = service.loadSavedCodingProgress(5, 100);
+    const rejected = expect(pending).rejects.toThrow('HTTP 503');
+    current.progress.next({ 'person:unit:var': { id: 7, label: 'SAVED' } });
+    current.progress.complete();
+    current[endpoint].error(new Error('HTTP 503'));
+    await rejected;
+    expect(service.selectedCodes.size).toBe(0);
+    expect(current.notes.observed).toBe(false);
+    expect(current.job.observed).toBe(false);
+
+    current = replies();
+    const retry = service.loadSavedCodingProgress(5, 100);
+    complete(current, 'RETRIED');
+    await retry;
+    expect(service.selectedCodes.get('person:unit:var')?.label).toBe('RETRIED');
+  });
+
   it('cancels all older requests and applies the latest job atomically', async () => {
     const oldReply = current;
     const oldLoad = service.loadSavedCodingProgress(5, 100);
