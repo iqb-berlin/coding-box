@@ -1,3 +1,7 @@
+/**
+ * @jest-config-loader ts-node
+ * @jest-config-loader-options {"compilerOptions":{"module":"CommonJS"}}
+ */
 export default {
   displayName: 'frontend',
   preset: '../../jest.preset.js',
