@@ -161,11 +161,9 @@ import {
   isSecondAutocodingWaitingForManualCoding,
   SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS
 } from '../../../shared/utils/coding-freshness-text.util';
-import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
 import { TestResultsUploadResultDialogComponent } from './test-results-upload-result-dialog.component';
 import {
   TestResultsImportProgressDialogComponent,
-  TestResultsImportProgressHandle,
   TestResultsImportProgressState
 } from './test-results-import-progress-dialog.component';
 import { TestResultsDeletePreviewDialogComponent } from './test-results-delete-preview-dialog.component';
@@ -2349,129 +2347,36 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               };
 
               const overwriteExisting = overwriteMode !== 'skip';
-              const uploadTitle =
-                resultType === 'logs' ?
-                  'Upload-Ergebnis (Logs)' :
-                  'Upload-Ergebnis (Antworten)';
-              const uploadIcon = resultType === 'logs' ? 'article' : 'upload_file';
-              const progressState$ = new BehaviorSubject<TestResultsImportProgressState>({
-                title: uploadTitle,
-                icon: uploadIcon,
-                phase: 'uploading',
-                phaseLabel: 'Datei wird hochgeladen',
-                message: resultType === 'logs' ?
-                  'Die Log-Datei wird in Teilen übertragen.' :
-                  'Die Antwortdatei wird in Teilen übertragen.',
-                percent: 0,
-                mode: 'determinate'
-              });
-              const progressDialogRef = this.dialog.open(
-                TestResultsImportProgressDialogComponent,
-                {
-                  width: '560px',
-                  maxWidth: '95vw',
-                  disableClose: true,
-                  data: { state$: progressState$ }
-                }
-              );
-              const progressHandle: TestResultsImportProgressHandle = {
-                dialogRef: progressDialogRef,
-                state$: progressState$
+              const workspaceId = this.appService.selectedWorkspaceId;
+              const beforeOverview = this.overview() || {
+                testPersons: 0,
+                testGroups: 0,
+                uniqueBooklets: 0,
+                uniqueUnits: 0,
+                uniqueResponses: 0,
+                responseStatusCounts: {},
+                sessionBrowserCounts: {},
+                sessionOsCounts: {},
+                sessionScreenCounts: {}
               };
-
               this.isLoading.set(true);
               this.isUploadingResults.set(true);
-
-              if (resultType === 'responses') {
-                this.uploadingMessage.set('Importiere Antworten... (0%)');
-              } else if (resultType === 'logs') {
-                this.uploadingMessage.set('Importiere Logs... (0%)');
-              } else {
-                this.uploadingMessage.set('Ergebnisse werden hochgeladen... (0%)');
-              }
-
-              const file = inputElement.files![0];
-              this.fileService
-                .uploadTestResultsChunked(
-                  this.appService.selectedWorkspaceId,
-                  file,
-                  resultType,
-                  {
-                    overwriteExisting,
-                    overwriteMode,
-                    scope,
-                    filters
-                  },
-                  (percent: number) => {
-                    if (resultType === 'responses') {
-                      this.uploadingMessage.set(`Importiere Antworten... (${percent}%)`);
-                    } else if (resultType === 'logs') {
-                      this.uploadingMessage.set(`Importiere Logs... (${percent}%)`);
-                    } else {
-                      this.uploadingMessage.set(`Ergebnisse werden hochgeladen... (${percent}%)`);
-                    }
-                    progressState$.next({
-                      title: uploadTitle,
-                      icon: uploadIcon,
-                      phase: 'uploading',
-                      phaseLabel: 'Datei wird hochgeladen',
-                      message: resultType === 'logs' ?
-                        'Die Log-Datei wird in Teilen übertragen.' :
-                        'Die Antwortdatei wird in Teilen übertragen.',
-                      percent,
-                      mode: 'determinate'
-                    });
-                  }
-                ).pipe(takeUntilDestroyed(this.destroyRef))
-                .subscribe({
-                  next: (jobs: TestResultsUploadJobDto[]) => {
-                    progressState$.next({
-                      title: uploadTitle,
-                      icon: uploadIcon,
-                      phase: 'processing',
-                      phaseLabel: 'Verarbeitung läuft',
-                      message: 'Upload abgeschlossen. Der Server verarbeitet die Datei.',
-                      percent: 0,
-                      completed: 0,
-                      total: jobs.length,
-                      mode: 'determinate'
-                    });
-
-                    const beforeOverview = this.overview() || {
-                      testPersons: 0,
-                      testGroups: 0,
-                      uniqueBooklets: 0,
-                      uniqueUnits: 0,
-                      uniqueResponses: 0,
-                      responseStatusCounts: {},
-                      sessionBrowserCounts: {},
-                      sessionOsCounts: {},
-                      sessionScreenCounts: {}
-                    };
-
-                    this.uploadStateService.registerBatch({
-                      workspaceId: this.appService.selectedWorkspaceId,
-                      jobIds: jobs.map(j => j.jobId),
-                      resultType,
-                      beforeOverview,
-                      initialIssues: [],
-                      progress: 0,
-                      completedCount: 0,
-                      totalJobs: jobs.length
-                    }, progressHandle);
-                  },
-                  error: err => {
-                    progressDialogRef.close();
-                    progressState$.complete();
-                    this.isLoading.set(false);
-                    this.isUploadingResults.set(false);
-                    this.snackBar.open(
-                      `Fehler beim Upload-Start: ${err.message}`,
-                      'Fehler',
-                      { duration: 5000 }
-                    );
-                  }
-                });
+              this.uploadingMessage.set(resultType === 'responses' ?
+                'Importiere Antworten... (0%)' : 'Importiere Logs... (0%)');
+              this.uploadStateService.startChunkedUpload(
+                workspaceId,
+                inputElement.files![0],
+                resultType,
+                {
+                  overwriteExisting, overwriteMode, scope, filters
+                },
+                beforeOverview
+              ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+                error: () => {
+                  this.isLoading.set(false);
+                  this.isUploadingResults.set(false);
+                }
+              });
             }
           );
       }
