@@ -16,6 +16,8 @@ Sowohl synchroner Export als auch Queue-Prozessor verwenden über den vorhandene
 Generation-Service denselben gemeinsamen Generator. Jobstart, Statusabfrage,
 Fortschritt und Download bleiben ausschließlich in der Kodierbox. Schließen
 beendet die Statusabfrage, nicht den Serverjob.
+Der Wrapper meldet asynchrone Daten- und Statusänderungen an Angular und ist mit
+OnPush und zoneless Change Detection getestet.
 
 ## Release-Kandidat
 

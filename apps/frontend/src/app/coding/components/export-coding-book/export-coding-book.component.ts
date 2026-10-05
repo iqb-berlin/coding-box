@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, OnDestroy
+  ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, OnDestroy
 } from '@angular/core';
 import { CodebookExportComponent } from '@iqb/ngx-coding-components/codebook-export';
 import type { CodebookExportConfig, UnitSelectionItem } from '@iqb/ngx-coding-components/codebook-models';
@@ -53,6 +53,7 @@ interface CodebookUnitOption {
 
 @Component({
   selector: 'shared-export-coding-book',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './export-coding-book.component.html',
   styleUrls: ['./export-coding-book.component.scss'],
   standalone: true,
@@ -136,7 +137,8 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     private validationStateService: ValidationStateService,
     private translateService: TranslateService,
     private dialog: MatDialog,
-    private dialogRef: MatDialogRef<ExportCodingBookComponent>
+    private dialogRef: MatDialogRef<ExportCodingBookComponent>,
+    private changeDetectorRef: ChangeDetectorRef
   ) { }
 
   private sharedUnitsSource: CodebookUnitOption[] | null = null;
@@ -226,8 +228,9 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     if (workspaceId) {
       this.isLoading = true;
 
-      this.fileService.getUnitsWithFileIds(workspaceId).subscribe({
+      this.fileService.getUnitsWithFileIds(workspaceId).pipe(takeUntil(this.destroy$)).subscribe({
         next: units => {
+          this.changeDetectorRef.markForCheck();
           if (units && units.length > 0) {
             this.availableUnits = units.map((unit: { id: number; unitId: string; fileName: string; data: string }) => ({
               unitId: unit.id,
@@ -248,6 +251,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
           this.isLoading = false;
         },
         error: () => {
+          this.changeDetectorRef.markForCheck();
           this.isLoading = false;
         }
       });
@@ -324,7 +328,8 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
       maxHeight: '88vh',
       autoFocus: false,
       data: dialogData
-    }).afterClosed().subscribe(jobDefinitionId => {
+    }).afterClosed().pipe(takeUntil(this.destroy$)).subscribe(jobDefinitionId => {
+      this.changeDetectorRef.markForCheck();
       if (jobDefinitionId !== undefined) {
         this.onJobDefinitionFilterChange(jobDefinitionId);
       }
@@ -378,8 +383,9 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingJobDefinitions = true;
-    this.codingJobBackendService.getJobDefinitions(workspaceId).subscribe({
+    this.codingJobBackendService.getJobDefinitions(workspaceId).pipe(takeUntil(this.destroy$)).subscribe({
       next: jobDefinitions => {
+        this.changeDetectorRef.markForCheck();
         this.availableJobDefinitions = jobDefinitions
           .filter(jobDefinition => jobDefinition.id !== undefined)
           .sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
@@ -388,6 +394,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
         this.applyQuickFilterUnitSelection();
       },
       error: () => {
+        this.changeDetectorRef.markForCheck();
         this.availableJobDefinitions = [];
         this.refreshJobDefinitionOptions();
         this.isLoadingJobDefinitions = false;
@@ -402,8 +409,9 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingVariableBundles = true;
-    this.codingJobBackendService.getVariableBundles(workspaceId).subscribe({
+    this.codingJobBackendService.getVariableBundles(workspaceId).pipe(takeUntil(this.destroy$)).subscribe({
       next: variableBundles => {
+        this.changeDetectorRef.markForCheck();
         this.availableVariableBundles = variableBundles
           .filter(variableBundle => variableBundle.id !== undefined)
           .sort((a, b) => a.name.localeCompare(b.name));
@@ -412,6 +420,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
         this.applyQuickFilterUnitSelection();
       },
       error: () => {
+        this.changeDetectorRef.markForCheck();
         this.availableVariableBundles = [];
         this.refreshJobDefinitionOptions();
         this.isLoadingVariableBundles = false;
@@ -686,6 +695,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   }
 
   private handleValidationResults(results: ValidateCodingCompletenessResponseDto | null): void {
+    this.changeDetectorRef.markForCheck();
     this.validationResults = results;
     if (results) {
       this.validationCacheKey = results.cacheKey || null;
@@ -693,6 +703,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   }
 
   private handleValidationProgress(progress: ValidationProgress): void {
+    this.changeDetectorRef.markForCheck();
     this.validationProgress = progress;
     this.isValidating = progress.status === 'loading' || progress.status === 'processing';
   }
@@ -700,13 +711,15 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   private loadMissingsProfiles(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
-      this.missingsProfileService.getMissingsProfiles(workspaceId).subscribe({
+      this.missingsProfileService.getMissingsProfiles(workspaceId).pipe(takeUntil(this.destroy$)).subscribe({
         next: profiles => {
+          this.changeDetectorRef.markForCheck();
           this.missingsProfiles = [{ id: 0, label: '' }, ...profiles.map((profile: { label: string; id: number }) => ({ id: profile.id ?? 0, label: profile.label }))];
           this.selectedMissingsProfile = 0;
           this.contentOptions.missingsProfile = this.selectedMissingsProfile.toString();
         },
         error: () => {
+          this.changeDetectorRef.markForCheck();
           // Error occurred while loading missings profiles
         }
       });
@@ -738,10 +751,12 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
       this.unitList
     ).pipe(takeUntil(this.destroy$)).subscribe({
       next: response => {
+        this.changeDetectorRef.markForCheck();
         this.codebookJobId = response.jobId;
         this.startCodebookPolling(workspaceId, response.jobId);
       },
       error: () => {
+        this.changeDetectorRef.markForCheck();
         this.codebookJobStatus = 'failed';
         this.codebookJobError = 'Failed to start codebook generation job';
       }
@@ -758,6 +773,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: status => {
+          this.changeDetectorRef.markForCheck();
           if (!status.status && status.error) {
             this.codebookJobStatus = 'failed';
             this.codebookJobError = status.error;
@@ -782,6 +798,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
           }
         },
         error: () => {
+          this.changeDetectorRef.markForCheck();
           this.codebookJobStatus = 'failed';
           this.codebookJobError = 'Failed to get job status';
           this.stopCodebookPolling();
@@ -799,6 +816,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   private downloadCodebookResult(workspaceId: number, jobId: string): void {
     this.exportService.downloadCodebookFile(workspaceId, jobId).pipe(takeUntil(this.destroy$)).subscribe({
       next: blob => {
+        this.changeDetectorRef.markForCheck();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         const timestamp = this.datePipe.transform(new Date(), 'yyyyMMdd_HHmmss');
@@ -812,6 +830,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
         this.codebookJobStatus = 'completed';
       },
       error: () => {
+        this.changeDetectorRef.markForCheck();
         this.codebookJobStatus = 'failed';
         this.codebookJobError = 'Failed to download codebook file';
       }
