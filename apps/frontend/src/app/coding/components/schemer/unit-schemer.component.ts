@@ -1,5 +1,5 @@
 import {
-  AfterViewInit, Component, ElementRef, OnDestroy, signal, input, output, viewChild, linkedSignal, ChangeDetectionStrategy
+  AfterViewInit, Component, ElementRef, OnDestroy, signal, input, output, viewChild, linkedSignal, ChangeDetectionStrategy, inject
 } from '@angular/core';
 
 import { Subject, takeUntil } from 'rxjs';
@@ -21,6 +21,8 @@ import { SchemerMessage } from '../../../core/services/post-message-types';
   imports: []
 })
 export class StandaloneUnitSchemerComponent implements AfterViewInit, OnDestroy {
+  private postMessageService = inject(PostMessageService);
+
   readonly hostingIframe = viewChild.required<ElementRef>('hostingIframe');
   readonly schemerId = input('');
   readonly schemerHtml = input('');
@@ -46,8 +48,6 @@ export class StandaloneUnitSchemerComponent implements AfterViewInit, OnDestroy 
   private destroy$ = new Subject<void>();
   private messageTimeout?: ReturnType<typeof setTimeout>;
   readonly message = signal('');
-
-  constructor(private postMessageService: PostMessageService) {}
 
   ngAfterViewInit(): void {
     this.iFrameElement = this.hostingIframe().nativeElement;

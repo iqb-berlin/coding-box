@@ -1,12 +1,14 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { Injectable, OnDestroy, inject } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { MatPaginatorIntl } from '@angular/material/paginator';
 import { TranslateService } from '@ngx-translate/core';
 
 @Injectable()
 export class GermanPaginatorIntl extends MatPaginatorIntl implements OnDestroy {
+  private translateService = inject(TranslateService);
+
   private readonly languageSubscription: Subscription;
-  constructor(private translateService: TranslateService) {
+  constructor() {
     super();
 
     this.itemsPerPageLabel = this.translateService.instant('paginator.itemsPerPageLabel');

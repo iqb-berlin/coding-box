@@ -1,4 +1,5 @@
-import { MatDialogRef } from '@angular/material/dialog';
+import { TestBed } from '@angular/core/testing';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { ContentDialogComponent, DialogData } from './content-dialog.component';
 
 describe('ContentDialogComponent', () => {
@@ -6,9 +7,14 @@ describe('ContentDialogComponent', () => {
     const dialogRef = {
       close: jest.fn()
     } as unknown as MatDialogRef<ContentDialogComponent>;
-
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: MatDialogRef, useValue: dialogRef },
+        { provide: MAT_DIALOG_DATA, useValue: data }
+      ]
+    });
     return {
-      component: new ContentDialogComponent(dialogRef, data),
+      component: TestBed.runInInjectionContext(() => new ContentDialogComponent()),
       dialogRef
     };
   };

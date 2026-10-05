@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -79,9 +79,7 @@ export type TestResultsImportDialogResult = {
   ]
 })
 export class TestResultsImportDialogComponent {
-  constructor(
-    private dialogRef: MatDialogRef<TestResultsImportDialogComponent>
-  ) {}
+  private dialogRef = inject<MatDialogRef<TestResultsImportDialogComponent>>(MatDialogRef);
 
   protected selectImportType(type: 'testcenter' | 'responses' | 'logs'): void {
     this.dialogRef.close({ type });

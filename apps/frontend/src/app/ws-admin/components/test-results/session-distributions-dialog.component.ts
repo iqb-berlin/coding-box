@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -198,6 +198,8 @@ export type SessionDistributionsDialogData = {
   ]
 })
 export class SessionDistributionsDialogComponent {
+  data = inject<SessionDistributionsDialogData>(MAT_DIALOG_DATA);
+
   protected readonly browserItems = this.toSortedCountList(this.data.browserCounts);
   protected readonly osItems = this.toSortedCountList(this.data.osCounts);
   protected readonly screenItems = this.toSortedCountList(this.data.screenCounts);
@@ -205,11 +207,6 @@ export class SessionDistributionsDialogComponent {
   protected readonly browserTotal = this.totalCount(this.browserItems);
   protected readonly osTotal = this.totalCount(this.osItems);
   protected readonly screenTotal = this.totalCount(this.screenItems);
-
-  constructor(
-    @Inject(MAT_DIALOG_DATA)
-    public data: SessionDistributionsDialogData
-  ) {}
 
   private toSortedCountList(
     map?: Record<string, number>

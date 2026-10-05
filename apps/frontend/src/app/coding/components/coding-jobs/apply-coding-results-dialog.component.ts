@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -161,12 +161,10 @@ export interface ApplyCodingResultsDialogResult {
   `]
 })
 export class ApplyCodingResultsDialogComponent {
-  protected overwriteExisting = false;
+  dialogRef = inject<MatDialogRef<ApplyCodingResultsDialogComponent>>(MatDialogRef);
+  protected data = inject<ApplyCodingResultsDialogData>(MAT_DIALOG_DATA);
 
-  constructor(
-    public dialogRef: MatDialogRef<ApplyCodingResultsDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) protected data: ApplyCodingResultsDialogData
-  ) {}
+  protected overwriteExisting = false;
 
   protected onCancel(): void {
     this.dialogRef.close(false);

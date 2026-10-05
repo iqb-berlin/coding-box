@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy, signal, ChangeDetectionStrategy, DestroyRef, inject
+  Component, OnInit, OnDestroy, signal, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
@@ -464,6 +464,12 @@ export interface ImportComparisonData {
   `]
 })
 export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
+  dialogRef = inject<MatDialogRef<ImportComparisonDialogComponent>>(MatDialogRef);
+  protected data = inject<ImportComparisonData>(MAT_DIALOG_DATA);
+  private translateService = inject(TranslateService);
+  private testPersonCodingService = inject(TestPersonCodingService);
+  private snackBar = inject(MatSnackBar);
+
   private readonly destroyRef = inject(DestroyRef);
 
   protected displayedColumns: string[] = [
@@ -488,14 +494,6 @@ export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
   readonly applyProgress = signal(-1);
 
   private pollingSubscription?: Subscription;
-
-  constructor(
-    public dialogRef: MatDialogRef<ImportComparisonDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) protected data: ImportComparisonData,
-    private translateService: TranslateService,
-    private testPersonCodingService: TestPersonCodingService,
-    private snackBar: MatSnackBar
-  ) {}
 
   ngOnInit(): void {
     this.dataSource.data = this.data.affectedRows;

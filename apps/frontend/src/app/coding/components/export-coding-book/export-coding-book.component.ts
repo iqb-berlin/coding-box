@@ -84,6 +84,16 @@ interface CodebookUnitOption {
   ]
 })
 export class ExportCodingBookComponent implements OnInit, OnDestroy {
+  private exportService = inject(CodingExportService);
+  private codingJobBackendService = inject(CodingJobBackendService);
+  private missingsProfileService = inject(MissingsProfileService);
+  private fileService = inject(FileService);
+  private appService = inject(AppService);
+  private datePipe = inject(DatePipe);
+  private validationStateService = inject(ValidationStateService);
+  private translateService = inject(TranslateService);
+  private dialog = inject(MatDialog);
+
   private readonly destroyRef = inject(DestroyRef);
 
   readonly unitList = signal<number[]>([]);
@@ -141,18 +151,6 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   readonly codebookJobProgress = signal(0);
   readonly codebookJobError = signal<string | null>(null);
   private codebookPollingSubscription: Subscription | null = null;
-
-  constructor(
-    private exportService: CodingExportService,
-    private codingJobBackendService: CodingJobBackendService,
-    private missingsProfileService: MissingsProfileService,
-    private fileService: FileService,
-    private appService: AppService,
-    private datePipe: DatePipe,
-    private validationStateService: ValidationStateService,
-    private translateService: TranslateService,
-    private dialog: MatDialog
-  ) { }
 
   ngOnInit(): void {
     this.updateSelectedJobDefinitionDisplay();

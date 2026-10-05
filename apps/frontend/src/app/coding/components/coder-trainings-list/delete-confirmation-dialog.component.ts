@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { MatButtonModule } from '@angular/material/button';
 import {
@@ -32,10 +32,10 @@ import { CoderTraining } from '../../models/coder-training.model';
   `]
 })
 export class DeleteConfirmationDialog {
-  constructor(
-    public dialogRef: MatDialogRef<DeleteConfirmationDialog>,
-    @Inject(MAT_DIALOG_DATA) protected data: { training: CoderTraining }
-  ) {}
+  dialogRef = inject<MatDialogRef<DeleteConfirmationDialog>>(MatDialogRef);
+  protected data = inject<{
+    training: CoderTraining;
+  }>(MAT_DIALOG_DATA);
 
   protected onCancel(): void {
     this.dialogRef.close(false);

@@ -1,6 +1,6 @@
 import { Subscription, finalize, Subject } from 'rxjs';
 import {
-  ChangeDetectorRef, Component, Inject, inject, OnInit, viewChild, effect, ChangeDetectionStrategy, DestroyRef
+  ChangeDetectorRef, Component, inject, OnInit, viewChild, effect, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -89,6 +89,13 @@ function createVariableAnalysisPaginatorIntl(): MatPaginatorIntl {
   ]
 })
 export class VariableAnalysisDialogComponent implements OnInit {
+  dialogRef = inject<MatDialogRef<VariableAnalysisDialogComponent>>(MatDialogRef);
+  data = inject<VariableAnalysisDialogData>(MAT_DIALOG_DATA);
+  private statisticsService = inject(CodingStatisticsService);
+  private appService = inject(AppService);
+  private workspaceSettingsService = inject(WorkspaceSettingsService);
+  private snackBar = inject(MatSnackBar);
+
   private analysisRequest?: Subscription;
 
   private readonly destroyRef = inject(DestroyRef);
@@ -131,15 +138,6 @@ export class VariableAnalysisDialogComponent implements OnInit {
   });
 
   readonly paginator = viewChild(MatPaginator);
-
-  constructor(
-    public dialogRef: MatDialogRef<VariableAnalysisDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: VariableAnalysisDialogData,
-    private statisticsService: CodingStatisticsService,
-    private appService: AppService,
-    private workspaceSettingsService: WorkspaceSettingsService,
-    private snackBar: MatSnackBar
-  ) { }
 
   ngOnInit(): void {
     this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(id => {

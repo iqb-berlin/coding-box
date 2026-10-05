@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   MAT_DIALOG_DATA,
@@ -312,13 +312,15 @@ export interface CodingImportFormatDialogResult {
   `]
 })
 export class CodingImportFormatDialogComponent {
+  private dialogRef = inject<MatDialogRef<CodingImportFormatDialogComponent>>(MatDialogRef);
+  protected data = inject<CodingImportFormatDialogData>(MAT_DIALOG_DATA);
+
   protected selectedVersion?: 'v1' | 'v2' | 'v3';
   protected existingCodingMode: CodingImportExistingCodingMode = 'skip-conflicts';
 
-  constructor(
-    private dialogRef: MatDialogRef<CodingImportFormatDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) protected data: CodingImportFormatDialogData
-  ) {
+  constructor() {
+    const data = this.data;
+
     this.selectedVersion = data.selectedVersion || data.availableVersions?.[0];
   }
 

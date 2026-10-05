@@ -1,5 +1,5 @@
 import {
-  ChangeDetectorRef, Component, Inject, OnInit, OnDestroy, computed, inject, signal, ChangeDetectionStrategy, DestroyRef
+  ChangeDetectorRef, Component, OnInit, OnDestroy, computed, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
@@ -204,6 +204,9 @@ interface DistributionPreviewSummary {
   ]
 })
 export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
+  dialogRef = inject<MatDialogRef<CodingJobDefinitionDialogComponent>>(MatDialogRef);
+  data = inject<CodingJobDefinitionDialogData>(MAT_DIALOG_DATA);
+
   protected readonly onActionKeydown = activateOnKeyboard;
 
   private readonly destroyRef = inject(DestroyRef);
@@ -310,11 +313,6 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   readonly existingJobDefinitions = signal<JobDefinition[]>([]);
   protected readonly manualCodingScopeSummary = signal<ManualCodingScopeSummary | null>(null);
   readonly includeDeriveErrorInManualCoding = signal(false);
-
-  constructor(
-    public dialogRef: MatDialogRef<CodingJobDefinitionDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: CodingJobDefinitionDialogData
-  ) { }
 
   ngOnInit(): void {
     if (this.data.codingJob?.doubleCodingAbsolute !== null && this.data.codingJob?.doubleCodingAbsolute !== undefined && this.data.codingJob.doubleCodingAbsolute > 0) {

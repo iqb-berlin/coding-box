@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy, ChangeDetectionStrategy, DestroyRef, inject
+  Component, OnInit, OnDestroy, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
@@ -92,20 +92,21 @@ import { ValidationBatchRunnerService } from '../../../shared/services/validatio
   `]
 })
 export class ValidationDialogComponent implements OnInit, OnDestroy {
+  data = inject<{
+    autoStart?: boolean;
+  }>(MAT_DIALOG_DATA);
+
+  private dialogRef = inject<MatDialogRef<ValidationDialogComponent>>(MatDialogRef);
+  private dialog = inject(MatDialog);
+  private appService = inject(AppService);
+  private validationTaskStateService = inject(ValidationTaskStateService);
+  private batchRunnerService = inject(ValidationBatchRunnerService);
+  private fileService = inject(FileService);
+  private snackBar = inject(MatSnackBar);
+
   private readonly destroyRef = inject(DestroyRef);
 
   private subscriptions: Subscription[] = [];
-
-  constructor(
-    @Inject(MAT_DIALOG_DATA) public data: { autoStart?: boolean },
-    private dialogRef: MatDialogRef<ValidationDialogComponent>,
-    private dialog: MatDialog,
-    private appService: AppService,
-    private validationTaskStateService: ValidationTaskStateService,
-    private batchRunnerService: ValidationBatchRunnerService,
-    private fileService: FileService,
-    private snackBar: MatSnackBar
-  ) {}
 
   ngOnInit(): void {
     // Auto-start functionality

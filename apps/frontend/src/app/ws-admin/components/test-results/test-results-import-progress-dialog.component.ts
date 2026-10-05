@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { MatDialogModule, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import type { MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
@@ -51,7 +51,5 @@ export interface TestResultsImportProgressHandle {
   styleUrls: ['./test-results-import-progress-dialog.component.scss']
 })
 export class TestResultsImportProgressDialogComponent {
-  constructor(
-    @Inject(MAT_DIALOG_DATA) protected data: TestResultsImportProgressDialogData
-  ) { }
+  protected data = inject<TestResultsImportProgressDialogData>(MAT_DIALOG_DATA);
 }

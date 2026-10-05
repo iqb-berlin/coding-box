@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnDestroy, inject, signal, ChangeDetectionStrategy, DestroyRef
+  Component, OnDestroy, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -54,6 +54,8 @@ export interface ContentPoolImportDialogResult {
   ]
 })
 export class ContentPoolImportDialogComponent implements OnDestroy {
+  readonly data = inject<ContentPoolImportDialogData>(MAT_DIALOG_DATA);
+
   private readonly destroyRef = inject(DestroyRef);
 
   private readonly contentPoolIntegrationService = inject(
@@ -79,10 +81,6 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
   readonly importProgress = signal<ContentPoolImportAcpProgress | undefined>(undefined);
 
   private importSubscription?: Subscription;
-
-  constructor(
-    @Inject(MAT_DIALOG_DATA) readonly data: ContentPoolImportDialogData
-  ) {}
 
   ngOnDestroy(): void {
     this.importSubscription?.unsubscribe();
