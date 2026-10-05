@@ -53,6 +53,9 @@ services:
         condition: service_completed_successfully
     environment:
       APP_ROLE: api
+      NX_DAEMON: 'false'
+      NX_ISOLATE_PLUGINS: 'false'
+      NODE_OPTIONS: '--max-old-space-size=2048'
       API_HOST: backend
       JWT_SECRET: ${REPLAY_E2E_JWT_SECRET}
       KEYCLOAK_CLIENT_ID: replay-e2e
@@ -69,7 +72,7 @@ services:
       WORKSPACE_TOKEN_REPLAY_READ_MAX_DURATION_DAYS: '1'
     command: ['npx', 'nx', 'serve', 'backend']
     ports:
-      - '127.0.0.1:${REPLAY_E2E_API_PORT}:3333'
+      - '${REPLAY_E2E_PUBLISH_HOST:-127.0.0.1}:${REPLAY_E2E_API_PORT}:3333'
     healthcheck:
       test:
         - CMD-SHELL
@@ -86,12 +89,17 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    environment:
+      NX_DAEMON: 'false'
+      NX_ISOLATE_PLUGINS: 'false'
+      NODE_OPTIONS: '--max-old-space-size=2048'
+      NG_BUILD_MAX_WORKERS: '2'
     command:
       - sh
       - -c
-      - sed -i 's#http://localhost:3333#http://backend:3333#' apps/frontend/proxy.conf.json && npx nx serve frontend --host=0.0.0.0
+      - sed -i 's#http://localhost:3333#http://backend:3333#' apps/frontend/proxy.conf.json && npx nx serve frontend --host=0.0.0.0 --allowedHosts=${REPLAY_E2E_CONNECT_HOST:-127.0.0.1} --configuration=${REPLAY_E2E_FRONTEND_CONFIGURATION:-development}
     ports:
-      - '127.0.0.1:${REPLAY_E2E_FRONTEND_PORT}:4200'
+      - '${REPLAY_E2E_PUBLISH_HOST:-127.0.0.1}:${REPLAY_E2E_FRONTEND_PORT}:4200'
     healthcheck:
       test:
         - CMD-SHELL
