@@ -12,13 +12,16 @@ import { AuthService } from '../../auth/service/auth.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AccessLevelGuard } from './access-level.guard';
+import { UsersService } from '../../database/services/users';
 
 type WorkspaceUsersServiceMock = jest.Mocked<Pick<WorkspaceUsersService, 'findUsers' | 'findCoders' | 'setWorkspaceUsers'>>;
 
 describe('WorkspaceUsersController', () => {
   let controller: WorkspaceUsersController;
   let workspaceUsersService: WorkspaceUsersServiceMock;
-  let authService: jest.Mocked<Pick<AuthService, 'createToken' | 'createTokenForUserId' | 'getWorkspaceTokenPolicy'>>;
+  let authService: jest.Mocked<Pick<AuthService,
+  'createToken' | 'createTokenForUserId' | 'getWorkspaceTokenPolicy' | 'canAccessWorkSpace'>>;
+  let usersService: jest.Mocked<Pick<UsersService, 'getUserIsAdmin' | 'getUserAccessLevel'>>;
 
   beforeEach(() => {
     workspaceUsersService = {
@@ -29,6 +32,9 @@ describe('WorkspaceUsersController', () => {
     authService = {
       createToken: jest.fn(),
       createTokenForUserId: jest.fn(),
+      canAccessWorkSpace: jest.fn().mockImplementation((userId: number, workspaceId: number) => Promise.resolve(
+        userId === 4 || (workspaceId === 3 && [1, 2, 3].includes(userId))
+      )),
       getWorkspaceTokenPolicy: jest.fn().mockReturnValue({
         scopes: {
           'replay:read': { maxDurationDays: 90 },
@@ -37,6 +43,12 @@ describe('WorkspaceUsersController', () => {
         }
       })
     };
+    usersService = {
+      getUserIsAdmin: jest.fn().mockImplementation((userId: number) => Promise.resolve(userId === 4)),
+      getUserAccessLevel: jest.fn().mockImplementation((userId: number, workspaceId: number) => Promise.resolve(
+        workspaceId === 3 && [1, 2, 3].includes(userId) ? userId : null
+      ))
+    };
 
     controller = new WorkspaceUsersController(
       workspaceUsersService as unknown as WorkspaceUsersService,
@@ -44,8 +56,8 @@ describe('WorkspaceUsersController', () => {
     );
   });
 
-  async function createTestApp(): Promise<INestApplication> {
-    const module: TestingModule = await Test.createTestingModule({
+  async function createTestApp(enforcePermissions = false): Promise<INestApplication> {
+    const builder = Test.createTestingModule({
       controllers: [WorkspaceUsersController],
       providers: [
         {
@@ -55,21 +67,26 @@ describe('WorkspaceUsersController', () => {
         {
           provide: AuthService,
           useValue: authService
+        },
+        {
+          provide: UsersService,
+          useValue: usersService
         }
       ]
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({
         canActivate: (context: ExecutionContext) => {
-          context.switchToHttp().getRequest().user = { id: 12 };
+          const request = context.switchToHttp().getRequest();
+          request.user = { id: Number(request.headers['x-test-user-id'] || 12) };
           return true;
         }
-      })
-      .overrideGuard(WorkspaceGuard)
-      .useValue({ canActivate: () => true })
-      .overrideGuard(AccessLevelGuard)
-      .useValue({ canActivate: () => true })
-      .compile();
+      });
+    if (!enforcePermissions) {
+      builder.overrideGuard(WorkspaceGuard).useValue({ canActivate: () => true });
+      builder.overrideGuard(AccessLevelGuard).useValue({ canActivate: () => true });
+    }
+    const module: TestingModule = await builder.compile();
 
     const app = module.createNestApplication();
     await app.init();
@@ -307,6 +324,45 @@ describe('WorkspaceUsersController', () => {
   });
 
   describe('setWorkspaceUsers', () => {
+    it.each([
+      { userId: 1, workspaceId: 3 },
+      { userId: 2, workspaceId: 3 },
+      { userId: 3, workspaceId: 4 },
+      { userId: 5, workspaceId: 3 }
+    ])('denies user $userId changing membership in workspace $workspaceId', async ({ userId, workspaceId }) => {
+      const app = await createTestApp(true);
+      try {
+        const response = await fetch(`${await app.getUrl()}/admin/workspace/${workspaceId}/users`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-test-user-id': String(userId) },
+          body: JSON.stringify([userId, 7])
+        });
+
+        expect(response.status).toBe(401);
+        expect(workspaceUsersService.setWorkspaceUsers).not.toHaveBeenCalled();
+      } finally {
+        await app.close();
+      }
+    });
+
+    it.each([3, 4])('preserves user $userId authorized membership management', async userId => {
+      workspaceUsersService.setWorkspaceUsers.mockResolvedValue(true);
+      const app = await createTestApp(true);
+      try {
+        const response = await fetch(`${await app.getUrl()}/admin/workspace/3/users`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-test-user-id': String(userId) },
+          body: JSON.stringify([7, 8])
+        });
+
+        expect(response.status).toBe(201);
+        expect(await response.json()).toBe(true);
+        expect(workspaceUsersService.setWorkspaceUsers).toHaveBeenCalledWith(3, [7, 8]);
+      } finally {
+        await app.close();
+      }
+    });
+
     it('delegates workspace user assignment', async () => {
       workspaceUsersService.setWorkspaceUsers.mockResolvedValue(true);
 

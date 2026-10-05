@@ -69,6 +69,10 @@ export class WsUsersComponent implements OnInit {
   @ViewChild(MatSort) sort = new MatSort();
   readonly userSelectionChanged = output<UserFullDto[]>();
 
+  get canManageGlobalUsers(): boolean {
+    return this.appService.authData.isAdmin;
+  }
+
   ngOnInit(): void {
     setTimeout(() => {
       this.createWorkspaceList();
@@ -80,7 +84,7 @@ export class WsUsersComponent implements OnInit {
     this.userObjectsDatasource = new MatTableDataSource(users);
     this.userObjectsDatasource
       .filterPredicate = (userList: UserFullDto, filter) => [
-        'name', 'firstName', 'lastName'
+        'username'
       ].some(column => (userList[column as keyof UserFullDto] as string || '')
         .toLowerCase()
         .includes(filter));
@@ -89,7 +93,10 @@ export class WsUsersComponent implements OnInit {
 
   updateUserList(): void {
     this.appService.dataLoading = true;
-    this.userBackendService.getUsersFull().subscribe(
+    const usersRequest = this.canManageGlobalUsers ?
+      this.userBackendService.getUsersFull() :
+      this.userBackendService.getUsersForWorkspaceSelection(this.appService.selectedWorkspaceId);
+    usersRequest.subscribe(
       (users: UserFullDto[]) => {
         if (users.length > 0) {
           this.setObjectsDatasource(users);
@@ -118,6 +125,10 @@ export class WsUsersComponent implements OnInit {
   }
 
   updateUserWorkspacesList(userId: number): void {
+    if (!this.canManageGlobalUsers) {
+      this.filteredUserWorkspaces = [];
+      return;
+    }
     if (this.tableSelectionCheckboxes.selected.length === 1) {
       this.userBackendService.getWorkspacesByUserList(userId).subscribe(workspaces => {
         this.filteredUserWorkspaces = this.userWorkspaces.filter(workspace => workspaces.includes(workspace.id));

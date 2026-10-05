@@ -43,6 +43,12 @@ export class UserBackendService {
       );
   }
 
+  getUsersForWorkspaceSelection(workspaceId: number): Observable<UserFullDto[]> {
+    return this.http
+      .get<UserFullDto[]>(`${this.serverUrl}admin/users/directory/${workspaceId}`)
+      .pipe(catchError(() => of([])));
+  }
+
   addUser(newUser: CreateUserDto): Observable<boolean> {
     return this.http
       .post(
