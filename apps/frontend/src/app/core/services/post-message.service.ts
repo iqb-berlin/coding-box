@@ -1,4 +1,6 @@
-import { Injectable, NgZone, OnDestroy } from '@angular/core';
+import {
+  Injectable, NgZone, OnDestroy, inject
+} from '@angular/core';
 import {
   Observable,
   Subject,
@@ -22,6 +24,8 @@ export type PostMessageEvent<T extends PostMessage = PostMessage> = {
   providedIn: 'root'
 })
 export class PostMessageService implements OnDestroy {
+  private readonly zone = inject(NgZone);
+
   private readonly messageListener = (event: MessageEvent): void => {
     this.zone.run(() => {
       const message = event.data as PostMessage;
@@ -35,7 +39,7 @@ export class PostMessageService implements OnDestroy {
   readonly messages$: Observable<PostMessageEvent> =
     this.messageSubject.asObservable();
 
-  constructor(private readonly zone: NgZone) {
+  constructor() {
     this.setupMessageListener();
   }
 

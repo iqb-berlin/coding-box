@@ -4,18 +4,24 @@ import { By } from '@angular/platform-browser';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSelect } from '@angular/material/select';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { ManualCodingExportDialogComponent } from './manual-coding-export-dialog.component';
+import { ManualCodingExportDialogComponent, ManualCodingExportDialogData } from './manual-coding-export-dialog.component';
 
 describe('ManualCodingExportDialogComponent', () => {
   const createComponent = (
-    data: ConstructorParameters<typeof ManualCodingExportDialogComponent>[1]
+    data: ManualCodingExportDialogData
   ): {
     component: ManualCodingExportDialogComponent;
     dialogRef: { close: jest.Mock };
   } => {
     const dialogRef = { close: jest.fn() };
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: MatDialogRef, useValue: dialogRef },
+        { provide: MAT_DIALOG_DATA, useValue: data }
+      ]
+    });
     return {
-      component: new ManualCodingExportDialogComponent(dialogRef as never, data),
+      component: TestBed.runInInjectionContext(() => new ManualCodingExportDialogComponent()),
       dialogRef
     };
   };

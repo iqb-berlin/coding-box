@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, ChangeDetectionStrategy
+  Component, OnInit, ChangeDetectionStrategy, inject
 } from '@angular/core';
 
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -30,16 +30,14 @@ import { XmlViewerComponent } from '../../../shared/components/xml-viewer/xml-vi
   ]
 })
 export class BookletInfoDialogComponent implements OnInit {
+  dialogRef = inject<MatDialogRef<BookletInfoDialogComponent>>(MatDialogRef);
+  protected data = inject<{
+    bookletInfo: BookletInfoDto;
+    bookletId: string;
+  }>(MAT_DIALOG_DATA);
+
   protected isLoading = true;
   protected errorMessage: string | null = null;
-
-  constructor(
-    public dialogRef: MatDialogRef<BookletInfoDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) protected data: {
-      bookletInfo: BookletInfoDto;
-      bookletId: string;
-    }
-  ) {}
 
   ngOnInit(): void {
     if (this.data.bookletInfo) {

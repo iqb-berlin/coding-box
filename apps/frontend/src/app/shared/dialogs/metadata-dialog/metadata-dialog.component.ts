@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy, ElementRef, inject, CUSTOM_ELEMENTS_SCHEMA, signal, viewChild, ChangeDetectionStrategy
+  Component, OnInit, OnDestroy, ElementRef, inject, CUSTOM_ELEMENTS_SCHEMA, signal, viewChild, ChangeDetectionStrategy
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -208,6 +208,9 @@ export interface MetadataDialogData {
   `]
 })
 export class MetadataDialogComponent implements OnInit, OnDestroy {
+  dialogRef = inject<MatDialogRef<MetadataDialogComponent>>(MatDialogRef);
+  data = inject<MetadataDialogData>(MAT_DIALOG_DATA);
+
   private readonly metadataFormElement = viewChild<ElementRef<MetadataProfileFormElement>>('metadataForm');
 
   private readonly webComponents = inject(MetadataWebComponentService);
@@ -230,11 +233,6 @@ export class MetadataDialogComponent implements OnInit, OnDestroy {
 
   protected readonly isEditing = signal(false);
   readonly hasChanges = signal(false);
-
-  constructor(
-    public dialogRef: MatDialogRef<MetadataDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: MetadataDialogData
-  ) { }
 
   async ngOnInit() {
     // Deep copy metadata values to avoid mutating reference passed in

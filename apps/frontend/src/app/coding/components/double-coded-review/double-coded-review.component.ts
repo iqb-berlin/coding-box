@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, OnDestroy, Inject, Optional, inject, signal, ChangeDetectionStrategy, DestroyRef
+  Component, OnInit, OnDestroy, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
@@ -134,6 +134,9 @@ interface DoubleCodedReviewDialogData {
   ]
 })
 export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
+  dialogRef = inject<MatDialogRef<DoubleCodedReviewComponent>>(MatDialogRef, { optional: true });
+  dialogData = inject<unknown>(MAT_DIALOG_DATA, { optional: true });
+
   private readonly destroyRef = inject(DestroyRef);
 
   private testPersonCodingService = inject(TestPersonCodingService);
@@ -149,11 +152,6 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   private replayDecisionBridge = inject(ReplayDecisionBridgeService);
 
   selectionForm: FormGroup = this.reviewFacade.selectionForm;
-
-  constructor(
-    @Optional() public dialogRef: MatDialogRef<DoubleCodedReviewComponent>,
-    @Optional() @Inject(MAT_DIALOG_DATA) public dialogData: unknown
-  ) {}
 
   get canApplyReviewResults(): boolean {
     return (

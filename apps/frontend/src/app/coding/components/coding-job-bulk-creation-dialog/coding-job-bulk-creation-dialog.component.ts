@@ -1,5 +1,5 @@
 import {
-  Component, Inject, inject, signal, ChangeDetectionStrategy
+  Component, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
@@ -137,6 +137,9 @@ interface DistributionMatrixRow {
   ]
 })
 export class CodingJobBulkCreationDialogComponent {
+  dialogRef = inject<MatDialogRef<CodingJobBulkCreationDialogComponent>>(MatDialogRef);
+  protected data = inject<BulkCreationData>(MAT_DIALOG_DATA);
+
   private fb = inject(FormBuilder);
   private distributedCodingService = inject(DistributedCodingService);
   private appService = inject(AppService);
@@ -153,10 +156,7 @@ export class CodingJobBulkCreationDialogComponent {
   private readonly minCoderCapacityPercent = 10;
   private readonly maxCoderCapacityPercent = 300;
 
-  constructor(
-    public dialogRef: MatDialogRef<CodingJobBulkCreationDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) protected data: BulkCreationData
-  ) {
+  constructor() {
     this.initForm();
 
     if (this.data.distribution && this.data.doubleCodingInfo) {

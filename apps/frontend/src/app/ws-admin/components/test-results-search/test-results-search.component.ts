@@ -1,5 +1,5 @@
 import {
-  ChangeDetectorRef, Component, Inject, OnDestroy, OnInit, inject, ChangeDetectionStrategy, DestroyRef
+  ChangeDetectorRef, Component, OnDestroy, OnInit, inject, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -68,6 +68,16 @@ interface QuickSearchTypeOption {
   ]
 })
 export class TestResultsSearchComponent implements OnInit, OnDestroy {
+  private dialogRef = inject<MatDialogRef<TestResultsSearchComponent, QuickSearchDialogResult>>(MatDialogRef);
+  protected data = inject<{
+    title: string;
+  }>(MAT_DIALOG_DATA);
+
+  private testResultService = inject(TestResultService);
+  private appService = inject(AppService);
+  private statisticsService = inject(CodingStatisticsService);
+  private snackBar = inject(MatSnackBar);
+
   private readonly destroyRef = inject(DestroyRef);
 
   private readonly changeDetectorRef = inject(ChangeDetectorRef);
@@ -95,15 +105,6 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
   results: QuickSearchResult = this.createEmptyResult('');
   private searchSubject = new Subject<string>();
   private searchSubscription?: Subscription;
-
-  constructor(
-    private dialogRef: MatDialogRef<TestResultsSearchComponent, QuickSearchDialogResult>,
-    @Inject(MAT_DIALOG_DATA) protected data: { title: string },
-    private testResultService: TestResultService,
-    private appService: AppService,
-    private statisticsService: CodingStatisticsService,
-    private snackBar: MatSnackBar
-  ) { }
 
   ngOnInit(): void {
     this.searchSubscription = this.searchSubject

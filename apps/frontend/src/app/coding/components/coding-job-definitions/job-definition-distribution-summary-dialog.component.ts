@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatDividerModule } from '@angular/material/divider';
@@ -53,12 +53,10 @@ export interface JobDefinitionDistributionSummaryDialogData {
   styleUrls: ['./job-definition-distribution-summary-dialog.component.scss']
 })
 export class JobDefinitionDistributionSummaryDialogComponent {
-  protected selectedSnapshotIndex = this.getInitialSnapshotIndex();
+  protected dialogRef = inject<MatDialogRef<JobDefinitionDistributionSummaryDialogComponent>>(MatDialogRef);
+  protected data = inject<JobDefinitionDistributionSummaryDialogData>(MAT_DIALOG_DATA);
 
-  constructor(
-    protected dialogRef: MatDialogRef<JobDefinitionDistributionSummaryDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) protected data: JobDefinitionDistributionSummaryDialogData
-  ) {}
+  protected selectedSnapshotIndex = this.getInitialSnapshotIndex();
 
   protected get snapshots(): JobDefinitionDistributionSnapshot[] {
     if (this.data.snapshots?.length) {

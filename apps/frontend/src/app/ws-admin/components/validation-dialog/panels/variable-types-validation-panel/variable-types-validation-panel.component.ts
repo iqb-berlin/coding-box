@@ -103,6 +103,9 @@ interface VariableTypesValidationResult {
 })
 export class VariableTypesValidationPanelComponent
 implements OnInit, OnDestroy {
+  private variableTypeValidationService = inject(VariableTypeValidationService);
+  private snackBar = inject(MatSnackBar);
+
   private readonly destroyRef = inject(DestroyRef);
 
   readonly disabled = input(false);
@@ -140,11 +143,6 @@ implements OnInit, OnDestroy {
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
   private taskSubscription?: Subscription;
-
-  constructor(
-    private variableTypeValidationService: VariableTypeValidationService,
-    private snackBar: MatSnackBar
-  ) {}
 
   ngOnInit(): void {
     const cachedResult =

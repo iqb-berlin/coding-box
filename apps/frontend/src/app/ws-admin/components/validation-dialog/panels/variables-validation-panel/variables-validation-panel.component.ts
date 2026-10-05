@@ -121,6 +121,9 @@ interface VariablesValidationResult {
   ]
 })
 export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
+  private variableValidationService = inject(VariableValidationService);
+  private snackBar = inject(MatSnackBar);
+
   private readonly destroyRef = inject(DestroyRef);
 
   readonly disabled = input(false);
@@ -162,11 +165,6 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
   private taskSubscription?: Subscription;
-
-  constructor(
-    private variableValidationService: VariableValidationService,
-    private snackBar: MatSnackBar
-  ) {}
 
   ngOnInit(): void {
     const cachedResult =

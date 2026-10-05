@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import {
@@ -77,6 +77,10 @@ const DIAGNOSTIC_CODE_TRANSLATION_KEYS: Record<string, string> = {
   styleUrls: ['./item-dataset-mapping-diagnostics-dialog.component.scss']
 })
 export class ItemDatasetMappingDiagnosticsDialogComponent {
+  readonly data = inject<ItemDatasetMappingDiagnosticsDialogData>(MAT_DIALOG_DATA);
+  private dialogRef = inject<MatDialogRef<ItemDatasetMappingDiagnosticsDialogComponent>>(MatDialogRef);
+  private translateService = inject(TranslateService);
+
   readonly pageSizeOptions = [10, 25, 50];
   search = '';
   selectedCode = '';
@@ -85,14 +89,7 @@ export class ItemDatasetMappingDiagnosticsDialogComponent {
   visibleGroups: DiagnosticGroup[] = [];
   private pageStates = new Map<string, DiagnosticPageState>();
 
-  constructor(
-    @Inject(MAT_DIALOG_DATA)
-    readonly data: ItemDatasetMappingDiagnosticsDialogData,
-    private dialogRef: MatDialogRef<
-    ItemDatasetMappingDiagnosticsDialogComponent
-    >,
-    private translateService: TranslateService
-  ) {
+  constructor() {
     this.availableCauses = this.groupDiagnostics(this.data.diagnostics)
       .map(group => ({
         code: group.code,

@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -165,10 +165,8 @@ export interface ApplyDuplicateAggregationDialogData {
   `]
 })
 export class ApplyDuplicateAggregationDialogComponent {
-  constructor(
-    public dialogRef: MatDialogRef<ApplyDuplicateAggregationDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) protected data: ApplyDuplicateAggregationDialogData
-  ) { }
+  dialogRef = inject<MatDialogRef<ApplyDuplicateAggregationDialogComponent>>(MatDialogRef);
+  protected data = inject<ApplyDuplicateAggregationDialogData>(MAT_DIALOG_DATA);
 
   protected onCancel(): void {
     this.dialogRef.close(false);

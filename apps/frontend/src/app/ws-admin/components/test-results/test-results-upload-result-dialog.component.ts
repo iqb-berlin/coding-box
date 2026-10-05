@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import {
-  Component, Inject, viewChild, ChangeDetectionStrategy, OnDestroy
+  Component, viewChild, ChangeDetectionStrategy, OnDestroy, inject
 } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -71,6 +71,10 @@ type ImportOutcomeMetric = { label: string; value: number };
   styleUrls: ['./test-results-upload-result-dialog.component.scss']
 })
 export class TestResultsUploadResultDialogComponent implements OnDestroy {
+  private dialogRef = inject<MatDialogRef<TestResultsUploadResultDialogComponent>>(MatDialogRef);
+  private translateService = inject(TranslateService);
+  data = inject<TestResultsUploadResultDialogData>(MAT_DIALOG_DATA);
+
   private readonly viewportRefreshTimers = new Set<number>();
 
   ngOnDestroy(): void {
@@ -89,12 +93,6 @@ export class TestResultsUploadResultDialogComponent implements OnDestroy {
     query: string;
     result: TestResultsUploadIssueDto[];
   } | null = null;
-
-  constructor(
-    private dialogRef: MatDialogRef<TestResultsUploadResultDialogComponent>,
-    private translateService: TranslateService,
-    @Inject(MAT_DIALOG_DATA) public data: TestResultsUploadResultDialogData
-  ) { }
 
   get result(): TestResultsUploadResultDto {
     return this.data.result;

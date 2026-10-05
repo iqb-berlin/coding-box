@@ -1,5 +1,5 @@
 import {
-  ChangeDetectorRef, Component, Inject, OnInit, ChangeDetectionStrategy, DestroyRef, inject
+  ChangeDetectorRef, Component, OnInit, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -395,6 +395,11 @@ export interface DownloadCodingResultsDialogData {
   `]
 })
 export class DownloadCodingResultsDialogComponent implements OnInit {
+  dialogRef = inject<MatDialogRef<DownloadCodingResultsDialogComponent>>(MatDialogRef);
+  protected data = inject<DownloadCodingResultsDialogData>(MAT_DIALOG_DATA);
+  private readonly missingsProfileService = inject(MissingsProfileService);
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   private readonly destroyRef = inject(DestroyRef);
 
   selectedVersion: 'v1' | 'v2' | 'v3' = 'v1';
@@ -409,12 +414,9 @@ export class DownloadCodingResultsDialogComponent implements OnInit {
   protected missingsProfilesError = false;
   private hasLoadedMissingsProfiles = false;
 
-  constructor(
-    public dialogRef: MatDialogRef<DownloadCodingResultsDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) protected data: DownloadCodingResultsDialogData,
-    private readonly missingsProfileService: MissingsProfileService,
-    private readonly changeDetectorRef: ChangeDetectorRef
-  ) {
+  constructor() {
+    const data = this.data;
+
     this.selectedVersion = data.currentVersion;
   }
 

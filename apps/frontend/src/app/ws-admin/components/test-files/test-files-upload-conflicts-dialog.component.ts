@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -32,14 +32,13 @@ export type TestFilesUploadConflictsDialogResult = {
   styleUrls: ['./test-files-upload-conflicts-dialog.component.scss']
 })
 export class TestFilesUploadConflictsDialogComponent {
+  private dialogRef = inject<MatDialogRef<TestFilesUploadConflictsDialogComponent, TestFilesUploadConflictsDialogResult>>(MatDialogRef);
+  data = inject<{
+    conflicts: TestFilesUploadConflictDto[];
+  }>(MAT_DIALOG_DATA);
+
   protected filterText = '';
   private selectedFileIds = new Set<string>();
-
-  constructor(
-    private dialogRef: MatDialogRef<TestFilesUploadConflictsDialogComponent, TestFilesUploadConflictsDialogResult>,
-    @Inject(MAT_DIALOG_DATA)
-    public data: { conflicts: TestFilesUploadConflictDto[] }
-  ) {}
 
   protected get conflicts(): TestFilesUploadConflictDto[] {
     return this.data?.conflicts || [];

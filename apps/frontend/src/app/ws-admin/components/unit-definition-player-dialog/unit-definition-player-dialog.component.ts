@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, signal, ChangeDetectionStrategy, DestroyRef, inject
+  Component, OnInit, signal, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -31,6 +31,14 @@ import { UnitPlayerComponent } from '../../../replay/components/unit-player/unit
   ]
 })
 export class UnitDefinitionPlayerDialogComponent implements OnInit {
+  dialogRef = inject<MatDialogRef<UnitDefinitionPlayerDialogComponent>>(MatDialogRef);
+  protected data = inject<{
+    workspaceId: number;
+    unitId: string;
+  }>(MAT_DIALOG_DATA);
+
+  private fileService = inject(FileService);
+
   private readonly destroyRef = inject(DestroyRef);
 
   protected readonly isLoading = signal(true);
@@ -38,12 +46,6 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
 
   protected readonly unitDef = signal<string | undefined>(undefined);
   protected readonly unitPlayer = signal<string | undefined>(undefined);
-
-  constructor(
-    public dialogRef: MatDialogRef<UnitDefinitionPlayerDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) protected data: { workspaceId: number; unitId: string },
-    private fileService: FileService
-  ) { }
 
   ngOnInit(): void {
     if (this.data.workspaceId && this.data.unitId) {

@@ -1,8 +1,13 @@
 import { ChangeDetectorRef, computed } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
 import { EditMissingsProfilesDialogComponent } from './edit-missings-profiles-dialog.component';
 import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
+import { MissingsProfileService } from '../../services/missings-profile.service';
+import { AppService } from '../../../core/services/app.service';
 
 describe('EditMissingsProfilesDialogComponent', () => {
   beforeEach(() => {
@@ -35,14 +40,19 @@ describe('EditMissingsProfilesDialogComponent', () => {
       getMissingsProfileDetails: jest.Mock;
     }> = {},
     snackBar = { open: jest.fn() }
-  ) => TestBed.runInInjectionContext(() => new EditMissingsProfilesDialogComponent(
-    { close: jest.fn(), beforeClosed: () => of() } as never,
-    { workspaceId: 1 },
-    missingsProfileService as never,
-    { selectedWorkspaceId: 1, selectedWorkspaceId$: of() } as never,
-    snackBar as never,
-    { instant: jest.fn(key => key) } as never
-  ));
+  ) => {
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: MatDialogRef, useValue: { close: jest.fn(), beforeClosed: () => of() } },
+        { provide: MAT_DIALOG_DATA, useValue: { workspaceId: 1 } },
+        { provide: MissingsProfileService, useValue: missingsProfileService },
+        { provide: AppService, useValue: { selectedWorkspaceId: 1, selectedWorkspaceId$: of() } },
+        { provide: MatSnackBar, useValue: snackBar },
+        { provide: TranslateService, useValue: { instant: jest.fn(key => key) } }
+      ]
+    });
+    return TestBed.runInInjectionContext(() => new EditMissingsProfilesDialogComponent());
+  };
 
   it('validates missing entries like the backend', () => {
     const component = createComponent();
