@@ -284,9 +284,7 @@ export class WorkspaceTestResultsImportController {
         `Error queuing test results upload after ${totalTime}ms!`,
         error
       );
-      throw new BadRequestException(
-        'Uploading test results failed to queue. Please try again.'
-      );
+      throw error;
     }
   }
 

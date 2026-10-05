@@ -195,11 +195,7 @@ export class WorkspaceFilesInfoController {
       throw new BadRequestException('Workspace ID is required.');
     }
 
-    try {
-      return await this.replayAnchorService.upsertOverride(workspace_id, override);
-    } catch (error) {
-      throw new BadRequestException(error.message);
-    }
+    return this.replayAnchorService.upsertOverride(workspace_id, override);
   }
 
   @Delete(':workspace_id/files/replay-anchor-overrides')

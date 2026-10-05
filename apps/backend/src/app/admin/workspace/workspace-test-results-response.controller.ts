@@ -146,17 +146,11 @@ export class WorkspaceTestResultsResponseController {
       @Body(new JsonSchemaValidationPipe(requestBodySchemas.ResolveDuplicateResponsesRequest)) body: ResolveDuplicateResponsesRequest,
       @Req() req: RequestWithUser
   ): Promise<{ resolvedCount: number; success: boolean }> {
-    try {
-      return await this.responseManagementService.resolveDuplicateResponses(
-        workspaceId,
-        body?.resolutionMap || {},
-        req.user.id
-      );
-    } catch (error) {
-      throw new BadRequestException(
-        `Failed to resolve duplicate responses. ${error.message}`
-      );
-    }
+    return this.responseManagementService.resolveDuplicateResponses(
+      workspaceId,
+      body?.resolutionMap || {},
+      req.user.id
+    );
   }
 
   @Get(':workspace_id/responses')
@@ -333,9 +327,7 @@ export class WorkspaceTestResultsResponseController {
       }
 
       this.logger.error(`Error searching for responses: ${error}`);
-      throw new BadRequestException(
-        `Failed to search for responses. ${error.message}`
-      );
+      throw error;
     }
   }
 

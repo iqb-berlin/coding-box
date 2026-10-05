@@ -1,10 +1,8 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
-  NotFoundException,
   Param,
   Patch,
   Post,
@@ -62,14 +60,7 @@ export class UnitTagsController {
     @WorkspaceId() workspaceId: number,
       @Body(new JsonSchemaValidationPipe(requestBodySchemas.CreateUnitTagDto)) createUnitTagDto: CreateUnitTagDto
   ): Promise<UnitTagDto> {
-    try {
-      return await this.unitTagService.create(createUnitTagDto);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to create tag: ${error.message}`);
-    }
+    return this.unitTagService.create(createUnitTagDto);
   }
 
   @Get('unit/:unitId')
@@ -102,14 +93,7 @@ export class UnitTagsController {
     @WorkspaceId() workspaceId: number,
       @Param('unitId') unitId: number
   ): Promise<UnitTagDto[]> {
-    try {
-      return await this.unitTagService.findAllByUnitId(unitId);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve tags: ${error.message}`);
-    }
+    return this.unitTagService.findAllByUnitId(unitId);
   }
 
   @Get(':id')
@@ -142,14 +126,7 @@ export class UnitTagsController {
     @WorkspaceId() workspaceId: number,
       @Param('id') id: number
   ): Promise<UnitTagDto> {
-    try {
-      return await this.unitTagService.findOne(id);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve tag: ${error.message}`);
-    }
+    return this.unitTagService.findOne(id);
   }
 
   @Patch(':id')
@@ -186,14 +163,7 @@ export class UnitTagsController {
       @Param('id') id: number,
       @Body(new JsonSchemaValidationPipe(requestBodySchemas.UpdateUnitTagDto)) updateUnitTagDto: UpdateUnitTagDto
   ): Promise<UnitTagDto> {
-    try {
-      return await this.unitTagService.update(id, updateUnitTagDto);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to update tag: ${error.message}`);
-    }
+    return this.unitTagService.update(id, updateUnitTagDto);
   }
 
   @Delete(':id')
@@ -226,13 +196,6 @@ export class UnitTagsController {
     @WorkspaceId() workspaceId: number,
       @Param('id') id: number
   ): Promise<boolean> {
-    try {
-      return await this.unitTagService.remove(id);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to delete tag: ${error.message}`);
-    }
+    return this.unitTagService.remove(id);
   }
 }

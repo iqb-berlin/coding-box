@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Setting } from '../../entities/setting.entity';
@@ -164,7 +164,7 @@ export class CodingReplayAnchorService {
     const replayAnchor = this.normalizeValue(override.replayAnchor);
 
     if (!unitName || !variableId || !replayAnchor) {
-      throw new Error('unitName, variableId and replayAnchor are required');
+      throw new BadRequestException('unitName, variableId and replayAnchor are required');
     }
 
     return { unitName, variableId, replayAnchor };
