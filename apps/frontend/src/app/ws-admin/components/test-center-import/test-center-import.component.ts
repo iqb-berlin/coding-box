@@ -1,5 +1,5 @@
 import {
-  Component, DestroyRef, inject, signal, ChangeDetectionStrategy
+  Component, DestroyRef, inject, signal, ChangeDetectionStrategy, OnInit, OnDestroy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
@@ -122,7 +122,7 @@ export interface ImportFormValues {
     MatTooltip
   ]
 })
-export class TestCenterImportComponent {
+export class TestCenterImportComponent implements OnInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
   private userBackendService = inject(UserBackendService);
   private importService = inject(ImportService);

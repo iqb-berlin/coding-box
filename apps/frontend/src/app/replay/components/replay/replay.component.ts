@@ -99,6 +99,7 @@ interface ReplayRecoveryDraft {
 }
 
 @Component({
+  host: { '(window:keydown)': 'onKeyDown($event)' },
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [ReplayCodingService, ReplaySessionLoaderService],
   selector: 'coding-box-replay',

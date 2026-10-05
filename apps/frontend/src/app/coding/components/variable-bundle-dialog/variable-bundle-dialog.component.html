@@ -96,7 +96,11 @@
             <div class="variables-grid">
               @for (variable of filteredVariables(); track variable.unitName + variable.variableId) {
                 <div class="variable-card" [class.selected]="selectedVariables.isSelected(variable)"
-                  (click)="selectedVariables.toggle(variable)">
+                  (click)="selectedVariables.toggle(variable)"
+                  role="button"
+                  tabindex="0"
+                  (keydown.enter)="onActionKeydown($event)"
+                  (keydown.space)="onActionKeydown($event)">
                   <div class="variable-card-header">
                     <mat-checkbox [checked]="selectedVariables.isSelected(variable)" (click)="$event.stopPropagation()"
                       (change)="$event ? selectedVariables.toggle(variable) : null">

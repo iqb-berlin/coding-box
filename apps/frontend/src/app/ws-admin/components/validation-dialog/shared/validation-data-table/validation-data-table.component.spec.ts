@@ -69,6 +69,20 @@ describe('ValidationDataTableComponent', () => {
     });
   });
 
+  it.each(['Enter', ' '])('opens a table action with %p and blocks it while loading', key => {
+    const emit = jest.spyOn(component.linkClick, 'emit');
+    const link = fixture.nativeElement.querySelector('a') as HTMLElement;
+    link.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenCalledWith({ item: mockData[0], columnKey: 'name' });
+
+    fixture.componentRef.setInput('loading', true);
+    fixture.detectChanges();
+    link.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(link.getAttribute('aria-disabled')).toBe('true');
+  });
+
   it('should emit selectionChange when selection changes', () => {
     const emitSpy = jest.spyOn(component.selectionChange, 'emit');
     component.toggleSelection(mockData[0]);

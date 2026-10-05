@@ -26,14 +26,22 @@
         <div class="groups-container">
           @for (group of itemGroups(); track group) {
             <div class="file-group">
-              <h3 class="group-header pointer" (click)="openMetadata(group)" matTooltip="Metadaten anzeigen (Unit)">
+              <h3 class="group-header pointer" (click)="openMetadata(group)" matTooltip="Metadaten anzeigen (Unit)"
+                role="button"
+                tabindex="0"
+                (keydown.enter)="onActionKeydown($event)"
+                (keydown.space)="onActionKeydown($event)">
                 <mat-icon>folder_open</mat-icon>
                 {{ group.fileId }}
               </h3>
               <div class="items-grid">
                 @for (id of group.items; track id) {
                   <div class="item-chip pointer" (click)="openMetadata(group, id)"
-                    matTooltip="Metadaten anzeigen (Item)">
+                    matTooltip="Metadaten anzeigen (Item)"
+                    role="button"
+                    tabindex="0"
+                    (keydown.enter)="onActionKeydown($event)"
+                    (keydown.space)="onActionKeydown($event)">
                     {{ id }}
                   </div>
                 }

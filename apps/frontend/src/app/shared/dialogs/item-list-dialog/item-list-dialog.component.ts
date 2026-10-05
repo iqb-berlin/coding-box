@@ -15,6 +15,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MetadataResolver } from '@iqb/metadata-resolver';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { activateOnKeyboard } from '../../utils/keyboard-activation.util';
 import { MetadataDialogComponent, MetadataDialogData } from '../metadata-dialog/metadata-dialog.component';
 import { AppService } from '../../../core/services/app.service';
 import { FileService } from '../../services/file/file.service';
@@ -39,6 +40,8 @@ import { takeUntilWorkspaceChanged } from '../../utils/workspace-request.operato
   styleUrls: ['./item-list-dialog.component.scss']
 })
 export class ItemListDialogComponent implements OnInit {
+  readonly onActionKeydown = activateOnKeyboard;
+
   private itemsRequest?: Subscription;
 
   private readonly destroyRef = inject(DestroyRef);

@@ -319,7 +319,11 @@
                       <div
                         class="kappa-section"
                         >
-                        <div class="kappa-header" (click)="toggleKappaStatistics()">
+                        <div class="kappa-header" (click)="toggleKappaStatistics()"
+                          role="button"
+                          tabindex="0"
+                          (keydown.enter)="onActionKeydown($event)"
+                          (keydown.space)="onActionKeydown($event)">
                           <h4>
                             <mat-icon>{{
                               showKappaStatistics() ? 'expand_less' : 'expand_more'

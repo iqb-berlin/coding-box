@@ -33,6 +33,7 @@ import {
   catchError, firstValueFrom, forkJoin, merge, Observable, of, Subject, Subscription,
   switchMap, takeUntil, timer
 } from 'rxjs';
+import { activateOnKeyboard } from '../../../shared/utils/keyboard-activation.util';
 import {
   CodingJob,
   DistributionVariableUsageByStatus,
@@ -203,6 +204,8 @@ interface DistributionPreviewSummary {
   ]
 })
 export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
+  readonly onActionKeydown = activateOnKeyboard;
+
   private readonly destroyRef = inject(DestroyRef);
 
   private changeDetectorRef = inject(ChangeDetectorRef);

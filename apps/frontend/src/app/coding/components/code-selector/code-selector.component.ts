@@ -13,6 +13,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { activateOnKeyboard } from '../../../shared/utils/keyboard-activation.util';
 import {
   BundleContext,
   BundleVariableContext,
@@ -72,6 +73,8 @@ interface IndexedReplayUnit {
   }
 })
 export class CodeSelectorComponent implements OnChanges {
+  readonly onActionKeydown = activateOnKeyboard;
+
   private readonly injector = inject(Injector);
 
   private readonly sanitizer = inject(DomSanitizer);

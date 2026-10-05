@@ -33,6 +33,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { activateOnKeyboard } from '../../../shared/utils/keyboard-activation.util';
 import { WorkspaceService } from '../../../workspace/services/workspace.service';
 import { FileService } from '../../../shared/services/file/file.service';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
@@ -180,6 +181,8 @@ type FilesValidationView = Omit<FilesValidation, ValidationSectionKey> & {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class FilesValidationDialogComponent implements OnInit {
+  readonly onActionKeydown = activateOnKeyboard;
+
   dialogRef = inject<MatDialogRef<FilesValidationDialogComponent>>(MatDialogRef);
   private dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);

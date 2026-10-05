@@ -47,11 +47,11 @@ describe('Zoneless file list', () => {
     cy.get('coding-box-search-filter input').focus().type('debounced');
     cy.wrap(null).should(() => { expect(requested).to.equal(true); });
     cy.get('coding-box-test-files .busy-overlay').should('be.visible');
-    cy.get('coding-box-test-files').contains('a', 'Validieren').should('have.attr', 'aria-disabled', 'true');
+    cy.get('coding-box-test-files').contains('button', 'Validieren').should('be.disabled');
     cy.wait('@searchFiles');
     cy.get('coding-box-test-files mat-row').should('contain.text', 'debounced-file.xml');
     cy.get('coding-box-test-files .busy-overlay').should('not.exist');
-    cy.get('coding-box-test-files').contains('a', 'Validieren').should('not.have.attr', 'aria-disabled', 'true');
+    cy.get('coding-box-test-files').contains('button', 'Validieren').should('be.enabled');
   });
 
   it('renders the empty state after a delayed list response', () => {
@@ -105,7 +105,7 @@ describe('Zoneless file list', () => {
 
   it('updates the real paginator and clears a previous row selection', () => {
     cy.get('coding-box-test-files mat-row mat-checkbox input').check();
-    cy.get('coding-box-test-files').contains('a', 'Test Datei(en) löschen').should('not.have.attr', 'aria-disabled', 'true');
+    cy.get('coding-box-test-files').contains('button', 'Test Datei(en) löschen').should('be.enabled');
     cy.intercept('GET', '**/api/admin/workspace/5/files?*', request => {
       expect(new URL(request.url).searchParams.get('page')).to.equal('2');
       request.reply({ delay: 250, body: filesBody('second-page.xml', 2) });
@@ -115,7 +115,7 @@ describe('Zoneless file list', () => {
     cy.get('coding-box-test-files mat-row').should('contain.text', 'second-page.xml');
     cy.get('mat-paginator .mat-mdc-paginator-range-label').should('contain.text', '101');
     cy.get('coding-box-test-files mat-row mat-checkbox input').should('not.be.checked');
-    cy.get('coding-box-test-files').contains('a', 'Test Datei(en) löschen').should('have.attr', 'aria-disabled', 'true');
+    cy.get('coding-box-test-files').contains('button', 'Test Datei(en) löschen').should('be.disabled');
   });
 
   for (const order of ['old-first', 'new-first', 'old-error']) {
@@ -216,12 +216,12 @@ describe('Zoneless file list', () => {
       cy.wrap(null).should(() => { expect(started).to.equal(true); });
       cy.get('coding-box-test-files').should('not.contain.text', 'ACP aus Content Pool');
       cy.wait('@poolSettings');
-      cy.get('coding-box-test-files').contains('a', 'ACP aus Content Pool')
-        .should(token ? 'not.have.attr' : 'have.attr', 'aria-disabled', 'true');
-      cy.get('coding-box-test-files').contains('a', 'Auswahl zu Content Pool').should('have.attr', 'aria-disabled', 'true');
+      cy.get('coding-box-test-files').contains('button', 'ACP aus Content Pool')
+        .should(token ? 'be.enabled' : 'be.disabled');
+      cy.get('coding-box-test-files').contains('button', 'Auswahl zu Content Pool').should('be.disabled');
       cy.get('coding-box-test-files mat-row mat-checkbox input').check();
-      cy.get('coding-box-test-files').contains('a', 'Auswahl zu Content Pool')
-        .should(token ? 'not.have.attr' : 'have.attr', 'aria-disabled', 'true');
+      cy.get('coding-box-test-files').contains('button', 'Auswahl zu Content Pool')
+        .should(token ? 'be.enabled' : 'be.disabled');
     });
   }
 
@@ -246,7 +246,7 @@ describe('Zoneless file list', () => {
     cy.window().then(win => { win.location.hash = '/workspace-admin/5/test-files'; });
     cy.wait('@files');
     cy.wait('@poolRetry').its('response.statusCode').should('equal', 200);
-    cy.get('coding-box-test-files').contains('a', 'ACP aus Content Pool').should('not.have.attr', 'aria-disabled', 'true');
+    cy.get('coding-box-test-files').contains('button', 'ACP aus Content Pool').should('be.enabled');
     cy.then(() => { expect(requests).to.equal(2); });
   });
 
@@ -376,7 +376,7 @@ describe('Zoneless file list', () => {
       cy.wait('@overlapLiteralFiles');
       cy.get('coding-box-search-filter input').focus().type('unit.*');
       cy.wait('@overlapLiteralFiles');
-      cy.get('coding-box-test-files').contains('a', 'Validieren').click();
+      cy.get('coding-box-test-files').contains('button', 'Validieren').click();
       cy.wrap(null).should(() => {
         expect(releaseTask).to.be.a('function');
         expect(releaseRegex).to.be.a('function');
@@ -390,7 +390,7 @@ describe('Zoneless file list', () => {
         cy.wait('@overlapRegexFiles');
       }
       cy.get('.validation-busy-card').should('be.visible');
-      cy.get('coding-box-test-files').contains('a', 'Validieren').should('have.attr', 'aria-disabled', 'true');
+      cy.get('coding-box-test-files').contains('button', 'Validieren').should('be.disabled');
       cy.then(() => { expect(tasks).to.equal(1); releaseTask?.(); });
       cy.wait('@overlapTask');
       cy.wait('@overlapResults');

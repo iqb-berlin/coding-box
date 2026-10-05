@@ -60,7 +60,7 @@ export interface SchemeEditorDialogData {
           [unitScheme]="unitScheme()"
           [schemerConfig]="{ definitionReportPolicy: 'eager', role: data.readOnly ? 'viewer' : 'editor' }"
           (schemeChanged)="onSchemeChanged($event)"
-          (error)="onError($event)">
+          (schemerError)="onError($event)">
         </unit-schemer-standalone>
       } @else {
         @if (loadError()) {

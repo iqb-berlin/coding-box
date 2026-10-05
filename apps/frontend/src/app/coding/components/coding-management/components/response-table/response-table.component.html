@@ -76,7 +76,11 @@
                     </div>
                     } @else if (column === 'unitname') {
                     <span class="clickable-cell" (click)="onShowUnitXml(element.unit.name)"
-                        [matTooltip]="'coding-management.tooltips.show-unit-xml' | translate">
+                        [matTooltip]="'coding-management.tooltips.show-unit-xml' | translate"
+                      role="button"
+                      tabindex="0"
+                      (keydown.enter)="onActionKeydown($event)"
+                      (keydown.space)="onActionKeydown($event)">
                         {{ element[column] }}
                     </span>
                     } @else if (column === 'value') {

@@ -1,5 +1,5 @@
 import {
-  Component, DestroyRef, OnInit, inject, signal, input, ChangeDetectionStrategy
+  Component, DestroyRef, OnInit, inject, signal, input, ChangeDetectionStrategy, OnDestroy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
@@ -73,7 +73,7 @@ import { TestPersonCodingJobResultDialogComponent } from '../test-person-coding-
     TranslateModule
   ]
 })
-export class TestPersonCodingComponent implements OnInit {
+export class TestPersonCodingComponent implements OnInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
   private testPersonCodingService = inject(TestPersonCodingService);
   private snackBar = inject(MatSnackBar);

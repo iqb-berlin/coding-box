@@ -113,7 +113,8 @@
         "lintFilePatterns": [
           "apps/frontend/src/**/*.ts",
           "apps/frontend/src/**/*.html"
-        ]
+        ],
+        "maxWarnings": 0
       }
     },
     "test": {

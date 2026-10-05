@@ -13,7 +13,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  Component, OnInit, SimpleChanges, DestroyRef, ChangeDetectorRef, inject, input, output, signal, viewChild, effect, ChangeDetectionStrategy
+  Component, OnInit, SimpleChanges, DestroyRef, ChangeDetectorRef, inject, input, output, signal, viewChild, effect, ChangeDetectionStrategy, OnChanges
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
@@ -37,7 +37,7 @@ import { SearchFilterComponent } from '../../../shared/search-filter/search-filt
   styleUrls: ['./users-selection.component.scss'],
   imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, FormsModule, TranslateModule, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent]
 })
-export class UsersSelectionComponent implements OnInit {
+export class UsersSelectionComponent implements OnInit, OnChanges {
   private userBackendService = inject(UserBackendService);
   private workspaceBackendService = inject(WorkspaceBackendService);
 

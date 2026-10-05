@@ -56,6 +56,20 @@ describe('VariableBundleDialogComponent in zoneless mode', () => {
 
   afterEach(() => fixture?.destroy());
 
+  it.each(['Enter', ' '])('preserves native keyboard behavior of a nested checkbox with %p', async key => {
+    await createComponent({ isEdit: false, preloadedIncompleteVariables: availableVariables });
+    const checkbox = fixture.nativeElement.querySelector('.variable-card input[type="checkbox"]') as HTMLInputElement;
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+    checkbox.dispatchEvent(event);
+    await fixture.whenStable();
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(fixture.componentInstance.selectedVariables.selected).toEqual([]);
+    checkbox.click();
+    await fixture.whenStable();
+    expect(fixture.componentInstance.selectedVariables.selected).toEqual([availableVariables[0]]);
+  });
+
   it('updates filtered cards after the debounce and selects only visible variables', async () => {
     await createComponent({ isEdit: false, preloadedIncompleteVariables: availableVariables });
     expect(fixture.nativeElement.querySelectorAll('.variable-card')).toHaveLength(2);

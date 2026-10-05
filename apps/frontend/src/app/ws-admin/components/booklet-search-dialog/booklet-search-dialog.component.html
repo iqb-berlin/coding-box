@@ -10,16 +10,21 @@
     </div>
 
     <div class="results-container">
-      <div *ngIf="isLoading()" class="loading-container">
+      @if (isLoading()) {
+      <div class="loading-container">
         <mat-spinner diameter="40"></mat-spinner>
         <p>Suche läuft...</p>
       </div>
+      }
 
-      <div *ngIf="!isLoading() && bookletSearchResults().length === 0 && bookletSearchText" class="no-results">
+      @if (!isLoading() && bookletSearchResults().length === 0 && bookletSearchText) {
+      <div class="no-results">
         <p>Keine Booklets gefunden.</p>
       </div>
+      }
 
-      <div *ngIf="!isLoading() && bookletSearchResults().length > 0" class="results-table-container">
+      @if (!isLoading() && bookletSearchResults().length > 0) {
+      <div class="results-table-container">
         <div class="table-actions">
           <button mat-raised-button color="warn" (click)="deleteAllBooklets()">
             <mat-icon>delete_sweep</mat-icon>
@@ -82,6 +87,7 @@
           (page)="onPageChange($event)">
         </mat-paginator>
       </div>
+      }
     </div>
   </div>
   <div mat-dialog-actions align="end">

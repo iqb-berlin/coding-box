@@ -82,8 +82,8 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
 
   readonly showCreateButton = input(true);
   readonly workspaceId = input<number>();
-  readonly onCreateTraining = output<void>();
-  readonly onEditTraining = output<CoderTraining>(); // New
+  readonly trainingCreationRequested = output<void>();
+  readonly trainingEditRequested = output<CoderTraining>();
 
   readonly coderTrainings = signal<CoderTraining[]>([]);
   readonly originalData = signal<CoderTraining[]>([]);
@@ -208,11 +208,11 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
   }
 
   requestFullEdit(training: CoderTraining): void {
-    this.onEditTraining.emit(training);
+    this.trainingEditRequested.emit(training);
   }
 
   createTraining(): void {
-    this.onCreateTraining.emit();
+    this.trainingCreationRequested.emit();
   }
 
   onTrainingNameFilterChange(): void {
