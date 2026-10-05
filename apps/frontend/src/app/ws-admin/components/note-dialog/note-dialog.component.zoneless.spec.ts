@@ -73,7 +73,7 @@ describe('NoteDialogComponent zoneless mutations', () => {
 
   it('renders a delayed added note and clears the input without another interaction', async () => {
     const dialogRef = await openDialog();
-    const textarea = document.querySelector('app-note-dialog textarea') as HTMLTextAreaElement;
+    const textarea = document.querySelector('coding-box-note-dialog textarea') as HTMLTextAreaElement;
     textarea.value = note.note;
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
     await fixture.whenStable();

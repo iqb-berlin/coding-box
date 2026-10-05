@@ -57,7 +57,7 @@ interface CodebookUnitOption {
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'shared-export-coding-book',
+  selector: 'coding-box-export-coding-book',
   templateUrl: './export-coding-book.component.html',
   styleUrls: ['./export-coding-book.component.scss'],
   standalone: true,
@@ -91,8 +91,8 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
 
   dataSource = new MatTableDataSource<CodebookUnitOption>([]);
 
-  readonly filterValue = signal('');
-  filterTextChanged = new Subject<Event>();
+  protected readonly filterValue = signal('');
+  protected filterTextChanged = new Subject<Event>();
   readonly isLoading = signal(false);
 
   readonly selectedMissingsProfile = signal<number>(0);
@@ -100,15 +100,15 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   readonly selectedJobDefinitionId = signal<number | null>(null);
   readonly availableJobDefinitions = signal<JobDefinition[]>([]);
   readonly jobDefinitionOptions = signal<CodebookJobDefinitionOption[]>([]);
-  readonly selectedJobDefinitionLabel = signal('');
-  readonly selectedJobDefinitionSummary = signal('');
+  protected readonly selectedJobDefinitionLabel = signal('');
+  protected readonly selectedJobDefinitionSummary = signal('');
   readonly isLoadingJobDefinitions = signal(false);
-  readonly selectedVariableBundleIds = signal<number[]>([]);
+  protected readonly selectedVariableBundleIds = signal<number[]>([]);
   readonly availableVariableBundles = signal<VariableBundle[]>([]);
-  readonly isLoadingVariableBundles = signal(false);
-  readonly workspaceChanges = signal(false);
+  protected readonly isLoadingVariableBundles = signal(false);
+  protected readonly workspaceChanges = signal(false);
 
-  displayedColumns: string[] = ['select', 'unitName'];
+  protected displayedColumns: string[] = ['select', 'unitName'];
 
   readonly contentOptions = signal<CodeBookContentSetting>({
     exportFormat: 'docx',
@@ -261,7 +261,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     return false;
   }
 
-  updateContentOption<K extends keyof CodeBookContentSetting>(
+  protected updateContentOption<K extends keyof CodeBookContentSetting>(
     key: K,
     value: CodeBookContentSetting[K]
   ): void {

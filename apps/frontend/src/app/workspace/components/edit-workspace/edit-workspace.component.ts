@@ -32,10 +32,10 @@ export type EditWorkspaceForm = FormGroup<{
 })
 export class EditWorkspaceComponent {
   private fb = inject(NonNullableFormBuilder);
-  data = inject<EditWorkspaceData>(MAT_DIALOG_DATA);
+  protected data = inject<EditWorkspaceData>(MAT_DIALOG_DATA);
 
   readonly editWorkspaceForm: EditWorkspaceForm;
-  name = this.data.ws?.name ?? '';
+  protected name = this.data.ws?.name ?? '';
   constructor() {
     this.editWorkspaceForm = this.fb.group({
       name: this.fb.control(this.name, [Validators.required, Validators.minLength(3)])

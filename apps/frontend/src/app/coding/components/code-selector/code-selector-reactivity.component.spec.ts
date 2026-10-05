@@ -13,7 +13,7 @@ import { CodeSelectorComponent } from './code-selector.component';
 
 @Component({
   imports: [CodeSelectorComponent],
-  template: `<app-code-selector [showProgress]="true" [unitsData]="units"
+  template: `<coding-box-code-selector [showProgress]="true" [unitsData]="units"
     [codingService]="service" [hasSaveError]="service.hasSaveError"
     [coderNotes]="notes()" (notesChanged)="noteChanges.push($event)" (notesCommitted)="noteCommits.push($event)" />`
 })

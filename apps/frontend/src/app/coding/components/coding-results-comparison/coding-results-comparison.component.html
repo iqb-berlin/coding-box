@@ -933,7 +933,7 @@
                             <td
                               mat-cell
                               *matCellDef="let comparison"
-                              [ngClass]="'match-status-' + getComparisonStatus(comparison)"
+                              [class]="'match-status-' + getComparisonStatus(comparison)"
                               [matTooltip]="getComparisonStatusTooltip(comparison)"
                               >
                               <mat-icon>{{ getComparisonStatusIcon(comparison) }}</mat-icon>
@@ -1064,12 +1064,12 @@
                                                       @if (hasCodingIssue(coder)) {
                                                         <span
                                                           class="coding-issue-badge"
-                                                          [ngClass]="getCodingIssueClass(coder)"
+                                                          [class]="getCodingIssueClass(coder)"
                                                           [matTooltip]="getCodingIssueTooltip(coder)"
                                                           >
                                                           <mat-icon
                                                             class="coding-issue-icon"
-                                                            [ngClass]="getCodingIssueClass(coder)"
+                                                            [class]="getCodingIssueClass(coder)"
                                                             aria-hidden="true"
                                                             >
                                                             flag
@@ -1116,12 +1116,12 @@
                                                       @if (hasCodingIssue(coder)) {
                                                         <span
                                                           class="coding-issue-badge"
-                                                          [ngClass]="getCodingIssueClass(coder)"
+                                                          [class]="getCodingIssueClass(coder)"
                                                           [matTooltip]="getCodingIssueTooltip(coder)"
                                                           >
                                                           <mat-icon
                                                             class="coding-issue-icon"
-                                                            [ngClass]="getCodingIssueClass(coder)"
+                                                            [class]="getCodingIssueClass(coder)"
                                                             aria-hidden="true"
                                                             >
                                                             flag

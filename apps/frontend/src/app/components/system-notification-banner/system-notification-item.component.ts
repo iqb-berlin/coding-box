@@ -21,7 +21,7 @@ export class SystemNotificationItemComponent {
 
   readonly dismissed = output<SystemNotificationDto>();
 
-  icon(): string {
+  protected icon(): string {
     return {
       outage: 'error',
       maintenance: 'build',

@@ -57,7 +57,7 @@ export class JournalComponent implements OnInit {
   private translateService = inject(TranslateService);
 
   readonly journalEntries = signal<JournalEntry[]>([]);
-  displayedColumns: string[] = [
+  protected displayedColumns: string[] = [
     'timestamp',
     'actor',
     'eventType',
@@ -69,14 +69,14 @@ export class JournalComponent implements OnInit {
   ];
 
   readonly totalEntries = signal(0);
-  readonly pageSize = signal(20);
-  readonly pageIndex = signal(0);
-  readonly loading = signal(false);
+  protected readonly pageSize = signal(20);
+  protected readonly pageIndex = signal(0);
+  protected readonly loading = signal(false);
   readonly loadError = signal(false);
   readonly loadErrorMessage = signal('');
   readonly loadErrorRequestId = signal('');
-  eventTypes = auditEventTypes;
-  resultTypes = auditEventResults;
+  protected eventTypes = auditEventTypes;
+  protected resultTypes = auditEventResults;
   readonly filters = signal<JournalFilters>({});
 
   ngOnInit(): void {
@@ -130,28 +130,28 @@ export class JournalComponent implements OnInit {
       });
   }
 
-  handlePageEvent(event: PageEvent): void {
+  protected handlePageEvent(event: PageEvent): void {
     this.pageSize.set(event.pageSize);
     this.pageIndex.set(event.pageIndex);
     this.loadJournalEntries();
   }
 
-  applyFilters(): void {
+  protected applyFilters(): void {
     this.pageIndex.set(0);
     this.loadJournalEntries();
   }
 
-  updateFilter<K extends keyof JournalFilters>(field: K, value: JournalFilters[K]): void {
+  protected updateFilter<K extends keyof JournalFilters>(field: K, value: JournalFilters[K]): void {
     this.filters.update(current => ({ ...current, [field]: value }));
   }
 
-  clearFilters(): void {
+  protected clearFilters(): void {
     this.filters.set({});
     this.pageIndex.set(0);
     this.loadJournalEntries();
   }
 
-  downloadCsv(): void {
+  protected downloadCsv(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return;
@@ -179,7 +179,7 @@ export class JournalComponent implements OnInit {
       });
   }
 
-  getActorLabel(entry: JournalEntry): string {
+  protected getActorLabel(entry: JournalEntry): string {
     if (entry.actorId) {
       return entry.actorId;
     }
@@ -189,7 +189,7 @@ export class JournalComponent implements OnInit {
     return entry.actorType;
   }
 
-  formatDetails(details: Record<string, unknown> | null): string {
+  protected formatDetails(details: Record<string, unknown> | null): string {
     if (!details) {
       return '';
     }

@@ -26,18 +26,18 @@ export interface ConfirmDialogData {
 export class ConfirmDialogComponent {
   constructor(
     public dialogRef: MatDialogRef<ConfirmDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: ConfirmDialogData
+    @Inject(MAT_DIALOG_DATA) protected data: ConfirmDialogData
   ) {}
 
-  onCancel(): void {
+  protected onCancel(): void {
     this.dialogRef.close(false);
   }
 
-  onConfirm(): void {
+  protected onConfirm(): void {
     this.dialogRef.close(true);
   }
 
-  onAlternative(): void {
+  protected onAlternative(): void {
     this.dialogRef.close(this.data.alternativeButtonValue ?? 'alternative');
   }
 }

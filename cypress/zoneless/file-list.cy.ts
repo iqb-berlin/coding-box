@@ -239,7 +239,7 @@ describe('Zoneless file list', () => {
     cy.window().then(win => { win.location.hash = '/workspace-admin/5/test-files'; });
     cy.wait('@files');
     cy.wait('@poolRetry').its('response.statusCode').should('equal', 500);
-    cy.get('app-error-message-display .other-error').should('be.visible');
+    cy.get('coding-box-error-message-display .other-error').should('be.visible');
     cy.get('coding-box-test-files').should('not.contain.text', 'ACP aus Content Pool');
     cy.window().then(win => { win.location.hash = '/'; });
     cy.get('coding-box-home').should('be.visible');
@@ -276,7 +276,7 @@ describe('Zoneless file list', () => {
     cy.wait('@files');
     cy.wait('@freshPoolConfig');
     cy.wait('@oldPoolConfig');
-    cy.get('app-error-message-display .other-error').should('not.exist');
+    cy.get('coding-box-error-message-display .other-error').should('not.exist');
     cy.get('coding-box-test-files').should('not.contain.text', 'ACP aus Content Pool');
     cy.get('mat-snack-bar-container').should('not.exist');
     cy.get('coding-box-test-files .busy-overlay').should('not.exist');
@@ -394,7 +394,7 @@ describe('Zoneless file list', () => {
       cy.then(() => { expect(tasks).to.equal(1); releaseTask?.(); });
       cy.wait('@overlapTask');
       cy.wait('@overlapResults');
-      cy.get('files-validation-dialog').should('be.visible');
+      cy.get('coding-box-files-validation-dialog').should('be.visible');
       if (first === 'validation') {
         cy.get('coding-box-test-files .busy-overlay').should('exist');
         cy.then(() => { releaseFiles?.(); });

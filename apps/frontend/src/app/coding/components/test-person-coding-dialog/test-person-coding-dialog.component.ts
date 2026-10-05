@@ -29,7 +29,7 @@ export interface TestPersonCodingDialogResult {
   imports: [TestPersonCodingComponent, MatIconModule, MatButtonModule, TranslateModule]
 })
 export class TestPersonCodingDialogComponent implements OnDestroy {
-  data = inject<TestPersonCodingDialogData | null>(MAT_DIALOG_DATA, { optional: true });
+  protected data = inject<TestPersonCodingDialogData | null>(MAT_DIALOG_DATA, { optional: true });
   readonly testPersonCodingComponent = viewChild(TestPersonCodingComponent);
 
   private destroy$ = new Subject<void>();
@@ -56,7 +56,7 @@ export class TestPersonCodingDialogComponent implements OnDestroy {
     this.destroy$.complete();
   }
 
-  closeDialog(): void {
+  protected closeDialog(): void {
     this.dialogRef.close(this.getDialogResult());
   }
 

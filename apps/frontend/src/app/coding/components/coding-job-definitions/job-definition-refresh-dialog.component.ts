@@ -47,11 +47,11 @@ interface RefreshStat {
 export class JobDefinitionRefreshDialogComponent {
   constructor(
     public dialogRef: MatDialogRef<JobDefinitionRefreshDialogComponent, boolean>,
-    @Inject(MAT_DIALOG_DATA) public data: JobDefinitionRefreshDialogData,
+    @Inject(MAT_DIALOG_DATA) protected data: JobDefinitionRefreshDialogData,
     private translateService: TranslateService
   ) {}
 
-  get preview(): JobDefinitionRefreshPreviewDto {
+  protected get preview(): JobDefinitionRefreshPreviewDto {
     return this.data.preview;
   }
 
@@ -59,7 +59,7 @@ export class JobDefinitionRefreshDialogComponent {
     return this.data.mode === 'update';
   }
 
-  getApplyTitleKey(): string {
+  protected getApplyTitleKey(): string {
     if (!this.preview.canApply) {
       return 'coding-job-definitions.refresh-dialog.title.blocked';
     }
@@ -69,7 +69,7 @@ export class JobDefinitionRefreshDialogComponent {
       'coding-job-definitions.refresh-dialog.title.apply';
   }
 
-  getIntroKey(): string {
+  protected getIntroKey(): string {
     if (!this.preview.canApply) {
       return this.isDefinitionUpdate ?
         'coding-job-definitions.refresh-dialog.intro.update-blocked' :
@@ -81,19 +81,19 @@ export class JobDefinitionRefreshDialogComponent {
       'coding-job-definitions.refresh-dialog.intro.apply';
   }
 
-  getDefinitionRuleKey(): string {
+  protected getDefinitionRuleKey(): string {
     return this.isDefinitionUpdate ?
       'coding-job-definitions.refresh-dialog.rules.use-updated-definition' :
       'coding-job-definitions.refresh-dialog.rules.use-current-definition';
   }
 
-  getConfirmKey(): string {
+  protected getConfirmKey(): string {
     return this.isDefinitionUpdate ?
       'coding-job-definitions.refresh-dialog.confirm-update' :
       'coding-job-definitions.refresh-dialog.confirm';
   }
 
-  getBlockingReason(): string {
+  protected getBlockingReason(): string {
     return this.preview.blockingReason ||
       this.translateService.instant(
         'coding-job-definitions.refresh-dialog.blocking-fallback'
@@ -145,7 +145,7 @@ export class JobDefinitionRefreshDialogComponent {
     ];
   }
 
-  getTaskStats(): RefreshStat[] {
+  protected getTaskStats(): RefreshStat[] {
     return [
       {
         labelKey: 'coding-job-definitions.refresh-dialog.stats.added-tasks',
@@ -165,11 +165,11 @@ export class JobDefinitionRefreshDialogComponent {
       .filter(delta => delta.addedCases > 0 || delta.addedCodingTasks > 0);
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close(false);
   }
 
-  confirm(): void {
+  protected confirm(): void {
     if (this.preview.canApply) {
       this.dialogRef.close(true);
     }

@@ -82,18 +82,18 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
 
   // Resource packages
   readonly resourcePackages = signal<ResourcePackageDto[]>([]);
-  resourcePackageDataSource = new MatTableDataSource<ResourcePackageDto>([]);
-  resourcePackageSelection = new SelectionModel<ResourcePackageDto>(true, []);
-  readonly isLoadingResourcePackages = signal(false);
-  readonly isResourcePackageOperationActive = signal(false);
-  readonly resourcePackageOperationText = signal('');
-  readonly resourcePackageProgressPercent = signal(0);
-  readonly resourcePackageProgressLoadedBytes = signal(0);
-  readonly resourcePackageProgressTotalBytes = signal(0);
-  readonly resourcePackageProgressMode = signal<'determinate' | 'indeterminate'>('indeterminate');
+  protected resourcePackageDataSource = new MatTableDataSource<ResourcePackageDto>([]);
+  protected resourcePackageSelection = new SelectionModel<ResourcePackageDto>(true, []);
+  protected readonly isLoadingResourcePackages = signal(false);
+  protected readonly isResourcePackageOperationActive = signal(false);
+  protected readonly resourcePackageOperationText = signal('');
+  protected readonly resourcePackageProgressPercent = signal(0);
+  protected readonly resourcePackageProgressLoadedBytes = signal(0);
+  protected readonly resourcePackageProgressTotalBytes = signal(0);
+  protected readonly resourcePackageProgressMode = signal<'determinate' | 'indeterminate'>('indeterminate');
   readonly activeDownloadPackageId = signal<number | null>(null);
   readonly resourcePackageTextFilterValue = signal<string>('');
-  resourcePackageColumns: string[] = [
+  protected resourcePackageColumns: string[] = [
     'selectCheckbox',
     'name',
     'packageType',
@@ -195,13 +195,13 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
   }
 
   /** Handles resource package text filter changes */
-  onResourcePackageTextFilterChange(value: string): void {
+  protected onResourcePackageTextFilterChange(value: string): void {
     this.resourcePackageTextFilterValue.set(value.trim());
     this.resourcePackageTextFilterChanged.next(this.resourcePackageTextFilterValue());
   }
 
   /** Clears all resource package filters */
-  clearResourcePackageFilters(): void {
+  protected clearResourcePackageFilters(): void {
     this.resourcePackageTextFilterValue.set('');
     this.applyResourcePackageFilters();
   }
@@ -209,7 +209,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
   /**
    * Deletes selected resource packages
    */
-  deleteResourcePackages(): void {
+  protected deleteResourcePackages(): void {
     const workspaceId = this.getWorkspaceId();
     if (this.resourcePackageSelection.selected.length === 0) {
       return;
@@ -284,7 +284,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
    * Downloads a resource package
    * @param resourcePackage The resource package to download
    */
-  downloadResourcePackage(resourcePackage: ResourcePackageDto): void {
+  protected downloadResourcePackage(resourcePackage: ResourcePackageDto): void {
     const workspaceId = this.getWorkspaceId();
     if (workspaceId === null) {
       this.snackBar.open(
@@ -340,7 +340,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
    * Uploads a resource package
    * @param target The file input change event target
    */
-  onResourcePackageSelected(target: EventTarget | null): void {
+  protected onResourcePackageSelected(target: EventTarget | null): void {
     const workspaceId = this.getWorkspaceId();
     if (workspaceId === null) {
       this.snackBar.open(
@@ -399,7 +399,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  installGeoGebraPackage(): void {
+  protected installGeoGebraPackage(): void {
     const workspaceId = this.getWorkspaceId();
     if (workspaceId === null) {
       this.snackBar.open(
@@ -463,7 +463,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
   /**
    * Toggles selection of all resource packages
    */
-  masterToggleResourcePackages(): void {
+  protected masterToggleResourcePackages(): void {
     if (this.isAllResourcePackagesSelected()) {
       this.resourcePackageSelection.clear();
     } else {
@@ -475,23 +475,23 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
    * Checks if all resource packages are selected
    * @returns True if all resource packages are selected
    */
-  isAllResourcePackagesSelected(): boolean {
+  protected isAllResourcePackagesSelected(): boolean {
     const numSelected = this.resourcePackageSelection.selected.length;
     const numRows = this.resourcePackages().length;
     return numSelected === numRows && numRows > 0;
   }
 
-  readonly hasGeoGebraPackage = computed<boolean>(() => this.resourcePackages().some(pkg => pkg.name.toLowerCase() === 'geogebra' && pkg.scope === 'global'));
+  protected readonly hasGeoGebraPackage = computed<boolean>(() => this.resourcePackages().some(pkg => pkg.name.toLowerCase() === 'geogebra' && pkg.scope === 'global'));
 
-  getPackageTypeLabel(resourcePackage: ResourcePackageDto): string {
+  protected getPackageTypeLabel(resourcePackage: ResourcePackageDto): string {
     return resourcePackage.packageType === 'geogebra' ? 'GeoGebra' : 'Ressourcenpaket';
   }
 
-  getPackageScopeLabel(resourcePackage: ResourcePackageDto): string {
+  protected getPackageScopeLabel(resourcePackage: ResourcePackageDto): string {
     return resourcePackage.scope === 'global' ? 'Global' : 'Workspace';
   }
 
-  isResourcePackageDownloading(resourcePackage: ResourcePackageDto): boolean {
+  protected isResourcePackageDownloading(resourcePackage: ResourcePackageDto): boolean {
     return this.activeDownloadPackageId() === resourcePackage.id;
   }
 
@@ -525,7 +525,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     this.resourcePackageProgressMode.set('indeterminate');
   }
 
-  formatBytes(bytes: number): string {
+  protected formatBytes(bytes: number): string {
     if (!bytes || bytes < 0) {
       return '0 B';
     }
@@ -558,7 +558,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
   /**
    * Closes the dialog
    */
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 }

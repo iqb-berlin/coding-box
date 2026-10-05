@@ -102,7 +102,7 @@ describe('Zoneless import and review notifications', () => {
     }, { force: true });
     cy.get('coding-box-coding-import-format-dialog').contains('button', 'Vorschau starten').click();
     cy.wait('@importPreview');
-    cy.get('app-import-comparison-dialog').as('comparison');
+    cy.get('coding-box-import-comparison-dialog').as('comparison');
     cy.get('@comparison').find('.comparison-table tbody tr').should('contain.text', 'UNIT_IMPORT');
 
     cy.get('@comparison').contains('button', 'Änderungen anwenden').click();
@@ -128,7 +128,7 @@ describe('Zoneless import and review notifications', () => {
     cy.get('@comparison').find('.apply-progress').should('contain.text', '100%');
     cy.get('@comparison').contains('button', 'Änderungen anwenden').should('be.disabled');
     cy.wait('@importResult');
-    cy.get('app-import-comparison-dialog').should('not.exist');
+    cy.get('coding-box-import-comparison-dialog').should('not.exist');
     cy.then(() => { expect(attempts).to.equal(3); });
   });
 

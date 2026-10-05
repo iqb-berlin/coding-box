@@ -72,9 +72,9 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
 
   private readonly changeDetectorRef = inject(ChangeDetectorRef);
 
-  searchText = '';
-  isLoading = false;
-  hasSearched = false;
+  protected searchText = '';
+  protected isLoading = false;
+  protected hasSearched = false;
   selectedKinds = new Set<QuickSearchResultKind>([
     'person',
     'booklet',
@@ -82,14 +82,14 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
     'response'
   ]);
 
-  readonly typeOptions: QuickSearchTypeOption[] = [
+  protected readonly typeOptions: QuickSearchTypeOption[] = [
     { kind: 'person', label: 'Personen', icon: 'person' },
     { kind: 'booklet', label: 'Testhefte', icon: 'menu_book' },
     { kind: 'unit', label: 'Aufgaben', icon: 'extension' },
     { kind: 'response', label: 'Antworten', icon: 'question_answer' }
   ];
 
-  readonly MIN_SEARCH_LENGTH = 2;
+  protected readonly MIN_SEARCH_LENGTH = 2;
   readonly SEARCH_DEBOUNCE_TIME = 350;
 
   results: QuickSearchResult = this.createEmptyResult('');
@@ -98,7 +98,7 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
 
   constructor(
     private dialogRef: MatDialogRef<TestResultsSearchComponent, QuickSearchDialogResult>,
-    @Inject(MAT_DIALOG_DATA) public data: { title: string },
+    @Inject(MAT_DIALOG_DATA) protected data: { title: string },
     private testResultService: TestResultService,
     private appService: AppService,
     private statisticsService: CodingStatisticsService,
@@ -115,11 +115,11 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
     this.searchSubscription?.unsubscribe();
   }
 
-  onSearchChange(): void {
+  protected onSearchChange(): void {
     this.searchSubject.next(this.searchText);
   }
 
-  toggleKind(kind: QuickSearchResultKind): void {
+  protected toggleKind(kind: QuickSearchResultKind): void {
     if (this.selectedKinds.has(kind)) {
       if (this.selectedKinds.size === 1) {
         return;
@@ -130,11 +130,11 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
     }
   }
 
-  isKindSelected(kind: QuickSearchResultKind): boolean {
+  protected isKindSelected(kind: QuickSearchResultKind): boolean {
     return this.selectedKinds.has(kind);
   }
 
-  getVisibleResults(kind: QuickSearchResultKind): QuickSearchResultItem[] {
+  protected getVisibleResults(kind: QuickSearchResultKind): QuickSearchResultItem[] {
     if (!this.selectedKinds.has(kind)) {
       return [];
     }
@@ -153,17 +153,17 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
     }
   }
 
-  getTotal(kind: QuickSearchResultKind): number {
+  protected getTotal(kind: QuickSearchResultKind): number {
     return this.results.totals[kind] || 0;
   }
 
-  getVisibleCount(): number {
+  protected getVisibleCount(): number {
     return this.typeOptions
       .map(option => this.getVisibleResults(option.kind).length)
       .reduce((sum, count) => sum + count, 0);
   }
 
-  openInTable(item: QuickSearchResultItem): void {
+  protected openInTable(item: QuickSearchResultItem): void {
     this.dialogRef.close({
       action: 'table',
       item,
@@ -171,14 +171,14 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
     });
   }
 
-  openInBrowser(item: QuickSearchResultItem): void {
+  protected openInBrowser(item: QuickSearchResultItem): void {
     this.dialogRef.close({
       action: 'browser',
       item
     });
   }
 
-  replay(item: QuickSearchResultItem): void {
+  protected replay(item: QuickSearchResultItem): void {
     const responseId = item.responseId;
     if (!responseId || !this.appService.selectedWorkspaceId) {
       this.snackBar.open(
@@ -213,7 +213,7 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
       });
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 

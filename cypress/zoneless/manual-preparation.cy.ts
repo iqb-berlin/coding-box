@@ -305,7 +305,7 @@ describe('Zoneless manual preparation workflows', () => {
     openBulk();
     cy.wait('@preview').its('response.statusCode').should('eq', 500);
     cy.get('coding-box-coding-job-bulk-creation-dialog').should('not.exist');
-    cy.get('app-error-message-display .close-button').click();
+    cy.get('coding-box-error-message-display .close-button').click();
     cy.contains('coding-box-coding-job-definitions tr', 'Browser definition').find('.primary-row-action').click();
     cy.wait('@preview').its('response.statusCode').should('eq', 200);
     cy.get('coding-box-coding-job-bulk-creation-dialog').as('bulk');

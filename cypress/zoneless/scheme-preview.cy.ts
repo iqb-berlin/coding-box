@@ -82,16 +82,16 @@ describe('VOCS preview without Zone.js', () => {
 
   function openPreview(): void {
     cy.contains('mat-row', 'DLB004.vocs').find('button').click();
-    cy.get('app-scheme-editor-dialog mat-spinner').should('be.visible');
+    cy.get('coding-box-scheme-editor-dialog mat-spinner').should('be.visible');
     cy.then(() => { releaseSchemerList(); });
   }
 
   it('opens the referenced 2.5.0 after delayed responses and passes the XML scheme type to the iframe', () => {
     openPreview();
     cy.wait('@schemerDownload');
-    cy.get('app-scheme-editor-dialog mat-spinner').should('not.exist');
-    cy.get('app-scheme-editor-dialog pre.raw-json').should('not.exist');
-    cy.get<HTMLIFrameElement>('app-scheme-editor-dialog iframe').should('be.visible').should($iframe => {
+    cy.get('coding-box-scheme-editor-dialog mat-spinner').should('not.exist');
+    cy.get('coding-box-scheme-editor-dialog pre.raw-json').should('not.exist');
+    cy.get<HTMLIFrameElement>('coding-box-scheme-editor-dialog iframe').should('be.visible').should($iframe => {
       expect($iframe[0].contentDocument?.body.textContent).to.contain('Schemer 2.5.0: iqb@3.0');
     });
   });
@@ -99,10 +99,10 @@ describe('VOCS preview without Zone.js', () => {
   it('explains an unavailable 2.5 reference instead of using the newer 2.8 Schemer', () => {
     missingReference = true;
     openPreview();
-    cy.get('app-scheme-editor-dialog [role="alert"]').should('contain.text', 'iqb-schemer@2.5');
-    cy.get('app-scheme-editor-dialog pre.raw-json').should('contain.text', 'variableCodings');
-    cy.get('app-scheme-editor-dialog iframe').should('not.exist');
-    cy.get('app-scheme-editor-dialog mat-spinner').should('not.exist');
+    cy.get('coding-box-scheme-editor-dialog [role="alert"]').should('contain.text', 'iqb-schemer@2.5');
+    cy.get('coding-box-scheme-editor-dialog pre.raw-json').should('contain.text', 'variableCodings');
+    cy.get('coding-box-scheme-editor-dialog iframe').should('not.exist');
+    cy.get('coding-box-scheme-editor-dialog mat-spinner').should('not.exist');
   });
 
   it('navigates through the coding status snackbar after saving closes the editor', () => {
@@ -127,26 +127,26 @@ describe('VOCS preview without Zone.js', () => {
       }
     });
     openPreview();
-    cy.get<HTMLIFrameElement>('app-scheme-editor-dialog iframe').should($iframe => {
+    cy.get<HTMLIFrameElement>('coding-box-scheme-editor-dialog iframe').should($iframe => {
       expect($iframe[0].contentDocument?.body.textContent).to.contain('Schema ändern');
     }).then($iframe => {
       cy.wrap($iframe[0].contentDocument!.body).contains('button', 'Schema ändern').click();
     });
-    cy.contains('app-scheme-editor-dialog button', 'Speichern').should('not.be.disabled').click();
+    cy.contains('coding-box-scheme-editor-dialog button', 'Speichern').should('not.be.disabled').click();
     cy.wait('@saveScheme');
-    cy.get('app-scheme-editor-dialog').should('not.exist');
+    cy.get('coding-box-scheme-editor-dialog').should('not.exist');
     cy.contains('mat-snack-bar-container button', 'Kodierstand prüfen').click();
     cy.location('hash').should('contain', '/workspace-admin/5/coding/management?refreshCodingFreshness=1');
     cy.wait('@refreshStatistics');
-    cy.get('app-coding-management .action-buttons-toolbar').should('be.visible');
+    cy.get('coding-box-coding-management .action-buttons-toolbar').should('be.visible');
   });
 
   it('ends loading with a readable explanation after a failed Schemer download', () => {
     failDownload = true;
     openPreview();
     cy.wait('@schemerDownload');
-    cy.get('app-scheme-editor-dialog [role="alert"]').should('contain.text', 'Herunterladen');
-    cy.get('app-scheme-editor-dialog mat-spinner').should('not.exist');
-    cy.get('app-scheme-editor-dialog pre.raw-json').should('contain.text', 'variableCodings');
+    cy.get('coding-box-scheme-editor-dialog [role="alert"]').should('contain.text', 'Herunterladen');
+    cy.get('coding-box-scheme-editor-dialog mat-spinner').should('not.exist');
+    cy.get('coding-box-scheme-editor-dialog pre.raw-json').should('contain.text', 'variableCodings');
   });
 });

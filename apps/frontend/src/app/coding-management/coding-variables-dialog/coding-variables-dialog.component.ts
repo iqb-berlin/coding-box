@@ -90,24 +90,24 @@ export interface FlattenedVariable {
   ]
 })
 export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
-  readonly onActionKeydown = activateOnKeyboard;
+  protected readonly onActionKeydown = activateOnKeyboard;
 
   private readonly destroyRef = inject(DestroyRef);
 
   dataSource = new MatTableDataSource<FlattenedVariable>([]);
-  displayedColumns: string[] = ['unitName', 'variableId', 'variableType', 'replayAnchor', 'actions'];
+  protected displayedColumns: string[] = ['unitName', 'variableId', 'variableType', 'replayAnchor', 'actions'];
 
-  readonly unitNameFilter = signal('');
+  protected readonly unitNameFilter = signal('');
   readonly variableIdFilter = signal('');
   readonly hasCodingSchemeFilter = signal(false);
   readonly hasCodesFilter = signal(false);
   readonly isDerivedFilter = signal(false);
-  readonly isManualOnlyFilter = signal(false);
-  readonly isClosedCodingFilter = signal(false);
+  protected readonly isManualOnlyFilter = signal(false);
+  protected readonly isClosedCodingFilter = signal(false);
   readonly trainingRequiredFilter = signal<'all' | 'required' | 'not-required'>('all');
   readonly selectedTypes = signal<string[]>([]);
-  availableTypes = ['string', 'integer', 'number', 'boolean', 'attachment', 'json'];
-  readonly isLoading = signal(false);
+  protected availableTypes = ['string', 'integer', 'number', 'boolean', 'attachment', 'json'];
+  protected readonly isLoading = signal(false);
 
   readonly sort = viewChild(MatSort);
   private readonly synchronizeSort = effect(() => {
@@ -140,7 +140,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
     return this.dataSource.filteredData.length > 0;
   }
 
-  readonly hasActiveFilters = computed<boolean>(() => !!(
+  protected readonly hasActiveFilters = computed<boolean>(() => !!(
     this.unitNameFilter().trim() ||
       this.variableIdFilter().trim() ||
       this.hasCodingSchemeFilter() ||
@@ -283,7 +283,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
     });
   }
 
-  saveReplayAnchor(variable: FlattenedVariable): void {
+  protected saveReplayAnchor(variable: FlattenedVariable): void {
     const replayAnchor = variable.replayAnchor().trim();
     if (!replayAnchor) {
       this.clearReplayAnchor(variable);
@@ -314,7 +314,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
     });
   }
 
-  clearReplayAnchor(variable: FlattenedVariable): void {
+  protected clearReplayAnchor(variable: FlattenedVariable): void {
     variable.isSavingReplayAnchor.set(true);
     this.fileBackendService.deleteReplayAnchorOverride(
       this.data.workspaceId,
@@ -339,7 +339,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
     });
   }
 
-  hasReplayAnchorChanges(variable: FlattenedVariable): boolean {
+  protected hasReplayAnchorChanges(variable: FlattenedVariable): boolean {
     return variable.replayAnchor().trim() !== variable.savedReplayAnchor();
   }
 
@@ -401,7 +401,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
     }
   }
 
-  getTypeClass(type: string): string {
+  protected getTypeClass(type: string): string {
     switch (type) {
       case 'boolean':
         return 'type-boolean';
@@ -488,7 +488,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
     });
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 }

@@ -20,7 +20,7 @@ import { FileService } from '../../../shared/services/file/file.service';
 import { StandaloneUnitSchemerComponent } from '../schemer/unit-schemer.component';
 
 @Component({
-  selector: 'unit-schemer-standalone',
+  selector: 'coding-box-unit-schemer',
   template: '',
   standalone: true
 })
@@ -180,7 +180,7 @@ describe('Schemer preview without Zone.js', () => {
     expect(component.unitScheme().schemeType).toBe('iqb@3.0');
     expect(fixture.nativeElement.querySelector('mat-spinner')).toBeNull();
     expect(fixture.nativeElement.querySelector('pre.raw-json')).toBeNull();
-    expect(fixture.nativeElement.querySelector('unit-schemer-standalone')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('coding-box-unit-schemer')).not.toBeNull();
   });
 
   it('explains a missing reference and renders the raw JSON after an empty result', async () => {
@@ -231,7 +231,7 @@ describe('Schemer preview without Zone.js', () => {
     expect(mockFileService.getUnitInfo).toHaveBeenCalledWith(2, 'DLB004');
     expect(mockFileService.downloadFile).toHaveBeenLastCalledWith(2, 25);
     expect(component.unitScheme().schemeType).toBe('iqb@3.0');
-    expect(fixture.nativeElement.querySelector('unit-schemer-standalone')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('coding-box-unit-schemer')).not.toBeNull();
   });
 
   it('still opens a standalone scheme if its unit XML is unavailable', async () => {
@@ -245,7 +245,7 @@ describe('Schemer preview without Zone.js', () => {
     await fixture.whenStable();
     expect(mockFileService.downloadFile).toHaveBeenLastCalledWith(2, 28);
     expect(component.unitScheme().schemeType).toBe('iqb@3.4');
-    expect(fixture.nativeElement.querySelector('unit-schemer-standalone')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('coding-box-unit-schemer')).not.toBeNull();
   });
 
   it('shows an explanation for empty Schemer HTML', async () => {
@@ -254,7 +254,7 @@ describe('Schemer preview without Zone.js', () => {
     downloadResponse$.next({ base64Data: '' });
     downloadResponse$.complete();
     await fixture.whenStable();
-    expect(fixture.nativeElement.querySelector('unit-schemer-standalone')).toBeNull();
+    expect(fixture.nativeElement.querySelector('coding-box-unit-schemer')).toBeNull();
     expect(fixture.nativeElement.querySelector('[role="alert"]')?.textContent).toContain('coding.schemer.decode-error');
   });
 

@@ -28,7 +28,7 @@ import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/co
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'app-edit-missings-profiles-dialog',
+  selector: 'coding-box-edit-missings-profiles-dialog',
   templateUrl: './edit-missings-profiles-dialog.component.html',
   styleUrls: ['./edit-missings-profiles-dialog.component.scss'],
   standalone: true,
@@ -67,7 +67,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   readonly loading = signal(false);
   readonly saving = signal(false);
   readonly editMissings = signal<MissingDto[]>([]);
-  displayedColumns: string[] = ['id', 'label', 'description', 'code', 'score', 'actions'];
+  protected displayedColumns: string[] = ['id', 'label', 'description', 'code', 'score', 'actions'];
 
   constructor(
     public dialogRef: MatDialogRef<EditMissingsProfilesDialogComponent>,
@@ -411,7 +411,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
     return typeof value === 'string' && value.trim() !== '';
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 
@@ -450,7 +450,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
     }));
   }
 
-  isMissingScoreNa(missing: MissingDto): boolean {
+  protected isMissingScoreNa(missing: MissingDto): boolean {
     return missing.score === null;
   }
 
@@ -477,7 +477,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
     });
   }
 
-  trackMissingRow(index: number): number {
+  protected trackMissingRow(index: number): number {
     return index;
   }
 

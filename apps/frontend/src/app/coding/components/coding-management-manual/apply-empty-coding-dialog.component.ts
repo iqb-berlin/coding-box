@@ -13,7 +13,7 @@ export interface ApplyEmptyCodingDialogData {
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'app-apply-empty-coding-dialog',
+  selector: 'coding-box-apply-empty-coding-dialog',
   standalone: true,
   imports: [
     MatDialogModule,
@@ -72,18 +72,18 @@ export interface ApplyEmptyCodingDialogData {
 export class ApplyEmptyCodingDialogComponent {
   constructor(
     public dialogRef: MatDialogRef<ApplyEmptyCodingDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: ApplyEmptyCodingDialogData
+    @Inject(MAT_DIALOG_DATA) protected data: ApplyEmptyCodingDialogData
   ) { }
 
-  onCancel(): void {
+  protected onCancel(): void {
     this.dialogRef.close(false);
   }
 
-  onConfirm(): void {
+  protected onConfirm(): void {
     this.dialogRef.close(true);
   }
 
-  getScoreDisplay(score: number | null): string | number {
+  protected getScoreDisplay(score: number | null): string | number {
     return score === null ? 'NA' : score;
   }
 }

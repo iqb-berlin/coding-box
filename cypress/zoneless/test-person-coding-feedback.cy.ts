@@ -88,7 +88,7 @@ describe('zoneless auto-coding job feedback when the list answers first', () => 
       cy.visit('/');
       cy.wait('@authData');
       cy.window().then(window => { window.location.hash = '/workspace-admin/5/coding/management'; });
-      cy.get('app-coding-management .action-buttons-toolbar button').contains('Automatisch Kodieren').click();
+      cy.get('coding-box-coding-management .action-buttons-toolbar button').contains('Automatisch Kodieren').click();
       cy.get('coding-box-test-person-coding-dialog coding-box-test-person-coding').as('dialog');
       cy.wait(['@jobs', '@groups']);
       cy.get('@dialog').contains('.button-container button', 'Alle Testgruppen kodieren')

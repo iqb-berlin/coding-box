@@ -36,12 +36,12 @@ export class WorkspacesComponent {
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
 
-  readonly initialSelectedWorkspaceIds: number[] = [];
+  protected readonly initialSelectedWorkspaceIds: number[] = [];
   readonly selectedWorkspaceRows = signal<WorkspaceInListDto[]>([]);
   readonly selectedWorkspaces = computed(() => this.selectedWorkspaceRows().map(workspace => workspace.id));
   readonly workspacesChanged = signal<boolean>(false);
   readonly isDeleting = signal<boolean>(false);
-  readonly deleteStatus = signal<string>('');
+  protected readonly deleteStatus = signal<string>('');
 
   addWorkspace(result: EditWorkspaceForm): void {
     runMutationAndRefreshAuthData(
@@ -130,7 +130,7 @@ export class WorkspacesComponent {
       );
   }
 
-  workspacesUpdated(): void {
+  protected workspacesUpdated(): void {
     this.workspacesChanged.set(false);
   }
 

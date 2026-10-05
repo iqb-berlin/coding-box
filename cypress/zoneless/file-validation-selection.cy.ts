@@ -37,7 +37,7 @@ describe('Zoneless TestTaker selection batches', () => {
     cy.wait('@files');
     cy.get('coding-box-test-files').contains('button', 'Validieren').click();
     cy.wait('@validation');
-    cy.get('files-validation-dialog').contains('mat-expansion-panel-header', 'TestTaker zum Filtern').click();
+    cy.get('coding-box-files-validation-dialog').contains('mat-expansion-panel-header', 'TestTaker zum Filtern').click();
   });
 
   afterEach(() => {
@@ -46,24 +46,24 @@ describe('Zoneless TestTaker selection batches', () => {
   });
 
   it('renders the final count after selecting all timer batches', () => {
-    cy.get('files-validation-dialog .select-all-row input').check();
-    cy.get('files-validation-dialog .exclude-button').each(button => {
+    cy.get('coding-box-files-validation-dialog .select-all-row input').check();
+    cy.get('coding-box-files-validation-dialog .exclude-button').each(button => {
       cy.wrap(button).should('contain.text', '(1202)').and('not.be.disabled');
     });
-    cy.get('files-validation-dialog .select-all-row input').should('be.checked');
+    cy.get('coding-box-files-validation-dialog .select-all-row input').should('be.checked');
   });
 
   it('renders the final mode count and clears every later batch', () => {
-    cy.get('files-validation-dialog .mode-group').contains('mat-checkbox', 'run-hot-return').find('input').check();
-    cy.get('files-validation-dialog .exclude-button').each(button => {
+    cy.get('coding-box-files-validation-dialog .mode-group').contains('mat-checkbox', 'run-hot-return').find('input').check();
+    cy.get('coding-box-files-validation-dialog .exclude-button').each(button => {
       cy.wrap(button).should('contain.text', '(1201)').and('not.be.disabled');
     });
-    cy.get('files-validation-dialog .mode-group').contains('mat-checkbox', 'run-hot-return').find('input')
+    cy.get('coding-box-files-validation-dialog .mode-group').contains('mat-checkbox', 'run-hot-return').find('input')
       .should('be.checked').uncheck();
-    cy.get('files-validation-dialog .exclude-button').each(button => {
+    cy.get('coding-box-files-validation-dialog .exclude-button').each(button => {
       cy.wrap(button).should('contain.text', '(0)').and('be.disabled');
     });
-    cy.get('files-validation-dialog .mode-group').contains('mat-checkbox', 'run-hot-return').find('input')
+    cy.get('coding-box-files-validation-dialog .mode-group').contains('mat-checkbox', 'run-hot-return').find('input')
       .should('not.be.checked');
   });
 });

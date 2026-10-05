@@ -4,7 +4,7 @@ import { CodingManagementComponent } from '../coding-management/coding-managemen
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coding-statistics-view',
-  template: '<app-coding-management [hideActionButtons]="true"></app-coding-management>',
+  template: '<coding-box-coding-management [hideActionButtons]="true"></coding-box-coding-management>',
   standalone: true,
   imports: [CodingManagementComponent]
 })

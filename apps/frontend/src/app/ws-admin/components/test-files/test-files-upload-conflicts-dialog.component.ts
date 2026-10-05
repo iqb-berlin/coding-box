@@ -32,7 +32,7 @@ export type TestFilesUploadConflictsDialogResult = {
   styleUrls: ['./test-files-upload-conflicts-dialog.component.scss']
 })
 export class TestFilesUploadConflictsDialogComponent {
-  filterText = '';
+  protected filterText = '';
   private selectedFileIds = new Set<string>();
 
   constructor(
@@ -41,11 +41,11 @@ export class TestFilesUploadConflictsDialogComponent {
     public data: { conflicts: TestFilesUploadConflictDto[] }
   ) {}
 
-  get conflicts(): TestFilesUploadConflictDto[] {
+  protected get conflicts(): TestFilesUploadConflictDto[] {
     return this.data?.conflicts || [];
   }
 
-  get filteredConflicts(): TestFilesUploadConflictDto[] {
+  protected get filteredConflicts(): TestFilesUploadConflictDto[] {
     const all = this.conflicts;
     const q = (this.filterText || '').trim().toUpperCase();
     if (!q) {
@@ -59,15 +59,15 @@ export class TestFilesUploadConflictsDialogComponent {
     });
   }
 
-  trackByConflict(index: number, item: TestFilesUploadConflictDto): string {
+  protected trackByConflict(index: number, item: TestFilesUploadConflictDto): string {
     return `${item.fileId}@@${item.filename}@@${item.fileType || ''}@@${index}`;
   }
 
-  isSelected(c: TestFilesUploadConflictDto): boolean {
+  protected isSelected(c: TestFilesUploadConflictDto): boolean {
     return !!c?.fileId && this.selectedFileIds.has(c.fileId);
   }
 
-  toggleSelected(c: TestFilesUploadConflictDto): void {
+  protected toggleSelected(c: TestFilesUploadConflictDto): void {
     const id = c?.fileId;
     if (!id) {
       return;
@@ -79,11 +79,11 @@ export class TestFilesUploadConflictsDialogComponent {
     }
   }
 
-  get selectedCount(): number {
+  protected get selectedCount(): number {
     return this.selectedFileIds.size;
   }
 
-  get allFilteredSelected(): boolean {
+  protected get allFilteredSelected(): boolean {
     const filtered = this.filteredConflicts;
     if (filtered.length === 0) {
       return false;
@@ -91,7 +91,7 @@ export class TestFilesUploadConflictsDialogComponent {
     return filtered.every(c => !!c.fileId && this.selectedFileIds.has(c.fileId));
   }
 
-  get someFilteredSelected(): boolean {
+  protected get someFilteredSelected(): boolean {
     const filtered = this.filteredConflicts;
     if (filtered.length === 0) {
       return false;
@@ -99,7 +99,7 @@ export class TestFilesUploadConflictsDialogComponent {
     return filtered.some(c => !!c.fileId && this.selectedFileIds.has(c.fileId)) && !this.allFilteredSelected;
   }
 
-  toggleSelectAllFiltered(): void {
+  protected toggleSelectAllFiltered(): void {
     const filtered = this.filteredConflicts;
     if (filtered.length === 0) {
       return;
@@ -119,16 +119,16 @@ export class TestFilesUploadConflictsDialogComponent {
     }
   }
 
-  clearSelection(): void {
+  protected clearSelection(): void {
     this.selectedFileIds.clear();
   }
 
-  overwrite(): void {
+  protected overwrite(): void {
     const overwriteFileIds = Array.from(this.selectedFileIds);
     this.dialogRef.close({ overwrite: true, overwriteFileIds });
   }
 
-  skip(): void {
+  protected skip(): void {
     this.dialogRef.close({ overwrite: false });
   }
 }

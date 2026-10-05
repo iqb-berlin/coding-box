@@ -35,7 +35,7 @@ function createDefaultFilterParams(): FilterParams {
 }
 
 @Component({
-  selector: 'app-response-filters',
+  selector: 'coding-box-response-filters',
   templateUrl: './response-filters.component.html',
   styleUrls: ['./response-filters.component.scss'],
   standalone: true,
@@ -128,7 +128,7 @@ export class ResponseFiltersComponent implements OnDestroy {
     return getResponseStatusLabel(status) || status;
   }
 
-  isRegexFilterInvalid(field: RegexFilterField): boolean {
+  protected isRegexFilterInvalid(field: RegexFilterField): boolean {
     return hasInvalidRegexFilter(this.draftFilterParams()[field], this.enableRegexSearch());
   }
 

@@ -100,10 +100,10 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
 
   readonly authToken = signal<string | null>(null);
   readonly duration = signal(DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS);
-  readonly minTokenDurationDays = 1;
+  protected readonly minTokenDurationDays = 1;
   readonly maxTokenDurationDays = signal(DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS);
-  readonly minAuthSessionIdleTimeoutMinutes = MIN_AUTH_SESSION_IDLE_TIMEOUT_MINUTES;
-  readonly maxAuthSessionIdleTimeoutMinutes = MAX_AUTH_SESSION_IDLE_TIMEOUT_MINUTES;
+  protected readonly minAuthSessionIdleTimeoutMinutes = MIN_AUTH_SESSION_IDLE_TIMEOUT_MINUTES;
+  protected readonly maxAuthSessionIdleTimeoutMinutes = MAX_AUTH_SESSION_IDLE_TIMEOUT_MINUTES;
   readonly externalReplayTokenScopes = EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES;
   readonly replayUrlExportMode = signal<ReplayUrlExportMode>(DEFAULT_REPLAY_URL_EXPORT_MODE);
   readonly replayUrlExportTokenDurationDays = signal(DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS);
@@ -115,9 +115,9 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   readonly enableRegexSearch = signal(false);
   readonly showTestResultsLogAnomalies = signal(false);
   readonly isExporting = signal(false);
-  readonly databaseExportProgress = signal(0);
+  protected readonly databaseExportProgress = signal(0);
   readonly databaseExportStatus = signal<DatabaseExportStatus | null>(null);
-  readonly databaseExportError = signal<string | null>(null);
+  protected readonly databaseExportError = signal<string | null>(null);
 
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -177,7 +177,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     this.stopExportPolling();
   }
 
-  openProcessOverview(): void {
+  protected openProcessOverview(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
       this.dialog.open(ProcessOverviewComponent, {
@@ -244,12 +244,12 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     return this.isDurationWithinReplayTokenPolicy(duration);
   }
 
-  isReplayUrlExportTokenDurationValid(): boolean {
+  protected isReplayUrlExportTokenDurationValid(): boolean {
     const duration = Number(this.replayUrlExportTokenDurationDays());
     return this.isDurationWithinReplayTokenPolicy(duration);
   }
 
-  isAuthSessionIdleTimeoutValid(): boolean {
+  protected isAuthSessionIdleTimeoutValid(): boolean {
     const duration = Number(this.authSessionIdleTimeoutMinutes());
     return Number.isInteger(duration) &&
       duration >= this.minAuthSessionIdleTimeoutMinutes &&
@@ -746,7 +746,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       });
   }
 
-  getDatabaseExportStatusLabel(): string {
+  protected getDatabaseExportStatusLabel(): string {
     switch (this.databaseExportStatus()) {
       case 'queued':
         return this.translateService.instant('ws-settings.export-status-queued');

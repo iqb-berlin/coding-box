@@ -28,7 +28,7 @@ export type EditUserData = {
 
 export class EditUserComponent {
   private fb = inject(NonNullableFormBuilder);
-  data = inject<EditUserData>(MAT_DIALOG_DATA);
+  protected data = inject<EditUserData>(MAT_DIALOG_DATA);
 
   readonly editUserForm: EditUserForm;
   constructor() {

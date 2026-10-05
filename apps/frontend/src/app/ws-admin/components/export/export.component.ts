@@ -111,14 +111,14 @@ export class ExportComponent {
   readonly psychometricMappingIssueDetails = signal('');
   readonly missingsProfiles = signal<MissingsProfileOption[]>([]);
   readonly itemDatasetMissingsProfiles = signal<MissingsProfileOption[]>([]);
-  readonly resultsMissingsProfiles = signal<MissingsProfileOption[]>([]);
+  protected readonly resultsMissingsProfiles = signal<MissingsProfileOption[]>([]);
   readonly selectedPsychometricDomain = signal('workspace');
   readonly selectedMissingsProfileId = signal<number | null>(null);
   readonly selectedItemDatasetMissingsProfileId = signal<number | null>(null);
   readonly selectedResultsMissingsProfileId = signal<number | null>(null);
   readonly partWholeCorrection = signal(true);
   readonly maxCategoryCount = signal(10);
-  readonly isPsychometricInfoExpanded = signal(false);
+  protected readonly isPsychometricInfoExpanded = signal(false);
   readonly isLoadingPsychometricOptions = signal(false);
   readonly psychometricOptionsLoadFailed = signal(false);
   private psychometricOptionsWorkspaceId: number | null = null;
@@ -127,7 +127,7 @@ export class ExportComponent {
   private loadingItemDatasetOptionsWorkspaceId: number | null = null;
   private resultsOptionsWorkspaceId: number | null = null;
   private loadingResultsOptionsWorkspaceId: number | null = null;
-  readonly isLoadingResultsOptions = signal(false);
+  protected readonly isLoadingResultsOptions = signal(false);
   readonly resultsOptionsLoadFailed = signal(false);
 
   constructor() {
@@ -334,11 +334,11 @@ export class ExportComponent {
     }
   }
 
-  onIncludeResponseValuesChange(): void {
+  protected onIncludeResponseValuesChange(): void {
     this.clearUnsupportedResultsOptions();
   }
 
-  onIncludeGeoGebraFilesChange(): void {
+  protected onIncludeGeoGebraFilesChange(): void {
     this.clearUnsupportedResultsOptions();
   }
 
@@ -493,7 +493,7 @@ export class ExportComponent {
     );
   }
 
-  readonly filteredItemDatasetOptions = computed<ItemDatasetOption[]>(() => {
+  protected readonly filteredItemDatasetOptions = computed<ItemDatasetOption[]>(() => {
     const search = this.itemSearch().trim().toLocaleLowerCase();
     if (!search) {
       return this.itemDatasetOptions();

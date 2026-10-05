@@ -64,17 +64,17 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
     MatDialogRef<ContentPoolImportDialogComponent>
   );
 
-  readonly acps = signal<ContentPoolAcpSummary[]>([]);
+  protected readonly acps = signal<ContentPoolAcpSummary[]>([]);
 
   readonly selectedAcpId = signal('');
 
-  readonly isLoadingAcps = signal(false);
+  protected readonly isLoadingAcps = signal(false);
 
-  readonly isImporting = signal(false);
+  protected readonly isImporting = signal(false);
 
-  readonly hasLoadedAcps = signal(false);
+  protected readonly hasLoadedAcps = signal(false);
 
-  readonly errorMessage = signal('');
+  protected readonly errorMessage = signal('');
 
   readonly importProgress = signal<ContentPoolImportAcpProgress | undefined>(undefined);
 
@@ -88,7 +88,7 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
     this.importSubscription?.unsubscribe();
   }
 
-  loadAcps(): void {
+  protected loadAcps(): void {
     this.errorMessage.set('');
     this.isLoadingAcps.set(true);
     this.hasLoadedAcps.set(false);
@@ -113,7 +113,7 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
       });
   }
 
-  importAcp(): void {
+  protected importAcp(): void {
     if (!this.selectedAcpId()) {
       this.errorMessage.set('Bitte ein ACP auswählen.');
       return;
@@ -165,18 +165,18 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
       });
   }
 
-  get importProgressMode(): 'determinate' | 'indeterminate' {
+  protected get importProgressMode(): 'determinate' | 'indeterminate' {
     return this.importProgress()?.totalFiles || this.importProgress()?.progress ?
       'determinate' :
       'indeterminate';
   }
 
-  get importProgressValue(): number {
+  protected get importProgressValue(): number {
     const progress = this.importProgress()?.progress || 0;
     return Math.max(0, Math.min(100, progress));
   }
 
-  get importProgressText(): string {
+  protected get importProgressText(): string {
     const importProgressSnapshot = this.importProgress();
 
     if (!importProgressSnapshot) {
@@ -196,7 +196,7 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
     return importProgressSnapshot.message;
   }
 
-  cancel(): void {
+  protected cancel(): void {
     this.dialogRef.close({ success: false });
   }
 

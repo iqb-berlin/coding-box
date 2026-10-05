@@ -197,16 +197,16 @@ export interface ApplyTrainingDiscussionResultsDialogResult {
   `]
 })
 export class ApplyTrainingDiscussionResultsDialogComponent {
-  existingResultStrategy: TrainingDiscussionExistingResultStrategy = 'skip';
-  jobConflictStrategy: TrainingDiscussionJobConflictStrategy = 'skip';
+  protected existingResultStrategy: TrainingDiscussionExistingResultStrategy = 'skip';
+  protected jobConflictStrategy: TrainingDiscussionJobConflictStrategy = 'skip';
 
   constructor(
-    public dialogRef: MatDialogRef<ApplyTrainingDiscussionResultsDialogComponent, ApplyTrainingDiscussionResultsDialogResult | undefined>,
+    protected dialogRef: MatDialogRef<ApplyTrainingDiscussionResultsDialogComponent, ApplyTrainingDiscussionResultsDialogResult | undefined>,
     @Inject(MAT_DIALOG_DATA)
-    public data: ApplyTrainingDiscussionResultsDialogData
+    protected data: ApplyTrainingDiscussionResultsDialogData
   ) { }
 
-  confirm(): void {
+  protected confirm(): void {
     this.dialogRef.close({
       existingResultStrategy: this.existingResultStrategy,
       jobConflictStrategy: this.jobConflictStrategy

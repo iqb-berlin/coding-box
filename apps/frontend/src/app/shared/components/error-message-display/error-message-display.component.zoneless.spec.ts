@@ -18,7 +18,7 @@ class WarningRouteComponent {}
 @Component({
   selector: 'test-warning-shell',
   imports: [RouterOutlet, ErrorMessageDisplayComponent],
-  template: '<router-outlet /><app-error-message-display />'
+  template: '<router-outlet /><coding-box-error-message-display />'
 })
 class WarningShellComponent {}
 

@@ -41,6 +41,15 @@ seven days and shows the complete suite's coverage.
 Angular rules plus syntax, control flow, and accessibility checks for external and
 inline templates. Warnings fail the Nx lint target. Constructor injection remains
 allowed; introducing the gate does not require a separate DI migration.
+Application components use the `coding-box-` selector prefix, enforced by lint.
+The duration editor retains `iqb-formly-duration` because the metadata library
+reads its numeric inputs through that host selector. Its lint exception is limited
+to the duration component. Test doubles can retain third-party selectors.
+Templates use direct `class` and `style` bindings; lint rejects unnecessary `ngClass`
+bindings in external and inline templates. Template-only component members are
+`protected`; inputs, outputs, and
+members accessed by component consumers retain their public contract. Lifecycle
+hooks explicitly implement the corresponding Angular interfaces.
 
 Both frontend Jest configurations explicitly select `ts-node`. The zoneless
 configuration imports the base configuration without a `.ts` extension, so it also

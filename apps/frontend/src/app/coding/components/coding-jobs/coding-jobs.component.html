@@ -374,7 +374,7 @@
                 >Status</mat-header-cell
                 >
                 <mat-cell *matCellDef="let element">
-                  <span [ngClass]="getStatusClass(element.status)">{{
+                  <span [class]="getStatusClass(element.status)">{{
                     getStatusText(element.status)
                   }}</span>
                 </mat-cell>

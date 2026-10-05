@@ -29,7 +29,7 @@ export type ExportFormat = 'json' | 'csv' | 'excel';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'app-export-dialog',
+  selector: 'coding-box-export-dialog',
   templateUrl: './export-dialog.component.html',
   styleUrls: ['./export-dialog.component.scss'],
   standalone: true,
@@ -67,15 +67,15 @@ export class ExportDialogComponent implements OnInit {
   private resultsDialogRef?: MatDialogRef<CodingValidationResultsDialogComponent>;
   private readonly isDownloadingValidation = signal(false);
 
-  selectedFormat: ExportFormat = 'json';
-  trainingRequiredFilter: 'all' | 'true' | 'false' = 'all';
+  protected selectedFormat: ExportFormat = 'json';
+  protected trainingRequiredFilter: 'all' | 'true' | 'false' = 'all';
 
-  readonly validationResults = toSignal(this.validationStateService.validationResults$, { requireSync: true });
-  readonly validationProgress = toSignal(this.validationStateService.validationProgress$, { requireSync: true });
+  protected readonly validationResults = toSignal(this.validationStateService.validationResults$, { requireSync: true });
+  protected readonly validationProgress = toSignal(this.validationStateService.validationProgress$, { requireSync: true });
   readonly isValidating = computed(() => this.isDownloadingValidation() ||
     this.validationProgress().status === 'loading' || this.validationProgress().status === 'processing');
 
-  readonly validationCacheKey = computed(() => this.validationResults()?.cacheKey || null);
+  protected readonly validationCacheKey = computed(() => this.validationResults()?.cacheKey || null);
   validationCurrentPage = 1;
   expectedCombinations: ExpectedCombinationDto[] = [];
   private readonly maxDisplayedMappingErrors = 5;
@@ -124,11 +124,11 @@ export class ExportDialogComponent implements OnInit {
       });
   }
 
-  onCancel(): void {
+  protected onCancel(): void {
     this.dialogRef.close();
   }
 
-  onExport(): void {
+  protected onExport(): void {
     const trainingRequired = this.trainingRequiredFilter === 'all' ? undefined : this.trainingRequiredFilter === 'true';
     this.dialogRef.close({
       format: this.selectedFormat,
@@ -137,7 +137,7 @@ export class ExportDialogComponent implements OnInit {
   }
 
   // Validation methods
-  onValidationFileSelected(event: Event): void {
+  protected onValidationFileSelected(event: Event): void {
     if (this.closed || this.destroyRef.destroyed) return;
     const input = event.target as HTMLInputElement;
 
@@ -366,7 +366,7 @@ export class ExportDialogComponent implements OnInit {
     });
   }
 
-  downloadValidationExcel(): void {
+  protected downloadValidationExcel(): void {
     const workspaceId = this.workspaceId;
 
     const validationCacheKey = this.validationCacheKey();
@@ -400,7 +400,7 @@ export class ExportDialogComponent implements OnInit {
     });
   }
 
-  openValidationResultsDialog(results: ValidateCodingCompletenessResponseDto): void {
+  protected openValidationResultsDialog(results: ValidateCodingCompletenessResponseDto): void {
     this.resultsDialogRef = this.matDialog.open(CodingValidationResultsDialogComponent, {
       width: '90vw',
       maxWidth: '1400px',

@@ -35,7 +35,7 @@ export class UserMenuComponent implements OnInit {
   private readonly appService: AppService = inject(AppService);
 
   readonly userName = signal('');
-  readonly userStatus = signal('');
+  protected readonly userStatus = signal('');
 
   async ngOnInit() {
     try {
@@ -55,11 +55,11 @@ export class UserMenuComponent implements OnInit {
     }
   }
 
-  async logout() {
+  protected async logout() {
     await this.authService.logout();
   }
 
-  async editAccount() {
+  protected async editAccount() {
     await this.authService.redirectToProfile();
   }
 }

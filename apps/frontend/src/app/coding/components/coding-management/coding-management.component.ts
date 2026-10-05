@@ -99,7 +99,7 @@ import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'app-coding-management',
+  selector: 'coding-box-coding-management',
   templateUrl: './coding-management.component.html',
   standalone: true,
   imports: [
@@ -138,7 +138,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   // State
   data: Success[] = [];
-  displayedColumns: string[] = [
+  protected displayedColumns: string[] = [
     'unitname',
     'variableid',
     'value',
@@ -152,23 +152,23 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     'actions'
   ];
 
-  readonly isLoading = signal(false);
-  readonly isLoadingStatistics = signal(false);
-  readonly isLoadingReview = signal(false);
-  readonly isDownloadInProgress = signal(false);
-  readonly resetProgress = signal<number | null>(null);
-  readonly downloadProgress = signal<number | null>(null);
-  readonly codingListDownloadProgress = signal<number | null>(null);
+  protected readonly isLoading = signal(false);
+  protected readonly isLoadingStatistics = signal(false);
+  protected readonly isLoadingReview = signal(false);
+  protected readonly isDownloadInProgress = signal(false);
+  protected readonly resetProgress = signal<number | null>(null);
+  protected readonly downloadProgress = signal<number | null>(null);
+  protected readonly codingListDownloadProgress = signal<number | null>(null);
 
   // Statistics state
   readonly codingStatistics = signal<CodingStatistics>({ totalResponses: 0, statusCounts: {} });
-  readonly referenceStatistics = signal<CodingStatistics | null>(null);
-  readonly referenceVersion = signal<StatisticsVersion | null>(null);
+  protected readonly referenceStatistics = signal<CodingStatistics | null>(null);
+  protected readonly referenceVersion = signal<StatisticsVersion | null>(null);
   readonly statisticsLoaded = signal(false);
-  readonly isGeogebraAvailable = signal(false);
+  protected readonly isGeogebraAvailable = signal(false);
 
   readonly currentStatusFilter = signal<string | null>(null);
-  pageSizeOptions = [100, 200, 500, 1000];
+  protected pageSizeOptions = [100, 200, 500, 1000];
   readonly pageSize = signal(100);
   readonly totalRecords = signal(0);
   readonly pageIndex = signal(0);
@@ -180,16 +180,16 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   readonly codingFreshnessScope = signal<CodingFreshnessScopeDto | null>(null);
   readonly isLoadingCodingFreshness = signal(false);
   readonly autocodingReadiness = signal<AutocodingReadinessDto | null>(null);
-  readonly isLoadingAutocodingReadiness = signal(false);
+  protected readonly isLoadingAutocodingReadiness = signal(false);
   readonly autocodingReadinessLoadFailed = signal(false);
   readonly manualAppliedResultsOverview = signal<AppliedResultsOverview | null>(null);
-  readonly isLoadingManualAppliedResultsOverview = signal(false);
+  protected readonly isLoadingManualAppliedResultsOverview = signal(false);
   readonly manualAppliedResultsOverviewLoadFailed = signal(false);
   readonly evaluationMode = signal(false);
-  readonly enableRegexSearch = signal(false);
+  protected readonly enableRegexSearch = signal(false);
   readonly autoRefreshManualCodingJobs = signal(true);
   readonly hasLoadedFullCodingStatusOverview = signal(false);
-  readonly isStartingFreshnessCoding = signal(false);
+  protected readonly isStartingFreshnessCoding = signal(false);
   readonly activeFreshnessJobId = signal<string | null>(null);
   readonly activeFreshnessJobProgress = signal<number | null>(null);
 
@@ -812,19 +812,19 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       });
   }
 
-  onDownloadResults(): void {
+  protected onDownloadResults(): void {
     this.openDownloadCodingResultsDialog();
   }
 
-  onCancelDownloadResults(): void {
+  protected onCancelDownloadResults(): void {
     this.codingManagementService.cancelCodingResultsDownload();
   }
 
-  cancelCodingListDownload(): void {
+  protected cancelCodingListDownload(): void {
     this.codingManagementService.cancelCodingListDownload();
   }
 
-  onResetVersion(): void {
+  protected onResetVersion(): void {
     this.openResetVersionDialog();
   }
 
@@ -1061,13 +1061,13 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     return [];
   });
 
-  readonly hasImportedResultsWithoutCoding = computed<boolean>(() => this.statisticsLoaded() &&
+  protected readonly hasImportedResultsWithoutCoding = computed<boolean>(() => this.statisticsLoaded() &&
       !this.hasCodingFreshnessWarnings() &&
       (this.codingFreshnessSummary()?.currentRevision || 0) > 0 &&
       (this.codingFreshnessSummary()?.items || []).length === 0 &&
       (this.codingStatistics().totalResponses || 0) === 0);
 
-  readonly isAutocodingReadinessBlocked = computed<boolean>(() => this.autocodingReadiness()?.readiness === 'BLOCKED');
+  protected readonly isAutocodingReadinessBlocked = computed<boolean>(() => this.autocodingReadiness()?.readiness === 'BLOCKED');
 
   readonly hasAutocodingReadinessLoadFailed = computed<boolean>(() => this.autocodingReadinessLoadFailed());
 
@@ -1128,7 +1128,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     return getCodingFreshnessSummaryText(this.codingFreshnessWarnings());
   }
 
-  get codingFreshnessExplanationText(): string {
+  protected get codingFreshnessExplanationText(): string {
     if (this.shouldShowSecondAutocodingWaitingState()) {
       return this.translateService.instant(
         'coding-management.readiness.second-autocoding-waits-help',
@@ -1211,7 +1211,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     return this.formatPreview(this.autocodingReadiness()?.missingUnitFiles || [], 5);
   }
 
-  get autocodingReadinessMissingCodingSchemePreview(): string {
+  protected get autocodingReadinessMissingCodingSchemePreview(): string {
     return this.formatPreview(this.autocodingReadiness()?.missingCodingSchemes || [], 5);
   }
 
@@ -1241,9 +1241,9 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       visible;
   }
 
-  readonly manualCodingFreshnessGuidanceText = computed<string>(() => getCodingFreshnessManualReviewGuidanceText(this.codingFreshnessWarnings()));
+  protected readonly manualCodingFreshnessGuidanceText = computed<string>(() => getCodingFreshnessManualReviewGuidanceText(this.codingFreshnessWarnings()));
 
-  readonly codingFreshnessGroupPreview = computed<string>(() => {
+  protected readonly codingFreshnessGroupPreview = computed<string>(() => {
     const groupNames = this.codingFreshnessScope()?.groupNames || [];
     if (groupNames.length === 0) {
       return '';
@@ -1281,7 +1281,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     return getCodingFreshnessChipLabel(item);
   }
 
-  getFreshnessAutoCodingButtonLabel(version: 'v1' | 'v3'): string {
+  protected getFreshnessAutoCodingButtonLabel(version: 'v1' | 'v3'): string {
     return getCodingFreshnessAutoCodingButtonLabel(this.autoCodingFreshnessWarnings(), version);
   }
 
@@ -1557,7 +1557,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   // Dialog Methods
-  onAutoCode(): void {
+  protected onAutoCode(): void {
     this.openTestPersonCodingDialog();
   }
 
@@ -1590,7 +1590,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     return ['completed', 'failed', 'cancelled', 'paused'].includes(status || '');
   }
 
-  fetchCodingList(): void {
+  protected fetchCodingList(): void {
     const dialogRef = this.dialog.open(ExportDialogComponent, {
       width: '500px'
     });
@@ -1602,7 +1602,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     });
   }
 
-  openExportCodingBook(): void {
+  protected openExportCodingBook(): void {
     this.dialog.open(ExportCodingBookComponent, {
       width: '80%',
       height: '80%'
@@ -1631,7 +1631,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.router.navigate([`/workspace-admin/${workspaceId}/test-files`]);
   }
 
-  fetchVariableAnalysis(): void {
+  protected fetchVariableAnalysis(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     this.dialog.open(VariableAnalysisDialogComponent, {
@@ -1643,7 +1643,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     });
   }
 
-  fetchUnitVariables(): void {
+  protected fetchUnitVariables(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     this.dialog.open(CodingVariablesDialogComponent, {
@@ -1827,7 +1827,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     return hidden > 0 ? `${visible} +${hidden}` : visible;
   }
 
-  openItemListDialog(): void {
+  protected openItemListDialog(): void {
     this.dialog.open(ItemListDialogComponent, {
       width: '600px',
       maxHeight: '80vh'

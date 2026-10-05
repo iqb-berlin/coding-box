@@ -164,7 +164,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
 
-  displayedColumns: string[] = [
+  protected displayedColumns: string[] = [
     'selectCheckbox',
     'filename',
     'file_size',
@@ -185,9 +185,9 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   readonly downloadProgressLoadedBytes = signal(0);
   readonly downloadProgressTotalBytes = signal(0);
   readonly downloadProgressStatus = signal<'preparing' | 'downloading'>('preparing');
-  readonly validationProgress = signal(0);
-  readonly validationProgressMessage = signal('');
-  readonly validationProgressSteps: ValidationProgressStep[] = [
+  protected readonly validationProgress = signal(0);
+  protected readonly validationProgressMessage = signal('');
+  protected readonly validationProgressSteps: ValidationProgressStep[] = [
     { threshold: 0, label: 'Änderungen prüfen' },
     { threshold: 3, label: 'Vorbereiten' },
     { threshold: 8, label: 'Ausschlüsse laden' },
@@ -206,11 +206,11 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     { threshold: 100, label: 'Abgeschlossen' }
   ];
 
-  readonly selectedFileType = signal<string>('');
-  readonly selectedFileSize = signal<string>('');
+  protected readonly selectedFileType = signal<string>('');
+  protected readonly selectedFileSize = signal<string>('');
   readonly enableRegexSearch = signal(false);
-  readonly fileTypes = signal<string[]>([]);
-  fileSizeRanges: { value: string; display: string }[] = [
+  protected readonly fileTypes = signal<string[]>([]);
+  protected fileSizeRanges: { value: string; display: string }[] = [
     { value: '', display: 'Alle Größen' },
     { value: '0-10KB', display: '< 10KB' },
     { value: '10KB-100KB', display: '10KB - 100KB' },
@@ -219,7 +219,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     { value: '10MB+', display: '> 10MB' }
   ];
 
-  getFileTypeLabel = getFileTypeLabel;
+  protected getFileTypeLabel = getFileTypeLabel;
 
   readonly resourcePackagesModified = signal(false);
   readonly contentPoolSettings = signal<ContentPoolSettings>({
@@ -235,8 +235,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   private fileListSubscription: Subscription | undefined;
 
   readonly page = signal<number>(1);
-  readonly limit = signal<number>(100);
-  readonly total = signal<number>(0);
+  protected readonly limit = signal<number>(100);
+  protected readonly total = signal<number>(0);
 
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -318,7 +318,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     return numSelected === numRows;
   }
 
-  masterToggle(): void {
+  protected masterToggle(): void {
     this.isAllSelected() ?
       this.tableCheckboxSelection.clear() :
       this.dataSource?.data.forEach(row => this.tableCheckboxSelection.select(row)
@@ -386,7 +386,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     this.loadTestFiles();
   }
 
-  onTextFilterChange(value: string): void {
+  protected onTextFilterChange(value: string): void {
     this.textFilterValue.set(value.trim());
     if (this.isTextFilterRegexInvalid()) {
       return;
@@ -394,7 +394,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     this.textFilterChanged.next(this.textFilterValue());
   }
 
-  clearFilters(): void {
+  protected clearFilters(): void {
     this.textFilterValue.set('');
     this.selectedFileType.set('');
     this.selectedFileSize.set('');
@@ -435,7 +435,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       });
   }
 
-  canUploadSelectedFilesToContentPool(): boolean {
+  protected canUploadSelectedFilesToContentPool(): boolean {
     return Boolean(
       !this.isLoadingContentPoolConfig() &&
       this.contentPoolSettings().enabled &&
@@ -445,7 +445,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     );
   }
 
-  openContentPoolUploadDialogForSelectedFiles(): void {
+  protected openContentPoolUploadDialogForSelectedFiles(): void {
     if (!this.contentPoolSettings().enabled) {
       this.snackBar.open(
         'Die Content-Pool-Integration ist aktuell deaktiviert.',
@@ -504,7 +504,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     );
   }
 
-  openContentPoolImportDialog(): void {
+  protected openContentPoolImportDialog(): void {
     if (!this.contentPoolSettings().enabled) {
       this.snackBar.open(
         'Die Content-Pool-Integration ist aktuell deaktiviert.',
@@ -859,7 +859,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     this.isValidating.set(false);
   }
 
-  testCenterImport(): void {
+  protected testCenterImport(): void {
     const dialogRef = this.dialog.open(TestCenterImportComponent, {
       width: '1000px',
       maxWidth: '95vw',
@@ -946,7 +946,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       });
   }
 
-  downloadFile(row: FilesInListDto): void {
+  protected downloadFile(row: FilesInListDto): void {
     this.fileService
       .downloadFile(this.appService.selectedWorkspaceId, row.id).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
@@ -971,7 +971,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       });
   }
 
-  downloadAllFilesAsZip(): void {
+  protected downloadAllFilesAsZip(): void {
     const ref = this.dialog.open(TestFilesZipExportOptionsDialogComponent, {
       width: '700px',
       maxWidth: '95vw',
@@ -1061,26 +1061,26 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       this.downloadProgressStatus() === 'preparing'
   ));
 
-  readonly busyProgressValue = computed<number>(() => (this.isValidating() ?
+  protected readonly busyProgressValue = computed<number>(() => (this.isValidating() ?
     this.validationProgress() :
     this.downloadProgressValue()));
 
-  readonly isBusyProgressIndeterminate = computed<boolean>(() => (this.isValidating() ? false : this.isDownloadProgressIndeterminate()));
+  protected readonly isBusyProgressIndeterminate = computed<boolean>(() => (this.isValidating() ? false : this.isDownloadProgressIndeterminate()));
 
-  get completedValidationStepCount(): number {
+  protected get completedValidationStepCount(): number {
     return this.validationProgressSteps.filter(
       step => this.isValidationStepComplete(step)
     ).length;
   }
 
-  isValidationStepComplete(step: ValidationProgressStep): boolean {
+  protected isValidationStepComplete(step: ValidationProgressStep): boolean {
     if (this.validationProgress() >= 100) {
       return true;
     }
     return this.validationProgress() > step.threshold;
   }
 
-  isValidationStepActive(index: number): boolean {
+  protected isValidationStepActive(index: number): boolean {
     const step = this.validationProgressSteps[index];
     const nextStep = this.validationProgressSteps[index + 1];
     return this.validationProgress() >= step.threshold &&
@@ -1107,7 +1107,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
   }
 
-  validateFiles(): void {
+  protected validateFiles(): void {
     if (this.isValidating()) return;
     this.isValidating.set(true);
     this.validationProgress.set(0);
@@ -1347,7 +1347,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     }
   }
 
-  openResourcePackagesDialog(): void {
+  protected openResourcePackagesDialog(): void {
     const dialogRef = this.dialog.open(ResourcePackagesDialogComponent, {
       width: '94vw',
       maxWidth: '1440px',
@@ -1364,7 +1364,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     });
   }
 
-  openGithubReleasesDialog(): void {
+  protected openGithubReleasesDialog(): void {
     const dialogRef = this.dialog.open(GithubReleasesDialogComponent, {
       width: '800px',
       maxWidth: '95vw',

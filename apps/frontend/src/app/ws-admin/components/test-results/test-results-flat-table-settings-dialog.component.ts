@@ -56,20 +56,20 @@ export type TestResultsFlatTableSettingsDialogResult = {
   templateUrl: './test-results-flat-table-settings-dialog.component.html'
 })
 export class TestResultsFlatTableSettingsDialogComponent {
-  audioLowThreshold: number;
-  shortProcessingThresholdMs: number;
-  longLoadingThresholdMs: number;
-  focusLostThresholdMs: number;
-  sessionSpanThresholdMs: number;
-  repeatedStartThreshold: number;
-  processingDurationMin: string;
-  processingDurationMax: string;
-  sessionBrowsersAllowlist: string[];
-  sessionOsAllowlist: string[];
-  sessionScreensAllowlist: string[];
-  availableSessionBrowsers: string[];
-  availableSessionOs: string[];
-  availableSessionScreens: string[];
+  protected audioLowThreshold: number;
+  protected shortProcessingThresholdMs: number;
+  protected longLoadingThresholdMs: number;
+  protected focusLostThresholdMs: number;
+  protected sessionSpanThresholdMs: number;
+  protected repeatedStartThreshold: number;
+  protected processingDurationMin: string;
+  protected processingDurationMax: string;
+  protected sessionBrowsersAllowlist: string[];
+  protected sessionOsAllowlist: string[];
+  protected sessionScreensAllowlist: string[];
+  protected availableSessionBrowsers: string[];
+  protected availableSessionOs: string[];
+  protected availableSessionScreens: string[];
 
   constructor(
     private dialogRef: MatDialogRef<
@@ -110,11 +110,11 @@ export class TestResultsFlatTableSettingsDialogComponent {
       [];
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close(undefined);
   }
 
-  save(): void {
+  protected save(): void {
     const parsed = Number(this.audioLowThreshold);
     const shortParsed = Number(this.shortProcessingThresholdMs);
     const longParsed = Number(this.longLoadingThresholdMs);

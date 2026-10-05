@@ -63,10 +63,10 @@ export class CoderListComponent implements OnInit {
   private snackBar = inject(MatSnackBar);
   private fb = inject(FormBuilder);
 
-  displayedColumns: string[] = ['selectCheckbox', 'name', 'displayName', 'email', 'assignedJobs'];
+  protected displayedColumns: string[] = ['selectCheckbox', 'name', 'displayName', 'email', 'assignedJobs'];
   dataSource = new MatTableDataSource<Coder>([]);
-  selection = new SelectionModel<Coder>(true, []);
-  readonly isLoading = signal(false);
+  protected selection = new SelectionModel<Coder>(true, []);
+  protected readonly isLoading = signal(false);
   coderForm: FormGroup;
   isEditing = false;
   editingCoderId: number | null = null;

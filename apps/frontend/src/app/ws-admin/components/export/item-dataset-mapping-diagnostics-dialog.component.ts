@@ -81,7 +81,7 @@ export class ItemDatasetMappingDiagnosticsDialogComponent {
   search = '';
   selectedCode = '';
   expandedCode: string | null = null;
-  availableCauses: Array<{ code: string; label: string; count: number }> = [];
+  protected availableCauses: Array<{ code: string; label: string; count: number }> = [];
   visibleGroups: DiagnosticGroup[] = [];
   private pageStates = new Map<string, DiagnosticPageState>();
 
@@ -102,11 +102,11 @@ export class ItemDatasetMappingDiagnosticsDialogComponent {
     this.applyFilters();
   }
 
-  get isWarning(): boolean {
+  protected get isWarning(): boolean {
     return this.data.severity === 'warning';
   }
 
-  get totalCount(): number {
+  protected get totalCount(): number {
     return this.data.diagnostics.length;
   }
 
@@ -122,7 +122,7 @@ export class ItemDatasetMappingDiagnosticsDialogComponent {
     this.applyFilters();
   }
 
-  onGroupOpened(code: string): void {
+  protected onGroupOpened(code: string): void {
     this.expandedCode = code;
   }
 
@@ -151,7 +151,7 @@ export class ItemDatasetMappingDiagnosticsDialogComponent {
     );
   }
 
-  getSourceFileLabel(diagnostic: ItemDatasetMappingDiagnostic): string {
+  protected getSourceFileLabel(diagnostic: ItemDatasetMappingDiagnostic): string {
     const key = diagnostic.code === 'missing-vomd' ?
       'item-dataset-diagnostic-expected-file' :
       'item-dataset-diagnostic-file';
@@ -208,7 +208,7 @@ export class ItemDatasetMappingDiagnosticsDialogComponent {
     return `itemdatensatz-${kind}-${datePart}.csv`;
   }
 
-  downloadCsv(): void {
+  protected downloadCsv(): void {
     if (this.filteredCount === 0) return;
     const blob = new Blob([this.buildCsv()], {
       type: 'text/csv;charset=utf-8'

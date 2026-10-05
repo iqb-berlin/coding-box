@@ -162,7 +162,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     return this._groupedVariables();
   }
 
-  get isEditMode(): boolean {
+  protected get isEditMode(): boolean {
     return !!this.editTraining();
   }
 
@@ -173,8 +173,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   readonly availableBundles = signal<VariableBundle[]>([]);
   readonly selectedBundleIds = signal<Set<number>>(new Set());
   readonly isLoading = signal(false);
-  readonly isLoadingVariables = signal(false);
-  readonly isLoadingBundles = signal(false);
+  protected readonly isLoadingVariables = signal(false);
+  protected readonly isLoadingBundles = signal(false);
 
   private _availableVariables$ = new BehaviorSubject<Variable[]>([]);
 
@@ -735,7 +735,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     return bundle.variables.filter(variable => this.isVariableDerived(variable)).length;
   }
 
-  getBundleEffectiveVariableCount(bundle: VariableBundle): number {
+  protected getBundleEffectiveVariableCount(bundle: VariableBundle): number {
     if (this.includeDerivedVariables) {
       return bundle.variables.length;
     }
@@ -743,7 +743,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     return bundle.variables.filter(variable => !this.isVariableDerived(variable)).length;
   }
 
-  getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
+  protected getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
         return 'Älteste Fälle zuerst';
@@ -760,7 +760,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     }
   }
 
-  getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
+  protected getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
         return 'Nimmt pro Variable die ältesten verfügbaren Fälle nach Erfassungsreihenfolge.';
@@ -777,7 +777,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     }
   }
 
-  getCaseOrderingModeLabel(mode?: 'continuous' | 'alternating' | null): string {
+  protected getCaseOrderingModeLabel(mode?: 'continuous' | 'alternating' | null): string {
     return mode === 'alternating' ? 'Abwechselnd' : 'Fortlaufend';
   }
 
@@ -911,7 +911,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     return this.getSelectableManualVariableKeys().some(key => !selectedManualKeys.has(key));
   }
 
-  hasManualVariablesSelected(): boolean {
+  protected hasManualVariablesSelected(): boolean {
     return this.getManualVariablesCount() > 0;
   }
 
@@ -1245,7 +1245,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       !this.hasAnyInsufficientCases();
   }
 
-  getValidationItems(): ValidationItem[] {
+  protected getValidationItems(): ValidationItem[] {
     return [
       { id: 'label', label: 'Schulungs-Bezeichnung ausgefüllt', valid: this.hasTrainingLabel() },
       { id: 'coders', label: 'Mindestens ein Kodierer ausgewählt', valid: this.hasSelectedCoders() },
@@ -1393,7 +1393,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     this._groupedVariables.set(this.getVariablesGroupedByBundle());
   }
 
-  trackBundleGroupById(
+  protected trackBundleGroupById(
     _index: number,
     bundleGroup: VariableGrouping['bundles'][number]
   ): number {
@@ -1497,20 +1497,20 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     return this.availableVariables().find(avail => avail.unitName === unitId && avail.variableId === variableId);
   }
 
-  hasDeriveErrorResponsesForControl(control: FormGroup): boolean {
+  protected hasDeriveErrorResponsesForControl(control: FormGroup): boolean {
     const unitId = control.get('unitId')?.value;
     const variableId = control.get('variableId')?.value;
     const variable = this.getAvailableVariable(unitId, variableId);
     return (variable?.deriveErrorResponseCount ?? 0) > 0 || control.get('includeDeriveError')?.value === true;
   }
 
-  getDeriveErrorResponseCountForControl(control: FormGroup): number {
+  protected getDeriveErrorResponseCountForControl(control: FormGroup): number {
     const unitId = control.get('unitId')?.value;
     const variableId = control.get('variableId')?.value;
     return this.getAvailableVariable(unitId, variableId)?.deriveErrorResponseCount ?? 0;
   }
 
-  isDeriveErrorIncludedForControl(control: FormGroup): boolean {
+  protected isDeriveErrorIncludedForControl(control: FormGroup): boolean {
     return control.get('includeDeriveError')?.value === true;
   }
 
@@ -1531,7 +1531,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     this.updateGroupedVariables();
   }
 
-  getSelectedDeriveErrorOptInCount(): number {
+  protected getSelectedDeriveErrorOptInCount(): number {
     return this.variablesFormArray.controls.filter(control => (
       control.get('includeDeriveError')?.value === true
     )).length;
@@ -1561,7 +1561,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       .join(', ');
   }
 
-  getBundleDeriveErrorControls(bundleGroup: { variables: { control: FormGroup; index: number }[] }): { control: FormGroup; index: number }[] {
+  protected getBundleDeriveErrorControls(bundleGroup: { variables: { control: FormGroup; index: number }[] }): { control: FormGroup; index: number }[] {
     return bundleGroup.variables.filter(item => this.hasDeriveErrorResponsesForControl(item.control));
   }
 
@@ -1716,7 +1716,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     this.trainingClosed.emit();
   }
 
-  openImportDialog(): void {
+  protected openImportDialog(): void {
     const dialogRef = this.dialog.open(JobDefinitionSelectionDialogComponent, {
       width: '1200px',
       height: '80vh',

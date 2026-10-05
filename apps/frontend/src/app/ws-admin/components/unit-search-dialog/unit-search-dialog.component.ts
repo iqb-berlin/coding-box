@@ -110,26 +110,26 @@ interface BookletSearchResult {
 export class UnitSearchDialogComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly searchCancel$ = new Subject<void>();
-  searchText: string = '';
-  searchValue: string = '';
-  searchVariableId: string = '';
-  searchUnitName: string = '';
-  searchStatus: string = '';
-  searchCodedStatus: string = '';
-  searchGroup: string = '';
-  searchCode: string = '';
+  protected searchText: string = '';
+  protected searchValue: string = '';
+  protected searchVariableId: string = '';
+  protected searchUnitName: string = '';
+  protected searchStatus: string = '';
+  protected searchCodedStatus: string = '';
+  protected searchGroup: string = '';
+  protected searchCode: string = '';
 
-  searchMode: 'unit' | 'response' | 'booklet' = 'unit';
+  protected searchMode: 'unit' | 'response' | 'booklet' = 'unit';
 
-  readonly unitSearchResults = signal<UnitSearchResult[]>([]);
-  readonly responseSearchResults = signal<ResponseSearchResult[]>([]);
-  readonly bookletSearchResults = signal<BookletSearchResult[]>([]);
-  bookletSearchText: string = '';
+  protected readonly unitSearchResults = signal<UnitSearchResult[]>([]);
+  protected readonly responseSearchResults = signal<ResponseSearchResult[]>([]);
+  protected readonly bookletSearchResults = signal<BookletSearchResult[]>([]);
+  protected bookletSearchText: string = '';
 
-  readonly isLoading = signal<boolean>(false);
-  unitDisplayedColumns: string[] = ['unitName', 'unitAlias', 'bookletName', 'personLogin', 'personCode', 'personGroup', 'tags', 'responseValue', 'actions'];
-  responseDisplayedColumns: string[] = ['variableId', 'value', 'status', 'codedStatus', 'unitName', 'unitAlias', 'bookletName', 'personLogin', 'personCode', 'personGroup', 'actions'];
-  bookletDisplayedColumns: string[] = ['bookletName', 'personCode', 'personLogin', 'personGroup', 'unitCount', 'actions'];
+  protected readonly isLoading = signal<boolean>(false);
+  protected unitDisplayedColumns: string[] = ['unitName', 'unitAlias', 'bookletName', 'personLogin', 'personCode', 'personGroup', 'tags', 'responseValue', 'actions'];
+  protected responseDisplayedColumns: string[] = ['variableId', 'value', 'status', 'codedStatus', 'unitName', 'unitAlias', 'bookletName', 'personLogin', 'personCode', 'personGroup', 'actions'];
+  protected bookletDisplayedColumns: string[] = ['bookletName', 'personCode', 'personLogin', 'personGroup', 'unitCount', 'actions'];
 
   private unitSearchSubject = new Subject<string>();
   private responseSearchSubject = new Subject<{ value?: string; variableId?: string; unitName?: string; status?: string; codedStatus?: string; group?: string; code?: string }>();
@@ -137,13 +137,13 @@ export class UnitSearchDialogComponent implements OnInit {
   private readonly SEARCH_DEBOUNCE_TIME = 500;
 
   readonly totalItems = signal<number>(0);
-  pageSize: number = 10;
-  pageIndex: number = 0;
-  pageSizeOptions: number[] = [50, 100, 200, 500];
+  protected pageSize: number = 10;
+  protected pageIndex: number = 0;
+  protected pageSizeOptions: number[] = [50, 100, 200, 500];
 
   constructor(
     private dialogRef: MatDialogRef<UnitSearchDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: { title: string },
+    @Inject(MAT_DIALOG_DATA) protected data: { title: string },
     private fileService: FileService,
     private unitService: UnitService,
     private responseService: ResponseService,
@@ -186,13 +186,13 @@ export class UnitSearchDialogComponent implements OnInit {
     });
   }
 
-  onUnitSearchChange(): void {
+  protected onUnitSearchChange(): void {
     if (this.searchText.trim().length > 2) {
       this.unitSearchSubject.next(this.searchText);
     }
   }
 
-  onResponseSearchChange(): void {
+  protected onResponseSearchChange(): void {
     this.responseSearchSubject.next({
       value: this.searchValue.trim() !== '' ? this.searchValue : undefined,
       variableId: this.searchVariableId.trim() !== '' ? this.searchVariableId : undefined,
@@ -204,13 +204,13 @@ export class UnitSearchDialogComponent implements OnInit {
     });
   }
 
-  onBookletSearchChange(): void {
+  protected onBookletSearchChange(): void {
     if (this.bookletSearchText.trim().length > 2) {
       this.bookletSearchSubject.next(this.bookletSearchText);
     }
   }
 
-  onPageChange(event: PageEvent): void {
+  protected onPageChange(event: PageEvent): void {
     this.pageSize = event.pageSize;
     this.pageIndex = event.pageIndex;
 
@@ -231,7 +231,7 @@ export class UnitSearchDialogComponent implements OnInit {
     }
   }
 
-  setSearchMode(mode: 'unit' | 'response' | 'booklet'): void {
+  protected setSearchMode(mode: 'unit' | 'response' | 'booklet'): void {
     if (this.searchMode === mode) {
       return;
     }
@@ -338,7 +338,7 @@ export class UnitSearchDialogComponent implements OnInit {
     });
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 
@@ -352,7 +352,7 @@ export class UnitSearchDialogComponent implements OnInit {
     window.open(`${window.location.origin}/#${url}`, '_blank');
   }
 
-  deleteUnit(unit: UnitSearchResult): void {
+  protected deleteUnit(unit: UnitSearchResult): void {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: {
@@ -401,7 +401,7 @@ export class UnitSearchDialogComponent implements OnInit {
     });
   }
 
-  deleteResponse(response: ResponseSearchResult): void {
+  protected deleteResponse(response: ResponseSearchResult): void {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: {
@@ -450,7 +450,7 @@ export class UnitSearchDialogComponent implements OnInit {
     });
   }
 
-  deleteAllUnits(): void {
+  protected deleteAllUnits(): void {
     if (this.unitSearchResults().length === 0) {
       this.snackBar.open(
         'Keine Aufgaben zum Löschen gefunden.',
@@ -511,7 +511,7 @@ export class UnitSearchDialogComponent implements OnInit {
     });
   }
 
-  deleteAllResponses(): void {
+  protected deleteAllResponses(): void {
     if (this.responseSearchResults().length === 0) {
       this.snackBar.open(
         'Keine Antworten zum Löschen gefunden.',
@@ -580,7 +580,7 @@ export class UnitSearchDialogComponent implements OnInit {
     });
   }
 
-  viewBookletInfo(booklet: BookletSearchResult): void {
+  protected viewBookletInfo(booklet: BookletSearchResult): void {
     const loadingSnackBar = this.snackBar.open(
       'Lade Testheft-Informationen...',
       '',
@@ -616,7 +616,7 @@ export class UnitSearchDialogComponent implements OnInit {
     });
   }
 
-  deleteBooklet(booklet: BookletSearchResult): void {
+  protected deleteBooklet(booklet: BookletSearchResult): void {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: {
@@ -668,7 +668,7 @@ export class UnitSearchDialogComponent implements OnInit {
     });
   }
 
-  deleteAllBooklets(): void {
+  protected deleteAllBooklets(): void {
     if (this.bookletSearchResults().length === 0) {
       this.snackBar.open(
         'Keine Booklets zum Löschen gefunden.',

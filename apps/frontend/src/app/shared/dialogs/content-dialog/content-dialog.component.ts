@@ -120,7 +120,7 @@ export class ContentDialogComponent {
 
   constructor(
     public dialogRef: MatDialogRef<ContentDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: DialogData
+    @Inject(MAT_DIALOG_DATA) protected data: DialogData
   ) {
     this.displayContent = data.isJson ? this.formatJson(data.content) : data.content;
   }

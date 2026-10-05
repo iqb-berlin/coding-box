@@ -44,10 +44,10 @@ export class UsersSelectionComponent implements OnInit, OnChanges {
   private destroyRef = inject(DestroyRef);
   private changeDetectorRef = inject(ChangeDetectorRef);
 
-  userObjectsDatasource = new MatTableDataSource<UserFullDto>();
-  displayedUserColumns = ['selectCheckbox', 'username', 'displayName'];
+  protected userObjectsDatasource = new MatTableDataSource<UserFullDto>();
+  protected displayedUserColumns = ['selectCheckbox', 'username', 'displayName'];
   tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
-  tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
+  protected tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
   readonly userWorkspaces = signal<WorkspaceInListDto[]>([]);
   readonly filteredUserWorkspaces = signal<WorkspaceInListDto[]>([]);
 
@@ -119,7 +119,7 @@ export class UsersSelectionComponent implements OnInit, OnChanges {
     });
   }
 
-  checkboxToggle(row: UserFullDto): void {
+  protected checkboxToggle(row: UserFullDto): void {
     this.tableSelectionCheckboxes.toggle(row);
     this.updateUserWorkspacesList(row.id);
     this.userSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
@@ -141,7 +141,7 @@ export class UsersSelectionComponent implements OnInit, OnChanges {
     return numSelected === numRows;
   }
 
-  masterToggle(): void {
+  protected masterToggle(): void {
     this.isAllSelected() || !this.userObjectsDatasource ?
       this.tableSelectionCheckboxes.clear() :
       this.userObjectsDatasource.data.forEach(row => this.tableSelectionCheckboxes.select(row));

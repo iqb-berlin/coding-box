@@ -288,10 +288,10 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   >());
 
   readonly flatData = signal<FlatResponseRow[]>([]);
-  readonly flatTotalRecords = signal<number>(0);
-  readonly flatPageSize = signal<number>(100);
-  readonly flatPageIndex = signal<number>(0);
-  readonly isLoadingFlat = signal<boolean>(false);
+  protected readonly flatTotalRecords = signal<number>(0);
+  protected readonly flatPageSize = signal<number>(100);
+  protected readonly flatPageIndex = signal<number>(0);
+  protected readonly isLoadingFlat = signal<boolean>(false);
 
   readonly flatFilters = signal<FlatResponseFilters>(this.createDefaultFlatFilters());
 
@@ -811,7 +811,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     return `p=${fmtP(match.p)} (n=${match.count || 0})`;
   }
 
-  onFlatFilterOptionSelected(): void {
+  protected onFlatFilterOptionSelected(): void {
     this.suppressNextFlatFilterChange = true;
     this.flatPageIndex.set(0);
     this.fetchFlatResponses(0, this.flatPageSize());
@@ -840,7 +840,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     );
   }
 
-  filteredGroups(): string[] {
+  protected filteredGroups(): string[] {
     return this.filterOptions(
       this.flatFilterOptions().groups,
       this.flatFilters().group,
@@ -848,7 +848,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     );
   }
 
-  filteredLogins(): string[] {
+  protected filteredLogins(): string[] {
     return this.filterOptions(
       this.flatFilterOptions().logins,
       this.flatFilters().login,
@@ -856,7 +856,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     );
   }
 
-  filteredBooklets(): string[] {
+  protected filteredBooklets(): string[] {
     return this.filterOptions(
       this.flatFilterOptions().booklets,
       this.flatFilters().booklet,
@@ -864,7 +864,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     );
   }
 
-  filteredUnits(): string[] {
+  protected filteredUnits(): string[] {
     return this.filterOptions(
       this.flatFilterOptions().units,
       this.flatFilters().unit,
@@ -872,7 +872,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     );
   }
 
-  filteredResponses(): string[] {
+  protected filteredResponses(): string[] {
     return this.filterOptions(
       this.flatFilterOptions().responses,
       this.flatFilters().response,
@@ -880,14 +880,14 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     );
   }
 
-  filteredResponseStatuses(): string[] {
+  protected filteredResponseStatuses(): string[] {
     return this.filterOptions(
       this.flatFilterOptions().responseStatuses,
       this.flatFilters().responseStatus
     );
   }
 
-  filteredTags(): string[] {
+  protected filteredTags(): string[] {
     return this.filterOptions(
       this.flatFilterOptions().tags,
       this.flatFilters().tags
@@ -1030,7 +1030,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     });
   }
 
-  openBookletLogsFromFlatRow(row: FlatResponseRow): void {
+  protected openBookletLogsFromFlatRow(row: FlatResponseRow): void {
     if (!this.appService.selectedWorkspaceId) {
       return;
     }
@@ -1068,7 +1068,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       });
   }
 
-  openNotesFromFlatRow(row: FlatResponseRow): void {
+  protected openNotesFromFlatRow(row: FlatResponseRow): void {
     if (!this.appService.selectedWorkspaceId) {
       return;
     }
@@ -1101,7 +1101,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       });
   }
 
-  openUnitLogsFromFlatRow(row: FlatResponseRow): void {
+  protected openUnitLogsFromFlatRow(row: FlatResponseRow): void {
     if (!this.appService.selectedWorkspaceId) {
       return;
     }
@@ -1211,7 +1211,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     this.flatSearchSubject.next();
   }
 
-  clearFlatFilters(): void {
+  protected clearFlatFilters(): void {
     this.backendInvalidRegexFields.clear();
     this.flatFilters.set(this.createDefaultFlatFilters());
     this.syncMediaFiltersFromFlatFilters();
@@ -1297,7 +1297,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     this.onFlatFilterChanged();
   }
 
-  openFlatSettings(): void {
+  protected openFlatSettings(): void {
     if (!this.appService.selectedWorkspaceId) {
       return;
     }
@@ -1635,15 +1635,15 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     );
   }
 
-  hasNotesForRow(row: FlatResponseRow): boolean {
+  protected hasNotesForRow(row: FlatResponseRow): boolean {
     return this.unitIdsWithNotes().has(row.unitId);
   }
 
-  hasLogAnomaliesForRow(row: FlatResponseRow): boolean {
+  protected hasLogAnomaliesForRow(row: FlatResponseRow): boolean {
     return (row.logAnomalies || []).length > 0;
   }
 
-  getLogAnomalySeverity(row: FlatResponseRow): LogAnomalySummary['severity'] | '' {
+  protected getLogAnomalySeverity(row: FlatResponseRow): LogAnomalySummary['severity'] | '' {
     const anomalies = row.logAnomalies || [];
     if (anomalies.some(anomaly => anomaly.severity === 'critical')) {
       return 'critical';
@@ -1657,7 +1657,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     return '';
   }
 
-  getLogAnomalySeverityLabel(row: FlatResponseRow): string {
+  protected getLogAnomalySeverityLabel(row: FlatResponseRow): string {
     switch (this.getLogAnomalySeverity(row)) {
       case 'critical':
         return 'kritisch';
@@ -1670,7 +1670,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     }
   }
 
-  getLogAnomalyTooltip(row: FlatResponseRow): string {
+  protected getLogAnomalyTooltip(row: FlatResponseRow): string {
     const anomalies = row.logAnomalies || [];
     if (anomalies.length === 0) {
       return 'Keine Log-Auffälligkeiten für dieses Testheft erkannt.';
@@ -1714,7 +1714,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       });
   }
 
-  replayFromFlatRow(row: FlatResponseRow): void {
+  protected replayFromFlatRow(row: FlatResponseRow): void {
     if (!this.appService.selectedWorkspaceId) {
       return;
     }
@@ -1749,7 +1749,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       });
   }
 
-  deleteFromFlatRow(row: FlatResponseRow): void {
+  protected deleteFromFlatRow(row: FlatResponseRow): void {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: <ConfirmDialogData>{
@@ -1796,15 +1796,15 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     });
   }
 
-  trackByTag(index: number, item: string): string {
+  protected trackByTag(index: number, item: string): string {
     return `${item}@@${index}`;
   }
 
-  trackByRow(index: number, item: FlatResponseRow): number {
+  protected trackByRow(index: number, item: FlatResponseRow): number {
     return item.responseId;
   }
 
-  setFlatFiltersField<K extends keyof FlatResponseFilters>(key: K, value: FlatResponseFilters[K]): void {
+  protected setFlatFiltersField<K extends keyof FlatResponseFilters>(key: K, value: FlatResponseFilters[K]): void {
     this.flatFilters.update(current => (current ? { ...current, [key]: value } : current));
   }
 }

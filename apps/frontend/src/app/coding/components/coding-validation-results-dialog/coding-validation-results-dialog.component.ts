@@ -50,22 +50,22 @@ export class CodingValidationResultsDialogComponent implements OnInit {
   private snackBar = inject(MatSnackBar);
   private dialogRef = inject<MatDialogRef<CodingValidationResultsDialogComponent>>(MatDialogRef);
 
-  validationResults: ValidateCodingCompletenessResponseDto;
+  protected validationResults: ValidateCodingCompletenessResponseDto;
   validationCacheKey: string | null = null;
-  isLoading = false;
-  currentPage = 1;
-  pageSize = 50;
+  protected isLoading = false;
+  protected currentPage = 1;
+  protected pageSize = 50;
   expectedCombinations: ExpectedCombinationDto[] = [];
 
-  get totalPages(): number {
+  protected get totalPages(): number {
     return this.validationResults?.totalPages || 0;
   }
 
-  get hasNextPage(): boolean {
+  protected get hasNextPage(): boolean {
     return this.validationResults?.hasNextPage || false;
   }
 
-  get hasPreviousPage(): boolean {
+  protected get hasPreviousPage(): boolean {
     return this.validationResults?.hasPreviousPage || false;
   }
 
@@ -87,13 +87,13 @@ export class CodingValidationResultsDialogComponent implements OnInit {
     });
   }
 
-  nextPage(): void {
+  protected nextPage(): void {
     if (this.hasNextPage) {
       this.loadValidationPage(this.currentPage + 1);
     }
   }
 
-  previousPage(): void {
+  protected previousPage(): void {
     if (this.hasPreviousPage) {
       this.loadValidationPage(this.currentPage - 1);
     }
@@ -202,7 +202,7 @@ export class CodingValidationResultsDialogComponent implements OnInit {
     });
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 }

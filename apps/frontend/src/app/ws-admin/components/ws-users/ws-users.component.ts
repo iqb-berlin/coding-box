@@ -62,12 +62,12 @@ export class WsUsersComponent implements OnInit {
 
   selectedUsers: number[] = [];
   readonly userObjectsDatasource = signal(new MatTableDataSource<UserFullDto>());
-  displayedUserColumns = ['selectCheckbox', 'name', 'displayName'];
+  protected displayedUserColumns = ['selectCheckbox', 'name', 'displayName'];
   tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
   tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
   userWorkspaces: WorkspaceInListDto[] = [];
   filteredUserWorkspaces: WorkspaceInListDto[] = [];
-  selectedUser: number[] = [];
+  protected selectedUser: number[] = [];
   selectedRows!: UserFullDto[];
   checkedRows!: UserFullDto[];
   readonly sort = viewChild(MatSort);
@@ -136,7 +136,7 @@ export class WsUsersComponent implements OnInit {
     return numSelected === numRows;
   }
 
-  masterToggle(): void {
+  protected masterToggle(): void {
     this.isAllSelected() ?
       this.tableSelectionCheckboxes.clear() :
       this.userObjectsDatasource().data.forEach(row => this.tableSelectionCheckboxes.select(row));

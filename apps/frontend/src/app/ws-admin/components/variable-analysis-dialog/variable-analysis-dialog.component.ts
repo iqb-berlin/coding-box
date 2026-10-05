@@ -208,7 +208,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     [key: string]: VariableFrequency[];
   }>({});
 
-  displayedColumns: string[] = [
+  protected displayedColumns: string[] = [
     'unitName',
     'variableId',
     'value',
@@ -236,12 +236,12 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   readonly searchText = signal('');
   readonly onlyWithEmptyValues = signal(false);
   readonly includeSchemaCodes = signal(false);
-  readonly isInfoVisible = signal(false);
+  protected readonly isInfoVisible = signal(false);
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | undefined;
   readonly currentPage = signal(0);
-  readonly pageSize = signal(50);
-  pageSizeOptions = [25, 50, 100, 200];
+  protected readonly pageSize = signal(50);
+  protected pageSizeOptions = [25, 50, 100, 200];
   readonly totalFilteredVariables = signal(0);
   readonly sortBy = signal<VariableAnalysisSortBy>('unitName');
   readonly sortDirection = signal<VariableAnalysisSortDirection>('asc');
@@ -250,11 +250,11 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   private latestResultsRequestId = 0;
   private resultsLoadingSnackBar: { dismiss: () => void } | undefined;
 
-  readonly MAX_VALUES_PER_VARIABLE = 20;
+  protected readonly MAX_VALUES_PER_VARIABLE = 20;
 
-  readonly isJobsLoading = signal(false);
+  protected readonly isJobsLoading = signal(false);
   readonly jobs = signal<VariableAnalysisJobDto[]>([]);
-  jobsDisplayedColumns: string[] = [
+  protected jobsDisplayedColumns: string[] = [
     'id',
     'status',
     'createdAt',
@@ -276,7 +276,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   readonly isStartingJob = signal(false);
   private hasAutoStarted = false;
-  readonly isInitializing = signal(false);
+  protected readonly isInitializing = signal(false);
   readonly isExporting = signal(false);
 
   constructor(
@@ -723,7 +723,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     this.searchSubject.next(value);
   }
 
-  clearSearch(): void {
+  protected clearSearch(): void {
     this.searchText.set('');
     this.currentPage.set(0);
     if (this.currentAnalysisJobId && this.isUsingServerSideResults) {
@@ -733,7 +733,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     this.filterVariables();
   }
 
-  onEmptyValuesFilterChange(): void {
+  protected onEmptyValuesFilterChange(): void {
     this.currentPage.set(0);
     if (this.currentAnalysisJobId && this.isUsingServerSideResults) {
       this.loadAnalysisResultsPage(this.currentAnalysisJobId);
@@ -751,7 +751,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     this.filterVariables();
   }
 
-  onPageChange(event: PageEvent): void {
+  protected onPageChange(event: PageEvent): void {
     this.currentPage.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     if (this.currentAnalysisJobId && this.isUsingServerSideResults) {
@@ -810,16 +810,16 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     return row.pointBiserial ?? row.codePbc ?? row.categoryPbc ?? null;
   }
 
-  formatMetric(row: VariableAnalysisTableRowDto): string {
+  protected formatMetric(row: VariableAnalysisTableRowDto): string {
     const metric = this.getMetricValue(row);
     return metric === null ? '-' : metric.toFixed(3);
   }
 
-  formatOptionalNumber(value: number | null | undefined): string {
+  protected formatOptionalNumber(value: number | null | undefined): string {
     return value === null || value === undefined ? '-' : value.toString();
   }
 
-  formatOptionalPercentage(value: number | null | undefined): string {
+  protected formatOptionalPercentage(value: number | null | undefined): string {
     return value === null || value === undefined ?
       '-' :
       `${value.toFixed(1)}%`;
@@ -847,7 +847,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     );
   }
 
-  onClose(): void {
+  protected onClose(): void {
     this.dialogRef.close();
   }
 
@@ -1034,7 +1034,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     });
   }
 
-  deleteAllJobs(): void {
+  protected deleteAllJobs(): void {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       data: {
         title: this.translate.instant('variable-analysis.delete-all-jobs'),
@@ -1257,7 +1257,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     );
   }
 
-  formatDate(date: Date): string {
+  protected formatDate(date: Date): string {
     if (!date) return '';
     return new Date(date).toLocaleString();
   }
@@ -1277,7 +1277,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     this.searchSubscription?.unsubscribe();
   }
 
-  getTranslatedStatus(status: string): string {
+  protected getTranslatedStatus(status: string): string {
     const translationKey = `variable-analysis.status-${status}`;
     return this.translate.instant(translationKey);
   }

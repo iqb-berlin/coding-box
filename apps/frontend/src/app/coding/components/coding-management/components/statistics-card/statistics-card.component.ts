@@ -20,7 +20,7 @@ import {
 import { StatisticsVersion } from '../../../../services/coding-management.service';
 
 @Component({
-  selector: 'app-statistics-card',
+  selector: 'coding-box-statistics-card',
   templateUrl: './statistics-card.component.html',
   styleUrls: ['./statistics-card.component.scss'],
   standalone: true,
@@ -40,7 +40,7 @@ import { StatisticsVersion } from '../../../../services/coding-management.servic
   ]
 })
 export class StatisticsCardComponent {
-  readonly onActionKeydown = activateOnKeyboard;
+  protected readonly onActionKeydown = activateOnKeyboard;
 
   readonly codingStatistics = input<CodingStatistics>({ totalResponses: 0, statusCounts: {} });
   readonly referenceStatistics = input<CodingStatistics | null>(null);
@@ -67,7 +67,7 @@ export class StatisticsCardComponent {
     'UNSET', 'NOT_REACHED', 'DISPLAYED', 'VALUE_CHANGED', 'PARTLY_DISPLAYED'
   ];
 
-  readonly codingRunOptions = [
+  protected readonly codingRunOptions = [
     { value: 'v1' as const, label: 'coding-management.statistics.first-autocode-run' },
     { value: 'v2' as const, label: 'coding-management.statistics.manual-coding-run' },
     { value: 'v3' as const, label: 'coding-management.statistics.second-autocode-run' }
@@ -131,7 +131,7 @@ export class StatisticsCardComponent {
     return currentStatuses;
   }
 
-  getStatusDifference(status: string): number | null {
+  protected getStatusDifference(status: string): number | null {
     const referenceStatistics = this.referenceStatistics();
     const selectedVersion = this.selectedVersion();
     if (
@@ -164,7 +164,7 @@ export class StatisticsCardComponent {
     return this.effectiveTotalResponses - this.effectiveReferenceTotalResponses;
   }
 
-  getDifferenceTooltip(): string {
+  protected getDifferenceTooltip(): string {
     const referenceVersion = this.referenceVersion();
     if (referenceVersion === 'v1') {
       return 'coding-management.statistics.difference-tooltip-v1';
@@ -201,15 +201,15 @@ export class StatisticsCardComponent {
     this.loadStatistics.emit();
   }
 
-  onDownloadResults(): void {
+  protected onDownloadResults(): void {
     this.downloadResults.emit();
   }
 
-  onCancelDownloadResults(): void {
+  protected onCancelDownloadResults(): void {
     this.cancelDownloadResults.emit();
   }
 
-  onResetVersion(): void {
+  protected onResetVersion(): void {
     this.resetVersion.emit();
   }
 
@@ -221,7 +221,7 @@ export class StatisticsCardComponent {
     this.derivedClick.emit();
   }
 
-  get isManualCodingComplete(): boolean {
+  protected get isManualCodingComplete(): boolean {
     if (this.selectedVersion() !== 'v2') {
       return false;
     }
