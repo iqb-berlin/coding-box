@@ -2546,3 +2546,79 @@ aufgesetzt. Der Remote-CI-Nachweis muss zum neuen gepushten Head gehören;
 frühere grüne Pipelines bestätigen diesen Stand nicht. Merge, Deployment und
 Produktionsbetrieb sind separate Nachweise. Die dokumentierten Grenzen der
 Risikoabdeckung bleiben erhalten.
+
+## Review-Nachlauf am 05.10.2026: Fehler und globale Operationen
+
+### ZL-053: Fehlgeschlagene Replay-Wiederherstellung darf nicht als geladen gelten
+
+Der atomare Abruf von Fortschritt, Notizen und Jobdaten meldet aktuelle
+HTTP-Fehler jetzt an den Aufrufer. Abgebrochene oder überholte Ladevorgänge
+enden weiterhin ohne Zustandsübernahme. Die Replay-Ansicht beendet bei einem
+Fehler den Ladezustand, zeigt den Fehler, leert die nicht verwendbare Sitzung
+und setzt keinen erfolgreichen Job-Schlüssel. Ein späterer Versuch kann den
+gespeicherten Fortschritt erneut laden. Native Service-Tests prüfen Fehler
+der Notiz- und Jobanfrage; der Komponenten-Test prüft die Fehlermeldung und
+den anschließenden erfolgreichen Versuch.
+
+### ZL-054: Upload- und Exportregistrierung überleben ihre auslösende Ansicht
+
+Der globale Upload-Dienst übernimmt den gesamten Chunk-Upload, seine
+Fortschrittsansicht und die Registrierung angenommener Jobs. Workspace und
+Ausgangsübersicht werden beim Start erfasst. Die Ansicht beendet nur ihre
+eigene Subscription; die endliche, geteilte Operation läuft bis zur Übergabe
+an den bestehenden globalen Poller weiter. Die Fortschrittsansicht bleibt
+bei Navigation geöffnet und endet auch bei einem verspäteten Startfehler.
+Bei Provider-Zerstörung werden Uploads, aktive Status-Polls und Fortschrittsansichten
+bereinigt. Globale Exportstarts registrieren und verfolgen angenommene Jobs
+ebenfalls nach dem Schließen ihrer auslösenden Ansicht; erneutes Abonnieren
+derselben erfolgreichen Operation erzeugt keinen zweiten Auftrag.
+
+Regressionen prüfen den ursprünglichen Workspace, verspäteten Erfolg und
+Fehler nach Ansichtszerstörung sowie einmalige Exportregistrierung mit
+anschließendem Poll. Der Browserfall hält die Upload-Abschlussantwort bis
+nach einer echten Navigation und prüft danach Fortschritts- und Ergebnisdialog.
+Ein angenommenes Serververfahren wird durch Navigation nicht zurückgerollt.
+
+### ZL-055: Speicher-Snackbar bleibt nach dem Schließen des Schemaeditors bedienbar
+
+Die Aktion „Kodierstand prüfen“ gehört zur Lebensdauer ihrer Snackbar.
+Sie navigiert auch nach dem erfolgreichen Speichern und Schließen des
+Schemaeditors zum ursprünglichen Workspace. Die Subscription endet nach
+einer Aktion oder beim Verschwinden der Snackbar. Native Tests prüfen beide
+Abschlusswege; der Browserfall ändert das Schema über die iframe-Schnittstelle,
+speichert und öffnet die Kodierverwaltung über die weiterhin sichtbare Aktion.
+
+### ZL-056: Dauerhafte Lade-Snackbars verschwinden bei Dialogschließung
+
+Die Leseanfragen für Unit-Informationen und Kodierungsschemata räumen ihre
+Lade-Snackbar über `finalize` auf. Damit endet die Anzeige auch beim Abbruch
+durch Dialogzerstörung. Native Tests halten beide Antworten zurück, zerstören
+den Dialog und prüfen sofortiges Aufräumen sowie das Ausbleiben verspäteter
+Folgedialoge und Fehlermeldungen.
+
+### Lokale Validierung des Review-Nachlaufs
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `frontend:lint --fix` und Nachprüfung der beiden ergänzten Service-Testdateien | bestanden; abschließender Diff ohne Whitespace-Fehler |
+| `frontend:test --runInBand --cache=false --silent` | abschließender vollständiger Lauf: 266 Suiten, 2.813 Tests bestanden; der alte Test für unterdrückte Replay-Ladefehler prüft jetzt die Fehlerweitergabe |
+| `frontend:test-zoneless --runInBand --cache=false --silent` | 73 Suiten, 1.039 Tests bestanden |
+| `frontend:build:production` | optimierter Produktionsbuild mit strenger Template-Prüfung bestanden |
+| Produktions-Cypress mit `cypress.zoneless.config.ts`: vollständiger Lauf und gezielte Schema-Nachprüfung | 138 Fälle aus 24 Spezifikationen abgesichert: 134 Fälle in 23 Spezifikationen im Gesamtlauf bestanden; anschließend alle 4 Schemafälle bestanden, keine Retries |
+| `frontend:zoneless-inventory -- --update`, `frontend:zoneless-approval`, `frontend:zoneless-inventory-test` | bestanden; 8.774 Einträge aus 328 Quelldateien und Referenzen auf 56 korrigierte Befunde geprüft |
+
+Die neue Schema-Browserfixture wurde auf UTF-8-Base64 umgestellt. Nach der
+Snackbar-Navigation aktualisiert die Zielansicht ihren Kodierstand; dafür
+sind jetzt die Statistik-, Übernahmeübersichts- und Readiness-Antworten explizit
+abgedeckt. Der Gesamtlauf scheiterte zunächst an diesen fehlenden Fixture-Antworten
+im Schemafall. Die gezielte Nachprüfung führt dessen vier Fälle mit der
+ergänzten Fixture erfolgreich aus, einschließlich der erwarteten Statistik-
+Aktualisierung. Ein zusätzlicher Nachprüfungslauf mit vier bestandenen Tests
+endete zunächst beim Nx-Cache-Schreiben mit `ENOSPC`; die abschließende Wiederholung
+mit eigenem Cache-Verzeichnis und `--skip-nx-cache` bestand vollständig.
+
+Die Browsernachweise verwenden kontrollierte API- und Keycloak-Antworten
+mit echten Routen und Templates des optimierten Frontends ohne ZoneJS.
+Live-Backend-/Keycloak-E2E wurden für diesen Nachlauf nicht erneut gestartet.
+Native und reguläre Tests überschneiden sich. Diese lokalen Nachweise
+bestätigen weder eine erfolgreiche Remote-CI am neuen Head noch ein Deployment.

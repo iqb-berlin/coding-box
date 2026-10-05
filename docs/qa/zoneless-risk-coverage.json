@@ -72,7 +72,9 @@
       "name": "Kodierung, Replay und Sitzungen",
       "risk": "Kodierungen und Kommentare müssen gespeichert werden; Navigation und Sitzungswiederherstellung dürfen Eingaben nicht verlieren.",
       "findings": [
-        "ZL-050"
+        "ZL-050",
+        "ZL-053",
+        "ZL-056"
       ],
       "tests": [
         "apps/frontend/src/app/coding/components/code-selector/code-selector-reactivity.component.spec.ts",
@@ -83,7 +85,9 @@
         "cypress/auth/coding-session.cy.ts",
         "apps/frontend/src/app/replay/components/unit-player/unit-player.component.spec.ts",
         "apps/frontend/src/app/coding/components/schemer/unit-schemer.component.zoneless.spec.ts",
-        "apps/frontend/src/app/replay/services/replay-coding-lifecycle.zoneless.spec.ts"
+        "apps/frontend/src/app/replay/services/replay-coding-lifecycle.zoneless.spec.ts",
+        "apps/frontend/src/app/replay/components/replay/replay.component.spec.ts",
+        "apps/frontend/src/app/coding-management/coding-variables-dialog/coding-variables-dialog.component.spec.ts"
       ]
     },
     {
@@ -98,7 +102,8 @@
         "ZL-011",
         "ZL-013",
         "ZL-014",
-        "ZL-051"
+        "ZL-051",
+        "ZL-054"
       ],
       "tests": [
         "apps/frontend/src/app/ws-admin/components/validation-dialog/validation-dialog.zoneless.spec.ts",
@@ -112,7 +117,8 @@
         "cypress/auth/coding-session.cy.ts",
         "apps/frontend/src/app/ws-admin/components/search-dialogs-onpush.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/components/variable-analysis-jobs-dialog/variable-analysis-jobs-dialog.component.zoneless.spec.ts",
-        "apps/frontend/src/app/ws-admin/components/test-results/test-results-upload-result-dialog.component.spec.ts"
+        "apps/frontend/src/app/ws-admin/components/test-results/test-results-upload-result-dialog.component.spec.ts",
+        "apps/frontend/src/app/ws-admin/services/test-results-upload-state.service.spec.ts"
       ]
     },
     {
@@ -136,7 +142,9 @@
         "ZL-029",
         "ZL-036",
         "ZL-041",
-        "ZL-049"
+        "ZL-049",
+        "ZL-054",
+        "ZL-055"
       ],
       "tests": [
         "apps/frontend/src/app/coding/components/export-coding-book/export-coding-book.component.zoneless.spec.ts",
@@ -168,7 +176,8 @@
         "apps/frontend/src/app/coding/components/schemer/unit-schemer.component.zoneless.spec.ts",
         "apps/frontend/src/app/components/export-toast/export-toast.component.zoneless.spec.ts",
         "apps/frontend/src/app/shared/search-filter/search-filter.component.zoneless.spec.ts",
-        "apps/frontend/src/app/shared/dialogs/item-list-dialog/item-list-dialog.component.zoneless.spec.ts"
+        "apps/frontend/src/app/shared/dialogs/item-list-dialog/item-list-dialog.component.zoneless.spec.ts",
+        "apps/frontend/src/app/shared/services/file/export-job.service.spec.ts"
       ]
     },
     {
@@ -229,9 +238,10 @@
         "results-validation",
         "files-exports-metadata",
         "administration",
-        "jobs"
+        "jobs",
+        "coding-replay"
       ],
-      "evidence": "Kontrollierte Subjects/HttpTestingController: verzögerter Erfolg, Leerzustand und Fehler mit Wiederholung im echten Template."
+      "evidence": "Kontrollierte Subjects/HttpTestingController: verzögerter Erfolg, Leerzustand und Fehler mit Wiederholung im echten Template. Fehler der atomaren Replay-Wiederherstellung werden angezeigt und lassen einen erneuten Versuch zu; kein erfolgreicher Lade-Schlüssel wird gesetzt."
     },
     {
       "id": "progress",
@@ -259,9 +269,10 @@
         "results-validation",
         "files-exports-metadata",
         "administration",
-        "jobs"
+        "jobs",
+        "coding-replay"
       ],
-      "evidence": "Schließen, DestroyRef und Workspace-Wechsel; verspätete Antworten erzeugen keine Folgeansichten. Browserregressionen schließen Schulungsdialoge während ausstehender Antworten und verlassen Workspaces während Bulk-Vorschau oder Bestätigung; keine alte Jobanlage. Chart.js-Tests prüfen die Freigabe von Chart-Instanzen und Media-Query-Listenern; der Browser öffnet den Statistikdialog erneut."
+      "evidence": "Schließen, DestroyRef und Workspace-Wechsel; verspätete Antworten erzeugen keine Folgeansichten. Browserregressionen schließen Schulungsdialoge während ausstehender Antworten und verlassen Workspaces während Bulk-Vorschau oder Bestätigung; keine alte Jobanlage. Chart.js-Tests prüfen die Freigabe von Chart-Instanzen und Media-Query-Listenern; der Browser öffnet den Statistikdialog erneut. Globale Uploads und Exportregistrierungen überleben ihre auslösende Ansicht im ursprünglichen Workspace; ein Browserfall hält die Upload-Abschlussantwort bis nach Navigation zurück. Die Schema-Speicheraktion bleibt nach Dialogschließung bis zur Snackbar-Aktion oder ihrem Verschwinden aktiv. Dauerhafte Lade-Snackbars enden bei Dialogzerstörung."
     },
     {
       "id": "timers-promises",
