@@ -60,13 +60,15 @@
     "test": {
       "executor": "@nx/jest:jest",
       "outputs": [
-        "{workspaceRoot}/coverage/apps/backend"
+        "{workspaceRoot}/coverage/apps/backend",
+        "{workspaceRoot}/reports/junit/backend.xml"
       ],
       "inputs": [
         "default",
         "^production",
         "{workspaceRoot}/jest.config.ts",
         "{workspaceRoot}/jest.preset.js",
+        "{workspaceRoot}/scripts/qa/**/*",
         "{workspaceRoot}/scripts/reference/variable-analysis-eatpreptba/**/*"
       ],
       "options": {

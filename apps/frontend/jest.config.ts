@@ -26,5 +26,9 @@ export default {
     '^@iqb/metadata-resolver$': '<rootDir>/../../node_modules/@iqb/metadata-resolver/dist/index.mjs',
     '^@iqb/metadata-resolver/(.*)$': '<rootDir>/../../node_modules/@iqb/metadata-resolver/dist/$1'
   },
-  coverageDirectory: '../../coverage/apps/frontend'
+  coverageDirectory: '../../coverage/apps/frontend',
+  reporters: [
+    'default',
+    ['<rootDir>/../../scripts/qa/junit-reporter.cjs', { project: 'frontend' }]
+  ]
 };

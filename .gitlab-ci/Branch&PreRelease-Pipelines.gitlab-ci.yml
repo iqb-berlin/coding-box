@@ -7,6 +7,7 @@
 .default_rules:
   rules:
     - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
+    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "develop"
     - if: $CI_COMMIT_BRANCH &&
         $CI_COMMIT_BRANCH != "main" &&
         $CI_COMMIT_BRANCH != "develop" &&
@@ -17,6 +18,7 @@
 .default_db_rules:
   rules:
     - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
+    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "develop"
     - if: $CI_COMMIT_BRANCH &&
         $CI_COMMIT_BRANCH != "main" &&
         $CI_COMMIT_BRANCH != "develop" &&
@@ -29,12 +31,15 @@
 .develop_pr_rules:
   rules:
     - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
+    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "develop"
     - if: $CI_COMMIT_TAG
       when: never
 
 .develop_pr_manual_rules:
   rules:
     - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
+      when: manual
+    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "develop"
       when: manual
     - if: $CI_COMMIT_TAG
       when: never
@@ -195,8 +200,9 @@ check-pre-release-rules:
 install-dependencies:
   stage: build
   interruptible: true
+  image: ${DOCKER_HUB_PROXY}node:22-bookworm
   rules:
-    - !reference [ .default_rules, rules ]
+    - !reference [ .quality_gate_rules, rules ]
   needs: []
   cache:
     key:
@@ -268,8 +274,11 @@ build-cicd-base-image:
       - node_modules/.cache/nx
 
 build-db-image:
-  stage: build
+  stage: build-images
   interruptible: true
+  needs:
+    - job: test-workflows-live
+      artifacts: false
   rules:
     - !reference [ .default_db_rules, rules ]
   image: ${DOCKER_IMAGE}
@@ -305,8 +314,11 @@ build-db-image:
     - docker logout ${REGISTRY}
 
 build-liquibase-image:
-  stage: build
+  stage: build-images
   interruptible: true
+  needs:
+    - job: test-workflows-live
+      artifacts: false
   rules:
     - !reference [ .default_db_rules, rules ]
   image: ${DOCKER_IMAGE}
@@ -349,13 +361,14 @@ build-app:
     - !reference [ .default_rules, rules ]
   image: ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
   script:
-    - npx nx affected --base=HEAD~1 --target=build --parallel=3
+    - npx nx build backend
+    - npx nx build frontend
   artifacts:
     paths:
       - dist
 
 test-db:
-  stage: test-db
+  stage: build-images
   interruptible: true
   rules:
     - !reference [ .default_db_rules, rules ]
@@ -451,59 +464,6 @@ test-db:
               --classpath changelog
             history
 
-test-app:
-  stage: test-units
-  interruptible: true
-  allow_failure: true
-  extends: .distributed
-  rules:
-    - !reference [ .default_rules, rules ]
-  image: ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
-  script:
-    - npx nx affected --base=HEAD~1 --target=test --parallel=1 -- --maxWorkers=2
-
-test-replay-live:
-  stage: test-replay
-  interruptible: true
-  allow_failure: true
-  image: ${CYPRESS_IMAGE}
-  services:
-    - name: ${DOCKER_SERVICE}
-      variables:
-        HEALTHCHECK_TCP_PORT: "2375"
-      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh ${DOCKER_DAEMON_OPTIONS}" ]
-      alias: docker
-  needs:
-    - install-dependencies
-  rules:
-    - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
-      changes:
-        - api-dto/coding/**/*
-        - apps/backend/src/app/admin/workspace/workspace-coding-replay*
-        - apps/backend/src/app/database/services/test-results/**/*
-        - apps/frontend/src/app/replay/**/*
-        - cypress/fixtures/replay-datasets/**/*
-        - cypress/e2e/replay-live.cy.ts
-        - cypress/support/replay-e2e.ts
-        - cypress.replay.config.ts
-        - scripts/e2e/replay/**/*
-      when: manual
-    - when: never
-  before_script:
-    - apt-get update
-    - apt-get install --yes --no-install-recommends docker.io docker-compose
-    - until docker info > /dev/null 2>&1; do sleep 1; done
-    - npx cypress install
-  script:
-    - npx nx run frontend:e2e-replay-live
-  artifacts:
-    when: always
-    expire_in: 7 days
-    paths:
-      - cypress/replay-artifacts/screenshots
-      - cypress/replay-artifacts/videos
-      - tmp/replay-e2e-artifacts
-
 lint-app:
   stage: lint
   extends: .distributed
@@ -513,7 +473,8 @@ lint-app:
     - !reference [ .default_rules, rules ]
   image: ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
   script:
-    - npx nx affected --base=HEAD~1 --target=lint --parallel=2
+    - npx nx lint backend
+    - npx nx lint frontend
 
 audit-app:
   stage: audit
@@ -528,6 +489,9 @@ audit-app:
 
 build-develop-commit-db-image:
   stage: build-images
+  needs:
+    - job: test-workflows-live
+      artifacts: false
   rules:
     - !reference [ .develop_commit_rules, rules ]
   image: ${DOCKER_IMAGE}
@@ -564,6 +528,9 @@ build-develop-commit-db-image:
 
 build-develop-commit-liquibase-image:
   stage: build-images
+  needs:
+    - job: test-workflows-live
+      artifacts: false
   rules:
     - !reference [ .develop_commit_rules, rules ]
   image: ${DOCKER_IMAGE}
@@ -600,6 +567,9 @@ build-develop-commit-liquibase-image:
 
 build-develop-commit-base-image:
   stage: build-images
+  needs:
+    - job: test-workflows-live
+      artifacts: false
   rules:
     - !reference [ .develop_commit_rules, rules ]
   image: ${DOCKER_IMAGE}
@@ -1011,6 +981,14 @@ build-pre-release:
   rules:
     - !reference [ .pre-release_rules, rules ]
   needs:
+    - job: test-backend
+      artifacts: false
+    - job: test-frontend
+      artifacts: false
+    - job: test-replay-live
+      artifacts: false
+    - job: test-workflows-live
+      artifacts: false
     - job: scan-main-commit-db-image
       artifacts: false
     - job: scan-main-commit-liquibase-image

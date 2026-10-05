@@ -5,12 +5,15 @@
 .main_pr_rules:
   rules:
     - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "main"
+    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"
     - if: $CI_COMMIT_TAG
       when: never
 
 .main_pr_manual_rules:
   rules:
     - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "main"
+      when: manual
+    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"
       when: manual
     - if: $CI_COMMIT_TAG
       when: never
@@ -261,8 +264,11 @@ build-main-pr-frontend-test-image:
     - docker logout ${CI_REGISTRY}
 
 build-main-pr-db-image:
-  stage: build
+  stage: build-images
   interruptible: true
+  needs:
+    - job: test-workflows-live
+      artifacts: false
   rules:
     - !reference [ .main_pr_rules, rules ]
   image: ${DOCKER_IMAGE}
@@ -298,8 +304,11 @@ build-main-pr-db-image:
     - docker logout ${CI_REGISTRY}
 
 build-main-pr-liquibase-image:
-  stage: build
+  stage: build-images
   interruptible: true
+  needs:
+    - job: test-workflows-live
+      artifacts: false
   rules:
     - !reference [ .main_pr_rules, rules ]
   image: ${DOCKER_IMAGE}
@@ -335,13 +344,15 @@ build-main-pr-liquibase-image:
     - docker logout ${REGISTRY}
 
 build-main-pr-backend-image:
-  stage: build
+  stage: build-images
   interruptible: true
   rules:
     - !reference [ .main_pr_rules, rules ]
   needs:
     - build-main-pr-base-image
     - build-main-pr-backend-test-image
+    - job: test-workflows-live
+      artifacts: false
   image: ${DOCKER_IMAGE}
   services:
     - name: ${DOCKER_SERVICE}
@@ -379,13 +390,15 @@ build-main-pr-backend-image:
     - docker logout ${CI_REGISTRY}
 
 build-main-pr-frontend-image:
-  stage: build
+  stage: build-images
   interruptible: true
   rules:
     - !reference [ .main_pr_rules, rules ]
   needs:
     - build-main-pr-base-image
     - build-main-pr-frontend-test-image
+    - job: test-workflows-live
+      artifacts: false
   image: ${DOCKER_IMAGE}
   services:
     - name: ${DOCKER_SERVICE}
@@ -423,7 +436,7 @@ build-main-pr-frontend-image:
     - docker logout ${CI_REGISTRY}
 
 test-main-pr-db:
-  stage: test-db
+  stage: build-images
   interruptible: true
   rules:
     - !reference [ .main_pr_rules, rules ]
@@ -518,64 +531,6 @@ test-main-pr-db:
               --password=${POSTGRES_PASSWORD}
               --classpath=changelog
             history
-  after_script:
-    - docker logout ${CI_REGISTRY}
-
-test-main-pr-backend:
-  stage: test-units
-  interruptible: true
-  allow_failure: true
-  rules:
-    - !reference [ .main_pr_rules, rules ]
-  needs:
-    - build-main-pr-backend-test-image
-  image: ${DOCKER_IMAGE}
-  services:
-    - name: ${DOCKER_SERVICE}
-      variables:
-        HEALTHCHECK_TCP_PORT: "2375"
-      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh ${DOCKER_DAEMON_OPTIONS}" ]
-      alias: docker
-  variables:
-    BACKEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-backend"
-  before_script:
-    - docker --version
-    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
-    - ip a | grep mtu
-    - docker network inspect bridge | grep mtu
-    - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
-    - docker pull --quiet ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
-  script:
-    - docker run ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test test backend
-  after_script:
-    - docker logout ${CI_REGISTRY}
-
-test-main-pr-frontend:
-  stage: test-units
-  interruptible: true
-  allow_failure: true
-  rules:
-    - !reference [ .main_pr_rules, rules ]
-  needs:
-    - build-main-pr-frontend-test-image
-  image: ${DOCKER_IMAGE}
-  services:
-    - name: ${DOCKER_SERVICE}
-      variables:
-        HEALTHCHECK_TCP_PORT: "2375"
-      entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh ${DOCKER_DAEMON_OPTIONS}" ]
-      alias: docker
-  variables:
-    FRONTEND_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-frontend"
-  before_script:
-    - docker --version
-    - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
-    - ip a | grep mtu
-    - docker network inspect bridge | grep mtu
-    - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
-    - docker pull --quiet ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
-  script:
-    - docker run ${FRONTEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test test frontend
   after_script:
     - docker logout ${CI_REGISTRY}
 
@@ -695,6 +650,9 @@ audit-main-pr-frontend:
 
 build-main-commit-db-image:
   stage: build-images
+  needs:
+    - job: test-workflows-live
+      artifacts: false
   rules:
     - !reference [ .production_image_rules, rules ]
   image: ${DOCKER_IMAGE}
@@ -730,6 +688,9 @@ build-main-commit-db-image:
 
 build-main-commit-liquibase-image:
   stage: build-images
+  needs:
+    - job: test-workflows-live
+      artifacts: false
   rules:
     - !reference [ .production_image_rules, rules ]
   image: ${DOCKER_IMAGE}
@@ -765,6 +726,9 @@ build-main-commit-liquibase-image:
 
 build-main-commit-base-image:
   stage: build-images
+  needs:
+    - job: test-workflows-live
+      artifacts: false
   rules:
     - !reference [ .production_image_rules, rules ]
   image: ${DOCKER_IMAGE}
@@ -1174,6 +1138,14 @@ build-release:
   rules:
     - !reference [ .release_rules, rules ]
   needs:
+    - job: test-backend
+      artifacts: false
+    - job: test-frontend
+      artifacts: false
+    - job: test-replay-live
+      artifacts: false
+    - job: test-workflows-live
+      artifacts: false
     - job: scan-main-commit-db-image
       artifacts: false
     - job: scan-main-commit-liquibase-image
