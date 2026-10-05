@@ -815,6 +815,67 @@ describe('ReplayCodingService', () => {
   });
 
   describe('saveNotes', () => {
+    it('keeps the latest typed note while older saves complete in order', async () => {
+      const firstResponse = new Subject<CodingJob>();
+      const secondResponse = new Subject<CodingJob>();
+      const latestResponse = new Subject<CodingJob>();
+      const firstStarted = new Promise<void>(resolve => {
+        codingJobBackendServiceMock.saveCodingNotes.mockImplementationOnce(() => {
+          resolve();
+          return firstResponse.asObservable();
+        });
+      });
+      const secondStarted = new Promise<void>(resolve => {
+        codingJobBackendServiceMock.saveCodingNotes.mockImplementationOnce(() => {
+          resolve();
+          return secondResponse.asObservable();
+        });
+      });
+      const latestStarted = new Promise<void>(resolve => {
+        codingJobBackendServiceMock.saveCodingNotes.mockImplementationOnce(() => {
+          resolve();
+          return latestResponse.asObservable();
+        });
+      });
+      service.codingJobId = 100;
+
+      const firstSave = service.saveNotes(1, 'p1', 'u1', 'v1', 'P');
+      expect(service.getNotes('p1', 'u1', 'v1')).toBe('P');
+      await firstStarted;
+      expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenCalledTimes(1);
+
+      const secondSave = service.saveNotes(1, 'p1', 'u1', 'v1', 'Pe');
+      expect(service.getNotes('p1', 'u1', 'v1')).toBe('Pe');
+      const latestSave = service.saveNotes(1, 'p1', 'u1', 'v1', 'Persisted workflow note');
+      expect(service.getNotes('p1', 'u1', 'v1')).toBe('Persisted workflow note');
+      expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenCalledTimes(1);
+
+      firstResponse.next({} as CodingJob);
+      firstResponse.complete();
+      await firstSave;
+      await secondStarted;
+      expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenCalledTimes(2);
+      expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenNthCalledWith(
+        2, 1, 100, expect.objectContaining({ notes: 'Pe' })
+      );
+      expect(service.getNotes('p1', 'u1', 'v1')).toBe('Persisted workflow note');
+
+      secondResponse.next({} as CodingJob);
+      secondResponse.complete();
+      await secondSave;
+      await latestStarted;
+      expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenCalledTimes(3);
+      expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenNthCalledWith(
+        3, 1, 100, expect.objectContaining({ notes: 'Persisted workflow note' })
+      );
+      expect(service.getNotes('p1', 'u1', 'v1')).toBe('Persisted workflow note');
+
+      latestResponse.next({} as CodingJob);
+      latestResponse.complete();
+      await latestSave;
+      expect(service.getNotes('p1', 'u1', 'v1')).toBe('Persisted workflow note');
+    });
+
     it('saves notes without sending a dummy selected code', async () => {
       codingJobBackendServiceMock.saveCodingNotes.mockReturnValue(of({} as CodingJob));
       service.codingJobId = 100;
@@ -1056,17 +1117,19 @@ describe('ReplayCodingService', () => {
 
     it('persists latest new-code-needed selection when it is chosen during a note save', async () => {
       const noteSubject = new Subject<CodingJob>();
-      const progressSubjects: Subject<CodingJob>[] = [];
-      codingJobBackendServiceMock.saveCodingNotes.mockReturnValue(noteSubject.asObservable());
-      codingJobBackendServiceMock.saveCodingProgress.mockImplementation(() => {
-        const subject = new Subject<CodingJob>();
-        progressSubjects.push(subject);
-        return subject.asObservable();
+      const noteStarted = new Promise<void>(resolve => {
+        codingJobBackendServiceMock.saveCodingNotes.mockImplementation(() => {
+          resolve();
+          return noteSubject.asObservable();
+        });
       });
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
       service.codingJobId = 100;
       const key = service.generateCompositeKey('p1', 'u1', 'v1');
+      let completedSelection = false;
 
       const noteSave = service.saveNotes(1, 'p1', 'u1', 'v1', 'needs a new code');
+      expect(service.getNotes('p1', 'u1', 'v1')).toBe('needs a new code');
       const newCodeNeededSelection = service.handleCodeSelected(
         {
           variableId: 'v1',
@@ -1082,16 +1145,18 @@ describe('ReplayCodingService', () => {
         'u1',
         1,
         null
-      );
-      await newCodeNeededSelection;
-      await Promise.resolve();
+      ).then(() => {
+        completedSelection = true;
+      });
+      await noteStarted;
       expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenCalledTimes(1);
       expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
+      expect(completedSelection).toBe(false);
 
       noteSubject.next({} as CodingJob);
       noteSubject.complete();
-      await Promise.resolve();
-      await Promise.resolve();
+      await noteSave;
+      await newCodeNeededSelection;
 
       expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledWith(
         1,
@@ -1110,9 +1175,7 @@ describe('ReplayCodingService', () => {
           }
         }
       );
-      progressSubjects[0].next({} as CodingJob);
-      progressSubjects[0].complete();
-      await noteSave;
+      expect(completedSelection).toBe(true);
       expect(service.selectedCodes.get(key)?.id).toBe(-2);
     });
 
