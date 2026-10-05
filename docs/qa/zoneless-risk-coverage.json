@@ -18,7 +18,8 @@
         "ZL-045",
         "ZL-047",
         "ZL-048",
-        "ZL-049"
+        "ZL-049",
+        "ZL-057"
       ],
       "tests": [
         "apps/frontend/src/app/coding/components/cohens-kappa-statistics/cohens-kappa-statistics.component.zoneless.spec.ts",
@@ -144,7 +145,8 @@
         "ZL-041",
         "ZL-049",
         "ZL-054",
-        "ZL-055"
+        "ZL-055",
+        "ZL-057"
       ],
       "tests": [
         "apps/frontend/src/app/coding/components/export-coding-book/export-coding-book.component.zoneless.spec.ts",
@@ -177,7 +179,9 @@
         "apps/frontend/src/app/components/export-toast/export-toast.component.zoneless.spec.ts",
         "apps/frontend/src/app/shared/search-filter/search-filter.component.zoneless.spec.ts",
         "apps/frontend/src/app/shared/dialogs/item-list-dialog/item-list-dialog.component.zoneless.spec.ts",
-        "apps/frontend/src/app/shared/services/file/export-job.service.spec.ts"
+        "apps/frontend/src/app/shared/services/file/export-job.service.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/export/export-start-lifecycle.zoneless.spec.ts",
+        "cypress/zoneless/export-start-failure.cy.ts"
       ]
     },
     {
@@ -241,7 +245,7 @@
         "jobs",
         "coding-replay"
       ],
-      "evidence": "Kontrollierte Subjects/HttpTestingController: verzögerter Erfolg, Leerzustand und Fehler mit Wiederholung im echten Template. Fehler der atomaren Replay-Wiederherstellung werden angezeigt und lassen einen erneuten Versuch zu; kein erfolgreicher Lade-Schlüssel wird gesetzt."
+      "evidence": "Kontrollierte Subjects/HttpTestingController: verzögerter Erfolg, Leerzustand und Fehler mit Wiederholung im echten Template. Fehler der atomaren Replay-Wiederherstellung werden angezeigt und lassen einen erneuten Versuch zu; kein erfolgreicher Lade-Schlüssel wird gesetzt. Der globale Export-Service meldet Startfehler einmalig, auch nach Ansichtszerstörung; Replay-Tokenfehler behalten ihren spezifischen Hinweis."
     },
     {
       "id": "progress",

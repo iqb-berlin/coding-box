@@ -2622,3 +2622,38 @@ mit echten Routen und Templates des optimierten Frontends ohne ZoneJS.
 Live-Backend-/Keycloak-E2E wurden für diesen Nachlauf nicht erneut gestartet.
 Native und reguläre Tests überschneiden sich. Diese lokalen Nachweise
 bestätigen weder eine erfolgreiche Remote-CI am neuen Head noch ein Deployment.
+
+## ZL-057: Export-Startfehler bleiben nach Navigation sichtbar
+
+Die gemeinsame Export-Operation meldet Startfehler jetzt im globalen
+`ExportJobService`, bevor sie an die aufrufenden Ansichten verteilt wird.
+So bleibt die fachliche Fehlermeldung auch nach dem Schließen der Exportansicht
+sichtbar. Die allgemeine HTTP-Fehlererfassung durch den Interceptor bleibt
+erhalten. Replay-Tokenfehler verwenden weiterhin ihren spezifischen Hinweis.
+Exportansicht und manuelle Kodierverwaltung räumen nur noch ihren eigenen
+Startzustand auf; sie erzeugen keine zusätzliche Startfehlermeldung.
+
+Die native Regression verwendet den echten Export-Service, die echte
+Export-Komponente und deren Template. Sie prüft offene und zerstörte Ansicht,
+genau eine Fehlermeldung, Freigabe des Exportbuttons sowie stillen Abbruch bei
+Provider-Zerstörung. Service-Tests prüfen mehrere Abonnenten, Weitergabe des
+ursprünglichen Fehlers und den spezifischen Replay-Tokenhinweis. Die neue
+Browserregression hält eine echte Export-Startantwort bis nach Navigation
+zurück und prüft dann die globale Snackbar. Ein zweiter Browserfall prüft
+Fehlermeldung und Buttonfreigabe in der offenen Ansicht.
+
+Lokale Prüfung am 05.10.2026:
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `frontend:lint` | bestanden |
+| `frontend:test --runInBand --cache=false --silent` | 267 Suiten, 2.818 Tests bestanden |
+| `frontend:test-zoneless --runInBand --cache=false --silent` | 74 Suiten, 1.042 Tests bestanden |
+| Produktions-Cypress mit `cypress.zoneless.config.ts`, `export-start-failure.cy.ts` und `export-item-dataset.cy.ts` | alle 6 Browserfälle aus 2 Spezifikationen bestanden, keine Retries; optimierter Build mit strenger Template-Prüfung bestanden |
+| `frontend:zoneless-inventory -- --update`, `frontend:zoneless-approval`, `frontend:zoneless-inventory-test` | bestanden; 8.774 Einträge und Referenzen auf 57 korrigierte Befunde geprüft |
+
+Die Testmengen überschneiden sich. Die neue Browserregression verwendet
+kontrollierte HTTP- und Keycloak-Antworten mit echten Routen und Templates;
+Live-Backend-/Keycloak-E2E wurden nicht erneut ausgeführt. Die vollständige
+Browser-Suite wurde für diesen einzelnen Befund nicht erneut gestartet.
+Remote-CI, Merge und Deployment sind separate Nachweise.
