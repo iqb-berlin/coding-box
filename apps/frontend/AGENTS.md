@@ -19,6 +19,7 @@ These instructions apply to `apps/frontend` and supplement the root `AGENTS.md`.
 
 ## Implementation Guidelines
 - Prefer standalone components and explicit `imports` arrays, matching the existing component style.
+- Use `inject()` for Angular dependency injection. Constructors can contain initialization logic; optional dependencies must account for `null`.
 - Use the `coding-box-` prefix for application component selectors and update template, style, and test references together.
 - Preserve selectors required by external integration contracts: the metadata library reads duration inputs through `iqb-formly-duration`, with a lint exception limited to that component.
 - Prefer `@if`/`@for` and direct `class`/`style` bindings in external and inline templates.

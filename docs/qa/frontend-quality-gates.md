@@ -39,8 +39,10 @@ seven days and shows the complete suite's coverage.
 
 `apps/frontend/.eslintrc.cjs` retains the repository's TypeScript rules and adds
 Angular rules plus syntax, control flow, and accessibility checks for external and
-inline templates. Warnings fail the Nx lint target. Constructor injection remains
-allowed; introducing the gate does not require a separate DI migration.
+inline templates. Warnings fail the Nx lint target. Angular classes resolve
+dependencies with `inject()`, enforced by lint. Constructors retain initialization
+logic, and optional dependencies use nullable `inject()` results. Ordinary model,
+error, and explicitly constructed factory classes retain their constructor APIs.
 Application components use the `coding-box-` selector prefix, enforced by lint.
 The duration editor retains `iqb-formly-duration` because the metadata library
 reads its numeric inputs through that host selector. Its lint exception is limited

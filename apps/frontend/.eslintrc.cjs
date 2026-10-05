@@ -14,8 +14,7 @@ module.exports = {
       ],
       rules: {
         ...typescriptConfig.rules,
-        // Constructor injection remains supported; do not turn lint setup into a DI migration.
-        '@angular-eslint/prefer-inject': 'off',
+        '@angular-eslint/prefer-inject': 'error',
         '@angular-eslint/component-selector': ['error', {
           type: 'element',
           prefix: 'coding-box',
