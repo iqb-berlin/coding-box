@@ -1,6 +1,6 @@
 import { Subscription, finalize, takeUntil } from 'rxjs';
 import {
-  Component, Inject, OnInit, signal, ChangeDetectionStrategy, DestroyRef, inject
+  Component, OnInit, signal, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -50,6 +50,16 @@ import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/co
   ]
 })
 export class EditMissingsProfilesDialogComponent implements OnInit {
+  dialogRef = inject<MatDialogRef<EditMissingsProfilesDialogComponent>>(MatDialogRef);
+  data = inject<{
+    workspaceId: number;
+  }>(MAT_DIALOG_DATA);
+
+  private missingsProfileService = inject(MissingsProfileService);
+  private appService = inject(AppService);
+  private snackBar = inject(MatSnackBar);
+  private translateService = inject(TranslateService);
+
   private profilesRequest?: Subscription;
   private detailsRequest?: Subscription;
 
@@ -68,15 +78,6 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   readonly saving = signal(false);
   readonly editMissings = signal<MissingDto[]>([]);
   protected displayedColumns: string[] = ['id', 'label', 'description', 'code', 'score', 'actions'];
-
-  constructor(
-    public dialogRef: MatDialogRef<EditMissingsProfilesDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: { workspaceId: number },
-    private missingsProfileService: MissingsProfileService,
-    private appService: AppService,
-    private snackBar: MatSnackBar,
-    private translateService: TranslateService
-  ) { }
 
   ngOnInit(): void {
     this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(id => {

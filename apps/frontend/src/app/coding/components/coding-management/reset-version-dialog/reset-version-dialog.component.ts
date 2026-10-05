@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -341,15 +341,17 @@ export interface ResetVersionDialogData {
   `]
 })
 export class ResetVersionDialogComponent {
+  dialogRef = inject<MatDialogRef<ResetVersionDialogComponent>>(MatDialogRef);
+  data = inject<ResetVersionDialogData>(MAT_DIALOG_DATA);
+
   protected versionLabel: string;
   protected cascadeVersions: string[] = [];
   protected resetVersions: string[] = [];
   resultImpactKey: string;
 
-  constructor(
-    public dialogRef: MatDialogRef<ResetVersionDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: ResetVersionDialogData
-  ) {
+  constructor() {
+    const data = this.data;
+
     this.versionLabel = data.versionLabel;
     this.cascadeVersions = data.cascadeVersions || [];
     this.resetVersions = [data.version, ...this.cascadeVersions];

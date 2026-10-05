@@ -103,6 +103,9 @@ interface ResponseStatusValidationResult {
 })
 export class ResponseStatusValidationPanelComponent
 implements OnInit, OnDestroy {
+  private responseStatusValidationService = inject(ResponseStatusValidationService);
+  private snackBar = inject(MatSnackBar);
+
   private readonly destroyRef = inject(DestroyRef);
 
   readonly disabled = input(false);
@@ -139,11 +142,6 @@ implements OnInit, OnDestroy {
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
   private taskSubscription?: Subscription;
-
-  constructor(
-    private responseStatusValidationService: ResponseStatusValidationService,
-    private snackBar: MatSnackBar
-  ) {}
 
   ngOnInit(): void {
     const cachedResult =

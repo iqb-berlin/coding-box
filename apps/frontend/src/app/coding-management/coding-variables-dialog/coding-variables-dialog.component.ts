@@ -1,5 +1,5 @@
 import {
-  AfterViewInit, Component, Inject, OnInit, signal, computed, WritableSignal, viewChild, effect, ChangeDetectionStrategy, DestroyRef, inject
+  AfterViewInit, Component, OnInit, signal, computed, WritableSignal, viewChild, effect, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -90,6 +90,13 @@ export interface FlattenedVariable {
   ]
 })
 export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
+  dialogRef = inject<MatDialogRef<CodingVariablesDialogComponent>>(MatDialogRef);
+  data = inject<CodingVariablesDialogData>(MAT_DIALOG_DATA);
+  private fileService = inject(FileService);
+  private fileBackendService = inject(FileBackendService);
+  private dialog = inject(MatDialog);
+  private snackBar = inject(MatSnackBar);
+
   protected readonly onActionKeydown = activateOnKeyboard;
 
   private readonly destroyRef = inject(DestroyRef);
@@ -113,15 +120,6 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
   private readonly synchronizeSort = effect(() => {
     this.dataSource.sort = this.sort() ?? null;
   });
-
-  constructor(
-    public dialogRef: MatDialogRef<CodingVariablesDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: CodingVariablesDialogData,
-    private fileService: FileService,
-    private fileBackendService: FileBackendService,
-    private dialog: MatDialog,
-    private snackBar: MatSnackBar
-  ) { }
 
   ngOnInit(): void {
     this.setupFilter();

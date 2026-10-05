@@ -1,4 +1,12 @@
 import { TestBed } from '@angular/core/testing';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { Router } from '@angular/router';
+import { AppService } from '../../../core/services/app.service';
+import { FileService } from '../../../shared/services/file/file.service';
+import { UnitService } from '../../../shared/services/unit/unit.service';
+import { ResponseService } from '../../../shared/services/response/response.service';
+import { TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { UnitSearchDialogComponent } from './unit-search-dialog.component';
 
 describe('UnitSearchDialogComponent', () => {
@@ -11,18 +19,21 @@ describe('UnitSearchDialogComponent', () => {
       selectedWorkspaceId: 123
     };
 
-    const component = TestBed.runInInjectionContext(() => new UnitSearchDialogComponent(
-      {} as never,
-      { title: 'Unit search' },
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      appService as never,
-      router as never,
-      {} as never,
-      {} as never
-    ));
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: MatDialogRef, useValue: {} },
+        { provide: MAT_DIALOG_DATA, useValue: { title: 'Unit search' } },
+        { provide: FileService, useValue: {} },
+        { provide: UnitService, useValue: {} },
+        { provide: ResponseService, useValue: {} },
+        { provide: TestResultService, useValue: {} },
+        { provide: AppService, useValue: appService },
+        { provide: Router, useValue: router },
+        { provide: MatDialog, useValue: {} },
+        { provide: MatSnackBar, useValue: {} }
+      ]
+    });
+    const component = TestBed.runInInjectionContext(() => new UnitSearchDialogComponent());
 
     return { component, router };
   }

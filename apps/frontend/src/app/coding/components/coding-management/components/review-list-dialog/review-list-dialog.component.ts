@@ -1,5 +1,5 @@
 import {
-  ChangeDetectorRef, Component, Inject, OnInit, inject, ElementRef, AfterViewInit, OnDestroy, viewChildren, afterRenderEffect, ChangeDetectionStrategy, DestroyRef
+  ChangeDetectorRef, Component, OnInit, inject, ElementRef, AfterViewInit, OnDestroy, viewChildren, afterRenderEffect, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -40,6 +40,9 @@ interface ReviewItem {
   ]
 })
 export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestroy {
+  dialogRef = inject<MatDialogRef<ReviewListDialogComponent>>(MatDialogRef);
+  protected data = inject<ReviewListDialogData>(MAT_DIALOG_DATA);
+
   private readonly destroyRef = inject(DestroyRef);
 
   private readonly changeDetectorRef = inject(ChangeDetectorRef);
@@ -53,11 +56,6 @@ export class ReviewListDialogComponent implements OnInit, AfterViewInit, OnDestr
 
   readonly reviewItemRefs = viewChildren<ElementRef<HTMLElement>>('reviewItemRef');
   private readonly synchronizeObserver = afterRenderEffect(() => this.updateObserver());
-
-  constructor(
-    public dialogRef: MatDialogRef<ReviewListDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) protected data: ReviewListDialogData
-  ) { }
 
   ngOnInit(): void {
     this.reviewItems = this.data.responses.map(response => ({

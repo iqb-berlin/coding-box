@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxChange, MatCheckboxModule } from '@angular/material/checkbox';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -29,12 +29,10 @@ interface DeleteMetric {
   styleUrls: ['./test-results-delete-preview-dialog.component.scss']
 })
 export class TestResultsDeletePreviewDialogComponent {
-  protected acknowledged = false;
+  private dialogRef = inject<MatDialogRef<TestResultsDeletePreviewDialogComponent>>(MatDialogRef);
+  data = inject<TestResultsDeletePreviewDialogData>(MAT_DIALOG_DATA);
 
-  constructor(
-    private dialogRef: MatDialogRef<TestResultsDeletePreviewDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: TestResultsDeletePreviewDialogData
-  ) {}
+  protected acknowledged = false;
 
   protected get preview(): TestResultsDeletePreviewDto {
     return this.data.preview;

@@ -184,6 +184,9 @@ import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
 })
 export class DuplicateResponsesValidationPanelComponent
 implements OnInit, OnDestroy {
+  private duplicateResponsesValidationService = inject(DuplicateResponsesValidationService);
+  private snackBar = inject(MatSnackBar);
+
   private readonly destroyRef = inject(DestroyRef);
 
   readonly disabled = input(false);
@@ -209,11 +212,6 @@ implements OnInit, OnDestroy {
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
   private taskSubscription?: Subscription;
-
-  constructor(
-    private duplicateResponsesValidationService: DuplicateResponsesValidationService,
-    private snackBar: MatSnackBar
-  ) {}
 
   ngOnInit(): void {
     const cachedResult =

@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, OnDestroy, signal, computed, input, output, viewChild, effect, ChangeDetectionStrategy
+  Component, OnInit, OnDestroy, signal, computed, input, output, viewChild, effect, ChangeDetectionStrategy, inject
 } from '@angular/core';
 
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -119,6 +119,8 @@ import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
   ]
 })
 export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
+  private testTakersValidationService = inject(TestTakersValidationService);
+
   readonly paginator = viewChild(MatPaginator);
   private readonly synchronizePaginator = effect(() => {
     this.paginatedMissingPersons.paginator = this.paginator() ?? null;
@@ -141,10 +143,6 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
   private taskSubscription?: Subscription;
-
-  constructor(
-    private testTakersValidationService: TestTakersValidationService
-  ) {}
 
   ngOnInit(): void {
     // Load cached result if available

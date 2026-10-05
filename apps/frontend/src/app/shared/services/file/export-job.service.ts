@@ -1,4 +1,4 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { Injectable, OnDestroy, inject } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService } from '@ngx-translate/core';
@@ -104,6 +104,12 @@ export function isReplayAuthTokenError(
   providedIn: 'root'
 })
 export class ExportJobService implements OnDestroy {
+  private codingJobBackendService = inject(CodingJobBackendService);
+  private appService = inject(AppService);
+  private workspaceSettingsService = inject(WorkspaceSettingsService);
+  private snackBar = inject(MatSnackBar);
+  private translateService = inject(TranslateService);
+
   private jobsSubject = new BehaviorSubject<ExportJob[]>([]);
   private pollingSubscriptions = new Map<string, Subscription>();
   private downloadSubscriptions = new Map<string, Subscription>();
@@ -116,14 +122,6 @@ export class ExportJobService implements OnDestroy {
   private stopPolling$ = new Subject<void>();
 
   readonly jobs$ = this.jobsSubject.asObservable();
-
-  constructor(
-    private codingJobBackendService: CodingJobBackendService,
-    private appService: AppService,
-    private workspaceSettingsService: WorkspaceSettingsService,
-    private snackBar: MatSnackBar,
-    private translateService: TranslateService
-  ) {}
 
   get activeJobs(): ExportJob[] {
     return this.jobsSubject.value.filter(

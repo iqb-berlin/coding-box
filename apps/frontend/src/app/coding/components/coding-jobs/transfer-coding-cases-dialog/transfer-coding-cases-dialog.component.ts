@@ -1,6 +1,4 @@
-import {
-  Component, Inject, ChangeDetectionStrategy
-} from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogActions,
@@ -46,18 +44,17 @@ export interface TransferCodingCasesDialogResult {
   ]
 })
 export class TransferCodingCasesDialogComponent {
+  private readonly dialogRef = inject<MatDialogRef<TransferCodingCasesDialogComponent, TransferCodingCasesDialogResult>>(MatDialogRef);
+  data = inject<TransferCodingCasesDialogData>(MAT_DIALOG_DATA);
+
   protected sourceCoderId: number | null = null;
   protected targetCoderId: number | null = null;
 
   protected readonly coders: Coder[];
 
-  constructor(
-    private readonly dialogRef: MatDialogRef<
-    TransferCodingCasesDialogComponent,
-    TransferCodingCasesDialogResult
-    >,
-    @Inject(MAT_DIALOG_DATA) public data: TransferCodingCasesDialogData
-  ) {
+  constructor() {
+    const data = this.data;
+
     this.coders = [...(data.coders || [])].sort((a, b) => {
       const labelA = a.displayName || a.name || '';
       const labelB = b.displayName || b.name || '';

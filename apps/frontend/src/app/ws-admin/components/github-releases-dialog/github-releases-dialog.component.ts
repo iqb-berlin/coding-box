@@ -1,6 +1,6 @@
 import { Subscription } from 'rxjs';
 import {
-  Component, Inject, OnInit, inject, signal, ChangeDetectionStrategy, DestroyRef
+  Component, OnInit, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
@@ -35,6 +35,9 @@ export interface GithubReleasesDialogData {
   ]
 })
 export class GithubReleasesDialogComponent implements OnInit {
+  dialogRef = inject<MatDialogRef<GithubReleasesDialogComponent>>(MatDialogRef);
+  data = inject<GithubReleasesDialogData>(MAT_DIALOG_DATA);
+
   private releasesRequest?: Subscription;
 
   private readonly destroyRef = inject(DestroyRef);
@@ -47,11 +50,6 @@ export class GithubReleasesDialogComponent implements OnInit {
   protected readonly isLoading = signal(false);
   protected displayedColumns = ['name', 'version', 'published_at', 'actions'];
   protected readonly selectedType = signal<'aspect-player' | 'schemer'>('aspect-player');
-
-  constructor(
-    public dialogRef: MatDialogRef<GithubReleasesDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: GithubReleasesDialogData
-  ) {}
 
   ngOnInit(): void {
     this.loadReleases();

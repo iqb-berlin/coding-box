@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, ChangeDetectionStrategy, signal, DestroyRef, inject
+  Component, OnInit, ChangeDetectionStrategy, signal, DestroyRef, inject
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, takeUntil } from 'rxjs';
@@ -47,19 +47,19 @@ export interface VariableAnalysisJobsDialogData {
   ]
 })
 export class VariableAnalysisJobsDialogComponent implements OnInit {
+  dialogRef = inject<MatDialogRef<VariableAnalysisJobsDialogComponent>>(MatDialogRef);
+  data = inject<VariableAnalysisJobsDialogData>(MAT_DIALOG_DATA);
+  private variableAnalysisService = inject(VariableAnalysisService);
+  private snackBar = inject(MatSnackBar);
+
   private readonly destroyRef = inject(DestroyRef);
   private readonly refreshCancel$ = new Subject<void>();
   displayedColumns: string[] = ['id', 'status', 'createdAt', 'unitId', 'variableId', 'actions'];
   readonly isLoading = signal(false);
   readonly jobs = signal<VariableAnalysisJobDto[]>([]);
 
-  constructor(
-    public dialogRef: MatDialogRef<VariableAnalysisJobsDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: VariableAnalysisJobsDialogData,
-    private variableAnalysisService: VariableAnalysisService,
-    private snackBar: MatSnackBar
-  ) {
-    this.jobs.set([...data.jobs]);
+  constructor() {
+    this.jobs.set([...this.data.jobs]);
   }
 
   ngOnInit(): void {

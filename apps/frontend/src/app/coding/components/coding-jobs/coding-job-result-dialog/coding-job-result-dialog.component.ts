@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy, AfterViewInit, inject, HostListener, signal, viewChild, effect, ChangeDetectionStrategy, DestroyRef
+  Component, OnInit, OnDestroy, AfterViewInit, inject, HostListener, signal, viewChild, effect, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
@@ -119,6 +119,13 @@ interface MissingPreviewLookup {
   ]
 })
 export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterViewInit {
+  dialogRef = inject<MatDialogRef<CodingJobResultDialogComponent>>(MatDialogRef);
+  data = inject<{
+    codingJob: CodingJob;
+    workspaceId: number;
+    canApplyResults?: boolean;
+  }>(MAT_DIALOG_DATA);
+
   private readonly destroyRef = inject(DestroyRef);
 
   readonly sort = viewChild(MatSort);
@@ -164,11 +171,6 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   protected readonly variableFilter = signal('');
   protected readonly codingIssueFilter = signal('');
   readonly testPersonFilter = signal('');
-
-  constructor(
-    public dialogRef: MatDialogRef<CodingJobResultDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: { codingJob: CodingJob; workspaceId: number; canApplyResults?: boolean }
-  ) { }
 
   ngOnInit(): void {
     this.loadCodingResults();

@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, ChangeDetectionStrategy, signal, DestroyRef, inject
+  Component, OnInit, ChangeDetectionStrategy, signal, DestroyRef, inject
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
@@ -108,6 +108,17 @@ interface BookletSearchResult {
   ]
 })
 export class UnitSearchDialogComponent implements OnInit {
+  private dialogRef = inject<MatDialogRef<UnitSearchDialogComponent>>(MatDialogRef);
+  protected data = inject<{ title: string }>(MAT_DIALOG_DATA);
+  private fileService = inject(FileService);
+  private unitService = inject(UnitService);
+  private responseService = inject(ResponseService);
+  private testResultService = inject(TestResultService);
+  private appService = inject(AppService);
+  private router = inject(Router);
+  private dialog = inject(MatDialog);
+  private snackBar = inject(MatSnackBar);
+
   private readonly destroyRef = inject(DestroyRef);
   private readonly searchCancel$ = new Subject<void>();
   protected searchText: string = '';
@@ -140,19 +151,6 @@ export class UnitSearchDialogComponent implements OnInit {
   protected pageSize: number = 10;
   protected pageIndex: number = 0;
   protected pageSizeOptions: number[] = [50, 100, 200, 500];
-
-  constructor(
-    private dialogRef: MatDialogRef<UnitSearchDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) protected data: { title: string },
-    private fileService: FileService,
-    private unitService: UnitService,
-    private responseService: ResponseService,
-    private testResultService: TestResultService,
-    private appService: AppService,
-    private router: Router,
-    private dialog: MatDialog,
-    private snackBar: MatSnackBar
-  ) { }
 
   ngOnInit(): void {
     this.unitSearchSubject.pipe(
