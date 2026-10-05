@@ -1,3 +1,5 @@
+import AdmZip = require('adm-zip');
+import { load } from 'cheerio';
 import { CodebookGenerator } from './codebook-generator.class';
 import type { CodeBookContentSetting } from './codebook.interfaces';
 
@@ -33,6 +35,36 @@ const unit = {
 };
 
 describe('Kodierbox adapter to shared CodebookGenerator', () => {
+  it.each([
+    {
+      name: 'direct list instructions',
+      instruction: '<ul><li>Erstes Kriterium</li><li>Zweites Kriterium</li></ul>',
+      ruleSets: [],
+      expected: ['Erstes Kriterium', 'Zweites Kriterium']
+    },
+    {
+      name: 'plain instructions after generated rule paragraphs',
+      instruction: 'Manuelle Instruktion',
+      ruleSets: [{ rules: [{ method: 'MATCH', parameters: ['ABC'] }], ruleOperatorAnd: true }],
+      expected: ['ABC', 'Manuelle Instruktion']
+    }
+  ])('retains $name in complete DOCX exports', async ({ instruction, ruleSets, expected }) => {
+    const variable = {
+      ...coding('V'),
+      codes: [{ ...coding('V').codes[0], manualInstruction: instruction, ruleSets }]
+    };
+    const buffer = await CodebookGenerator.generateCodebook([{
+      ...unit,
+      scheme: JSON.stringify({ version: '3.0', variableCodings: [variable] })
+    }], { ...options, exportFormat: 'docx', hasClosedVars: true }, []);
+    const $ = load(new AdmZip(buffer).readAsText('word/document.xml'), { xml: true });
+    const paragraphs = $('w\\:tr').first().children('w\\:tc').last()
+      .find('w\\:p')
+      .toArray()
+      .map(paragraph => $(paragraph).find('w\\:t').text());
+    expect(paragraphs).toEqual(expected);
+  });
+
   it('keeps the training scope before applying shared manual code filtering', async () => {
     const buffer = await CodebookGenerator.generateCodebook([unit], { ...options, trainingRequirement: 'required' }, []);
     const [result] = JSON.parse(buffer.toString());
