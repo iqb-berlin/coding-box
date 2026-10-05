@@ -1,28 +1,25 @@
 import {
-  Component, OnInit, OnDestroy
+  ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, OnDestroy
 } from '@angular/core';
+import { CodebookExportComponent } from '@iqb/ngx-coding-components/codebook-export';
+import type { CodebookExportConfig, UnitSelectionItem } from '@iqb/ngx-coding-components/codebook-models';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatRadioModule } from '@angular/material/radio';
+import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
-import { MatInputModule } from '@angular/material/input';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatOptionModule } from '@angular/material/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatDividerModule } from '@angular/material/divider';
-import { MatTableDataSource, MatTableModule } from '@angular/material/table';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTableDataSource } from '@angular/material/table';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   Subject, Subscription, interval
 } from 'rxjs';
 import {
-  debounceTime, distinctUntilChanged, switchMap, takeUntil
+  debounceTime, distinctUntilChanged, exhaustMap, takeUntil
 } from 'rxjs/operators';
 import {
   CodeBookContentSetting,
@@ -56,24 +53,20 @@ interface CodebookUnitOption {
 
 @Component({
   selector: 'shared-export-coding-book',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './export-coding-book.component.html',
   styleUrls: ['./export-coding-book.component.scss'],
   standalone: true,
   imports: [
+    CodebookExportComponent,
     FormsModule,
     MatDialogModule,
-    MatCheckboxModule,
-    MatRadioModule,
     MatSelectModule,
     MatButtonModule,
-    MatInputModule,
     MatFormFieldModule,
     MatOptionModule,
     MatIconModule,
     MatTooltipModule,
-    MatDividerModule,
-    MatTableModule,
-    MatProgressSpinnerModule,
     MatProgressBarModule,
     TranslateModule
   ],
@@ -143,8 +136,50 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     private datePipe: DatePipe,
     private validationStateService: ValidationStateService,
     private translateService: TranslateService,
-    private dialog: MatDialog
+    private dialog: MatDialog,
+    private dialogRef: MatDialogRef<ExportCodingBookComponent>,
+    private changeDetectorRef: ChangeDetectorRef
   ) { }
+
+  private sharedUnitsSource: CodebookUnitOption[] | null = null;
+  private sharedUnitsCache: UnitSelectionItem[] = [];
+  private profilesSource: { id: number; label: string }[] | null = null;
+  private profilesCache: { id: number; label: string }[] = [];
+
+  get sharedUnits(): UnitSelectionItem[] {
+    if (this.sharedUnitsSource !== this.availableUnits) {
+      this.sharedUnitsSource = this.availableUnits;
+      this.sharedUnitsCache = this.availableUnits.map(unit => ({
+        unitId: unit.unitId,
+        key: unit.unitKey.replace(/\.vocs$/i, ''),
+        unitName: this.formatUnitName(unit.unitName),
+        unitAlias: unit.unitAlias
+      }));
+    }
+    return this.sharedUnitsCache;
+  }
+
+  get sharedMissingsProfiles(): { id: number; label: string }[] {
+    if (this.profilesSource !== this.missingsProfiles) {
+      this.profilesSource = this.missingsProfiles;
+      this.profilesCache = this.missingsProfiles.filter(profile => profile.id !== 0);
+    }
+    return this.profilesCache;
+  }
+
+  get isExportBusy(): boolean {
+    return this.codebookJobStatus === 'pending' || this.codebookJobStatus === 'processing';
+  }
+
+  onSharedExport(config: CodebookExportConfig): void {
+    if (this.isExportBusy) return;
+    this.unitList = [...config.selectedUnits];
+    this.selectedMissingsProfile = config.missingsProfileId;
+    this.contentOptions = { ...this.contentOptions, ...config.contentOptions };
+    this.exportCodingBook();
+  }
+
+  closeDialog(): void { this.dialogRef.close(false); }
 
   ngOnInit(): void {
     this.updateSelectedJobDefinitionDisplay();
@@ -157,7 +192,8 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     this.filterTextChanged
       .pipe(
         debounceTime(300),
-        distinctUntilChanged()
+        distinctUntilChanged(),
+        takeUntil(this.destroy$)
       )
       .subscribe(event => {
         this.applyFilter(event);
@@ -192,8 +228,9 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     if (workspaceId) {
       this.isLoading = true;
 
-      this.fileService.getUnitsWithFileIds(workspaceId).subscribe({
+      this.fileService.getUnitsWithFileIds(workspaceId).pipe(takeUntil(this.destroy$)).subscribe({
         next: units => {
+          this.changeDetectorRef.markForCheck();
           if (units && units.length > 0) {
             this.availableUnits = units.map((unit: { id: number; unitId: string; fileName: string; data: string }) => ({
               unitId: unit.id,
@@ -214,6 +251,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
           this.isLoading = false;
         },
         error: () => {
+          this.changeDetectorRef.markForCheck();
           this.isLoading = false;
         }
       });
@@ -290,7 +328,8 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
       maxHeight: '88vh',
       autoFocus: false,
       data: dialogData
-    }).afterClosed().subscribe(jobDefinitionId => {
+    }).afterClosed().pipe(takeUntil(this.destroy$)).subscribe(jobDefinitionId => {
+      this.changeDetectorRef.markForCheck();
       if (jobDefinitionId !== undefined) {
         this.onJobDefinitionFilterChange(jobDefinitionId);
       }
@@ -344,8 +383,9 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingJobDefinitions = true;
-    this.codingJobBackendService.getJobDefinitions(workspaceId).subscribe({
+    this.codingJobBackendService.getJobDefinitions(workspaceId).pipe(takeUntil(this.destroy$)).subscribe({
       next: jobDefinitions => {
+        this.changeDetectorRef.markForCheck();
         this.availableJobDefinitions = jobDefinitions
           .filter(jobDefinition => jobDefinition.id !== undefined)
           .sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
@@ -354,6 +394,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
         this.applyQuickFilterUnitSelection();
       },
       error: () => {
+        this.changeDetectorRef.markForCheck();
         this.availableJobDefinitions = [];
         this.refreshJobDefinitionOptions();
         this.isLoadingJobDefinitions = false;
@@ -368,8 +409,9 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingVariableBundles = true;
-    this.codingJobBackendService.getVariableBundles(workspaceId).subscribe({
+    this.codingJobBackendService.getVariableBundles(workspaceId).pipe(takeUntil(this.destroy$)).subscribe({
       next: variableBundles => {
+        this.changeDetectorRef.markForCheck();
         this.availableVariableBundles = variableBundles
           .filter(variableBundle => variableBundle.id !== undefined)
           .sort((a, b) => a.name.localeCompare(b.name));
@@ -378,6 +420,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
         this.applyQuickFilterUnitSelection();
       },
       error: () => {
+        this.changeDetectorRef.markForCheck();
         this.availableVariableBundles = [];
         this.refreshJobDefinitionOptions();
         this.isLoadingVariableBundles = false;
@@ -652,6 +695,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   }
 
   private handleValidationResults(results: ValidateCodingCompletenessResponseDto | null): void {
+    this.changeDetectorRef.markForCheck();
     this.validationResults = results;
     if (results) {
       this.validationCacheKey = results.cacheKey || null;
@@ -659,6 +703,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   }
 
   private handleValidationProgress(progress: ValidationProgress): void {
+    this.changeDetectorRef.markForCheck();
     this.validationProgress = progress;
     this.isValidating = progress.status === 'loading' || progress.status === 'processing';
   }
@@ -666,13 +711,15 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   private loadMissingsProfiles(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
-      this.missingsProfileService.getMissingsProfiles(workspaceId).subscribe({
+      this.missingsProfileService.getMissingsProfiles(workspaceId).pipe(takeUntil(this.destroy$)).subscribe({
         next: profiles => {
+          this.changeDetectorRef.markForCheck();
           this.missingsProfiles = [{ id: 0, label: '' }, ...profiles.map((profile: { label: string; id: number }) => ({ id: profile.id ?? 0, label: profile.label }))];
           this.selectedMissingsProfile = 0;
           this.contentOptions.missingsProfile = this.selectedMissingsProfile.toString();
         },
         error: () => {
+          this.changeDetectorRef.markForCheck();
           // Error occurred while loading missings profiles
         }
       });
@@ -680,6 +727,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   }
 
   exportCodingBook(): void {
+    if (this.isExportBusy) return;
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return;
@@ -701,12 +749,14 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
       this.contentOptions.missingsProfile,
       this.contentOptions,
       this.unitList
-    ).subscribe({
+    ).pipe(takeUntil(this.destroy$)).subscribe({
       next: response => {
+        this.changeDetectorRef.markForCheck();
         this.codebookJobId = response.jobId;
         this.startCodebookPolling(workspaceId, response.jobId);
       },
       error: () => {
+        this.changeDetectorRef.markForCheck();
         this.codebookJobStatus = 'failed';
         this.codebookJobError = 'Failed to start codebook generation job';
       }
@@ -718,11 +768,12 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
 
     this.codebookPollingSubscription = interval(1500)
       .pipe(
-        takeUntil(this.destroy$),
-        switchMap(() => this.exportService.getCodebookJobStatus(workspaceId, jobId))
+        exhaustMap(() => this.exportService.getCodebookJobStatus(workspaceId, jobId)),
+        takeUntil(this.destroy$)
       )
       .subscribe({
         next: status => {
+          this.changeDetectorRef.markForCheck();
           if (!status.status && status.error) {
             this.codebookJobStatus = 'failed';
             this.codebookJobError = status.error;
@@ -733,7 +784,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
           this.codebookJobProgress = status.progress || 0;
 
           if (status.status === 'completed') {
-            this.codebookJobStatus = 'completed';
+            this.codebookJobStatus = 'processing';
             this.stopCodebookPolling();
             this.downloadCodebookResult(workspaceId, jobId);
           } else if (status.status === 'failed') {
@@ -747,6 +798,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
           }
         },
         error: () => {
+          this.changeDetectorRef.markForCheck();
           this.codebookJobStatus = 'failed';
           this.codebookJobError = 'Failed to get job status';
           this.stopCodebookPolling();
@@ -762,8 +814,9 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   }
 
   private downloadCodebookResult(workspaceId: number, jobId: string): void {
-    this.exportService.downloadCodebookFile(workspaceId, jobId).subscribe({
+    this.exportService.downloadCodebookFile(workspaceId, jobId).pipe(takeUntil(this.destroy$)).subscribe({
       next: blob => {
+        this.changeDetectorRef.markForCheck();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         const timestamp = this.datePipe.transform(new Date(), 'yyyyMMdd_HHmmss');
@@ -774,8 +827,10 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
+        this.codebookJobStatus = 'completed';
       },
       error: () => {
+        this.changeDetectorRef.markForCheck();
         this.codebookJobStatus = 'failed';
         this.codebookJobError = 'Failed to download codebook file';
       }

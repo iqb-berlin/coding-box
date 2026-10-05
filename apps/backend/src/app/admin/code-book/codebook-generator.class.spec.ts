@@ -1,249 +1,87 @@
+import AdmZip = require('adm-zip');
+import { load } from 'cheerio';
 import { CodebookGenerator } from './codebook-generator.class';
+import type { CodeBookContentSetting } from './codebook.interfaces';
 
-const contentSetting = {
+const options: CodeBookContentSetting = {
   exportFormat: 'json',
-  hasDerivedVars: false,
-  hasOnlyVarsWithCodes: false,
-  hasOnlyManualCoding: false,
-  hasClosedVars: true,
+  missingsProfile: '',
+  hasOnlyManualCoding: true,
+  hasClosedVars: false,
+  hasOnlyVarsWithCodes: true,
+  hasDerivedVars: true,
   hasGeneralInstructions: true,
   codeLabelToUpper: false,
   showScore: true,
-  hideItemVarRelation: false,
-  trainingRequirement: 'all',
-  jobDefinitionId: null
+  hideItemVarRelation: false
 };
-
-const manualCode = {
-  id: 1,
-  label: 'Code A',
-  score: 1,
-  type: 'FULL_CREDIT',
-  manualInstruction: '<p>manual</p>',
-  ruleSet: []
-};
-
-const closedCode = {
-  id: 2,
-  label: 'Closed',
-  score: 0,
-  type: 'RESIDUAL_AUTO',
-  manualInstruction: '',
-  ruleSet: []
-};
-
-const variableCoding = {
-  id: 'VAR',
-  alias: 'ALIAS',
-  label: 'Variable',
+const coding = (id: string, training = false) => ({
+  id,
+  alias: `${id}_ALIAS`,
+  label: id,
   sourceType: 'BASE',
-  manualInstruction: '<p>general</p>',
-  codes: [manualCode, closedCode]
+  processing: training ? ['CODER_TRAINING_REQUIRED'] : [],
+  codes: [
+    {
+      id: 0, label: 'Zero', type: 'FULL_CREDIT', score: 0, ruleSets: [], manualInstruction: '<p>Bewerten</p>'
+    },
+    {
+      id: 1, label: 'Rest', type: 'RESIDUAL_AUTO', score: 0, ruleSets: [], manualInstruction: ''
+    }
+  ]
+});
+const unit = {
+  id: 1, key: 'U.VOCS', name: 'Unit', scheme: JSON.stringify({ version: '3.0', variableCodings: [coding('A', true), coding('B')] }), metadata: { items: [] }
 };
 
-describe('CodebookGenerator', () => {
-  it('returns an empty json buffer for empty codebooks', async () => {
-    await expect(CodebookGenerator.generateCodebook([], contentSetting as never, []))
-      .resolves.toEqual(Buffer.from('[]', 'utf-8'));
-  });
-
-  it('formats and filters book variables and codes', () => {
-    const generator = CodebookGenerator as unknown as Record<string, (...args: unknown[]) => unknown>;
-
-    expect(generator.getSortedBookVariables([
-      { id: 'B', sourceType: 'BASE', codes: [] },
-      { id: 'A', sourceType: 'BASE', codes: [] }
-    ])).toEqual([
-      { id: 'A', sourceType: 'BASE', codes: [] },
-      { id: 'B', sourceType: 'BASE', codes: [] }
-    ]);
-
-    expect(generator.isClosed(variableCoding)).toBe(true);
-    expect(generator.isManual(variableCoding)).toBe(true);
-    expect(generator.isManualWithoutClosed(variableCoding)).toBe(true);
-    expect(generator.isClosedWithoutManual(variableCoding)).toBe(true);
-
-    const baseVariable = generator.getBaseOrDerivedBookVariable(variableCoding, contentSetting);
-    expect(baseVariable).toMatchObject({ id: 'ALIAS', label: 'Variable' });
-
-    const derivedVariable = generator.getBaseOrDerivedBookVariable(
-      { ...variableCoding, sourceType: 'DERIVE' },
-      { ...contentSetting, hasDerivedVars: false }
-    );
-    expect(derivedVariable).toBeNull();
-
-    expect(generator.getManualOrClosedCodedBookVariable(
-      { ...contentSetting, hasOnlyVarsWithCodes: true },
-      [],
-      variableCoding
-    )).toBeNull();
-
-    expect(generator.getManualOrClosedCodedBookVariable(
-      { ...contentSetting, hasOnlyManualCoding: true, hasClosedVars: false },
-      [],
-      { ...variableCoding, codes: [closedCode] }
-    )).toBeNull();
-
-    expect(generator.getManualOrClosedCodedBookVariable(
-      { ...contentSetting, hasOnlyManualCoding: true, hasClosedVars: true },
-      [],
-      { ...variableCoding, codes: [{ ...closedCode, manualInstruction: '' }] }
-    )).toBeNull();
-
-    expect(generator.getManualOrClosedCodedBookVariable(
-      { ...contentSetting, hasClosedVars: false },
-      [],
-      { ...variableCoding, codes: [closedCode] }
-    )).toBeNull();
-  });
-
-  it('builds code information fallbacks and rule descriptions', () => {
-    const generator = CodebookGenerator as unknown as Record<string, (...args: unknown[]) => unknown>;
-
-    expect(generator.getCodeInfo({ id: 5 }, { ...contentSetting, showScore: true }))
-      .toMatchObject({ id: '5', score: '' });
-
-    expect(generator.getRulesDescription(
-      { ruleSetDescriptions: ['Keine Regeln definiert.', 'Regel A'] },
-      { manualInstruction: '' }
-    )).toContain('Regel A');
-
-    const codeInfos = generator.getCodes(
-      [
-        { ...manualCode, id: 1 },
-        { id: 0 },
-        { ...manualCode, id: 3, ruleSet: undefined }
-      ],
-      { ...contentSetting, codeLabelToUpper: true }
-    ) as { id: string }[];
-    expect(Array.isArray(codeInfos)).toBe(true);
-    expect(codeInfos.length).toBeGreaterThan(0);
-    expect(codeInfos.map(codeInfo => codeInfo.id)).toContain('0');
-  });
-
-  it('includes code 0 in generated codebook output', async () => {
-    const codebookBuffer = await CodebookGenerator.generateCodebook(
-      [
-        {
-          id: 1,
-          key: 'UNIT.VOCS',
-          name: 'Unit',
-          scheme: JSON.stringify({
-            version: '3.0',
-            variableCodings: [
-              {
-                ...variableCoding,
-                codes: [
-                  {
-                    ...manualCode, id: 0, label: 'Code 0', score: 0, type: 'NO_CREDIT'
-                  },
-                  {
-                    ...manualCode, id: 1, label: 'Code 1', score: 1, type: 'FULL_CREDIT'
-                  }
-                ]
-              }
-            ]
-          })
-        }
-      ],
-      contentSetting as never,
-      []
-    );
-
-    const codebook = JSON.parse(codebookBuffer.toString('utf-8')) as Array<{
-      variables: Array<{ codes: Array<{ id: string }> }>;
-    }>;
-
-    expect(codebook[0].variables[0].codes.map(code => code.id)).toEqual(['0', '1']);
-  });
-
-  it('filters variables by increased coder training requirement', async () => {
-    const codebookBuffer = await CodebookGenerator.generateCodebook(
-      [
-        {
-          id: 1,
-          key: 'UNIT.VOCS',
-          name: 'Unit',
-          scheme: JSON.stringify({
-            version: '3.0',
-            variableCodings: [
-              {
-                ...variableCoding,
-                id: 'VAR_REQUIRED',
-                alias: 'VAR_REQUIRED',
-                processing: ['CODER_TRAINING_REQUIRED']
-              },
-              {
-                ...variableCoding,
-                id: 'VAR_NORMAL',
-                alias: 'VAR_NORMAL',
-                processing: []
-              }
-            ]
-          })
-        }
-      ],
-      { ...contentSetting, trainingRequirement: 'required' } as never,
-      []
-    );
-
-    const codebook = JSON.parse(codebookBuffer.toString('utf-8')) as Array<{
-      variables: Array<{ id: string }>;
-    }>;
-
-    expect(codebook[0].variables.map(variable => variable.id)).toEqual([
-      'VAR_REQUIRED'
-    ]);
-  });
-
-  it('filters codes without manual instructions in manual codebooks without closed variables', () => {
-    const generator = CodebookGenerator as unknown as Record<string, (...args: unknown[]) => unknown>;
-
-    const codeInfos = generator.getCodes(
-      [
-        manualCode,
-        { ...manualCode, id: 2, manualInstruction: '' },
-        { ...manualCode, id: 3, manualInstruction: '   ' },
-        { ...manualCode, id: 4, manualInstruction: '<p style="margin-top: 0; min-height: 1em"></p>' }
-      ],
-      { ...contentSetting, hasOnlyManualCoding: true, hasClosedVars: false }
-    ) as { id: string; description: string }[];
-
-    expect(codeInfos).toHaveLength(1);
-    expect(codeInfos[0]).toMatchObject({
-      id: '1',
-      description: '<p>manual</p>'
-    });
-  });
-
-  it('keeps codes without manual instructions when closed variables are included', () => {
-    const generator = CodebookGenerator as unknown as Record<string, (...args: unknown[]) => unknown>;
-
-    const codeInfos = generator.getCodes(
-      [
-        manualCode,
-        { ...manualCode, id: 2, manualInstruction: '' },
-        { ...manualCode, id: 3, manualInstruction: '   ' }
-      ],
-      { ...contentSetting, hasOnlyManualCoding: true, hasClosedVars: true }
-    ) as { id: string; description: string }[];
-
-    expect(codeInfos.map(codeInfo => codeInfo.id)).toEqual(['1', '2', '3']);
-  });
-
-  it('treats visually empty HTML manual instructions as missing for variable filtering', () => {
-    const generator = CodebookGenerator as unknown as Record<string, (...args: unknown[]) => unknown>;
-    const whitespaceManualVariable = {
-      ...variableCoding,
-      codes: [{ ...manualCode, manualInstruction: '<p style="margin-top: 0; min-height: 1em"></p>' }]
+describe('Kodierbox adapter to shared CodebookGenerator', () => {
+  it.each([
+    {
+      name: 'direct list instructions',
+      instruction: '<ul><li>Erstes Kriterium</li><li>Zweites Kriterium</li></ul>',
+      ruleSets: [],
+      expected: ['Erstes Kriterium', 'Zweites Kriterium']
+    },
+    {
+      name: 'plain instructions after generated rule paragraphs',
+      instruction: 'Manuelle Instruktion',
+      ruleSets: [{ rules: [{ method: 'MATCH', parameters: ['ABC'] }], ruleOperatorAnd: true }],
+      expected: ['ABC', 'Manuelle Instruktion']
+    }
+  ])('retains $name in complete DOCX exports', async ({ instruction, ruleSets, expected }) => {
+    const variable = {
+      ...coding('V'),
+      codes: [{ ...coding('V').codes[0], manualInstruction: instruction, ruleSets }]
     };
+    const buffer = await CodebookGenerator.generateCodebook([{
+      ...unit,
+      scheme: JSON.stringify({ version: '3.0', variableCodings: [variable] })
+    }], { ...options, exportFormat: 'docx', hasClosedVars: true }, []);
+    const $ = load(new AdmZip(buffer).readAsText('word/document.xml'), { xml: true });
+    const paragraphs = $('w\\:tr').first().children('w\\:tc').last()
+      .find('w\\:p')
+      .toArray()
+      .map(paragraph => $(paragraph).find('w\\:t').text());
+    expect(paragraphs).toEqual(expected);
+  });
 
-    expect(generator.isManual(whitespaceManualVariable)).toBe(false);
-    expect(generator.isManualWithoutClosed(whitespaceManualVariable)).toBe(false);
-    expect(generator.getManualOrClosedCodedBookVariable(
-      { ...contentSetting, hasOnlyManualCoding: true, hasClosedVars: false },
-      [],
-      whitespaceManualVariable
-    )).toBeNull();
+  it('keeps the training scope before applying shared manual code filtering', async () => {
+    const buffer = await CodebookGenerator.generateCodebook([unit], { ...options, trainingRequirement: 'required' }, []);
+    const [result] = JSON.parse(buffer.toString());
+    expect(result.key).toBe('U');
+    expect(result.variables.map(v => v.id)).toEqual(['A_ALIAS']);
+    expect(result.variables[0].codes.map(c => c.id)).toEqual(['0']);
+  });
+
+  it('retains all / not-required training choices', async () => {
+    for (const [trainingRequirement, count] of [['all', 2], ['not-required', 1]] as const) {
+      const buffer = await CodebookGenerator.generateCodebook([unit], { ...options, trainingRequirement }, []);
+      expect(JSON.parse(buffer.toString())[0].variables).toHaveLength(count);
+    }
+  });
+
+  it('returns an empty JSON array and rejects malformed schemes', async () => {
+    expect((await CodebookGenerator.generateCodebook([], options, [])).toString()).toBe('[]');
+    await expect(CodebookGenerator.generateCodebook([{ ...unit, scheme: '{' }], options, [])).rejects.toThrow();
   });
 });
