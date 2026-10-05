@@ -1,4 +1,8 @@
-import base from './jest.config.ts';
+/**
+ * @jest-config-loader ts-node
+ * @jest-config-loader-options {"compilerOptions":{"module":"CommonJS"}}
+ */
+import base from './jest.config';
 
 export default {
   ...base,
