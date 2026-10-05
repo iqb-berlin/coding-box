@@ -391,13 +391,6 @@ export class ExportComponent {
           this.isStartingExport.set(false);
         },
         error: () => {
-          this.snackBar.open(
-            this.translateService.instant(
-              'ws-admin.export.errors.start-failed'
-            ),
-            this.translateService.instant('close'),
-            { duration: 5000 }
-          );
           this.isStartingExport.set(false);
         }
       });
