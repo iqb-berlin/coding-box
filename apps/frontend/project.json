@@ -112,6 +112,24 @@
       "options": {
         "jestConfig": "apps/frontend/jest.config.ts",
         "passWithNoTests": true
+      },
+      "configurations": {
+        "ci": {
+          "ci": true,
+          "codeCoverage": true,
+          "runInBand": true,
+          "passWithNoTests": false,
+          "reporters": [
+            "default",
+            "jest-junit"
+          ],
+          "coverageReporters": [
+            "text-summary",
+            "lcov",
+            "cobertura",
+            "json-summary"
+          ]
+        }
       }
     },
     "e2e": {

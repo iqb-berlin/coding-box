@@ -524,7 +524,7 @@ test-main-pr-db:
 test-main-pr-backend:
   stage: test-units
   interruptible: true
-  allow_failure: true
+  allow_failure: false
   rules:
     - !reference [ .main_pr_rules, rules ]
   needs:
@@ -553,7 +553,7 @@ test-main-pr-backend:
 test-main-pr-frontend:
   stage: test-units
   interruptible: true
-  allow_failure: true
+  allow_failure: false
   rules:
     - !reference [ .main_pr_rules, rules ]
   needs:
@@ -582,7 +582,7 @@ test-main-pr-frontend:
 lint-main-pr-backend:
   stage: lint
   interruptible: true
-  allow_failure: true
+  allow_failure: false
   rules:
     - !reference [ .main_pr_rules, rules ]
   needs:
@@ -611,7 +611,7 @@ lint-main-pr-backend:
 lint-main-pr-frontend:
   stage: lint
   interruptible: true
-  allow_failure: true
+  allow_failure: false
   rules:
     - !reference [ .main_pr_rules, rules ]
   needs:
@@ -803,6 +803,8 @@ build-main-commit-backend-image:
   rules:
     - !reference [ .production_image_rules, rules ]
   needs:
+    - job: quality-checks
+      artifacts: false
     - build-main-commit-base-image
   image: ${DOCKER_IMAGE}
   services:
@@ -844,6 +846,8 @@ build-main-commit-frontend-image:
   rules:
     - !reference [ .production_image_rules, rules ]
   needs:
+    - job: quality-checks
+      artifacts: false
     - build-main-commit-base-image
   image: ${DOCKER_IMAGE}
   services:
@@ -1174,6 +1178,8 @@ build-release:
   rules:
     - !reference [ .release_rules, rules ]
   needs:
+    - job: quality-checks
+      artifacts: false
     - job: scan-main-commit-db-image
       artifacts: false
     - job: scan-main-commit-liquibase-image
