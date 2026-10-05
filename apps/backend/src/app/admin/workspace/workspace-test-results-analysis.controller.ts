@@ -21,6 +21,8 @@ import {
   ApiBadRequestResponse
 } from '@nestjs/swagger';
 import { Repository } from 'typeorm';
+import { requestBodySchemas } from '../../http/request-body.schemas';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -229,7 +231,7 @@ export class WorkspaceTestResultsAnalysisController {
   @RequireAccessLevel(3)
   async findFlatResponseFrequencies(
     @Param('workspace_id') workspaceId: number,
-      @Body() body: FlatResponseFrequenciesRequest
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.FlatResponseFrequenciesRequest)) body: FlatResponseFrequenciesRequest
   ): Promise<Record<string, { total: number; values: Array<{ value: string; count: number; p: number }> }>> {
     try {
       return await this.workspaceTestResultsService.findFlatResponseFrequencies(

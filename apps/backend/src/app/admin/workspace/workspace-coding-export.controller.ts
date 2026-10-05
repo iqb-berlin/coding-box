@@ -25,6 +25,8 @@ import {
 import { Response, Request } from 'express';
 import * as fs from 'fs';
 import { Readable } from 'stream';
+import { requestBodySchemas } from '../../http/request-body.schemas';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
 import {
   JobQueueService,
   ExportJobProgress,
@@ -1203,7 +1205,7 @@ export class WorkspaceCodingExportController {
   @ApiParam({ name: 'workspace_id', type: Number })
   async estimateExportJob(
     @WorkspaceId() workspace_id: number,
-      @Body() body: BackgroundExportRequest
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.BackgroundExportRequest)) body: BackgroundExportRequest
   ): Promise<ByVariableExportEstimateResponse> {
     if (
       body.exportType !== 'by-variable' &&
@@ -1349,7 +1351,7 @@ export class WorkspaceCodingExportController {
   async startExportJob(
     @WorkspaceId() workspace_id: number,
       @Req() req: Request,
-      @Body() body: unknown
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.BackgroundExportRequest)) body: unknown
   ): Promise<{ jobId: string; message: string }> {
     let request: BackgroundExportRequest;
     try {

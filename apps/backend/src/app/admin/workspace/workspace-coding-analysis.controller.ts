@@ -17,6 +17,8 @@ import {
 } from '@nestjs/swagger';
 import { Repository } from 'typeorm';
 import { Response } from 'express';
+import { requestBodySchemas } from '../../http/request-body.schemas';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
@@ -148,7 +150,7 @@ export class WorkspaceCodingAnalysisController {
   })
   async validateCodingCompleteness(
     @WorkspaceId() workspace_id: number,
-      @Body() request: ValidateCodingCompletenessRequestDto
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.ValidateCodingCompletenessRequestDto)) request: ValidateCodingCompletenessRequestDto
   ): Promise<ValidateCodingCompletenessResponseDto> {
     // Extract and validate pagination parameters
     const page = Math.max(1, request.page || 1);
@@ -184,7 +186,7 @@ export class WorkspaceCodingAnalysisController {
   })
   async validateAndExportCodingCompleteness(
     @WorkspaceId() workspace_id: number,
-      @Body() request: ExportValidationResultsRequestDto,
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.ExportValidationResultsRequestDto)) request: ExportValidationResultsRequestDto,
       @Res() res: Response
   ): Promise<void> {
     const excelData =
@@ -483,7 +485,7 @@ export class WorkspaceCodingAnalysisController {
   })
   async getAppliedResultsCount(
     @WorkspaceId() workspace_id: number,
-      @Body()
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCodingAnalysisController_getAppliedResultsCount))
                    body: { incompleteVariables: { unitName: string; variableId: string }[] }
   ): Promise<number> {
     return this.codingValidationService.getAppliedResultsCount(
@@ -739,7 +741,7 @@ export class WorkspaceCodingAnalysisController {
   })
   async saveAggregationSettings(
   @WorkspaceId() workspace_id: number,
-                 @Body() body: { threshold?: number; flags?: ResponseMatchingFlag[] } = {}
+                 @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCodingAnalysisController_saveAggregationSettings)) body: { threshold?: number; flags?: ResponseMatchingFlag[] } = {}
   ) {
     const threshold = this.normalizeIntegerParam(body.threshold, 2, 2, 100);
     return this.codingAnalysisService.saveAggregationSettings(
@@ -798,7 +800,7 @@ export class WorkspaceCodingAnalysisController {
   })
   async applyDuplicateAggregation(
     @WorkspaceId() workspace_id: number,
-      @Body() body: { threshold: number; aggregateMode: boolean }
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCodingAnalysisController_applyDuplicateAggregation)) body: { threshold: number; aggregateMode: boolean }
   ): Promise<{
         success: boolean;
         aggregatedGroups: number;
@@ -823,7 +825,7 @@ export class WorkspaceCodingAnalysisController {
   })
   async postTriggerResponseAnalysis(
     @WorkspaceId() workspace_id: number,
-                   @Body() body: { threshold?: number } = {}
+                   @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCodingAnalysisController_postTriggerResponseAnalysis, true)) body: { threshold?: number } = {}
   ): Promise<void> {
     const threshold = body.threshold === undefined ?
       undefined :

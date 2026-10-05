@@ -23,6 +23,8 @@ import {
   ApiBadRequestResponse
 } from '@nestjs/swagger';
 import { Repository } from 'typeorm';
+import { requestBodySchemas } from '../../http/request-body.schemas';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import {
   AllowWorkspaceTokenScopes,
@@ -141,7 +143,7 @@ export class WorkspaceTestResultsResponseController {
   })
   async resolveDuplicateResponses(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Body() body: ResolveDuplicateResponsesRequest,
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.ResolveDuplicateResponsesRequest)) body: ResolveDuplicateResponsesRequest,
       @Req() req: RequestWithUser
   ): Promise<{ resolvedCount: number; success: boolean }> {
     try {

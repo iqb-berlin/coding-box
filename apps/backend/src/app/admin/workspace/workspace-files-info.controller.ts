@@ -18,6 +18,8 @@ import {
   ApiTags
 } from '@nestjs/swagger';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
+import { requestBodySchemas } from '../../http/request-body.schemas';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceFilesService } from '../../database/services/workspace';
@@ -187,7 +189,7 @@ export class WorkspaceFilesInfoController {
   })
   async saveReplayAnchorOverride(
     @Param('workspace_id') workspace_id: number,
-      @Body() override: CodingReplayAnchorOverride
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.CodingReplayAnchorOverride)) override: CodingReplayAnchorOverride
   ): Promise<CodingReplayAnchorOverride> {
     if (!workspace_id) {
       throw new BadRequestException('Workspace ID is required.');

@@ -27,6 +27,8 @@ import {
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import * as fs from 'fs';
+import { requestBodySchemas } from '../../http/request-body.schemas';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -365,7 +367,7 @@ export class WorkspaceTestResultsExportController {
   async startExportTestResultsJob(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
       @Req() req: RequestWithUser,
-      @Body()
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceTestResultsExportController_startExportTestResultsJob, true))
                                          filters?: {
                                            groupNames?: string[];
                                            bookletNames?: string[];
@@ -424,7 +426,7 @@ export class WorkspaceTestResultsExportController {
   async startExportTestLogsJob(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
       @Req() req: RequestWithUser,
-      @Body()
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceTestResultsExportController_startExportTestLogsJob, true))
                                          filters?: {
                                            groupNames?: string[];
                                            bookletNames?: string[];

@@ -31,6 +31,8 @@ import {
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
+import { requestBodySchemas } from '../../http/request-body.schemas';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -378,7 +380,7 @@ export class WorkspaceTestResultsImportController {
   async initChunkedUpload(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
       @Param('resultType') resultType: 'logs' | 'responses',
-      @Body() body: ChunkedUploadInitRequestDto
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.ChunkedUploadInitRequestDto)) body: ChunkedUploadInitRequestDto
   ): Promise<ChunkedUploadInitResponseDto> {
     if (!body.fileName || !body.fileSize || !body.mimeType) {
       throw new BadRequestException(
@@ -503,7 +505,7 @@ export class WorkspaceTestResultsImportController {
   async completeChunkedUpload(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
       @Param('uploadId') uploadId: string,
-      @Body() body: ChunkedUploadCompleteRequestDto
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.ChunkedUploadCompleteRequestDto, true)) body: ChunkedUploadCompleteRequestDto
   ): Promise<TestResultsUploadJobDto[]> {
     const session = await this.cacheService.get<ChunkedUploadSession>(
       this.uploadSessionKey(uploadId)

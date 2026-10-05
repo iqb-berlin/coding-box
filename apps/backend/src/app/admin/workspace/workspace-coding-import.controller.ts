@@ -22,6 +22,8 @@ import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Response } from 'express';
+import { requestBodySchemas } from '../../http/request-body.schemas';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -66,7 +68,7 @@ export class WorkspaceCodingImportController {
   })
   async importExternalCodingWithProgress(
     @WorkspaceId() workspace_id: number,
-      @Body() body: ExternalCodingImportDto,
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.ExternalCodingImportDto)) body: ExternalCodingImportDto,
       @Res() res: Response
   ): Promise<void> {
     // Guard: SSE endpoint is only for preview mode
@@ -131,7 +133,7 @@ export class WorkspaceCodingImportController {
   })
   async applyExternalCodingImport(
     @WorkspaceId() workspace_id: number,
-      @Body() body: ExternalCodingImportDto
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.ExternalCodingImportDto)) body: ExternalCodingImportDto
   ): Promise<{ jobId: string }> {
     if (!body.file) {
       throw new BadRequestException('File data is required.');
@@ -279,7 +281,7 @@ export class WorkspaceCodingImportController {
   })
   async importExternalCoding(
     @WorkspaceId() workspace_id: number,
-      @Body() body: ExternalCodingImportDto
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.ExternalCodingImportDto)) body: ExternalCodingImportDto
   ): Promise<{
         message: string;
         processedRows: number;

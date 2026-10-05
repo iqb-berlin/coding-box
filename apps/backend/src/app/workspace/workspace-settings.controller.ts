@@ -13,6 +13,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { requestBodySchemas } from '../http/request-body.schemas';
+import { JsonSchemaValidationPipe } from '../http/json-schema-validation.pipe';
 import { Setting } from '../database/entities/setting.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../admin/workspace/workspace.guard';
@@ -155,7 +157,7 @@ export class WorkspaceSettingsController {
   @RequireAccessLevel(3)
   async createWorkspaceSettings(
   @Param('workspaceId', ParseIntPipe) workspaceId: number,
-    @Body() createSettingsDto: WorkspaceSettingsBatchDto
+    @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceSettingsBatchDto)) createSettingsDto: WorkspaceSettingsBatchDto
   ) {
     const settings = this.validateWorkspaceSettingsBatch(createSettingsDto);
 
@@ -202,7 +204,7 @@ export class WorkspaceSettingsController {
   @RequireAccessLevel(3)
   async createWorkspaceSetting(
   @Param('workspaceId', ParseIntPipe) workspaceId: number,
-    @Body() createSettingDto: WorkspaceSettingWriteDto
+    @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceSettingWriteDto)) createSettingDto: WorkspaceSettingWriteDto
   ) {
     const settingKey = this.getWorkspaceSettingStorageKey(
       workspaceId,
@@ -239,7 +241,7 @@ export class WorkspaceSettingsController {
   async updateWorkspaceSetting(
   @Param('workspaceId', ParseIntPipe) workspaceId: number,
     @Param('settingId') settingId: string,
-    @Body() updateSettingDto: { value: string }
+    @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceSettingsController_updateWorkspaceSetting)) updateSettingDto: { value: string }
   ) {
     this.assertSettingIdBelongsToWorkspace(workspaceId, settingId);
 

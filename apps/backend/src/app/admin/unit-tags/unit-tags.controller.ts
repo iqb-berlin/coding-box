@@ -20,6 +20,8 @@ import {
   ApiParam,
   ApiTags
 } from '@nestjs/swagger';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
+import { requestBodySchemas } from '../../http/request-body.schemas';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../workspace/workspace.guard';
 import { WorkspaceId } from '../workspace/workspace.decorator';
@@ -58,7 +60,7 @@ export class UnitTagsController {
   })
   async create(
     @WorkspaceId() workspaceId: number,
-      @Body() createUnitTagDto: CreateUnitTagDto
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.CreateUnitTagDto)) createUnitTagDto: CreateUnitTagDto
   ): Promise<UnitTagDto> {
     try {
       return await this.unitTagService.create(createUnitTagDto);
@@ -182,7 +184,7 @@ export class UnitTagsController {
   async update(
     @WorkspaceId() workspaceId: number,
       @Param('id') id: number,
-      @Body() updateUnitTagDto: UpdateUnitTagDto
+      @Body(new JsonSchemaValidationPipe(requestBodySchemas.UpdateUnitTagDto)) updateUnitTagDto: UpdateUnitTagDto
   ): Promise<UnitTagDto> {
     try {
       return await this.unitTagService.update(id, updateUnitTagDto);

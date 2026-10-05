@@ -11,6 +11,7 @@ import { AppModule } from './app/app.module';
 import { ExportWorkerModule } from './app/export-worker/export-worker.module';
 import { isExportWorkerProcess } from './app/export-worker/export-worker-role';
 import { GlobalHttpExceptionFilter } from './app/http/global-http-exception.filter';
+import { createRequestValidationPipe } from './app/http/request-validation';
 import {
   createRequestMonitoringMiddleware
 } from './app/http/request-monitoring.middleware';
@@ -40,6 +41,7 @@ async function bootstrap() {
 
   app.use(requestIdMiddleware);
   app.useGlobalFilters(new GlobalHttpExceptionFilter());
+  app.useGlobalPipes(createRequestValidationPipe());
 
   app.use((req, _res, next) => {
     const [pathname, query = ''] = req.url.split('?', 2);
