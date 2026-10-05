@@ -1,5 +1,5 @@
 import {
-  Component, ChangeDetectionStrategy, OnChanges, SimpleChanges, input, output
+  Component, ChangeDetectionStrategy, OnChanges, SimpleChanges, input, output, inject
 } from '@angular/core';
 
 import {
@@ -64,6 +64,8 @@ import { CodingResponseSortBy } from '../../../../../models/coding-interfaces';
   ]
 })
 export class ResponseTableComponent implements OnChanges {
+  private translateService = inject(TranslateService);
+
   protected readonly onActionKeydown = activateOnKeyboard;
 
   readonly data = input<Success[]>([]);
@@ -89,8 +91,6 @@ export class ResponseTableComponent implements OnChanges {
   readonly sortChange = output<Sort>();
 
   dataSource = new MatTableDataSource<Success>([]);
-
-  constructor(private translateService: TranslateService) { }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes.data) {

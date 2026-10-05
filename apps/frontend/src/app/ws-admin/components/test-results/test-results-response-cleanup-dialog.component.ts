@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, signal, ChangeDetectionStrategy, DestroyRef, inject
+  Component, OnInit, signal, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -44,6 +44,11 @@ interface VariableOption {
   styleUrls: ['./test-results-response-cleanup-dialog.component.scss']
 })
 export class TestResultsResponseCleanupDialogComponent implements OnInit {
+  private dialogRef = inject<MatDialogRef<TestResultsResponseCleanupDialogComponent, TestResultsResponseCleanupRequestDto | false>>(MatDialogRef);
+  private testResultBackendService = inject(TestResultBackendService);
+  private fileBackendService = inject(FileBackendService);
+  data = inject<TestResultsResponseCleanupDialogData>(MAT_DIALOG_DATA);
+
   private readonly destroyRef = inject(DestroyRef);
 
   readonly availableUnits = signal<string[]>([]);
@@ -55,16 +60,6 @@ export class TestResultsResponseCleanupDialogComponent implements OnInit {
   protected readonly subformsText = signal('');
   protected readonly isLoading = signal(false);
   protected readonly loadFailed = signal(false);
-
-  constructor(
-    private dialogRef: MatDialogRef<
-    TestResultsResponseCleanupDialogComponent,
-    TestResultsResponseCleanupRequestDto | false
-    >,
-    private testResultBackendService: TestResultBackendService,
-    private fileBackendService: FileBackendService,
-    @Inject(MAT_DIALOG_DATA) public data: TestResultsResponseCleanupDialogData
-  ) {}
 
   ngOnInit(): void {
     this.isLoading.set(true);

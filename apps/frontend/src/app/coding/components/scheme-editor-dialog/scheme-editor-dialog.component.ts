@@ -1,6 +1,5 @@
 import {
-  Component, Inject, OnInit, DestroyRef, inject, signal,
-  computed, ChangeDetectionStrategy
+  Component, OnInit, DestroyRef, inject, signal, computed, ChangeDetectionStrategy
 } from '@angular/core';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 
@@ -125,6 +124,14 @@ export interface SchemeEditorDialogData {
   `]
 })
 export class SchemeEditorDialogComponent implements OnInit {
+  dialogRef = inject<MatDialogRef<SchemeEditorDialogComponent>>(MatDialogRef);
+  protected data = inject<SchemeEditorDialogData>(MAT_DIALOG_DATA);
+  private snackBar = inject(MatSnackBar);
+  private fileService = inject(FileService);
+  private translate = inject(TranslateService);
+  private dialog = inject(MatDialog);
+  private router = inject(Router);
+
   private readonly destroyRef = inject(DestroyRef);
   protected readonly loadError = signal('');
   readonly schemerHtml = signal('');
@@ -146,16 +153,6 @@ export class SchemeEditorDialogComponent implements OnInit {
       return raw.toString?.() ?? String(raw);
     }
   });
-
-  constructor(
-    public dialogRef: MatDialogRef<SchemeEditorDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) protected data: SchemeEditorDialogData,
-    private snackBar: MatSnackBar,
-    private fileService: FileService,
-    private translate: TranslateService,
-    private dialog: MatDialog,
-    private router: Router
-  ) { }
 
   ngOnInit(): void {
     this.unitScheme.set({

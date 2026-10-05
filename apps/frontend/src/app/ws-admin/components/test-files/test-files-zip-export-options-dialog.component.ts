@@ -1,5 +1,5 @@
 import {
-  Component, Inject, viewChild, ChangeDetectionStrategy
+  Component, viewChild, ChangeDetectionStrategy, inject
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -78,6 +78,9 @@ export type TestFilesZipExportOptionsDialogData = {
   ]
 })
 export class TestFilesZipExportOptionsDialogComponent {
+  private dialogRef = inject<MatDialogRef<TestFilesZipExportOptionsDialogComponent>>(MatDialogRef);
+  protected dialogData = inject<TestFilesZipExportOptionsDialogData>(MAT_DIALOG_DATA);
+
   readonly fileTypesList = viewChild.required<MatSelectionList>('fileTypesList');
 
   protected data: TestFilesZipExportOptions = {
@@ -86,11 +89,9 @@ export class TestFilesZipExportOptionsDialogComponent {
 
   protected getFileTypeLabel = getFileTypeLabel;
 
-  constructor(
-    private dialogRef: MatDialogRef<TestFilesZipExportOptionsDialogComponent>,
-    @Inject(MAT_DIALOG_DATA)
-    protected dialogData: TestFilesZipExportOptionsDialogData
-  ) {
+  constructor() {
+    const dialogData = this.dialogData;
+
     this.data.fileTypes = [
       ...(dialogData.selectedFileTypes || dialogData.availableFileTypes || [])
     ];

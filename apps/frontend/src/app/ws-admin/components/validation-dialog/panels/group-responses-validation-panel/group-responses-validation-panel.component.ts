@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, OnDestroy, signal, computed, input, output, ChangeDetectionStrategy
+  Component, OnInit, OnDestroy, signal, computed, input, output, ChangeDetectionStrategy, inject
 } from '@angular/core';
 
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -127,6 +127,9 @@ interface GroupResponsesValidationResult {
 })
 export class GroupResponsesValidationPanelComponent
 implements OnInit, OnDestroy {
+  private groupResponsesValidationService = inject(GroupResponsesValidationService);
+  private snackBar = inject(MatSnackBar);
+
   readonly disabled = input(false);
   readonly validate = output<void>();
 
@@ -153,11 +156,6 @@ implements OnInit, OnDestroy {
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
   private taskSubscription?: Subscription;
-
-  constructor(
-    private groupResponsesValidationService: GroupResponsesValidationService,
-    private snackBar: MatSnackBar
-  ) {}
 
   ngOnInit(): void {
     const cachedResult =

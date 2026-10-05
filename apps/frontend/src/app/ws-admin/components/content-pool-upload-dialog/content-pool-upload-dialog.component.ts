@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnDestroy, inject, signal, ChangeDetectionStrategy, DestroyRef
+  Component, OnDestroy, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -59,6 +59,8 @@ export interface ContentPoolUploadDialogResult {
   ]
 })
 export class ContentPoolUploadDialogComponent implements OnDestroy {
+  readonly data = inject<ContentPoolUploadDialogData>(MAT_DIALOG_DATA);
+
   private readonly destroyRef = inject(DestroyRef);
 
   private readonly contentPoolIntegrationService = inject(
@@ -87,9 +89,9 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
 
   private uploadSubscription?: Subscription;
 
-  constructor(
-    @Inject(MAT_DIALOG_DATA) readonly data: ContentPoolUploadDialogData
-  ) {
+  constructor() {
+    const data = this.data;
+
     this.changelog.set(`Dateien aus Coding-Box ersetzt: ${data.files.map(file => file.filename).join(', ')}`);
   }
 

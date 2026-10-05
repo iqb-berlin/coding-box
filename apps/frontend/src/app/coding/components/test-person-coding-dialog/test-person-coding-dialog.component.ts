@@ -29,14 +29,14 @@ export interface TestPersonCodingDialogResult {
   imports: [TestPersonCodingComponent, MatIconModule, MatButtonModule, TranslateModule]
 })
 export class TestPersonCodingDialogComponent implements OnDestroy {
+  dialogRef = inject<MatDialogRef<TestPersonCodingDialogComponent>>(MatDialogRef);
+
   protected data = inject<TestPersonCodingDialogData | null>(MAT_DIALOG_DATA, { optional: true });
   readonly testPersonCodingComponent = viewChild(TestPersonCodingComponent);
 
   private destroy$ = new Subject<void>();
 
-  constructor(
-    public dialogRef: MatDialogRef<TestPersonCodingDialogComponent>
-  ) {
+  constructor() {
     this.dialogRef.backdropClick()
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => this.closeDialog());

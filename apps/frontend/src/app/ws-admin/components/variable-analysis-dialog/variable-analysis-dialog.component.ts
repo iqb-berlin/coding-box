@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy, signal, ChangeDetectionStrategy, DestroyRef, inject
+  Component, OnInit, OnDestroy, signal, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
@@ -201,6 +201,13 @@ type VariableAnalysisExportFormat = 'csv' | 'xlsx';
   ]
 })
 export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
+  dialogRef = inject<MatDialogRef<VariableAnalysisDialogComponent>>(MatDialogRef);
+  data = inject<VariableAnalysisData>(MAT_DIALOG_DATA);
+  private variableAnalysisService = inject(VariableAnalysisService);
+  private snackBar = inject(MatSnackBar);
+  private translate = inject(TranslateService);
+  private dialog = inject(MatDialog);
+
   private readonly destroyRef = inject(DestroyRef);
 
   readonly isLoading = signal(false);
@@ -278,15 +285,6 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   private hasAutoStarted = false;
   protected readonly isInitializing = signal(false);
   readonly isExporting = signal(false);
-
-  constructor(
-    public dialogRef: MatDialogRef<VariableAnalysisDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: VariableAnalysisData,
-    private variableAnalysisService: VariableAnalysisService,
-    private snackBar: MatSnackBar,
-    private translate: TranslateService,
-    private dialog: MatDialog
-  ) {}
 
   ngOnInit(): void {
     this.searchSubscription = this.searchSubject

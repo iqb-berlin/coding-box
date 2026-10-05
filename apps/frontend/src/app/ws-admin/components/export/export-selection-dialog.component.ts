@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -178,13 +178,13 @@ export interface ExportSelectionDialogResult {
   `]
 })
 export class ExportSelectionDialogComponent {
+  dialogRef = inject<MatDialogRef<ExportSelectionDialogComponent>>(MatDialogRef);
+  protected data = inject<ExportSelectionDialogData>(MAT_DIALOG_DATA);
+
   private selected = new Set<string>();
 
-  constructor(
-    public dialogRef: MatDialogRef<ExportSelectionDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) protected data: ExportSelectionDialogData
-  ) {
-    for (const id of data.selectedCombinedJobIds ?? []) {
+  constructor() {
+    for (const id of this.data.selectedCombinedJobIds ?? []) {
       this.selected.add(id);
     }
   }

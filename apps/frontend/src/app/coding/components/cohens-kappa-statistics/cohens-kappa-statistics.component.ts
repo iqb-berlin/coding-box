@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, Inject, Optional, computed, inject, signal, ChangeDetectionStrategy, DestroyRef
+  Component, OnInit, computed, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
@@ -61,6 +61,9 @@ export interface CohensKappaStatisticsDialogData {
   ]
 })
 export class CohensKappaStatisticsComponent implements OnInit {
+  protected dialogRef = inject<MatDialogRef<CohensKappaStatisticsComponent>>(MatDialogRef, { optional: true });
+  dialogData = inject<CohensKappaStatisticsDialogData | null>(MAT_DIALOG_DATA, { optional: true });
+
   private readonly destroyRef = inject(DestroyRef);
 
   private testPersonCodingService = inject(TestPersonCodingService);
@@ -69,10 +72,9 @@ export class CohensKappaStatisticsComponent implements OnInit {
   private snackBar = inject(MatSnackBar);
   private kappaStatisticsRequestId = 0;
 
-  constructor(
-    @Optional() protected dialogRef: MatDialogRef<CohensKappaStatisticsComponent>,
-    @Optional() @Inject(MAT_DIALOG_DATA) public dialogData: CohensKappaStatisticsDialogData | null
-  ) {
+  constructor() {
+    const dialogData = this.dialogData;
+
     this.availableCoderTrainings.set(dialogData?.availableCoderTrainings ?? []);
     this.selectedCoderTrainingId.set(this.getInitialCoderTrainingId());
     this.excludeTrainings.set(dialogData?.excludeTrainings ??

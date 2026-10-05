@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -21,15 +21,17 @@ interface DialogData {
   styleUrls: ['./test-person-coding-job-result-dialog.component.scss']
 })
 export class TestPersonCodingJobResultDialogComponent {
+  protected data = inject<DialogData>(MAT_DIALOG_DATA);
+  private dialogRef = inject<MatDialogRef<TestPersonCodingJobResultDialogComponent>>(MatDialogRef);
+
   protected displayedColumns = ['status', 'count'];
   protected statusRows: { status: string; count: number }[] = [];
   warnings: string[] = [];
   protected effectiveTotal = 0;
 
-  constructor(
-    @Inject(MAT_DIALOG_DATA) protected data: DialogData,
-    private dialogRef: MatDialogRef<TestPersonCodingJobResultDialogComponent>
-  ) {
+  constructor() {
+    const data = this.data;
+
     const result = data.job.result;
     this.warnings = result?.warnings || [];
     if (result?.statusCounts) {
