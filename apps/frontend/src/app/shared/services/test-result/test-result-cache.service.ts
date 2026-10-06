@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
-import { tap, catchError, map } from 'rxjs/operators';
+import { tap, map } from 'rxjs/operators';
 import { SERVER_URL } from '../../../injection-tokens';
 
 interface CacheEntry<T> {
@@ -74,7 +74,6 @@ export class TestResultCacheService {
         params: params
       }
     ).pipe(
-      catchError(() => of({ data: [], total: 0 })),
       map(result => result || { data: [], total: 0 }),
       tap(result => this.addToCache(cacheKey, result))
     );

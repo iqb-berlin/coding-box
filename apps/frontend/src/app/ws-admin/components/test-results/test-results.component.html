@@ -345,7 +345,8 @@
     <mat-spinner class="mat-spinner"></mat-spinner>
     <p class="loading-text">{{ uploadingMessage }}</p>
   </div>
-  } @if(!isUploadingResults){ @if (dataSource) { @if (isTableView) {
+  } @if(!isUploadingResults){
+  @if (isTableView) {
   <coding-box-test-results-flat-table
     [initialFilters]="quickSearchTableFilters"
     [showWorkspaceLogAnomalies]="showTestResultsLogAnomalies"
@@ -354,6 +355,23 @@
     (responseDeleted)="onFlatTableResponseDeleted()"
   ></coding-box-test-results-flat-table>
   } @else {
+  @if (testResultsLoadFailed) {
+  <div class="coding-freshness-banner test-results-load-error" role="alert">
+    <mat-icon>warning</mat-icon>
+    <span>{{ 'search-filter.test-results-load-error' | translate }}</span>
+    <button mat-stroked-button type="button" (click)="retryTestResultsLoad()">
+      <mat-icon>refresh</mat-icon>
+      {{ 'test-results-page.retry' | translate }}
+    </button>
+  </div>
+  }
+  @if (isLoading && !dataSource) {
+  <div class="loading-container">
+    <mat-spinner class="mat-spinner"></mat-spinner>
+    <p class="loading-text">{{ 'test-results-page.loading' | translate }}</p>
+  </div>
+  }
+  @if (dataSource) {
   <div class="content-container">
     <div class="data-card">
       <div class="section-header">
@@ -937,7 +955,7 @@
       </div>
     </div>
   </div>
-  } } @else {
+  } @else if (!isLoading && !testResultsLoadFailed) {
   <div class="empty-state-container">
     <mat-icon class="empty-state-icon">assignment</mat-icon>
     <h2 class="empty-state-title">Keine Testergebnisse vorhanden</h2>
@@ -945,5 +963,5 @@
       Laden Sie Antworten oder Logs hoch, um Testergebnisse anzuzeigen.
     </p>
   </div>
-  } }
+  } } }
 </div>

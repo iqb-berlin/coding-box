@@ -408,6 +408,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private searchSubscription: Subscription | null = null;
   private deleteTaskSubscription: Subscription | null = null;
   private flatFilterRequestSubscription: Subscription | null = null;
+  private testResultsRequest = { page: 0, limit: 50, searchText: '' };
+  private testResultsRequestGeneration = 0;
   private readonly SEARCH_DEBOUNCE_TIME = 800;
   selection = new SelectionModel<P>(true, []);
   dataSource!: MatTableDataSource<P>;
@@ -435,6 +437,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   testPerson: P | null = null;
   selectedBooklet!: Booklet | string;
   isLoading: boolean = true;
+  testResultsLoadFailed: boolean = false;
   isUploadingResults: boolean = false;
   isSearching: boolean = false;
   isLoadingBooklets: boolean = false;
@@ -547,6 +550,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.testResultsRequestGeneration += 1;
     if (this.searchSubscription) {
       this.searchSubscription.unsubscribe();
       this.searchSubscription = null;
@@ -1221,25 +1225,45 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     limit: number = 50,
     searchText: string = ''
   ): void {
+    this.testResultsRequestGeneration += 1;
+    const requestGeneration = this.testResultsRequestGeneration;
+    const workspaceId = this.appService.selectedWorkspaceId;
+    this.testResultsRequest = { page, limit, searchText };
     this.isLoading = true;
+    this.testResultsLoadFailed = false;
     this.testResultService
       .getTestResults(
-        this.appService.selectedWorkspaceId,
+        workspaceId,
         page,
         limit,
         searchText
       )
       .subscribe({
         next: response => {
+          if (requestGeneration !== this.testResultsRequestGeneration ||
+            workspaceId !== this.appService.selectedWorkspaceId) {
+            return;
+          }
           this.isLoading = false;
           this.isSearching = false;
           const { data, total } = response;
           this.updateTable(data, total);
         },
         error: () => {
+          if (requestGeneration !== this.testResultsRequestGeneration ||
+            workspaceId !== this.appService.selectedWorkspaceId) {
+            return;
+          }
           this.isLoading = false;
+          this.isSearching = false;
+          this.testResultsLoadFailed = true;
         }
       });
+  }
+
+  retryTestResultsLoad(): void {
+    const { page, limit, searchText } = this.testResultsRequest;
+    this.createTestResultsList(page, limit, searchText);
   }
 
   private loadWorkspaceOverview(): void {

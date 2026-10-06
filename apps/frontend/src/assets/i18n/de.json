@@ -2372,6 +2372,8 @@
     }
   },
   "test-results-page": {
+    "loading": "Testergebnisse werden geladen...",
+    "retry": "Wiederholen",
     "coding-status": {
       "manual-title": "Kodierstatus wird manuell aktualisiert",
       "manual-text": "Automatische Statusprüfungen sind für diesen Arbeitsbereich deaktiviert. Aktualisieren Sie den Kodierstatus in der Kodierungsverwaltung bei Bedarf manuell.",
