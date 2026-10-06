@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { WsgCodingJobModule } from './coding-job/coding-job.module';
 import { WorkspaceSettingsController } from '../workspace/workspace-settings.controller';
+import { WorkspaceSettingsService } from '../workspace/workspace-settings.service';
 import { Setting } from '../database/entities/setting.entity';
 import { AuthModule } from '../auth/auth.module';
 
@@ -12,7 +13,7 @@ import { AuthModule } from '../auth/auth.module';
     TypeOrmModule.forFeature([Setting])
   ],
   controllers: [WorkspaceSettingsController],
-  providers: [],
+  providers: [WorkspaceSettingsService],
   exports: []
 })
 export class WsgAdminModule {}
