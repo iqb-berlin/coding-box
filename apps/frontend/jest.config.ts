@@ -21,7 +21,7 @@ export default {
     'jest-preset-angular/build/serializers/html-comment'
   ],
   moduleNameMapper: {
-    '^@swimlane/ngx-charts$': '<rootDir>/src/test-setup.ts',
+    '^@swimlane/ngx-charts$': '<rootDir>/src/test-mocks.ts',
     '^keycloak-js$': '<rootDir>/src/mocks/keycloak-js.mock.ts',
     '^@iqb/metadata-resolver$': '<rootDir>/../../node_modules/@iqb/metadata-resolver/dist/index.mjs',
     '^@iqb/metadata-resolver/(.*)$': '<rootDir>/../../node_modules/@iqb/metadata-resolver/dist/$1'

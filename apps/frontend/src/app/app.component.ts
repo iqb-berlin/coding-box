@@ -1,6 +1,7 @@
 import {
-  Component, OnInit, OnDestroy, effect, inject
+  Component, OnInit, OnDestroy, DestroyRef, effect, inject, untracked
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   Router, RouterLink, RouterOutlet, NavigationEnd
 } from '@angular/router';
@@ -12,7 +13,7 @@ import { MatButton } from '@angular/material/button';
 import { LocationStrategy } from '@angular/common';
 import { KeycloakProfile } from 'keycloak-js';
 import { KEYCLOAK_EVENT_SIGNAL } from 'keycloak-angular';
-import { Subscription, filter, firstValueFrom } from 'rxjs';
+import { filter, firstValueFrom } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
@@ -51,25 +52,35 @@ export class AppComponent implements OnInit, OnDestroy {
   errorMessage = '';
   authData: AuthDataDto = AppService.defaultAuthData;
   currentWorkspaceName = '';
-  private routerSubscription: Subscription | null = null;
+  private readonly destroyRef = inject(DestroyRef);
 
   constructor() {
     effect(() => {
-      handleKeycloakSessionEvent(this.keycloakEvent(), this.appService, this.router);
-      if (this.authService.isLoggedIn() && !this.appService.needsReAuthentication) {
-        this.authSessionActivity.start();
-      } else {
-        this.authSessionActivity.restart();
-      }
+      const event = this.keycloakEvent();
+      // Only a new Keycloak event may replay its authentication side effects.
+      untracked(() => handleKeycloakSessionEvent(event, this.appService, this.router));
     });
 
-    this.appService.authData$.subscribe(authData => {
+    effect(() => {
+      // Keycloak authentication itself is not a signal; re-read it on each event.
+      this.keycloakEvent();
+      const sessionActive = this.authService.isLoggedIn() && !this.appService.needsReAuthentication;
+      untracked(() => {
+        if (sessionActive) {
+          this.authSessionActivity.start();
+        } else {
+          this.authSessionActivity.restart();
+        }
+      });
+    });
+
+    this.appService.authData$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(authData => {
       this.authData = authData;
       this.updateCurrentWorkspaceName();
     });
 
-    this.routerSubscription = this.router.events
-      .pipe(filter(event => event instanceof NavigationEnd))
+    this.router.events
+      .pipe(filter(event => event instanceof NavigationEnd), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         this.updateCurrentWorkspaceName();
       });
@@ -92,7 +103,6 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.routerSubscription?.unsubscribe();
     this.authSessionActivity.stop();
     this.systemNotifications.stopPolling();
   }

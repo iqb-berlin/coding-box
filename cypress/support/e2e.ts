@@ -5,9 +5,11 @@ interface WorkspaceStubOptions {
   userId?: number;
   identity?: string;
   workspaceName?: string;
+  isAdmin?: boolean;
+  accessLevel?: number;
 }
 
-const createToken = (nonce: string, identity: string): string => {
+const createToken = (nonce: string, identity: string, roles: string[]): string => {
   const now = Math.floor(Date.now() / 1000);
   const encode = (value: object) =>
     Cypress.Buffer.from(JSON.stringify(value))
@@ -23,7 +25,7 @@ const createToken = (nonce: string, identity: string): string => {
       iat: now,
       exp: now + 3600,
       session_state: 'e2e-session',
-      realm_access: { roles: ['admin'] }
+      realm_access: { roles }
     }),
     'e2e'
   ].join('.');
@@ -31,7 +33,7 @@ const createToken = (nonce: string, identity: string): string => {
 
 Cypress.Commands.add(
   'mockKeycloakAuthentication',
-  (identity = 'e2e-user') => {
+  (identity = 'e2e-user', roles = ['admin']) => {
     let nonce = '';
     cy.intercept(
       'GET',
@@ -52,7 +54,7 @@ Cypress.Commands.add(
       'POST',
       `${keycloakUrl}/realms/coding-box/protocol/openid-connect/token`,
       request => {
-        const token = createToken(nonce, identity);
+        const token = createToken(nonce, identity, roles);
         request.reply({
           access_token: token,
           refresh_token: token,
@@ -81,7 +83,9 @@ Cypress.Commands.add(
     workspaceId,
     userId = 2,
     identity = 'e2e-user',
-    workspaceName = 'E2E Workspace'
+    workspaceName = 'E2E Workspace',
+    isAdmin = true,
+    accessLevel
   }: WorkspaceStubOptions) => {
     cy.intercept('GET', '**/api//admin/logo/settings', {
       statusCode: 404,
@@ -95,12 +99,12 @@ Cypress.Commands.add(
         email: `${identity}@example.org`,
         firstName: 'E2E',
         lastName: 'User',
-        isAdmin: true,
+        isAdmin,
         workspaces: [{ id: workspaceId, name: workspaceName }]
       }
     }).as('authData');
     cy.intercept('GET', `**/api/admin/users/access/${workspaceId}`, {
-      body: []
+      body: accessLevel === undefined ? [] : [{ id: userId, accessLevel, canCode: accessLevel === 1 }]
     });
     cy.intercept(
       'GET',
@@ -119,6 +123,12 @@ Cypress.Commands.add(
       `**/api/workspace/${workspaceId}/settings/auth-session-idle-timeout-minutes`,
       { body: 30 }
     );
+    cy.intercept('GET', `**/api/admin/workspace/${workspaceId}/coding/export-missings-profiles`, {
+      body: []
+    });
+    cy.intercept('GET', `**/api/admin/workspace/${workspaceId}/coding/freshness`, {
+      body: { workspaceId, currentRevision: 0, items: [] }
+    });
     cy.intercept(
       'GET',
       `**/api/admin/workspace/${workspaceId}/responses/geogebra-existence`,
@@ -130,7 +140,7 @@ Cypress.Commands.add(
 declare global {
   namespace Cypress {
     interface Chainable {
-      mockKeycloakAuthentication(identity?: string): Chainable<void>;
+      mockKeycloakAuthentication(identity?: string, roles?: string[]): Chainable<void>;
       stubWorkspace(options: WorkspaceStubOptions): Chainable<void>;
     }
   }

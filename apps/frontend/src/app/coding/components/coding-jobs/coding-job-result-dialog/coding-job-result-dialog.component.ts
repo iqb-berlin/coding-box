@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy, AfterViewInit,
+  ChangeDetectorRef, Component, Inject, OnInit, OnDestroy, AfterViewInit,
   ViewChild,
   inject,
   HostListener
@@ -131,6 +131,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   private translateService = inject(TranslateService);
   private router = inject(Router);
   private dialog = inject(MatDialog);
+  private changeDetector = inject(ChangeDetectorRef);
 
   isLoading = true;
   isNotesUnavailable = false;
@@ -227,6 +228,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       takeUntil(this.destroy$),
       finalize(() => {
         this.isLoading = false;
+        this.changeDetector.markForCheck();
       })
     ).subscribe({
       next: ({
@@ -635,11 +637,13 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       }
 
       this.isLoading = true;
+      this.changeDetector.markForCheck();
       this.codingJobBackendService.applyCodingResults(this.data.workspaceId, this.data.codingJob.id, {
         overwriteExisting: dialogResult.overwriteExisting
       }).subscribe({
         next: result => {
           this.isLoading = false;
+          this.changeDetector.markForCheck();
           let message = this.translateService.instant(result.messageKey, result.messageParams || {});
           if (result.success) {
             this.hasAppliedResults = true;
@@ -673,6 +677,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
         },
         error: error => {
           this.isLoading = false;
+          this.changeDetector.markForCheck();
           this.snackBar.open(`Fehler beim Anwenden der Kodierergebnisse: ${error.message || error}`, 'Schließen', { duration: 5000 });
         }
       });

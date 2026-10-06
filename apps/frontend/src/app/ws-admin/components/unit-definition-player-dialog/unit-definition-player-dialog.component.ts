@@ -1,4 +1,6 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import {
+  ChangeDetectorRef, inject, Component, Inject, OnInit
+} from '@angular/core';
 
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -27,6 +29,8 @@ import { UnitPlayerComponent } from '../../../replay/components/unit-player/unit
   ]
 })
 export class UnitDefinitionPlayerDialogComponent implements OnInit {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   isLoading = true;
   errorMessage: string | null = null;
 
@@ -58,6 +62,7 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
 
     this.fileService.getUnit(workspaceId, unitId).subscribe({
       next: (unitFiles: FilesDto[]) => {
+        this.changeDetectorRef.markForCheck();
         if (!unitFiles || unitFiles.length === 0) {
           this.errorMessage = `Aufgabe ${unitId} wurde nicht gefunden.`;
           this.isLoading = false;
@@ -97,6 +102,7 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
             return of({ def: [] as FilesDto[], player: [] as FilesDto[] });
           })
         ).subscribe((result: { def: FilesDto[]; player: FilesDto[] }) => {
+          this.changeDetectorRef.markForCheck();
           if (this.errorMessage) {
             return;
           }
@@ -116,6 +122,7 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
         });
       },
       error: () => {
+        this.changeDetectorRef.markForCheck();
         this.errorMessage = 'Fehler beim Laden der Aufgabendaten.';
         this.isLoading = false;
       }

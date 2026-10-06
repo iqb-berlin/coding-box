@@ -1,5 +1,5 @@
 import {
-  Component, ElementRef, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild, HostListener, inject,
+  ChangeDetectorRef, Component, ElementRef, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild, HostListener, inject,
   input
 } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -120,6 +120,7 @@ interface ReplayRecoveryDraft {
   styleUrl: './replay.component.scss'
 })
 export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
+  private changeDetectorRef = inject(ChangeDetectorRef);
   private fileService = inject(FileService);
   private replayBackendService = inject(ReplayBackendService);
   private appService = inject(AppService);
@@ -943,6 +944,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     } else if (this.isCodingMode && !this.codingService.codingScheme) {
       this.loadCodingSchemeForCodingJob(unitPayloadRunId);
     }
+    this.changeDetectorRef.markForCheck();
   }
 
   private nextUnitPayloadRunId(): number {
@@ -1054,6 +1056,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.prefixResponseServerTimings(responsePayload.serverTimings)
       );
       this.appliedReplayContext = context;
+      this.changeDetectorRef.markForCheck();
       this.setIsLoaded();
       return true;
     } catch (error) {
@@ -1434,6 +1437,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (!preserveCodingData) {
       this.codingService.resetCodingData();
     }
+    this.changeDetectorRef.markForCheck();
   }
 
   private createReplayRecoveryDraft(): ReplayRecoveryDraft | null {
@@ -1871,7 +1875,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return this.codingService.getPreSelectedCodingIssueOptionId(this.testPerson, this.unitId, variableId);
   }
 
-  pauseCodingJob(): void {
+  async pauseCodingJob(): Promise<void> {
     if (
       this.codingService.codingJobId &&
       !this.isCodingInteractionBlockedByReAuthentication() &&
@@ -1879,13 +1883,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       !this.codingService.isCompletedJobReview &&
       !this.codingService.isCodingJobFinalized
     ) {
-      this.codingService.pauseCodingJob(this.workspaceId, this.codingService.codingJobId);
+      await this.codingService.pauseCodingJob(this.workspaceId, this.codingService.codingJobId);
+      this.changeDetectorRef.markForCheck();
     }
   }
 
-  resumeCodingJob(): void {
+  async resumeCodingJob(): Promise<void> {
     if (this.codingService.codingJobId && !this.isReviewMode && !this.isCodingInteractionBlockedByReAuthentication()) {
-      this.codingService.resumeCodingJob(this.workspaceId, this.codingService.codingJobId);
+      await this.codingService.resumeCodingJob(this.workspaceId, this.codingService.codingJobId);
+      this.changeDetectorRef.markForCheck();
     }
   }
 
@@ -2169,6 +2175,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           }
           if (fileData && fileData.base64Data) {
             this.codingService.setCodingSchemeFromVocsData(fileData.base64Data);
+            this.changeDetectorRef.markForCheck();
           }
         });
     }

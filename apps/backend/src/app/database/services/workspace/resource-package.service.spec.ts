@@ -6,6 +6,7 @@ import * as AdmZip from 'adm-zip';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { spawnSync } from 'child_process';
 import ResourcePackage from '../../entities/resource-package.entity';
 import { ResourcePackageService } from './resource-package.service';
 
@@ -51,6 +52,36 @@ describe('ResourcePackageService', () => {
 
   afterEach(() => {
     fs.rmSync(packagesPath, { recursive: true, force: true });
+  });
+
+  it('rejects a corrupt later ZIP entry without an uncaught exception or partial package', () => {
+    const result = spawnSync(process.execPath, [
+      path.join(__dirname, 'resource-package-extraction.fixture.cjs'), process.cwd()
+    ], { encoding: 'utf8', timeout: 10000 });
+
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({ rejected: true, leftovers: [] });
+  });
+
+  it('preserves ordinary package content and empty directories without privileged permission bits', async () => {
+    const zip = new AdmZip();
+    const binary = Buffer.from([0, 255, 128, 13, 10]);
+    zip.addFile('empty/', Buffer.alloc(0), '', 0o2700);
+    zip.addFile('data/ä.txt', Buffer.from('Grüße'), '', 0o4600);
+    zip.addFile('data/image.bin', binary);
+    const buffer = zip.toBuffer();
+
+    await service.create(7, createUpload('Ordinary.itcr.zip', buffer));
+
+    const directory = path.join(packagesPath, 'Ordinary');
+    expect(fs.readFileSync(path.join(directory, 'data/ä.txt'), 'utf8')).toBe('Grüße');
+    expect(fs.readFileSync(path.join(directory, 'data/image.bin'))).toEqual(binary);
+    expect(fs.readdirSync(path.join(directory, 'empty'))).toEqual([]);
+    expect(fs.statSync(path.join(directory, 'empty')).mode % 4096).toBe(0o700);
+    expect(fs.statSync(path.join(directory, 'data/ä.txt')).mode % 4096).toBe(0o600);
+    expect(fs.readFileSync(path.join(directory, 'Ordinary.itcr.zip'))).toEqual(buffer);
+    expect(packages[0]).toMatchObject({ name: 'Ordinary', workspaceId: 7, scope: 'workspace' });
   });
 
   it('should install the current GeoGebra bundle ZIP layout', async () => {

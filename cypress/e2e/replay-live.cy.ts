@@ -50,6 +50,10 @@ describe('live replay with the embedded Aspect player', () => {
     cy.task('replay:cleanup', null, { log: false });
   });
 
+  afterEach(() => {
+    cy.window().should('not.have.property', 'Zone');
+  });
+
   it('replays two people, two pages, aliases, anchors and the typed negative response', () => {
     visitReplay(setup, setup.expected.personA, setup.expected.pages[0]);
     assertPlayerAlias(setup.expected.pageAliases[0]);

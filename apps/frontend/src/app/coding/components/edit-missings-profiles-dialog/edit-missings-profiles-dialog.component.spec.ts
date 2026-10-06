@@ -1,8 +1,15 @@
+import { ChangeDetectorRef } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { EditMissingsProfilesDialogComponent } from './edit-missings-profiles-dialog.component';
 import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
 
 describe('EditMissingsProfilesDialogComponent', () => {
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [{ provide: ChangeDetectorRef, useValue: { markForCheck: jest.fn() } }]
+    });
+  });
   const createValidMissings = (): MissingDto[] => [
     {
       id: 'mir',
@@ -28,14 +35,14 @@ describe('EditMissingsProfilesDialogComponent', () => {
       getMissingsProfileDetails: jest.Mock;
     }> = {},
     snackBar = { open: jest.fn() }
-  ) => new EditMissingsProfilesDialogComponent(
+  ) => TestBed.runInInjectionContext(() => new EditMissingsProfilesDialogComponent(
     { close: jest.fn() } as never,
     { workspaceId: 1 },
     missingsProfileService as never,
     {} as never,
     snackBar as never,
     { instant: jest.fn(key => key) } as never
-  );
+  ));
 
   it('validates missing entries like the backend', () => {
     const component = createComponent();

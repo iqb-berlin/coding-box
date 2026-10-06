@@ -1,3 +1,4 @@
+import { ChangeDetectorRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService } from '@ngx-translate/core';
@@ -35,6 +36,7 @@ describe('UsersComponent', () => {
         { provide: WorkspaceBackendService, useValue: {} },
         { provide: AppService, useValue: appService },
         { provide: MatSnackBar, useValue: snackBar },
+        { provide: ChangeDetectorRef, useValue: { markForCheck: jest.fn() } },
         { provide: TranslateService, useValue: { instant: (key: string) => key } }
       ]
     });

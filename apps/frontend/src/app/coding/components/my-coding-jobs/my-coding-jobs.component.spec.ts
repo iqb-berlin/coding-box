@@ -99,12 +99,29 @@ describe('MyCodingJobsComponent', () => {
     component = fixture.componentInstance;
   });
 
+  it('stops loading jobs from auth updates after the view is destroyed', () => {
+    const authData = new BehaviorSubject({ userId: 7, workspaces: [] });
+    const appService = TestBed.inject(AppService) as unknown as { authData$: Observable<unknown> };
+    appService.authData$ = authData.asObservable();
+    const loadJobs = jest.spyOn(component, 'loadMyCodingJobs').mockImplementation(() => {});
+    fixture.detectChanges();
+    expect(loadJobs).toHaveBeenCalledTimes(1);
+    authData.next({ userId: 8, workspaces: [] });
+    expect(loadJobs).toHaveBeenCalledTimes(2);
+
+    fixture.destroy();
+    authData.next({ userId: 9, workspaces: [] });
+    expect(loadJobs).toHaveBeenCalledTimes(2);
+    expect(component.currentUserId).toBe(8);
+  });
+
   it('renders completed coding jobs with start and submit-for-review actions', () => {
     fixture.detectChanges();
     component.isAuthorized = true;
     component.isLoading = false;
     component.dataSource.data = [completedJob];
     component.jobsTotal = 1;
+    fixture.changeDetectorRef.markForCheck();
 
     fixture.detectChanges();
 
@@ -132,6 +149,7 @@ describe('MyCodingJobsComponent', () => {
       component.isLoading = false;
       component.dataSource.data = [job];
       component.jobsTotal = 1;
+      fixture.changeDetectorRef.markForCheck();
 
       fixture.detectChanges();
 
@@ -640,5 +658,31 @@ describe('MyCodingJobsComponent', () => {
       'http://localhost/#/replay/person/unit/0/var?mode=coding&codingJobId=10&workspaceId=1',
       '_blank'
     );
+  });
+  it('renders the empty state after delayed authorization without workspaces', async () => {
+    const auth = new Subject<{ userId: number; workspaces: [] }>();
+    const appService = TestBed.inject(AppService) as unknown as { authData$: Observable<unknown> };
+    appService.authData$ = auth;
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    auth.next({ userId: 7, workspaces: [] });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('coding.my-coding-jobs.no-jobs-assigned');
+    expect(fixture.nativeElement.querySelector('.filter-row')).not.toBeNull();
+  });
+
+  it('ends the loading view after a delayed job-list error', async () => {
+    const response = new Subject<{ data: CodingJob[]; total: number; page: number; limit: number }>();
+    jest.spyOn(TestBed.inject(CodingJobBackendService), 'getCodingJobs').mockReturnValue(response);
+    const appService = TestBed.inject(AppService) as unknown as { authData$: Observable<unknown> };
+    appService.authData$ = of({ userId: 7, workspaces: [{ id: 1, name: 'Workspace' }] });
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.loading-container')).not.toBeNull();
+    response.error(new Error('failed'));
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('.loading-container')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.filter-row')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('coding.my-coding-jobs.no-jobs-assigned');
   });
 });

@@ -1,10 +1,11 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import { MAT_DIALOG_DATA, MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { WorkspaceProcessesService } from '../../services/workspace-processes.service';
 import { ProcessOverviewComponent } from './process-overview.component';
 import { ProcessDto } from '../../../../../../../api-dto/workspaces/process-dto';
@@ -42,6 +43,7 @@ describe('ProcessOverviewComponent', () => {
         ProcessOverviewComponent
       ],
       providers: [
+        provideZonelessChangeDetection(),
         { provide: WorkspaceProcessesService, useValue: processesService },
         { provide: MatDialog, useValue: dialog },
         { provide: MatSnackBar, useValue: snackBar },
@@ -207,6 +209,19 @@ describe('ProcessOverviewComponent', () => {
       'Schließen',
       { duration: 3000 }
     );
+  });
+
+  it('clears the loading overlay after a delayed background-process response', async () => {
+    const response = new Subject<ProcessDto[]>();
+    processesService.getProcesses.mockReturnValueOnce(response.asObservable());
+    component.loadProcesses();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.loading-overlay')).not.toBeNull();
+
+    response.next([]);
+    await fixture.whenStable();
+
+    expect(fixture.nativeElement.querySelector('.loading-overlay')).toBeNull();
   });
 
   it('uses precise action semantics for active and inactive jobs', () => {

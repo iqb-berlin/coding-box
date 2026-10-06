@@ -1335,8 +1335,9 @@ export class ContentPoolIntegrationService {
     return 20 + Math.round((processedFiles / totalFiles) * 68);
   }
 
-  private inferMimeType(fileName: string, contentType?: string): string {
-    const normalizedContentType = (contentType || '').toLowerCase().split(';')[0].trim();
+  private inferMimeType(fileName: string, contentType?: unknown): string {
+    const normalizedContentType = typeof contentType === 'string' ?
+      contentType.toLowerCase().split(';')[0].trim() : '';
     const extension = fileName.includes('.') ?
       fileName.slice(fileName.lastIndexOf('.')).toLowerCase() :
       '';

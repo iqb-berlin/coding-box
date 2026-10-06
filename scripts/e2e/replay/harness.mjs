@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import AdmZip from 'adm-zip';
+import { findComposeContainer } from './compose-container.mjs';
 
 const REQUIRED_ENV = [
   'REPLAY_E2E_API_URL',
@@ -35,7 +36,44 @@ export function createReplayHarness(environment = process.env) {
       }
 
       activeState = await setupReplayWorkspace(config);
+      if (environment.REPLAY_E2E_AUTH === 'true') {
+        const { setupCodingFixture } = await import('./auth-fixture.mjs');
+        Object.assign(activeState.browser, await setupCodingFixture(activeState, environment));
+      }
       return activeState.browser;
+    },
+
+    async readFileSettings() {
+      if (!activeState || environment.REPLAY_E2E_AUTH !== 'true') {
+        throw new Error('File settings read requires the isolated authentication fixture.');
+      }
+      const { workspaceId, adminToken } = activeState;
+      const regex = await apiJson(config, `/workspace/${workspaceId}/settings/enable-regex-search`, { token: adminToken });
+      const pool = await apiJson(config, `/admin/workspace/${workspaceId}/content-pool/config`, { token: adminToken });
+      return { regex: JSON.parse(regex.value), pool };
+    },
+
+    async prepareFileSettings() {
+      if (!activeState || environment.REPLAY_E2E_AUTH !== 'true') {
+        throw new Error('File settings setup requires the isolated authentication fixture.');
+      }
+      const { workspaceId, adminToken } = activeState;
+      const headers = { 'content-type': 'application/json' };
+      await apiJson(config, `/workspace/${workspaceId}/settings`, {
+        method: 'POST', token: adminToken, headers,
+        body: JSON.stringify({ key: 'enable-regex-search', value: JSON.stringify({ enabled: true }) })
+      });
+      await apiJson(config, '/admin/content-pool/settings', {
+        method: 'PUT', token: adminToken, headers,
+        body: JSON.stringify({ enabled: true, baseUrl: 'https://synthetic.example.invalid',
+          applicationToken: 'file-settings-e2e-synthetic-token' })
+      });
+      const regex = await apiJson(config, `/workspace/${workspaceId}/settings/enable-regex-search`, { token: adminToken });
+      const pool = await apiJson(config, `/admin/workspace/${workspaceId}/content-pool/config`, { token: adminToken });
+      if (!JSON.parse(regex.value).enabled || !pool.enabled || !pool.hasApplicationToken) {
+        throw new Error('File settings fixture did not persist.');
+      }
+      return pool;
     },
 
     async verifyItemMatrix() {
@@ -427,10 +465,11 @@ async function seedIncompleteItemMatrixFixture(config, workspaceId) {
     )
     SELECT COUNT(*) FROM updated_responses;
   `;
+  const dbContainer = await findComposeContainer(config.composeProject, 'db');
   const output = await runCapture('docker', [
     'exec',
     '-i',
-    `${config.composeProject}-db-1`,
+    dbContainer,
     'psql',
     '--username=replay_e2e',
     '--dbname=replay_e2e',
@@ -490,7 +529,12 @@ async function pollExportJob(config, workspaceId, token, jobId) {
       `/admin/workspace/${workspaceId}/coding/export/job/${encodeURIComponent(jobId)}`,
       { token }
     );
-    if (lastStatus.status === 'failed' || lastStatus.status === 'completed') {
+    // The queue can expose the failed state before failedReason (and therefore
+    // the public diagnostic metadata) is visible through the status endpoint.
+    if (
+      lastStatus.status === 'completed' ||
+      (lastStatus.status === 'failed' && lastStatus.error)
+    ) {
       return lastStatus;
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
@@ -703,7 +747,7 @@ function createAdminToken(config) {
   const now = Math.floor(Date.now() / 1000);
   return signHs256(
     {
-      iss: ISSUER,
+      iss: config.issuer || ISSUER,
       sub: `replay-e2e-admin-${config.runId}`,
       aud: CLIENT_ID,
       azp: CLIENT_ID,
@@ -750,6 +794,7 @@ function readConfig(environment) {
   }
 
   return {
+    issuer: environment.REPLAY_E2E_OIDC_ISSUER,
     apiUrl: environment.REPLAY_E2E_API_URL,
     baseUrl: environment.REPLAY_E2E_BASE_URL,
     cacheDir: path.resolve(environment.REPLAY_E2E_CACHE_DIR),

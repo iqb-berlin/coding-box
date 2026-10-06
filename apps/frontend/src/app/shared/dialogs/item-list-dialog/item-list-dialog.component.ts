@@ -1,4 +1,6 @@
-import { Component, OnInit, inject } from '@angular/core';
+import {
+  ChangeDetectorRef, Component, OnInit, inject
+} from '@angular/core';
 
 import { MatDialogModule, MatDialogRef, MatDialog } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -32,6 +34,8 @@ import { base64ToUtf8 } from '../../utils/common-utils';
   styleUrls: ['./item-list-dialog.component.scss']
 })
 export class ItemListDialogComponent implements OnInit {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   private fileService = inject(FileService);
   private appService = inject(AppService);
   private dialog = inject(MatDialog);
@@ -59,6 +63,7 @@ export class ItemListDialogComponent implements OnInit {
 
     this.fileService.getItemIdsFromMetadata(workspaceId).subscribe({
       next: groups => {
+        this.changeDetectorRef.markForCheck();
         this.itemGroups = groups;
         this.isLoading = false;
       }

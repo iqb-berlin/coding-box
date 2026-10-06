@@ -1,5 +1,7 @@
 import {
   Component,
+  ChangeDetectorRef,
+  inject,
   Input,
   Output,
   EventEmitter,
@@ -131,6 +133,8 @@ interface GroupResponsesValidationResult {
 })
 export class GroupResponsesValidationPanelComponent
 implements OnInit, OnDestroy {
+  private readonly changeDetector = inject(ChangeDetectorRef);
+
   @Input() disabled = false;
   @Output() validate = new EventEmitter<void>();
 
@@ -252,9 +256,11 @@ implements OnInit, OnDestroy {
           this.pageSize = result.limit || 10;
           this.updatePaginatedGroupResponses();
           this.isLoadingPage = false;
+          this.changeDetector.markForCheck();
         },
         error: () => {
           this.isLoadingPage = false;
+          this.changeDetector.markForCheck();
           this.snackBar.open('Fehler beim Laden der Seite', 'Schließen', {
             duration: 5000
           });
@@ -299,9 +305,11 @@ implements OnInit, OnDestroy {
             duration: 3000
           });
           this.isExporting = false;
+          this.changeDetector.markForCheck();
         },
         error: () => {
           this.isExporting = false;
+          this.changeDetector.markForCheck();
           this.snackBar.open('Fehler beim CSV-Export', 'Schließen', {
             duration: 5000
           });

@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
-  Component,
+  ChangeDetectorRef, Component, DestroyRef,
   EventEmitter,
   Input,
   OnChanges,
@@ -11,6 +11,7 @@ import {
   SimpleChanges,
   inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MatTableModule } from '@angular/material/table';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -33,6 +34,7 @@ import {
   debounceTime,
   of,
   shareReplay,
+  finalize,
   tap
 } from 'rxjs';
 import { FileService } from '../../../shared/services/file/file.service';
@@ -211,6 +213,9 @@ const SPECIFIC_LOG_MEDIA_FILTERS: FlatTableMediaFilter[] = [
   styleUrls: ['./test-results-flat-table.component.scss']
 })
 export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   private fileService = inject(FileService);
   private unitNoteService = inject(UnitNoteService);
   private statisticsService = inject(CodingStatisticsService);
@@ -486,6 +491,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     this.workspaceCacheInvalidatedSubscription =
       this.testResultService.workspaceCacheInvalidated$.subscribe(
         workspaceId => {
+          this.changeDetectorRef.markForCheck();
           if (!this.appService.selectedWorkspaceId) {
             return;
           }
@@ -757,6 +763,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         .getFlatResponseFrequencies(this.appService.selectedWorkspaceId, batch)
         .subscribe({
           next: (resp: FlatResponseFrequenciesResponse) => {
+            this.changeDetectorRef.markForCheck();
             Object.entries(resp || {}).forEach(([key, incoming]) => {
               const existing = this.frequenciesByComboKey.get(key);
               if (!existing) {
@@ -781,6 +788,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
             }
           },
           error: () => {
+            this.changeDetectorRef.markForCheck();
             completedBatches += 1;
             if (completedBatches === batches.length) {
               this.isLoadingFrequencies = false;
@@ -918,6 +926,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       return;
     }
 
+    const workspaceId = this.appService.selectedWorkspaceId;
     const normalizedBookletId = String(row.booklet).toUpperCase();
 
     const loadingSnackBar = this.snackBar.open(
@@ -927,9 +936,11 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     );
 
     this.fileService
-      .getBookletInfo(this.appService.selectedWorkspaceId, normalizedBookletId)
+      .getBookletInfo(workspaceId, normalizedBookletId)
+      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => loadingSnackBar.dismiss()))
       .subscribe({
         next: bookletInfo => {
+          if (this.appService.selectedWorkspaceId !== workspaceId) return;
           loadingSnackBar.dismiss();
 
           this.dialog.open(BookletInfoDialogComponent, {
@@ -944,6 +955,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
           });
         },
         error: () => {
+          if (this.appService.selectedWorkspaceId !== workspaceId) return;
           loadingSnackBar.dismiss();
           this.snackBar.open(
             'Fehler beim Laden der Testheft-Informationen',
@@ -955,12 +967,14 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   }
 
   openUnitInfoFromFlatRow(row: FlatResponseRow): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
     if (!this.appService.selectedWorkspaceId) {
       return;
     }
 
-    this.getPersonTestResults(row.personId).subscribe({
+    this.getPersonTestResults(row.personId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: booklets => {
+        if (this.appService.selectedWorkspaceId !== workspaceId) return;
         const booklet = (booklets || []).find(b => b.name === row.booklet);
         if (!booklet) {
           this.snackBar.open('Testheft nicht gefunden', 'Info', {
@@ -986,9 +1000,11 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         );
 
         this.fileService
-          .getUnitInfo(this.appService.selectedWorkspaceId, unitFileId)
+          .getUnitInfo(workspaceId, unitFileId)
+          .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => loadingSnackBar.dismiss()))
           .subscribe({
             next: unitInfo => {
+              if (this.appService.selectedWorkspaceId !== workspaceId) return;
               loadingSnackBar.dismiss();
 
               this.dialog.open(UnitInfoDialogComponent, {
@@ -1003,6 +1019,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
               });
             },
             error: () => {
+              if (this.appService.selectedWorkspaceId !== workspaceId) return;
               loadingSnackBar.dismiss();
               this.snackBar.open(
                 'Fehler beim Laden der Aufgaben-Informationen',
@@ -1013,6 +1030,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
           });
       },
       error: () => {
+        if (this.appService.selectedWorkspaceId !== workspaceId) return;
         this.snackBar.open(
           'Fehler beim Laden der Aufgaben-Informationen',
           'Fehler',
@@ -1297,6 +1315,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     this.testResultService
       .getFlatResponseFilterOptions(this.appService.selectedWorkspaceId, {})
       .subscribe(opts => {
+        this.changeDetectorRef.markForCheck();
         const currentBrowsers = this.sessionBrowsersAllowlist
           .split(',')
           .map(v => v.trim())
@@ -1355,6 +1374,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         });
 
         ref.afterClosed().subscribe(result => {
+          this.changeDetectorRef.markForCheck();
           if (!result) {
             return;
           }
@@ -1448,6 +1468,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     this.testResultService
       .getFlatResponseFilterOptions(this.appService.selectedWorkspaceId, {})
       .subscribe(opts => {
+        this.changeDetectorRef.markForCheck();
         this.flatFilterOptions = opts;
       });
   }
@@ -1501,6 +1522,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     this.flatResponsesRequestSequence += 1;
     const requestSequence = this.flatResponsesRequestSequence;
     this.isLoadingFlat = true;
+    this.changeDetectorRef.markForCheck();
 
     const sessionFilterActive = this.flatFilters.sessionFilter;
     this.flatResponsesSubscription?.unsubscribe();
@@ -1557,6 +1579,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       })
       .subscribe({
         next: resp => {
+          this.changeDetectorRef.markForCheck();
           if (requestSequence !== this.flatResponsesRequestSequence) {
             return;
           }
@@ -1583,6 +1606,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
           this.loadNotesPresenceForCurrentPage();
         },
         error: (error: HttpErrorResponse) => {
+          this.changeDetectorRef.markForCheck();
           if (requestSequence === this.flatResponsesRequestSequence) {
             this.isLoadingFlat = false;
             this.showFlatResponseLoadError(error);
@@ -1700,6 +1724,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       .getNotesForMultipleUnits(this.appService.selectedWorkspaceId, unitIds)
       .subscribe({
         next: notesByUnitId => {
+          this.changeDetectorRef.markForCheck();
           const nextSet = new Set<number>();
           Object.entries(notesByUnitId || {}).forEach(([unitId, notes]) => {
             if (Array.isArray(notes) && notes.length > 0) {
@@ -1709,6 +1734,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
           this.unitIdsWithNotes = nextSet;
         },
         error: () => {
+          this.changeDetectorRef.markForCheck();
           this.unitIdsWithNotes = new Set<number>();
         }
       });

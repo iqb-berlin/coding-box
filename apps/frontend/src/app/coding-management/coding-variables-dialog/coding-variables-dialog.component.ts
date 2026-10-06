@@ -1,5 +1,5 @@
 import {
-  AfterViewInit,
+  ChangeDetectorRef, inject, AfterViewInit,
   Component,
   Inject,
   OnInit,
@@ -91,6 +91,8 @@ export interface FlattenedVariable {
   ]
 })
 export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
   dataSource = new MatTableDataSource<FlattenedVariable>([]);
   displayedColumns: string[] = ['unitName', 'variableId', 'variableType', 'replayAnchor', 'actions'];
 
@@ -221,6 +223,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
       replayAnchorOverrides: this.fileBackendService.getReplayAnchorOverrides(this.data.workspaceId)
     }).subscribe({
       next: ({ unitVariableDetails, replayAnchorOverrides }) => {
+        this.changeDetectorRef.markForCheck();
         const replayAnchorByVariable = this.toReplayAnchorMap(replayAnchorOverrides);
         const flattenedData: FlattenedVariable[] = [];
 
@@ -268,6 +271,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
         this.isLoading = false;
       },
       error: () => {
+        this.changeDetectorRef.markForCheck();
         this.snackBar.open('Fehler beim Laden der Kodiervariablen', 'Schließen', {
           duration: 5000,
           panelClass: ['error-snackbar']
@@ -291,6 +295,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
       replayAnchor
     }).subscribe({
       next: saved => {
+        this.changeDetectorRef.markForCheck();
         variable.replayAnchor = saved.replayAnchor;
         variable.savedReplayAnchor = saved.replayAnchor;
         variable.isSavingReplayAnchor = false;
@@ -299,6 +304,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
         });
       },
       error: () => {
+        this.changeDetectorRef.markForCheck();
         variable.isSavingReplayAnchor = false;
         this.snackBar.open('Replay-Anchor konnte nicht gespeichert werden', 'Schließen', {
           duration: 5000,
@@ -316,6 +322,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
       variable.variableId
     ).subscribe({
       next: () => {
+        this.changeDetectorRef.markForCheck();
         variable.replayAnchor = '';
         variable.savedReplayAnchor = '';
         variable.isSavingReplayAnchor = false;
@@ -324,6 +331,7 @@ export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
         });
       },
       error: () => {
+        this.changeDetectorRef.markForCheck();
         variable.isSavingReplayAnchor = false;
         this.snackBar.open('Replay-Anchor konnte nicht zurückgesetzt werden', 'Schließen', {
           duration: 5000,

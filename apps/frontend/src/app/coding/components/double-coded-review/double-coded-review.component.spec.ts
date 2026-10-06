@@ -1,3 +1,5 @@
+import { provideZonelessChangeDetection } from '@angular/core';
+import { delay } from 'rxjs/operators';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialog } from '@angular/material/dialog';
 import { MatPaginator } from '@angular/material/paginator';
@@ -59,6 +61,7 @@ describe('DoubleCodedReviewComponent', () => {
     await TestBed.configureTestingModule({
       imports: [DoubleCodedReviewComponent, TranslateModule.forRoot()],
       providers: [
+        provideZonelessChangeDetection(),
         provideNoopAnimations(),
         {
           provide: AppService,
@@ -384,10 +387,12 @@ describe('DoubleCodedReviewComponent', () => {
 
     const expectRestoredPage = (): void => {
       component.isLoading = true;
+      fixture.changeDetectorRef.markForCheck();
       fixture.detectChanges();
       expect(fixture.debugElement.query(By.directive(MatPaginator))).toBeNull();
 
       component.isLoading = false;
+      fixture.changeDetectorRef.markForCheck();
       fixture.detectChanges();
       const paginator = fixture.debugElement.query(By.directive(MatPaginator))
         .componentInstance as MatPaginator;
@@ -1579,5 +1584,18 @@ describe('DoubleCodedReviewComponent', () => {
     expect(getDecisionCell(interCoderConflictItem.responseId).statusLabel).toBe(
       'double-coded-review.decision.status-inter-coder-conflict'
     );
+  });
+  it('renders a delayed server response without another user action', async () => {
+    const backend = TestBed.inject(TestPersonCodingService);
+    const response = backend.getDoubleCodedVariablesForReview(1, {}).pipe(delay(30));
+    jest.spyOn(backend, 'getDoubleCodedVariablesForReview').mockReturnValue(response);
+    fixture.destroy();
+    fixture = TestBed.createComponent(DoubleCodedReviewComponent);
+    component = fixture.componentInstance;
+    fixture.autoDetectChanges();
+    await new Promise<void>(resolve => { setTimeout(resolve, 80); });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('mat-spinner')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('person-1');
   });
 });

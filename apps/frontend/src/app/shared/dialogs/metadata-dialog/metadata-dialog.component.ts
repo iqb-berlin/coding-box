@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, CUSTOM_ELEMENTS_SCHEMA
+  Component, Inject, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ViewChild, inject, CUSTOM_ELEMENTS_SCHEMA
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -20,8 +20,9 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MDProfile } from '@iqbspecs/metadata-profile/metadata-profile.interface';
 import { MetadataProfileValues, VocabularyEntry } from '@iqbspecs/metadata-values/metadata-values.interface';
-import { bootstrapMetadataWebComponents, UnitMetadataValues } from '@iqb/metadata-components';
-import { MetadataResolver } from '@iqb/metadata-resolver';
+import { UnitMetadataValues, VocabularyProvider, TopConcept } from '@iqb/metadata-components';
+import { MetadataResolver, VocabConcept } from '@iqb/metadata-resolver';
+import { MetadataWebComponentService } from '../../services/metadata-web-component.service';
 
 export interface MetadataItem {
   id: string;
@@ -37,7 +38,7 @@ export interface VomdMetadata {
 }
 
 interface MetadataProfileFormElement extends HTMLElement {
-  resolver?: MetadataResolver;
+  vocabularyProvider?: VocabularyProvider;
   profileData?: MDProfile;
   metadataValues: Partial<UnitMetadataValues>;
   language?: string;
@@ -145,7 +146,7 @@ export interface MetadataDialogData {
 
         <div class="metadata-container">
           <metadata-profile-form
-            id="metadata-form"
+            #metadataForm
             [attr.language]="data.language || 'de'"
             [attr.readonly]="isEditing ? null : ''">
           </metadata-profile-form>
@@ -205,7 +206,19 @@ export interface MetadataDialogData {
     }
   `]
 })
-export class MetadataDialogComponent implements OnInit {
+export class MetadataDialogComponent implements OnInit, OnDestroy {
+  @ViewChild('metadataForm') private metadataFormElement?: ElementRef<MetadataProfileFormElement>;
+  private readonly cdr = inject(ChangeDetectorRef);
+  private readonly webComponents = inject(MetadataWebComponentService);
+  private destroyed = false;
+  private initializationTimer?: ReturnType<typeof setTimeout>;
+  private metadataForm?: MetadataProfileFormElement;
+  private readonly metadataChangeListener = (event: Event) => {
+    this.currentWebComponentMetadata = (event as CustomEvent).detail;
+    this.saveCurrentViewDataToLocal();
+    this.markAsChanged();
+  };
+
   private currentWebComponentMetadata: Partial<UnitMetadataValues> | null = null;
   private webComponentInitialized = false;
   isLoading = true;
@@ -230,12 +243,20 @@ export class MetadataDialogComponent implements OnInit {
       this.selectedView = this.data.selectedView;
     }
 
-    await bootstrapMetadataWebComponents();
+    await this.webComponents.ensureRegistered();
+    if (this.destroyed) return;
     this.extractItems();
 
-    setTimeout(() => {
+    this.initializationTimer = setTimeout(() => {
+      this.initializationTimer = undefined;
       this.initializeWebComponent();
     }, 100);
+  }
+
+  ngOnDestroy(): void {
+    this.destroyed = true;
+    if (this.initializationTimer !== undefined) clearTimeout(this.initializationTimer);
+    this.metadataForm?.removeEventListener('metadataChange', this.metadataChangeListener);
   }
 
   private extractItems(): void {
@@ -247,7 +268,7 @@ export class MetadataDialogComponent implements OnInit {
   }
 
   private initializeWebComponent(): void {
-    const form = document.getElementById('metadata-form') as unknown as MetadataProfileFormElement;
+    const form = this.metadataFormElement?.nativeElement;
 
     if (!form) {
       return;
@@ -256,11 +277,8 @@ export class MetadataDialogComponent implements OnInit {
     try {
       this.updateFormData(form);
 
-      form.addEventListener('metadataChange', ((event: CustomEvent) => {
-        this.currentWebComponentMetadata = event.detail;
-        this.saveCurrentViewDataToLocal();
-        this.markAsChanged();
-      }) as EventListener);
+      this.metadataForm = form;
+      form.addEventListener('metadataChange', this.metadataChangeListener);
 
       form.readonly = !this.isEditing;
       this.webComponentInitialized = true;
@@ -269,6 +287,7 @@ export class MetadataDialogComponent implements OnInit {
       console.error('Error initializing web component:', err);
     } finally {
       this.isLoading = false;
+      this.cdr.markForCheck();
     }
   }
 
@@ -298,21 +317,39 @@ export class MetadataDialogComponent implements OnInit {
     }
 
     form.language = this.data.language || 'de';
-    form.resolver = this.data.resolver;
+    form.vocabularyProvider = this.getVocabularyProvider();
     form.readonly = !this.isEditing;
+  }
+
+  private getVocabularyProvider(): VocabularyProvider | undefined {
+    const resolver = this.data.resolver;
+    if (!resolver) return undefined;
+    const normalize = (concept: VocabConcept): TopConcept => ({
+      ...concept,
+      notation: concept.notation ?? [],
+      prefLabel: { ...concept.prefLabel, de: concept.prefLabel?.de ?? concept.prefLabel?.en ?? '' },
+      narrower: (concept.narrower ?? []).map(normalize)
+    });
+    return {
+      getVocabularies: () => resolver.getVocabularies().map(vocabulary => ({
+        url: vocabulary.url,
+        data: { ...vocabulary.data, hasTopConcept: vocabulary.data.hasTopConcept?.map(normalize) }
+      })),
+      getVocabularyDictionary: () => resolver.getVocabularyDictionary()
+    };
   }
 
   onViewChange(): void {
     // We don't save here because the listener already updates local state on every change
     // But we need to update the form with the new view's data
-    const form = document.getElementById('metadata-form') as unknown as MetadataProfileFormElement;
+    const form = this.metadataFormElement?.nativeElement;
     if (form && this.webComponentInitialized) {
       this.updateFormData(form);
     }
   }
 
   onEditModeChange(): void {
-    const form = document.getElementById('metadata-form') as unknown as MetadataProfileFormElement;
+    const form = this.metadataFormElement?.nativeElement;
     if (form) {
       form.readonly = !this.isEditing;
     }
@@ -320,6 +357,7 @@ export class MetadataDialogComponent implements OnInit {
 
   markAsChanged(): void {
     this.hasChanges = true;
+    this.cdr.markForCheck();
   }
 
   updateItemProperty(prop: 'id' | 'variableId' | 'description', value: string): void {

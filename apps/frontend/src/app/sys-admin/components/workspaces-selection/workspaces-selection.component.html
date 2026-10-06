@@ -9,12 +9,12 @@
       class="scroll-area">
       <ng-container matColumnDef="selectCheckbox">
         <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
-          <mat-checkbox [checked]="(tableSelectionCheckboxes | hasSelectionValue : tableSelectionCheckboxes.selected.length) &&  (tableSelectionCheckboxes.selected.length | isAllSelected : objectsDatasource.data.length)"
+          <mat-checkbox [disabled]="selectionDisabled()" [checked]="(tableSelectionCheckboxes | hasSelectionValue : tableSelectionCheckboxes.selected.length) &&  (tableSelectionCheckboxes.selected.length | isAllSelected : objectsDatasource.data.length)"
             [indeterminate]="(tableSelectionCheckboxes | hasSelectionValue : tableSelectionCheckboxes.selected.length) && !(tableSelectionCheckboxes.selected.length | isAllSelected : objectsDatasource.data.length)"
             (change)="$event ? masterToggle() : null" />
         </mat-header-cell>
         <mat-cell *matCellDef="let row" class="fx-flex-row-fix-70">
-          <mat-checkbox [checked]="tableSelectionCheckboxes | isSelected: row : tableSelectionCheckboxes.selected.length"
+          <mat-checkbox [disabled]="selectionDisabled()" [checked]="tableSelectionCheckboxes.isSelected(row)"
             (click)="$event.stopPropagation()"
             (change)="$event ? selectCheckbox(row) : null" />
         </mat-cell>

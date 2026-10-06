@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 import {
@@ -22,9 +22,11 @@ export class WorkspaceAccessRightsDialogComponent {
   }>(MAT_DIALOG_DATA);
 
   private userBackendService = inject(UserBackendService);
+  private changeDetectorRef = inject(ChangeDetectorRef);
 
   selectedWorkspacesIds: number[] = [];
   isLoadingUserWorkspaces = false;
+  workspaceListReady = false;
   userWorkspacesLoadingFailed = false;
   result: number[] = [];
   constructor() {
@@ -36,12 +38,14 @@ export class WorkspaceAccessRightsDialogComponent {
             this.selectedWorkspacesIds = workspaces || [];
             this.result = [...this.selectedWorkspacesIds];
             this.isLoadingUserWorkspaces = false;
+            this.changeDetectorRef.markForCheck();
           },
           error: () => {
             this.selectedWorkspacesIds = [];
             this.result = [];
             this.userWorkspacesLoadingFailed = true;
             this.isLoadingUserWorkspaces = false;
+            this.changeDetectorRef.markForCheck();
           }
         });
     }

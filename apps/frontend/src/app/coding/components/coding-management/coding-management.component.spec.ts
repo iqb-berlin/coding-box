@@ -1967,4 +1967,20 @@ describe('CodingManagementComponent', () => {
       expect(completeSpy).toHaveBeenCalled();
     });
   });
+
+  it.each([[10, 55, 100], [55, 10, 100], [0, 100]])(
+    'renders successive reset progress events %j without another action', async (...values: number[]) => {
+      fixture.autoDetectChanges();
+      await fixture.whenStable();
+      await new Promise<void>(resolve => { setTimeout(resolve, 30); });
+      for (const value of values) {
+        resetProgressSubject.next(value);
+        await fixture.whenStable();
+        expect(fixture.nativeElement.querySelector('.reset-progress-label')?.textContent).toContain(`${value}%`);
+      }
+      resetProgressSubject.next(null);
+      await fixture.whenStable();
+      expect(fixture.nativeElement.querySelector('.reset-progress-label')).toBeNull();
+    }
+  );
 });

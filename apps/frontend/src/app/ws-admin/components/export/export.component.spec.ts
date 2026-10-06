@@ -1,3 +1,5 @@
+import { provideZonelessChangeDetection } from '@angular/core';
+import { delay } from 'rxjs/operators';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -87,6 +89,7 @@ describe('ExportComponent', () => {
         TranslateModule.forRoot()
       ],
       providers: [
+        provideZonelessChangeDetection(),
         {
           provide: AppService,
           useValue: appService
@@ -901,5 +904,18 @@ describe('ExportComponent', () => {
       { duration: 5000 }
     );
     expect(component.isStartingExport).toBe(false);
+  });
+  it('renders a delayed server response without another user action', async () => {
+    const backend = TestBed.inject(MissingsProfileService);
+    const response = backend.getExportMissingsProfilesOrThrow(1).pipe(delay(30));
+    jest.spyOn(backend, 'getExportMissingsProfilesOrThrow').mockReturnValue(response);
+    fixture.destroy();
+    fixture = TestBed.createComponent(ExportComponent);
+    component = fixture.componentInstance;
+    fixture.autoDetectChanges();
+    await new Promise<void>(resolve => { setTimeout(resolve, 80); });
+    await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).toContain('IQB-Standard');
+    expect(fixture.nativeElement.querySelector('button[color=primary]').disabled).toBe(false);
   });
 });
