@@ -1,33 +1,20 @@
 import {
-  Controller,
-  Post,
-  Get,
-  UseGuards,
-  Body,
-  Res,
-  Param,
-  BadRequestException,
-  NotFoundException,
-  Logger,
-  HttpCode
+  Controller, Post, Get, UseGuards, Res, Param, BadRequestException, NotFoundException, Logger, HttpCode
 } from '@nestjs/common';
 import {
-  ApiOkResponse,
-  ApiParam,
-  ApiTags,
-  ApiBody,
-  ApiOperation
+  ApiOkResponse, ApiParam, ApiTags, ApiOperation
 } from '@nestjs/swagger';
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Response } from 'express';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { ExternalCodingImportService } from '../../database/services/coding';
-import { ExternalCodingImportDto } from '../../../../../../api-dto/coding/external-coding-import.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
 
@@ -49,11 +36,7 @@ export class WorkspaceCodingImportController {
   @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiBody({
-    description:
-      'External coding file upload (CSV/Excel) with streaming progress. Only for preview mode (previewOnly=true).',
-    type: ExternalCodingImportDto
-  })
+
   @ApiOkResponse({
     description: 'External coding import preview with progress streaming',
     content: {
@@ -66,7 +49,7 @@ export class WorkspaceCodingImportController {
   })
   async importExternalCodingWithProgress(
     @WorkspaceId() workspace_id: number,
-      @Body() body: ExternalCodingImportDto,
+      @ValidatedBody('ExternalCodingImportDto') body: RequestBody<'ExternalCodingImportDto'>,
       @Res() res: Response
   ): Promise<void> {
     // Guard: SSE endpoint is only for preview mode
@@ -125,13 +108,10 @@ export class WorkspaceCodingImportController {
     summary: 'Apply external coding import via background job',
     description: 'Queues an external coding import job. Returns a job ID for polling progress.'
   })
-  @ApiBody({
-    description: 'External coding file upload (CSV/Excel)',
-    type: ExternalCodingImportDto
-  })
+
   async applyExternalCodingImport(
     @WorkspaceId() workspace_id: number,
-      @Body() body: ExternalCodingImportDto
+      @ValidatedBody('ExternalCodingImportDto') body: RequestBody<'ExternalCodingImportDto'>
   ): Promise<{ jobId: string }> {
     if (!body.file) {
       throw new BadRequestException('File data is required.');
@@ -273,13 +253,10 @@ export class WorkspaceCodingImportController {
   @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiBody({
-    description: 'External coding file upload (CSV/Excel)',
-    type: ExternalCodingImportDto
-  })
+
   async importExternalCoding(
     @WorkspaceId() workspace_id: number,
-      @Body() body: ExternalCodingImportDto
+      @ValidatedBody('ExternalCodingImportDto') body: RequestBody<'ExternalCodingImportDto'>
   ): Promise<{
         message: string;
         processedRows: number;

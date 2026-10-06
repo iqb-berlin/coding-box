@@ -1,3 +1,4 @@
+import type { RequestBody } from '../request-contracts';
 export type CodingFreshnessVersion = 'v1' | 'v2' | 'v3';
 
 export type CodingFreshnessState =
@@ -76,10 +77,7 @@ export interface CodingFreshnessImpactDto {
   affectedUnits: number;
 }
 
-export interface StartCodingFreshnessJobDto {
-  version: Extract<CodingFreshnessVersion, 'v1' | 'v3'>;
-  states?: Extract<CodingFreshnessState, 'PENDING' | 'STALE'>[];
-}
+export type StartCodingFreshnessJobDto = RequestBody<'StartCodingFreshnessJobDto'>;
 
 export interface CodingFreshnessJobResultDto {
   totalResponses: number;

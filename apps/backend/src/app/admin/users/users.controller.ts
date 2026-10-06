@@ -1,17 +1,15 @@
 import {
-  Body, ParseIntPipe,
-  Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards
+  ParseIntPipe, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards
 } from '@nestjs/common';
 import {
-  ApiBadRequestResponse, ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiMethodNotAllowedResponse,
-  ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiTags
+  ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiMethodNotAllowedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { UsersService } from '../../database/services/users';
 import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
-import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceUserInListDto } from '../../../../../../api-dto/user/workspace-user-in-list-dto';
-import { UserInListDto } from '../../../../../../api-dto/user/user-in-list-dto';
 
 @ApiTags('Admin Users')
 @Controller('admin/users')
@@ -41,15 +39,12 @@ export class UsersController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update users access', description: 'Updates access levels for users in a specific workspace' })
   @ApiParam({ name: 'workspaceId', type: Number, description: 'ID of the workspace' })
-  @ApiBody({
-    type: [UserInListDto],
-    description: 'Array of users with updated access levels'
-  })
+
   @ApiOkResponse({ description: 'Users access levels updated successfully.', type: Boolean })
   @ApiBadRequestResponse({ description: 'Invalid workspace ID or user data' })
   @ApiNotFoundResponse({ description: 'Workspace or users not found' })
   @ApiTags('users access')
-  async updateUsersAccess(@Param('workspaceId', ParseIntPipe) workspaceId: number, @Body() users: UserInListDto[]): Promise<boolean> {
+  async updateUsersAccess(@Param('workspaceId', ParseIntPipe) workspaceId: number, @ValidatedBody('UsersController_updateUsersAccess') users: RequestBody<'UsersController_updateUsersAccess'>): Promise<boolean> {
     return this.usersService.updateUsersAccess(workspaceId, users);
   }
 
@@ -72,12 +67,12 @@ export class UsersController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update user', description: 'Updates a user\'s details' })
   @ApiParam({ name: 'userId', type: Number, description: 'ID of the user to update' })
-  @ApiBody({ type: UserFullDto, description: 'Updated user data' })
+
   @ApiOkResponse({ description: 'User updated successfully', type: UserFullDto })
   @ApiBadRequestResponse({ description: 'Invalid user ID or data' })
   @ApiNotFoundResponse({ description: 'User not found' })
   @ApiTags('admin users')
-  async updateUser(@Param('userId', ParseIntPipe) userId: number, @Body() userData: UserFullDto): Promise<UserFullDto> {
+  async updateUser(@Param('userId', ParseIntPipe) userId: number, @ValidatedBody('UserFullDto') userData: RequestBody<'UserFullDto'>): Promise<UserFullDto> {
     return this.usersService.updateUser(userId, userData);
   }
 
@@ -161,15 +156,7 @@ export class UsersController {
     type: Number,
     description: 'ID of the user'
   })
-  @ApiBody({
-    schema: {
-      type: 'array',
-      items: {
-        type: 'number'
-      },
-      description: 'Array of workspace IDs to assign to the user'
-    }
-  })
+
   @ApiCreatedResponse({
     description: 'Workspaces assigned successfully',
     type: Number
@@ -177,7 +164,7 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid user ID or workspace IDs' })
   @ApiNotFoundResponse({ description: 'User or workspaces not found' })
   @ApiTags('admin users')
-  async assignUserWorkspaces(@Body() workspaceIds: number[],
+  async assignUserWorkspaces(@ValidatedBody('UsersController_assignUserWorkspaces') workspaceIds: RequestBody<'UsersController_assignUserWorkspaces'>,
     @Param('userId', ParseIntPipe) userId: number) {
     return this.usersService.assignUserWorkspaces(userId, workspaceIds);
   }
@@ -189,17 +176,14 @@ export class UsersController {
     summary: 'Create a new user',
     description: 'Creates a new user with the provided data'
   })
-  @ApiBody({
-    type: CreateUserDto,
-    description: 'User data to create'
-  })
+
   @ApiCreatedResponse({
     description: 'User created successfully. Returns the ID of the new user.',
     type: Number
   })
   @ApiBadRequestResponse({ description: 'Invalid user data' })
   @ApiTags('admin users')
-  async create(@Body() createUserDto: CreateUserDto) {
+  async create(@ValidatedBody('CreateUserDto') createUserDto: RequestBody<'CreateUserDto'>) {
     return this.usersService.create(createUserDto);
   }
 }

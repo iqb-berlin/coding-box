@@ -1,14 +1,12 @@
 import {
-  Body, Controller, Delete, Get, Put, UseGuards
+  Controller, Delete, Get, Put, UseGuards
 } from '@nestjs/common';
 import {
-  ApiBearerAuth,
-  ApiBody,
-  ApiOkResponse,
-  ApiOperation,
-  ApiTags
+  ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags
 } from '@nestjs/swagger';
-import { LegalNoticeDto, UpdateLegalNoticeDto } from '../../../../../../api-dto/legal-notice/legal-notice.dto';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { LegalNoticeDto } from '../../../../../../api-dto/legal-notice/legal-notice.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AdminGuard } from '../admin.guard';
 import { LegalNoticeService } from './legal-notice.service';
@@ -31,10 +29,10 @@ export class LegalNoticeController {
   @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update imprint/privacy text' })
-  @ApiBody({ type: UpdateLegalNoticeDto })
+
   @ApiOkResponse({ description: 'Imprint/privacy text updated', type: LegalNoticeDto })
   async updateLegalNotice(
-    @Body() body: UpdateLegalNoticeDto
+    @ValidatedBody('UpdateLegalNoticeDto') body: RequestBody<'UpdateLegalNoticeDto'>
   ): Promise<LegalNoticeDto> {
     return this.legalNoticeService.updateLegalNotice(body);
   }

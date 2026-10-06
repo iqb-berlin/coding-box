@@ -1,9 +1,7 @@
 import {
-  BadRequestException,
   Controller,
   ForbiddenException,
   Get,
-  HttpException,
   Param,
   ParseIntPipe,
   Req,
@@ -104,16 +102,9 @@ export class CodingJobsController {
     @Param('id', ParseIntPipe) id: number,
       @Req() req: Request
   ): Promise<CodingJobDto> {
-    try {
-      const result = await this.codingJobService.getCodingJobById(id);
-      await this.assertCanAccessDirectCodingJob(id, result.workspace_id, req);
-      return CodingJobDto.fromEntity(result);
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve coding job: ${error.message}`);
-    }
+    const result = await this.codingJobService.getCodingJobById(id);
+    await this.assertCanAccessDirectCodingJob(id, result.workspace_id, req);
+    return CodingJobDto.fromEntity(result);
   }
 
   @Get(':coderId/coders')
@@ -179,25 +170,18 @@ export class CodingJobsController {
     @Param('coderId', ParseIntPipe) coderId: number,
       @Req() req: Request
   ): Promise<{ data: CodingJobDto[] }> {
-    try {
-      await this.assertCanQueryCoderJobs(coderId, req);
-      const codingJobs = await this.codingJobService.getCodingJobsByCoder(coderId);
-      await Promise.all(
-        codingJobs.map(job => this.assertCanAccessDirectCodingJob(
-          job.id,
-          job.workspace_id,
-          req
-        ))
-      );
-      return {
-        data: codingJobs.map(job => CodingJobDto.fromEntity(job))
-      };
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to get coding jobs for coder: ${error.message}`);
-    }
+    await this.assertCanQueryCoderJobs(coderId, req);
+    const codingJobs = await this.codingJobService.getCodingJobsByCoder(coderId);
+    await Promise.all(
+      codingJobs.map(job => this.assertCanAccessDirectCodingJob(
+        job.id,
+        job.workspace_id,
+        req
+      ))
+    );
+    return {
+      data: codingJobs.map(job => CodingJobDto.fromEntity(job))
+    };
   }
 
   @Get(':id/responses')
@@ -271,33 +255,26 @@ export class CodingJobsController {
           alias: string;
         };
       }[] }> {
-    try {
-      const codingJob = await this.codingJobService.getCodingJobById(id);
-      await this.assertCanAccessDirectCodingJob(id, codingJob.workspace_id, req);
-      const responses = await this.codingJobService.getResponsesForCodingJob(id);
-      return {
-        data: responses.map(response => ({
-          id: response.id,
-          unitid: response.unitid,
-          variableid: response.variableid,
-          status: statusNumberToString(response.status) || 'UNSET',
-          value: response.value,
-          subform: response.subform,
-          code_v1: response.code_v1,
-          score_v1: response.score_v1,
-          status_v1: statusNumberToString(response.status_v1) || null,
-          unit: response.unit ? {
-            id: response.unit.id,
-            name: response.unit.name,
-            alias: response.unit.alias
-          } : { id: 0, name: '', alias: '' }
-        }))
-      };
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to get responses for coding job: ${error.message}`);
-    }
+    const codingJob = await this.codingJobService.getCodingJobById(id);
+    await this.assertCanAccessDirectCodingJob(id, codingJob.workspace_id, req);
+    const responses = await this.codingJobService.getResponsesForCodingJob(id);
+    return {
+      data: responses.map(response => ({
+        id: response.id,
+        unitid: response.unitid,
+        variableid: response.variableid,
+        status: statusNumberToString(response.status) || 'UNSET',
+        value: response.value,
+        subform: response.subform,
+        code_v1: response.code_v1,
+        score_v1: response.score_v1,
+        status_v1: statusNumberToString(response.status_v1) || null,
+        unit: response.unit ? {
+          id: response.unit.id,
+          name: response.unit.name,
+          alias: response.unit.alias
+        } : { id: 0, name: '', alias: '' }
+      }))
+    };
   }
 }

@@ -454,7 +454,7 @@ test-db:
 test-app:
   stage: test-units
   interruptible: true
-  allow_failure: true
+  allow_failure: false
   extends: .distributed
   rules:
     - !reference [ .default_rules, rules ]
@@ -465,7 +465,7 @@ test-app:
 test-replay-live:
   stage: test-replay
   interruptible: true
-  allow_failure: true
+  allow_failure: false
   image: ${CYPRESS_IMAGE}
   services:
     - name: ${DOCKER_SERVICE}
@@ -473,27 +473,36 @@ test-replay-live:
         HEALTHCHECK_TCP_PORT: "2375"
       entrypoint: [ "sh", "-c", "dockerd-entrypoint.sh ${DOCKER_DAEMON_OPTIONS}" ]
       alias: docker
-  needs:
-    - install-dependencies
+  variables:
+    CYPRESS_INSTALL_BINARY: "0"
+    NX_DAEMON: "false"
+    NX_NO_CLOUD: "true"
+  needs: []
   rules:
-    - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_PIPELINE_SOURCE == "external_pull_request_event" || $CI_PIPELINE_SOURCE == "merge_request_event" || $CI_COMMIT_BRANCH
       changes:
-        - api-dto/coding/**/*
-        - apps/backend/src/app/admin/workspace/workspace-coding-replay*
-        - apps/backend/src/app/database/services/test-results/**/*
-        - apps/frontend/src/app/replay/**/*
-        - cypress/fixtures/replay-datasets/**/*
-        - cypress/e2e/replay-live.cy.ts
-        - cypress/support/replay-e2e.ts
+        - api-dto/**/*
+        - apps/backend/**/*
+        - apps/frontend/**/*
+        - database/**/*
+        - package.json
+        - package-lock.json
+        - nx.json
+        - tsconfig.base.json
+        - .gitlab-ci.yml
+        - .gitlab-ci/**/*
+        - cypress/**/*
         - cypress.replay.config.ts
         - scripts/e2e/replay/**/*
-      when: manual
     - when: never
   before_script:
     - apt-get update
     - apt-get install --yes --no-install-recommends docker.io docker-compose
     - until docker info > /dev/null 2>&1; do sleep 1; done
-    - npx cypress install
+    - npm ci --cache .npm --prefer-offline --no-fund
+    - env -u CYPRESS_INSTALL_BINARY npx cypress install
   script:
     - npx nx run frontend:e2e-replay-live
   artifacts:
@@ -508,7 +517,7 @@ lint-app:
   stage: lint
   extends: .distributed
   interruptible: true
-  allow_failure: true
+  allow_failure: false
   rules:
     - !reference [ .default_rules, rules ]
   image: ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
@@ -636,6 +645,11 @@ build-develop-commit-backend-image:
   rules:
     - !reference [ .develop_commit_rules, rules ]
   needs:
+    - job: quality-checks
+      artifacts: false
+    - job: test-replay-live
+      optional: true
+      artifacts: false
     - build-develop-commit-base-image
   image: ${DOCKER_IMAGE}
   services:
@@ -678,6 +692,11 @@ build-develop-commit-frontend-image:
   rules:
     - !reference [ .develop_commit_rules, rules ]
   needs:
+    - job: quality-checks
+      artifacts: false
+    - job: test-replay-live
+      optional: true
+      artifacts: false
     - build-develop-commit-base-image
   image: ${DOCKER_IMAGE}
   services:
@@ -1011,6 +1030,11 @@ build-pre-release:
   rules:
     - !reference [ .pre-release_rules, rules ]
   needs:
+    - job: quality-checks
+      artifacts: false
+    - job: test-replay-live
+      optional: true
+      artifacts: false
     - job: scan-main-commit-db-image
       artifacts: false
     - job: scan-main-commit-liquibase-image

@@ -1,65 +1,31 @@
 import {
-  Controller,
-  Get,
-  Query,
-  Res,
-  Req,
-  UseGuards,
-  Body,
-  Post,
-  Param,
-  Delete,
-  Logger,
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException
+  Controller, Get, Query, Res, Req, UseGuards, Post, Param, Delete, Logger, BadRequestException, ForbiddenException, NotFoundException
 } from '@nestjs/common';
 import {
-  ApiOkResponse,
-  ApiBadRequestResponse,
-  ApiParam,
-  ApiQuery,
-  ApiTags,
-  ApiBody
+  ApiOkResponse, ApiBadRequestResponse, ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
 import { Response, Request } from 'express';
 import * as fs from 'fs';
 import { Readable } from 'stream';
-import {
-  JobQueueService,
-  ExportJobProgress,
-  ExportJobResult
-} from '../../job-queue/job-queue.service';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import { rethrowDownloadError } from '../../http/download-error';
+import { JobQueueService, ExportJobProgress, ExportJobResult } from '../../job-queue/job-queue.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import {
-  CodingExportService,
-  CodingExportOrchestratorService,
-  CodingListExportService,
-  CodingPsychometricExportService,
-  ExportArtifactService
+  CodingExportService, CodingExportOrchestratorService, CodingListExportService, CodingPsychometricExportService, ExportArtifactService
 } from '../../database/services/coding';
 import { PsychometricDomainCandidatesDto } from '../../../../../../api-dto/coding/psychometric-discrimination.dto';
 import {
-  BackgroundExportRequest,
-  ExportJobErrorMetadataDto,
-  ExportJobProgressPhaseDto,
-  ExportJobResultDto,
-  ExportJobStateDto,
-  ExportJobStatusResponseDto,
-  ExportRequestValidationError,
-  ItemDatasetOptionsDto,
-  ItemMatrixExportDiagnosticsDto,
-  ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE,
-  parseExportRequest
+  BackgroundExportRequest, ExportJobErrorMetadataDto, ExportJobProgressPhaseDto, ExportJobResultDto, ExportJobStateDto, ExportJobStatusResponseDto, ExportRequestValidationError, ItemDatasetOptionsDto, ItemMatrixExportDiagnosticsDto, ITEM_MATRIX_UNRESOLVED_CELLS_ERROR_CODE, parseExportRequest
 } from '../../../../../../api-dto/coding/export-request.dto';
-import {
-  parseItemMatrixExportIncompleteError
-} from '../../database/services/coding/item-matrix-export-incomplete.error';
+import { parseItemMatrixExportIncompleteError } from '../../database/services/coding/item-matrix-export-incomplete.error';
 
 type RequestUser = { id?: number | string; userId?: number | string };
+
 type ByVariableExportEstimateResponse = {
   exportType: 'by-variable' | 'by-variable-compact';
   unitVariableCount: number;
@@ -809,7 +775,7 @@ export class WorkspaceCodingExportController {
       );
       res.send(buffer);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      rethrowDownloadError(error, res);
     }
   }
 
@@ -907,7 +873,7 @@ export class WorkspaceCodingExportController {
       );
       res.send(buffer);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      rethrowDownloadError(error, res);
     }
   }
 
@@ -1033,7 +999,7 @@ export class WorkspaceCodingExportController {
       );
       res.send(buffer);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      rethrowDownloadError(error, res);
     }
   }
 
@@ -1128,7 +1094,7 @@ export class WorkspaceCodingExportController {
       );
       res.send(buffer);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      rethrowDownloadError(error, res);
     }
   }
 
@@ -1203,7 +1169,7 @@ export class WorkspaceCodingExportController {
   @ApiParam({ name: 'workspace_id', type: Number })
   async estimateExportJob(
     @WorkspaceId() workspace_id: number,
-      @Body() body: BackgroundExportRequest
+      @ValidatedBody('BackgroundExportRequest') body: RequestBody<'BackgroundExportRequest'>
   ): Promise<ByVariableExportEstimateResponse> {
     if (
       body.exportType !== 'by-variable' &&
@@ -1229,110 +1195,7 @@ export class WorkspaceCodingExportController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiBody({
-    description: 'Start a background export job',
-    schema: {
-      type: 'object',
-      required: ['exportType'],
-      properties: {
-        exportType: {
-          type: 'string',
-          enum: [
-            'aggregated',
-            'by-coder',
-            'by-variable',
-            'by-variable-compact',
-            'detailed',
-            'coding-times',
-            'coding-list',
-            'results-by-version',
-            'item-matrix',
-            'psychometrics'
-          ],
-          description: 'Type of export to generate'
-        },
-        version: {
-          type: 'string',
-          enum: ['v1', 'v2', 'v3'],
-          description: 'Coding result version for results-by-version exports'
-        },
-        format: {
-          type: 'string',
-          enum: ['csv', 'excel', 'json'],
-          description:
-            'File format for exports that support multiple formats. results-by-version supports csv and excel; coding-list supports csv, excel and json.'
-        },
-        matrixValue: {
-          type: 'string',
-          enum: ['code', 'score'],
-          description: 'Cell value for item-matrix exports'
-        },
-        partWholeCorrection: {
-          type: 'boolean',
-          description:
-            'Subtract the current item score from its domain score. Defaults to true.'
-        },
-        missingsProfileId: {
-          type: 'number',
-          description:
-            'Missing profile used for codes and missing scores. Required for item-matrix and every results-by-version export.'
-        },
-        notReachedScope: {
-          type: 'string',
-          enum: ['unit', 'testlet', 'booklet'],
-          description: 'Range used to distinguish mnr from omitted items'
-        },
-        recodeTrailingOmissions: {
-          type: 'boolean',
-          description:
-            'Recode trailing omissions as mnr for testlet or booklet scope'
-        },
-        items: {
-          type: 'array',
-          items: {
-            type: 'object',
-            required: ['unitId', 'itemId'],
-            properties: {
-              unitId: { type: 'string' },
-              itemId: { type: 'string' }
-            }
-          },
-          description: 'Selected VOMD items; omitted means all items'
-        },
-        domain: {
-          type: 'object',
-          description:
-            'Psychometric domain selection: the whole workspace or one complete, single-valued VOMD field'
-        },
-        maxCategoryCount: {
-          type: 'number',
-          description:
-            'Maximum number of raw categories per item. Defaults to 10.'
-        },
-        outputCommentsInsteadOfCodes: { type: 'boolean' },
-        includeReplayUrl: { type: 'boolean' },
-        includeResponseValues: { type: 'boolean' },
-        includeGeoGebraResponseValues: { type: 'boolean' },
-        includeGeoGebraFiles: { type: 'boolean' },
-        anonymizeCoders: { type: 'boolean' },
-        usePseudoCoders: { type: 'boolean' },
-        doubleCodingMethod: {
-          type: 'string',
-          enum: [
-            'new-row-per-variable',
-            'new-column-per-coder',
-            'most-frequent'
-          ]
-        },
-        includeComments: { type: 'boolean' },
-        includeModalValue: { type: 'boolean' },
-        includeDoubleCoded: { type: 'boolean' },
-        excludeAutoCoded: { type: 'boolean' },
-        trainingRequired: { type: 'boolean' },
-        authToken: { type: 'string' }
-      }
-    }
-  })
+
   @ApiOkResponse({
     description: 'Export job created successfully',
     schema: {
@@ -1349,7 +1212,7 @@ export class WorkspaceCodingExportController {
   async startExportJob(
     @WorkspaceId() workspace_id: number,
       @Req() req: Request,
-      @Body() body: unknown
+      @ValidatedBody('BackgroundExportRequest') body: RequestBody<'BackgroundExportRequest'>
   ): Promise<{ jobId: string; message: string }> {
     let request: BackgroundExportRequest;
     try {
@@ -1520,7 +1383,7 @@ export class WorkspaceCodingExportController {
         `Error getting export job status: ${error.message}`,
         error.stack
       );
-      return { error: error.message };
+      throw error;
     }
   }
 
@@ -1611,7 +1474,7 @@ export class WorkspaceCodingExportController {
         `Error downloading export: ${error.message}`,
         error.stack
       );
-      res.status(500).json({ error: error.message });
+      rethrowDownloadError(error, res);
     }
   }
 
@@ -1837,10 +1700,7 @@ export class WorkspaceCodingExportController {
         `Error deleting export job: ${error.message}`,
         error.stack
       );
-      return {
-        success: false,
-        message: error.message
-      };
+      throw error;
     }
   }
 
@@ -1955,10 +1815,7 @@ export class WorkspaceCodingExportController {
         `Error cancelling export job: ${error.message}`,
         error.stack
       );
-      return {
-        success: false,
-        message: error.message
-      };
+      throw error;
     }
   }
 }

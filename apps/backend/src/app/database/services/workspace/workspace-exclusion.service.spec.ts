@@ -1,6 +1,6 @@
 import { Repository } from 'typeorm';
 import { WorkspaceExclusionService } from './workspace-exclusion.service';
-import { WorkspaceCoreService } from './workspace-core.service';
+import Workspace from '../../entities/workspace.entity';
 import FileUpload from '../../entities/file_upload.entity';
 import { CacheService } from '../../../cache/cache.service';
 
@@ -29,7 +29,7 @@ describe('WorkspaceExclusionService', () => {
     };
 
     const service = new WorkspaceExclusionService(
-      workspaceCoreService as unknown as WorkspaceCoreService,
+      workspaceCoreService as unknown as Repository<Workspace>,
       fileUploadRepository as unknown as Repository<FileUpload>,
       cacheService as unknown as CacheService
     );

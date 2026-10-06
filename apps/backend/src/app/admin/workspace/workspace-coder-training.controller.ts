@@ -1,51 +1,22 @@
 import {
-  BadRequestException,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Put,
-  Query,
-  UseGuards,
-  Body,
-  Delete,
-  Req,
-  Res
+  BadRequestException, Controller, Get, Param, Post, Put, Query, UseGuards, Delete, Req, Res
 } from '@nestjs/common';
 import {
-  ApiOkResponse,
-  ApiParam,
-  ApiQuery,
-  ApiTags,
-  ApiBody
+  ApiOkResponse, ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import * as fastCsv from 'fast-csv';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import {
-  CoderTrainingResultsApplyService,
-  CoderTrainingService,
-  TrainingCohensKappaStatistics
-} from '../../database/services/coding';
-import { JobDefinitionVariable, JobDefinitionVariableBundle } from '../../database/entities/job-definition.entity';
+import { CoderTrainingResultsApplyService, CoderTrainingService, TrainingCohensKappaStatistics } from '../../database/services/coding';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
-import {
-  ApplyTrainingDiscussionResultsRequestDto,
-  ApplyTrainingDiscussionResultsResultDto,
-  TrainingDiscussionApplyPreviewDto,
-  TrainingDiscussionApplySource
-} from '../../../../../../api-dto/coding/training-discussion-apply.dto';
+import { ApplyTrainingDiscussionResultsResultDto, TrainingDiscussionApplyPreviewDto } from '../../../../../../api-dto/coding/training-discussion-apply.dto';
 import { TrainingComparisonFreshnessDto } from '../../../../../../api-dto/coding/training-comparison-freshness.dto';
 import {
-  TrainingCodingComparisonPageDto,
-  TrainingComparisonFiltersDto,
-  TrainingComparisonMatchFilter,
-  TrainingComparisonNotesFilter,
-  TrainingComparisonSortBy,
-  TrainingComparisonSortDirection,
-  WithinTrainingCodingComparisonPageDto
+  TrainingCodingComparisonPageDto, TrainingComparisonFiltersDto, TrainingComparisonMatchFilter, TrainingComparisonNotesFilter, TrainingComparisonSortBy, TrainingComparisonSortDirection, WithinTrainingCodingComparisonPageDto
 } from '../../../../../../api-dto/coding/training-comparison.dto';
 import { sanitizeCsvText } from '../../utils/csv.util';
 
@@ -324,37 +295,7 @@ export class WorkspaceCoderTrainingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiBody({
-    description:
-      'Generate coder training packages based on CODING_INCOMPLETE responses for specific variable and unit combinations',
-    schema: {
-      type: 'object',
-      properties: {
-        selectedCoders: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'number' },
-              name: { type: 'string' }
-            }
-          }
-        },
-        variableConfigs: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              variableId: { type: 'string' },
-              unitId: { type: 'string' },
-              sampleCount: { type: 'number' },
-              includeDeriveError: { type: 'boolean' }
-            }
-          }
-        }
-      }
-    }
-  })
+
   @ApiOkResponse({
     description: 'Coder training packages generated successfully',
     schema: {
@@ -388,16 +329,8 @@ export class WorkspaceCoderTrainingController {
   })
   async generateCoderTrainingPackages(
     @WorkspaceId() workspace_id: number,
-      @Body()
-                   body: {
-                     selectedCoders: { id: number; name: string }[];
-                     variableConfigs: {
-                       variableId: string;
-                       unitId: string;
-                       sampleCount: number;
-                       includeDeriveError?: boolean;
-                     }[];
-                   }
+      @ValidatedBody('WorkspaceCoderTrainingController_generateCoderTrainingPackages')
+                   body: RequestBody<'WorkspaceCoderTrainingController_generateCoderTrainingPackages'>
   ): Promise<
       {
         coderId: number;
@@ -527,80 +460,7 @@ export class WorkspaceCoderTrainingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiBody({
-    description: 'Create persistent coding jobs for coder training',
-    schema: {
-      type: 'object',
-      properties: {
-        trainingLabel: {
-          type: 'string',
-          description: 'Label for the coder training session'
-        },
-        missingsProfileId: {
-          type: 'number',
-          description:
-            'ID of the missings profile to assign to all created coding jobs'
-        },
-        selectedCoders: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'number' },
-              name: { type: 'string' }
-            }
-          }
-        },
-        variableConfigs: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              variableId: { type: 'string' },
-              unitId: { type: 'string' },
-              sampleCount: { type: 'number' },
-              includeDeriveError: { type: 'boolean' }
-            }
-          }
-        },
-        assignedVariables: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              unitName: { type: 'string' },
-              variableId: { type: 'string' },
-              sampleCount: { type: 'number' },
-              includeDeriveError: { type: 'boolean' }
-            }
-          }
-        },
-        assignedVariableBundles: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'number' },
-              name: { type: 'string' }
-            }
-          }
-        },
-        showScore: {
-          type: 'boolean',
-          description: 'Whether score values are shown in coding jobs created for this training'
-        },
-        allowComments: {
-          type: 'boolean',
-          description: 'Whether comments are allowed in coding jobs created for this training'
-        },
-        suppressGeneralInstructions: {
-          type: 'boolean',
-          description: 'Whether general variable instructions are hidden in coding jobs created for this training'
-        }
-      },
-      required: ['trainingLabel', 'selectedCoders', 'variableConfigs']
-    }
-  })
+
   @ApiOkResponse({
     description: 'Coding jobs created successfully for coder training',
     schema: {
@@ -630,27 +490,8 @@ export class WorkspaceCoderTrainingController {
   })
   async createCoderTrainingJobs(
     @WorkspaceId() workspace_id: number,
-      @Body()
-                   body: {
-                     trainingLabel: string;
-                     missingsProfileId?: number;
-                     selectedCoders: { id: number; name: string }[];
-                     variableConfigs: {
-                       variableId: string;
-                       unitId: string;
-                       sampleCount: number;
-                       includeDeriveError?: boolean;
-                     }[];
-                     assignedVariables?: JobDefinitionVariable[];
-                     assignedVariableBundles?: JobDefinitionVariableBundle[];
-                     caseOrderingMode?: 'continuous' | 'alternating';
-                     caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups';
-                     referenceTrainingIds?: number[];
-                     referenceMode?: 'same' | 'different';
-                     showScore?: boolean;
-                     allowComments?: boolean;
-                     suppressGeneralInstructions?: boolean;
-                   }
+      @ValidatedBody('WorkspaceCoderTrainingController_createCoderTrainingJobs')
+                   body: RequestBody<'WorkspaceCoderTrainingController_createCoderTrainingJobs'>
   ): Promise<{
         success: boolean;
         jobsCreated: number;
@@ -816,27 +657,11 @@ export class WorkspaceCoderTrainingController {
     type: Number,
     description: 'ID of the coder training'
   })
-  @ApiBody({
-    description: 'Persist or clear discussion result for a response in coder training comparison',
-    schema: {
-      type: 'object',
-      properties: {
-        responseId: { type: 'number' },
-        code: { type: 'number', nullable: true },
-        score: {
-          type: 'number',
-          nullable: true,
-          description: 'Deprecated input; score is derived on the server from coding scheme, missings, or stored results.'
-        },
-        notes: { type: 'string', nullable: true }
-      },
-      required: ['responseId']
-    }
-  })
+
   async saveDiscussionResult(
     @WorkspaceId() workspace_id: number,
       @Param('trainingId') trainingId: number,
-      @Body() body: { responseId: number; code: number | null; score: number | null; notes?: string | null },
+      @ValidatedBody('WorkspaceCoderTrainingController_saveDiscussionResult') body: RequestBody<'WorkspaceCoderTrainingController_saveDiscussionResult'>,
       @Req() req: Request
   ): Promise<{
         success: boolean;
@@ -874,28 +699,15 @@ export class WorkspaceCoderTrainingController {
     type: Number,
     description: 'ID of the coder training'
   })
-  @ApiBody({
-    description: 'Preview applying training discussion results to final v2 response results.',
-    schema: {
-      type: 'object',
-      properties: {
-        source: {
-          type: 'string',
-          enum: ['manual', 'auto_agreement']
-        }
-      },
-      required: ['source']
-    }
-  })
   async previewApplyDiscussionResults(
     @WorkspaceId() workspace_id: number,
       @Param('trainingId') trainingId: number,
-      @Body('source') source: TrainingDiscussionApplySource
+      @ValidatedBody('TrainingDiscussionApplyPreviewRequest') body: RequestBody<'TrainingDiscussionApplyPreviewRequest'>
   ): Promise<TrainingDiscussionApplyPreviewDto> {
     return this.coderTrainingResultsApplyService.previewTrainingDiscussionResults(
       workspace_id,
       Number(trainingId),
-      source
+      body.source
     );
   }
 
@@ -909,31 +721,11 @@ export class WorkspaceCoderTrainingController {
     type: Number,
     description: 'ID of the coder training'
   })
-  @ApiBody({
-    description: 'Apply training discussion results to final v2 response results.',
-    schema: {
-      type: 'object',
-      properties: {
-        source: {
-          type: 'string',
-          enum: ['manual', 'auto_agreement']
-        },
-        existingResultStrategy: {
-          type: 'string',
-          enum: ['skip', 'overwrite']
-        },
-        jobConflictStrategy: {
-          type: 'string',
-          enum: ['skip', 'removeFromJobs']
-        }
-      },
-      required: ['source']
-    }
-  })
+
   async applyDiscussionResults(
     @WorkspaceId() workspace_id: number,
       @Param('trainingId') trainingId: number,
-      @Body() body: ApplyTrainingDiscussionResultsRequestDto
+      @ValidatedBody('ApplyTrainingDiscussionResultsRequestDto') body: RequestBody<'ApplyTrainingDiscussionResultsRequestDto'>
   ): Promise<ApplyTrainingDiscussionResultsResultDto> {
     return this.coderTrainingResultsApplyService.applyTrainingDiscussionResults(
       workspace_id,
@@ -951,77 +743,7 @@ export class WorkspaceCoderTrainingController {
     type: Number,
     description: 'ID of the coder training to update'
   })
-  @ApiBody({
-    description: 'Updated coder training configuration',
-    schema: {
-      type: 'object',
-      properties: {
-        label: { type: 'string' },
-        missingsProfileId: { type: 'number' },
-        selectedCoders: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'number' },
-              name: { type: 'string' }
-            }
-          }
-        },
-        variableConfigs: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              variableId: { type: 'string' },
-              unitId: { type: 'string' },
-              sampleCount: { type: 'number' },
-              includeDeriveError: { type: 'boolean' }
-            }
-          }
-        },
-        assignedVariables: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              unitName: { type: 'string' },
-              variableId: { type: 'string' },
-              sampleCount: { type: 'number' },
-              includeDeriveError: { type: 'boolean' }
-            }
-          }
-        },
-        assignedVariableBundles: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'number' },
-              name: { type: 'string' }
-            }
-          }
-        },
-        caseOrderingMode: { type: 'string', enum: ['continuous', 'alternating'] },
-        caseSelectionMode: { type: 'string', enum: ['oldest_first', 'newest_first', 'random', 'random_per_testgroup', 'random_testgroups'] },
-        referenceTrainingIds: { type: 'array', items: { type: 'number' } },
-        referenceMode: { type: 'string', enum: ['same', 'different'] },
-        showScore: {
-          type: 'boolean',
-          description: 'Whether score values are shown in coding jobs created for this training'
-        },
-        allowComments: {
-          type: 'boolean',
-          description: 'Whether comments are allowed in coding jobs created for this training'
-        },
-        suppressGeneralInstructions: {
-          type: 'boolean',
-          description: 'Whether general variable instructions are hidden in coding jobs created for this training'
-        }
-      },
-      required: ['label', 'selectedCoders', 'variableConfigs']
-    }
-  })
+
   @ApiOkResponse({
     description: 'Coder training updated successfully.',
     schema: {
@@ -1036,26 +758,7 @@ export class WorkspaceCoderTrainingController {
   async updateCoderTraining(
     @WorkspaceId() workspace_id: number,
       @Param('trainingId') trainingId: number,
-      @Body() body: {
-        label: string;
-        missingsProfileId?: number;
-        selectedCoders: { id: number; name: string }[];
-        variableConfigs: {
-          variableId: string;
-          unitId: string;
-          sampleCount: number;
-          includeDeriveError?: boolean;
-        }[];
-        assignedVariables?: JobDefinitionVariable[];
-        assignedVariableBundles?: JobDefinitionVariableBundle[];
-        caseOrderingMode?: 'continuous' | 'alternating';
-        caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups';
-        referenceTrainingIds?: number[];
-        referenceMode?: 'same' | 'different';
-        showScore?: boolean;
-        allowComments?: boolean;
-        suppressGeneralInstructions?: boolean;
-      }
+      @ValidatedBody('WorkspaceCoderTrainingController_updateCoderTraining') body: RequestBody<'WorkspaceCoderTrainingController_updateCoderTraining'>
   ): Promise<{ success: boolean; message: string; jobsCreated?: number }> {
     if (!trainingId || trainingId <= 0) {
       throw new Error('Valid training ID must be provided');
@@ -1192,19 +895,7 @@ export class WorkspaceCoderTrainingController {
     type: Number,
     description: 'ID of the coder training to update'
   })
-  @ApiBody({
-    description: 'New label for the coder training',
-    schema: {
-      type: 'object',
-      properties: {
-        label: {
-          type: 'string',
-          description: 'New label for the coder training'
-        }
-      },
-      required: ['label']
-    }
-  })
+
   @ApiOkResponse({
     description: 'Coder training label updated successfully.',
     schema: {
@@ -1221,7 +912,7 @@ export class WorkspaceCoderTrainingController {
   async updateCoderTrainingLabel(
     @WorkspaceId() workspace_id: number,
       @Param('trainingId') trainingId: number,
-      @Body() body: { label: string }
+      @ValidatedBody('WorkspaceCoderTrainingController_updateCoderTrainingLabel') body: RequestBody<'WorkspaceCoderTrainingController_updateCoderTrainingLabel'>
   ): Promise<{ success: boolean; message: string }> {
     if (!trainingId || trainingId <= 0) {
       throw new Error('Valid training ID must be provided');

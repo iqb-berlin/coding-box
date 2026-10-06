@@ -1,22 +1,8 @@
 import {
-  BadRequestException,
-  Controller,
-  Post,
-  Get,
-  Body,
-  Param,
-  Res,
-  UseGuards,
-  Logger,
-  ForbiddenException,
-  NotFoundException,
-  HttpException
+  BadRequestException, Controller, Post, Get, Body, Param, Res, UseGuards, Logger, ForbiddenException, NotFoundException, HttpException
 } from '@nestjs/common';
 import {
-  ApiOkResponse,
-  ApiParam,
-  ApiBody,
-  ApiTags
+  ApiOkResponse, ApiParam, ApiBody, ApiTags
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import * as fs from 'fs';
@@ -26,11 +12,8 @@ import { WorkspaceId } from './workspace.decorator';
 import { CodebookGenerationService } from '../../database/services/coding/codebook-generation.service';
 import { JobQueueService, CodebookJobResult } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
-import {
-  CodeBookContentSetting,
-  CodebookExportFormat,
-  CodebookTrainingRequirementFilter
-} from '../code-book/codebook.interfaces';
+import { rethrowDownloadError } from '../../http/download-error';
+import { CodeBookContentSetting, CodebookExportFormat, CodebookTrainingRequirementFilter } from '../code-book/codebook.interfaces';
 
 type CodebookRequestBody = {
   missingsProfile?: unknown;
@@ -399,16 +382,7 @@ export class WorkspaceCodingCodebookController {
         `Error downloading codebook: ${error.message}`,
         error.stack
       );
-      if (res.headersSent || res.destroyed || res.writableEnded) {
-        if (!res.destroyed) {
-          res.destroy(error);
-        }
-        return;
-      }
-      res.removeHeader('Content-Disposition');
-      res.removeHeader('Content-Length');
-      res.setHeader('Content-Type', 'application/json');
-      res.status(500).json({ error: error.message });
+      rethrowDownloadError(error, res);
     }
   }
 

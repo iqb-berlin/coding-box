@@ -21,10 +21,10 @@ export class UnitTagService {
    * @param createUnitTagDto The data to create the tag with
    * @returns The created tag
    */
-  async create(createUnitTagDto: CreateUnitTagDto): Promise<UnitTagDto> {
+  async create(workspaceId: number, createUnitTagDto: CreateUnitTagDto): Promise<UnitTagDto> {
     // Check if the unit exists
     const unit = await this.unitRepository.findOne({
-      where: { id: createUnitTagDto.unitId }
+      where: { id: createUnitTagDto.unitId, booklet: { person: { workspace_id: workspaceId } } }
     });
 
     if (!unit) {
@@ -56,10 +56,10 @@ export class UnitTagService {
    * @param unitId The ID of the unit
    * @returns An array of tags
    */
-  async findAllByUnitId(unitId: number): Promise<UnitTagDto[]> {
+  async findAllByUnitId(workspaceId: number, unitId: number): Promise<UnitTagDto[]> {
     // Check if the unit exists
     const unit = await this.unitRepository.findOne({
-      where: { id: unitId }
+      where: { id: unitId, booklet: { person: { workspace_id: workspaceId } } }
     });
 
     if (!unit) {
@@ -68,7 +68,7 @@ export class UnitTagService {
 
     // Find all tags for the unit
     const tags = await this.unitTagRepository.find({
-      where: { unitId },
+      where: { unitId, unit: { booklet: { person: { workspace_id: workspaceId } } } },
       order: { createdAt: 'DESC' }
     });
 
@@ -87,14 +87,14 @@ export class UnitTagService {
    * @param unitIds Array of unit IDs
    * @returns An array of tags for all specified units
    */
-  async findAllByUnitIds(unitIds: number[]): Promise<UnitTagDto[]> {
+  async findAllByUnitIds(workspaceId: number, unitIds: number[]): Promise<UnitTagDto[]> {
     if (!unitIds || unitIds.length === 0) {
       return [];
     }
 
     // Find all tags for the units in a single query
     const tags = await this.unitTagRepository.find({
-      where: { unitId: In(unitIds) },
+      where: { unitId: In(unitIds), unit: { booklet: { person: { workspace_id: workspaceId } } } },
       order: { createdAt: 'DESC' }
     });
 
@@ -113,9 +113,9 @@ export class UnitTagService {
    * @param id The ID of the tag
    * @returns The tag
    */
-  async findOne(id: number): Promise<UnitTagDto> {
+  async findOne(workspaceId: number, id: number): Promise<UnitTagDto> {
     const tag = await this.unitTagRepository.findOne({
-      where: { id }
+      where: { id, unit: { booklet: { person: { workspace_id: workspaceId } } } }
     });
 
     if (!tag) {
@@ -137,9 +137,9 @@ export class UnitTagService {
    * @param updateUnitTagDto The data to update the tag with
    * @returns The updated tag
    */
-  async update(id: number, updateUnitTagDto: UpdateUnitTagDto): Promise<UnitTagDto> {
+  async update(workspaceId: number, id: number, updateUnitTagDto: UpdateUnitTagDto): Promise<UnitTagDto> {
     const tag = await this.unitTagRepository.findOne({
-      where: { id }
+      where: { id, unit: { booklet: { person: { workspace_id: workspaceId } } } }
     });
 
     if (!tag) {
@@ -170,9 +170,9 @@ export class UnitTagService {
    * @param id The ID of the tag
    * @returns True if the tag was deleted
    */
-  async remove(id: number): Promise<boolean> {
+  async remove(workspaceId: number, id: number): Promise<boolean> {
     const tag = await this.unitTagRepository.findOne({
-      where: { id }
+      where: { id, unit: { booklet: { person: { workspace_id: workspaceId } } } }
     });
 
     if (!tag) {

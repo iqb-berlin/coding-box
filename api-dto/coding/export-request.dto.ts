@@ -1,4 +1,4 @@
-import { PsychometricExportOptions } from './psychometric-discrimination.dto';
+import type { RequestBody } from '../request-contracts';
 
 export const BACKGROUND_EXPORT_TYPES = [
   'aggregated',
@@ -185,37 +185,11 @@ export interface ItemDatasetOptionsDto {
   mappingWarnings?: ItemDatasetMappingWarningDto[];
 }
 
-interface ExportRequestTransportOptions {
-  authToken?: string;
-  serverUrl?: string;
-  includeReplayUrl?: boolean;
-}
+export type ResultsByVersionExportRequest = Extract<RequestBody<'BackgroundExportRequest'>, { exportType: 'results-by-version' }>;
 
-export interface ResultsByVersionExportRequest extends ExportRequestTransportOptions {
-  exportType: 'results-by-version';
-  version?: ExportVersion;
-  format?: Exclude<ExportFormat, 'json'>;
-  missingsProfileId: number;
-  includeResponseValues?: boolean;
-  includeGeoGebraResponseValues?: boolean;
-  includeGeoGebraFiles?: boolean;
-}
+export type ItemMatrixExportRequest = Extract<RequestBody<'BackgroundExportRequest'>, { exportType: 'item-matrix' }>;
 
-export interface ItemMatrixExportRequest extends ExportRequestTransportOptions {
-  exportType: 'item-matrix';
-  version?: ExportVersion;
-  format?: Exclude<ExportFormat, 'json'>;
-  matrixValue?: 'code' | 'score';
-  missingsProfileId: number;
-  notReachedScope?: ItemDatasetNotReachedScope;
-  recodeTrailingOmissions?: boolean;
-  items?: ItemDatasetSelection[];
-}
-
-export interface PsychometricExportRequest
-  extends ExportRequestTransportOptions, PsychometricExportOptions {
-  exportType: 'psychometrics';
-}
+export type PsychometricExportRequest = Extract<RequestBody<'BackgroundExportRequest'>, { exportType: 'psychometrics' }>;
 
 export type ExportRequest =
   | PsychometricExportRequest
@@ -227,34 +201,9 @@ export type OtherBackgroundExportType = Exclude<
   ExportRequest['exportType']
 >;
 
-export interface OtherBackgroundExportRequest extends ExportRequestTransportOptions {
-  exportType: OtherBackgroundExportType;
-  format?: ExportFormat;
-  outputCommentsInsteadOfCodes?: boolean;
-  anonymizeCoders?: boolean;
-  usePseudoCoders?: boolean;
-  doubleCodingMethod?:
-    'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent';
-  includeComments?: boolean;
-  includeModalValue?: boolean;
-  includeDoubleCoded?: boolean;
-  includeResponseValues?: boolean;
-  excludeAutoCoded?: boolean;
-  trainingRequired?: boolean;
-  testResultFilters?: {
-    groupNames?: string[];
-    bookletNames?: string[];
-    unitNames?: string[];
-    personIds?: number[];
-    includeLogAnomalies?: boolean;
-  };
-  jobDefinitionIds?: number[];
-  coderTrainingIds?: number[];
-  coderIds?: number[];
-}
+export type OtherBackgroundExportRequest = Extract<RequestBody<'BackgroundExportRequest'>, { exportType: OtherBackgroundExportType }>;
 
-export type BackgroundExportRequest =
-  ExportRequest | OtherBackgroundExportRequest;
+export type BackgroundExportRequest = RequestBody<'BackgroundExportRequest'>;
 
 export class ExportRequestValidationError extends Error {
   constructor(message: string) {

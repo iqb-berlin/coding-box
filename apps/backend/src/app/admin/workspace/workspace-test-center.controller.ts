@@ -1,5 +1,10 @@
 import {
-  BadRequestException, Controller, Get, Param, Query, UseGuards
+  BadRequestException,
+  Controller,
+  Get,
+  Param,
+  Query,
+  UseGuards
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -34,6 +39,17 @@ export class WorkspaceTestCenterController {
     private cacheService: CacheService,
     private jobQueueService: JobQueueService
   ) {}
+
+  private decodeTestcenterUrl(url: string): string {
+    try {
+      return decodeURIComponent(url);
+    } catch (error) {
+      if (error instanceof URIError) {
+        throw new BadRequestException('Invalid URL encoding');
+      }
+      throw error;
+    }
+  }
 
   private async invalidateFlatResponseFilterOptionsCache(
     workspaceId: number
@@ -205,7 +221,7 @@ export class WorkspaceTestCenterController {
       workspace_id,
       tc_workspace,
       server,
-      decodeURIComponent(url),
+      this.decodeTestcenterUrl(url),
       token,
       importOptions,
       testGroups,
@@ -340,21 +356,13 @@ export class WorkspaceTestCenterController {
       @Query('token') token: string,
       @Query('importRunId') importRunId: string
   ): Promise<TestGroupsInfoDto[]> {
-    try {
-      return await this.testCenterService.getTestgroups(
-        workspace_id,
-        tc_workspace,
-        server,
-        decodeURIComponent(url),
-        token,
-        importRunId
-      );
-    } catch (error) {
-      throw new BadRequestException(
-        error instanceof Error ?
-          error.message :
-          'Failed to retrieve test groups from Testcenter.'
-      );
-    }
+    return this.testCenterService.getTestgroups(
+      workspace_id,
+      tc_workspace,
+      server,
+      this.decodeTestcenterUrl(url),
+      token,
+      importRunId
+    );
   }
 }

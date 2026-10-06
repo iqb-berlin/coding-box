@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
 import { JwtService } from '@nestjs/jwt';
+import { DERIVED_VARIABLE_READER } from '../database/services/workspace/derived-variable-reader.token';
 import Workspace from '../database/entities/workspace.entity';
 import WorkspaceAdmin from '../database/entities/workspace-admin.entity';
 import FileUpload from '../database/entities/file_upload.entity';
@@ -35,66 +36,28 @@ import { JobDefinition } from '../database/entities/job-definition.entity';
 import { CodingUnitFreshness } from '../database/entities/coding-unit-freshness.entity';
 import { DoubleCodingReviewDecision } from '../database/entities/double-coding-review-decision.entity';
 import {
-  WorkspaceCoreService,
-  WorkspaceFilesService,
-  WorkspaceXmlSchemaValidationService,
-  WorkspaceFileStorageService,
-  WorkspaceFileParsingService,
-  WorkspaceCodingService,
-  WorkspacePlayerService,
-  WorkspaceUsersService,
-  ResourcePackageService,
-  UnitInfoService,
-  UnitTagService,
-  UnitNoteService,
-  BookletInfoService,
-  WorkspaceExclusionService
+  WorkspaceCoreService, WorkspaceFilesService, WorkspaceXmlSchemaValidationService, WorkspaceFileStorageService, WorkspaceFileParsingService, WorkspaceCodingService, WorkspacePlayerService, WorkspaceUsersService, ResourcePackageService, UnitInfoService, UnitTagService, UnitNoteService, BookletInfoService, WorkspaceExclusionService
 } from '../database/services/workspace';
 import {
-  WorkspaceTestResultsService,
-  TestcenterService,
-  UploadResultsService,
-  PersonService,
-  PersonQueryService,
-  PersonValidationService,
-  PersonDataProcessingService,
-  PersonPersistenceService,
-  ResponseManagementService,
-  VariableAnalysisService,
-  VariableAnalysisReplayService,
-  ReplayStatisticsService
+  WorkspaceTestResultsService, TestcenterService, UploadResultsService, PersonService, PersonQueryService, PersonValidationService, PersonDataProcessingService, PersonPersistenceService, ResponseManagementService, VariableAnalysisService, VariableAnalysisReplayService, ReplayStatisticsService
 } from '../database/services/test-results';
 import {
-  WorkspaceResponseValidationService,
-  WorkspaceTestFilesValidationService,
-  ExportValidationResultsService,
-  ValidationTaskService
+  WorkspaceResponseValidationService, WorkspaceTestFilesValidationService, ExportValidationResultsService, ValidationTaskService
 } from '../database/services/validation';
-import {
-  CodingListExportService,
-  CodingExportOrchestratorService,
-  CodingValidationService,
-  DoubleCodingReviewDecisionService,
-  DoubleCodingReviewQueryService,
-  CodingAnalysisService,
-  CodingProgressService,
-  CodingReplayService,
-  CodingVersionService,
-  CodingJobOperationsService,
-  CodebookGenerationService,
-  CodingResponseQueryService,
-  CodingFreshnessService,
-  CodingItemMatrixExportService,
-  ExportArtifactService
-} from '../database/services/coding';
-import {
-  JobService,
-  BullJobManagementService
-} from '../database/services/jobs';
+import { CodingListExportService } from '../database/services/coding/coding-list-export.service';
+import { CodingExportOrchestratorService } from '../database/services/coding/coding-export-orchestrator.service';
+import { DoubleCodingReviewDecisionService } from '../database/services/coding/double-coding-review-decision.service';
+import { DoubleCodingReviewQueryService } from '../database/services/coding/double-coding-review-query.service';
+import { CodingProgressService } from '../database/services/coding/coding-progress.service';
+import { CodingReplayService } from '../database/services/coding/coding-replay.service';
+import { CodingVersionService } from '../database/services/coding/coding-version.service';
+import { CodingJobOperationsService } from '../database/services/coding/coding-job-operations.service';
+import { CodebookGenerationService } from '../database/services/coding/codebook-generation.service';
+import { CodingResponseQueryService } from '../database/services/coding/coding-response-query.service';
+import { ExportArtifactService } from '../database/services/coding/export-artifact.service';
+import { JobService, BullJobManagementService } from '../database/services/jobs';
 import { JournalService } from '../database/services/shared';
-// eslint-disable-next-line import/no-cycle
 import { JobQueueClientModule } from '../job-queue/job-queue-client.module';
-// eslint-disable-next-line import/no-cycle
 import { CacheClientModule } from '../cache/cache-client.module';
 // eslint-disable-next-line import/no-cycle
 import { CodingModule } from '../coding/coding.module';
@@ -141,6 +104,7 @@ import { CodingModule } from '../coding/coding.module';
     forwardRef(() => CodingModule)
   ],
   providers: [
+    { provide: DERIVED_VARIABLE_READER, useExisting: WorkspaceFilesService },
     WorkspaceCoreService,
     WorkspaceFilesService,
     WorkspaceXmlSchemaValidationService,
@@ -174,24 +138,22 @@ import { CodingModule } from '../coding/coding.module';
     ResponseManagementService,
     CodingListExportService,
     CodingExportOrchestratorService,
-    CodingValidationService,
     DoubleCodingReviewDecisionService,
     DoubleCodingReviewQueryService,
-    CodingAnalysisService,
     CodingProgressService,
     CodingReplayService,
     CodingVersionService,
     CodingJobOperationsService,
     CodebookGenerationService,
     CodingResponseQueryService,
-    CodingFreshnessService,
-    CodingItemMatrixExportService,
     ExportArtifactService,
     UnitInfoService,
     BookletInfoService,
     WorkspaceExclusionService
   ],
   exports: [
+    DERIVED_VARIABLE_READER,
+    forwardRef(() => CodingModule),
     WorkspaceCoreService,
     WorkspaceFilesService,
     WorkspaceTestResultsService,
@@ -219,18 +181,14 @@ import { CodingModule } from '../coding/coding.module';
     ResponseManagementService,
     CodingListExportService,
     CodingExportOrchestratorService,
-    CodingValidationService,
     DoubleCodingReviewDecisionService,
     DoubleCodingReviewQueryService,
-    CodingAnalysisService,
     CodingProgressService,
     CodingReplayService,
     CodingVersionService,
     CodingJobOperationsService,
     CodebookGenerationService,
     CodingResponseQueryService,
-    CodingFreshnessService,
-    CodingItemMatrixExportService,
     ExportArtifactService,
     UnitInfoService,
     BookletInfoService,

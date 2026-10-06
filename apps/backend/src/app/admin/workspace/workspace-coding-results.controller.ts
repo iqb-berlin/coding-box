@@ -1,16 +1,9 @@
 import {
-  Controller,
-  Body,
-  Get,
-  Param,
-  Post,
-  UseGuards
+  Controller, Body, Get, Param, Post, UseGuards
 } from '@nestjs/common';
-import {
-  ApiOkResponse,
-  ApiParam,
-  ApiTags
-} from '@nestjs/swagger';
+import { ApiOkResponse, ApiParam, ApiTags } from '@nestjs/swagger';
+import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
+import { requestBodySchemas } from '../../http/request-body.schemas';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
@@ -98,7 +91,7 @@ export class WorkspaceCodingResultsController {
   async applyCodingResults(
     @WorkspaceId() workspace_id: number,
       @Param('jobId') jobId: number,
-      @Body('overwriteExisting') overwriteExisting?: boolean
+      @Body('overwriteExisting', new JsonSchemaValidationPipe(requestBodySchemas.boolean, true)) overwriteExisting?: boolean
   ): Promise<ApplyCodingResultsResult> {
     return this.codingJobOperationsService.applyCodingResults(workspace_id, jobId, {
       overwriteExisting: overwriteExisting === true

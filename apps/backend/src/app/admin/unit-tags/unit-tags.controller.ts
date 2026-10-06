@@ -1,32 +1,16 @@
 import {
-  BadRequestException,
-  Body,
-  Controller,
-  Delete,
-  Get,
-  NotFoundException,
-  Param,
-  Patch,
-  Post,
-  UseGuards
+  Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, UseGuards
 } from '@nestjs/common';
 import {
-  ApiBadRequestResponse,
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiNotFoundResponse,
-  ApiOkResponse,
-  ApiOperation,
-  ApiParam,
-  ApiTags
+  ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiTags
 } from '@nestjs/swagger';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../workspace/workspace.guard';
 import { WorkspaceId } from '../workspace/workspace.decorator';
 import { UnitTagService } from '../../database/services/workspace';
 import { UnitTagDto } from '../../../../../../api-dto/unit-tags/unit-tag.dto';
-import { CreateUnitTagDto } from '../../../../../../api-dto/unit-tags/create-unit-tag.dto';
-import { UpdateUnitTagDto } from '../../../../../../api-dto/unit-tags/update-unit-tag.dto';
 
 @ApiTags('Unit Tags')
 @Controller('admin/workspace/:workspace_id/unit-tags')
@@ -58,16 +42,9 @@ export class UnitTagsController {
   })
   async create(
     @WorkspaceId() workspaceId: number,
-      @Body() createUnitTagDto: CreateUnitTagDto
+      @ValidatedBody('CreateUnitTagDto') createUnitTagDto: RequestBody<'CreateUnitTagDto'>
   ): Promise<UnitTagDto> {
-    try {
-      return await this.unitTagService.create(createUnitTagDto);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to create tag: ${error.message}`);
-    }
+    return this.unitTagService.create(workspaceId, createUnitTagDto);
   }
 
   @Get('unit/:unitId')
@@ -98,16 +75,9 @@ export class UnitTagsController {
   })
   async findAllByUnitId(
     @WorkspaceId() workspaceId: number,
-      @Param('unitId') unitId: number
+      @Param('unitId', ParseIntPipe) unitId: number
   ): Promise<UnitTagDto[]> {
-    try {
-      return await this.unitTagService.findAllByUnitId(unitId);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve tags: ${error.message}`);
-    }
+    return this.unitTagService.findAllByUnitId(workspaceId, unitId);
   }
 
   @Get(':id')
@@ -138,16 +108,9 @@ export class UnitTagsController {
   })
   async findOne(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number
+      @Param('id', ParseIntPipe) id: number
   ): Promise<UnitTagDto> {
-    try {
-      return await this.unitTagService.findOne(id);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve tag: ${error.message}`);
-    }
+    return this.unitTagService.findOne(workspaceId, id);
   }
 
   @Patch(':id')
@@ -181,17 +144,10 @@ export class UnitTagsController {
   })
   async update(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number,
-      @Body() updateUnitTagDto: UpdateUnitTagDto
+      @Param('id', ParseIntPipe) id: number,
+      @ValidatedBody('UpdateUnitTagDto') updateUnitTagDto: RequestBody<'UpdateUnitTagDto'>
   ): Promise<UnitTagDto> {
-    try {
-      return await this.unitTagService.update(id, updateUnitTagDto);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to update tag: ${error.message}`);
-    }
+    return this.unitTagService.update(workspaceId, id, updateUnitTagDto);
   }
 
   @Delete(':id')
@@ -222,15 +178,8 @@ export class UnitTagsController {
   })
   async remove(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number
+      @Param('id', ParseIntPipe) id: number
   ): Promise<boolean> {
-    try {
-      return await this.unitTagService.remove(id);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to delete tag: ${error.message}`);
-    }
+    return this.unitTagService.remove(workspaceId, id);
   }
 }

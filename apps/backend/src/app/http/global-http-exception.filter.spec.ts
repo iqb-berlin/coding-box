@@ -64,7 +64,7 @@ describe('GlobalHttpExceptionFilter', () => {
       requestId: 'request-1'
     }));
     expect(loggerSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[request-1] GET /api/admin/workspace/5/journal?page=1&limit=20 failed with 500'),
+      expect.stringContaining('[request-1] GET /api/admin/workspace/5/journal failed with 500'),
       expect.any(String)
     );
   });
@@ -97,5 +97,24 @@ describe('GlobalHttpExceptionFilter', () => {
       message: 'Internal server error',
       requestId: 'request-3'
     }));
+  });
+
+  it.each(['originalUrl', 'url'] as const)('excludes query values from server logs using %s', urlField => {
+    const requestPath = '/api/admin/workspace/5/importWorkspaceFiles/testGroups';
+    const error = new Error('Testcenter unavailable');
+    const { host, response } = createHost({
+      requestId: 'request-private-query',
+      originalUrl: '',
+      [urlField]: `${requestPath}?token=synthetic-private-token&customCredential=synthetic-private-password`
+    });
+    new GlobalHttpExceptionFilter().catch(error, host);
+
+    expect(response.status).toHaveBeenCalledWith(500);
+    expect(loggerSpy).toHaveBeenCalledWith(
+      `[request-private-query] GET ${requestPath} failed with 500: Testcenter unavailable`,
+      error.stack
+    );
+    expect(JSON.stringify(loggerSpy.mock.calls)).not.toContain('synthetic-private-token');
+    expect(JSON.stringify(loggerSpy.mock.calls)).not.toContain('synthetic-private-password');
   });
 });

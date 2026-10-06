@@ -1,21 +1,6 @@
-import { ExpectedCombinationDto } from './expected-combination.dto';
+import type { RequestBody } from '../request-contracts';
 
 /**
  * DTO for validation request with pagination support
  */
-export class ValidateCodingCompletenessRequestDto {
-  /**
-   * The expected combinations to validate
-   */
-  expectedCombinations!: ExpectedCombinationDto[];
-
-  /**
-   * Page number (1-based). Defaults to 1 if not provided.
-   */
-  page?: number;
-
-  /**
-   * Number of items per page. Defaults to 50 if not provided.
-   */
-  pageSize?: number;
-}
+export type ValidateCodingCompletenessRequestDto = RequestBody<'ValidateCodingCompletenessRequestDto'>;

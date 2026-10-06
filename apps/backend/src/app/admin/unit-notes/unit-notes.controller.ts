@@ -1,32 +1,16 @@
 import {
-  BadRequestException,
-  Body,
-  Controller,
-  Delete,
-  Get,
-  NotFoundException,
-  Param,
-  Patch,
-  Post,
-  UseGuards
+  Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, UseGuards
 } from '@nestjs/common';
 import {
-  ApiBadRequestResponse,
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiNotFoundResponse,
-  ApiOkResponse,
-  ApiOperation,
-  ApiParam,
-  ApiTags
+  ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiTags
 } from '@nestjs/swagger';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../workspace/workspace.guard';
 import { WorkspaceId } from '../workspace/workspace.decorator';
 import { UnitNoteService } from '../../database/services/workspace';
 import { UnitNoteDto } from '../../../../../../api-dto/unit-notes/unit-note.dto';
-import { CreateUnitNoteDto } from '../../../../../../api-dto/unit-notes/create-unit-note.dto';
-import { UpdateUnitNoteDto } from '../../../../../../api-dto/unit-notes/update-unit-note.dto';
 
 @ApiTags('Unit Notes')
 @Controller('admin/workspace/:workspace_id/unit-notes')
@@ -58,16 +42,9 @@ export class UnitNotesController {
   })
   async create(
     @WorkspaceId() workspaceId: number,
-      @Body() createUnitNoteDto: CreateUnitNoteDto
+      @ValidatedBody('CreateUnitNoteDto') createUnitNoteDto: RequestBody<'CreateUnitNoteDto'>
   ): Promise<UnitNoteDto> {
-    try {
-      return await this.unitNoteService.create(createUnitNoteDto);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to create note: ${error.message}`);
-    }
+    return this.unitNoteService.create(workspaceId, createUnitNoteDto);
   }
 
   @Get('unit/:unitId')
@@ -98,16 +75,9 @@ export class UnitNotesController {
   })
   async findAllByUnitId(
     @WorkspaceId() workspaceId: number,
-      @Param('unitId') unitId: number
+      @Param('unitId', ParseIntPipe) unitId: number
   ): Promise<UnitNoteDto[]> {
-    try {
-      return await this.unitNoteService.findAllByUnitId(unitId);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve notes: ${error.message}`);
-    }
+    return this.unitNoteService.findAllByUnitId(workspaceId, unitId);
   }
 
   @Post('units/notes')
@@ -132,13 +102,9 @@ export class UnitNotesController {
   })
   async findAllByUnitIds(
     @WorkspaceId() workspaceId: number,
-      @Body() { unitIds }: { unitIds: number[] }
+      @ValidatedBody('UnitNotesController_findAllByUnitIds') { unitIds }: RequestBody<'UnitNotesController_findAllByUnitIds'>
   ): Promise<{ [unitId: number]: UnitNoteDto[] }> {
-    try {
-      return await this.unitNoteService.findAllByUnitIds(unitIds);
-    } catch (error) {
-      throw new BadRequestException(`Failed to retrieve notes: ${error.message}`);
-    }
+    return this.unitNoteService.findAllByUnitIds(workspaceId, unitIds);
   }
 
   @Get(':id')
@@ -169,16 +135,9 @@ export class UnitNotesController {
   })
   async findOne(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number
+      @Param('id', ParseIntPipe) id: number
   ): Promise<UnitNoteDto> {
-    try {
-      return await this.unitNoteService.findOne(id);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve note: ${error.message}`);
-    }
+    return this.unitNoteService.findOne(workspaceId, id);
   }
 
   @Patch(':id')
@@ -212,17 +171,10 @@ export class UnitNotesController {
   })
   async update(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number,
-      @Body() updateUnitNoteDto: UpdateUnitNoteDto
+      @Param('id', ParseIntPipe) id: number,
+      @ValidatedBody('UpdateUnitNoteDto') updateUnitNoteDto: RequestBody<'UpdateUnitNoteDto'>
   ): Promise<UnitNoteDto> {
-    try {
-      return await this.unitNoteService.update(id, updateUnitNoteDto);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to update note: ${error.message}`);
-    }
+    return this.unitNoteService.update(workspaceId, id, updateUnitNoteDto);
   }
 
   @Delete(':id')
@@ -253,15 +205,8 @@ export class UnitNotesController {
   })
   async remove(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number
+      @Param('id', ParseIntPipe) id: number
   ): Promise<boolean> {
-    try {
-      return await this.unitNoteService.remove(id);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to delete note: ${error.message}`);
-    }
+    return this.unitNoteService.remove(workspaceId, id);
   }
 }

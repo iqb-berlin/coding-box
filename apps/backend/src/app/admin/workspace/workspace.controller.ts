@@ -1,32 +1,13 @@
 import {
-  BadRequestException,
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Logger,
-  ParseArrayPipe,
-  Patch,
-  Post,
-  Query,
-  Req,
-  UseGuards
+  BadRequestException, Controller, Delete, Get, Logger, ParseArrayPipe, Patch, Post, Query, Req, UseGuards
 } from '@nestjs/common';
 import {
-  ApiBadRequestResponse,
-  ApiBearerAuth,
-  ApiBody,
-  ApiConflictResponse,
-  ApiCreatedResponse,
-  ApiNotFoundResponse,
-  ApiOkResponse,
-  ApiOperation, ApiParam,
-  ApiQuery,
-  ApiTags
+  ApiBadRequestResponse, ApiBearerAuth, ApiConflictResponse, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
-import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
 import { WorkspaceCoreService } from '../../database/services/workspace';
 import { WorkspaceId } from './workspace.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -85,17 +66,13 @@ export class WorkspaceController {
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 20
   ): Promise<{ data: WorkspaceInListDto[]; total: number; page: number; limit: number }> {
-    try {
-      const [workspaces, total] = await this.workspaceCoreService.findAll({ page, limit });
-      return {
-        data: workspaces,
-        total,
-        page,
-        limit
-      };
-    } catch (error) {
-      throw new BadRequestException('Failed to retrieve admin workspaces. Please try again later.');
-    }
+    const [workspaces, total] = await this.workspaceCoreService.findAll({ page, limit });
+    return {
+      data: workspaces,
+      total,
+      page,
+      limit
+    };
   }
 
   @Get('access-rights-matrix')
@@ -133,15 +110,11 @@ export class WorkspaceController {
     if (!id || id <= 0) {
       throw new BadRequestException('Invalid workspace ID.');
     }
-    try {
-      const workspace = await this.workspaceCoreService.findOne(id);
-      if (!workspace) {
-        this.logger.error('Admin workspace not found.');
-      }
-      return workspace;
-    } catch (error) {
-      throw new BadRequestException(`Failed to retrieve workspace: ${error.message}`);
+    const workspace = await this.workspaceCoreService.findOne(id);
+    if (!workspace) {
+      this.logger.error('Admin workspace not found.');
     }
+    return workspace;
   }
 
   @Delete()
@@ -175,10 +148,7 @@ export class WorkspaceController {
     summary: 'Update workspace',
     description: 'Updates an existing workspace with the provided data'
   })
-  @ApiBody({
-    type: WorkspaceFullDto,
-    description: 'Updated workspace data'
-  })
+
   @ApiOkResponse({ description: 'Workspace updated successfully' })
   @ApiConflictResponse({
     description: 'Workspace settings are currently locked by another mutation.'
@@ -186,7 +156,7 @@ export class WorkspaceController {
   @ApiBadRequestResponse({ description: 'Invalid workspace data' })
   @ApiNotFoundResponse({ description: 'Workspace not found' })
   @ApiTags('admin workspaces')
-  async patch(@Body() workspaces: WorkspaceFullDto) {
+  async patch(@ValidatedBody('WorkspaceFullDto') workspaces: RequestBody<'WorkspaceFullDto'>) {
     return this.workspaceCoreService.patch(workspaces);
   }
 
@@ -194,17 +164,14 @@ export class WorkspaceController {
   @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new workspace', description: 'Creates a new workspace with the provided data' })
-  @ApiBody({
-    type: CreateWorkspaceDto,
-    description: 'Workspace data to create'
-  })
+
   @ApiCreatedResponse({
     description: 'Sends back the id of the new workspace in database',
     type: Number
   })
   @ApiBadRequestResponse({ description: 'Invalid workspace data' })
   @ApiTags('admin workspaces')
-  async create(@Body() createWorkspaceDto: CreateWorkspaceDto, @Req() request: RequestWithUser) {
+  async create(@ValidatedBody('CreateWorkspaceDto') createWorkspaceDto: RequestBody<'CreateWorkspaceDto'>, @Req() request: RequestWithUser) {
     return this.workspaceCoreService.create(createWorkspaceDto, Number(request.user.id));
   }
 }

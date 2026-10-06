@@ -1,9 +1,7 @@
 import {
-  BadRequestException,
   Controller,
   Delete,
   Get,
-  NotFoundException,
   Param,
   Post,
   UseGuards
@@ -52,15 +50,8 @@ export class JobsController {
     description: 'Workspace not found.'
   })
   async getJobs(@WorkspaceId() workspaceId: number): Promise<JobDto[]> {
-    try {
-      const jobs = await this.jobService.getJobs(workspaceId);
-      return jobs.map(job => JobDto.fromEntity(job));
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve jobs: ${error.message}`);
-    }
+    const jobs = await this.jobService.getJobs(workspaceId);
+    return jobs.map(job => JobDto.fromEntity(job));
   }
 
   @Get(':job_id')
@@ -93,15 +84,8 @@ export class JobsController {
     @WorkspaceId() workspaceId: number,
       @Param('job_id') jobId: number
   ): Promise<JobDto> {
-    try {
-      const job = await this.jobService.getJob(jobId, workspaceId);
-      return JobDto.fromEntity(job);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to retrieve job: ${error.message}`);
-    }
+    const job = await this.jobService.getJob(jobId, workspaceId);
+    return JobDto.fromEntity(job);
   }
 
   @Post(':job_id/cancel')
@@ -140,15 +124,8 @@ export class JobsController {
     @WorkspaceId() workspaceId: number,
       @Param('job_id') jobId: number
   ): Promise<{ success: boolean; message: string }> {
-    try {
-      await this.jobService.getJob(jobId, workspaceId);
-      return await this.jobService.cancelJob(jobId);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to cancel job: ${error.message}`);
-    }
+    await this.jobService.getJob(jobId, workspaceId);
+    return this.jobService.cancelJob(jobId);
   }
 
   @Delete(':job_id')
@@ -187,14 +164,7 @@ export class JobsController {
     @WorkspaceId() workspaceId: number,
       @Param('job_id') jobId: number
   ): Promise<{ success: boolean; message: string }> {
-    try {
-      await this.jobService.getJob(jobId, workspaceId);
-      return await this.jobService.deleteJob(jobId);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      throw new BadRequestException(`Failed to delete job: ${error.message}`);
-    }
+    await this.jobService.getJob(jobId, workspaceId);
+    return this.jobService.deleteJob(jobId);
   }
 }

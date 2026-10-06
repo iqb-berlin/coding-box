@@ -534,17 +534,11 @@ export class WsgCodingJobController {
       );
     }
 
-    try {
-      const codingJob = await this.codingJobService.createCodingJob(
-        workspaceId,
-        createCodingJobDto
-      );
-      return CodingJobDto.fromEntity(codingJob);
-    } catch (error) {
-      throw new BadRequestException(
-        `Failed to create coding job: ${error.message}`
-      );
-    }
+    const codingJob = await this.codingJobService.createCodingJob(
+      workspaceId,
+      createCodingJobDto
+    );
+    return CodingJobDto.fromEntity(codingJob);
   }
 
   @Put(':id')
