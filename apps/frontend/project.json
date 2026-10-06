@@ -121,6 +121,15 @@
     },
     "e2e": {
       "executor": "@nx/cypress:cypress",
+      "inputs": [
+        "default",
+        "^production",
+        "frontendE2e",
+        "{workspaceRoot}/scripts/qa/hash-frontend-artifact.mjs",
+        {
+          "runtime": "node scripts/qa/hash-frontend-artifact.mjs"
+        }
+      ],
       "options": {
         "cypressConfig": "cypress.config.ts",
         "testingType": "e2e",
