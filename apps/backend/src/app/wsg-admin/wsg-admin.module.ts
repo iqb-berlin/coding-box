@@ -1,19 +1,16 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { WsgCodingJobModule } from './coding-job/coding-job.module';
 import { WorkspaceSettingsController } from '../workspace/workspace-settings.controller';
-import { WorkspaceSettingsService } from '../workspace/workspace-settings.service';
-import { Setting } from '../database/entities/setting.entity';
+import { WorkspaceSettingsModule } from '../workspace/workspace-settings.module';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
     AuthModule,
     WsgCodingJobModule,
-    TypeOrmModule.forFeature([Setting])
+    WorkspaceSettingsModule
   ],
   controllers: [WorkspaceSettingsController],
-  providers: [WorkspaceSettingsService],
   exports: []
 })
 export class WsgAdminModule {}

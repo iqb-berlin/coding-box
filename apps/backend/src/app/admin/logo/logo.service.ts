@@ -4,6 +4,7 @@ import { diskStorage } from 'multer';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { AppLogoDto } from '../../../../../../api-dto/app-logo-dto';
 
 function isMissingFile(error: unknown): boolean {
@@ -56,7 +57,7 @@ export class LogoService {
     return { success: logos.length > 0 };
   }
 
-  async saveLogoSettings(settings: AppLogoDto): Promise<{ success: boolean }> {
+  async saveLogoSettings(settings: RequestBody<'AppLogoDto'>): Promise<{ success: boolean }> {
     await fs.mkdir(this.dataDir, { recursive: true });
     // Readers must see complete JSON even during concurrent async writes.
     const temporaryPath = `${this.settingsPath}.${randomUUID()}.tmp`;

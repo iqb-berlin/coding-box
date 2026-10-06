@@ -1,33 +1,16 @@
 import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  ParseIntPipe,
-  Patch,
-  Post,
-  UseGuards
+  Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, UseGuards
 } from '@nestjs/common';
 import {
-  ApiBadRequestResponse,
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiNotFoundResponse,
-  ApiOkResponse,
-  ApiOperation,
-  ApiParam,
-  ApiTags
+  ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiTags
 } from '@nestjs/swagger';
-import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
-import { requestBodySchemas } from '../../http/request-body.schemas';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../workspace/workspace.guard';
 import { WorkspaceId } from '../workspace/workspace.decorator';
 import { UnitTagService } from '../../database/services/workspace';
 import { UnitTagDto } from '../../../../../../api-dto/unit-tags/unit-tag.dto';
-import { CreateUnitTagDto } from '../../../../../../api-dto/unit-tags/create-unit-tag.dto';
-import { UpdateUnitTagDto } from '../../../../../../api-dto/unit-tags/update-unit-tag.dto';
 
 @ApiTags('Unit Tags')
 @Controller('admin/workspace/:workspace_id/unit-tags')
@@ -59,7 +42,7 @@ export class UnitTagsController {
   })
   async create(
     @WorkspaceId() workspaceId: number,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.CreateUnitTagDto)) createUnitTagDto: CreateUnitTagDto
+      @ValidatedBody('CreateUnitTagDto') createUnitTagDto: RequestBody<'CreateUnitTagDto'>
   ): Promise<UnitTagDto> {
     return this.unitTagService.create(workspaceId, createUnitTagDto);
   }
@@ -162,7 +145,7 @@ export class UnitTagsController {
   async update(
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.UpdateUnitTagDto)) updateUnitTagDto: UpdateUnitTagDto
+      @ValidatedBody('UpdateUnitTagDto') updateUnitTagDto: RequestBody<'UpdateUnitTagDto'>
   ): Promise<UnitTagDto> {
     return this.unitTagService.update(workspaceId, id, updateUnitTagDto);
   }

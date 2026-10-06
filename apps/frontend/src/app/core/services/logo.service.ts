@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { AppLogoDto } from '../../../../../../api-dto/app-logo-dto';
 import { SERVER_URL } from '../../injection-tokens';
 
@@ -36,7 +37,7 @@ export class LogoService {
    * @param logoSettings The logo settings to save
    * @returns An Observable with the success status
    */
-  saveLogoSettings(logoSettings: AppLogoDto): Observable<{ success: boolean }> {
+  saveLogoSettings(logoSettings: RequestBody<'AppLogoDto'>): Observable<{ success: boolean }> {
     return this.http.put<{ success: boolean }>(`${this.serverUrl}/admin/logo/settings`, logoSettings, {});
   }
 

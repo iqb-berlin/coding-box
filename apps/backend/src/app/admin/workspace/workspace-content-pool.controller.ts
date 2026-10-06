@@ -1,38 +1,13 @@
 import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  ParseIntPipe,
-  Post,
-  UseGuards
+  Controller, Get, Param, ParseIntPipe, Post, UseGuards
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
-import { requestBodySchemas } from '../../http/request-body.schemas';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
-import {
-  AccessLevelGuard,
-  RequireAccessLevel
-} from './access-level.guard';
+import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { ContentPoolIntegrationService } from '../content-pool/content-pool-integration.service';
-
-interface ImportAcpDto {
-  acpId: string;
-
-  overwriteExisting?: boolean;
-
-  overwriteFileIds?: string[];
-}
-
-interface UploadFilesToAcpDto {
-  acpId: string;
-
-  fileIds: number[];
-
-  changelog?: string;
-}
 
 @ApiTags('Admin Workspace Content Pool')
 @Controller('admin/workspace/:workspace_id/content-pool')
@@ -68,7 +43,7 @@ export class WorkspaceContentPoolController {
   })
   async importAcp(
   @Param('workspace_id', ParseIntPipe) workspaceId: number,
-    @Body(new JsonSchemaValidationPipe(requestBodySchemas.ImportAcpDto)) body: ImportAcpDto
+    @ValidatedBody('ImportAcpDto') body: RequestBody<'ImportAcpDto'>
   ) {
     return this.contentPoolIntegrationService.importAcpFilesToWorkspace({
       workspaceId,
@@ -85,7 +60,7 @@ export class WorkspaceContentPoolController {
   })
   async startImportAcp(
   @Param('workspace_id', ParseIntPipe) workspaceId: number,
-    @Body(new JsonSchemaValidationPipe(requestBodySchemas.ImportAcpDto)) body: ImportAcpDto
+    @ValidatedBody('ImportAcpDto') body: RequestBody<'ImportAcpDto'>
   ) {
     return this.contentPoolIntegrationService.startAcpImportToWorkspace({
       workspaceId,
@@ -111,7 +86,7 @@ export class WorkspaceContentPoolController {
   })
   async startUploadFilesToAcp(
   @Param('workspace_id', ParseIntPipe) workspaceId: number,
-    @Body(new JsonSchemaValidationPipe(requestBodySchemas.UploadFilesToAcpDto)) body: UploadFilesToAcpDto
+    @ValidatedBody('UploadFilesToAcpDto') body: RequestBody<'UploadFilesToAcpDto'>
   ) {
     return this.contentPoolIntegrationService.startUploadWorkspaceFilesToAcp({
       workspaceId,

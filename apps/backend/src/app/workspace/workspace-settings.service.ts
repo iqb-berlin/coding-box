@@ -2,10 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Setting } from '../database/entities/setting.entity';
-import {
-  DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
-  DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS
-} from '../../../../../api-dto/workspaces/workspace-setting-defaults';
+import { getWorkspaceRegexSearchEnabled } from '../utils/regex-search.util';
+import { DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES, DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS } from '../../../../../api-dto/workspaces/workspace-setting-defaults';
 
 export interface WorkspaceSettingWriteDto {
   key: string;
@@ -84,6 +82,10 @@ export class WorkspaceSettingsService {
     @InjectRepository(Setting)
     private settingRepository: Repository<Setting>
   ) {}
+
+  isRegexSearchEnabled(workspaceId: number): Promise<boolean> {
+    return getWorkspaceRegexSearchEnabled(this.settingRepository, workspaceId);
+  }
 
   async getWorkspaceSetting(
     workspaceId: number,
@@ -219,7 +221,7 @@ export class WorkspaceSettingsService {
     });
 
     if (!setting) {
-      throw new Error(`Setting ${settingId} not found`);
+      throw new NotFoundException(`Setting ${settingId} not found`);
     }
 
     setting.content = updateSettingDto.value;
@@ -241,7 +243,7 @@ export class WorkspaceSettingsService {
 
     const result = await this.settingRepository.delete({ key: settingId });
     if (result.affected === 0) {
-      throw new Error(`Setting ${settingId} not found`);
+      throw new NotFoundException(`Setting ${settingId} not found`);
     }
     return { message: 'Setting deleted successfully' };
   }

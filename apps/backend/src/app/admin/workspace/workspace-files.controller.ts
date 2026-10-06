@@ -1,37 +1,12 @@
 import {
-  BadRequestException,
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  InternalServerErrorException,
-  Logger,
-  Param,
-  Post,
-  Query,
-  StreamableFile,
-  UseGuards,
-  UseInterceptors,
-  UploadedFiles,
-  Put
+  BadRequestException, Controller, Delete, Get, HttpCode, InternalServerErrorException, Logger, Param, Post, Query, StreamableFile, UseGuards, UseInterceptors, UploadedFiles, Put
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import {
-  ApiBearerAuth,
-  ApiConsumes,
-  ApiConflictResponse,
-  ApiNotFoundResponse,
-  ApiOkResponse,
-  ApiOperation,
-  ApiParam,
-  ApiTags,
-  ApiBadRequestResponse
+  ApiBearerAuth, ApiConsumes, ApiConflictResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiTags, ApiBadRequestResponse
 } from '@nestjs/swagger';
-import { Repository } from 'typeorm';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { requestBodySchemas } from '../../http/request-body.schemas';
-import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -39,14 +14,10 @@ import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { WorkspaceFilesService, WorkspaceCoreService } from '../../database/services/workspace';
 import { TestFilesUploadResultDto } from '../../../../../../api-dto/files/test-files-upload-result.dto';
-import { WorkspaceSettingsDto } from '../../../../../../api-dto/workspaces/workspace-settings-dto';
 import { PersonService } from '../../database/services/test-results';
 import { CodingStatisticsService, CodingValidationService } from '../../database/services/coding';
-import { Setting } from '../../database/entities/setting.entity';
-import {
-  getWorkspaceRegexSearchEnabled,
-  toRegexSearchException
-} from '../../utils/regex-search.util';
+import { WorkspaceSettingsService } from '../../workspace/workspace-settings.service';
+import { toRegexSearchException } from '../../utils/regex-search.util';
 
 @ApiTags('Admin Workspace Files')
 @Controller('admin/workspace')
@@ -59,8 +30,7 @@ export class WorkspaceFilesController {
     private readonly personService: PersonService,
     private readonly codingStatisticsService: CodingStatisticsService,
     private readonly codingValidationService: CodingValidationService,
-    @InjectRepository(Setting)
-    private readonly settingRepository: Repository<Setting>
+    private readonly workspaceSettingsService: WorkspaceSettingsService
   ) { }
 
   @Get(':workspace_id/files')
@@ -123,7 +93,7 @@ export class WorkspaceFilesController {
     }
     try {
       const effectiveRegexSearch = regexSearch === 'true' &&
-        await getWorkspaceRegexSearchEnabled(this.settingRepository, workspace_id);
+        await this.workspaceSettingsService.isRegexSearchEnabled(workspace_id);
       const [files, total, fileTypes] =
         await this.workspaceFilesService.findFiles(workspace_id, {
           page,
@@ -185,7 +155,7 @@ export class WorkspaceFilesController {
   })
   async excludePersons(
     @Param('workspace_id') workspaceId: number,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceFilesController_excludePersons)) body: { logins: string[] }
+      @ValidatedBody('WorkspaceFilesController_excludePersons') body: RequestBody<'WorkspaceFilesController_excludePersons'>
   ): Promise<boolean> {
     if (!workspaceId) {
       throw new BadRequestException('Workspace ID is required.');
@@ -233,7 +203,7 @@ export class WorkspaceFilesController {
   @ApiOkResponse({ description: 'Persons marked as considered', type: Boolean })
   async considerPersons(
     @Param('workspace_id') workspaceId: number,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceFilesController_considerPersons)) body: { logins: string[] }
+      @ValidatedBody('WorkspaceFilesController_considerPersons') body: RequestBody<'WorkspaceFilesController_considerPersons'>
   ): Promise<boolean> {
     if (!workspaceId) {
       throw new BadRequestException('Workspace ID is required.');
@@ -400,7 +370,7 @@ export class WorkspaceFilesController {
   })
   async downloadWorkspaceFilesAsZip(
     @Param('workspace_id') workspaceId: string,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceFilesController_downloadWorkspaceFilesAsZip, true)) body?: { fileTypes?: string[] }
+      @ValidatedBody('WorkspaceFilesController_downloadWorkspaceFilesAsZip', true) body?: RequestBody<'WorkspaceFilesController_downloadWorkspaceFilesAsZip'>
   ): Promise<StreamableFile> {
     const startTime = Date.now();
     const MAX_ZIP_SIZE = 500 * 1024 * 1024; // 500MB limit
@@ -524,7 +494,7 @@ export class WorkspaceFilesController {
   })
   async updateIgnoredUnits(
     @Param('workspace_id') workspaceId: number,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceFilesController_updateIgnoredUnits)) body: { ignoredUnits: string[] }
+      @ValidatedBody('WorkspaceFilesController_updateIgnoredUnits') body: RequestBody<'WorkspaceFilesController_updateIgnoredUnits'>
   ): Promise<void> {
     if (!body || !Array.isArray(body.ignoredUnits)) {
       throw new BadRequestException('ignoredUnits must be an array of strings');
@@ -551,7 +521,7 @@ export class WorkspaceFilesController {
   })
   async updateWorkspaceSettings(
     @Param('workspace_id') workspaceId: number,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceSettingsDto)) body: WorkspaceSettingsDto
+      @ValidatedBody('WorkspaceSettingsDto') body: RequestBody<'WorkspaceSettingsDto'>
   ): Promise<void> {
     if (!body) {
       throw new BadRequestException('Request body is required');

@@ -1,15 +1,9 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
-  BehaviorSubject,
-  catchError,
-  map,
-  Observable,
-  of,
-  tap
+  BehaviorSubject, catchError, map, Observable, of, tap
 } from 'rxjs';
-import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
-import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { PaginatedWorkspacesDto } from '../../../../../../api-dto/workspaces/paginated-workspaces-dto';
 import { PaginatedWorkspaceUserDto } from '../../../../../../api-dto/workspaces/paginated-workspace-user-dto';
 import { SERVER_URL } from '../../injection-tokens';
@@ -89,7 +83,7 @@ export class WorkspaceService {
       );
   }
 
-  addWorkspace(workspaceData: CreateWorkspaceDto): Observable<number | null> {
+  addWorkspace(workspaceData: RequestBody<'CreateWorkspaceDto'>): Observable<number | null> {
     return this.http
       .post<number>(`${this.serverUrl}admin/workspace`, workspaceData, { headers: this.authHeader })
       .pipe(
@@ -110,7 +104,7 @@ export class WorkspaceService {
       );
   }
 
-  changeWorkspace(workspaceData: WorkspaceFullDto): Observable<boolean> {
+  changeWorkspace(workspaceData: RequestBody<'WorkspaceFullDto'>): Observable<boolean> {
     return this.http
       .patch<boolean>(`${this.serverUrl}admin/workspace`, workspaceData, { headers: this.authHeader })
       .pipe(

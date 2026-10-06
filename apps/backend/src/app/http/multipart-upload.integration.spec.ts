@@ -1,6 +1,6 @@
 import { ExecutionContext, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
+import { WorkspaceSettingsService } from '../workspace/workspace-settings.service';
 import { WorkspaceFilesController } from '../admin/workspace/workspace-files.controller';
 import { WorkspaceFilesService } from '../database/services/workspace/workspace-files.service';
 import { WorkspaceCoreService } from '../database/services/workspace/workspace-core.service';
@@ -8,7 +8,6 @@ import { PersonService } from '../database/services/test-results/person.service'
 import { CodingStatisticsService } from '../database/services/coding/coding-statistics.service';
 import { CodingValidationService } from '../database/services/coding/coding-validation.service';
 import { UsersService } from '../database/services/users';
-import { Setting } from '../database/entities/setting.entity';
 import { AuthService } from '../auth/service/auth.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GlobalHttpExceptionFilter } from './global-http-exception.filter';
@@ -31,7 +30,7 @@ describe('Workspace multipart uploads', () => {
         { provide: PersonService, useValue: {} },
         { provide: CodingStatisticsService, useValue: {} },
         { provide: CodingValidationService, useValue: {} },
-        { provide: getRepositoryToken(Setting), useValue: {} },
+        { provide: WorkspaceSettingsService, useValue: {} },
         { provide: AuthService, useValue: { canAccessWorkSpace: async () => true } },
         {
           provide: UsersService,

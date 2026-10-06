@@ -3,17 +3,14 @@ import {
 } from '@nestjs/common';
 import { In, MoreThan, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
+import type { RequestBody } from '../../../../../../../api-dto/request-contracts';
 import User from '../../entities/user.entity';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { CreateUserDto } from '../../../../../../../api-dto/user/create-user-dto';
 import WorkspaceUser from '../../entities/workspace_user.entity';
 import { WorkspaceUserInListDto } from '../../../../../../../api-dto/user/workspace-user-in-list-dto';
-import { UserInListDto } from '../../../../../../../api-dto/user/user-in-list-dto';
 import {
-  assertStudyManagersRemain,
-  DEFAULT_WORKSPACE_USER_ACCESS,
-  lockUserRows,
-  lockWorkspaceUserRows
+  assertStudyManagersRemain, DEFAULT_WORKSPACE_USER_ACCESS, lockUserRows, lockWorkspaceUserRows
 } from '../workspace/workspace-user-access.util';
 
 @Injectable()
@@ -74,7 +71,7 @@ export class UsersService {
       });
   }
 
-  async updateUsersAccess(workspaceId: number, users: UserInListDto[]): Promise<boolean> {
+  async updateUsersAccess(workspaceId: number, users: RequestBody<'UsersController_updateUsersAccess'>): Promise<boolean> {
     this.logger.log('Patch users access rights');
     const normalizedWorkspaceId = Number(workspaceId);
     if (!Number.isInteger(normalizedWorkspaceId) || normalizedWorkspaceId < 1) {
@@ -258,7 +255,7 @@ export class UsersService {
     } as UserFullDto;
   }
 
-  async updateUser(userId: number, userData: UserFullDto): Promise<UserFullDto> {
+  async updateUser(userId: number, userData: RequestBody<'UserFullDto'>): Promise<UserFullDto> {
     this.logger.log(`Updating user with id: ${userId}`);
     const existingUser = await this.usersRepository.findOne({ where: { id: userId } });
     if (!existingUser) {
@@ -347,7 +344,7 @@ export class UsersService {
     }
   }
 
-  async create(user: CreateUserDto): Promise<number> {
+  async create(user: RequestBody<'CreateUserDto'>): Promise<number> {
     try {
       this.logger.log('Creating a new user');
 
@@ -362,7 +359,7 @@ export class UsersService {
     }
   }
 
-  async createUser(user: CreateUserDto): Promise<number> {
+  async createUser(user: RequestBody<'CreateUserDto'>): Promise<number> {
     const existingUser: User | null = await this.usersRepository.findOne({
       where: { username: user.username },
       select: ['id', 'username'] // Fetch only the needed fields for validation

@@ -1,33 +1,16 @@
 import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  ParseIntPipe,
-  Patch,
-  Post,
-  UseGuards
+  Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, UseGuards
 } from '@nestjs/common';
 import {
-  ApiBadRequestResponse,
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiNotFoundResponse,
-  ApiOkResponse,
-  ApiOperation,
-  ApiParam,
-  ApiTags
+  ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiTags
 } from '@nestjs/swagger';
-import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
-import { requestBodySchemas } from '../../http/request-body.schemas';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../workspace/workspace.guard';
 import { WorkspaceId } from '../workspace/workspace.decorator';
 import { UnitNoteService } from '../../database/services/workspace';
 import { UnitNoteDto } from '../../../../../../api-dto/unit-notes/unit-note.dto';
-import { CreateUnitNoteDto } from '../../../../../../api-dto/unit-notes/create-unit-note.dto';
-import { UpdateUnitNoteDto } from '../../../../../../api-dto/unit-notes/update-unit-note.dto';
 
 @ApiTags('Unit Notes')
 @Controller('admin/workspace/:workspace_id/unit-notes')
@@ -59,7 +42,7 @@ export class UnitNotesController {
   })
   async create(
     @WorkspaceId() workspaceId: number,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.CreateUnitNoteDto)) createUnitNoteDto: CreateUnitNoteDto
+      @ValidatedBody('CreateUnitNoteDto') createUnitNoteDto: RequestBody<'CreateUnitNoteDto'>
   ): Promise<UnitNoteDto> {
     return this.unitNoteService.create(workspaceId, createUnitNoteDto);
   }
@@ -119,7 +102,7 @@ export class UnitNotesController {
   })
   async findAllByUnitIds(
     @WorkspaceId() workspaceId: number,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.UnitNotesController_findAllByUnitIds)) { unitIds }: { unitIds: number[] }
+      @ValidatedBody('UnitNotesController_findAllByUnitIds') { unitIds }: RequestBody<'UnitNotesController_findAllByUnitIds'>
   ): Promise<{ [unitId: number]: UnitNoteDto[] }> {
     return this.unitNoteService.findAllByUnitIds(workspaceId, unitIds);
   }
@@ -189,7 +172,7 @@ export class UnitNotesController {
   async update(
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.UpdateUnitNoteDto)) updateUnitNoteDto: UpdateUnitNoteDto
+      @ValidatedBody('UpdateUnitNoteDto') updateUnitNoteDto: RequestBody<'UpdateUnitNoteDto'>
   ): Promise<UnitNoteDto> {
     return this.unitNoteService.update(workspaceId, id, updateUnitNoteDto);
   }

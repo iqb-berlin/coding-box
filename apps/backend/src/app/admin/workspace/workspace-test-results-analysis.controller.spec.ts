@@ -1,6 +1,5 @@
-import { Repository } from 'typeorm';
 import { CacheService } from '../../cache/cache.service';
-import { Setting } from '../../database/entities/setting.entity';
+import { WorkspaceSettingsService } from '../../workspace/workspace-settings.service';
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
 import { WorkspaceTestResultsAnalysisController } from './workspace-test-results-analysis.controller';
 
@@ -23,7 +22,7 @@ describe('WorkspaceTestResultsAnalysisController', () => {
     controller = new WorkspaceTestResultsAnalysisController(
       workspaceTestResultsService as unknown as WorkspaceTestResultsService,
       {} as CacheService,
-      settingRepository as unknown as Repository<Setting>
+      new WorkspaceSettingsService(settingRepository as never)
     );
   });
 

@@ -1,32 +1,16 @@
 import {
-  BadRequestException,
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Put,
-  Query,
-  UseGuards
+  BadRequestException, Controller, Delete, Get, Param, Put, Query, UseGuards
 } from '@nestjs/common';
 import {
-  ApiBearerAuth,
-  ApiOkResponse,
-  ApiOperation,
-  ApiParam,
-  ApiBadRequestResponse,
-  ApiTags
+  ApiBearerAuth, ApiOkResponse, ApiOperation, ApiParam, ApiBadRequestResponse, ApiTags
 } from '@nestjs/swagger';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
-import { requestBodySchemas } from '../../http/request-body.schemas';
-import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceFilesService } from '../../database/services/workspace';
-import {
-  type CodingReplayAnchorOverride,
-  CodingReplayAnchorService
-} from '../../database/services/coding/coding-replay-anchor.service';
+import { type CodingReplayAnchorOverride, CodingReplayAnchorService } from '../../database/services/coding/coding-replay-anchor.service';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
 
@@ -189,7 +173,7 @@ export class WorkspaceFilesInfoController {
   })
   async saveReplayAnchorOverride(
     @Param('workspace_id') workspace_id: number,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.CodingReplayAnchorOverride)) override: CodingReplayAnchorOverride
+      @ValidatedBody('CodingReplayAnchorOverride') override: RequestBody<'CodingReplayAnchorOverride'>
   ): Promise<CodingReplayAnchorOverride> {
     if (!workspace_id) {
       throw new BadRequestException('Workspace ID is required.');

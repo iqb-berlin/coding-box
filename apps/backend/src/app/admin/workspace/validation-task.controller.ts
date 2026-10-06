@@ -1,24 +1,11 @@
 import {
-  BadRequestException,
-  Body,
-  Controller,
-  Post,
-  Get,
-  Param,
-  Query,
-  ParseIntPipe,
-  Logger,
-  UseGuards
+  BadRequestException, Controller, Post, Get, Param, Query, ParseIntPipe, Logger, UseGuards
 } from '@nestjs/common';
 import {
-  ApiBearerAuth,
-  ApiTags,
-  ApiOperation,
-  ApiParam,
-  ApiQuery
+  ApiBearerAuth, ApiTags, ApiOperation, ApiParam, ApiQuery
 } from '@nestjs/swagger';
-import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
-import { requestBodySchemas } from '../../http/request-body.schemas';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidationTaskService } from '../../database/services/validation';
 import { ValidationTaskDto } from './dto/validation-task.dto';
 import { CreateValidationTaskRequestDto } from './dto/create-validation-task-request.dto';
@@ -123,7 +110,7 @@ export class ValidationTaskController {
       @Query('page') page?: string,
       @Query('limit') limit?: string,
       @Query() allQueryParams?: Record<string, string | number | boolean | undefined>,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.CreateValidationTaskRequestDto, true)) body?: CreateValidationTaskRequestDto
+      @ValidatedBody('CreateValidationTaskRequestDto', true) body?: RequestBody<'CreateValidationTaskRequestDto'>
   ): Promise<ValidationTaskDto> {
     this.logger.log(`Creating validation task of type ${type} for workspace ${workspaceId}`);
 

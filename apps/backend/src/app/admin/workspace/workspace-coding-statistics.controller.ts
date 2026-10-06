@@ -1,52 +1,25 @@
 import {
-  Controller,
-  Get,
-  Param,
-  Post,
-  Query,
-  Req,
-  UseGuards,
-  Body,
-  Logger,
-  BadRequestException,
-  Res
+  Controller, Get, Param, Post, Query, Req, UseGuards, Logger, BadRequestException, Res
 } from '@nestjs/common';
 import {
-  ApiOkResponse,
-  ApiParam,
-  ApiQuery,
-  ApiTags,
-  ApiBody
+  ApiOkResponse, ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
-import { requestBodySchemas } from '../../http/request-body.schemas';
-import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import {
-  CodingStatisticsService,
-  CodingJobService,
-  CodingProgressService,
-  AutoCodingRunGuardService,
-  DoubleCodingReviewQueryService,
-  CodingFreshnessService,
-  CodingProcessService,
-  CodingReadinessService,
-  CodingReplayService
+  CodingStatisticsService, CodingJobService, CodingProgressService, AutoCodingRunGuardService, DoubleCodingReviewQueryService, CodingFreshnessService, CodingProcessService, CodingReadinessService, CodingReplayService
 } from '../../database/services/coding';
 import { PersonService } from '../../database/services/test-results';
 import { CodingStatistics } from '../../database/services/shared';
 import {
-  CodingFreshnessJobResultDto,
-  CodingFreshnessScopeDto,
-  CodingFreshnessState,
-  CodingFreshnessSummaryDto,
-  CodingFreshnessVersion,
-  StartCodingFreshnessJobDto
+  CodingFreshnessJobResultDto, CodingFreshnessScopeDto, CodingFreshnessState, CodingFreshnessSummaryDto, CodingFreshnessVersion
 } from '../../../../../../api-dto/coding/coding-freshness.dto';
 import { AutocodingReadinessDto } from '../../../../../../api-dto/coding/autocoding-readiness.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
@@ -1120,25 +1093,13 @@ export class WorkspaceCodingStatisticsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      required: ['version'],
-      properties: {
-        version: { type: 'string', enum: ['v1', 'v3'] },
-        states: {
-          type: 'array',
-          items: { type: 'string', enum: ['PENDING', 'STALE'] }
-        }
-      }
-    }
-  })
+
   @ApiOkResponse({
     description: 'Coding freshness auto-coding job created successfully.'
   })
   async codeFreshnessScope(
     @WorkspaceId() workspace_id: number,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.StartCodingFreshnessJobDto)) body: StartCodingFreshnessJobDto
+      @ValidatedBody('StartCodingFreshnessJobDto') body: RequestBody<'StartCodingFreshnessJobDto'>
   ): Promise<CodingFreshnessJobResultDto> {
     await this.jobQueueService.assertNoDependencyConflicts('test-person-coding', workspace_id);
 
@@ -2631,64 +2592,7 @@ export class WorkspaceCodingStatisticsController {
   @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiBody({
-    description: 'Calculate distribution for coding jobs (preview mode)',
-    schema: {
-      type: 'object',
-      properties: {
-        selectedVariables: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              unitName: { type: 'string' },
-              variableId: { type: 'string' },
-              includeDeriveError: { type: 'boolean' }
-            }
-          }
-        },
-        selectedVariableBundles: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'number' },
-              name: { type: 'string' },
-              caseOrderingMode: { type: 'string', enum: ['continuous', 'alternating'] },
-              variables: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    unitName: { type: 'string' },
-                    variableId: { type: 'string' },
-                    includeDeriveError: { type: 'boolean' }
-                  }
-                }
-              }
-            }
-          }
-        },
-        selectedCoders: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'number' },
-              name: { type: 'string' },
-              username: { type: 'string' },
-              weight: { type: 'number' },
-              capacityPercent: { type: 'number' }
-            }
-          }
-        },
-        doubleCodingAbsolute: { type: 'number' },
-        doubleCodingPercentage: { type: 'number' },
-        distributionSeed: { type: 'string' }
-      },
-      required: ['selectedVariables', 'selectedCoders']
-    }
-  })
+
   @ApiOkResponse({
     description: 'Distribution calculated successfully.',
     schema: {
@@ -2767,28 +2671,8 @@ export class WorkspaceCodingStatisticsController {
   })
   async calculateDistribution(
     @WorkspaceId() workspace_id: number,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCodingStatisticsController_calculateDistribution))
-                   body: {
-                     selectedVariables: { unitName: string; variableId: string; includeDeriveError?: boolean }[];
-                     selectedVariableBundles?: {
-                       id: number;
-                       name: string;
-                       caseOrderingMode?: 'continuous' | 'alternating';
-                       variables: { unitName: string; variableId: string; includeDeriveError?: boolean }[];
-                     }[];
-                     selectedCoders: {
-                       id: number;
-                       name: string;
-                       username: string;
-                       weight?: number;
-                       capacityPercent?: number;
-                     }[];
-                     doubleCodingAbsolute?: number;
-                     doubleCodingPercentage?: number;
-                     caseOrderingMode?: 'continuous' | 'alternating';
-                     maxCodingCases?: number;
-                     distributionSeed?: string | number;
-                   },
+      @ValidatedBody('WorkspaceCodingStatisticsController_calculateDistribution')
+                   body: RequestBody<'WorkspaceCodingStatisticsController_calculateDistribution'>,
                    @Res({ passthrough: true }) response: Response
   ): Promise<DistributionCalculationResponse> {
     const cancellation = new AbortController();
@@ -2814,67 +2698,7 @@ export class WorkspaceCodingStatisticsController {
   @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiBody({
-    description: 'Create distributed coding jobs with equal case distribution',
-    schema: {
-      type: 'object',
-      properties: {
-        selectedVariables: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              unitName: { type: 'string' },
-              variableId: { type: 'string' },
-              includeDeriveError: { type: 'boolean' }
-            }
-          }
-        },
-        selectedVariableBundles: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'number' },
-              name: { type: 'string' },
-              caseOrderingMode: { type: 'string', enum: ['continuous', 'alternating'] },
-              variables: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    unitName: { type: 'string' },
-                    variableId: { type: 'string' },
-                    includeDeriveError: { type: 'boolean' }
-                  }
-                }
-              }
-            }
-          }
-        },
-        selectedCoders: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'number' },
-              name: { type: 'string' },
-              username: { type: 'string' },
-              weight: { type: 'number' },
-              capacityPercent: { type: 'number' }
-            }
-          }
-        },
-        doubleCodingAbsolute: { type: 'number' },
-        doubleCodingPercentage: { type: 'number' },
-        distributionSeed: { type: 'string' },
-        showScore: { type: 'boolean' },
-        allowComments: { type: 'boolean' },
-        suppressGeneralInstructions: { type: 'boolean' }
-      },
-      required: ['selectedVariables', 'selectedCoders']
-    }
-  })
+
   @ApiOkResponse({
     description: 'Distributed coding jobs created successfully',
     schema: {
@@ -2977,31 +2801,8 @@ export class WorkspaceCodingStatisticsController {
   })
   async createDistributedCodingJobs(
     @WorkspaceId() workspace_id: number,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCodingStatisticsController_createDistributedCodingJobs))
-                   body: {
-                     selectedVariables: { unitName: string; variableId: string; includeDeriveError?: boolean }[];
-                     selectedVariableBundles?: {
-                       id: number;
-                       name: string;
-                       caseOrderingMode?: 'continuous' | 'alternating';
-                       variables: { unitName: string; variableId: string; includeDeriveError?: boolean }[];
-                     }[];
-                     selectedCoders: {
-                       id: number;
-                       name: string;
-                       username: string;
-                       weight?: number;
-                       capacityPercent?: number;
-                     }[];
-                     doubleCodingAbsolute?: number;
-                     doubleCodingPercentage?: number;
-                     caseOrderingMode?: 'continuous' | 'alternating';
-                     maxCodingCases?: number;
-                     distributionSeed?: string | number;
-                     showScore?: boolean;
-                     allowComments?: boolean;
-                     suppressGeneralInstructions?: boolean;
-                   }
+      @ValidatedBody('WorkspaceCodingStatisticsController_createDistributedCodingJobs')
+                   body: RequestBody<'WorkspaceCodingStatisticsController_createDistributedCodingJobs'>
   ): Promise<DistributedCodingJobsResponse> {
     if (!body) {
       throw new BadRequestException('Request body is required');

@@ -7,10 +7,7 @@ import { Setting } from '../database/entities/setting.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../admin/workspace/workspace.guard';
 import { AccessLevelGuard } from '../admin/workspace/access-level.guard';
-import {
-  DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES,
-  DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS
-} from '../../../../../api-dto/workspaces/workspace-setting-defaults';
+import { DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES, DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS } from '../../../../../api-dto/workspaces/workspace-setting-defaults';
 
 interface TransactionalSettingRepositoryMock {
   findOne: jest.Mock<Promise<Setting | null>, [unknown]>;
@@ -198,6 +195,19 @@ describe('WorkspaceSettingsController', () => {
     await expect(
       controller.getWorkspaceSetting(5, 'unknown-setting')
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('returns not found when updating a missing setting', async () => {
+    settingRepository.findOne.mockResolvedValue(null);
+    await expect(controller.updateWorkspaceSetting(5, 'workspace-5-missing', { value: '{}' }))
+      .rejects.toBeInstanceOf(NotFoundException);
+    expect(settingRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('returns not found when deleting a missing setting', async () => {
+    settingRepository.delete.mockResolvedValue({ affected: 0 });
+    await expect(controller.deleteWorkspaceSetting(5, 'workspace-5-missing'))
+      .rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('saves workspace settings in a single transaction', async () => {

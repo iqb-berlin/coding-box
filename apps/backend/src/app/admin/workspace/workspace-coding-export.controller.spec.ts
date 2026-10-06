@@ -266,6 +266,7 @@ describe('WorkspaceCodingExportController', () => {
     await expect(
       controller.startExportJob(5, { user: { id: 2 } } as never, {
         exportType: 'item-matrix',
+        missingsProfileId: 1,
         version: 'v4' as never
       })
     ).rejects.toThrow(BadRequestException);
@@ -861,10 +862,7 @@ describe('WorkspaceCodingExportController', () => {
     );
 
     try {
-      await expect(controller.deleteExportJob(5, 'job-1')).resolves.toEqual({
-        success: false,
-        message: 'file is busy'
-      });
+      await expect(controller.deleteExportJob(5, 'job-1')).rejects.toThrow('file is busy');
       expect(cacheService.delete).not.toHaveBeenCalled();
       expect(jobQueueService.deleteExportJob).not.toHaveBeenCalled();
     } finally {
@@ -895,10 +893,7 @@ describe('WorkspaceCodingExportController', () => {
       codingPsychometricExportServiceMock
     );
 
-    await expect(controller.deleteExportJob(5, 'job-1')).resolves.toEqual({
-      success: false,
-      message: 'Export artifacts could not be deleted completely'
-    });
+    await expect(controller.deleteExportJob(5, 'job-1')).rejects.toThrow('Export artifacts could not be deleted completely');
     expect(cacheService.delete).toHaveBeenCalledTimes(3);
     expect(jobQueueService.deleteExportJob).not.toHaveBeenCalled();
   });

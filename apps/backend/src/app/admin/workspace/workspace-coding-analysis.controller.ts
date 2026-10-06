@@ -1,24 +1,12 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Query,
-  Res,
-  UseGuards
+  Controller, Get, Post, Query, Res, UseGuards
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import {
-  ApiOkResponse,
-  ApiParam,
-  ApiQuery,
-  ApiBody,
-  ApiTags
+  ApiOkResponse, ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
-import { Repository } from 'typeorm';
 import { Response } from 'express';
-import { requestBodySchemas } from '../../http/request-body.schemas';
-import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
@@ -27,13 +15,9 @@ import { CodingValidationService, CodingAnalysisService, MissingsProfilesService
 import { VariableAnalysisReplayService } from '../../database/services/test-results';
 import { ExportValidationResultsService } from '../../database/services/validation';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
-import { ValidateCodingCompletenessRequestDto } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
-import { ExportValidationResultsRequestDto } from '../../../../../../api-dto/coding/export-validation-results-request.dto';
 import { ManualCodeAvailabilityValidationDto } from '../../../../../../api-dto/coding/manual-code-availability.dto';
-import { ResponseMatchingFlag } from '../../database/services/coding/coding-job.service';
-import { Setting } from '../../database/entities/setting.entity';
-import { getWorkspaceRegexSearchEnabled } from '../../utils/regex-search.util';
+import { WorkspaceSettingsService } from '../../workspace/workspace-settings.service';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -44,8 +28,7 @@ export class WorkspaceCodingAnalysisController {
     private codingValidationService: CodingValidationService,
     private codingAnalysisService: CodingAnalysisService,
     private missingsProfilesService: MissingsProfilesService,
-    @InjectRepository(Setting)
-    private readonly settingRepository: Repository<Setting>
+    private readonly workspaceSettingsService: WorkspaceSettingsService
   ) { }
 
   @Get(':workspace_id/coding/variable-analysis')
@@ -120,7 +103,7 @@ export class WorkspaceCodingAnalysisController {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 500); // Set maximum limit to 500
     const effectiveRegexSearch = regexSearch === 'true' &&
-      await getWorkspaceRegexSearchEnabled(this.settingRepository, workspace_id);
+      await this.workspaceSettingsService.isRegexSearchEnabled(workspace_id);
 
     return this.variableAnalysisReplayService.getVariableAnalysis(
       workspace_id,
@@ -140,17 +123,14 @@ export class WorkspaceCodingAnalysisController {
   @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiBody({
-    description: 'Expected combinations to validate with optional pagination',
-    type: ValidateCodingCompletenessRequestDto
-  })
+
   @ApiOkResponse({
     description: 'Validation results with pagination support',
     type: ValidateCodingCompletenessResponseDto
   })
   async validateCodingCompleteness(
     @WorkspaceId() workspace_id: number,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.ValidateCodingCompletenessRequestDto)) request: ValidateCodingCompletenessRequestDto
+      @ValidatedBody('ValidateCodingCompletenessRequestDto') request: RequestBody<'ValidateCodingCompletenessRequestDto'>
   ): Promise<ValidateCodingCompletenessResponseDto> {
     // Extract and validate pagination parameters
     const page = Math.max(1, request.page || 1);
@@ -169,10 +149,7 @@ export class WorkspaceCodingAnalysisController {
   @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiBody({
-    description: 'Cache key to export validation results from Redis cache',
-    type: ExportValidationResultsRequestDto
-  })
+
   @ApiOkResponse({
     description: 'Validation results exported as Excel from cached data',
     content: {
@@ -186,7 +163,7 @@ export class WorkspaceCodingAnalysisController {
   })
   async validateAndExportCodingCompleteness(
     @WorkspaceId() workspace_id: number,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.ExportValidationResultsRequestDto)) request: ExportValidationResultsRequestDto,
+      @ValidatedBody('ExportValidationResultsRequestDto') request: RequestBody<'ExportValidationResultsRequestDto'>,
       @Res() res: Response
   ): Promise<void> {
     const excelData =
@@ -454,27 +431,7 @@ export class WorkspaceCodingAnalysisController {
   @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiBody({
-    description:
-      'List of manual coding variables to check for applied results',
-    schema: {
-      type: 'object',
-      properties: {
-        incompleteVariables: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              unitName: { type: 'string', description: 'Unit name' },
-              variableId: { type: 'string', description: 'Variable ID' }
-            }
-          },
-          description: 'List of variables with manual coding cases'
-        }
-      },
-      required: ['incompleteVariables']
-    }
-  })
+
   @ApiOkResponse({
     description: 'Count of applied results for manual coding variables.',
     schema: {
@@ -485,8 +442,8 @@ export class WorkspaceCodingAnalysisController {
   })
   async getAppliedResultsCount(
     @WorkspaceId() workspace_id: number,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCodingAnalysisController_getAppliedResultsCount))
-                   body: { incompleteVariables: { unitName: string; variableId: string }[] }
+      @ValidatedBody('WorkspaceCodingAnalysisController_getAppliedResultsCount')
+                   body: RequestBody<'WorkspaceCodingAnalysisController_getAppliedResultsCount'>
   ): Promise<number> {
     return this.codingValidationService.getAppliedResultsCount(
       workspace_id,
@@ -713,35 +670,13 @@ export class WorkspaceCodingAnalysisController {
   @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiBody({
-    description: 'Response aggregation settings',
-    schema: {
-      type: 'object',
-      properties: {
-        threshold: {
-          type: 'number',
-          description: 'Minimum number of duplicate occurrences to trigger aggregation',
-          example: 2,
-          minimum: 2,
-          maximum: 100
-        },
-        flags: {
-          type: 'array',
-          items: {
-            type: 'string',
-            enum: Object.values(ResponseMatchingFlag)
-          },
-          description: 'Response matching flags'
-        }
-      }
-    }
-  })
+
   @ApiOkResponse({
     description: 'Response aggregation settings saved.'
   })
   async saveAggregationSettings(
   @WorkspaceId() workspace_id: number,
-                 @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCodingAnalysisController_saveAggregationSettings, true)) body: { threshold?: number; flags?: ResponseMatchingFlag[] } = {}
+                 @ValidatedBody('WorkspaceCodingAnalysisController_saveAggregationSettings', true) body: RequestBody<'WorkspaceCodingAnalysisController_saveAggregationSettings'> | undefined = {}
   ) {
     const threshold = this.normalizeIntegerParam(body.threshold, 2, 2, 100);
     return this.codingAnalysisService.saveAggregationSettings(
@@ -756,26 +691,7 @@ export class WorkspaceCodingAnalysisController {
   @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiBody({
-    description: 'Aggregation configuration with threshold and mode',
-    schema: {
-      type: 'object',
-      properties: {
-        threshold: {
-          type: 'number',
-          description: 'Minimum number of duplicate occurrences to trigger aggregation',
-          example: 2,
-          minimum: 2
-        },
-        aggregateMode: {
-          type: 'boolean',
-          description: 'Whether to enable aggregation',
-          example: true
-        }
-      },
-      required: ['threshold', 'aggregateMode']
-    }
-  })
+
   @ApiOkResponse({
     description: 'Duplicate aggregation applied successfully',
     schema: {
@@ -800,7 +716,7 @@ export class WorkspaceCodingAnalysisController {
   })
   async applyDuplicateAggregation(
     @WorkspaceId() workspace_id: number,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCodingAnalysisController_applyDuplicateAggregation)) body: { threshold: number; aggregateMode: boolean }
+      @ValidatedBody('WorkspaceCodingAnalysisController_applyDuplicateAggregation') body: RequestBody<'WorkspaceCodingAnalysisController_applyDuplicateAggregation'>
   ): Promise<{
         success: boolean;
         aggregatedGroups: number;
@@ -825,7 +741,7 @@ export class WorkspaceCodingAnalysisController {
   })
   async postTriggerResponseAnalysis(
     @WorkspaceId() workspace_id: number,
-                   @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCodingAnalysisController_postTriggerResponseAnalysis, true)) body: { threshold?: number } = {}
+                   @ValidatedBody('WorkspaceCodingAnalysisController_postTriggerResponseAnalysis', true) body: RequestBody<'WorkspaceCodingAnalysisController_postTriggerResponseAnalysis'> | undefined = {}
   ): Promise<void> {
     const threshold = body.threshold === undefined ?
       undefined :

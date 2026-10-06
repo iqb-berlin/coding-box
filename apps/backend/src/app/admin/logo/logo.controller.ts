@@ -1,26 +1,13 @@
 import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Post,
-  Put,
-  UploadedFile,
-  UseGuards,
-  UseInterceptors
+  Controller, Delete, Get, Post, Put, UploadedFile, UseGuards, UseInterceptors
 } from '@nestjs/common';
 import {
-  ApiBearerAuth,
-  ApiBody,
-  ApiConsumes,
-  ApiOkResponse,
-  ApiOperation,
-  ApiTags
+  ApiBearerAuth, ApiBody, ApiConsumes, ApiOkResponse, ApiOperation, ApiTags
 } from '@nestjs/swagger';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { LogoService } from './logo.service';
 import { LogoUploadInterceptor } from './logo-upload.interceptor';
-import { requestBodySchemas } from '../../http/request-body.schemas';
-import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AdminGuard } from '../admin.guard';
 import { AppLogoDto } from '../../../../../../api-dto/app-logo-dto';
@@ -66,9 +53,9 @@ export class LogoController {
   @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Save logo settings', description: 'Saves logo settings like background color' })
-  @ApiBody({ type: AppLogoDto })
+
   @ApiOkResponse({ description: 'Logo settings saved successfully', type: Boolean })
-  async saveLogoSettings(@Body(new JsonSchemaValidationPipe(requestBodySchemas.AppLogoDto)) logoSettings: AppLogoDto): Promise<{ success: boolean }> {
+  async saveLogoSettings(@ValidatedBody('AppLogoDto') logoSettings: RequestBody<'AppLogoDto'>): Promise<{ success: boolean }> {
     return this.logoService.saveLogoSettings(logoSettings);
   }
 
