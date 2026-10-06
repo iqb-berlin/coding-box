@@ -125,7 +125,7 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
   /**
    * Check if any validation is currently running
    */
-  isAnyValidationRunning(): boolean {
+  protected isAnyValidationRunning(): boolean {
     const workspaceId = this.appService.selectedWorkspaceId;
     const taskIds = this.validationTaskStateService.getAllTaskIds(workspaceId);
     return Object.values(taskIds).some(id => id !== null && id !== undefined);
@@ -196,7 +196,7 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
   /**
    * Get overall headline text
    */
-  getOverallHeadline(): string {
+  protected getOverallHeadline(): string {
     const status = this.getOverallStatus();
     switch (status) {
       case 'running':
@@ -215,7 +215,7 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
   /**
    * Get overall subline text
    */
-  getOverallSubline(): string {
+  protected getOverallSubline(): string {
     const status = this.getOverallStatus();
     if (status === 'running') {
       return 'Bitte warten Sie, bis alle Validierungen abgeschlossen sind.';
@@ -235,7 +235,7 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
   /**
    * Get recommended next step
    */
-  getRecommendedNextStep(): string {
+  protected getRecommendedNextStep(): string {
     const status = this.getOverallStatus();
     if (status === 'failed') {
       return 'Beheben Sie die Fehler und führen Sie die Prüfungen erneut durch.';

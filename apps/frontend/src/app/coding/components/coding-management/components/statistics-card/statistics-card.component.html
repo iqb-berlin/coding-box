@@ -78,7 +78,7 @@
       <span class="statistic-value">
         {{ effectiveTotalResponses }}
         @if (getTotalResponsesDifference() !== null) {
-        <span class="difference-value" [ngClass]="{
+        <span class="difference-value" [class]="{
               'difference-positive': getTotalResponsesDifference()! > 0,
               'difference-negative': getTotalResponsesDifference()! < 0,
               'difference-neutral': getTotalResponsesDifference() === 0
@@ -124,7 +124,7 @@
         {{ codingStatistics.statusCounts[status] || 0 }}
         <span class="percentage">({{ getStatusPercentage(status) }}%)</span>
         @if (getStatusDifference(status) !== null) {
-        <span class="difference-value" [ngClass]="{
+        <span class="difference-value" [class]="{
                 'difference-positive': getStatusDifference(status)! > 0,
                 'difference-negative': getStatusDifference(status)! < 0,
                 'difference-neutral': getStatusDifference(status) === 0

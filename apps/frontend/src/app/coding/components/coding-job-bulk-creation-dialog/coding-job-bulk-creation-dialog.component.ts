@@ -141,13 +141,13 @@ export class CodingJobBulkCreationDialogComponent {
   private distributedCodingService = inject(DistributedCodingService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
-  displayOptionsForm!: FormGroup;
+  protected displayOptionsForm!: FormGroup;
   jobPreviews: JobPreview[] = [];
-  distributionMatrix: DistributionMatrixRow[] = [];
-  doubleCodingPreview?: DoubleCodingPreview;
+  protected distributionMatrix: DistributionMatrixRow[] = [];
+  protected doubleCodingPreview?: DoubleCodingPreview;
   warnings: JobCreationWarning[] = [];
   showWarningsPanel = false;
-  warningsConfirmed = false;
+  protected warningsConfirmed = false;
   isLoading = false;
   private readonly defaultCoderCapacityPercent = 100;
   private readonly minCoderCapacityPercent = 10;
@@ -155,7 +155,7 @@ export class CodingJobBulkCreationDialogComponent {
 
   constructor(
     public dialogRef: MatDialogRef<CodingJobBulkCreationDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: BulkCreationData
+    @Inject(MAT_DIALOG_DATA) protected data: BulkCreationData
   ) {
     this.initForm();
 
@@ -378,7 +378,7 @@ export class CodingJobBulkCreationDialogComponent {
     return this.data.selectedVariableBundles?.find(bundle => bundle.name === itemKey);
   }
 
-  getBundleDisplayName(bundle: PreviewVariableBundle): string {
+  protected getBundleDisplayName(bundle: PreviewVariableBundle): string {
     const sameNameCount = (this.data.selectedVariableBundles || [])
       .filter(selectedBundle => selectedBundle.name === bundle.name)
       .length;
@@ -453,7 +453,7 @@ export class CodingJobBulkCreationDialogComponent {
     });
   }
 
-  getVariableDisplayName(variable: { unitName: string; variableId: string }): string {
+  protected getVariableDisplayName(variable: { unitName: string; variableId: string }): string {
     return `${variable.unitName} → ${variable.variableId}`;
   }
 
@@ -461,15 +461,15 @@ export class CodingJobBulkCreationDialogComponent {
     return this.distributionMatrix.reduce((total, row) => total + (row.coderCases[coderName] || 0), 0);
   }
 
-  getCaseCountForCoderInRow(row: DistributionMatrixRow, coder: Coder): number {
+  protected getCaseCountForCoderInRow(row: DistributionMatrixRow, coder: Coder): number {
     return row.coderCasesById?.[String(coder.id)] ?? row.coderCases[coder.name] ?? 0;
   }
 
-  getCoderTotalById(coder: Coder): number {
+  protected getCoderTotalById(coder: Coder): number {
     return this.distributionMatrix.reduce((total, row) => total + this.getCaseCountForCoderInRow(row, coder), 0);
   }
 
-  getDoubleCodedCasesForCoder(
+  protected getDoubleCodedCasesForCoder(
     info: { doubleCodedCasesPerCoder: Record<string, number> },
     coder: Coder
   ): number {
@@ -481,7 +481,7 @@ export class CodingJobBulkCreationDialogComponent {
     return info.doubleCodedCasesPerCoder[duplicateSafeKey] || 0;
   }
 
-  getGrandTotal(): number {
+  protected getGrandTotal(): number {
     return this.distributionMatrix.reduce((total, row) => total + row.totalCases, 0);
   }
 
@@ -503,7 +503,7 @@ export class CodingJobBulkCreationDialogComponent {
     );
   }
 
-  getJobCaseCount(job: JobPreview): number {
+  protected getJobCaseCount(job: JobPreview): number {
     if (job.caseCount !== undefined) {
       return job.caseCount;
     }
@@ -538,21 +538,21 @@ export class CodingJobBulkCreationDialogComponent {
     return Number.isNaN(caseCount) ? 0 : caseCount;
   }
 
-  objectKeys(obj: Record<string, unknown>): string[] {
+  protected objectKeys(obj: Record<string, unknown>): string[] {
     return Object.keys(obj);
   }
 
-  getDoubleCodingGridTemplate(): string {
+  protected getDoubleCodingGridTemplate(): string {
     const coderColumns = 'minmax(88px, 1fr) '.repeat(this.data.selectedCoders.length);
     return `minmax(180px, 1.6fr) minmax(88px, 1fr) minmax(88px, 1fr) minmax(88px, 1fr) ${coderColumns}`.trim();
   }
 
-  getDistributionGridTemplate(): string {
+  protected getDistributionGridTemplate(): string {
     const coderColumns = 'minmax(88px, 1fr) '.repeat(this.data.selectedCoders.length);
     return `minmax(180px, 1.6fr) ${coderColumns}minmax(70px, .8fr)`.trim();
   }
 
-  getVariableDisplayNameFromKey(variableKey: string): string {
+  protected getVariableDisplayNameFromKey(variableKey: string): string {
     const bundle = this.findBundleForItemKey(variableKey);
     if (bundle) {
       return this.getBundleDisplayName(bundle);
@@ -565,11 +565,11 @@ export class CodingJobBulkCreationDialogComponent {
     return variableKey;
   }
 
-  onCancel(): void {
+  protected onCancel(): void {
     this.dialogRef.close(false);
   }
 
-  onConfirm(): void {
+  protected onConfirm(): void {
     if (this.data.maxCodingCases !== undefined && this.data.maxCodingCases !== null && this.data.maxCodingCases > 0) {
       const uniqueCases = this.getUniqueCaseTotal();
       if (uniqueCases > this.data.maxCodingCases) {

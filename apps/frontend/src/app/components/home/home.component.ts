@@ -48,7 +48,7 @@ import {
   styleUrls: ['./home.component.scss']
 })
 export class HomeComponent implements OnInit {
-  readonly appService: AppService = inject(AppService);
+  protected readonly appService: AppService = inject(AppService);
   private readonly destroyRef = inject(DestroyRef);
 
   private readonly route = inject(ActivatedRoute);
@@ -58,8 +58,8 @@ export class HomeComponent implements OnInit {
   private authService = inject(AuthService);
 
   readonly workspaces = signal<WorkspaceFullDto[]>([]);
-  readonly authData = signal(AppService.defaultAuthData);
-  readonly authBootstrapStatus = signal<AuthBootstrapStatus>('checking');
+  protected readonly authData = signal(AppService.defaultAuthData);
+  protected readonly authBootstrapStatus = signal<AuthBootstrapStatus>('checking');
   private isPersonalCodingJobsRedirectChecked = false;
   private authDataRefreshRequested = false;
   private navigationStarted = false;

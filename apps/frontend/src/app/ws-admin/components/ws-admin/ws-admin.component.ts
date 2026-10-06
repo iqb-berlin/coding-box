@@ -62,15 +62,15 @@ export class WsAdminComponent implements OnInit {
     { path: 'coding/export', label: 'ws-admin.export' }
   ];
 
-  readonly navLinks = signal<WsAdminNavLink[]>([]);
-  readonly codingManagerLinks = signal<WsAdminNavLink[]>([...this.baseCodingManagerLinks]);
+  protected readonly navLinks = signal<WsAdminNavLink[]>([]);
+  protected readonly codingManagerLinks = signal<WsAdminNavLink[]>([...this.baseCodingManagerLinks]);
 
   readonly accessLevel = signal<number>(0);
   readonly canCode = signal(false);
   readonly hasAssignedCodingJobs = signal(false);
   readonly authData = signal(AppService.defaultAuthData);
 
-  readonly hasCodingJobsAccess = computed<boolean>(() => this.canCode() || this.hasAssignedCodingJobs());
+  protected readonly hasCodingJobsAccess = computed<boolean>(() => this.canCode() || this.hasAssignedCodingJobs());
 
   ngOnInit() {
     combineLatest([this.route.params, this.appService.authData$])

@@ -38,7 +38,7 @@ import { SelectionModel } from '@angular/cdk/collections';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatIconButton } from '@angular/material/button';
-import { DatePipe, NgClass } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import {
   debounceTime, distinctUntilChanged, forkJoin, Subject, Subscription
@@ -65,7 +65,6 @@ import {
     TranslateModule,
     FormsModule,
     DatePipe,
-    NgClass,
     MatIcon,
     MatHeaderCell,
     MatCell,
@@ -102,7 +101,7 @@ implements OnInit, OnDestroy, OnChanges {
   private translateService = inject(TranslateService);
   private route = inject(ActivatedRoute);
 
-  displayedColumns: string[] = [
+  protected displayedColumns: string[] = [
     'actions',
     'name',
     'description',
@@ -115,7 +114,7 @@ implements OnInit, OnDestroy, OnChanges {
   ];
 
   dataSource = new MatTableDataSource<CodingJob>([]);
-  selection = new SelectionModel<CodingJob>(true, []);
+  protected selection = new SelectionModel<CodingJob>(true, []);
   readonly isLoading = signal(false);
   readonly currentUserId = signal(0);
   readonly isAuthorized = signal(false);
@@ -126,14 +125,14 @@ implements OnInit, OnDestroy, OnChanges {
   readonly incompleteJobs = signal(0);
   readonly completedJobs = signal(0);
 
-  readonly selectedStatus = signal<string | null>(null);
-  readonly selectedJobName = signal<string | null>(null);
+  protected readonly selectedStatus = signal<string | null>(null);
+  protected readonly selectedJobName = signal<string | null>(null);
   readonly selectedWorkspaceIds = signal<number[]>([]);
   readonly originalData = signal<CodingJob[]>([]);
   readonly currentWorkspaces = signal<WorkspaceFullDto[]>([]);
   readonly jobsTotal = signal(0);
-  readonly pageSize = signal(50);
-  readonly pageIndex = signal(0);
+  protected readonly pageSize = signal(50);
+  protected readonly pageIndex = signal(0);
   readonly serverPagingEnabled = signal(false);
   private authWorkspaces: WorkspaceFullDto[] = [];
   private loadJobsSubscription?: Subscription;
@@ -370,15 +369,15 @@ implements OnInit, OnDestroy, OnChanges {
     );
   }
 
-  onStatusFilterChange(): void {
+  protected onStatusFilterChange(): void {
     this.reloadFirstPage();
   }
 
-  onJobNameFilterChange(): void {
+  protected onJobNameFilterChange(): void {
     this.jobNameFilterChanges.next(this.selectedJobName() ?? '');
   }
 
-  onWorkspaceFilterChange(): void {
+  protected onWorkspaceFilterChange(): void {
     if (this.workspaceToggleInProgress) {
       return;
     }
@@ -386,7 +385,7 @@ implements OnInit, OnDestroy, OnChanges {
     this.reloadFirstPage();
   }
 
-  isAllWorkspacesSelected(): boolean {
+  protected isAllWorkspacesSelected(): boolean {
     if (this.currentWorkspaces().length === 0) return false;
     return this.currentWorkspaces().every(ws => this.selectedWorkspaceIds().includes(ws.id)
     );
@@ -432,7 +431,7 @@ implements OnInit, OnDestroy, OnChanges {
     );
   }
 
-  onPageChange(event: PageEvent): void {
+  protected onPageChange(event: PageEvent): void {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     this.selection.clear();
@@ -447,7 +446,7 @@ implements OnInit, OnDestroy, OnChanges {
     this.loadMyCodingJobs(this.authWorkspaces);
   }
 
-  selectRow(row: CodingJob): void {
+  protected selectRow(row: CodingJob): void {
     this.selection.toggle(row);
   }
 
@@ -542,7 +541,7 @@ implements OnInit, OnDestroy, OnChanges {
     return this.translateService.instant('coding.my-coding-jobs.start-coding');
   }
 
-  getStartCodingJobIcon(job: CodingJob): string {
+  protected getStartCodingJobIcon(job: CodingJob): string {
     if (this.isReadOnlyReviewJob(job)) {
       return 'visibility';
     }
@@ -550,11 +549,11 @@ implements OnInit, OnDestroy, OnChanges {
     return 'play_arrow';
   }
 
-  canSubmitForReview(job: CodingJob): boolean {
+  protected canSubmitForReview(job: CodingJob): boolean {
     return job.status === 'completed';
   }
 
-  getSubmitForReviewLabel(): string {
+  protected getSubmitForReviewLabel(): string {
     return this.translateService.instant(
       'coding.my-coding-jobs.submit-for-review'
     );
@@ -613,7 +612,7 @@ implements OnInit, OnDestroy, OnChanges {
     });
   }
 
-  getStatusClass(status: string): string {
+  protected getStatusClass(status: string): string {
     switch (status) {
       case 'active':
         return 'status-active';
@@ -634,7 +633,7 @@ implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  getStatusText(status: string): string {
+  protected getStatusText(status: string): string {
     switch (status) {
       case 'active':
         return this.translateService.instant(
@@ -669,7 +668,7 @@ implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  getVariables(job: CodingJob): string {
+  protected getVariables(job: CodingJob): string {
     if (job.assignedVariables && job.assignedVariables.length > 0) {
       return this.formatAssignedVariables(job.assignedVariables);
     }
@@ -679,7 +678,7 @@ implements OnInit, OnDestroy, OnChanges {
     return this.translateService.instant('coding.my-coding-jobs.no-variables');
   }
 
-  getVariableBundles(job: CodingJob): string {
+  protected getVariableBundles(job: CodingJob): string {
     if (job.assignedVariableBundles && job.assignedVariableBundles.length > 0) {
       const count = job.assignedVariableBundles.length;
       const maxToShow = 2;
@@ -700,7 +699,7 @@ implements OnInit, OnDestroy, OnChanges {
     );
   }
 
-  getProgress(job: CodingJob): string {
+  protected getProgress(job: CodingJob): string {
     if (!job.totalUnits || job.totalUnits === 0) {
       return this.translateService.instant('coding.my-coding-jobs.no-tasks');
     }

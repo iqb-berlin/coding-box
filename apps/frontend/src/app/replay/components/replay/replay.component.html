@@ -3,7 +3,7 @@
 @let unitsDataValue = unitsData();
 <div class="replay-container" [class.print-mode]="isPrintMode()" [class.booklet-mode]="isCodingMode() || isBookletReplayMode()"
   [class.resizing]="isResizing()" (window:keydown)="onKeyDown($any($event))">
-  <cb-spinner [isLoaded]="isLoaded"></cb-spinner>
+  <coding-box-spinner [isLoaded]="isLoaded"></coding-box-spinner>
 
   @if (isCodingMode() || isBookletReplayMode()) {
   @if (isBookletReplayMode() && !!player() && unitDef()) {
@@ -40,7 +40,7 @@
     <div class="resize-handle" (mousedown)="onResizeStart($event)"></div>
     <div class="code-selector-container" [style.width.px]="codePanelWidth()" [style.min-width.px]="codePanelWidth()">
       @if (codingService.codingScheme && codingService.currentVariableId) {
-      <app-code-selector [codingScheme]="codingService.codingScheme" [variableId]="codingService.currentVariableId"
+      <coding-box-code-selector [codingScheme]="codingService.codingScheme" [variableId]="codingService.currentVariableId"
         [codingCaseKey]="getCurrentCodingCaseKey()"
         [preSelectedCodeId]="getPreSelectedCodeId(codingService.currentVariableId)"
         [preSelectedCodingIssueOptionId]="getPreSelectedCodingIssueOptionId(codingService.currentVariableId)"
@@ -62,7 +62,7 @@
         (openCodingJobs)="openCodingJobs()"
         (openCommentDialog)="openCommentDialog()" (pauseCodingJob)="pauseCodingJob()"
         (unitChanged)="handleUnitChanged($event)">
-      </app-code-selector>
+      </coding-box-code-selector>
       }
     </div>
     }

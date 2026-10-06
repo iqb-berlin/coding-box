@@ -110,21 +110,21 @@ implements OnInit, OnDestroy {
   @Output() validate = new EventEmitter<void>();
   @Output() showUnitXml = new EventEmitter<string>();
 
-  readonly isRunning = signal(false);
-  readonly wasRun = signal(false);
-  readonly isLoadingPage = signal(false);
-  readonly errorMessage = signal<string | null>(null);
-  readonly invalidTypeVariables = signal<InvalidVariableDto[]>([]);
-  readonly totalInvalid = signal(0);
-  readonly currentPage = signal(1);
-  readonly pageSize = signal(10);
-  readonly selectedResponses = signal<Set<number>>(new Set());
-  readonly expandedPanel = signal(false);
-  readonly isDeletingResponses = signal(false);
-  readonly isExporting = signal(false);
-  readonly activeTask = signal<ValidationTaskDto | null>(null);
+  protected readonly isRunning = signal(false);
+  protected readonly wasRun = signal(false);
+  protected readonly isLoadingPage = signal(false);
+  protected readonly errorMessage = signal<string | null>(null);
+  protected readonly invalidTypeVariables = signal<InvalidVariableDto[]>([]);
+  protected readonly totalInvalid = signal(0);
+  protected readonly currentPage = signal(1);
+  protected readonly pageSize = signal(10);
+  protected readonly selectedResponses = signal<Set<number>>(new Set());
+  protected readonly expandedPanel = signal(false);
+  protected readonly isDeletingResponses = signal(false);
+  protected readonly isExporting = signal(false);
+  protected readonly activeTask = signal<ValidationTaskDto | null>(null);
 
-  tableColumns: ValidationTableColumn[] = [
+  protected tableColumns: ValidationTableColumn[] = [
     {
       key: 'select',
       label: 'Auswählen',
@@ -185,13 +185,13 @@ implements OnInit, OnDestroy {
     this.taskSubscription?.unsubscribe();
   }
 
-  get status(): ValidationStatus {
+  protected get status(): ValidationStatus {
     return this.variableTypeValidationService.getValidationStatus();
   }
 
-  readonly errorCount = computed<number>(() => this.totalInvalid());
+  protected readonly errorCount = computed<number>(() => this.totalInvalid());
 
-  onValidate(): void {
+  protected onValidate(): void {
     if (this.isRunning() || this.disabled) {
       return;
     }
@@ -219,7 +219,7 @@ implements OnInit, OnDestroy {
     this.validate.emit();
   }
 
-  onPageChange(event: PageEvent): void {
+  protected onPageChange(event: PageEvent): void {
     this.currentPage.set(event.pageIndex + 1);
     this.pageSize.set(event.pageSize);
     this.isLoadingPage.set(true);
@@ -244,30 +244,30 @@ implements OnInit, OnDestroy {
       });
   }
 
-  onSelectionChange(newSelection: Set<unknown>): void {
+  protected onSelectionChange(newSelection: Set<unknown>): void {
     this.selectedResponses.set(newSelection as Set<number>);
   }
 
-  onLinkClick(event: { item: InvalidVariableDto; columnKey: string }): void {
+  protected onLinkClick(event: { item: InvalidVariableDto; columnKey: string }): void {
     if (event.columnKey === 'fileName') {
       this.showUnitXml.emit(event.item.fileName);
     }
   }
 
-  toggleExpansion(): void {
+  protected toggleExpansion(): void {
     this.expandedPanel.set(!this.expandedPanel());
   }
 
-  selectAll(): void {
+  protected selectAll(): void {
     this.selectedResponses.set(new Set(this.invalidTypeVariables().filter(v => v.responseId !== undefined)
       .map(v => v.responseId!)));
   }
 
-  deselectAll(): void {
+  protected deselectAll(): void {
     this.selectedResponses.set(new Set());
   }
 
-  deleteSelected(): void {
+  protected deleteSelected(): void {
     if (this.selectedResponses().size === 0 || this.isDeletingResponses()) {
       return;
     }
@@ -296,7 +296,7 @@ implements OnInit, OnDestroy {
       });
   }
 
-  deleteAll(): void {
+  protected deleteAll(): void {
     if (this.invalidTypeVariables().length === 0 || this.isDeletingResponses()) {
       return;
     }
@@ -322,7 +322,7 @@ implements OnInit, OnDestroy {
     });
   }
 
-  exportCsv(): void {
+  protected exportCsv(): void {
     if (this.isExporting()) {
       return;
     }

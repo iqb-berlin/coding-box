@@ -27,7 +27,7 @@ type Data = {
 
 export class EditUserComponent {
   private fb = inject(UntypedFormBuilder);
-  data = inject<Data>(MAT_DIALOG_DATA);
+  protected data = inject<Data>(MAT_DIALOG_DATA);
 
   editUserForm: UntypedFormGroup;
   constructor() {

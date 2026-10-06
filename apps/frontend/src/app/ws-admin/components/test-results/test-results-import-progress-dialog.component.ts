@@ -52,6 +52,6 @@ export interface TestResultsImportProgressHandle {
 })
 export class TestResultsImportProgressDialogComponent {
   constructor(
-    @Inject(MAT_DIALOG_DATA) public data: TestResultsImportProgressDialogData
+    @Inject(MAT_DIALOG_DATA) protected data: TestResultsImportProgressDialogData
   ) { }
 }

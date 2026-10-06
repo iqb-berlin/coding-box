@@ -168,7 +168,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
   readonly dynamicCoderColumns = signal<string[]>([]);
   readonly dynamicManagerColumns = signal<string[]>([]);
-  readonly displayedColumns = signal<string[]>([...this.staticColumns, 'selection']);
+  protected readonly displayedColumns = signal<string[]>([...this.staticColumns, 'selection']);
   readonly coderColumnMeta = signal<Record<string, CoderColumnMeta>>({});
   readonly managerColumnMeta = signal<Record<string, ManagerColumnMeta>>({});
 
@@ -176,18 +176,18 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   readonly allData = signal<DoubleCodedItem[]>([]);
   readonly totalItems = signal(0);
   readonly currentPage = signal(1);
-  readonly pageSize = signal(50);
+  protected readonly pageSize = signal(50);
   readonly sortBy = signal<DoubleCodedReviewSortBy>('unitVariable');
   readonly sortDirection = signal<DoubleCodedReviewSortDirection>('asc');
   readonly isLoading = signal(false);
   readonly showOnlyConflicts = signal(false);
-  agreementControl = new FormControl<'all' | 'match' | 'differ'>('all');
-  searchControl = new FormControl('');
-  coderControl = new FormControl<number | null>(null);
-  statusControl = new FormControl<'all' | 'done' | 'pending'>('all');
-  resolvedControl = new FormControl<'all' | 'resolved' | 'unresolved'>('all');
+  protected agreementControl = new FormControl<'all' | 'match' | 'differ'>('all');
+  protected searchControl = new FormControl('');
+  protected coderControl = new FormControl<number | null>(null);
+  protected statusControl = new FormControl<'all' | 'done' | 'pending'>('all');
+  protected resolvedControl = new FormControl<'all' | 'resolved' | 'unresolved'>('all');
   scopeControl = new FormControl<string[]>([]);
-  readonly availableCoders = signal<{
+  protected readonly availableCoders = signal<{
     id: number;
     name: string;
   }[]>([]);
@@ -207,7 +207,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   readonly selectedItem = signal<DoubleCodedItem | null>(null);
-  readonly replayLoadingByResponseId = signal<Record<number, boolean>>({});
+  protected readonly replayLoadingByResponseId = signal<Record<number, boolean>>({});
   private get replayWindowByResponseId(): Map<number, MessageEventSource> {
     return this.replayDecisionBridge.replayWindowByResponseId;
   }
@@ -567,7 +567,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     );
   }
 
-  getCoderColumnHeader(columnId: string): string {
+  protected getCoderColumnHeader(columnId: string): string {
     return (
       this.coderColumnMeta()[columnId]?.label ||
       this.translateService.instant('double-coded-review.columns.coder-results')
@@ -608,7 +608,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     return `${meta.label} (${details.join('; ')})`;
   }
 
-  getCoderResultsForColumn(
+  protected getCoderResultsForColumn(
     item: DoubleCodedItem,
     columnId: string
   ): CoderResult[] {
@@ -662,7 +662,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     return 'legacy';
   }
 
-  getManagerDecisionStateLabel(
+  protected getManagerDecisionStateLabel(
     decision: DoubleCodedManagerDecisionDto
   ): string {
     const fallbackByState: Record<
@@ -710,13 +710,13 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     return Number.isFinite(timestamp) ? timestamp : 0;
   }
 
-  getCoderResultSourceLabel(result: CoderResult): string {
+  protected getCoderResultSourceLabel(result: CoderResult): string {
     return result.jobName ?
       `${result.jobName} (#${result.jobId})` :
       `#${result.jobId}`;
   }
 
-  isAppliedCodeMatch(item: DoubleCodedItem, result: CoderResult): boolean {
+  protected isAppliedCodeMatch(item: DoubleCodedItem, result: CoderResult): boolean {
     return this.reviewFacade.isAppliedCodeMatch(item, result);
   }
 
@@ -972,7 +972,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       visibleValues.join(', ');
   }
 
-  isAllCodersDone(item: DoubleCodedItem): boolean {
+  protected isAllCodersDone(item: DoubleCodedItem): boolean {
     return item.coderResults.every(result => result.code !== null);
   }
 
@@ -1004,7 +1004,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     this.loadData();
   }
 
-  areAllVisibleConflictsResolved(): boolean {
+  protected areAllVisibleConflictsResolved(): boolean {
     const currentItems = this.dataSource.data;
     return currentItems.every(item => {
       if (!this.hasConflict(item)) {
@@ -1016,7 +1016,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     });
   }
 
-  getUnresolvedCount(): number {
+  protected getUnresolvedCount(): number {
     const currentItems = this.dataSource.data;
     return currentItems.filter(item => {
       if (!this.hasConflict(item)) return false;
@@ -1108,7 +1108,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     this.isLoading.set(false);
   }
 
-  onPageChange(event: PageEvent): void {
+  protected onPageChange(event: PageEvent): void {
     this.currentPage.set(event.pageIndex + 1);
     this.pageSize.set(event.pageSize);
     this.loadData();
@@ -1126,7 +1126,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     );
   }
 
-  applyReviewDecisions(): void {
+  protected applyReviewDecisions(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.translateService
@@ -1326,7 +1326,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     });
   }
 
-  getCodeDisplay(code: number | null): string {
+  protected getCodeDisplay(code: number | null): string {
     if (code === null || code === undefined) {
       return 'N/A';
     }
@@ -1340,7 +1340,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     }
   }
 
-  getCodeLabel(code: number | null): string {
+  protected getCodeLabel(code: number | null): string {
     if (code === null || code === undefined) {
       return '';
     }
@@ -1367,7 +1367,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     }
   }
 
-  close(): void {
+  protected close(): void {
     if (this.dialogRef) {
       this.dialogRef.close({ resultsApplied: this.resultsApplied });
     }

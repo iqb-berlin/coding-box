@@ -178,7 +178,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
   private preloadedVariables: Variable[] | null = null;
 
-  displayedColumns: string[] = [
+  protected displayedColumns: string[] = [
     'select',
     'actions',
     'name',
@@ -198,18 +198,18 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   readonly isLoading = signal(false);
   readonly hasLoadedJobs = signal(false);
 
-  readonly coderTrainings = signal<CoderTraining[]>([]);
-  readonly selectedTrainingId = signal<number | string | null>(null);
+  protected readonly coderTrainings = signal<CoderTraining[]>([]);
+  protected readonly selectedTrainingId = signal<number | string | null>(null);
   readonly selectedStatus = signal<string | null>(null);
   readonly selectedCoderId = signal<number | null>(null);
   readonly selectedJobName = signal<string | null>(null);
   readonly originalData = signal<CodingJob[]>([]);
   readonly jobsTotal = signal(0);
-  readonly pageSize = signal(50);
-  readonly pageIndex = signal(0);
-  readonly sortBy = signal<'name' | 'description' | 'status' | 'createdAt' | 'updatedAt'>('createdAt');
+  protected readonly pageSize = signal(50);
+  protected readonly pageIndex = signal(0);
+  protected readonly sortBy = signal<'name' | 'description' | 'status' | 'createdAt' | 'updatedAt'>('createdAt');
 
-  readonly sortDirection = signal<'asc' | 'desc'>('desc');
+  protected readonly sortDirection = signal<'asc' | 'desc'>('desc');
 
   private loadJobsSubscription?: Subscription;
   private jobNameFilterSubscription?: Subscription;
@@ -443,7 +443,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     this.jobNameFilterChanges.next(this.selectedJobName() ?? '');
   }
 
-  onSortChange(sort: Sort): void {
+  protected onSortChange(sort: Sort): void {
     if (!this.isSupportedServerSort(sort.active) || !sort.direction) {
       this.sortBy.set('createdAt');
       this.sortDirection.set('desc');
@@ -455,7 +455,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     this.reloadFirstPage();
   }
 
-  onPageChange(event: PageEvent): void {
+  protected onPageChange(event: PageEvent): void {
     this.pageIndex.set(event.pageIndex);
     this.pageSize.set(event.pageSize);
     this.selection.clear();
@@ -543,7 +543,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     return `${variableNames.slice(0, maxToShow).join(', ')} +${variableNames.length - maxToShow} weitere`;
   }
 
-  getFullVariables(job: CodingJob): string {
+  protected getFullVariables(job: CodingJob): string {
     if (job.assignedVariables && job.assignedVariables.length > 0) {
       const variableNames = job.assignedVariables.map(v => {
         const unitName = v.unitName || 'unbekannt';
@@ -579,7 +579,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     return 'Keine Variablen zugewiesen';
   }
 
-  getFullVariableBundles(job: CodingJob): string {
+  protected getFullVariableBundles(job: CodingJob): string {
     if (job.assignedVariableBundles && job.assignedVariableBundles.length > 0) {
       const bundleNames = job.assignedVariableBundles.map(
         b => b.name || 'unbekannt'
@@ -791,7 +791,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     return 'start';
   }
 
-  canStartCodingJob(job: CodingJob): boolean {
+  protected canStartCodingJob(job: CodingJob): boolean {
     const userId = this.appService.authData.userId;
     return (
       userId > 0 &&
@@ -804,11 +804,11 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     return !!job?.id && this.canReviewCodingJobs();
   }
 
-  getStartCodingJobLabel(): string {
+  protected getStartCodingJobLabel(): string {
     return 'Kodierjob starten';
   }
 
-  getStartCodingJobIcon(): string {
+  protected getStartCodingJobIcon(): string {
     return 'play_arrow';
   }
 
@@ -842,7 +842,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     );
   }
 
-  getJobActionAriaLabel(action: string, job: CodingJob): string {
+  protected getJobActionAriaLabel(action: string, job: CodingJob): string {
     const jobName = this.getDisplayName(job);
     switch (action) {
       case 'start':
@@ -1067,7 +1067,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     return `${job.assignedCoders.length} Kodierer`;
   }
 
-  getFullCoderNames(job: CodingJob): string {
+  protected getFullCoderNames(job: CodingJob): string {
     if (this.coderNamesByJobId.has(job.id)) {
       const full = this.coderNamesByJobId.get(job.id)!;
       return full === 'Keine' ? 'Keine Kodierer zugewiesen' : full;
@@ -1081,7 +1081,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     return `${job.assignedCoders.length} Kodierer`;
   }
 
-  getDisplayName(job: CodingJob): string {
+  protected getDisplayName(job: CodingJob): string {
     if (job.training_id) {
       const prefix = this.translateService.instant(
         'coding.trainings.job-name-prefix'
@@ -1142,7 +1142,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       });
   }
 
-  onTrainingFilterChange(): void {
+  protected onTrainingFilterChange(): void {
     this.selection.clear();
     this.reloadFirstPage();
   }
@@ -1283,26 +1283,26 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     });
   }
 
-  isAllSelected(): boolean {
+  protected isAllSelected(): boolean {
     const numSelected = this.selection.selected.length;
     const numRows = this.dataSource.data.length;
     return numSelected === numRows;
   }
 
-  masterToggle(): void {
+  protected masterToggle(): void {
     this.isAllSelected() ?
       this.selection.clear() :
       this.dataSource.data.forEach(row => this.selection.select(row));
   }
 
-  checkboxLabel(row?: CodingJob): string {
+  protected checkboxLabel(row?: CodingJob): string {
     if (!row) {
       return `${this.isAllSelected() ? 'deselect' : 'select'} all`;
     }
     return `${this.selection.isSelected(row) ? 'deselect' : 'select'} row ${row.id + 1}`;
   }
 
-  openDoubleCodedReviewDialog(): void {
+  protected openDoubleCodedReviewDialog(): void {
     const dialogRef = this.dialog.open(DoubleCodedReviewComponent, {
       width: '98vw',
       maxWidth: '100vw',
@@ -1384,7 +1384,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
       });
   }
 
-  openCohensKappaStatisticsDialog(): void {
+  protected openCohensKappaStatisticsDialog(): void {
     this.dialog.open(CohensKappaStatisticsComponent, {
       width: '90vw',
       maxWidth: '1400px',
@@ -1595,7 +1595,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
     return parts.join('\n');
   }
 
-  getAggregationSettingsText(job: CodingJob): string {
+  protected getAggregationSettingsText(job: CodingJob): string {
     if (!job.aggregationSettingsVersion) {
       return 'Aggregation: ältere Jobs nutzen aktuelle Workspace-Einstellungen';
     }

@@ -31,17 +31,17 @@ import { SystemNotificationService } from './core/services/system-notification.s
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'app-root',
+  selector: 'coding-box-root',
   imports: [RouterOutlet, MatSlideToggleModule, MatProgressSpinner, RouterLink, TranslateModule, MatTooltip, MatButton, UserMenuComponent, WrappedIconComponent, ExportToastComponent, ErrorMessageDisplayComponent, SystemNotificationBannerComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
   providers: [AuthService]
 })
 export class AppComponent implements OnInit, OnDestroy {
-  appService = inject(AppService);
-  authService = inject(AuthService);
+  protected appService = inject(AppService);
+  protected authService = inject(AuthService);
 
-  url = inject(LocationStrategy);
+  protected url = inject(LocationStrategy);
   private router = inject(Router);
   private keycloakEvent = inject(KEYCLOAK_EVENT_SIGNAL);
   private snackBar = inject(MatSnackBar);
@@ -52,7 +52,7 @@ export class AppComponent implements OnInit, OnDestroy {
   readonly loggedInKeycloak = signal<boolean>(false);
   readonly errorMessage = signal('');
   readonly authData = signal<AuthDataDto>(AppService.defaultAuthData);
-  readonly currentWorkspaceName = signal('');
+  protected readonly currentWorkspaceName = signal('');
   private readonly destroyRef = inject(DestroyRef);
 
   constructor() {
@@ -170,7 +170,7 @@ export class AppComponent implements OnInit, OnDestroy {
     return !!userProfile?.id && !!userProfile?.username;
   }
 
-  isAdminUser(): boolean {
+  protected isAdminUser(): boolean {
     return hasAdminBypass(this.authService.getRoles(), this.authData().isAdmin);
   }
 }

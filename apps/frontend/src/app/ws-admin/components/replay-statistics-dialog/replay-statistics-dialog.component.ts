@@ -522,11 +522,11 @@ implements OnInit, AfterViewInit, OnDestroy {
     dialogContent?: ElementRef<HTMLElement>;
 
   workspaceId: number;
-  loading = true;
-  selectedTabIndex = 0;
+  protected loading = true;
+  protected selectedTabIndex = 0;
 
-  wideView: [number, number] = [900, 520];
-  halfView: [number, number] = [440, 380];
+  protected wideView: [number, number] = [900, 520];
+  protected halfView: [number, number] = [440, 380];
 
   private readonly defaultLastDays = 30;
   private readonly topUnitsCount = 25;
@@ -535,19 +535,19 @@ implements OnInit, AfterViewInit, OnDestroy {
   private rafPending = false;
 
   // Chart data
-  frequencyData: ReplayFrequencyData[] = [];
-  durationDistributionData: { name: string; value: number }[] = [];
-  unitDurationData: ReplayFrequencyData[] = [];
-  dayDistributionData: ReplayFrequencyData[] = [];
-  hourDistributionData: ReplayFrequencyData[] = [];
+  protected frequencyData: ReplayFrequencyData[] = [];
+  protected durationDistributionData: { name: string; value: number }[] = [];
+  protected unitDurationData: ReplayFrequencyData[] = [];
+  protected dayDistributionData: ReplayFrequencyData[] = [];
+  protected hourDistributionData: ReplayFrequencyData[] = [];
 
   // Failure distribution data
-  failureByUnitData: ReplayFrequencyData[] = [];
-  failureByDayData: ReplayFrequencyData[] = [];
-  failureByHourData: ReplayFrequencyData[] = [];
+  protected failureByUnitData: ReplayFrequencyData[] = [];
+  protected failureByDayData: ReplayFrequencyData[] = [];
+  protected failureByHourData: ReplayFrequencyData[] = [];
 
   // Error statistics data
-  errorStats = {
+  protected errorStats = {
     successRate: 0,
     totalReplays: 0,
     successfulReplays: 0,
@@ -555,14 +555,14 @@ implements OnInit, AfterViewInit, OnDestroy {
     commonErrors: [] as Array<{ message: string; count: number }>
   };
 
-  sourceSummary: ReplaySourceSummaryResponse = {
+  protected sourceSummary: ReplaySourceSummaryResponse = {
     internal: 0,
     external: 0,
     total: 0
   };
 
   // Duration statistics
-  durationStats = {
+  protected durationStats = {
     min: 0,
     max: 0,
     average: 0
@@ -571,7 +571,7 @@ implements OnInit, AfterViewInit, OnDestroy {
   // Chart configuration
   colorScheme = 'vivid';
 
-  formatMilliseconds(milliseconds: number): string {
+  protected formatMilliseconds(milliseconds: number): string {
     // Convert to seconds with 2 decimal places for better readability
     return `${(milliseconds / 1000).toFixed(2)} s`;
   }
@@ -583,7 +583,7 @@ implements OnInit, AfterViewInit, OnDestroy {
     return value;
   }
 
-  readonly formatXAxisTick = (value: string): string => this.formatXAxisLabel(value);
+  protected readonly formatXAxisTick = (value: string): string => this.formatXAxisLabel(value);
 
   constructor() {
     this.workspaceId = this.data.workspaceId;

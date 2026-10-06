@@ -1,7 +1,7 @@
 <div class="selection-cell">
   <div
     class="decision-status"
-    [ngClass]="statusClass"
+    [class]="statusClass"
     [matTooltip]="statusTooltip"
   >
     <mat-icon>{{ statusIcon }}</mat-icon>
@@ -9,7 +9,7 @@
     @if (!item().isResolved) {
       <span class="progress-dots">
         @for (isCoderDone of completionStates; track $index) {
-          <span class="dot" [ngClass]="isCoderDone ? 'filled' : 'empty'"></span>
+          <span class="dot" [class]="isCoderDone ? 'filled' : 'empty'"></span>
         }
       </span>
     }
