@@ -38,9 +38,17 @@ verwendet deshalb `justInTimeCompile: false`, damit alle sechs Specs vorab
 kompiliert werden. Cypress 15 kann mit Webpack-JIT den Runner vor dem Ende der
 Spec-Kompilierung starten; der Upstream-Fix ist noch offen:
 https://github.com/cypress-io/cypress/pull/34120. Component-Tests laufen im
-gleichen Job vor E2E, Retries bleiben aus. Die acht Quality-Gate-Tests prüfen
+gleichen Job vor E2E, Retries bleiben aus. Die neun Quality-Gate-Tests prüfen
 auch, dass ein leerer Spec-Lauf fehlschlägt. Der abschließende CI-Nachweis muss
 den Schutz und die vorab kompilierten Component-Specs enthalten.
+
+Pipeline #102993 auf `684f404c` führte alle sechs Component-Fälle erfolgreich
+aus. Die parallele GitHub-Webhook-Pipeline #102992 scheiterte schon vor der
+Code-Ausführung beim Dependency-Proxy-Image-Pull mit HTTP 404. Für externe PRs
+nach `develop` bezieht der Workflow deshalb dieselben öffentlichen Basisimages
+direkt. Proxy-Login und -Logout erfolgen nur bei aktiviertem Proxy; Registry-
+Logins bleiben erhalten. Die neuen Quality-Gate-Fälle führen die tatsächlichen
+Shell-Zeilen mit einem Docker-Stub aus und prüfen beide Proxy-Modi.
 
 ## Prüfinfrastruktur
 

@@ -17,6 +17,9 @@ mount adapter. Component screenshots and videos use separate artifact folders.
 Both browser targets fail when a discovered spec executes zero tests. Component
 specs compile up front (`justInTimeCompile: false`) to avoid Cypress 15's webpack
 JIT startup race, and run before E2E in the same job. Test retries remain disabled.
+GitHub webhook pipelines targeting `develop` pull the same official upstream base images directly,
+because the project bot has no group Dependency Proxy access. Regular branch
+pipelines retain the proxy. Project registry images and all checks stay enabled.
 Live Replay and Keycloak authentication remain separate integration jobs and
 exercise the production frontend with their disposable backend environments.
 
