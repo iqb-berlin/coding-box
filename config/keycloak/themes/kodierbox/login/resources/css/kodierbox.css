@@ -1,0 +1,203 @@
+:root {
+  --kodierbox-primary: #006064;
+  --kodierbox-primary-hover: #004d50;
+  --kodierbox-text: #263238;
+  --kodierbox-muted: #526168;
+  --kodierbox-border: #c5cdd1;
+  --pf-global--primary-color--100: var(--kodierbox-primary);
+  --pf-global--primary-color--200: var(--kodierbox-primary-hover);
+}
+
+.login-pf,
+.login-pf body {
+  background: #f3f5f6;
+  color: var(--kodierbox-text);
+  font-family: Roboto, 'Helvetica Neue', Arial, sans-serif;
+  letter-spacing: 0;
+  min-height: 100%;
+}
+
+.login-pf-page {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 580px;
+  margin: 0 auto;
+  padding: 32px 20px;
+}
+
+#kc-header {
+  padding: 0;
+  margin-bottom: 24px;
+  color: var(--kodierbox-text);
+  text-align: center;
+  white-space: normal;
+}
+
+#kc-header-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0;
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+
+#kc-header-wrapper::before {
+  content: '';
+  display: block;
+  flex: none;
+  width: 110px;
+  height: 58px;
+  background: url('../img/iqb-logo.png') center / contain no-repeat;
+}
+
+.login-pf-page .card-pf {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 28px 32px;
+  border: 1px solid #e1e6e8;
+  border-top: 4px solid var(--kodierbox-primary);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgb(38 50 56 / 8%);
+}
+
+.login-pf-page .login-pf-header {
+  margin-bottom: 24px;
+}
+
+h1#kc-page-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+#kc-content-wrapper,
+#kc-form-wrapper {
+  margin-top: 0;
+}
+
+#kc-locale {
+  position: relative;
+  top: auto;
+  right: auto;
+  width: auto;
+  margin-bottom: 16px;
+  text-align: right;
+}
+
+/* Keycloak 22 uses a link; later versions use a menu button. */
+#kc-locale-dropdown:focus-within ul {
+  display: block;
+}
+
+#kc-current-locale-link {
+  color: var(--kodierbox-muted);
+  font: inherit;
+}
+
+.login-pf a {
+  color: var(--kodierbox-primary);
+  overflow-wrap: anywhere;
+}
+
+.login-pf a:hover {
+  color: var(--kodierbox-primary-hover);
+}
+
+.login-pf a:focus-visible,
+.login-pf button:focus-visible,
+.login-pf input:focus-visible,
+.login-pf select:focus-visible {
+  outline: 2px solid var(--kodierbox-primary);
+  outline-offset: 3px;
+}
+
+.login-pf .pf-c-form__label-text {
+  color: var(--kodierbox-text);
+  font-weight: 500;
+}
+
+.login-pf .pf-c-form-control {
+  min-height: 44px;
+  border-color: var(--kodierbox-border);
+  border-radius: 4px;
+  color: var(--kodierbox-text);
+  font-size: 16px;
+}
+
+.login-pf .pf-c-form-control[aria-invalid='true'] {
+  border-color: #b71c1c;
+}
+
+.login-pf .pf-c-button {
+  min-height: 44px;
+  border-radius: 4px;
+  font-size: 16px;
+  white-space: normal;
+}
+
+.login-pf .pf-c-button.pf-m-primary {
+  background: var(--kodierbox-primary);
+  color: #fff;
+}
+
+.login-pf .pf-c-button.pf-m-primary:hover,
+.login-pf .pf-c-button.pf-m-primary:focus {
+  background: var(--kodierbox-primary-hover);
+}
+
+#kc-info {
+  margin: 24px -32px -28px;
+}
+
+#kc-info-wrapper {
+  padding: 20px 32px;
+  border-top: 1px solid #e1e6e8;
+  border-radius: 0 0 7px 7px;
+  background: #f7f9fa;
+  color: var(--kodierbox-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#kc-form-options .checkbox,
+.login-pf-page .subtitle {
+  color: var(--kodierbox-muted);
+}
+
+.login-pf .pf-c-alert__title,
+.login-pf .pf-c-form__helper-text,
+#kc-attempted-username {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .login-pf-page {
+    padding: 20px 12px;
+  }
+
+  .login-pf-page .card-pf {
+    padding: 24px 20px;
+  }
+
+  #kc-info {
+    margin: 24px -20px -24px;
+  }
+
+  #kc-info-wrapper {
+    padding: 18px 20px;
+  }
+
+  .login-pf-page .login-pf-settings {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+}

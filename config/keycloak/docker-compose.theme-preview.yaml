@@ -1,0 +1,18 @@
+name: kodierbox-theme-preview
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:${KEYCLOAK_THEME_VERSION:-22.0.5}
+    command:
+      - start-dev
+      - --import-realm
+      - --spi-theme-static-max-age=-1
+      - --spi-theme-cache-themes=false
+      - --spi-theme-cache-templates=false
+    ports:
+      - '127.0.0.1:8087:8080'
+    volumes:
+      - ./themes/kodierbox:/opt/keycloak/themes/kodierbox:ro
+      - ./preview:/opt/keycloak/data/import:ro
+    tmpfs:
+      - /opt/keycloak/data:mode=1777
