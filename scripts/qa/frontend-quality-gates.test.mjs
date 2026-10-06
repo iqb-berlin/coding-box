@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
+import { runInNewContext } from 'node:vm';
 
 const workspace = fileURLToPath(new URL('../..', import.meta.url));
 const require = createRequire(new URL('../../package.json', import.meta.url));
@@ -78,6 +79,26 @@ test('frontend tests cannot reintroduce Zone.js or its timer helpers', () => {
   const componentSetup = readFileSync(join(workspace, 'cypress/support/component.ts'), 'utf8');
   assert.match(componentSetup, /from 'cypress\/angular-zoneless'/);
   assert.doesNotMatch(componentSetup, /from 'cypress\/angular'/);
+});
+
+test('both browser targets reject a discovered spec that executes zero tests', () => {
+  const ts = require('typescript');
+  const source = readFileSync(join(workspace, 'cypress.config.ts'), 'utf8');
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS }
+  }).outputText;
+  const exports = {};
+  runInNewContext(compiled, { exports, require });
+  for (const type of ['component', 'e2e']) {
+    const hooks = new Map();
+    exports.default[type].setupNodeEvents((event, callback) => hooks.set(event, callback), {});
+    const afterSpec = hooks.get('after:spec');
+    assert.equal(typeof afterSpec, 'function');
+    const spec = { relative: 'cypress/component/fixture.cy.ts' };
+    assert.throws(() => afterSpec(spec, { stats: { tests: 0 } }), /did not execute any tests/);
+    assert.doesNotThrow(() => afterSpec(spec, { stats: { tests: 1 } }));
+    assert.doesNotThrow(() => afterSpec(spec, undefined));
+  }
 });
 
 test('CI selects coverage, rejects empty suites, and publishes reports as a required job', () => {
