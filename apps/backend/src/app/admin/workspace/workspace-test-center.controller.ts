@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Param,
@@ -38,6 +39,17 @@ export class WorkspaceTestCenterController {
     private cacheService: CacheService,
     private jobQueueService: JobQueueService
   ) {}
+
+  private decodeTestcenterUrl(url: string): string {
+    try {
+      return decodeURIComponent(url);
+    } catch (error) {
+      if (error instanceof URIError) {
+        throw new BadRequestException('Invalid URL encoding');
+      }
+      throw error;
+    }
+  }
 
   private async invalidateFlatResponseFilterOptionsCache(
     workspaceId: number
@@ -209,7 +221,7 @@ export class WorkspaceTestCenterController {
       workspace_id,
       tc_workspace,
       server,
-      decodeURIComponent(url),
+      this.decodeTestcenterUrl(url),
       token,
       importOptions,
       testGroups,
@@ -348,7 +360,7 @@ export class WorkspaceTestCenterController {
       workspace_id,
       tc_workspace,
       server,
-      decodeURIComponent(url),
+      this.decodeTestcenterUrl(url),
       token,
       importRunId
     );

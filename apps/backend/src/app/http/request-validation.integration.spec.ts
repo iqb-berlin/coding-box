@@ -15,6 +15,8 @@ import { CodingJobController } from '../admin/coding-job/coding-job.controller';
 import { VariableBundleController } from '../admin/variable-bundle/variable-bundle.controller';
 import { UsersController } from '../admin/users/users.controller';
 import { WorkspaceCodingStatisticsController } from '../admin/workspace/workspace-coding-statistics.controller';
+import { WorkspaceCodingAnalysisController } from '../admin/workspace/workspace-coding-analysis.controller';
+import { CodingAnalysisService } from '../database/services/coding/coding-analysis.service';
 import { WorkspaceTestCenterController } from '../admin/workspace/workspace-test-center.controller';
 import { AccessLevelGuard } from '../admin/workspace/access-level.guard';
 import { DistributionPreviewLimiterService } from '../admin/workspace-coding/distribution-preview-limiter.service';
@@ -47,6 +49,7 @@ describe('HTTP request validation and exception handling', () => {
   const bundles = { createVariableBundle: jest.fn() };
   const users = { updateUsersAccess: jest.fn() };
   const testcenter = { getTestgroups: jest.fn() };
+  const analysis = { saveAggregationSettings: jest.fn() };
   let logError: jest.SpyInstance;
 
   beforeAll(async () => {
@@ -57,13 +60,15 @@ describe('HTTP request validation and exception handling', () => {
         UsersController,
         PrimitiveQueryController,
         WorkspaceCodingStatisticsController,
-        WorkspaceTestCenterController
+        WorkspaceTestCenterController,
+        WorkspaceCodingAnalysisController
       ],
       providers: [
         { provide: CodingJobService, useValue: codingJobs },
         { provide: VariableBundleService, useValue: bundles },
         { provide: UsersService, useValue: users },
         { provide: TestcenterService, useValue: testcenter },
+        { provide: CodingAnalysisService, useValue: analysis },
         {
           provide: DistributionPreviewLimiterService,
           useValue: { run: (callback: () => Promise<unknown>) => callback() }
@@ -190,6 +195,26 @@ describe('HTTP request validation and exception handling', () => {
       error.stack
     );
     expect(JSON.stringify(logError.mock.calls)).not.toContain(token);
+  });
+
+  it.each([undefined, {}])('accepts aggregation defaults with body %j', async payload => {
+    analysis.saveAggregationSettings.mockResolvedValue({ threshold: 2, flags: [] });
+    const response = await post('admin/workspace/47/coding/aggregation-settings', payload);
+    expect(response.status).toBe(201);
+    expect(analysis.saveAggregationSettings).toHaveBeenCalledWith(47, 2, undefined);
+  });
+
+  it('still rejects malformed aggregation settings', async () => {
+    const response = await post('admin/workspace/47/coding/aggregation-settings', { threshold: 'wrong' });
+    expect(response.status).toBe(400);
+    expect(analysis.saveAggregationSettings).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for malformed Testcenter URL encoding before calling the service', async () => {
+    const response = await fetch(`${baseUrl}/api/admin/workspace/47/importWorkspaceFiles/testGroups?url=%25`);
+    expect(response.status).toBe(400);
+    expect((await response.json()).message).toBe('Invalid URL encoding');
+    expect(testcenter.getTestgroups).not.toHaveBeenCalled();
   });
 
   it('rejects a missing DTO body before invoking the service', async () => {
