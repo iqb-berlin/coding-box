@@ -172,21 +172,24 @@ export class WorkspaceCodingService {
   }
 
   async pauseJob(
-    jobId: string
+    jobId: string,
+    workspaceId: number
   ): Promise<{ success: boolean; message: string }> {
-    return this.bullJobManagementService.pauseJob(jobId);
+    return this.bullJobManagementService.pauseJob(jobId, workspaceId);
   }
 
   async resumeJob(
-    jobId: string
+    jobId: string,
+    workspaceId: number
   ): Promise<{ success: boolean; message: string }> {
-    return this.bullJobManagementService.resumeJob(jobId);
+    return this.bullJobManagementService.resumeJob(jobId, workspaceId);
   }
 
   async restartJob(
-    jobId: string
+    jobId: string,
+    workspaceId: number
   ): Promise<{ success: boolean; message: string; jobId?: string }> {
-    return this.bullJobManagementService.restartJob(jobId);
+    return this.bullJobManagementService.restartJob(jobId, workspaceId);
   }
 
   async getBullJobs(workspaceId: number): Promise<

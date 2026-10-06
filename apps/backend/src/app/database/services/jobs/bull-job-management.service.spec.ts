@@ -4,6 +4,8 @@ import {
   TestPersonCodingJobData
 } from '../../../job-queue/job-queue.service';
 import { BullJobManagementService } from './bull-job-management.service';
+import { CodingFreshnessService } from '../coding/coding-freshness.service';
+import { CodingReadinessService } from '../coding/coding-readiness.service';
 
 describe('BullJobManagementService', () => {
   const createFailedJob = (
@@ -16,7 +18,7 @@ describe('BullJobManagementService', () => {
 
   const createService = (job: Job<TestPersonCodingJobData>) => {
     const jobQueueService = {
-      getTestPersonCodingJob: jest.fn().mockResolvedValue(job),
+      getWorkspaceJob: jest.fn().mockResolvedValue(job),
       assertNoDependencyConflicts: jest.fn().mockResolvedValue(undefined),
       addTestPersonCodingJob: jest.fn().mockResolvedValue({ id: 'new-job' }),
       deleteTestPersonCodingJob: jest.fn().mockResolvedValue(true)
@@ -24,7 +26,12 @@ describe('BullJobManagementService', () => {
 
     return {
       service: new BullJobManagementService(
-        jobQueueService as unknown as JobQueueService
+        jobQueueService as unknown as JobQueueService,
+        {
+          assertAutoCodingRunCanStart: jest.fn().mockResolvedValue(undefined),
+          isRevisionCurrent: jest.fn().mockResolvedValue(true)
+        } as unknown as CodingFreshnessService,
+        { assertAutoCodingCanProcess: jest.fn().mockResolvedValue(undefined) } as unknown as CodingReadinessService
       ),
       jobQueueService
     };
@@ -47,7 +54,7 @@ describe('BullJobManagementService', () => {
       createFailedJob(originalData)
     );
 
-    await expect(service.restartJob('old-job')).resolves.toEqual({
+    await expect(service.restartJob('old-job', 7)).resolves.toEqual({
       success: true,
       message: 'Job old-job has been restarted as job new-job',
       jobId: 'new-job'
@@ -66,7 +73,7 @@ describe('BullJobManagementService', () => {
       freshnessSourceRevision: 42
     });
     expect(jobQueueService.deleteTestPersonCodingJob).toHaveBeenCalledWith(
-      'old-job'
+      'old-job', 7
     );
   });
 
@@ -82,7 +89,7 @@ describe('BullJobManagementService', () => {
         createFailedJob(invalidData)
       );
 
-      await expect(service.restartJob('old-job')).resolves.toEqual({
+      await expect(service.restartJob('old-job', 7)).resolves.toEqual({
         success: false,
         message: 'Error restarting job: autoCoderRun must be 1 or 2'
       });

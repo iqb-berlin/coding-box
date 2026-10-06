@@ -1133,9 +1133,8 @@ describe('WorkspaceCodingExportController', () => {
         'Export job cancellation requested (job will stop at next checkpoint)'
     });
     expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith(
-      'job-1'
-    );
-    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1');
+      'job-1', 5);
+    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1', 5);
     expect(cacheService.get).not.toHaveBeenCalled();
     expect(cacheService.delete).not.toHaveBeenCalled();
   });
@@ -1164,9 +1163,8 @@ describe('WorkspaceCodingExportController', () => {
       message: 'Export job cancelled successfully'
     });
     expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith(
-      'job-1'
-    );
-    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1');
+      'job-1', 5);
+    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1', 5);
   });
 
   it('does not report coding export cancellation as successful when queue cancellation was not accepted', async () => {
@@ -1193,9 +1191,8 @@ describe('WorkspaceCodingExportController', () => {
       message: 'Export job cancellation could not be requested'
     });
     expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith(
-      'job-1'
-    );
-    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1');
+      'job-1', 5);
+    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1', 5);
   });
 
   it('reports coding export cancellation as successful when cancellation completes during the request', async () => {
@@ -1226,9 +1223,8 @@ describe('WorkspaceCodingExportController', () => {
         'Export job cancellation requested (job will stop at next checkpoint)'
     });
     expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith(
-      'job-1'
-    );
-    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1');
+      'job-1', 5);
+    expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1', 5);
   });
 
   it('rejects export job status access for jobs from another workspace', async () => {

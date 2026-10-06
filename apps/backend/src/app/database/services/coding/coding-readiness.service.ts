@@ -1,4 +1,6 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException, Inject, Injectable, Logger, forwardRef
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   Brackets, EntityManager, In, Repository, SelectQueryBuilder
@@ -10,10 +12,12 @@ import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { Unit } from '../../entities/unit.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
+// eslint-disable-next-line import/no-cycle
 import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
+// eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import {
   AutocodingInvalidVariableSampleDto,
@@ -108,7 +112,9 @@ export class CodingReadinessService {
     private readonly unitRepository: Repository<Unit>,
     @InjectRepository(FileUpload)
     private readonly fileUploadRepository: Repository<FileUpload>,
+    @Inject(forwardRef(() => WorkspaceFilesService))
     private readonly workspaceFilesService: WorkspaceFilesService,
+    @Inject(forwardRef(() => WorkspaceExclusionService))
     private readonly workspaceExclusionService: WorkspaceExclusionService,
     private readonly cacheService: CacheService
   ) {}
