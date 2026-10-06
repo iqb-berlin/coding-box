@@ -961,6 +961,7 @@ describe('WorkspaceCodingService', () => {
   });
 
   describe('Job Management Operations', () => {
+    const workspaceId = 1;
     const jobId = 'test-job-123';
 
     describe('pauseJob', () => {
@@ -971,10 +972,10 @@ describe('WorkspaceCodingService', () => {
         };
         mockBullJobManagementService.pauseJob.mockResolvedValue(expectedResult);
 
-        const result = await service.pauseJob(jobId);
+        const result = await service.pauseJob(jobId, workspaceId);
 
         expect(mockBullJobManagementService.pauseJob).toHaveBeenCalledWith(
-          jobId
+          jobId, workspaceId
         );
         expect(result).toEqual(expectedResult);
       });
@@ -983,7 +984,7 @@ describe('WorkspaceCodingService', () => {
         const expectedResult = { success: false, message: 'Job not found' };
         mockBullJobManagementService.pauseJob.mockResolvedValue(expectedResult);
 
-        const result = await service.pauseJob(jobId);
+        const result = await service.pauseJob(jobId, workspaceId);
 
         expect(result.success).toBe(false);
       });
@@ -999,10 +1000,10 @@ describe('WorkspaceCodingService', () => {
           expectedResult
         );
 
-        const result = await service.resumeJob(jobId);
+        const result = await service.resumeJob(jobId, workspaceId);
 
         expect(mockBullJobManagementService.resumeJob).toHaveBeenCalledWith(
-          jobId
+          jobId, workspaceId
         );
         expect(result).toEqual(expectedResult);
       });
@@ -1016,7 +1017,7 @@ describe('WorkspaceCodingService', () => {
           expectedResult
         );
 
-        const result = await service.resumeJob(jobId);
+        const result = await service.resumeJob(jobId, workspaceId);
 
         expect(result.success).toBe(false);
       });
@@ -1033,10 +1034,10 @@ describe('WorkspaceCodingService', () => {
           expectedResult
         );
 
-        const result = await service.restartJob(jobId);
+        const result = await service.restartJob(jobId, workspaceId);
 
         expect(mockBullJobManagementService.restartJob).toHaveBeenCalledWith(
-          jobId
+          jobId, workspaceId
         );
         expect(result).toEqual(expectedResult);
       });
@@ -1050,7 +1051,7 @@ describe('WorkspaceCodingService', () => {
           expectedResult
         );
 
-        const result = await service.restartJob(jobId);
+        const result = await service.restartJob(jobId, workspaceId);
 
         expect(result.success).toBe(false);
       });

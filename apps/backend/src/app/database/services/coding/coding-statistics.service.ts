@@ -11,6 +11,7 @@ import {
   statusStringToNumber
 } from '../../utils/response-status-converter';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
+// eslint-disable-next-line import/no-cycle
 import { BullJobManagementService } from '../jobs/bull-job-management.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
@@ -57,8 +58,11 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     private responseRepository: Repository<ResponseEntity>,
     private cacheService: CacheService,
     private jobQueueService: JobQueueService,
+    @Inject(forwardRef(() => BullJobManagementService))
     private bullJobManagementService: BullJobManagementService,
+    @Inject(forwardRef(() => WorkspaceCoreService))
     private workspaceCoreService: WorkspaceCoreService,
+    @Inject(forwardRef(() => WorkspaceExclusionService))
     private workspaceExclusionService: WorkspaceExclusionService,
     @Inject(forwardRef(() => WorkspaceFilesService))
     private workspaceFilesService: WorkspaceFilesService
@@ -342,7 +346,8 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   }
 
   async getJobStatus(
-    jobId: string
+    jobId: string,
+    workspaceId: number
   ): Promise<{
       status:
       | 'pending'
@@ -356,12 +361,10 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       error?: string;
     } | null> {
     try {
-      let bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      let bullJob = await this.jobQueueService.getWorkspaceJob(workspaceId, 'test-person-coding', jobId);
 
       if (!bullJob) {
-        bullJob = (await this.jobQueueService.getCodingStatisticsJob(
-          jobId
-        )) as never;
+        bullJob = await this.jobQueueService.getWorkspaceJob(workspaceId, 'coding-statistics', jobId);
       }
 
       if (bullJob) {
@@ -391,7 +394,8 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   }
 
   async getCodingStatisticsJobStatus(
-    jobId: string
+    jobId: string,
+    workspaceId: number
   ): Promise<{
       status:
       | 'pending'
@@ -405,7 +409,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       error?: string;
     } | null> {
     try {
-      const bullJob = await this.jobQueueService.getCodingStatisticsJob(jobId);
+      const bullJob = await this.jobQueueService.getWorkspaceJob(workspaceId, 'coding-statistics', jobId);
       if (!bullJob) {
         return null;
       }
@@ -510,10 +514,11 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   }
 
   async cancelJob(
-    jobId: string
+    jobId: string,
+    workspaceId: number
   ): Promise<{ success: boolean; message: string }> {
     try {
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      const bullJob = await this.jobQueueService.getWorkspaceJob(workspaceId, 'test-person-coding', jobId);
       if (!bullJob) {
         return { success: false, message: `Job with ID ${jobId} not found` };
       }
@@ -534,7 +539,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       }
 
       const result = await this.jobQueueService.cancelTestPersonCodingJob(
-        jobId
+        jobId, workspaceId
       );
       if (result) {
         this.logger.log(`Job ${jobId} has been cancelled successfully`);
@@ -554,16 +559,17 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   }
 
   async deleteJob(
-    jobId: string
+    jobId: string,
+    workspaceId: number
   ): Promise<{ success: boolean; message: string }> {
     try {
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      const bullJob = await this.jobQueueService.getWorkspaceJob(workspaceId, 'test-person-coding', jobId);
       if (!bullJob) {
         return { success: false, message: `Job with ID ${jobId} not found` };
       }
 
       const result = await this.jobQueueService.deleteTestPersonCodingJob(
-        jobId
+        jobId, workspaceId
       );
       if (result) {
         this.logger.log(`Job ${jobId} has been deleted successfully`);
