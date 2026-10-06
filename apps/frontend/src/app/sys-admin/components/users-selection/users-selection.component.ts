@@ -13,7 +13,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, OnInit, SimpleChanges, DestroyRef, inject, input, output, signal, ChangeDetectionStrategy
+  ViewChild, Component, OnInit, SimpleChanges, DestroyRef, inject, input, output, signal, ChangeDetectionStrategy, OnChanges
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
@@ -37,16 +37,16 @@ import { SearchFilterComponent } from '../../../shared/search-filter/search-filt
   styleUrls: ['./users-selection.component.scss'],
   imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, FormsModule, TranslateModule, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent]
 })
-export class UsersSelectionComponent implements OnInit {
+export class UsersSelectionComponent implements OnInit, OnChanges {
   private userBackendService = inject(UserBackendService);
   private workspaceBackendService = inject(WorkspaceBackendService);
 
   private destroyRef = inject(DestroyRef);
 
-  userObjectsDatasource = new MatTableDataSource<UserFullDto>();
-  displayedUserColumns = ['selectCheckbox', 'username', 'displayName'];
+  protected userObjectsDatasource = new MatTableDataSource<UserFullDto>();
+  protected displayedUserColumns = ['selectCheckbox', 'username', 'displayName'];
   tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
-  tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
+  protected tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
   readonly userWorkspaces = signal<WorkspaceInListDto[]>([]);
   readonly filteredUserWorkspaces = signal<WorkspaceInListDto[]>([]);
 
@@ -113,7 +113,7 @@ export class UsersSelectionComponent implements OnInit {
     });
   }
 
-  checkboxToggle(row: UserFullDto): void {
+  protected checkboxToggle(row: UserFullDto): void {
     this.tableSelectionCheckboxes.toggle(row);
     this.updateUserWorkspacesList(row.id);
     this.userSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
@@ -135,7 +135,7 @@ export class UsersSelectionComponent implements OnInit {
     return numSelected === numRows;
   }
 
-  masterToggle(): void {
+  protected masterToggle(): void {
     this.isAllSelected() || !this.userObjectsDatasource ?
       this.tableSelectionCheckboxes.clear() :
       this.userObjectsDatasource.data.forEach(row => this.tableSelectionCheckboxes.select(row));

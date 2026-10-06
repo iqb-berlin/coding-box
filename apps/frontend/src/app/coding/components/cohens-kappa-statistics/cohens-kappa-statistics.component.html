@@ -142,7 +142,7 @@
                   <div class="kappa-stats">
                     <div class="stat-item">
                       <span class="stat-label">{{ 'cohens-kappa-statistics.average-kappa' | translate }}</span>
-                      <span class="stat-value kappa" [ngClass]="getKappaClass(summary.workspaceSummary.averageKappa)">
+                      <span class="stat-value kappa" [class]="getKappaClass(summary.workspaceSummary.averageKappa)">
                         {{ summary.workspaceSummary.averageKappa !== null ?
                         (summary.workspaceSummary.averageKappa | number:'1.3-3') : 'N/A' }}
                       </span>
@@ -296,7 +296,7 @@
                             <td>{{ stat.doubleCodedCount }}</td>
                             <td>{{ stat.doubleCodedRate !== null ? (stat.doubleCodedRate | percent:'1.1-1') : 'N/A' }}</td>
                             <td>
-                              <span class="kappa-cell" [ngClass]="getKappaClass(stat.meanKappa)">
+                              <span class="kappa-cell" [class]="getKappaClass(stat.meanKappa)">
                                 {{ stat.meanKappa !== null ? (stat.meanKappa | number:'1.3-3') : 'N/A' }}
                               </span>
                             </td>
@@ -328,7 +328,7 @@
                               <td>{{ getVariableLabel(stat) }}</td>
                               <td>{{ getCoderPairLabel(pair) }}</td>
                               <td>
-                                <span class="kappa-cell" [ngClass]="getKappaClass(pair.kappa)">
+                                <span class="kappa-cell" [class]="getKappaClass(pair.kappa)">
                                   {{ pair.kappa !== null ? (pair.kappa | number:'1.3-3') : 'N/A' }}
                                 </span>
                               </td>

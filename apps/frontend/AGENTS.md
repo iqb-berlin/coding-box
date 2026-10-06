@@ -3,7 +3,7 @@
 These instructions apply to `apps/frontend` and supplement the root `AGENTS.md`.
 
 ## Project Shape
-- This is an Angular 20 application using standalone components, Angular Material, RxJS, ngx-translate, and Keycloak integration.
+- This is an Angular 21 application using standalone components, Angular Material, RxJS, ngx-translate, and Keycloak integration.
 - Application-wide providers live in `src/app/app.config.ts`; root routes live in `src/app/app.routes.ts`.
 - Feature routes are split by area, for example `coding/coding.routes.ts`, `replay/replay.routes.ts`, `sys-admin/sys-admin.routes.ts`, and `ws-admin/ws-admin.routes.ts`.
 - `src/app/core` is for singleton services, guards, interceptors, auth, and app-wide state.
@@ -19,6 +19,10 @@ These instructions apply to `apps/frontend` and supplement the root `AGENTS.md`.
 
 ## Implementation Guidelines
 - Prefer standalone components and explicit `imports` arrays, matching the existing component style.
+- Use the `coding-box-` prefix for application component selectors and update template, style, and test references together.
+- Preserve selectors required by external integration contracts: the metadata library reads duration inputs through `iqb-formly-duration`, with a lint exception limited to that component.
+- Prefer `@if`/`@for` and direct `class`/`style` bindings in external and inline templates.
+- Mark template-only component members `protected`; retain public inputs, outputs, and members used by component consumers. Implement the interface for each lifecycle hook.
 - Use Angular Material components already used in the app; do not introduce new UI libraries without a clear need.
 - Put component templates and SCSS next to the component unless the local pattern clearly differs.
 - Add or update translation keys in `src/assets/i18n/de.json` for user-facing text instead of hard-coding German UI strings in templates or services.

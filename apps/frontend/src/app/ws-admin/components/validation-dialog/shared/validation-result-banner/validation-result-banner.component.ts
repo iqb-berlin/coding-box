@@ -13,7 +13,7 @@ export type OverallValidationStatus = 'not-run' | 'running' | 'success' | 'faile
   standalone: true,
   imports: [CommonModule, MatIconModule],
   template: `
-    <div class="validation-result" [ngClass]="'validation-' + status">
+    <div class="validation-result" [class]="'validation-' + status">
       <mat-icon>{{ getStatusIcon() }}</mat-icon>
       <div class="result-content">
         <div class="headline"><strong>{{ headline }}</strong></div>
@@ -100,7 +100,7 @@ export class ValidationResultBannerComponent {
   @Input() subline = '';
   @Input() recommendation = '';
 
-  getStatusIcon(): string {
+  protected getStatusIcon(): string {
     switch (this.status) {
       case 'running':
         return 'hourglass_empty';

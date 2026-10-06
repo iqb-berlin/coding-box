@@ -116,7 +116,7 @@
       </div>
       <hr />
 
-      <div class="planning-status-banner" [ngClass]="getPlanningStatusClass()">
+      <div class="planning-status-banner" [class]="getPlanningStatusClass()">
         <mat-icon>{{ getPlanningStatusIcon() }}</mat-icon>
         <div class="planning-status-copy">
           <strong>{{ getPlanningStatusTitle() }}</strong>
@@ -252,7 +252,7 @@
                   @if (isManualTab('planning')) {
                     <div
                       class="planning-next-step"
-                      [ngClass]="getPlanningStatusClass()"
+                      [class]="getPlanningStatusClass()"
                       >
                       <mat-icon>{{ getPlanningNextStepIcon() }}</mat-icon>
                       <div class="next-step-copy">

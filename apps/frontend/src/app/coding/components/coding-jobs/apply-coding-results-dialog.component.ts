@@ -161,29 +161,29 @@ export interface ApplyCodingResultsDialogResult {
   `]
 })
 export class ApplyCodingResultsDialogComponent {
-  overwriteExisting = false;
+  protected overwriteExisting = false;
 
   constructor(
     public dialogRef: MatDialogRef<ApplyCodingResultsDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: ApplyCodingResultsDialogData
+    @Inject(MAT_DIALOG_DATA) protected data: ApplyCodingResultsDialogData
   ) {}
 
-  onCancel(): void {
+  protected onCancel(): void {
     this.dialogRef.close(false);
   }
 
-  onConfirm(): void {
+  protected onConfirm(): void {
     this.dialogRef.close({ overwriteExisting: this.overwriteExisting });
   }
 
-  hasSummary(): boolean {
+  protected hasSummary(): boolean {
     return this.data.totalResults !== undefined ||
       this.data.codedResults !== undefined ||
       this.data.reviewIssues !== undefined ||
       this.data.hasReviewIssues !== undefined;
   }
 
-  hasReviewIssues(): boolean {
+  protected hasReviewIssues(): boolean {
     if (this.data.reviewIssues !== undefined) {
       return this.data.reviewIssues > 0;
     }

@@ -70,12 +70,12 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
   private appService = inject(AppService);
   private codingJobBackendService = inject(CodingJobBackendService);
 
-  displayedColumns: string[] = ['actions', 'name', 'description', 'variableCount', 'createdAt', 'updatedAt'];
-  dataSource = new MatTableDataSource<VariableBundle>([]);
+  protected displayedColumns: string[] = ['actions', 'name', 'description', 'variableCount', 'createdAt', 'updatedAt'];
+  protected dataSource = new MatTableDataSource<VariableBundle>([]);
   readonly isLoading = signal(false);
 
-  readonly selectedName = signal<string | null>(null);
-  readonly originalData = signal<VariableBundle[]>([]);
+  protected readonly selectedName = signal<string | null>(null);
+  protected readonly originalData = signal<VariableBundle[]>([]);
 
   @ViewChild(MatSort) sort!: MatSort;
 
@@ -104,7 +104,7 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
     });
   }
 
-  onNameFilterChange(): void {
+  protected onNameFilterChange(): void {
     this.applyFilters();
   }
 

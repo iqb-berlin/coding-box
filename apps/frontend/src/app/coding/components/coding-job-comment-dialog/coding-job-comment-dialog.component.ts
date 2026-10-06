@@ -65,17 +65,17 @@ export class CodingJobCommentDialogComponent {
     comment: string;
   }>(MAT_DIALOG_DATA);
 
-  commentText: string;
+  protected commentText: string;
 
   constructor() {
     this.commentText = this.data.comment || '';
   }
 
-  saveComment(): void {
+  protected saveComment(): void {
     this.dialogRef.close(this.commentText);
   }
 
-  closeDialog(): void {
+  protected closeDialog(): void {
     this.dialogRef.close();
   }
 }

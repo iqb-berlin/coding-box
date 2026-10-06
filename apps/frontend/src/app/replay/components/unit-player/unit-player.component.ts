@@ -65,7 +65,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   responses!: Response[] | null;
   count: number = 0;
   dataParts!: { [key: string]: string };
-  isLoaded: Subject<boolean> = new Subject<boolean>();
+  protected isLoaded: Subject<boolean> = new Subject<boolean>();
   private currentPageId = '';
 
   ngOnChanges(changes: SimpleChanges): void {

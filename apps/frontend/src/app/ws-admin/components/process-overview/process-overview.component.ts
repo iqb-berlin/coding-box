@@ -244,16 +244,16 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
 
   workspaceId: number = this.data.workspaceId;
   processes = new MatTableDataSource<ProcessDto>([]);
-  displayedColumns: string[] = ['queueName', 'status', 'progress', 'time', 'details', 'actions'];
-  readonly isLoading = signal(false);
+  protected displayedColumns: string[] = ['queueName', 'status', 'progress', 'time', 'details', 'actions'];
+  protected readonly isLoading = signal(false);
   readonly lastLoadedAt = signal(Date.now());
 
   // Filter properties
-  readonly statusFilter = signal('');
-  readonly typeFilter = signal('');
-  readonly searchFilter = signal('');
-  readonly availableTypes = signal<string[]>([]);
-  statusOptions: ProcessStatus[] = ['active', 'waiting', 'delayed', 'completed', 'failed', 'paused', 'cancelled', 'unknown'];
+  protected readonly statusFilter = signal('');
+  protected readonly typeFilter = signal('');
+  protected readonly searchFilter = signal('');
+  protected readonly availableTypes = signal<string[]>([]);
+  protected statusOptions: ProcessStatus[] = ['active', 'waiting', 'delayed', 'completed', 'failed', 'paused', 'cancelled', 'unknown'];
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
@@ -293,7 +293,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     };
   }
 
-  applyFilter(): void {
+  protected applyFilter(): void {
     this.processes.filter = JSON.stringify({
       status: this.statusFilter(),
       type: this.typeFilter(),
@@ -304,7 +304,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     }
   }
 
-  clearFilters(): void {
+  protected clearFilters(): void {
     this.statusFilter.set('');
     this.typeFilter.set('');
     this.searchFilter.set('');
@@ -393,7 +393,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     return this.getProcessAction(process) !== null;
   }
 
-  getActionTooltip(process: ProcessDto): string {
+  protected getActionTooltip(process: ProcessDto): string {
     const action = this.getProcessAction(process);
     if (!action) {
       return this.translateService.instant('process-overview.actions.not-safe');
@@ -410,7 +410,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     return presentation ? this.translateService.instant(presentation.labelKey) : queueName;
   }
 
-  getQueueDescription(queueName: string): string {
+  protected getQueueDescription(queueName: string): string {
     const presentation = QUEUE_PRESENTATIONS[queueName];
     return presentation ? this.translateService.instant(presentation.descriptionKey) : queueName;
   }
@@ -423,15 +423,15 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     return STATUS_PRESENTATIONS[status].icon;
   }
 
-  getStatusClass(status: ProcessStatus): string {
+  protected getStatusClass(status: ProcessStatus): string {
     return `status-${STATUS_PRESENTATIONS[status].cssClass}`;
   }
 
-  getStatusTooltip(status: ProcessStatus): string {
+  protected getStatusTooltip(status: ProcessStatus): string {
     return this.translateService.instant(STATUS_PRESENTATIONS[status].tooltipKey);
   }
 
-  hasProgressPercent(process: ProcessDto): boolean {
+  protected hasProgressPercent(process: ProcessDto): boolean {
     return this.getProgressPercent(process) !== null;
   }
 
@@ -488,7 +488,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     return null;
   }
 
-  getActionIcon(process: ProcessDto): string {
+  protected getActionIcon(process: ProcessDto): string {
     const action = this.getProcessAction(process);
     if (action === 'cancel') return 'cancel';
     if (action === 'pause') return 'pause_circle';

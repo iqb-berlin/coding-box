@@ -28,10 +28,10 @@ type Data = {
 })
 export class EditWorkspaceComponent {
   private fb = inject(UntypedFormBuilder);
-  data = inject<Data>(MAT_DIALOG_DATA);
+  protected data = inject<Data>(MAT_DIALOG_DATA);
 
   editWorkspaceForm: UntypedFormGroup;
-  name = this.data.ws?.name;
+  protected name = this.data.ws?.name;
   constructor() {
     this.editWorkspaceForm = this.fb.group({
       name: this.fb.control(this.name, [Validators.required, Validators.minLength(3)])

@@ -47,8 +47,8 @@ export class CodebookJobDefinitionPickerDialogComponent {
   selectedJobDefinitionId: number | null = this.data.selectedJobDefinitionId;
 
   constructor(
-    public dialogRef: MatDialogRef<CodebookJobDefinitionPickerDialogComponent, number | null | undefined>,
-    @Inject(MAT_DIALOG_DATA) public data: CodebookJobDefinitionPickerDialogData
+    protected dialogRef: MatDialogRef<CodebookJobDefinitionPickerDialogComponent, number | null | undefined>,
+    @Inject(MAT_DIALOG_DATA) protected data: CodebookJobDefinitionPickerDialogData
   ) {}
 
   get filteredOptions(): CodebookJobDefinitionOption[] {

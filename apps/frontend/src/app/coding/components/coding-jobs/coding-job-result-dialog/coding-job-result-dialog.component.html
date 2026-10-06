@@ -122,7 +122,7 @@
 
           <ng-container matColumnDef="code">
             <mat-header-cell *matHeaderCellDef mat-sort-header>Code</mat-header-cell>
-            <mat-cell *matCellDef="let result" [ngClass]="getCellClasses(result)">
+            <mat-cell *matCellDef="let result" [class]="getCellClasses(result)">
               @if (isCodingIssueOption(result) && result.givenCode !== undefined && result.givenCode !== null) {
                 <span class="given-code">{{result.givenCode}}</span>
                 <span class="uncertainty-indicator">(unsicher)</span>
@@ -134,7 +134,7 @@
 
           <ng-container matColumnDef="score">
             <mat-header-cell *matHeaderCellDef mat-sort-header>Score</mat-header-cell>
-            <mat-cell *matCellDef="let result" [ngClass]="getCellClasses(result)">
+            <mat-cell *matCellDef="let result" [class]="getCellClasses(result)">
               @if (isCodingIssueOption(result) && result.givenScore !== undefined && result.givenScore !== null) {
                 <span class="given-code">{{result.givenScore}}</span>
                 <span class="uncertainty-indicator">(unsicher)</span>
@@ -146,7 +146,7 @@
 
           <ng-container matColumnDef="codingIssueOption">
             <mat-header-cell *matHeaderCellDef mat-sort-header>Kodierungshinweis</mat-header-cell>
-            <mat-cell *matCellDef="let result" [ngClass]="getCellClasses(result)">
+            <mat-cell *matCellDef="let result" [class]="getCellClasses(result)">
               {{result.codingIssueOptionLabel || '-'}}
             </mat-cell>
           </ng-container>

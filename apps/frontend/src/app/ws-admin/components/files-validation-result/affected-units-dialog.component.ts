@@ -28,15 +28,15 @@ export type AffectedUnitsDialogResult = {
   ]
 })
 export class AffectedUnitsDialogComponent {
-  filterText = '';
+  protected filterText = '';
 
   constructor(
     private dialogRef: MatDialogRef<AffectedUnitsDialogComponent, AffectedUnitsDialogResult>,
     @Inject(MAT_DIALOG_DATA)
-    public data: { title: string; units: string[] }
+    protected data: { title: string; units: string[] }
   ) {}
 
-  get filteredUnits(): string[] {
+  protected get filteredUnits(): string[] {
     const all = (this.data?.units || []).slice();
     const q = (this.filterText || '').trim().toUpperCase();
     if (!q) {
@@ -45,14 +45,14 @@ export class AffectedUnitsDialogComponent {
     return all.filter(u => (u || '').toUpperCase().includes(q));
   }
 
-  selectUnit(unitId: string): void {
+  protected selectUnit(unitId: string): void {
     if (!unitId) {
       return;
     }
     this.dialogRef.close({ unitId });
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 }

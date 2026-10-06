@@ -29,12 +29,12 @@ import { XmlViewerComponent } from '../../../shared/components/xml-viewer/xml-vi
   ]
 })
 export class UnitInfoDialogComponent implements OnInit {
-  isLoading = true;
-  errorMessage: string | null = null;
+  protected isLoading = true;
+  protected errorMessage: string | null = null;
 
   constructor(
     public dialogRef: MatDialogRef<UnitInfoDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: {
+    @Inject(MAT_DIALOG_DATA) protected data: {
       unitInfo: UnitInfoDto;
       unitId: string;
     }
@@ -46,7 +46,7 @@ export class UnitInfoDialogComponent implements OnInit {
     }
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 }

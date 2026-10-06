@@ -477,7 +477,7 @@
                       <div class="variable-id-row">
                         <span class="variable-id-text">{{ variable.unitName }}_{{ variable.variableId }}</span>
                         @if (variable.availableCases !== undefined && variable.responseCount !== undefined) {
-                        <mat-chip class="availability-chip" [ngClass]="getAvailabilityClass(variable)">
+                        <mat-chip class="availability-chip" [class]="getAvailabilityClass(variable)">
                           {{ getAvailabilityText(variable) }} verfügbar
                         </mat-chip>
                         } @else if (variable.responseCount != null) {

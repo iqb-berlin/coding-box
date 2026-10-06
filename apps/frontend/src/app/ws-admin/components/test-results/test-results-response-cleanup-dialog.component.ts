@@ -45,13 +45,13 @@ interface VariableOption {
 export class TestResultsResponseCleanupDialogComponent implements OnInit {
   readonly availableUnits = signal<string[]>([]);
   private variableOptions: VariableOption[] = [];
-  selectedUnitNames: string[] = [];
-  readonly selectedVariableIds = signal<string[]>([]);
-  readonly answeredFrom = signal('');
-  readonly answeredBefore = signal('');
-  readonly subformsText = signal('');
-  readonly isLoading = signal(false);
-  readonly loadFailed = signal(false);
+  protected selectedUnitNames: string[] = [];
+  protected readonly selectedVariableIds = signal<string[]>([]);
+  protected readonly answeredFrom = signal('');
+  protected readonly answeredBefore = signal('');
+  protected readonly subformsText = signal('');
+  protected readonly isLoading = signal(false);
+  protected readonly loadFailed = signal(false);
 
   constructor(
     private dialogRef: MatDialogRef<
@@ -84,7 +84,7 @@ export class TestResultsResponseCleanupDialogComponent implements OnInit {
     });
   }
 
-  get availableVariables(): VariableOption[] {
+  protected get availableVariables(): VariableOption[] {
     const selectedUnits = new Set(
       this.selectedUnitNames.map(TestResultsResponseCleanupDialogComponent.normalizeUnitName)
     );
@@ -97,7 +97,7 @@ export class TestResultsResponseCleanupDialogComponent implements OnInit {
       .sort((a, b) => a.label.localeCompare(b.label));
   }
 
-  get canSubmit(): boolean {
+  protected get canSubmit(): boolean {
     return this.selectedUnitNames.length > 0 &&
       this.toTimestamp(this.answeredBefore()) !== null &&
       (
@@ -110,12 +110,12 @@ export class TestResultsResponseCleanupDialogComponent implements OnInit {
       );
   }
 
-  onUnitsChanged(): void {
+  protected onUnitsChanged(): void {
     const available = new Set(this.availableVariables.map(option => option.value));
     this.selectedVariableIds.set(this.selectedVariableIds().filter(variableId => available.has(variableId)));
   }
 
-  submit(): void {
+  protected submit(): void {
     if (!this.canSubmit) {
       return;
     }
@@ -140,7 +140,7 @@ export class TestResultsResponseCleanupDialogComponent implements OnInit {
     this.dialogRef.close(request);
   }
 
-  cancel(): void {
+  protected cancel(): void {
     this.dialogRef.close(false);
   }
 

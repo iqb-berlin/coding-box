@@ -83,11 +83,11 @@ export class TestResultsImportDialogComponent {
     private dialogRef: MatDialogRef<TestResultsImportDialogComponent>
   ) {}
 
-  selectImportType(type: 'testcenter' | 'responses' | 'logs'): void {
+  protected selectImportType(type: 'testcenter' | 'responses' | 'logs'): void {
     this.dialogRef.close({ type });
   }
 
-  cancel(): void {
+  protected cancel(): void {
     this.dialogRef.close(undefined);
   }
 }

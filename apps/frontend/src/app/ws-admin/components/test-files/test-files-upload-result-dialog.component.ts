@@ -284,7 +284,7 @@ export class TestFilesUploadResultDialogComponent {
     return `${item.level}@@${item.fileName || ''}@@${item.rowIndex || ''}@@${item.message}@@${index}`;
   }
 
-  getFailureSuggestions(
+  protected getFailureSuggestions(
     file: TestFilesUploadFailedDto
   ): TestFilesUploadFailureSuggestion[] {
     return getTestFilesUploadFailureSuggestions(file);

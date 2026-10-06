@@ -131,25 +131,25 @@ implements OnInit, OnDestroy {
   @Input() disabled = false;
   @Output() validate = new EventEmitter<void>();
 
-  readonly isRunning = signal(false);
+  protected readonly isRunning = signal(false);
   readonly wasRun = signal(false);
-  readonly isLoadingPage = signal(false);
-  readonly isExporting = signal(false);
-  readonly errorMessage = signal<string | null>(null);
-  readonly result = signal<GroupResponsesValidationResult | null>(null);
-  readonly expandedPanel = signal(false);
-  paginatedGroupResponses = new MatTableDataSource<{
+  protected readonly isLoadingPage = signal(false);
+  protected readonly isExporting = signal(false);
+  protected readonly errorMessage = signal<string | null>(null);
+  protected readonly result = signal<GroupResponsesValidationResult | null>(null);
+  protected readonly expandedPanel = signal(false);
+  protected paginatedGroupResponses = new MatTableDataSource<{
     group: string;
     hasResponse: boolean;
   }>([]);
 
-  displayedColumns = ['group', 'status'];
+  protected displayedColumns = ['group', 'status'];
 
   // Pagination state
-  readonly totalItems = signal(0);
-  readonly pageSize = signal(10);
-  readonly currentPage = signal(1);
-  readonly activeTask = signal<ValidationTaskDto | null>(null);
+  protected readonly totalItems = signal(0);
+  protected readonly pageSize = signal(10);
+  protected readonly currentPage = signal(1);
+  protected readonly activeTask = signal<ValidationTaskDto | null>(null);
 
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
@@ -198,13 +198,13 @@ implements OnInit, OnDestroy {
     this.taskSubscription?.unsubscribe();
   }
 
-  get status(): ValidationStatus {
+  protected get status(): ValidationStatus {
     return this.groupResponsesValidationService.getValidationStatus();
   }
 
-  readonly errorCount = computed<number>(() => this.result()?.totalGroupsWithoutResponses || 0);
+  protected readonly errorCount = computed<number>(() => this.result()?.totalGroupsWithoutResponses || 0);
 
-  onValidate(): void {
+  protected onValidate(): void {
     if (this.isRunning() || this.disabled) {
       return;
     }
@@ -233,7 +233,7 @@ implements OnInit, OnDestroy {
     this.validate.emit();
   }
 
-  onPageChange(event: PageEvent): void {
+  protected onPageChange(event: PageEvent): void {
     this.currentPage.set(event.pageIndex + 1);
     this.pageSize.set(event.pageSize);
     this.isLoadingPage.set(true);
@@ -259,7 +259,7 @@ implements OnInit, OnDestroy {
       });
   }
 
-  toggleExpansion(): void {
+  protected toggleExpansion(): void {
     this.expandedPanel.set(!this.expandedPanel());
   }
 
@@ -271,7 +271,7 @@ implements OnInit, OnDestroy {
     }
   }
 
-  exportCsv(): void {
+  protected exportCsv(): void {
     if (this.isExporting()) {
       return;
     }

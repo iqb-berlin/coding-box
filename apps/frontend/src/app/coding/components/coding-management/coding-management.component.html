@@ -199,7 +199,7 @@
     <div class="content-row-container">
       <!-- Statistics Section -->
       <div class="statistics-section">
-        <app-statistics-card [codingStatistics]="codingStatistics()" [referenceStatistics]="referenceStatisticsValue"
+        <coding-box-statistics-card [codingStatistics]="codingStatistics()" [referenceStatistics]="referenceStatisticsValue"
           [referenceVersion]="referenceVersionValue" [selectedVersion]="selectedStatisticsVersion()"
           [isLoading]="isLoadingStatistics()" [isDownloadInProgress]="isDownloadInProgress()"
           [statisticsLoaded]="statisticsLoaded()" [resetProgress]="resetProgressValue" [downloadProgress]="downloadProgressValue"
@@ -207,21 +207,21 @@
           (versionChange)="onVersionChange($event)" (loadStatistics)="fetchCodingStatistics()"
           (downloadResults)="onDownloadResults()" (cancelDownloadResults)="onCancelDownloadResults()" (resetVersion)="onResetVersion()"
           (statusClick)="onStatusClick($event)" (derivedClick)="onDerivedClick()">
-        </app-statistics-card>
+        </coding-box-statistics-card>
       </div>
 
       <!-- Filter Section -->
       <div class="filters-section">
-        <app-response-filters [filterParams]="filterParams()" [availableStatuses]="getAvailableStatuses()"
+        <coding-box-response-filters [filterParams]="filterParams()" [availableStatuses]="getAvailableStatuses()"
           [isLoading]="isLoading()" [isGeogebraAvailable]="isGeogebraAvailable()"
           [enableRegexSearch]="enableRegexSearch()" (filterChange)="onFilterChange($event)"
           (clearFilters)="onClearFilters()">
-        </app-response-filters>
+        </coding-box-response-filters>
       </div>
 
       <!-- Data Section -->
       <div class="data-section">
-        <app-response-table [data]="data" [displayedColumns]="displayedColumns" [totalRecords]="totalRecords()"
+        <coding-box-response-table [data]="data" [displayedColumns]="displayedColumns" [totalRecords]="totalRecords()"
           [pageSize]="pageSize()" [pageIndex]="pageIndex()" [pageSizeOptions]="pageSizeOptions" [isLoading]="isLoading()"
           [currentStatusFilter]="filterParams().codedStatus || currentStatusFilterValue" [selectedVersion]="selectedStatisticsVersion()"
           [isGeogebraFilterActive]="filterParams().geogebra" [isDerivedFilterActive]="filterParams().responseSource === 'derived'"
@@ -229,7 +229,7 @@
           (pageChange)="onPageChange($event)"
           (replayClick)="onReplayClick($event)" (showCodingScheme)="onShowCodingScheme($event)"
           (showUnitXml)="onShowUnitXml($event)" (reviewClick)="onReviewClick()" (sortChange)="onSortChange($event)">
-        </app-response-table>
+        </coding-box-response-table>
       </div>
     </div>
   </div>

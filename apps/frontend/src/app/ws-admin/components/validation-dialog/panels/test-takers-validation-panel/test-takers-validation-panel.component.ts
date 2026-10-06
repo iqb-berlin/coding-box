@@ -124,16 +124,16 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
   @Input() disabled = false;
   @Output() validate = new EventEmitter<void>();
 
-  readonly isRunning = signal(false);
+  protected readonly isRunning = signal(false);
   readonly wasRun = signal(false);
-  readonly isLoadingPage = signal(false);
-  readonly isExporting = signal(false);
+  protected readonly isLoadingPage = signal(false);
+  protected readonly isExporting = signal(false);
   readonly result = signal<TestTakersValidationDto | null>(null);
-  readonly errorMessage = signal<string | null>(null);
+  protected readonly errorMessage = signal<string | null>(null);
   readonly expandedPanel = signal(false);
-  paginatedMissingPersons = new MatTableDataSource<MissingPersonDto>([]);
-  displayedColumns = ['group', 'login', 'code', 'reason'];
-  readonly activeTask = signal<ValidationTaskDto | null>(null);
+  protected paginatedMissingPersons = new MatTableDataSource<MissingPersonDto>([]);
+  protected displayedColumns = ['group', 'login', 'code', 'reason'];
+  protected readonly activeTask = signal<ValidationTaskDto | null>(null);
 
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
@@ -182,7 +182,7 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
     return this.testTakersValidationService.getValidationStatus();
   }
 
-  readonly errorCount = computed(() => this.result()?.missingPersons.length || 0);
+  protected readonly errorCount = computed(() => this.result()?.missingPersons.length || 0);
 
   onValidate(): void {
     if (this.isRunning() || this.disabled) {
@@ -218,7 +218,7 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  exportCsv(): void {
+  protected exportCsv(): void {
     const resultSnapshot = this.result();
 
     if (this.isExporting() || !resultSnapshot) {

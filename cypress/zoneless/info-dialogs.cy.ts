@@ -73,9 +73,9 @@ describe('Zoneless information dialogs from the results table', () => {
       cy.wait('@info').its('response.statusCode').should('equal', 500);
       cy.get(info.selector).should('not.exist');
       cy.get('mat-snack-bar-container').should('contain.text', 'Fehler beim Laden');
-      cy.get('app-error-message-display .other-error').should('have.length', 1).should('be.visible')
+      cy.get('coding-box-error-message-display .other-error').should('have.length', 1).should('be.visible')
         .find('button.close-button').click();
-      cy.get('app-error-message-display .other-error').should('not.exist');
+      cy.get('coding-box-error-message-display .other-error').should('not.exist');
       cy.get('coding-box-test-results-flat-table').contains('button', info.id).click();
       cy.wait('@info').its('response.statusCode').should('equal', 200);
       cy.get(info.selector).should('contain.text', info.id);

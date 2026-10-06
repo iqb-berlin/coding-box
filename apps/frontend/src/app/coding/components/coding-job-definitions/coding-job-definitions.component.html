@@ -238,7 +238,7 @@
           <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.status' | translate }}</th>
           <td mat-cell *matCellDef="let definition">
             <div class="status-cell-content">
-              <span class="status-badge" [ngClass]="definition.status">
+              <span class="status-badge" [class]="definition.status">
                 {{ getStatusLabel(definition.status) }}
               </span>
               <span class="status-hint">{{ getDefinitionStatusHint(definition) }}</span>

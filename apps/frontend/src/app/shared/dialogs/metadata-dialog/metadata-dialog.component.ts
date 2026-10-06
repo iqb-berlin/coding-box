@@ -61,7 +61,7 @@ export interface MetadataDialogData {
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'app-metadata-dialog',
+  selector: 'coding-box-metadata-dialog',
   standalone: true,
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
   imports: [
@@ -222,13 +222,13 @@ export class MetadataDialogComponent implements OnInit, OnDestroy {
 
   private currentWebComponentMetadata: Partial<UnitMetadataValues> | null = null;
   private webComponentInitialized = false;
-  readonly isLoading = signal(true);
+  protected readonly isLoading = signal(true);
 
-  readonly selectedView = signal<string>('unit');
-  readonly items = signal<MetadataItem[]>([]);
+  protected readonly selectedView = signal<string>('unit');
+  protected readonly items = signal<MetadataItem[]>([]);
   readonly localMetadataValues = signal<VomdMetadata | undefined>(undefined); // Local copy of full metadata
 
-  readonly isEditing = signal(false);
+  protected readonly isEditing = signal(false);
   readonly hasChanges = signal(false);
 
   constructor(
@@ -341,7 +341,7 @@ export class MetadataDialogComponent implements OnInit, OnDestroy {
     };
   }
 
-  onViewChange(): void {
+  protected onViewChange(): void {
     // We don't save here because the listener already updates local state on every change
     // But we need to update the form with the new view's data
     const form = this.metadataFormElement?.nativeElement;
@@ -350,7 +350,7 @@ export class MetadataDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  onEditModeChange(): void {
+  protected onEditModeChange(): void {
     const form = this.metadataFormElement?.nativeElement;
     if (form) {
       form.readonly = !this.isEditing();
@@ -361,7 +361,7 @@ export class MetadataDialogComponent implements OnInit, OnDestroy {
     this.hasChanges.set(true);
   }
 
-  updateItemProperty(prop: 'id' | 'variableId' | 'description', value: string): void {
+  protected updateItemProperty(prop: 'id' | 'variableId' | 'description', value: string): void {
     const item = this.getSelectedItem();
     if (item) {
       this.updateItems(this.items().map(current => (current.uuid === item.uuid ? { ...current, [prop]: value } : current)));
@@ -387,7 +387,7 @@ export class MetadataDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  close(save: boolean = false): void {
+  protected close(save: boolean = false): void {
     if (save) {
       // Ensure latest web component state is captured (should be covered by listener, but good to be sure)
       this.dialogRef.close(this.localMetadataValues());
@@ -396,7 +396,7 @@ export class MetadataDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  getSelectedItem(): MetadataItem | undefined {
+  protected getSelectedItem(): MetadataItem | undefined {
     if (this.selectedView() === 'unit') {
       return undefined;
     }

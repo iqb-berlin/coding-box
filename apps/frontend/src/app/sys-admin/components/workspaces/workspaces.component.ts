@@ -40,11 +40,11 @@ export class WorkspacesComponent {
 
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
   tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
-  readonly initialSelectedWorkspaceIds: number[] = [];
+  protected readonly initialSelectedWorkspaceIds: number[] = [];
   readonly selectedWorkspaces = signal<number[]>([]);
   readonly workspacesChanged = signal<boolean>(false);
   readonly isDeleting = signal<boolean>(false);
-  readonly deleteStatus = signal<string>('');
+  protected readonly deleteStatus = signal<string>('');
 
   @ViewChild(MatSort) sort = new MatSort();
 
@@ -142,7 +142,7 @@ export class WorkspacesComponent {
       );
   }
 
-  workspacesUpdated(): void {
+  protected workspacesUpdated(): void {
     this.workspacesChanged.set(false);
   }
 

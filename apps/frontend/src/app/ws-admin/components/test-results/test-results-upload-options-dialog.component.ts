@@ -42,27 +42,27 @@ export type TestResultsUploadOptionsDialogResult = {
   styleUrls: ['./test-results-upload-options-dialog.component.scss']
 })
 export class TestResultsUploadOptionsDialogComponent {
-  overwriteMode: OverwriteMode;
-  scope: UploadScope;
-  groupName = '';
-  bookletName = '';
-  unitNameOrAlias = '';
-  variableId = '';
-  subform = '';
+  protected overwriteMode: OverwriteMode;
+  protected scope: UploadScope;
+  protected groupName = '';
+  protected bookletName = '';
+  protected unitNameOrAlias = '';
+  protected variableId = '';
+  protected subform = '';
 
   constructor(
     private dialogRef: MatDialogRef<TestResultsUploadOptionsDialogComponent, TestResultsUploadOptionsDialogResult | undefined>,
-    @Inject(MAT_DIALOG_DATA) public data: TestResultsUploadOptionsDialogData
+    @Inject(MAT_DIALOG_DATA) protected data: TestResultsUploadOptionsDialogData
   ) {
     this.overwriteMode = data.defaultOverwriteMode || 'skip';
     this.scope = data.defaultScope || 'person';
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close(undefined);
   }
 
-  confirm(): void {
+  protected confirm(): void {
     this.dialogRef.close({
       overwriteMode: this.overwriteMode,
       scope: this.scope,

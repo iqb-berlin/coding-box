@@ -59,7 +59,7 @@ interface DatabaseExportJobState {
   ]
 })
 export class SysAdminSettingsComponent implements OnInit, OnDestroy {
-  appService = inject(AppService);
+  protected appService = inject(AppService);
   private http = inject(HttpClient);
   private logoService = inject(LogoService);
   private systemSettingsService = inject(SystemSettingsService);
@@ -69,22 +69,22 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
 
   private exportPollingSubscription: Subscription | null = null;
 
-  readonly selectedFile = signal<File | null>(null);
-  readonly previewUrl = signal<string | null>(null);
-  readonly isDefaultLogo = signal(true);
-  readonly logoAltText = signal('');
-  readonly backgroundColorValue = signal('');
+  protected readonly selectedFile = signal<File | null>(null);
+  protected readonly previewUrl = signal<string | null>(null);
+  protected readonly isDefaultLogo = signal(true);
+  protected readonly logoAltText = signal('');
+  protected readonly backgroundColorValue = signal('');
   readonly isExporting = signal(false);
-  readonly databaseExportProgress = signal(0);
+  protected readonly databaseExportProgress = signal(0);
   readonly databaseExportStatus = signal<DatabaseExportStatus | null>(null);
   readonly databaseExportError = signal<string | null>(null);
-  readonly isLoadingLegalNotice = signal(false);
-  readonly isSavingLegalNotice = signal(false);
+  protected readonly isLoadingLegalNotice = signal(false);
+  protected readonly isSavingLegalNotice = signal(false);
   readonly isLegalNoticeDefault = signal(true);
   readonly legalNoticeHtml = signal(defaultLegalNoticeHtml);
-  readonly legalNoticePreviewHtml = signal(this.sanitizeHtml(defaultLegalNoticeHtml));
-  readonly isLoadingContentPoolSettings = signal(false);
-  readonly isSavingContentPoolSettings = signal(false);
+  protected readonly legalNoticePreviewHtml = signal(this.sanitizeHtml(defaultLegalNoticeHtml));
+  protected readonly isLoadingContentPoolSettings = signal(false);
+  protected readonly isSavingContentPoolSettings = signal(false);
   readonly isTestingContentPoolConnection = signal(false);
   readonly contentPoolSettings = signal<ContentPoolSettings>({
     enabled: false,
@@ -93,7 +93,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   });
 
   readonly contentPoolApplicationToken = signal('');
-  readonly clearContentPoolApplicationToken = signal(false);
+  protected readonly clearContentPoolApplicationToken = signal(false);
 
   private readonly ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'];
   constructor() {
@@ -107,7 +107,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     this.loadContentPoolSettings();
   }
 
-  onFileSelected(event: Event): void {
+  protected onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     if (input.files && input.files.length > 0) {
       const selectedFile = input.files[0];
@@ -141,7 +141,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     reader.readAsDataURL(selectedFileSnapshot);
   }
 
-  resetFileInput(): void {
+  protected resetFileInput(): void {
     this.selectedFile.set(null);
     this.previewUrl.set(null);
     const fileInput = document.getElementById('logo-upload') as HTMLInputElement;
@@ -150,7 +150,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     }
   }
 
-  uploadLogo(): void {
+  protected uploadLogo(): void {
     const selectedFileSnapshot = this.selectedFile();
 
     if (!selectedFileSnapshot || !this.previewUrl()) return;
@@ -187,7 +187,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     });
   }
 
-  resetToDefaultLogo(): void {
+  protected resetToDefaultLogo(): void {
     this.logoService.deleteLogo().subscribe({
       next: response => {
         if (response.success) {
@@ -207,7 +207,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     });
   }
 
-  saveAltText(): void {
+  protected saveAltText(): void {
     const updatedLogo = {
       ...this.appService.appLogo,
       alt: this.logoAltText()
@@ -229,7 +229,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     });
   }
 
-  saveBackgroundColor(): void {
+  protected saveBackgroundColor(): void {
     const updatedLogo = {
       ...this.appService.appLogo,
       bodyBackground: this.backgroundColorValue()
@@ -250,7 +250,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     });
   }
 
-  resetToDefaultBackground(): void {
+  protected resetToDefaultBackground(): void {
     this.backgroundColorValue.set(standardLogo.bodyBackground || '');
     const updatedLogo = {
       ...this.appService.appLogo,
@@ -354,7 +354,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     });
   }
 
-  updateLegalNoticePreview(): void {
+  protected updateLegalNoticePreview(): void {
     this.legalNoticePreviewHtml.set(this.sanitizeHtml(this.legalNoticeHtml()));
   }
 
@@ -362,7 +362,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     this.stopExportPolling();
   }
 
-  getDatabaseExportStatusLabel(): string {
+  protected getDatabaseExportStatusLabel(): string {
     switch (this.databaseExportStatus()) {
       case 'queued':
         return 'In Warteschlange';
@@ -403,7 +403,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     });
   }
 
-  saveContentPoolSettings(): void {
+  protected saveContentPoolSettings(): void {
     const normalizedBaseUrl = (this.contentPoolSettings().baseUrl || '').trim();
     const applicationToken = this.contentPoolApplicationToken().trim();
     if (this.contentPoolSettings().enabled && !normalizedBaseUrl) {
@@ -462,12 +462,12 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
       });
   }
 
-  clearStoredContentPoolToken(): void {
+  protected clearStoredContentPoolToken(): void {
     this.contentPoolApplicationToken.set('');
     this.clearContentPoolApplicationToken.set(true);
   }
 
-  onContentPoolTokenInputChange(value: string): void {
+  protected onContentPoolTokenInputChange(value: string): void {
     if ((value || '').trim()) {
       this.clearContentPoolApplicationToken.set(false);
     }
@@ -686,7 +686,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     return fallback;
   }
 
-  setContentPoolSettingsField<K extends keyof ContentPoolSettings>(key: K, value: ContentPoolSettings[K]): void {
+  protected setContentPoolSettingsField<K extends keyof ContentPoolSettings>(key: K, value: ContentPoolSettings[K]): void {
     this.contentPoolSettings.update(current => (current ? { ...current, [key]: value } : current));
   }
 }

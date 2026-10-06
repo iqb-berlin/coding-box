@@ -75,13 +75,13 @@ interface BookletSearchResult {
 export class BookletSearchDialogComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly searchCancel$ = new Subject<void>();
-  bookletSearchText = '';
-  readonly bookletSearchResults = signal<BookletSearchResult[]>([]);
-  readonly isLoading = signal(false);
-  readonly totalResults = signal(0);
+  protected bookletSearchText = '';
+  protected readonly bookletSearchResults = signal<BookletSearchResult[]>([]);
+  protected readonly isLoading = signal(false);
+  protected readonly totalResults = signal(0);
   currentPage = 1;
-  pageSize = 10;
-  displayedColumns: string[] = ['bookletName', 'personCode', 'personLogin', 'personGroup', 'unitCount', 'actions'];
+  protected pageSize = 10;
+  protected displayedColumns: string[] = ['bookletName', 'personCode', 'personLogin', 'personGroup', 'unitCount', 'actions'];
   private searchSubject = new Subject<string>();
 
   constructor(
@@ -112,12 +112,12 @@ export class BookletSearchDialogComponent implements OnInit {
     }
   }
 
-  onBookletSearchChange(): void {
+  protected onBookletSearchChange(): void {
     this.isLoading.set(true);
     this.searchSubject.next(this.bookletSearchText);
   }
 
-  onPageChange(event: PageEvent): void {
+  protected onPageChange(event: PageEvent): void {
     this.currentPage = event.pageIndex + 1;
     this.pageSize = event.pageSize;
     this.searchBooklets(this.bookletSearchText);
@@ -152,11 +152,11 @@ export class BookletSearchDialogComponent implements OnInit {
     });
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 
-  viewBookletInfo(booklet: BookletSearchResult): void {
+  protected viewBookletInfo(booklet: BookletSearchResult): void {
     const loadingSnackBar = this.snackBar.open(
       'Lade Testheft-Informationen...',
       '',
@@ -192,7 +192,7 @@ export class BookletSearchDialogComponent implements OnInit {
     });
   }
 
-  deleteBooklet(booklet: BookletSearchResult): void {
+  protected deleteBooklet(booklet: BookletSearchResult): void {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: {
@@ -244,7 +244,7 @@ export class BookletSearchDialogComponent implements OnInit {
     });
   }
 
-  deleteAllBooklets(): void {
+  protected deleteAllBooklets(): void {
     if (this.bookletSearchResults().length === 0) {
       return;
     }

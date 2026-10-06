@@ -19,7 +19,7 @@ import { base64ToUtf8 } from '../../utils/common-utils';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  selector: 'app-item-list-dialog',
+  selector: 'coding-box-item-list-dialog',
   standalone: true,
   imports: [
     MatDialogModule,
@@ -41,20 +41,20 @@ export class ItemListDialogComponent implements OnInit {
   private dialogRef = inject(MatDialogRef<ItemListDialogComponent>);
   private snackBar = inject(MatSnackBar);
 
-  readonly itemGroups = signal<{
+  protected readonly itemGroups = signal<{
     fileId: string;
     id: number;
     items: string[];
   }[]>([]);
 
-  readonly isLoading = signal(true);
-  readonly error = signal('');
+  protected readonly isLoading = signal(true);
+  protected readonly error = signal('');
 
   ngOnInit(): void {
     this.loadItemIds();
   }
 
-  loadItemIds(): void {
+  protected loadItemIds(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.error.set('Kein Workspace ausgewählt.');
@@ -149,7 +149,7 @@ export class ItemListDialogComponent implements OnInit {
     }
   }
 
-  close(): void {
+  protected close(): void {
     this.dialogRef.close();
   }
 }
