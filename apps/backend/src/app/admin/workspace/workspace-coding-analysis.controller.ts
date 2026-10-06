@@ -741,7 +741,7 @@ export class WorkspaceCodingAnalysisController {
   })
   async saveAggregationSettings(
   @WorkspaceId() workspace_id: number,
-                 @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCodingAnalysisController_saveAggregationSettings)) body: { threshold?: number; flags?: ResponseMatchingFlag[] } = {}
+                 @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCodingAnalysisController_saveAggregationSettings, true)) body: { threshold?: number; flags?: ResponseMatchingFlag[] } = {}
   ) {
     const threshold = this.normalizeIntegerParam(body.threshold, 2, 2, 100);
     return this.codingAnalysisService.saveAggregationSettings(
