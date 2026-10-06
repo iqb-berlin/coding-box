@@ -31,10 +31,16 @@ Mock-Provider und Daten sind an die aktuellen Dienste und Dialogabläufe angepas
 Pipeline #102989 auf `151cddda` bestand alle elf Jobs. Die anschließende Prüfung
 des Browser-Protokolls zeigte jedoch einen leeren Lauf der ersten Component-Spec:
 Nur fünf der sechs Fälle wurden ausgeführt. Deshalb lehnen beide Browser-Targets
-über `after:spec` einen Lauf ohne Tests ab. Für den kalten Angular-Compiler erlaubt
-die Component-Konfiguration 120 Sekunden Seitenladezeit; Retries bleiben aus.
-Die acht Quality-Gate-Tests prüfen auch, dass ein leerer Spec-Lauf fehlschlägt.
-Der abschließende CI-Nachweis muss diesen zusätzlichen Schutz enthalten.
+über `after:spec` einen Lauf ohne Tests ab. Pipeline #102990 auf `7a7a5a81`
+bestätigte den Schutz: Der erneute leere Lauf ließ den Browser-Job fehlschlagen;
+mehr Seitenladezeit beseitigte die Ursache nicht. Die Component-Konfiguration
+verwendet deshalb `justInTimeCompile: false`, damit alle sechs Specs vorab
+kompiliert werden. Cypress 15 kann mit Webpack-JIT den Runner vor dem Ende der
+Spec-Kompilierung starten; der Upstream-Fix ist noch offen:
+https://github.com/cypress-io/cypress/pull/34120. Component-Tests laufen im
+gleichen Job vor E2E, Retries bleiben aus. Die acht Quality-Gate-Tests prüfen
+auch, dass ein leerer Spec-Lauf fehlschlägt. Der abschließende CI-Nachweis muss
+den Schutz und die vorab kompilierten Component-Specs enthalten.
 
 ## Prüfinfrastruktur
 
