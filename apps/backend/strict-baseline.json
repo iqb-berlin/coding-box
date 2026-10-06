@@ -1,0 +1,1337 @@
+{
+  "description": "Legacy strict diagnostics from PR 1047, including existing bodies relocated to feature providers. Only prune, never expand.",
+  "diagnostics": [
+    {
+      "file": "apps/backend/src/app/admin/code-book/codebook-generator.class.ts",
+      "code": 18048,
+      "message": "'variableCoding.codes' is possibly 'undefined'.",
+      "count": 4
+    },
+    {
+      "file": "apps/backend/src/app/admin/code-book/codebook-generator.class.ts",
+      "code": 2322,
+      "message": "Type 'string | undefined' is not assignable to type 'string'.\n  Type 'undefined' is not assignable to type 'string'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/admin/code-book/codebook-generator.class.ts",
+      "code": 2345,
+      "message": "Argument of type 'CodeData[] | undefined' is not assignable to parameter of type 'CodeData[]'.\n  Type 'undefined' is not assignable to type 'CodeData[]'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/admin/coding-jobs/coding-jobs.controller.ts",
+      "code": 2322,
+      "message": "Type '{ id: number; unitid: number; variableid: string; status: ResponseStatusType; value: string; subform: string; code_v1: number | null; score_v1: number | null; status_v1: ResponseStatusType | null; unit: { ...; }; }[]' is not assignable to type '{ id: number; unitid: number; variableid: string; status: string; value: string; subform: string; code_v1: number; score_v1: number; status_v1: string; unit: { id: number; name: string; alias: string; }; }[]'.\n  Type '{ id: number; unitid: number; variableid: string; status: ResponseStatusType; value: string; subform: string; code_v1: number | null; score_v1: number | null; status_v1: ResponseStatusType | null; unit: { ...; }; }' is not assignable to type '{ id: number; unitid: number; variableid: string; status: string; value: string; subform: string; code_v1: number; score_v1: number; status_v1: string; unit: { id: number; name: string; alias: string; }; }'.\n    Types of property 'code_v1' are incompatible.\n      Type 'number | null' is not assignable to type 'number'.\n        Type 'null' is not assignable to type 'number'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/admin/coding-jobs/coding-jobs.controller.ts",
+      "code": 2345,
+      "message": "Argument of type 'number | null' is not assignable to parameter of type 'number'.\n  Type 'null' is not assignable to type 'number'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/admin/content-pool/content-pool-integration.service.ts",
+      "code": 18046,
+      "message": "'payload.capabilities' is of type 'unknown'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/admin/content-pool/content-pool-integration.service.ts",
+      "code": 18048,
+      "message": "'replacement.snapshot' is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/admin/database/database-export.processor.ts",
+      "code": 2339,
+      "message": "Property 'message' does not exist on type '{}'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/admin/database/database-export.processor.ts",
+      "code": 2339,
+      "message": "Property 'stack' does not exist on type '{}'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/admin/database/database-export.service.ts",
+      "code": 2339,
+      "message": "Property 'message' does not exist on type '{}'.",
+      "count": 6
+    },
+    {
+      "file": "apps/backend/src/app/admin/database/database-export.service.ts",
+      "code": 2339,
+      "message": "Property 'stack' does not exist on type '{}'.",
+      "count": 6
+    },
+    {
+      "file": "apps/backend/src/app/admin/database/database-export.service.ts",
+      "code": 2554,
+      "message": "Expected 1 arguments, but got 2.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/admin/database/database-export.service.ts",
+      "code": 7006,
+      "message": "Parameter 'col' implicitly has an 'any' type.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/admin/database/database-export.service.ts",
+      "code": 7006,
+      "message": "Parameter 'row' implicitly has an 'any' type.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/admin/database/database-export.service.ts",
+      "code": 7006,
+      "message": "Parameter 'table' implicitly has an 'any' type.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/admin/database/database-export.service.ts",
+      "code": 7006,
+      "message": "Parameter 'tableName' implicitly has an 'any' type.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/admin/resource-packages/file-mimetype-filter.ts",
+      "code": 7006,
+      "message": "Parameter 'req' implicitly has an 'any' type.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/admin/users/users.controller.ts",
+      "code": 7006,
+      "message": "Parameter 'req' implicitly has an 'any' type.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/admin/variable-analysis/dto/variable-analysis-job.dto.ts",
+      "code": 2322,
+      "message": "Type 'number | undefined' is not assignable to type 'number'.\n  Type 'undefined' is not assignable to type 'number'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/admin/variable-analysis/dto/variable-analysis-job.dto.ts",
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.\n    Argument of type 'number | Date | undefined' is not assignable to parameter of type 'string | number | Date'.\n      Type 'undefined' is not assignable to type 'string | number | Date'.\n  Overload 2 of 4, '(value: string | number): Date', gave the following error.\n    Argument of type 'number | Date | undefined' is not assignable to parameter of type 'string | number'.\n      Type 'undefined' is not assignable to type 'string | number'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/admin/variable-analysis/variable-analysis.controller.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 15
+    },
+    {
+      "file": "apps/backend/src/app/admin/workspace/github-releases.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/admin/workspace/journal.controller.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/admin/workspace/workspace-coding-codebook.controller.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 8
+    },
+    {
+      "file": "apps/backend/src/app/admin/workspace/workspace-coding-codebook.controller.ts",
+      "code": 2322,
+      "message": "Type 'boolean | undefined' is not assignable to type 'boolean'.\n  Type 'undefined' is not assignable to type 'boolean'.",
+      "count": 8
+    },
+    {
+      "file": "apps/backend/src/app/admin/workspace/workspace-coding-export.controller.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 14
+    },
+    {
+      "file": "apps/backend/src/app/admin/workspace/workspace-coding-import.controller.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/admin/workspace/workspace-coding-statistics.controller.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 8
+    },
+    {
+      "file": "apps/backend/src/app/admin/workspace/workspace-files-content.controller.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/admin/workspace/workspace-files-content.controller.ts",
+      "code": 2322,
+      "message": "Type 'FileDownloadDto | null' is not assignable to type 'FileDownloadDto'.\n  Type 'null' is not assignable to type 'FileDownloadDto'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/admin/workspace/workspace-test-results-export.controller.ts",
+      "code": 2322,
+      "message": "Type 'string | undefined' is not assignable to type 'string'.\n  Type 'undefined' is not assignable to type 'string'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/cache/cache.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 20
+    },
+    {
+      "file": "apps/backend/src/app/cache/response-cache-scheduler.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 6
+    },
+    {
+      "file": "apps/backend/src/app/cache/response-cache-scheduler.service.ts",
+      "code": 2532,
+      "message": "Object is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/database.module.ts",
+      "code": 2532,
+      "message": "Object is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/codebook-generation.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/codebook-generation.service.ts",
+      "code": 18046,
+      "message": "'parseError' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coder-training-results-apply.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coder-training-results-apply.service.ts",
+      "code": 7006,
+      "message": "Parameter 'row' implicitly has an 'any' type.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coder-training.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 9
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coder-training.service.ts",
+      "code": 2322,
+      "message": "Type '{ id: number; workspace_id: number; label: string; created_at: Date; updated_at: Date; jobsCount: number; case_ordering_mode: CaseOrderingMode; case_selection_mode: CaseSelectionMode; ... 7 more ...; assigned_coders: number[]; }[]' is not assignable to type 'CoderTrainingWithJobs[]'.\n  Type '{ id: number; workspace_id: number; label: string; created_at: Date; updated_at: Date; jobsCount: number; case_ordering_mode: CaseOrderingMode; case_selection_mode: CaseSelectionMode; ... 7 more ...; assigned_coders: number[]; }' is not assignable to type 'CoderTrainingWithJobs'.\n    Types of property 'assigned_variable_bundles' are incompatible.\n      Type '{ id: number; name: string; sampleCount: number; caseOrderingMode: CaseOrderingMode | null; variables: { includeDeriveError?: true | undefined; sampleCount: number; unitName: string; variableId: string; }[]; }[]' is not assignable to type 'JobDefinitionVariableBundle[]'.\n        Type '{ id: number; name: string; sampleCount: number; caseOrderingMode: CaseOrderingMode | null; variables: { includeDeriveError?: true | undefined; sampleCount: number; unitName: string; variableId: string; }[]; }' is not assignable to type 'JobDefinitionVariableBundle'.\n          Types of property 'caseOrderingMode' are incompatible.\n            Type 'CaseOrderingMode | null' is not assignable to type 'CaseOrderingMode | undefined'.\n              Type 'null' is not assignable to type 'CaseOrderingMode | undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coder-training.service.ts",
+      "code": 2322,
+      "message": "Type 'number | null' is not assignable to type 'number'.\n  Type 'null' is not assignable to type 'number'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coder-training.service.ts",
+      "code": 2322,
+      "message": "Type 'number | undefined' is not assignable to type 'number'.\n  Type 'undefined' is not assignable to type 'number'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coder-training.service.ts",
+      "code": 2345,
+      "message": "Argument of type 'CaseOrderingMode | null' is not assignable to parameter of type '\"continuous\" | \"alternating\"'.\n  Type 'null' is not assignable to type '\"continuous\" | \"alternating\"'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-aggregation-peer.service.ts",
+      "code": 7006,
+      "message": "Parameter 'subQuery' implicitly has an 'any' type.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-analysis.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 6
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-export.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 6
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-export.service.ts",
+      "code": 2344,
+      "message": "Type 'unknown' does not satisfy the constraint 'ObjectLiteral'.",
+      "count": 4
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-export.service.ts",
+      "code": 2345,
+      "message": "Argument of type '(number | null)[]' is not assignable to parameter of type 'number[]'.\n  Type 'number | null' is not assignable to type 'number'.\n    Type 'null' is not assignable to type 'number'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-export.service.ts",
+      "code": 2345,
+      "message": "Argument of type 'unknown' is not assignable to parameter of type 'Error'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-file-cache.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-freshness.service.ts",
+      "code": 2344,
+      "message": "Type 'T' does not satisfy the constraint 'ObjectLiteral'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-item-builder.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-job-distribution.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-job-mutation.service.ts",
+      "code": 2345,
+      "message": "Argument of type '(number | undefined)[]' is not assignable to parameter of type 'number[]'.\n  Type 'number | undefined' is not assignable to type 'number'.\n    Type 'undefined' is not assignable to type 'number'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-job-operations.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-job-progress.service.ts",
+      "code": 2322,
+      "message": "Type 'Partial<CodingJobUnit>' is not assignable to type 'FindOptionsWhere<CodingJobUnit> | FindOptionsWhere<CodingJobUnit>[] | undefined'.\n  Type 'Partial<CodingJobUnit>' is not assignable to type 'FindOptionsWhere<CodingJobUnit>'.\n    Types of property 'workspace_id' are incompatible.\n      Type 'number | null | undefined' is not assignable to type 'number | FindOperator<number> | undefined'.\n        Type 'null' is not assignable to type 'number | FindOperator<number> | undefined'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-job-progress.service.ts",
+      "code": 2339,
+      "message": "Property 'id' does not exist on type 'CodingJob[]'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-job-progress.service.ts",
+      "code": 2352,
+      "message": "Conversion of type '{ codingJobCoders: CodingJobCoder[]; length: number; toString(): string; toLocaleString(): string; toLocaleString(locales: string | string[], options?: Intl.NumberFormatOptions & Intl.DateTimeFormatOptions): string; ... 30 more ...; [Symbol.unscopables]: { ...; }; }' to type 'CodingJob' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.\n  Type '{ codingJobCoders: CodingJobCoder[]; length: number; toString(): string; toLocaleString(): string; toLocaleString(locales: string | string[], options?: (NumberFormatOptions & DateTimeFormatOptions) | undefined): string; ... 30 more ...; [Symbol.unscopables]: { ...; }; }' is missing the following properties from type 'CodingJob': id, workspace_id, name, job_type, and 18 more.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-job-progress.service.ts",
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 3, '(entityLikeArray: DeepPartial<CodingJob>[]): CodingJob[]', gave the following error.\n    Object literal may only specify known properties, and 'workspace_id' does not exist in type 'DeepPartial<CodingJob>[]'.\n  Overload 2 of 3, '(entityLike: DeepPartial<CodingJob>): CodingJob', gave the following error.\n    Type 'null' is not assignable to type 'DeepPartial<string | undefined>'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-job-query.service.ts",
+      "code": 2344,
+      "message": "Type 'T' does not satisfy the constraint 'ObjectLiteral'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-job-scheme.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-job-type.util.ts",
+      "code": 2344,
+      "message": "Type 'T' does not satisfy the constraint 'ObjectLiteral'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-list-export.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-list-query.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-list-stream.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 12
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-list-stream.service.ts",
+      "code": 2345,
+      "message": "Argument of type 'unknown' is not assignable to parameter of type 'Error | undefined'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-list-stream.service.ts",
+      "code": 2345,
+      "message": "Argument of type 'unknown' is not assignable to parameter of type 'Error'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-process.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 9
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-process.service.ts",
+      "code": 18047,
+      "message": "'target.tuple' is possibly 'null'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-process.service.ts",
+      "code": 2322,
+      "message": "Type 'number | null' is not assignable to type 'number | undefined'.\n  Type 'null' is not assignable to type 'number | undefined'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-process.service.ts",
+      "code": 2345,
+      "message": "Argument of type 'string | null' is not assignable to parameter of type 'string | undefined'.\n  Type 'null' is not assignable to type 'string | undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-process.service.ts",
+      "code": 7005,
+      "message": "Variable 'nonCodingStatuses' implicitly has an 'any[]' type.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-process.service.ts",
+      "code": 7034,
+      "message": "Variable 'nonCodingStatuses' implicitly has type 'any[]' in some locations where its type cannot be determined.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-progress.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-progress.service.ts",
+      "code": 7006,
+      "message": "Parameter 'subQuery' implicitly has an 'any' type.",
+      "count": 5
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-replay-anchor.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-replay.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 6
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-response-query.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 4
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-results-export.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 18
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-results-export.service.ts",
+      "code": 2322,
+      "message": "Type 'number | null | undefined' is not assignable to type 'number | null'.\n  Type 'undefined' is not assignable to type 'number | null'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-results-export.service.ts",
+      "code": 2345,
+      "message": "Argument of type '(number | null)[]' is not assignable to parameter of type 'number[]'.\n  Type 'number | null' is not assignable to type 'number'.\n    Type 'null' is not assignable to type 'number'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-results.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 15
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-results.service.ts",
+      "code": 2322,
+      "message": "Type 'number | null' is not assignable to type 'number'.\n  Type 'null' is not assignable to type 'number'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-results.service.ts",
+      "code": 7006,
+      "message": "Parameter 'row' implicitly has an 'any' type.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-statistics.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 15
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-statistics.service.ts",
+      "code": 18048,
+      "message": "'statistics.baseResponseCount' is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-statistics.service.ts",
+      "code": 18048,
+      "message": "'statistics.derivedResponseCount' is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-statistics.service.ts",
+      "code": 18048,
+      "message": "'statistics.derivedStatusCounts' is possibly 'undefined'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-statistics.service.ts",
+      "code": 7006,
+      "message": "Parameter 'id' implicitly has an 'any' type.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-statistics.service.ts",
+      "code": 7006,
+      "message": "Parameter 'result' implicitly has an 'any' type.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-statistics.service.ts",
+      "code": 7006,
+      "message": "Parameter 'row' implicitly has an 'any' type.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-times-export.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-validation.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 11
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-validation.service.ts",
+      "code": 2345,
+      "message": "Argument of type 'number | null' is not assignable to parameter of type 'number'.\n  Type 'null' is not assignable to type 'number'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/coding-version.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/double-coding-review-decision.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 9
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/double-coding-review-query.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 4
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/external-coding-import.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 8
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/external-coding-import.service.ts",
+      "code": 18046,
+      "message": "'rollbackError' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/external-coding-import.service.ts",
+      "code": 18046,
+      "message": "'rowError' is of type 'unknown'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/external-coding-import.service.ts",
+      "code": 18048,
+      "message": "'variableCoding.codes' is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/external-coding-import.service.ts",
+      "code": 2322,
+      "message": "Type '(headers: string[]) => string[]' is not assignable to type 'boolean | HeaderTransformFunction | HeaderArray | undefined'.\n  Type '(headers: string[]) => string[]' is not assignable to type 'HeaderTransformFunction'.\n    Types of parameters 'headers' and 'headers' are incompatible.\n      Type 'HeaderArray' is not assignable to type 'string[]'.\n        Type 'string | null | undefined' is not assignable to type 'string'.\n          Type 'undefined' is not assignable to type 'string'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/external-coding-import.service.ts",
+      "code": 2322,
+      "message": "Type 'string | undefined' is not assignable to type 'string'.\n  Type 'undefined' is not assignable to type 'string'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/coding/missings-profiles.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 16
+    },
+    {
+      "file": "apps/backend/src/app/database/services/jobs/bull-job-management.service.ts",
+      "code": 18046,
+      "message": "'bullError' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/jobs/bull-job-management.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 9
+    },
+    {
+      "file": "apps/backend/src/app/database/services/jobs/job.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 8
+    },
+    {
+      "file": "apps/backend/src/app/database/services/shared/journal.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 12
+    },
+    {
+      "file": "apps/backend/src/app/database/services/shared/lru-cache.ts",
+      "code": 2345,
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'.\n  Type 'undefined' is not assignable to type 'string'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/person-data-processing.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 11
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/person-persistence.service.ts",
+      "code": 18046,
+      "message": "'bookletError' is of type 'unknown'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/person-persistence.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 14
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/person-persistence.service.ts",
+      "code": 18046,
+      "message": "'unitError' is of type 'unknown'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/person-persistence.service.ts",
+      "code": 18048,
+      "message": "'result.affected' is possibly 'undefined'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/person-persistence.service.ts",
+      "code": 2345,
+      "message": "Argument of type 'DeepPartial<ResponseEntity>[]' is not assignable to parameter of type 'Partial<ResponseEntity>[]'.\n  Type 'DeepPartial<ResponseEntity>' is not assignable to type 'Partial<ResponseEntity>'.\n    Type '{ id?: number | undefined; unitid?: number | undefined; variableid?: string | undefined; status?: number | undefined; value?: string | undefined; subform?: string | undefined; is_autocoder_generated?: DeepPartial<...>; ... 11 more ...; unit?: DeepPartial<...> | undefined; }' is not assignable to type 'Partial<ResponseEntity>'.\n      Types of property 'unit' are incompatible.\n        Type 'DeepPartial<Unit> | undefined' is not assignable to type 'Unit | undefined'.\n          Type '{ id?: number | undefined; bookletid?: number | undefined; name?: string | undefined; alias?: string | undefined; booklet?: DeepPartial<Booklet> | undefined; ... 5 more ...; notes?: DeepPartial<...> | undefined; }' is not assignable to type 'Unit'.\n            Types of property 'id' are incompatible.\n              Type 'number | undefined' is not assignable to type 'number'.\n                Type 'undefined' is not assignable to type 'number'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/person-persistence.service.ts",
+      "code": 2769,
+      "message": "No overload matches this call.\n  Overload 1 of 4, '(entities: DeepPartial<ResponseEntity>[], options?: SaveOptions | undefined): Promise<(DeepPartial<ResponseEntity> & ResponseEntity)[]>', gave the following error.\n    Argument of type 'ResponseInsertEntry[]' is not assignable to parameter of type 'DeepPartial<ResponseEntity>[]'.\n      Type 'ResponseInsertEntry' is not assignable to type 'DeepPartial<ResponseEntity>'.\n        Type 'ResponseInsertEntry' is not assignable to type '{ id?: number | undefined; unitid?: number | undefined; variableid?: string | undefined; status?: number | undefined; value?: string | undefined; subform?: string | undefined; is_autocoder_generated?: DeepPartial<...>; ... 11 more ...; unit?: DeepPartial<...> | undefined; }'.\n          Types of property 'value' are incompatible.\n            Type 'string | null' is not assignable to type 'string | undefined'.\n              Type 'null' is not assignable to type 'string | undefined'.\n  Overload 2 of 4, '(entity: DeepPartial<ResponseEntity>, options?: SaveOptions | undefined): Promise<DeepPartial<ResponseEntity> & ResponseEntity>', gave the following error.\n    Argument of type 'ResponseInsertEntry[]' is not assignable to parameter of type 'DeepPartial<ResponseEntity>'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/person-persistence.service.ts",
+      "code": 7015,
+      "message": "Element implicitly has an 'any' type because index expression is not of type 'number'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/person-query.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 7
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/person-query.service.ts",
+      "code": 2344,
+      "message": "Type 'unknown' does not satisfy the constraint 'ObjectLiteral'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/person.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 11
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/replay-statistics.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 22
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/response-management.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/response-management.service.ts",
+      "code": 18046,
+      "message": "'rollbackError' is of type 'unknown'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/response-management.service.ts",
+      "code": 2322,
+      "message": "Type 'number' is not assignable to type 'null'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/response-management.service.ts",
+      "code": 2322,
+      "message": "Type 'string | null' is not assignable to type 'string | undefined'.\n  Type 'null' is not assignable to type 'string | undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/response-management.service.ts",
+      "code": 2345,
+      "message": "Argument of type 'string | null' is not assignable to parameter of type 'string'.\n  Type 'null' is not assignable to type 'string'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/response-management.service.ts",
+      "code": 2345,
+      "message": "Argument of type 'string' is not assignable to parameter of type 'never'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/testcenter.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 4
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/testcenter.service.ts",
+      "code": 18046,
+      "message": "'statsError' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/testcenter.service.ts",
+      "code": 2339,
+      "message": "Property 'message' does not exist on type '{}'.",
+      "count": 4
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/upload-results.service.ts",
+      "code": 18046,
+      "message": "'e' is of type 'unknown'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/upload-results.service.ts",
+      "code": 2345,
+      "message": "Argument of type '(row: T) => T' is not assignable to parameter of type 'RowTransformFunction<Row, Row>'.\n  Type '(row: T) => T' is not assignable to type 'SyncRowTransform<Row, Row>'.\n    Types of parameters 'row' and 'row' are incompatible.\n      Type 'Row' is not assignable to type 'T'.\n        'T' could be instantiated with an arbitrary type which could be unrelated to 'Row'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/upload-results.service.ts",
+      "code": 2345,
+      "message": "Argument of type '\"unit\" | \"booklet\" | \"workspace\" | \"group\" | \"response\" | \"person\" | undefined' is not assignable to parameter of type '\"unit\" | \"booklet\" | \"workspace\" | \"group\" | \"response\" | \"person\"'.\n  Type 'undefined' is not assignable to type '\"unit\" | \"booklet\" | \"workspace\" | \"group\" | \"response\" | \"person\"'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/upload-results.service.ts",
+      "code": 2345,
+      "message": "Argument of type 'unknown' is not assignable to parameter of type 'Error | undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/upload-results.service.ts",
+      "code": 2790,
+      "message": "The operand of a 'delete' operator must be optional.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/variable-analysis-replay.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 4
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/workspace-test-results.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 12
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/workspace-test-results.service.ts",
+      "code": 2322,
+      "message": "Type '{ unitId: number; unitName: string; unitAlias: string; bookletId: number; bookletName: string; personId: number; personLogin: string; personCode: string; personGroup: string; tags: { id: number; unitId: number; tag: string; color?: string | undefined; createdAt: Date; }[]; responses: { ...; }[]; }[]' is not assignable to type '{ unitId: number; unitName: string; unitAlias: string | null; bookletId: number; bookletName: string; personId: number; personLogin: string; personCode: string; personGroup: string; tags: { id: number; unitId: number; tag: string; color?: string | undefined; createdAt: Date; }[]; responses: { ...; }[]; }[]'.\n  Type '{ unitId: number; unitName: string; unitAlias: string; bookletId: number; bookletName: string; personId: number; personLogin: string; personCode: string; personGroup: string; tags: { id: number; unitId: number; tag: string; color?: string; createdAt: Date; }[]; responses: { ...; }[]; }' is not assignable to type '{ unitId: number; unitName: string; unitAlias: string | null; bookletId: number; bookletName: string; personId: number; personLogin: string; personCode: string; personGroup: string; tags: { id: number; unitId: number; tag: string; color?: string | undefined; createdAt: Date; }[]; responses: { ...; }[]; }'.\n    Types of property 'responses' are incompatible.\n      Type '{ variableId: string; value: string; status: ResponseStatusType; code: number | null; score: number | null; codedStatus: ResponseStatusType; }[]' is not assignable to type '{ variableId: string; value: string; status: string; code?: number | undefined; score?: number | undefined; codedStatus?: string | undefined; }[]'.\n        Type '{ variableId: string; value: string; status: ResponseStatusType; code: number | null; score: number | null; codedStatus: ResponseStatusType; }' is not assignable to type '{ variableId: string; value: string; status: string; code?: number | undefined; score?: number | undefined; codedStatus?: string | undefined; }'.\n          Types of property 'code' are incompatible.\n            Type 'number | null' is not assignable to type 'number | undefined'.\n              Type 'null' is not assignable to type 'number | undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/workspace-test-results.service.ts",
+      "code": 2322,
+      "message": "Type 'null' is not assignable to type 'string | boolean | undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/workspace-test-results.service.ts",
+      "code": 2322,
+      "message": "Type 'number' is not assignable to type 'null'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/workspace-test-results.service.ts",
+      "code": 2322,
+      "message": "Type 'number[]' is not assignable to type 'never[]'.\n  Type 'number' is not assignable to type 'never'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/workspace-test-results.service.ts",
+      "code": 2339,
+      "message": "Property 'ts' does not exist on type 'never'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/workspace-test-results.service.ts",
+      "code": 2344,
+      "message": "Type 'unknown' does not satisfy the constraint 'ObjectLiteral'.",
+      "count": 6
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/workspace-test-results.service.ts",
+      "code": 2345,
+      "message": "Argument of type '{ id: number; unitid: number; variableid: string; status: ResponseStatusType; value: string; subform: string; code: number | null; score: number | null; codedstatus: ResponseStatusType; }[]' is not assignable to parameter of type '{ id: number; unitid: number; variableid: string; status: string; value: string; subform: string; code?: number | undefined; score?: number | undefined; codedstatus?: string | undefined; }[]'.\n  Type '{ id: number; unitid: number; variableid: string; status: ResponseStatusType; value: string; subform: string; code: number | null; score: number | null; codedstatus: ResponseStatusType; }' is not assignable to type '{ id: number; unitid: number; variableid: string; status: string; value: string; subform: string; code?: number | undefined; score?: number | undefined; codedstatus?: string | undefined; }'.\n    Types of property 'code' are incompatible.\n      Type 'number | null' is not assignable to type 'number | undefined'.\n        Type 'null' is not assignable to type 'number | undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/workspace-test-results.service.ts",
+      "code": 2345,
+      "message": "Argument of type 'number | null' is not assignable to parameter of type 'number'.\n  Type 'null' is not assignable to type 'number'.",
+      "count": 6
+    },
+    {
+      "file": "apps/backend/src/app/database/services/test-results/workspace-test-results.service.ts",
+      "code": 2345,
+      "message": "Argument of type 'string' is not assignable to parameter of type 'never'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/users/users.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/validation/export-validation-results.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/validation/validation-task.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 8
+    },
+    {
+      "file": "apps/backend/src/app/database/services/validation/validation-task.service.ts",
+      "code": 18046,
+      "message": "'innerError' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/validation/workspace-response-validation.service.ts",
+      "code": 18048,
+      "message": "'variableInfo' is possibly 'undefined'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/unit-info.service.ts",
+      "code": 18048,
+      "message": "'codingSchemeRefElement.$' is possibly 'undefined'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/unit-info.service.ts",
+      "code": 18048,
+      "message": "'definitionElement.$' is possibly 'undefined'.",
+      "count": 4
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/unit-info.service.ts",
+      "code": 18048,
+      "message": "'definitionRefElement.$' is possibly 'undefined'.",
+      "count": 4
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/unit-info.service.ts",
+      "code": 18048,
+      "message": "'metadataElement.Id' is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/unit-info.service.ts",
+      "code": 18048,
+      "message": "'metadataElement.Label' is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/unit-info.service.ts",
+      "code": 18048,
+      "message": "'result.Unit.Metadata' is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/unit-info.service.ts",
+      "code": 18048,
+      "message": "'variable.values' is possibly 'undefined'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/unit-info.service.ts",
+      "code": 2454,
+      "message": "Variable 'definition' is used before being assigned.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/unit-note.service.ts",
+      "code": 18049,
+      "message": "'result.affected' is possibly 'null' or 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/unit-tag.service.ts",
+      "code": 18049,
+      "message": "'result.affected' is possibly 'null' or 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/workspace-core.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/workspace-core.service.ts",
+      "code": 2322,
+      "message": "Type 'WorkspaceSettingsDto | undefined' is not assignable to type '{}'.\n  Type 'undefined' is not assignable to type '{}'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/workspace-exclusion-query.util.ts",
+      "code": 2344,
+      "message": "Type 'T' does not satisfy the constraint 'ObjectLiteral'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/workspace-files.service.ts",
+      "code": 18046,
+      "message": "'cacheError' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/workspace-files.service.ts",
+      "code": 18046,
+      "message": "'e' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/workspace-files.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 40
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/workspace-files.service.ts",
+      "code": 18046,
+      "message": "'extractError' is of type 'unknown'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/workspace-files.service.ts",
+      "code": 18046,
+      "message": "'metadataError' is of type 'unknown'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/workspace-files.service.ts",
+      "code": 18048,
+      "message": "'response.responses' is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/workspace-files.service.ts",
+      "code": 2322,
+      "message": "Type '{ file_id: string | null; workspace_id: number; }' is not assignable to type 'FindOptionsWhere<FileUpload> | FindOptionsWhere<FileUpload>[] | undefined'.\n  Types of property 'file_id' are incompatible.\n    Type 'string | null' is not assignable to type 'string | FindOperator<string> | undefined'.\n      Type 'null' is not assignable to type 'string | FindOperator<string> | undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/workspace-files.service.ts",
+      "code": 2345,
+      "message": "Argument of type 'FileUpload' is not assignable to parameter of type '_QueryDeepPartialEntity<FileUpload> | _QueryDeepPartialEntity<FileUpload>[]'.\n  Type 'FileUpload' is not assignable to type '_QueryDeepPartialEntity<FileUpload>'.\n    Types of property 'structured_data' are incompatible.\n      Type 'StructuredFileData' is not assignable to type '(() => string) | _QueryDeepPartialEntity<StructuredFileData> | undefined'.\n        Type 'StructuredFileData' is not assignable to type '_QueryDeepPartialEntity<StructuredFileData>'.\n          Types of property 'extractedInfo' are incompatible.\n            Type '{ [key: string]: unknown; } | undefined' is not assignable to type '(() => string) | _QueryDeepPartialEntity<{ [key: string]: unknown; } | undefined>'.\n              Type '{ [key: string]: unknown; }' is not assignable to type '(() => string) | _QueryDeepPartialEntity<{ [key: string]: unknown; } | undefined>'.\n                Type '{ [key: string]: unknown; }' is not assignable to type '_QueryDeepPartialEntity<{ [key: string]: unknown; }>'.\n                  'string' index signatures are incompatible.\n                    Type 'unknown' is not assignable to type '(() => string) | _QueryDeepPartialEntity<unknown> | undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/workspace-files.service.ts",
+      "code": 2345,
+      "message": "Argument of type 'FileUpload[]' is not assignable to parameter of type '_QueryDeepPartialEntity<FileUpload> | _QueryDeepPartialEntity<FileUpload>[]'.\n  Type 'FileUpload[]' is not assignable to type '_QueryDeepPartialEntity<FileUpload>[]'.\n    Type 'FileUpload' is not assignable to type '_QueryDeepPartialEntity<FileUpload>'.\n      Types of property 'structured_data' are incompatible.\n        Type 'StructuredFileData' is not assignable to type '(() => string) | _QueryDeepPartialEntity<StructuredFileData> | undefined'.\n          Type 'StructuredFileData' is not assignable to type '_QueryDeepPartialEntity<StructuredFileData>'.\n            Types of property 'extractedInfo' are incompatible.\n              Type '{ [key: string]: unknown; } | undefined' is not assignable to type '(() => string) | _QueryDeepPartialEntity<{ [key: string]: unknown; } | undefined>'.\n                Type '{ [key: string]: unknown; }' is not assignable to type '(() => string) | _QueryDeepPartialEntity<{ [key: string]: unknown; } | undefined>'.\n                  Type '{ [key: string]: unknown; }' is not assignable to type '_QueryDeepPartialEntity<{ [key: string]: unknown; }>'.\n                    'string' index signatures are incompatible.\n                      Type 'unknown' is not assignable to type '(() => string) | _QueryDeepPartialEntity<unknown> | undefined'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/workspace-files.service.ts",
+      "code": 2345,
+      "message": "Argument of type 'string | undefined' is not assignable to parameter of type 'string'.\n  Type 'undefined' is not assignable to type 'string'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/workspace-files.service.ts",
+      "code": 2532,
+      "message": "Object is possibly 'undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/workspace-files.service.ts",
+      "code": 7053,
+      "message": "Element implicitly has an 'any' type because expression of type '\"@type\"' can't be used to index type '{}'.\n  Property '@type' does not exist on type '{}'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/workspace-player.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 6
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/workspace-player.service.ts",
+      "code": 2322,
+      "message": "Type 'Partial<Persons>' is not assignable to type 'FindOptionsWhere<Persons> | FindOptionsWhere<Persons>[] | undefined'.\n  Type 'Partial<Persons>' is not assignable to type 'FindOptionsWhere<Persons>'.\n    Types of property 'booklets_relation' are incompatible.\n      Type 'Booklet[] | undefined' is not assignable to type 'boolean | FindOperator<any> | Booklet | FindOptionsWhere<Booklet> | FindOptionsWhere<Booklet>[] | EqualOperator<...> | undefined'.\n        Type 'Booklet[]' is not assignable to type 'boolean | FindOperator<any> | Booklet | FindOptionsWhere<Booklet> | FindOptionsWhere<Booklet>[] | EqualOperator<...> | undefined'.\n          Type 'Booklet[]' is not assignable to type 'FindOptionsWhere<Booklet>[]'.\n            Type 'Booklet' is not assignable to type 'FindOptionsWhere<Booklet>'.\n              Types of property 'units' are incompatible.\n                Type 'Unit[]' is not assignable to type 'boolean | FindOperator<any> | Unit | FindOptionsWhere<Unit> | FindOptionsWhere<Unit>[] | EqualOperator<Unit> | undefined'.\n                  Type 'Unit[]' is not assignable to type 'FindOptionsWhere<Unit>[]'.\n                    Type 'Unit' is not assignable to type 'FindOptionsWhere<Unit>'.\n                      Types of property 'responses' are incompatible.\n                        Type 'ResponseEntity[]' is not assignable to type 'boolean | FindOperator<any> | ResponseEntity | FindOptionsWhere<ResponseEntity> | FindOptionsWhere<ResponseEntity>[] | EqualOperator<...> | undefined'.\n                          Type 'ResponseEntity[]' is not assignable to type 'FindOptionsWhere<ResponseEntity>[]'.\n                            Type 'ResponseEntity' is not assignable to type 'FindOptionsWhere<ResponseEntity>'.\n                              Types of property 'autocoder_invalidated_version' are incompatible.\n                                Type '\"v1\" | \"v2\" | null | undefined' is not assignable to type 'NonNullable<\"v1\" | \"v2\" | null | undefined> | FindOperator<NonNullable<\"v1\" | \"v2\" | null | undefined>> | undefined'.\n                                  Type 'null' is not assignable to type 'NonNullable<\"v1\" | \"v2\" | null | undefined> | FindOperator<NonNullable<\"v1\" | \"v2\" | null | undefined>> | undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/database/services/workspace/workspace-users.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/job-queue.service.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 20
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/job-queue.service.ts",
+      "code": 18046,
+      "message": "'readyError' is of type 'unknown'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/job-queue.service.ts",
+      "code": 2322,
+      "message": "Type 'Job<any> | null' is not assignable to type 'Job<CodebookGenerationJobData>'.\n  Type 'null' is not assignable to type 'Job<CodebookGenerationJobData>'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/job-queue.service.ts",
+      "code": 2322,
+      "message": "Type 'Job<any> | null' is not assignable to type 'Job<CodingAnalysisJobData>'.\n  Type 'null' is not assignable to type 'Job<CodingAnalysisJobData>'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/job-queue.service.ts",
+      "code": 2322,
+      "message": "Type 'Job<any> | null' is not assignable to type 'Job<CodingStatisticsJobData>'.\n  Type 'null' is not assignable to type 'Job<CodingStatisticsJobData>'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/job-queue.service.ts",
+      "code": 2322,
+      "message": "Type 'Job<any> | null' is not assignable to type 'Job<ExportJobData>'.\n  Type 'null' is not assignable to type 'Job<ExportJobData>'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/job-queue.service.ts",
+      "code": 2322,
+      "message": "Type 'Job<any> | null' is not assignable to type 'Job<ExternalCodingImportJobData>'.\n  Type 'null' is not assignable to type 'Job<ExternalCodingImportJobData>'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/job-queue.service.ts",
+      "code": 2322,
+      "message": "Type 'Job<any> | null' is not assignable to type 'Job<ResetCodingVersionJobData>'.\n  Type 'null' is not assignable to type 'Job<ResetCodingVersionJobData>'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/job-queue.service.ts",
+      "code": 2322,
+      "message": "Type 'Job<any> | null' is not assignable to type 'Job<TestPersonCodingJobData>'.\n  Type 'null' is not assignable to type 'Job<TestPersonCodingJobData>'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/job-queue.service.ts",
+      "code": 2322,
+      "message": "Type 'Job<any> | null' is not assignable to type 'Job<TestResultsUploadJobData>'.\n  Type 'null' is not assignable to type 'Job<TestResultsUploadJobData>'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/job-queue.service.ts",
+      "code": 2322,
+      "message": "Type 'Job<any> | null' is not assignable to type 'Job<ValidationTaskJobData>'.\n  Type 'null' is not assignable to type 'Job<ValidationTaskJobData>'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/job-queue.service.ts",
+      "code": 2322,
+      "message": "Type 'Job<any> | null' is not assignable to type 'Job<VariableAnalysisJobData>'.\n  Type 'null' is not assignable to type 'Job<VariableAnalysisJobData>'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/job-queue.service.ts",
+      "code": 2322,
+      "message": "Type 'Queue<any> | undefined' is not assignable to type 'Queue<any>'.\n  Type 'undefined' is not assignable to type 'Queue<any>'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/processors/codebook-generation.processor.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/processors/coding-analysis.processor.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/processors/coding-analysis.processor.ts",
+      "code": 2322,
+      "message": "Type 'number | null' is not assignable to type 'number | undefined'.\n  Type 'null' is not assignable to type 'number | undefined'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/processors/coding-statistics.processor.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/processors/export-job.processor.ts",
+      "code": 18046,
+      "message": "'cleanupError' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/processors/export-job.processor.ts",
+      "code": 18046,
+      "message": "'entryError' is of type 'unknown'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/processors/export-job.processor.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 4
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/processors/external-coding-import.processor.ts",
+      "code": 18046,
+      "message": "'cleanupError' is of type 'unknown'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/processors/external-coding-import.processor.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/processors/reset-coding-version.processor.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/processors/upload-results.processor.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/processors/validation-task.processor.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/app/job-queue/processors/variable-analysis.processor.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 4
+    },
+    {
+      "file": "apps/backend/src/app/utils/voud/extractVariableLocation.ts",
+      "code": 2345,
+      "message": "Argument of type '{ id: any; markingPanels: any; connectedTo: any; alwaysVisible: null; path: {}; }' is not assignable to parameter of type 'never'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/utils/voud/extractVariableLocation.ts",
+      "code": 2790,
+      "message": "The operand of a 'delete' operator must be optional.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/utils/voud/extractVariableLocation.ts",
+      "code": 7006,
+      "message": "Parameter '_' implicitly has an 'any' type.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/utils/voud/extractVariableLocation.ts",
+      "code": 7006,
+      "message": "Parameter 'arr' implicitly has an 'any' type.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/utils/voud/extractVariableLocation.ts",
+      "code": 7006,
+      "message": "Parameter 'currentObj' implicitly has an 'any' type.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/utils/voud/extractVariableLocation.ts",
+      "code": 7006,
+      "message": "Parameter 'data' implicitly has an 'any' type.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/utils/voud/extractVariableLocation.ts",
+      "code": 7006,
+      "message": "Parameter 'depId' implicitly has an 'any' type.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/utils/voud/extractVariableLocation.ts",
+      "code": 7006,
+      "message": "Parameter 'match' implicitly has an 'any' type.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/utils/voud/extractVariableLocation.ts",
+      "code": 7006,
+      "message": "Parameter 'node' implicitly has an 'any' type.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/utils/voud/extractVariableLocation.ts",
+      "code": 7031,
+      "message": "Binding element 'id' implicitly has an 'any' type.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/utils/voud/voud-inspector.ts",
+      "code": 18046,
+      "message": "'error' is of type 'unknown'.",
+      "count": 3
+    },
+    {
+      "file": "apps/backend/src/app/utils/voud/voud-inspector.ts",
+      "code": 7006,
+      "message": "Parameter 'filePathOrContent' implicitly has an 'any' type.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/app/wsg-admin/coding-job/coding-job.controller.ts",
+      "code": 2322,
+      "message": "Type 'number | undefined' is not assignable to type 'number'.\n  Type 'undefined' is not assignable to type 'number'.",
+      "count": 1
+    },
+    {
+      "file": "apps/backend/src/main.ts",
+      "code": 7006,
+      "message": "Parameter '_res' implicitly has an 'any' type.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/main.ts",
+      "code": 7006,
+      "message": "Parameter 'next' implicitly has an 'any' type.",
+      "count": 2
+    },
+    {
+      "file": "apps/backend/src/main.ts",
+      "code": 7006,
+      "message": "Parameter 'req' implicitly has an 'any' type.",
+      "count": 2
+    }
+  ]
+}
