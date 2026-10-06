@@ -240,7 +240,7 @@ build-cicd-base-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${REGISTRY_PASSWORD}" | docker login -u ${REGISTRY_USER} --password-stdin ${REGISTRY}
   script:
     - docker build
@@ -255,7 +255,7 @@ build-cicd-base-image:
         .
     - docker push -q ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${REGISTRY}
 
 .distributed:
@@ -290,7 +290,7 @@ build-db-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${REGISTRY_PASSWORD}" | docker login -u ${REGISTRY_USER} --password-stdin ${REGISTRY}
   script:
     - docker build
@@ -305,7 +305,7 @@ build-db-image:
         .
     - docker push -q -a ${DB_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${REGISTRY}
 
 build-liquibase-image:
@@ -327,7 +327,7 @@ build-liquibase-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${REGISTRY_PASSWORD}" | docker login -u ${REGISTRY_USER} --password-stdin ${REGISTRY}
   script:
     - docker build
@@ -342,7 +342,7 @@ build-liquibase-image:
         .
     - docker push -q -a ${LIQUIBASE_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${REGISTRY}
 
 build-app:
@@ -666,7 +666,7 @@ build-develop-commit-db-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
@@ -681,7 +681,7 @@ build-develop-commit-db-image:
         .
     - docker push --quiet --all-tags ${DB_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 build-develop-commit-liquibase-image:
@@ -702,7 +702,7 @@ build-develop-commit-liquibase-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
@@ -717,7 +717,7 @@ build-develop-commit-liquibase-image:
         .
     - docker push --quiet --all-tags ${LIQUIBASE_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 build-develop-commit-base-image:
@@ -738,7 +738,7 @@ build-develop-commit-base-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
@@ -750,7 +750,7 @@ build-develop-commit-base-image:
         .
     - docker push --quiet --all-tags ${BASE_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 build-develop-commit-backend-image:
@@ -774,7 +774,7 @@ build-develop-commit-backend-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
@@ -792,7 +792,7 @@ build-develop-commit-backend-image:
         .
     - docker push --quiet --all-tags ${BACKEND_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 build-develop-commit-frontend-image:
@@ -816,7 +816,7 @@ build-develop-commit-frontend-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
@@ -834,7 +834,7 @@ build-develop-commit-frontend-image:
         .
     - docker push --quiet --all-tags ${FRONTEND_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 scan-develop-commit-db-image:
