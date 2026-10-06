@@ -5,6 +5,7 @@ import { JobDefinition } from '../../entities/job-definition.entity';
 import { DERIVE_ERROR_STATUS } from '../../utils/manual-coding-candidate.util';
 import { CodingAggregationPeerService } from './coding-aggregation-peer.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
+import { JournalService } from '../shared/journal.service';
 
 jest.mock('../workspace/workspace-files.service', () => ({
   WorkspaceFilesService: class {}
@@ -104,6 +105,7 @@ describe('CodingJobService distribution from job definitions', () => {
   let cacheService: { delete: jest.Mock; incr: jest.Mock };
 
   beforeEach(() => {
+    jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     codingJobRepository = createRepo();
     const codingJobCoderRepository = createRepo();
     const codingJobVariableRepository = createRepo();

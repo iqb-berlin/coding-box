@@ -237,8 +237,9 @@ export class WorkspaceUsersController {
   @ApiBadRequestResponse({ description: 'Invalid user IDs or workspace ID' })
   @ApiTags('admin users')
   async setWorkspaceUsers(@Body() userIds: number[],
-    @Param('workspace_id', ParseIntPipe) workspaceId: number) {
-    return this.workspaceUsersService.setWorkspaceUsers(workspaceId, userIds);
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Req() request?: RequestWithUser) {
+    return this.workspaceUsersService.setWorkspaceUsers(workspaceId, userIds, request ? Number(request.user.id) : undefined);
   }
 
   @Get(':workspace_id/coders')

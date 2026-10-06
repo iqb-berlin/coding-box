@@ -14,6 +14,7 @@ import { CacheService } from '../../../cache/cache.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { CodingAnalysisService } from '../coding/coding-analysis.service';
+import { JournalService } from '../shared/journal.service';
 
 describe('TestCenterService', () => {
   let service: TestcenterService;
@@ -26,6 +27,7 @@ describe('TestCenterService', () => {
   let codingAnalysisService: DeepMocked<CodingAnalysisService>;
 
   beforeEach(async () => {
+    jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TestcenterService,
@@ -64,6 +66,7 @@ describe('TestCenterService', () => {
         {
           provide: DataSource,
           useValue: {
+            transaction: jest.fn(callback => callback({})),
             createQueryRunner: jest.fn().mockReturnValue({
               connect: jest.fn().mockResolvedValue(undefined),
               query: jest.fn().mockResolvedValue([]),
@@ -410,6 +413,60 @@ describe('TestCenterService', () => {
       metadata: 'false'
     };
 
+    describe('import summary audit', () => {
+      beforeEach(() => {
+        httpService.axiosRef.get.mockResolvedValue({ data: [] });
+        personService.createPersonList.mockResolvedValue([]);
+        personService.getImportStatistics.mockResolvedValue({ persons: 0, booklets: 0, units: 0 });
+      });
+
+      it('records trusted actor and correlation without credentials', async () => {
+        const result = await service.importWorkspaceFiles('123', 'tc', '1', '', 'secret-token', mockImportOptions, 'g1', true, undefined, 'run-1', 'skip', 7);
+        expect(result.success).toBe(true);
+        expect(JournalService.recordEventInTransaction).toHaveBeenCalledTimes(1);
+        expect(JournalService.recordEventInTransaction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+          workspaceId: 123, actorUserId: 7, actorType: 'user', eventType: 'TEST_RESULTS_IMPORTED', correlationId: 'run-1', result: 'success'
+        }));
+        expect(JSON.stringify(jest.mocked(JournalService.recordEventInTransaction).mock.calls)).not.toContain('secret-token');
+      });
+
+      it('preserves the committed result when only the summary audit fails', async () => {
+        jest.mocked(JournalService.recordEventInTransaction).mockRejectedValueOnce(new Error('audit unavailable'));
+        const result = await service.importWorkspaceFiles('123', 'tc', '1', '', 'token', mockImportOptions, 'g1');
+        expect(result.success).toBe(true);
+        expect(result.issues).toContainEqual(expect.objectContaining({ level: 'warning', message: expect.stringContaining('audit journal') }));
+        expect(httpService.axiosRef.get).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('updates freshness and caches for committed batches when a later audit fails', async () => {
+      const persons = Array.from({ length: 51 }, (_, index) => ({
+        workspace_id: 123, group: 'g1', login: `p${index}`, code: 'c', booklets: []
+      }));
+      httpService.axiosRef.get.mockResolvedValue({
+        data: persons.map(person => ({
+          groupname: person.group, loginname: person.login, code: person.code
+        }))
+      });
+      personService.createPersonList.mockResolvedValue(persons);
+      personService.assignBookletsToPerson.mockImplementation(async person => person);
+      personService.assignUnitsToBookletAndPerson.mockImplementation(async person => person);
+      personService.processPersonBooklets
+        .mockResolvedValueOnce({
+          addedUnitIds: [10], changedUnitIds: [], addedResponseCount: 1, changedResponseCount: 0
+        })
+        .mockRejectedValueOnce(new Error('batch audit unavailable'));
+
+      const result = await service.importWorkspaceFiles('123', 'tc', '1', '', 'token', mockImportOptions, 'g1', true, undefined, 'partial-run', 'skip', 7);
+
+      expect(result.success).toBe(false);
+      expect(personService.processPersonBooklets).toHaveBeenCalledTimes(2);
+      expect(personService.processPersonBooklets).toHaveBeenCalledWith(expect.any(Array), 123, 'skip', 'person', expect.any(Array), expect.objectContaining({ actorUserId: 7, correlationId: 'partial-run' }));
+      expect(codingFreshnessService.markUnitsPendingAfterImport).toHaveBeenCalledWith(123, [10], 1);
+      expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(123);
+      expect(JournalService.recordEventInTransaction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ result: 'failure', actorUserId: 7 }));
+    });
+
     it('should import responses and create persons/booklets/units', async () => {
       const mockResponses: Response[] = [
         {
@@ -491,7 +548,8 @@ describe('TestCenterService', () => {
         123,
         'skip',
         'person',
-        expect.any(Array)
+        expect.any(Array),
+        expect.objectContaining({ workspaceId: 123, source: 'testcenter', actorType: 'system' })
       );
     });
 
@@ -557,7 +615,8 @@ describe('TestCenterService', () => {
         123,
         'merge',
         'person',
-        expect.any(Array)
+        expect.any(Array),
+        expect.objectContaining({ workspaceId: 123, source: 'testcenter', actorType: 'system' })
       );
     });
 

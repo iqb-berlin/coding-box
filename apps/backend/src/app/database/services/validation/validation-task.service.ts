@@ -361,7 +361,8 @@ export class ValidationTaskService {
             const deletedCount =
               await this.validationService.deleteInvalidResponses(
                 task.workspace_id,
-                responseIds
+                responseIds,
+                { actorUserId: typeof taskData.userId === 'string' || typeof taskData.userId === 'number' ? taskData.userId : undefined, jobId: task.id }
               );
             result = { deletedCount };
           } else {
@@ -378,7 +379,8 @@ export class ValidationTaskService {
             const deletedCount =
               await this.validationService.deleteAllInvalidResponses(
                 task.workspace_id,
-                validationType
+                validationType,
+                { actorUserId: typeof taskData.userId === 'string' || typeof taskData.userId === 'number' ? taskData.userId : undefined, jobId: task.id }
               );
             result = { deletedCount };
           } else {
@@ -390,7 +392,7 @@ export class ValidationTaskService {
             result = await this.testResultsService.deleteTestResultsByRequest(
               task.workspace_id,
               taskData as unknown as TestResultsDeleteRequestDto,
-              typeof taskData.userId === 'string' ? taskData.userId : '',
+              typeof taskData.userId === 'string' || typeof taskData.userId === 'number' ? String(taskData.userId) : '',
               onProgress
             );
           } else {
@@ -407,7 +409,7 @@ export class ValidationTaskService {
               await this.testResultsService.deleteTestResultResponsesByRequest(
                 task.workspace_id,
                 taskData as unknown as TestResultsResponseCleanupRequestDto,
-                typeof taskData.userId === 'string' ? taskData.userId : '',
+                typeof taskData.userId === 'string' || typeof taskData.userId === 'number' ? String(taskData.userId) : '',
                 onProgress
               );
           } else {
@@ -421,7 +423,7 @@ export class ValidationTaskService {
             result = await this.testResultsService.deleteTestLogsByRequest(
               task.workspace_id,
               taskData as unknown as TestResultsDeleteRequestDto,
-              typeof taskData.userId === 'string' ? taskData.userId : '',
+              typeof taskData.userId === 'string' || typeof taskData.userId === 'number' ? String(taskData.userId) : '',
               onProgress
             );
           } else {

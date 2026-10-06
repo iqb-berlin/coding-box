@@ -49,8 +49,9 @@ export class UsersController {
   @ApiBadRequestResponse({ description: 'Invalid workspace ID or user data' })
   @ApiNotFoundResponse({ description: 'Workspace or users not found' })
   @ApiTags('users access')
-  async updateUsersAccess(@Param('workspaceId', ParseIntPipe) workspaceId: number, @Body() users: UserInListDto[]): Promise<boolean> {
-    return this.usersService.updateUsersAccess(workspaceId, users);
+  async updateUsersAccess(@Param('workspaceId', ParseIntPipe) workspaceId: number, @Body() users: UserInListDto[],
+    @Req() request: { user: { id: number } }): Promise<boolean> {
+    return this.usersService.updateUsersAccess(workspaceId, users, request.user.id);
   }
 
   @Get('full')
@@ -178,8 +179,9 @@ export class UsersController {
   @ApiNotFoundResponse({ description: 'User or workspaces not found' })
   @ApiTags('admin users')
   async assignUserWorkspaces(@Body() workspaceIds: number[],
-    @Param('userId', ParseIntPipe) userId: number) {
-    return this.usersService.assignUserWorkspaces(userId, workspaceIds);
+    @Param('userId', ParseIntPipe) userId: number,
+    @Req() request?: { user: { id: number } }) {
+    return this.usersService.assignUserWorkspaces(userId, workspaceIds, request?.user.id);
   }
 
   @Post()
