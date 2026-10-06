@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { MatDialogRef } from '@angular/material/dialog';
 
 import { MatButtonModule } from '@angular/material/button';
@@ -10,6 +10,7 @@ import { CodingJobDefinitionsComponent } from '../coding-job-definitions/coding-
 import { JobDefinition } from '../../services/coding-job-backend.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-job-definition-selection-dialog',
   standalone: true,
   imports: [

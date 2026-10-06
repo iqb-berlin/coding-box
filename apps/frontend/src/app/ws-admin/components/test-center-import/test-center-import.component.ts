@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 import {
@@ -84,6 +84,7 @@ export interface ImportFormValues {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-center-import',
   templateUrl: 'test-center-import.component.html',
   styleUrls: ['./test-center-import.component.scss'],

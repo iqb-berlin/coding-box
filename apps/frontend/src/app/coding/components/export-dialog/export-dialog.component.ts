@@ -1,5 +1,5 @@
 import {
-  Component, inject, OnInit, OnDestroy
+  Component, inject, OnInit, OnDestroy, ChangeDetectionStrategy
 } from '@angular/core';
 import { MatDialogRef, MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -26,6 +26,7 @@ import { CodingValidationResultsDialogComponent } from '../coding-validation-res
 export type ExportFormat = 'json' | 'csv' | 'excel';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-export-dialog',
   templateUrl: './export-dialog.component.html',
   styleUrls: ['./export-dialog.component.scss'],

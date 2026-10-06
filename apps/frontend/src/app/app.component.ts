@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, OnDestroy, DestroyRef, effect, inject, untracked, signal
+  Component, OnInit, OnDestroy, DestroyRef, effect, inject, untracked, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
@@ -30,6 +30,7 @@ import { SystemNotificationBannerComponent } from './components/system-notificat
 import { SystemNotificationService } from './core/services/system-notification.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-root',
   imports: [RouterOutlet, MatSlideToggleModule, MatProgressSpinner, RouterLink, TranslateModule, MatTooltip, MatButton, UserMenuComponent, WrappedIconComponent, ExportToastComponent, ErrorMessageDisplayComponent, SystemNotificationBannerComponent],
   templateUrl: './app.component.html',

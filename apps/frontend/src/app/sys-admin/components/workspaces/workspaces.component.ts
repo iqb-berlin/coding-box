@@ -1,5 +1,5 @@
 import {
-  Component, ViewChild, inject, signal
+  Component, ViewChild, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -26,6 +26,7 @@ type WorkspaceData = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-workspaces',
   templateUrl: './workspaces.component.html',
   styleUrls: ['./workspaces.component.scss'],

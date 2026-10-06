@@ -1,6 +1,6 @@
 import {
   Component, DestroyRef, inject, Input, Output, EventEmitter, OnInit, OnDestroy, signal,
-  computed
+  computed, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -35,6 +35,7 @@ interface VariableTypesValidationResult {
  * Displays validation results for variable types and allows deletion of invalid responses.
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-variable-types-validation-panel',
   standalone: true,
   imports: [

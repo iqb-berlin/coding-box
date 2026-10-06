@@ -1,5 +1,5 @@
 import {
-  Component, inject, signal
+  Component, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
@@ -11,6 +11,7 @@ import { WorkspaceBackendService } from '../../../workspace/services/workspace-b
 import { UsersSelectionComponent } from '../users-selection/users-selection.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-user-access-rights-dialog',
   templateUrl: './user-access-rights-dialog.component.html',
   styleUrls: ['./user-access-rights-dialog.component.scss'],

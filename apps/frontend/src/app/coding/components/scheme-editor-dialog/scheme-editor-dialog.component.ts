@@ -1,6 +1,6 @@
 import {
   Component, Inject, OnInit, DestroyRef, inject, signal,
-  computed
+  computed, ChangeDetectionStrategy
 } from '@angular/core';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 
@@ -36,6 +36,7 @@ export interface SchemeEditorDialogData {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-scheme-editor-dialog',
   standalone: true,
   imports: [

@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, DestroyRef, inject, signal
+  Component, OnInit, DestroyRef, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -32,6 +32,7 @@ import {
 } from '../../shared/utils/workspace-access';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-home',
   standalone: true,
   imports: [

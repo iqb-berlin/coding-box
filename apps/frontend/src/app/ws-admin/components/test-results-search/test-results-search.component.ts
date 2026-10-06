@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnDestroy, OnInit
+  Component, Inject, OnDestroy, OnInit, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -50,6 +50,7 @@ interface QuickSearchTypeOption {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-search',
   templateUrl: './test-results-search.component.html',
   styleUrls: ['./test-results-search.component.scss'],

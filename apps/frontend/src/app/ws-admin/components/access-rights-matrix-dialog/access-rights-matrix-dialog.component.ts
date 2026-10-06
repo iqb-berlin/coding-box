@@ -1,5 +1,5 @@
 import {
-  Component, inject, OnInit, signal
+  Component, inject, OnInit, signal, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { MatDialogModule } from '@angular/material/dialog';
@@ -22,6 +22,7 @@ interface MatrixRow {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-access-rights-matrix-dialog',
   templateUrl: './access-rights-matrix-dialog.component.html',
   styleUrls: ['./access-rights-matrix-dialog.component.scss'],

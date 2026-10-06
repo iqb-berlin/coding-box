@@ -13,7 +13,7 @@ import {
 } from '@angular/material/table';
 import {
   ViewChild, Component, OnInit, inject,
-  output
+  output, ChangeDetectionStrategy
 } from '@angular/core';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
@@ -41,6 +41,7 @@ import {
 } from '../../../sys-admin/components/workspace-access-rights-dialog/workspace-access-rights-dialog.component';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-ws-users',
   templateUrl: './ws-users.component.html',
   styleUrls: ['./ws-users.component.scss'],

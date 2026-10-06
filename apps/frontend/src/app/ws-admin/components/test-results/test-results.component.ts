@@ -12,7 +12,7 @@ import {
   MatRow
 } from '@angular/material/table';
 import {
-  Component, DestroyRef, ElementRef, inject, OnDestroy, OnInit, ViewChild, signal, computed
+  Component, DestroyRef, ElementRef, inject, OnDestroy, OnInit, ViewChild, signal, computed, ChangeDetectionStrategy
 } from '@angular/core';
 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -336,6 +336,7 @@ string,
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results',
   templateUrl: './test-results.component.html',
   styleUrls: ['./test-results.component.scss'],

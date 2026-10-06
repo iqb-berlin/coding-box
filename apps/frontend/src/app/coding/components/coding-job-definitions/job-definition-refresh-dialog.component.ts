@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, Inject } from '@angular/core';
+import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogModule,
@@ -30,6 +30,7 @@ interface RefreshStat {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-job-definition-refresh-dialog',
   standalone: true,
   imports: [

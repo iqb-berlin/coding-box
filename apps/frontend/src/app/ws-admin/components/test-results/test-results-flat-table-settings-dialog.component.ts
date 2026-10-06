@@ -1,4 +1,4 @@
-import { Component, Inject } from '@angular/core';
+import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogModule,
@@ -42,6 +42,7 @@ export type TestResultsFlatTableSettingsDialogResult = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-flat-table-settings-dialog',
   standalone: true,
   imports: [

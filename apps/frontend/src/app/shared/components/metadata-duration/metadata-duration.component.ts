@@ -1,5 +1,5 @@
 import {
-  Component, DestroyRef, inject, signal
+  Component, DestroyRef, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
@@ -8,6 +8,7 @@ import { MatInputModule } from '@angular/material/input';
 import { FormlyDurationComponent } from '@iqb/metadata-components';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'iqb-formly-duration',
   standalone: true,
   imports: [TranslateModule, MatFormFieldModule, MatInputModule],
