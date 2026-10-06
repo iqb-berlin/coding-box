@@ -30,6 +30,7 @@ async function bootstrap() {
   }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  app.enableShutdownHooks();
   const configService = app.get(ConfigService);
   const runtimeConfig = app.get(RuntimeConfigService);
   const host = configService.get('API_HOST') || 'localhost';
