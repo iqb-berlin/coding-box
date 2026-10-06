@@ -1,6 +1,6 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import {
-  ChangeDetectorRef, Component, inject, OnDestroy, OnInit
+  Component, inject, OnDestroy, OnInit, signal
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -91,29 +91,29 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
   private translateService = inject(TranslateService);
   private rawServerUrl = inject(SERVER_URL);
-  private changeDetector = inject(ChangeDetectorRef);
+
   private exportPollingSubscription: Subscription | null = null;
 
-  authToken: string | null = null;
-  duration = DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
+  readonly authToken = signal<string | null>(null);
+  readonly duration = signal(DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS);
   readonly minTokenDurationDays = 1;
-  maxTokenDurationDays = DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
+  readonly maxTokenDurationDays = signal(DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS);
   readonly minAuthSessionIdleTimeoutMinutes = MIN_AUTH_SESSION_IDLE_TIMEOUT_MINUTES;
   readonly maxAuthSessionIdleTimeoutMinutes = MAX_AUTH_SESSION_IDLE_TIMEOUT_MINUTES;
   readonly externalReplayTokenScopes = EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES;
-  replayUrlExportMode: ReplayUrlExportMode = DEFAULT_REPLAY_URL_EXPORT_MODE;
-  replayUrlExportTokenDurationDays = DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS;
-  authSessionIdleTimeoutMinutes = DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES;
-  autoFetchCodingStatistics = true;
-  autoRefreshManualCodingJobs = true;
-  evaluationMode = false;
-  includeDeriveErrorInManualCoding = false;
-  enableRegexSearch = false;
-  showTestResultsLogAnomalies = false;
-  isExporting = false;
-  databaseExportProgress = 0;
-  databaseExportStatus: DatabaseExportStatus | null = null;
-  databaseExportError: string | null = null;
+  readonly replayUrlExportMode = signal<ReplayUrlExportMode>(DEFAULT_REPLAY_URL_EXPORT_MODE);
+  readonly replayUrlExportTokenDurationDays = signal(DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS);
+  readonly authSessionIdleTimeoutMinutes = signal(DEFAULT_AUTH_SESSION_IDLE_TIMEOUT_MINUTES);
+  readonly autoFetchCodingStatistics = signal(true);
+  readonly autoRefreshManualCodingJobs = signal(true);
+  readonly evaluationMode = signal(false);
+  readonly includeDeriveErrorInManualCoding = signal(false);
+  readonly enableRegexSearch = signal(false);
+  readonly showTestResultsLogAnomalies = signal(false);
+  readonly isExporting = signal(false);
+  readonly databaseExportProgress = signal(0);
+  readonly databaseExportStatus = signal<DatabaseExportStatus | null>(null);
+  readonly databaseExportError = signal<string | null>(null);
 
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -122,20 +122,17 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       this.workspaceSettingsService
         .getReplayUrlExportMode(workspaceId)
         .subscribe(mode => {
-          this.changeDetector.markForCheck();
-          this.replayUrlExportMode = mode;
+          this.replayUrlExportMode.set(mode);
         });
       this.workspaceSettingsService
         .getAuthSessionIdleTimeoutMinutes(workspaceId)
         .subscribe(timeoutMinutes => {
-          this.changeDetector.markForCheck();
-          this.authSessionIdleTimeoutMinutes = timeoutMinutes;
+          this.authSessionIdleTimeoutMinutes.set(timeoutMinutes);
         });
       this.workspaceSettingsService
         .getEvaluationMode(workspaceId)
         .subscribe(enabled => {
-          this.changeDetector.markForCheck();
-          this.evaluationMode = enabled;
+          this.evaluationMode.set(enabled);
           if (enabled) {
             this.applyEvaluationModeLocalPreset(true);
           }
@@ -143,36 +140,31 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       this.workspaceSettingsService
         .getAutoFetchCodingStatistics(workspaceId)
         .subscribe(enabled => {
-          this.changeDetector.markForCheck();
-          this.autoFetchCodingStatistics = this.evaluationMode ?
+          this.autoFetchCodingStatistics.set(this.evaluationMode() ?
             false :
-            enabled;
+            enabled);
         });
       this.workspaceSettingsService
         .getAutoRefreshManualCodingJobs(workspaceId)
         .subscribe(enabled => {
-          this.changeDetector.markForCheck();
-          this.autoRefreshManualCodingJobs = this.evaluationMode ?
+          this.autoRefreshManualCodingJobs.set(this.evaluationMode() ?
             false :
-            enabled;
+            enabled);
         });
       this.workspaceSettingsService
         .getIncludeDeriveErrorInManualCoding(workspaceId)
         .subscribe(enabled => {
-          this.changeDetector.markForCheck();
-          this.includeDeriveErrorInManualCoding = enabled;
+          this.includeDeriveErrorInManualCoding.set(enabled);
         });
       this.workspaceSettingsService
         .getEnableRegexSearch(workspaceId)
         .subscribe(enabled => {
-          this.changeDetector.markForCheck();
-          this.enableRegexSearch = enabled;
+          this.enableRegexSearch.set(enabled);
         });
       this.workspaceSettingsService
         .getShowTestResultsLogAnomalies(workspaceId)
         .subscribe(enabled => {
-          this.changeDetector.markForCheck();
-          this.showTestResultsLogAnomalies = enabled;
+          this.showTestResultsLogAnomalies.set(enabled);
         });
     }
   }
@@ -219,13 +211,12 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     this.appService
       .createOwnToken(
         this.appService.selectedWorkspaceId,
-        Number(this.duration),
+        Number(this.duration()),
         this.externalReplayTokenScopes
       )
       .subscribe({
         next: (authToken: string) => {
-          this.changeDetector.markForCheck();
-          this.authToken = authToken;
+          this.authToken.set(authToken);
           this.snackBar.open(
             this.translateService.instant(
               'ws-settings.token-generated-successfully'
@@ -235,7 +226,6 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
           );
         },
         error: () => {
-          this.changeDetector.markForCheck();
           this.snackBar.open(
             this.translateService.instant('ws-settings.token-generation-failed'),
             this.translateService.instant('close'),
@@ -246,17 +236,17 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   }
 
   isTokenDurationValid(): boolean {
-    const duration = Number(this.duration);
+    const duration = Number(this.duration());
     return this.isDurationWithinReplayTokenPolicy(duration);
   }
 
   isReplayUrlExportTokenDurationValid(): boolean {
-    const duration = Number(this.replayUrlExportTokenDurationDays);
+    const duration = Number(this.replayUrlExportTokenDurationDays());
     return this.isDurationWithinReplayTokenPolicy(duration);
   }
 
   isAuthSessionIdleTimeoutValid(): boolean {
-    const duration = Number(this.authSessionIdleTimeoutMinutes);
+    const duration = Number(this.authSessionIdleTimeoutMinutes());
     return Number.isInteger(duration) &&
       duration >= this.minAuthSessionIdleTimeoutMinutes &&
       duration <= this.maxAuthSessionIdleTimeoutMinutes;
@@ -265,19 +255,15 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   private isDurationWithinReplayTokenPolicy(duration: number): boolean {
     return Number.isInteger(duration) &&
       duration >= this.minTokenDurationDays &&
-      duration <= this.maxTokenDurationDays;
+      duration <= this.maxTokenDurationDays();
   }
 
   private loadWorkspaceTokenPolicy(workspaceId?: number): void {
     this.appService.getWorkspaceTokenPolicy().subscribe({
       next: policy => {
-        this.changeDetector.markForCheck();
-        this.maxTokenDurationDays = this.getMaxTokenDurationDaysForScopes(
-          policy,
-          this.externalReplayTokenScopes
-        );
-        if (Number(this.duration) > this.maxTokenDurationDays) {
-          this.duration = this.maxTokenDurationDays;
+        this.maxTokenDurationDays.set(this.getMaxTokenDurationDaysForScopes(policy, this.externalReplayTokenScopes));
+        if (Number(this.duration()) > this.maxTokenDurationDays()) {
+          this.duration.set(this.maxTokenDurationDays());
         }
         if (workspaceId) {
           this.loadReplayUrlExportTokenDuration(workspaceId);
@@ -290,11 +276,10 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     this.workspaceSettingsService
       .getReplayUrlExportTokenDurationDays(
         workspaceId,
-        this.maxTokenDurationDays
+        this.maxTokenDurationDays()
       )
       .subscribe(durationDays => {
-        this.changeDetector.markForCheck();
-        this.replayUrlExportTokenDurationDays = durationDays;
+        this.replayUrlExportTokenDurationDays.set(durationDays);
       });
   }
 
@@ -309,12 +294,14 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         duration >= this.minTokenDurationDays
       ));
 
-    return maxDurations.length ? Math.min(...maxDurations) : this.maxTokenDurationDays;
+    return maxDurations.length ? Math.min(...maxDurations) : this.maxTokenDurationDays();
   }
 
   copyToken(): void {
-    if (this.authToken) {
-      this.clipboard.copy(this.authToken);
+    const authTokenSnapshot = this.authToken();
+
+    if (authTokenSnapshot) {
+      this.clipboard.copy(authTokenSnapshot);
       this.snackBar.open(
         this.translateService.instant('ws-settings.token-copied-to-clipboard'),
         this.translateService.instant('close'),
@@ -324,11 +311,11 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   }
 
   toggleReplayUrlExportMode(toggleEvent: { checked: boolean }): void {
-    const previousMode = this.replayUrlExportMode;
+    const previousMode = this.replayUrlExportMode();
     const mode: ReplayUrlExportMode = toggleEvent.checked ?
       'auth' :
       'workspaceId';
-    this.replayUrlExportMode = mode;
+    this.replayUrlExportMode.set(mode);
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (workspaceId) {
@@ -336,7 +323,6 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         .setReplayUrlExportMode(workspaceId, mode)
         .subscribe({
           next: () => {
-            this.changeDetector.markForCheck();
             this.snackBar.open(
               this.translateService.instant(
                 'ws-settings.replay-url-export-mode-saved'
@@ -346,8 +332,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
             );
           },
           error: () => {
-            this.changeDetector.markForCheck();
-            this.replayUrlExportMode = previousMode;
+            this.replayUrlExportMode.set(previousMode);
             this.snackBar.open(
               this.translateService.instant('ws-settings.error-saving-setting'),
               this.translateService.instant('close'),
@@ -379,12 +364,11 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     this.workspaceSettingsService
       .setReplayUrlExportTokenDurationDays(
         workspaceId,
-        Number(this.replayUrlExportTokenDurationDays),
-        this.maxTokenDurationDays
+        Number(this.replayUrlExportTokenDurationDays()),
+        this.maxTokenDurationDays()
       )
       .subscribe({
         next: () => {
-          this.changeDetector.markForCheck();
           this.snackBar.open(
             this.translateService.instant(
               'ws-settings.replay-url-export-token-duration-saved'
@@ -394,7 +378,6 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
           );
         },
         error: () => {
-          this.changeDetector.markForCheck();
           this.snackBar.open(
             this.translateService.instant('ws-settings.error-saving-setting'),
             this.translateService.instant('close'),
@@ -425,11 +408,10 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     this.workspaceSettingsService
       .setAuthSessionIdleTimeoutMinutes(
         workspaceId,
-        Number(this.authSessionIdleTimeoutMinutes)
+        Number(this.authSessionIdleTimeoutMinutes())
       )
       .subscribe({
         next: () => {
-          this.changeDetector.markForCheck();
           this.snackBar.open(
             this.translateService.instant(
               'ws-settings.auth-session-idle-timeout-saved'
@@ -439,7 +421,6 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
           );
         },
         error: () => {
-          this.changeDetector.markForCheck();
           this.snackBar.open(
             this.translateService.instant('ws-settings.error-saving-setting'),
             this.translateService.instant('close'),
@@ -471,9 +452,9 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
 
   toggleEvaluationMode(toggleEvent: { checked: boolean }): void {
     const previousState = {
-      evaluationMode: this.evaluationMode,
-      autoFetchCodingStatistics: this.autoFetchCodingStatistics,
-      autoRefreshManualCodingJobs: this.autoRefreshManualCodingJobs
+      evaluationMode: this.evaluationMode(),
+      autoFetchCodingStatistics: this.autoFetchCodingStatistics(),
+      autoRefreshManualCodingJobs: this.autoRefreshManualCodingJobs()
     };
     const enabled = toggleEvent.checked;
     this.applyEvaluationModeLocalPreset(enabled);
@@ -484,7 +465,6 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
         .setEvaluationMode(workspaceId, enabled)
         .subscribe({
           next: () => {
-            this.changeDetector.markForCheck();
             this.snackBar.open(
               enabled ?
                 this.translateService.instant(
@@ -498,12 +478,9 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
             );
           },
           error: () => {
-            this.changeDetector.markForCheck();
-            this.evaluationMode = previousState.evaluationMode;
-            this.autoFetchCodingStatistics =
-              previousState.autoFetchCodingStatistics;
-            this.autoRefreshManualCodingJobs =
-              previousState.autoRefreshManualCodingJobs;
+            this.evaluationMode.set(previousState.evaluationMode);
+            this.autoFetchCodingStatistics.set(previousState.autoFetchCodingStatistics);
+            this.autoRefreshManualCodingJobs.set(previousState.autoRefreshManualCodingJobs);
             this.snackBar.open(
               this.translateService.instant('ws-settings.error-saving-setting'),
               this.translateService.instant('close'),
@@ -518,24 +495,23 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   }
 
   toggleAutoFetchCodingStatistics(toggleEvent: { checked: boolean }): void {
-    if (this.evaluationMode) {
+    if (this.evaluationMode()) {
       return;
     }
 
-    this.autoFetchCodingStatistics = toggleEvent.checked;
+    this.autoFetchCodingStatistics.set(toggleEvent.checked);
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (workspaceId) {
       this.workspaceSettingsService
         .setAutoFetchCodingStatistics(
           workspaceId,
-          this.autoFetchCodingStatistics
+          this.autoFetchCodingStatistics()
         )
         .subscribe({
           next: () => {
-            this.changeDetector.markForCheck();
             this.snackBar.open(
-              this.autoFetchCodingStatistics ?
+              this.autoFetchCodingStatistics() ?
                 this.translateService.instant(
                   'ws-settings.auto-fetch-coding-statistics-enabled'
                 ) :
@@ -547,7 +523,6 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
             );
           },
           error: () => {
-            this.changeDetector.markForCheck();
             this.snackBar.open(
               this.translateService.instant('ws-settings.error-saving-setting'),
               this.translateService.instant('close'),
@@ -556,31 +531,30 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
                 panelClass: ['error-snackbar']
               }
             );
-            this.autoFetchCodingStatistics = !this.autoFetchCodingStatistics;
+            this.autoFetchCodingStatistics.set(!this.autoFetchCodingStatistics());
           }
         });
     }
   }
 
   toggleAutoRefreshManualCodingJobs(toggleEvent: { checked: boolean }): void {
-    if (this.evaluationMode) {
+    if (this.evaluationMode()) {
       return;
     }
 
-    this.autoRefreshManualCodingJobs = toggleEvent.checked;
+    this.autoRefreshManualCodingJobs.set(toggleEvent.checked);
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (workspaceId) {
       this.workspaceSettingsService
         .setAutoRefreshManualCodingJobs(
           workspaceId,
-          this.autoRefreshManualCodingJobs
+          this.autoRefreshManualCodingJobs()
         )
         .subscribe({
           next: () => {
-            this.changeDetector.markForCheck();
             this.snackBar.open(
-              this.autoRefreshManualCodingJobs ?
+              this.autoRefreshManualCodingJobs() ?
                 this.translateService.instant(
                   'ws-settings.auto-refresh-manual-coding-jobs-enabled'
                 ) :
@@ -592,7 +566,6 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
             );
           },
           error: () => {
-            this.changeDetector.markForCheck();
             this.snackBar.open(
               this.translateService.instant('ws-settings.error-saving-setting'),
               this.translateService.instant('close'),
@@ -601,33 +574,32 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
                 panelClass: ['error-snackbar']
               }
             );
-            this.autoRefreshManualCodingJobs = !this.autoRefreshManualCodingJobs;
+            this.autoRefreshManualCodingJobs.set(!this.autoRefreshManualCodingJobs());
           }
         });
     }
   }
 
   private applyEvaluationModeLocalPreset(enabled: boolean): void {
-    this.evaluationMode = enabled;
-    this.autoFetchCodingStatistics = false;
-    this.autoRefreshManualCodingJobs = !enabled;
+    this.evaluationMode.set(enabled);
+    this.autoFetchCodingStatistics.set(false);
+    this.autoRefreshManualCodingJobs.set(!enabled);
   }
 
   toggleIncludeDeriveErrorInManualCoding(toggleEvent: { checked: boolean }): void {
-    this.includeDeriveErrorInManualCoding = toggleEvent.checked;
+    this.includeDeriveErrorInManualCoding.set(toggleEvent.checked);
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (workspaceId) {
       this.workspaceSettingsService
         .setIncludeDeriveErrorInManualCoding(
           workspaceId,
-          this.includeDeriveErrorInManualCoding
+          this.includeDeriveErrorInManualCoding()
         )
         .subscribe({
           next: () => {
-            this.changeDetector.markForCheck();
             this.snackBar.open(
-              this.includeDeriveErrorInManualCoding ?
+              this.includeDeriveErrorInManualCoding() ?
                 this.translateService.instant(
                   'ws-settings.include-derive-error-in-manual-coding-enabled'
                 ) :
@@ -639,7 +611,6 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
             );
           },
           error: () => {
-            this.changeDetector.markForCheck();
             this.snackBar.open(
               this.translateService.instant('ws-settings.error-saving-setting'),
               this.translateService.instant('close'),
@@ -648,25 +619,23 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
                 panelClass: ['error-snackbar']
               }
             );
-            this.includeDeriveErrorInManualCoding =
-              !this.includeDeriveErrorInManualCoding;
+            this.includeDeriveErrorInManualCoding.set(!this.includeDeriveErrorInManualCoding());
           }
         });
     }
   }
 
   toggleEnableRegexSearch(toggleEvent: { checked: boolean }): void {
-    this.enableRegexSearch = toggleEvent.checked;
+    this.enableRegexSearch.set(toggleEvent.checked);
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (workspaceId) {
       this.workspaceSettingsService
-        .setEnableRegexSearch(workspaceId, this.enableRegexSearch)
+        .setEnableRegexSearch(workspaceId, this.enableRegexSearch())
         .subscribe({
           next: () => {
-            this.changeDetector.markForCheck();
             this.snackBar.open(
-              this.enableRegexSearch ?
+              this.enableRegexSearch() ?
                 this.translateService.instant(
                   'ws-settings.enable-regex-search-enabled'
                 ) :
@@ -678,7 +647,6 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
             );
           },
           error: () => {
-            this.changeDetector.markForCheck();
             this.snackBar.open(
               this.translateService.instant('ws-settings.error-saving-setting'),
               this.translateService.instant('close'),
@@ -687,27 +655,26 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
                 panelClass: ['error-snackbar']
               }
             );
-            this.enableRegexSearch = !this.enableRegexSearch;
+            this.enableRegexSearch.set(!this.enableRegexSearch());
           }
         });
     }
   }
 
   toggleShowTestResultsLogAnomalies(toggleEvent: { checked: boolean }): void {
-    this.showTestResultsLogAnomalies = toggleEvent.checked;
+    this.showTestResultsLogAnomalies.set(toggleEvent.checked);
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (workspaceId) {
       this.workspaceSettingsService
         .setShowTestResultsLogAnomalies(
           workspaceId,
-          this.showTestResultsLogAnomalies
+          this.showTestResultsLogAnomalies()
         )
         .subscribe({
           next: () => {
-            this.changeDetector.markForCheck();
             this.snackBar.open(
-              this.showTestResultsLogAnomalies ?
+              this.showTestResultsLogAnomalies() ?
                 this.translateService.instant(
                   'ws-settings.show-test-results-log-anomalies-enabled'
                 ) :
@@ -719,7 +686,6 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
             );
           },
           error: () => {
-            this.changeDetector.markForCheck();
             this.snackBar.open(
               this.translateService.instant('ws-settings.error-saving-setting'),
               this.translateService.instant('close'),
@@ -728,15 +694,14 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
                 panelClass: ['error-snackbar']
               }
             );
-            this.showTestResultsLogAnomalies =
-              !this.showTestResultsLogAnomalies;
+            this.showTestResultsLogAnomalies.set(!this.showTestResultsLogAnomalies());
           }
         });
     }
   }
 
   exportWorkspaceDatabase(): void {
-    if (this.isExporting) {
+    if (this.isExporting()) {
       return;
     }
 
@@ -751,10 +716,10 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     }
 
     const authHeaders = this.getAuthHeaders();
-    this.isExporting = true;
-    this.databaseExportProgress = 0;
-    this.databaseExportStatus = 'queued';
-    this.databaseExportError = null;
+    this.isExporting.set(true);
+    this.databaseExportProgress.set(0);
+    this.databaseExportStatus.set('queued');
+    this.databaseExportError.set(null);
 
     const apiUrl = this.getWorkspaceDatabaseExportApiUrl(workspaceId);
 
@@ -762,25 +727,23 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       .post<{ jobId: string; message: string }>(`${apiUrl}/job`, {}, { headers: authHeaders })
       .subscribe({
         next: ({ jobId }) => {
-          this.changeDetector.markForCheck();
           this.startExportPolling(workspaceId, jobId, authHeaders);
         },
         error: error => {
-          this.changeDetector.markForCheck();
-          this.isExporting = false;
+          this.isExporting.set(false);
           const message = this.extractErrorMessage(
             error,
             this.translateService.instant('ws-settings.error-starting-workspace-database-export')
           );
-          this.databaseExportError = message;
-          this.databaseExportStatus = 'failed';
+          this.databaseExportError.set(message);
+          this.databaseExportStatus.set('failed');
           this.snackBar.open(message, this.translateService.instant('close'), { duration: 5000 });
         }
       });
   }
 
   getDatabaseExportStatusLabel(): string {
-    switch (this.databaseExportStatus) {
+    switch (this.databaseExportStatus()) {
       case 'queued':
         return this.translateService.instant('ws-settings.export-status-queued');
       case 'running':
@@ -814,12 +777,11 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: state => {
-          this.changeDetector.markForCheck();
-          this.databaseExportStatus = state.status;
-          this.databaseExportProgress = Math.max(0, Math.min(100, Math.round(state.progress || 0)));
+          this.databaseExportStatus.set(state.status);
+          this.databaseExportProgress.set(Math.max(0, Math.min(100, Math.round(state.progress || 0))));
 
           if (state.status === 'completed') {
-            this.databaseExportProgress = 100;
+            this.databaseExportProgress.set(100);
             this.stopExportPolling();
             this.downloadExportFile(workspaceId, jobId, headers);
             return;
@@ -827,11 +789,11 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
 
           if (state.status === 'failed' || state.status === 'cancelled') {
             this.stopExportPolling();
-            this.isExporting = false;
+            this.isExporting.set(false);
             const message =
               state.error ||
               this.translateService.instant('ws-settings.error-exporting-workspace-database-retry');
-            this.databaseExportError = message;
+            this.databaseExportError.set(message);
             this.snackBar.open(
               message,
               this.translateService.instant('close'),
@@ -840,15 +802,14 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
           }
         },
         error: error => {
-          this.changeDetector.markForCheck();
           this.stopExportPolling();
-          this.isExporting = false;
+          this.isExporting.set(false);
           const message = this.extractErrorMessage(
             error,
             this.translateService.instant('ws-settings.error-fetching-workspace-database-export-status')
           );
-          this.databaseExportStatus = 'failed';
-          this.databaseExportError = message;
+          this.databaseExportStatus.set('failed');
+          this.databaseExportError.set(message);
           this.snackBar.open(message, this.translateService.instant('close'), { duration: 5000 });
         }
       });
@@ -868,14 +829,13 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       })
       .subscribe({
         next: blob => {
-          this.changeDetector.markForCheck();
           this.saveBlob(
             blob,
             `workspace-${workspaceId}-export-${new Date().toISOString().split('T')[0]}.sqlite`
           );
-          this.isExporting = false;
-          this.databaseExportStatus = 'completed';
-          this.databaseExportError = null;
+          this.isExporting.set(false);
+          this.databaseExportStatus.set('completed');
+          this.databaseExportError.set(null);
           this.snackBar.open(
             this.translateService.instant('ws-settings.workspace-database-exported-successfully'),
             this.translateService.instant('close'),
@@ -883,15 +843,10 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
           );
         },
         error: error => {
-          this.changeDetector.markForCheck();
-          this.isExporting = false;
-          this.databaseExportStatus = 'failed';
-          this.databaseExportError = this.extractErrorMessage(
-            error,
-            this.translateService.instant('ws-settings.error-downloading-workspace-database-export')
-          );
-          this.snackBar.open(
-            this.databaseExportError,
+          this.isExporting.set(false);
+          this.databaseExportStatus.set('failed');
+          this.databaseExportError.set(this.extractErrorMessage(error, this.translateService.instant('ws-settings.error-downloading-workspace-database-export')));
+          this.snackBar.open(this.databaseExportError() ?? '',
             this.translateService.instant('close'),
             { duration: 5000 }
           );

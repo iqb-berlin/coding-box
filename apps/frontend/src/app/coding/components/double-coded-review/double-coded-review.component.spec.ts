@@ -360,13 +360,13 @@ describe('DoubleCodedReviewComponent', () => {
       getDoubleCodedVariablesForReview: jest.Mock;
     };
     api.getDoubleCodedVariablesForReview.mockClear();
-    component.currentPage = 3;
+    component.currentPage.set(3);
 
     component.onSortChange({ active: 'personInfo', direction: 'desc' });
 
-    expect(component.currentPage).toBe(1);
-    expect(component.sortBy).toBe('personInfo');
-    expect(component.sortDirection).toBe('desc');
+    expect(component.currentPage()).toBe(1);
+    expect(component.sortBy()).toBe('personInfo');
+    expect(component.sortDirection()).toBe('desc');
     expect(api.getDoubleCodedVariablesForReview).toHaveBeenCalledWith(
       1,
       expect.objectContaining({
@@ -382,16 +382,16 @@ describe('DoubleCodedReviewComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    component.totalItems = 200;
-    component.currentPage = 3;
+    component.totalItems.set(200);
+    component.currentPage.set(3);
 
     const expectRestoredPage = (): void => {
-      component.isLoading = true;
+      component.isLoading.set(true);
       fixture.changeDetectorRef.markForCheck();
       fixture.detectChanges();
       expect(fixture.debugElement.query(By.directive(MatPaginator))).toBeNull();
 
-      component.isLoading = false;
+      component.isLoading.set(false);
       fixture.changeDetectorRef.markForCheck();
       fixture.detectChanges();
       const paginator = fixture.debugElement.query(By.directive(MatPaginator))
@@ -469,7 +469,7 @@ describe('DoubleCodedReviewComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(component.dynamicCoderColumns).toEqual(['coder_10', 'coder_20']);
+    expect(component.dynamicCoderColumns()).toEqual(['coder_10', 'coder_20']);
 
     const nativeElement = fixture.nativeElement as HTMLElement;
     const coderHeaders = Array.from(
@@ -483,7 +483,7 @@ describe('DoubleCodedReviewComponent', () => {
       'Coder A',
       'Coder B'
     ]);
-    expect(component.coderColumnMeta.coder_10.coderNames).toEqual([
+    expect(component.coderColumnMeta().coder_10.coderNames).toEqual([
       'Coder A',
       'Coder A renamed'
     ]);
@@ -683,7 +683,7 @@ describe('DoubleCodedReviewComponent', () => {
     const reviewItem = component.dataSource.data.find(
       item => item.responseId === 502
     )!;
-    expect(component.dynamicManagerColumns).toEqual(['manager_88']);
+    expect(component.dynamicManagerColumns()).toEqual(['manager_88']);
     expect(component.getManagerColumnHeader('manager_88')).toBe('Manager B');
     expect(
       component.getManagerDecisionForColumn(reviewItem, 'manager_88')
@@ -723,7 +723,7 @@ describe('DoubleCodedReviewComponent', () => {
 
     harness.updateDisplayedColumns(component.dataSource.data);
 
-    expect(component.dynamicManagerColumns).toContain('manager_99');
+    expect(component.dynamicManagerColumns()).toContain('manager_99');
     expect(component.getManagerDecisionForColumn(
       reviewItem,
       'manager_99'
@@ -804,7 +804,7 @@ describe('DoubleCodedReviewComponent', () => {
     };
     harness.updateDisplayedColumns(component.dataSource.data);
 
-    expect(component.dynamicManagerColumns).toEqual(
+    expect(component.dynamicManagerColumns()).toEqual(
       expect.arrayContaining(['manager_42', 'manager_43'])
     );
     expect(

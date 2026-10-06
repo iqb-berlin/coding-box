@@ -3,14 +3,14 @@
     <h1 class="page-title">{{ 'coding.my-coding-jobs.title' | translate }}</h1>
     <p class="subtitle">{{ 'coding.my-coding-jobs.subtitle' | translate }}</p>
 
-    @if (isLoading) {
+    @if (isLoading()) {
       <div class="loading-container">
         <mat-spinner></mat-spinner>
         <p>{{ 'coding.my-coding-jobs.loading-jobs' | translate }}</p>
       </div>
     }
 
-    @if (!isLoading && isAuthorized) {
+    @if (!isLoading() && isAuthorized()) {
       <div class="fx-row-center-center-stretch fx-gap-16 filter-row">
         <mat-form-field appearance="outline" class="filter-field">
           <mat-label>{{ 'admin.workspaces' | translate }}</mat-label>
@@ -25,7 +25,7 @@
               ('coding.my-coding-jobs.select-all-workspaces' | translate)
               }}
             </mat-option>
-            @for (ws of currentWorkspaces; track ws) {
+            @for (ws of currentWorkspaces(); track ws) {
               <mat-option [value]="ws.id">
                 {{ws.name}}
               </mat-option>
@@ -57,13 +57,13 @@
         </mat-form-field>
       </div>
 
-      @if (jobsTotal > 0 && !serverPagingEnabled) {
+      @if (jobsTotal() > 0 && !serverPagingEnabled()) {
         <div class="stats-row">
           <div class="total-progress-section">
             <mat-icon>bar_chart</mat-icon>
             <span class="total-progress-text">
               {{ 'coding.my-coding-jobs.total-coding-progress' | translate }}:
-              <strong>{{totalProgress}}% ({{totalCodedUnits}}/{{totalUnits}} {{ 'coding.my-coding-jobs.no-tasks' | translate
+              <strong>{{totalProgress()}}% ({{totalCodedUnits()}}/{{totalUnits()}} {{ 'coding.my-coding-jobs.no-tasks' | translate
               }})</strong>
             </span>
           </div>
@@ -72,7 +72,7 @@
             <mat-icon>work_outline</mat-icon>
             <span class="total-progress-text">
               {{ 'coding.my-coding-jobs.total-progress-incomplete' | translate }}:
-              <strong>{{incompleteJobs}}</strong>
+              <strong>{{incompleteJobs()}}</strong>
             </span>
           </div>
 
@@ -80,13 +80,13 @@
             <mat-icon>check_circle</mat-icon>
             <span class="total-progress-text">
               {{ 'coding.my-coding-jobs.total-progress-completed' | translate }}:
-              <strong>{{completedJobs}}</strong>
+              <strong>{{completedJobs()}}</strong>
             </span>
           </div>
         </div>
       }
 
-      @if (jobsTotal > 0) {
+      @if (jobsTotal() > 0) {
         <div class="flex-container">
           <div class="table-container">
             <mat-table [dataSource]="dataSource" class="coding-jobs-table">
@@ -180,9 +180,9 @@
             </mat-table>
           </div>
           <mat-paginator
-            [length]="jobsTotal"
-            [pageIndex]="pageIndex"
-            [pageSize]="pageSize"
+            [length]="jobsTotal()"
+            [pageIndex]="pageIndex()"
+            [pageSize]="pageSize()"
             [pageSizeOptions]="[10, 25, 50]"
             showFirstLastButtons
             (page)="onPageChange($event)"
@@ -190,7 +190,7 @@
         </div>
       }
 
-      @if (jobsTotal === 0) {
+      @if (jobsTotal() === 0) {
         <div class="no-data-message">
           <mat-icon>assignment</mat-icon>
           <p>{{ 'coding.my-coding-jobs.no-jobs-assigned' | translate }}</p>

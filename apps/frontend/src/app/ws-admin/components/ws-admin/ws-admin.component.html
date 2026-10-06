@@ -1,9 +1,9 @@
 <div class="page-body">
   <div class="admin-background">
-    @if (authData.isAdmin || accessLevel >= 3 || (accessLevel < 2 && hasCodingJobsAccess)){
+    @if (authData().isAdmin || accessLevel() >= 3 || (accessLevel() < 2 && hasCodingJobsAccess())){
       <div class="flex-container">
       <nav mat-tab-nav-bar class="navigation" [tabPanel]="tabPanel">
-      @for (link of navLinks; track link) {
+      @for (link of navLinks(); track link) {
         <a mat-tab-link
            [routerLink]="link.path"
            routerLinkActive="active-link"
@@ -17,10 +17,10 @@
         <router-outlet></router-outlet>
       </mat-tab-nav-panel>
       </div>
-    } @else if (accessLevel === 2){
+    } @else if (accessLevel() === 2){
       <div class="flex-container">
         <nav mat-tab-nav-bar class="navigation" [tabPanel]="tabPanel">
-          @for (link of codingManagerLinks; track link.path) {
+          @for (link of codingManagerLinks(); track link.path) {
             <a mat-tab-link
                [routerLink]="link.path"
                routerLinkActive="active-link"

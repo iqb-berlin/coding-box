@@ -1,4 +1,6 @@
-import { ChangeDetectorRef, Component, inject } from '@angular/core';
+import {
+  Component, inject, signal
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatTooltip } from '@angular/material/tooltip';
@@ -22,25 +24,22 @@ import {
   imports: [MatCheckbox, MatButton, MatTooltip, FormsModule, TranslateModule, MatIcon]
 })
 export class WsAccessRightsComponent {
-  private readonly changeDetectorRef = inject(ChangeDetectorRef);
-
   private userBackendService = inject(UserBackendService);
   appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
-  workspaceUsers = new WorkspaceUserToCheckCollection([]);
+  readonly workspaceUsers = signal(new WorkspaceUserToCheckCollection([]));
 
   constructor() {
     this.createUserList();
   }
 
   createUserList(): void {
-    this.workspaceUsers = new WorkspaceUserToCheckCollection([]);
+    this.workspaceUsers.set(new WorkspaceUserToCheckCollection([]));
     this.userBackendService.getUsers(this.appService.selectedWorkspaceId)
       .subscribe(users => {
-        this.changeDetectorRef.markForCheck();
         if (users.length > 0) {
-          this.workspaceUsers = new WorkspaceUserToCheckCollection(users);
+          this.workspaceUsers.set(new WorkspaceUserToCheckCollection(users));
         }
       });
   }
@@ -48,7 +47,7 @@ export class WsAccessRightsComponent {
   save(): void {
     runMutationAndRefreshAuthData(
       this.appService,
-      this.userBackendService.saveUsers(this.appService.selectedWorkspaceId, this.workspaceUsers.getChecks())
+      this.userBackendService.saveUsers(this.appService.selectedWorkspaceId, this.workspaceUsers().getChecks())
     )
       .subscribe(result => {
         if (hasCurrentAuthDataAfterMutation(result)) {
@@ -57,16 +56,16 @@ export class WsAccessRightsComponent {
             '',
             { duration: 3000 }
           );
-          this.workspaceUsers.setHasChangedFalse();
+          this.workspaceUsers().setHasChangedFalse();
         } else if (result.mutationSucceeded && result.authDataRefreshOutcome === 'failed') {
           this.snackBar.open(
             this.translateService.instant('admin.change-saved-auth-data-refresh-failed'),
             this.translateService.instant('error'),
             { duration: 5000 }
           );
-          this.workspaceUsers.setHasChangedFalse();
+          this.workspaceUsers().setHasChangedFalse();
         } else if (result.mutationSucceeded) {
-          this.workspaceUsers.setHasChangedFalse();
+          this.workspaceUsers().setHasChangedFalse();
         } else {
           this.snackBar.open(
             this.translateService.instant('admin.workspace-access-right-not-set'),
@@ -86,7 +85,7 @@ export class WsAccessRightsComponent {
       user.isChecked = false;
       user.canCode = false;
     }
-    this.workspaceUsers.updateHasChanged();
+    this.workspaceUsers().updateHasChanged();
   }
 
   changeCanCode(checked: boolean, user: WorkspaceUserChecked): void {
@@ -95,6 +94,6 @@ export class WsAccessRightsComponent {
       user.accessLevel = 1;
     }
     user.canCode = checked && user.isChecked;
-    this.workspaceUsers.updateHasChanged();
+    this.workspaceUsers().updateHasChanged();
   }
 }

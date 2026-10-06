@@ -1,5 +1,6 @@
 import {
-  Component, Inject, OnInit, ChangeDetectorRef, DestroyRef, inject
+  Component, Inject, OnInit, DestroyRef, inject, signal,
+  computed
 } from '@angular/core';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 
@@ -50,28 +51,28 @@ export interface SchemeEditorDialogData {
   template: `
     <h2 mat-dialog-title>{{ data.fileName }}</h2>
     <mat-dialog-content>
-      @if (isLoading) {
+      @if (isLoading()) {
         <mat-spinner diameter="40" [attr.aria-label]="'coding.schemer.loading' | translate"></mat-spinner>
-      } @else if (schemerHtml) {
+      } @else if (schemerHtml()) {
         <unit-schemer-standalone
-          [schemerHtml]="schemerHtml"
-          [unitScheme]="unitScheme"
+          [schemerHtml]="schemerHtml()"
+          [unitScheme]="unitScheme()"
           [schemerConfig]="{ definitionReportPolicy: 'eager', role: data.readOnly ? 'viewer' : 'editor' }"
           (schemeChanged)="onSchemeChanged($event)"
           (error)="onError($event)">
         </unit-schemer-standalone>
       } @else {
-        @if (loadError) {
-          <p role="alert">{{ loadError }}</p>
+        @if (loadError()) {
+          <p role="alert">{{ loadError() }}</p>
         }
-        <pre class="raw-json">{{ prettyScheme }}</pre>
+        <pre class="raw-json">{{ prettyScheme() }}</pre>
       }
     </mat-dialog-content>
     <mat-divider></mat-divider>
     <mat-dialog-actions align="end">
       <button mat-button (click)="close()">{{ 'close' | translate }}</button>
       @if (!data.readOnly) {
-        <button mat-button color="primary" [disabled]="!hasChanges" (click)="save()">{{ 'save' | translate }}</button>
+        <button mat-button color="primary" [disabled]="!hasChanges()" (click)="save()">{{ 'save' | translate }}</button>
       }
     </mat-dialog-actions>
   `,
@@ -123,20 +124,19 @@ export interface SchemeEditorDialogData {
   `]
 })
 export class SchemeEditorDialogComponent implements OnInit {
-  private readonly changeDetectorRef = inject(ChangeDetectorRef);
   private readonly destroyRef = inject(DestroyRef);
-  loadError = '';
-  schemerHtml = '';
-  isLoading = true;
-  hasChanges = false;
+  readonly loadError = signal('');
+  readonly schemerHtml = signal('');
+  readonly isLoading = signal(true);
+  readonly hasChanges = signal(false);
 
-  unitScheme: UnitScheme = {
+  readonly unitScheme = signal<UnitScheme>({
     scheme: '',
     schemeType: 'iqb-standard@3.2'
-  };
+  });
 
-  get prettyScheme(): string {
-    const raw = this.unitScheme?.scheme ?? '';
+  readonly prettyScheme = computed<string>(() => {
+    const raw = this.unitScheme()?.scheme ?? '';
     if (!raw) return '';
     try {
       const parsed = JSON.parse(raw);
@@ -144,7 +144,7 @@ export class SchemeEditorDialogComponent implements OnInit {
     } catch {
       return raw.toString?.() ?? String(raw);
     }
-  }
+  });
 
   constructor(
     public dialogRef: MatDialogRef<SchemeEditorDialogComponent>,
@@ -157,21 +157,20 @@ export class SchemeEditorDialogComponent implements OnInit {
   ) { }
 
   ngOnInit(): void {
-    this.unitScheme = {
+    this.unitScheme.set({
       scheme: this.data.content,
       schemeType: this.data.codingSchemeRef?.schemeType || this.inferSchemeType()
-    };
+    });
     this.loadSchemerHtml();
     this.fileService.getVariableInfoForScheme(this.data.workspaceId, this.data.fileName)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: variables => {
           if (variables && variables.length > 0) {
-            this.unitScheme = {
-              ...this.unitScheme,
+            this.unitScheme.set({
+              ...this.unitScheme(),
               variables
-            };
-            this.changeDetectorRef.markForCheck();
+            });
           }
         },
         error: () => {
@@ -195,8 +194,8 @@ export class SchemeEditorDialogComponent implements OnInit {
   }
 
   loadSchemerHtml(): void {
-    this.isLoading = true;
-    this.loadError = '';
+    this.isLoading.set(true);
+    this.loadError.set('');
     const reference$ = this.data.codingSchemeRef || !this.data.fileName.toLowerCase().endsWith('.vocs') ?
       of(this.data.codingSchemeRef) :
       this.fileService.getUnitInfo(this.data.workspaceId, this.data.fileName.replace(/\.vocs$/i, '').toUpperCase())
@@ -208,17 +207,17 @@ export class SchemeEditorDialogComponent implements OnInit {
 
     reference$.pipe(
       switchMap(reference => {
-        if (reference?.schemeType) this.unitScheme = { ...this.unitScheme, schemeType: reference.schemeType };
+        if (reference?.schemeType) this.unitScheme.set({ ...this.unitScheme(), schemeType: reference.schemeType });
         return this.fileService.getFilesList(this.data.workspaceId, 1, 10000, 'Schemer').pipe(
           switchMap(response => {
             const file = selectSchemerFile(response.data || [], reference?.schemer);
             if (!file) {
-              this.loadError = this.translate.instant('coding.schemer.not-found', { schemer: reference?.schemer || '' });
+              this.loadError.set(this.translate.instant('coding.schemer.not-found', { schemer: reference?.schemer || '' }));
               return of(null);
             }
             return this.fileService.downloadFile(this.data.workspaceId, file.id).pipe(
               catchError(() => {
-                this.loadError = this.translate.instant('coding.schemer.download-error');
+                this.loadError.set(this.translate.instant('coding.schemer.download-error'));
                 return of(null);
               })
             );
@@ -226,20 +225,19 @@ export class SchemeEditorDialogComponent implements OnInit {
         );
       }),
       catchError(() => {
-        this.loadError = this.translate.instant('coding.schemer.fetch-error');
+        this.loadError.set(this.translate.instant('coding.schemer.fetch-error'));
         return of(null);
       }),
       takeUntilDestroyed(this.destroyRef),
       finalize(() => {
-        this.isLoading = false;
-        if (!this.destroyRef.destroyed) this.changeDetectorRef.markForCheck();
+        this.isLoading.set(false);
       })
     ).subscribe(file => {
       if (file) {
-        this.schemerHtml = base64ToUtf8(file.base64Data);
-        if (!this.schemerHtml.trim()) {
-          this.schemerHtml = '';
-          this.loadError = this.translate.instant('coding.schemer.decode-error');
+        this.schemerHtml.set(base64ToUtf8(file.base64Data));
+        if (!this.schemerHtml().trim()) {
+          this.schemerHtml.set('');
+          this.loadError.set(this.translate.instant('coding.schemer.decode-error'));
         }
       }
     });
@@ -247,11 +245,11 @@ export class SchemeEditorDialogComponent implements OnInit {
 
   onSchemeChanged(scheme: UnitScheme): void {
     if (this.data.readOnly) return;
-    if (!scheme.variables && this.unitScheme.variables) {
-      scheme.variables = this.unitScheme.variables;
+    if (!scheme.variables && this.unitScheme().variables) {
+      scheme.variables = this.unitScheme().variables;
     }
-    this.unitScheme = scheme;
-    this.hasChanges = true;
+    this.unitScheme.set(scheme);
+    this.hasChanges.set(true);
   }
 
   onError(error: string): void {
@@ -263,7 +261,7 @@ export class SchemeEditorDialogComponent implements OnInit {
   }
 
   close(): void {
-    if (this.hasChanges) {
+    if (this.hasChanges()) {
       const confirmRef = this.dialog.open(ConfirmDialogComponent, {
         width: '400px',
         data: {
@@ -285,7 +283,7 @@ export class SchemeEditorDialogComponent implements OnInit {
   }
 
   save(): void {
-    if (!this.hasChanges) {
+    if (!this.hasChanges()) {
       this.dialogRef.close(false);
       return;
     }
@@ -312,7 +310,7 @@ export class SchemeEditorDialogComponent implements OnInit {
     overwriteExisting: boolean = false,
     overwriteFileIds?: string[]
   ): void {
-    const blob = new Blob([this.unitScheme.scheme], { type: 'application/octet-stream' });
+    const blob = new Blob([this.unitScheme().scheme], { type: 'application/octet-stream' });
     const file = new File([blob], filename, { type: 'application/octet-stream' });
 
     const formData = new FormData();

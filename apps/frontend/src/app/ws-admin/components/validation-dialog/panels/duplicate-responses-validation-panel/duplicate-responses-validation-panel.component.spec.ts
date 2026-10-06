@@ -21,7 +21,7 @@ describe('DuplicateResponsesValidationPanelComponent', () => {
     ));
     jest.spyOn(component, 'onValidate').mockImplementation();
 
-    component.duplicateResponses = [
+    component.duplicateResponses.set([
       {
         key: 'group-a',
         duplicates: [{ responseId: 1 }, { responseId: 2 }]
@@ -34,12 +34,32 @@ describe('DuplicateResponsesValidationPanelComponent', () => {
         key: 'group-c',
         duplicates: [{ responseId: 5 }, { responseId: 6 }]
       }
-    ] as DuplicateResponseSelectionDto[];
-    component.duplicateResponseSelections.set('group-a', 1);
-    component.duplicateResponseSelections.set('group-b', 3);
-    component.duplicateResponseSelections.set('group-c', 5);
-    component.duplicateResponseTouchedKeys.add('group-a');
-    component.duplicateResponseTouchedKeys.add('group-b');
+    ] as DuplicateResponseSelectionDto[]);
+    component.duplicateResponseSelections.update(value => {
+      const next = new Map(value);
+      next.set('group-a', 1);
+      return next;
+    });
+    component.duplicateResponseSelections.update(value => {
+      const next = new Map(value);
+      next.set('group-b', 3);
+      return next;
+    });
+    component.duplicateResponseSelections.update(value => {
+      const next = new Map(value);
+      next.set('group-c', 5);
+      return next;
+    });
+    component.duplicateResponseTouchedKeys.update(value => {
+      const next = new Set(value);
+      next.add('group-a');
+      return next;
+    });
+    component.duplicateResponseTouchedKeys.update(value => {
+      const next = new Set(value);
+      next.add('group-b');
+      return next;
+    });
 
     component.resolveSelectedDuplicates();
 
@@ -50,9 +70,9 @@ describe('DuplicateResponsesValidationPanelComponent', () => {
     expect(validationService.resolveDuplicateGroup).toHaveBeenNthCalledWith(2, [
       4
     ]);
-    expect(component.duplicateResponseSelections.has('group-a')).toBe(false);
-    expect(component.duplicateResponseSelections.has('group-b')).toBe(false);
-    expect(component.duplicateResponseSelections.get('group-c')).toBe(5);
+    expect(component.duplicateResponseSelections().has('group-a')).toBe(false);
+    expect(component.duplicateResponseSelections().has('group-b')).toBe(false);
+    expect(component.duplicateResponseSelections().get('group-c')).toBe(5);
     expect(component.onValidate).toHaveBeenCalledTimes(1);
   });
 });

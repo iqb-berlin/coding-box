@@ -1,7 +1,17 @@
+@let validationProgressValue = validationProgress();
+@let responseAnalysisValue = responseAnalysis();
+@let responseAnalysisErrorValue = responseAnalysisError();
+@let codingProgressOverviewValue = codingProgressOverview();
+@let variableCoverageOverviewValue = variableCoverageOverview();
+@let caseCoverageOverviewValue = caseCoverageOverview();
+@let manualCodingScopeSummaryValue = manualCodingScopeSummary();
+@let appliedResultsOverviewValue = appliedResultsOverview();
+@let emptyResponseMissingValue = emptyResponseMissing();
+@let editTrainingValue = editTraining();
 <div class="fx-column-start-stretch fx-gap-10 coding-container">
   <mat-tab-group
     class="manual-coding-tabs"
-    [selectedIndex]="selectedManualTabIndex"
+    [selectedIndex]="selectedManualTabIndex()"
     (selectedIndexChange)="onManualTabChanged($event)"
     >
     @for (tab of visibleManualCodingTabs; track tab) {
@@ -12,9 +22,9 @@
   </mat-tab-group>
 
   @if (
-    validationProgress &&
-    (validationProgress.status === 'loading' ||
-    validationProgress.status === 'processing')
+    validationProgressValue &&
+    (validationProgressValue.status === 'loading' ||
+    validationProgressValue.status === 'processing')
     ) {
     <div
       class="fx-column-start-start fx-gap-10 validation-progress"
@@ -22,15 +32,15 @@
       <div class="statistics-card manual-planning-card">
         <h2 class="section-title">Validierung läuft</h2>
         <p class="section-description">
-          {{ validationProgress.message }}
+          {{ validationProgressValue.message }}
         </p>
         <hr />
         <div class="progress-container">
           <mat-progress-bar
             mode="determinate"
-            [value]="validationProgress.progress"
+            [value]="validationProgressValue.progress"
           ></mat-progress-bar>
-          <p class="progress-text">{{ validationProgress.progress }}%</p>
+          <p class="progress-text">{{ validationProgressValue.progress }}%</p>
         </div>
         <p class="progress-note">
           Sie können andere Aufgaben erledigen, während die Validierung im
@@ -40,18 +50,18 @@
     </div>
   }
 
-  @if (validationProgress && validationProgress.status === 'error') {
+  @if (validationProgressValue && validationProgressValue.status === 'error') {
     <div
       class="fx-column-start-start fx-gap-10 validation-error"
       >
       <div class="statistics-card error-card">
         <h2 class="section-title">Fehler bei der Validierung</h2>
         <p class="section-description">
-          {{ validationProgress.message }}
+          {{ validationProgressValue.message }}
         </p>
-        @if (validationProgress.error) {
+        @if (validationProgressValue.error) {
           <p class="error-details">
-            {{ validationProgress.error }}
+            {{ validationProgressValue.error }}
           </p>
         }
         <hr />
@@ -75,7 +85,7 @@
             mat-stroked-button
             color="primary"
             (click)="externalCodingFileInput.click()"
-            [disabled]="isLoading"
+            [disabled]="isLoading()"
             matTooltip="{{
               'coding-management-manual.import.tooltip' | translate
             }}"
@@ -111,7 +121,7 @@
         <div class="planning-status-copy">
           <strong>{{ getPlanningStatusTitle() }}</strong>
           <span>{{ getPlanningStatusDescription() }}</span>
-          @if (hasManualCodeAvailabilityWarnings) {
+          @if (hasManualCodeAvailabilityWarnings()) {
             <div
               class="manual-code-availability-list"
               >
@@ -122,26 +132,26 @@
                   {{ warning.unitName }} / {{ warning.variableId }}
                 </span>
               }
-              @if (hasHiddenManualCodeAvailabilityWarnings) {
+              @if (hasHiddenManualCodeAvailabilityWarnings()) {
                 <button
                   mat-button
                   type="button"
                   class="manual-code-availability-toggle"
-                  [attr.aria-expanded]="showAllManualCodeAvailabilityWarnings"
+                  [attr.aria-expanded]="showAllManualCodeAvailabilityWarnings()"
                   (click)="toggleManualCodeAvailabilityWarnings()"
                   >
                   <mat-icon>{{
-                    showAllManualCodeAvailabilityWarnings
+                    showAllManualCodeAvailabilityWarnings()
                     ? 'expand_less'
                     : 'expand_more'
                   }}</mat-icon>
                   {{
-                  showAllManualCodeAvailabilityWarnings
+                  showAllManualCodeAvailabilityWarnings()
                   ? ('coding-management-manual.buttons.show-fewer-manual-code-warnings'
                   | translate)
                   : ('coding-management-manual.buttons.show-more-manual-code-warnings'
                   | translate: {
-                  count: hiddenManualCodeAvailabilityWarningCount
+                  count: hiddenManualCodeAvailabilityWarningCount()
                   })
                   }}
                 </button>
@@ -211,17 +221,17 @@
                 >{{ getVariableCoveragePercentage() | number: '1.0-0' }}%</span
                 >
                 <span class="metric-hint"
-                  >{{ variableCoverageOverview?.missingVariables || 0 }} fehlend</span
+                  >{{ variableCoverageOverviewValue?.missingVariables || 0 }} fehlend</span
                   >
                 </div>
                 <div class="overview-metric">
                   <span class="metric-label">In Jobs verteilt</span>
                   <span class="metric-value">{{
-                    caseCoverageOverview?.effectiveCasesInJobs || 0
+                    caseCoverageOverviewValue?.effectiveCasesInJobs || 0
                   }}</span>
                   <span class="metric-hint"
                     >{{
-                    caseCoverageOverview?.effectiveUnassignedCases || 0
+                    caseCoverageOverviewValue?.effectiveUnassignedCases || 0
                     }}
                     Arbeitsfälle nicht zugewiesen</span
                     >
@@ -232,7 +242,7 @@
                       >{{ getAppliedResultsPercentage() | number: '1.0-0' }}%</span
                       >
                       <span class="metric-hint"
-                        >{{ appliedResultsOverview?.remainingResponses || 0 }} Arbeitsfälle
+                        >{{ appliedResultsOverviewValue?.remainingResponses || 0 }} Arbeitsfälle
                         verbleibend</span
                         >
                       </div>
@@ -270,7 +280,7 @@
                         <h3
                           class="subsection-title"
             [matTooltip]="
-              responseAnalysis?.isCalculating
+              responseAnalysisValue?.isCalculating
                 ? 'Analyse läuft'
                 : ''
             "
@@ -280,7 +290,7 @@
                           'coding-management-manual.duplicate-aggregation.config-title'
                           | translate
                           }}
-                          @if (responseAnalysis?.isCalculating) {
+                          @if (responseAnalysisValue?.isCalculating) {
                             <mat-icon
                               class="aggregation-lock-icon"
                               matTooltip="Analyse läuft"
@@ -315,7 +325,7 @@
                                         min="2"
                                         max="100"
                                         step="1"
-                                        [disabled]="!!responseAnalysis?.isCalculating"
+                                        [disabled]="!!responseAnalysisValue?.isCalculating"
                                         />
                                     </mat-form-field>
                                     <div class="threshold-help">
@@ -329,7 +339,7 @@
                                         Erstellen gespeicherten Aggregationseinstellungen.
                                       </small>
                                     </div>
-                                    @if (isApplyingDuplicateAggregation) {
+                                    @if (isApplyingDuplicateAggregation()) {
                                       <div
                                         class="saving-indicator"
                                         >
@@ -345,7 +355,7 @@
                                       'coding-management-manual.response-matching.title'
                                       | translate
                                       }}
-                                      @if (isLoadingMatchingMode || isSavingMatchingMode) {
+                                      @if (isLoadingMatchingMode() || isSavingMatchingMode()) {
                                         <span
                                           class="loading-indicator"
                                           >
@@ -368,11 +378,11 @@
                                           [checked]="isDuplicateAggregationActive"
                                           (change)="onAggregationModeChanged($event.checked)"
                           [disabled]="
-                            isLoadingMatchingMode ||
-                            isSavingMatchingMode ||
-                            isApplyingDuplicateAggregation ||
-                            isLoadingResponseAnalysis ||
-                            responseAnalysis?.isCalculating
+                            isLoadingMatchingMode() ||
+                            isSavingMatchingMode() ||
+                            isApplyingDuplicateAggregation() ||
+                            isLoadingResponseAnalysis() ||
+                            responseAnalysisValue?.isCalculating
                           "
                                           color="primary"
                                           >
@@ -391,9 +401,9 @@
                             toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)
                           "
                           [disabled]="
-                            isLoadingMatchingMode ||
-                            isSavingMatchingMode ||
-                            isApplyingDuplicateAggregation
+                            isLoadingMatchingMode() ||
+                            isSavingMatchingMode() ||
+                            isApplyingDuplicateAggregation()
                           "
                                           color="primary"
                                           >
@@ -414,9 +424,9 @@
                             )
                           "
                           [disabled]="
-                            isLoadingMatchingMode ||
-                            isSavingMatchingMode ||
-                            isApplyingDuplicateAggregation
+                            isLoadingMatchingMode() ||
+                            isSavingMatchingMode() ||
+                            isApplyingDuplicateAggregation()
                           "
                                           color="primary"
                                           >
@@ -459,11 +469,11 @@
                                             type="button"
                                             (click)="restartAnalysis()"
                           [disabled]="
-                            isLoadingMatchingMode ||
-                            isSavingMatchingMode ||
-                            isApplyingDuplicateAggregation ||
-                            isLoadingResponseAnalysis ||
-                            responseAnalysis?.isCalculating
+                            isLoadingMatchingMode() ||
+                            isSavingMatchingMode() ||
+                            isApplyingDuplicateAggregation() ||
+                            isLoadingResponseAnalysis() ||
+                            responseAnalysisValue?.isCalculating
                           "
                                             >
                                             <mat-icon>autorenew</mat-icon>
@@ -479,7 +489,7 @@
                                 </div>
                               </div>
                             </div>
-                            @if (responseAnalysis?.aggregationSummary; as aggregation) {
+                            @if (responseAnalysisValue?.aggregationSummary; as aggregation) {
                               <div
                                 class="aggregation-impact"
                                 >
@@ -521,7 +531,7 @@
                           <div
                             class="analysis-stale-note"
                             >
-                            @if (responseAnalysis?.aggregationSummary; as aggregation) {
+                            @if (responseAnalysisValue?.aggregationSummary; as aggregation) {
                               <mat-icon>warning</mat-icon>
                               @if (isResponseAnalysisOutdated()) {
                                 <span>
@@ -556,7 +566,7 @@
                 <!-- Response Analysis Section -->
                 <div
                   class="response-analysis-section statistics-section"
-                  [class.blurred-content]="isLoadingResponseAnalysis"
+                  [class.blurred-content]="isLoadingResponseAnalysis()"
                   >
                   <h3 class="subsection-title">
                     <mat-icon>analytics</mat-icon>
@@ -566,26 +576,26 @@
                       (click)="restartAnalysis()"
                       matTooltip="Antwortanalyse neu berechnen"
               [disabled]="
-                isLoadingResponseAnalysis || responseAnalysis?.isCalculating
+                isLoadingResponseAnalysis() || responseAnalysisValue?.isCalculating
               "
                       >
                       <mat-icon>autorenew</mat-icon>
                     </button>
                     @if (
-                      isLoadingResponseAnalysis || responseAnalysis?.isCalculating
+                      isLoadingResponseAnalysis() || responseAnalysisValue?.isCalculating
                       ) {
                       <span
                         class="loading-indicator"
                         >
                         <mat-spinner diameter="16"></mat-spinner>
-                        @if (responseAnalysis?.isCalculating) {
+                        @if (responseAnalysisValue?.isCalculating) {
                           <span
                             class="analysis-progress-text"
                             >
                             Berechnung läuft...
-                            @if (responseAnalysis?.progress != null) {
+                            @if (responseAnalysisValue?.progress != null) {
                               <span
-                                >({{ responseAnalysis?.progress }}%)</span
+                                >({{ responseAnalysisValue?.progress }}%)</span
                                 >
                               }
                             </span>
@@ -599,10 +609,10 @@
                       | translate
                       }}
                     </p>
-                    @if (responseAnalysis) {
+                    @if (responseAnalysisValue) {
                       <div class="analysis-summary">
                         <!-- Empty Responses Summary -->
-                        @if (!responseAnalysis.isCalculating) {
+                        @if (!responseAnalysisValue.isCalculating) {
                           <div
                             class="analysis-card"
                             [class.has-issues]="hasUncodedEmptyResponses()"
@@ -611,7 +621,7 @@
                               type="button"
                               class="analysis-header"
                               (click)="toggleEmptyResponsesDetails()"
-                              [attr.aria-expanded]="showEmptyResponsesDetails"
+                              [attr.aria-expanded]="showEmptyResponsesDetails()"
                               aria-controls="empty-responses-details"
                               >
                               <div class="analysis-icon-title">
@@ -619,7 +629,7 @@
                                   [class.warning-icon]="hasUncodedEmptyResponses()"
                     [class.success-icon]="
                       !hasUncodedEmptyResponses() &&
-                      responseAnalysis.emptyResponses.total > 0
+                      responseAnalysisValue.emptyResponses.total > 0
                     "
                                   >
                                   {{
@@ -636,11 +646,11 @@
                                     [class.warning-count]="hasUncodedEmptyResponses()"
                       [class.success-count]="
                         !hasUncodedEmptyResponses() &&
-                        responseAnalysis.emptyResponses.total > 0
+                        responseAnalysisValue.emptyResponses.total > 0
                       "
                                     >
-                                    {{ responseAnalysis.emptyResponses.total }}
-                                    @if (responseAnalysis.emptyResponses.total > 0) {
+                                    {{ responseAnalysisValue.emptyResponses.total }}
+                                    @if (responseAnalysisValue.emptyResponses.total > 0) {
                                       <span
                                         class="count-detail"
                                         >
@@ -655,12 +665,12 @@
                                 </div>
                               </div>
                               <mat-icon class="expand-icon">{{
-                                showEmptyResponsesDetails ? 'expand_less' : 'expand_more'
+                                showEmptyResponsesDetails() ? 'expand_less' : 'expand_more'
                               }}</mat-icon>
                             </button>
                             @if (
-                              showEmptyResponsesDetails &&
-                              responseAnalysis.emptyResponses.total > 0
+                              showEmptyResponsesDetails() &&
+                              responseAnalysisValue.emptyResponses.total > 0
                               ) {
                               <div
                                 class="analysis-details"
@@ -716,7 +726,7 @@
                                     </thead>
                                     <tbody>
                                       @for (
-                                        item of responseAnalysis.emptyResponses.items
+                                        item of responseAnalysisValue.emptyResponses.items
                                         ; track
                                         item) {
                                         <tr
@@ -746,10 +756,10 @@
                                   </table>
                                 </div>
                                 <mat-paginator
-                                  [length]="responseAnalysis.emptyResponses.total"
-                                  [pageSize]="emptyPageSize"
+                                  [length]="responseAnalysisValue.emptyResponses.total"
+                                  [pageSize]="emptyPageSize()"
                                   [pageSizeOptions]="[5, 10, 25, 50, 100]"
-                                  [pageIndex]="emptyPageIndex"
+                                  [pageIndex]="emptyPageIndex()"
                                   (page)="onEmptyPageChange($event)"
                                   aria-label="Seite der leeren Antworten auswählen"
                                   >
@@ -760,17 +770,17 @@
                                     color="primary"
                                     (click)="onApplyEmptyResponseCoding()"
                     [disabled]="
-                      isApplyingEmptyCoding ||
-                      responseAnalysis.isCalculating ||
+                      isApplyingEmptyCoding() ||
+                      responseAnalysisValue.isCalculating ||
                       !hasUncodedEmptyResponses() ||
-                      !emptyResponseMissing
+                      !emptyResponseMissingValue
                     "
                                     [matTooltip]="getApplyEmptyResponseCodingTooltip()"
                                     >
-                                    @if (!isApplyingEmptyCoding) {
+                                    @if (!isApplyingEmptyCoding()) {
                                       <mat-icon>flash_on</mat-icon>
                                     }
-                                    @if (isApplyingEmptyCoding) {
+                                    @if (isApplyingEmptyCoding()) {
                                       <mat-spinner
                                         diameter="20"
                                       ></mat-spinner>
@@ -786,26 +796,26 @@
                           </div>
                         }
                         <!-- Duplicate Values Summary -->
-                        @if (!responseAnalysis.isCalculating) {
+                        @if (!responseAnalysisValue.isCalculating) {
                           <div
                             class="analysis-card"
-                            [class.has-issues]="hasDuplicateFindingsWithoutAggregation"
+                            [class.has-issues]="hasDuplicateFindingsWithoutAggregation()"
                             >
                             <button
                               type="button"
                               class="analysis-header"
                               (click)="toggleDuplicateValuesDetails()"
-                              [attr.aria-expanded]="showDuplicateValuesDetails"
+                              [attr.aria-expanded]="showDuplicateValuesDetails()"
                               aria-controls="duplicate-values-details"
                               >
                               <div class="analysis-icon-title">
                                 <mat-icon
                     [class.warning-icon]="
-                      hasDuplicateFindingsWithoutAggregation
+                      hasDuplicateFindingsWithoutAggregation()
                     "
                                   >
                                   {{
-                                  responseAnalysis.duplicateValues.total > 0
+                                  responseAnalysisValue.duplicateValues.total > 0
                                   ? 'content_copy'
                                   : 'check_circle'
                                   }}
@@ -817,7 +827,7 @@
                                     | translate
                                     }}
                                     @if (
-                                      responseAnalysis.duplicateValues.isAggregationApplied
+                                      responseAnalysisValue.duplicateValues.isAggregationApplied
                                       ) {
                                       <span
                                         class="aggregation-applied-badge"
@@ -833,27 +843,27 @@
                                   <span
                                     class="analysis-count"
                       [class.warning-count]="
-                        hasDuplicateFindingsWithoutAggregation
+                        hasDuplicateFindingsWithoutAggregation()
                       "
                                     >
-                                    {{ responseAnalysis.duplicateValues.total }}
+                                    {{ responseAnalysisValue.duplicateValues.total }}
                                     {{
                                     'coding-management-manual.response-analysis.groups'
                                     | translate
                                     }}
-                                    ({{ responseAnalysis.duplicateValues.totalResponses }}
+                                    ({{ responseAnalysisValue.duplicateValues.totalResponses }}
                                     {{
                                     'coding-management-manual.response-analysis.responses'
                                     | translate
                                     }})
-                                    @if (responseAnalysisAggregationSavings > 0) {
+                                    @if (responseAnalysisAggregationSavings() > 0) {
                                       <span>
-                                        - {{ responseAnalysisAggregationSavings }} Einsparung in
+                                        - {{ responseAnalysisAggregationSavings() }} Einsparung in
                                         dieser Analyse
                                       </span>
                                     }
                                   </span>
-                                  @if (hasDuplicateFindingsWithoutAggregation) {
+                                  @if (hasDuplicateFindingsWithoutAggregation()) {
                                     <span
                                       class="analysis-note aggregation-disabled-note"
                                       >
@@ -867,18 +877,18 @@
                                 </div>
                               </div>
                               <mat-icon class="expand-icon">{{
-                                showDuplicateValuesDetails ? 'expand_less' : 'expand_more'
+                                showDuplicateValuesDetails() ? 'expand_less' : 'expand_more'
                               }}</mat-icon>
                             </button>
                             @if (
-                              showDuplicateValuesDetails &&
-                              responseAnalysis.duplicateValues.total > 0
+                              showDuplicateValuesDetails() &&
+                              responseAnalysisValue.duplicateValues.total > 0
                               ) {
                               <div
                                 class="analysis-details"
                                 id="duplicate-values-details"
                                 >
-                                @for (group of responseAnalysis.duplicateValues.groups; track group) {
+                                @for (group of responseAnalysisValue.duplicateValues.groups; track group) {
                                   <div
                                     class="duplicate-group"
                                     >
@@ -920,10 +930,10 @@
                                       </div>
                                     }
                                     <mat-paginator
-                                      [length]="responseAnalysis.duplicateValues.total"
-                                      [pageSize]="duplicatePageSize"
+                                      [length]="responseAnalysisValue.duplicateValues.total"
+                                      [pageSize]="duplicatePageSize()"
                                       [pageSizeOptions]="[5, 10, 20, 50, 100]"
-                                      [pageIndex]="duplicatePageIndex"
+                                      [pageIndex]="duplicatePageIndex()"
                                       (page)="onDuplicatePageChange($event)"
                                       aria-label="Seite der Duplikatgruppen auswählen"
                                       >
@@ -937,16 +947,16 @@
                               {{
                               'coding-management-manual.response-analysis.last-updated'
                               | translate
-                              }}: {{ responseAnalysis.analysisTimestamp | date: 'medium' }}
+                              }}: {{ responseAnalysisValue.analysisTimestamp | date: 'medium' }}
                             </p>
                           </div>
                         }
-                        @if (responseAnalysisError && !isLoadingResponseAnalysis) {
+                        @if (responseAnalysisErrorValue && !isLoadingResponseAnalysis()) {
                           <div
                             class="no-analysis-data error-state"
                             >
                             <mat-icon>error</mat-icon>
-                            <span>{{ responseAnalysisError }}</span>
+                            <span>{{ responseAnalysisErrorValue }}</span>
                             <button mat-stroked-button color="warn" (click)="restartAnalysis()">
                               <mat-icon>autorenew</mat-icon>
                               Erneut versuchen
@@ -954,9 +964,9 @@
                           </div>
                         }
                         @if (
-                          !responseAnalysis &&
-                          !responseAnalysisError &&
-                          !isLoadingResponseAnalysis
+                          !responseAnalysisValue &&
+                          !responseAnalysisErrorValue &&
+                          !isLoadingResponseAnalysis()
                           ) {
                           <div
                             class="no-analysis-data"
@@ -976,7 +986,7 @@
                           </div>
                         }
                         <!-- Loading Overlay for Response Analysis -->
-                        @if (isLoadingResponseAnalysis) {
+                        @if (isLoadingResponseAnalysis()) {
                           <div class="loading-overlay">
                             <div class="loading-content">
                               <mat-spinner diameter="40"></mat-spinner>
@@ -995,17 +1005,17 @@
 
                   <div class="statistics-content">
                     <!-- Coding Progress Overview -->
-                    @if (isManualTab('execution') && codingProgressOverview) {
+                    @if (isManualTab('execution') && codingProgressOverviewValue) {
                       <div
                         class="coding-progress-section statistics-section"
-                        [class.blurred-content]="isLoadingCodingProgress"
+                        [class.blurred-content]="isLoadingCodingProgress()"
                         >
                         <div class="statistics-card">
                           <h2 class="section-title section-title-with-action">
                             Kodierungsfortschritt
                             <button
                               mat-icon-button
-                              (click)="showProgressInfo = !showProgressInfo"
+                              (click)="showProgressInfo.set(!showProgressInfo())"
                 [matTooltip]="
                   'coding-management-manual.coding-progress.info-tooltip'
                     | translate
@@ -1019,7 +1029,7 @@
                               <mat-icon class="section-info-icon">info</mat-icon>
                             </button>
                           </h2>
-                          @if (showProgressInfo) {
+                          @if (showProgressInfo()) {
                             <div class="info-alert progress-info">
                               <mat-icon class="info-alert-icon">school</mat-icon>
                               <div class="info-alert-content">
@@ -1054,45 +1064,45 @@
                             <button
                               type="button"
                               class="stat-item stat-item-button"
-                              (click)="showTotalDetails = !showTotalDetails"
-                              [attr.aria-expanded]="showTotalDetails"
+                              (click)="showTotalDetails.set(!showTotalDetails())"
+                              [attr.aria-expanded]="showTotalDetails()"
                               aria-controls="total-details"
                               matTooltip="Klicken, um die Zusammensetzung anzuzeigen"
                               >
                               <span class="stat-label"
                                 >Effektive Kodierfälle gesamt:
                                 <mat-icon class="stat-label-inline-icon">{{
-                                  showTotalDetails ? 'expand_less' : 'expand_more'
+                                  showTotalDetails() ? 'expand_less' : 'expand_more'
                                 }}</mat-icon></span
                                 >
                                 <span class="stat-value stat-value-link">{{
-                                  codingProgressOverview.totalCasesToCode
+                                  codingProgressOverviewValue.totalCasesToCode
                                 }}</span>
                               </button>
                               <div class="stat-item">
                                 <span class="stat-label">Abgeschlossene Fälle:</span>
                                 <span class="stat-value covered">{{
-                                  codingProgressOverview.completedCases
+                                  codingProgressOverviewValue.completedCases
                                 }}</span>
                               </div>
                               <div class="stat-item">
                                 <span class="stat-label">Offene Arbeitsfälle:</span>
                                 <span class="stat-value missing">{{
-                                  codingProgressOverview.totalCasesToCode -
-                                  codingProgressOverview.completedCases
+                                  codingProgressOverviewValue.totalCasesToCode -
+                                  codingProgressOverviewValue.completedCases
                                 }}</span>
                               </div>
                               <div class="stat-item">
                                 <span class="stat-label">Fertigstellungsrate:</span>
                                 <span class="stat-value percentage"
                                   >{{
-                                  codingProgressOverview.completionPercentage
+                                  codingProgressOverviewValue.completionPercentage
                                   | number: '1.1-1'
                                   }}%</span
                                   >
                                 </div>
                               </div>
-                              @if (showTotalDetails) {
+                              @if (showTotalDetails()) {
                                 <div
                                   id="total-details"
                                   class="total-details-container"
@@ -1107,7 +1117,7 @@
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      @for (variable of codingIncompleteVariables; track variable) {
+                                      @for (variable of codingIncompleteVariables(); track variable) {
                                         <tr>
                                           <td>{{ variable.unitName }}</td>
                                           <td>{{ variable.variableId }}</td>
@@ -1116,7 +1126,7 @@
                                           </td>
                                         </tr>
                                       }
-                                      @if (codingIncompleteVariables.length === 0) {
+                                      @if (codingIncompleteVariables().length === 0) {
                                         <tr>
                                           <td colspan="3" class="empty-details-cell">
                                             Keine offenen Variablen gefunden.
@@ -1128,8 +1138,8 @@
                                 </div>
                               }
                               @if (
-                                manualCodingScopeSummary &&
-                                manualCodingScopeSummary.coveredSourceResponseCount > 0
+                                manualCodingScopeSummaryValue &&
+                                manualCodingScopeSummaryValue.coveredSourceResponseCount > 0
                                 ) {
                                 <div
                                   class="manual-scope-note"
@@ -1141,18 +1151,18 @@
                                     | translate
                                     : {
                                     statusResponseCount:
-                                    manualCodingScopeSummary.manualResponseCount +
-                                    manualCodingScopeSummary.coveredSourceResponseCount,
+                                    manualCodingScopeSummaryValue.manualResponseCount +
+                                    manualCodingScopeSummaryValue.coveredSourceResponseCount,
                                     responseCount:
-                                    manualCodingScopeSummary.coveredSourceResponseCount,
+                                    manualCodingScopeSummaryValue.coveredSourceResponseCount,
                                     variableCount:
-                                    manualCodingScopeSummary.coveredSourceVariableCount
+                                    manualCodingScopeSummaryValue.coveredSourceVariableCount
                                   }
                                   }}
                                 </span>
                               </div>
                             }
-                            @if (codingProgressOverview.aggregationActive) {
+                            @if (codingProgressOverviewValue.aggregationActive) {
                               <div
                                 class="aggregation-note"
                                 >
@@ -1162,13 +1172,13 @@
                                   'coding-management-manual.coding-progress.aggregation-note'
                                   | translate
                                   : {
-                                  rawCases: codingProgressOverview.rawTotalCasesToCode,
+                                  rawCases: codingProgressOverviewValue.rawTotalCasesToCode,
                                   effectiveCases:
-                                  codingProgressOverview.totalCasesToCode,
+                                  codingProgressOverviewValue.totalCasesToCode,
                                   threshold:
-                                  codingProgressOverview.aggregationThreshold,
+                                  codingProgressOverviewValue.aggregationThreshold,
                                   collapsedCases:
-                                  codingProgressOverview.aggregatedDuplicateCases
+                                  codingProgressOverviewValue.aggregatedDuplicateCases
                                 }
                                 }}
                               </span>
@@ -1177,11 +1187,11 @@
                           <div class="coverage-bar coverage-bar-spaced">
                             <div
                               class="coverage-fill"
-                              [style.width.%]="codingProgressOverview.completionPercentage"
+                              [style.width.%]="codingProgressOverviewValue.completionPercentage"
                             ></div>
                           </div>
                         </div>
-                        @if (isLoadingCodingProgress) {
+                        @if (isLoadingCodingProgress()) {
                           <div class="loading-overlay">
                             <div class="loading-content">
                               <mat-spinner diameter="40"></mat-spinner>
@@ -1231,17 +1241,17 @@
                     <!-- Variable Coverage Statistics -->
                     @if (isManualTab('planning')) {
                       <div id="manual-variable-coverage">
-                        @if (variableCoverageOverview) {
+                        @if (variableCoverageOverviewValue) {
                           <div
                             class="variable-coverage-section statistics-section"
-                            [class.blurred-content]="isLoadingVariableCoverage"
+                            [class.blurred-content]="isLoadingVariableCoverage()"
                             >
                             <div class="statistics-card">
                               <h2 class="section-title section-title-with-action">
                                 Variablenabdeckung
                                 <button
                                   mat-icon-button
-                                  (click)="showVariableCoverageInfo = !showVariableCoverageInfo"
+                                  (click)="showVariableCoverageInfo.set(!showVariableCoverageInfo())"
                 [matTooltip]="
                   'coding-management-manual.variable-coverage.info-tooltip'
                     | translate
@@ -1270,17 +1280,17 @@
                                     <mat-icon>refresh</mat-icon>
                                   </button>
                                 }
-                                @if (variableCoverageOverview.conflictedVariables > 0) {
+                                @if (variableCoverageOverviewValue.conflictedVariables > 0) {
                                   <span
                                     class="conflict-badge"
                                     matTooltip="Es gibt Konflikte bei der Variablenzuordnung"
                                     >
                                     <mat-icon>warning</mat-icon>
-                                    {{ variableCoverageOverview.conflictedVariables }} Konflikte
+                                    {{ variableCoverageOverviewValue.conflictedVariables }} Konflikte
                                   </span>
                                 }
                               </h2>
-                              @if (showVariableCoverageInfo) {
+                              @if (showVariableCoverageInfo()) {
                                 <div
                                   class="info-alert variable-coverage-info"
                                   >
@@ -1318,38 +1328,38 @@
                                 <div class="stat-item">
                                   <span class="stat-label">Gesamt Variablen:</span>
                                   <span class="stat-value">{{
-                                    variableCoverageOverview.totalVariables
+                                    variableCoverageOverviewValue.totalVariables
                                   }}</span>
                                 </div>
                                 <div class="stat-item">
                                   <span class="stat-label">Abgedeckte Variablen:</span>
                                   <span class="stat-value covered">{{
-                                    variableCoverageOverview.coveredVariables
+                                    variableCoverageOverviewValue.coveredVariables
                                   }}</span>
                                 </div>
                                 <div class="stat-item">
                                   <span class="stat-label">Fehlende Variablen:</span>
                                   <span class="stat-value missing">{{
-                                    variableCoverageOverview.missingVariables
+                                    variableCoverageOverviewValue.missingVariables
                                   }}</span>
                                 </div>
                                 <div class="stat-item">
                                   <span class="stat-label">Vollständig abgedeckt:</span>
                                   <span class="stat-value covered">{{
-                                    variableCoverageOverview.fullyAbgedeckteVariablen
+                                    variableCoverageOverviewValue.fullyAbgedeckteVariablen
                                   }}</span>
                                 </div>
                                 <div class="stat-item">
                                   <span class="stat-label">Partiell abgedeckt:</span>
                                   <span class="stat-value partial">{{
-                                    variableCoverageOverview.partiallyAbgedeckteVariablen
+                                    variableCoverageOverviewValue.partiallyAbgedeckteVariablen
                                   }}</span>
                                 </div>
                                 <div class="stat-item">
                                   <span class="stat-label">Abdeckungsrate:</span>
                                   <span class="stat-value percentage"
                                     >{{
-                                    variableCoverageOverview.coveragePercentage
+                                    variableCoverageOverviewValue.coveragePercentage
                                     | number: '1.1-1'
                                     }}%</span
                                     >
@@ -1364,7 +1374,7 @@
                                       <div class="status-content">
                                         <span class="status-label">Entwurf:</span>
                                         <span class="status-value">{{
-                                          variableCoverageOverview.coveredByDraft
+                                          variableCoverageOverviewValue.coveredByDraft
                                         }}</span>
                                       </div>
                                     </div>
@@ -1373,7 +1383,7 @@
                                       <div class="status-content">
                                         <span class="status-label">Warten auf Genehmigung:</span>
                                         <span class="status-value">{{
-                                          variableCoverageOverview.coveredByPendingReview
+                                          variableCoverageOverviewValue.coveredByPendingReview
                                         }}</span>
                                       </div>
                                     </div>
@@ -1382,11 +1392,11 @@
                                       <div class="status-content">
                                         <span class="status-label">Genehmigt:</span>
                                         <span class="status-value">{{
-                                          variableCoverageOverview.coveredByApproved
+                                          variableCoverageOverviewValue.coveredByApproved
                                         }}</span>
                                       </div>
                                     </div>
-                                    @if (variableCoverageOverview.conflictedVariables > 0) {
+                                    @if (variableCoverageOverviewValue.conflictedVariables > 0) {
                                       <div
                                         class="status-item conflict"
                                         >
@@ -1394,7 +1404,7 @@
                                         <div class="status-content">
                                           <span class="status-label">Konflikte:</span>
                                           <span class="status-value">{{
-                                            variableCoverageOverview.conflictedVariables
+                                            variableCoverageOverviewValue.conflictedVariables
                                           }}</span>
                                         </div>
                                       </div>
@@ -1403,7 +1413,7 @@
                                 </div>
                                 <!-- Conflicts Details -->
                                 @if (
-                                  variableCoverageOverview.coverageByStatus.conflicted.length > 0
+                                  variableCoverageOverviewValue.coverageByStatus.conflicted.length > 0
                                   ) {
                                   <div
                                     class="conflicts-section"
@@ -1414,7 +1424,7 @@
                                     </h3>
                                     <div class="conflicts-list">
                                       @for (
-                                        conflict of variableCoverageOverview.coverageByStatus
+                                        conflict of variableCoverageOverviewValue.coverageByStatus
                                         .conflicted
                                         ; track
                                         conflict) {
@@ -1447,11 +1457,11 @@
                                 <div class="coverage-bar">
                                   <div
                                     class="coverage-fill"
-                                    [style.width.%]="variableCoverageOverview.coveragePercentage"
+                                    [style.width.%]="variableCoverageOverviewValue.coveragePercentage"
                                   ></div>
                                 </div>
                               </div>
-                              @if (isLoadingVariableCoverage) {
+                              @if (isLoadingVariableCoverage()) {
                                 <div class="loading-overlay">
                                   <div class="loading-content">
                                     <mat-spinner diameter="40"></mat-spinner>
@@ -1479,7 +1489,7 @@
                             Kodierjobs
                             <button
                               mat-icon-button
-                              (click)="showCodingJobsInfo = !showCodingJobsInfo"
+                              (click)="showCodingJobsInfo.set(!showCodingJobsInfo())"
               [matTooltip]="
                 'coding-management-manual.coding-jobs.info-tooltip' | translate
               "
@@ -1491,7 +1501,7 @@
                               <mat-icon class="section-info-icon">info</mat-icon>
                             </button>
                           </h3>
-                          @if (showCodingJobsInfo) {
+                          @if (showCodingJobsInfo()) {
                             <div class="info-alert coding-jobs-info">
                               <mat-icon class="info-alert-icon">assignment</mat-icon>
                               <div class="info-alert-content">
@@ -1509,13 +1519,13 @@
                               mat-stroked-button
                               color="primary"
                               type="button"
-                              [disabled]="isStartingManualExport || isLoadingCodersForExport"
+                              [disabled]="isStartingManualExport() || isLoadingCodersForExport()"
                               (click)="openExecutionExport()"
                               >
                               <mat-icon>download</mat-icon>
                               Export
                             </button>
-                            @if (canManageManualCodingJobs) {
+                            @if (canManageManualCodingJobs()) {
                               <button
                                 mat-stroked-button
                                 color="primary"
@@ -1593,17 +1603,17 @@
                       }
 
                       <!-- Case Coverage Statistics -->
-                      @if (isManualTab('execution') && caseCoverageOverview) {
+                      @if (isManualTab('execution') && caseCoverageOverviewValue) {
                         <div
                           class="case-coverage-section statistics-section"
-                          [class.blurred-content]="isLoadingCaseCoverage"
+                          [class.blurred-content]="isLoadingCaseCoverage()"
                           >
                           <div class="statistics-card">
                             <h2 class="section-title section-title-with-action">
                               Fälle in Kodierjobs
                               <button
                                 mat-icon-button
-                                (click)="showCaseCoverageInfo = !showCaseCoverageInfo"
+                                (click)="showCaseCoverageInfo.set(!showCaseCoverageInfo())"
                 [matTooltip]="
                   'coding-management-manual.case-coverage.info-tooltip'
                     | translate
@@ -1617,7 +1627,7 @@
                                 <mat-icon class="section-info-icon">info</mat-icon>
                               </button>
                             </h2>
-                            @if (showCaseCoverageInfo) {
+                            @if (showCaseCoverageInfo()) {
                               <div
                                 class="info-alert case-coverage-info"
                                 >
@@ -1646,41 +1656,41 @@
                               <div class="stat-item">
                                 <span class="stat-label">Effektive Kodierfälle gesamt:</span>
                                 <span class="stat-value">{{
-                                  caseCoverageOverview.effectiveTotalCasesToCode
+                                  caseCoverageOverviewValue.effectiveTotalCasesToCode
                                 }}</span>
                               </div>
                               <div class="stat-item">
                                 <span class="stat-label">Arbeitsfälle in Jobs:</span>
                                 <span class="stat-value covered">{{
-                                  caseCoverageOverview.effectiveCasesInJobs
+                                  caseCoverageOverviewValue.effectiveCasesInJobs
                                 }}</span>
                               </div>
                               <div class="stat-item">
                                 <span class="stat-label">Doppelt kodierte Fälle:</span>
                                 <span class="stat-value">{{
-                                  caseCoverageOverview.doubleCodedCases
+                                  caseCoverageOverviewValue.doubleCodedCases
                                 }}</span>
                               </div>
                               <div class="stat-item">
                                 <span class="stat-label">Einfach kodierte Fälle:</span>
-                                <span class="stat-value">{{ effectiveSingleCodedCases }}</span>
+                                <span class="stat-value">{{ effectiveSingleCodedCases() }}</span>
                               </div>
                               <div class="stat-item">
                                 <span class="stat-label">Nicht zugewiesene Arbeitsfälle:</span>
                                 <span class="stat-value missing">{{
-                                  caseCoverageOverview.effectiveUnassignedCases
+                                  caseCoverageOverviewValue.effectiveUnassignedCases
                                 }}</span>
                               </div>
                               <div class="stat-item">
                                 <span class="stat-label">Abdeckungsrate:</span>
                                 <span class="stat-value percentage"
                                   >{{
-                                  caseCoverageOverview.coveragePercentage | number: '1.1-1'
+                                  caseCoverageOverviewValue.coveragePercentage | number: '1.1-1'
                                   }}%</span
                                   >
                                 </div>
                               </div>
-                              @if (caseCoverageOverview.aggregationActive) {
+                              @if (caseCoverageOverviewValue.aggregationActive) {
                                 <div
                                   class="aggregation-note"
                                   >
@@ -1690,12 +1700,12 @@
                                     'coding-management-manual.coding-progress.aggregation-note'
                                     | translate
                                     : {
-                                    rawCases: caseCoverageOverview.totalCasesToCode,
+                                    rawCases: caseCoverageOverviewValue.totalCasesToCode,
                                     effectiveCases:
-                                    caseCoverageOverview.effectiveTotalCasesToCode,
-                                    threshold: caseCoverageOverview.aggregationThreshold,
+                                    caseCoverageOverviewValue.effectiveTotalCasesToCode,
+                                    threshold: caseCoverageOverviewValue.aggregationThreshold,
                                     collapsedCases:
-                                    caseCoverageOverview.aggregatedDuplicateCases
+                                    caseCoverageOverviewValue.aggregatedDuplicateCases
                                   }
                                   }}
                                 </span>
@@ -1704,11 +1714,11 @@
                             <div class="coverage-bar">
                               <div
                                 class="coverage-fill"
-                                [style.width.%]="caseCoverageOverview.coveragePercentage"
+                                [style.width.%]="caseCoverageOverviewValue.coveragePercentage"
                               ></div>
                             </div>
                           </div>
-                          @if (isLoadingCaseCoverage) {
+                          @if (isLoadingCaseCoverage()) {
                             <div class="loading-overlay">
                               <div class="loading-content">
                                 <mat-spinner diameter="40"></mat-spinner>
@@ -1726,14 +1736,14 @@
                       <!-- Applied Results Section -->
                       @if (isManualTab('completion')) {
                         <div id="manual-completion">
-                          @if (appliedResultsOverview) {
+                          @if (appliedResultsOverviewValue) {
                             <div class="applied-results-section">
                               <div class="statistics-card">
                                 <h2 class="section-title section-title-with-action">
                                   {{ 'applied-results-overview.title' | translate }}
                                   <button
                                     mat-icon-button
-                                    (click)="showAppliedResultsInfo = !showAppliedResultsInfo"
+                                    (click)="showAppliedResultsInfo.set(!showAppliedResultsInfo())"
                   [matTooltip]="
                     'coding-management-manual.applied-results.info-tooltip'
                       | translate
@@ -1747,7 +1757,7 @@
                                     <mat-icon class="section-info-icon">info</mat-icon>
                                   </button>
                                 </h2>
-                                @if (showAppliedResultsInfo) {
+                                @if (showAppliedResultsInfo()) {
                                   <div
                                     class="info-alert applied-results-info"
                                     >
@@ -1777,9 +1787,9 @@
                                     <span class="stat-label">{{
                                       'applied-results-overview.coding-incomplete' | translate
                                     }}</span>
-                                    <span class="stat-value">{{ effectiveCodingCases }}</span>
+                                    <span class="stat-value">{{ effectiveCodingCases() }}</span>
                                   </div>
-                                  @if (aggregationSavings > 0) {
+                                  @if (aggregationSavings() > 0) {
                                     <div class="stat-item">
                                       <span class="stat-label stat-label-success">
                                         <mat-icon class="stat-label-inline-icon">layers</mat-icon>
@@ -1788,7 +1798,7 @@
                                         }}
                                       </span>
                                       <span class="stat-value stat-value-success">{{
-                                        aggregationSavings
+                                        aggregationSavings()
                                       }}</span>
                                     </div>
                                   }
@@ -1797,7 +1807,7 @@
                                       'applied-results-overview.applied-results' | translate
                                     }}</span>
                                     <span class="stat-value covered">{{
-                                      appliedResultsOverview.appliedResponses
+                                      appliedResultsOverviewValue.appliedResponses
                                     }}</span>
                                   </div>
                                   <div class="stat-item">
@@ -1805,10 +1815,10 @@
                                       'applied-results-overview.remaining' | translate
                                     }}</span>
                                     <span class="stat-value missing">{{
-                                      appliedResultsOverview.remainingResponses
+                                      appliedResultsOverviewValue.remainingResponses
                                     }}</span>
                                   </div>
-                                  @if (hasDeriveErrorManualCases) {
+                                  @if (hasDeriveErrorManualCases()) {
                                     <div class="stat-item">
                                       <span class="stat-label">{{
                                         'applied-results-overview.derive-error-additional'
@@ -1819,9 +1829,9 @@
                                         'applied-results-overview.derive-error-progress'
                                         | translate
                                         : {
-                                        applied: deriveErrorAppliedCases,
-                                        total: deriveErrorManualCases,
-                                        remaining: deriveErrorRemainingCases
+                                        applied: deriveErrorAppliedCases(),
+                                        total: deriveErrorManualCases(),
+                                        remaining: deriveErrorRemainingCases()
                                       }
                                       }}
                                     </span>
@@ -1833,13 +1843,13 @@
                                   }}</span>
                                   <span class="stat-value percentage"
                                     >{{
-                                    appliedResultsOverview.completionPercentage
+                                    appliedResultsOverviewValue.completionPercentage
                                     | number: '1.1-1'
                                     }}%</span
                                     >
                                   </div>
                                 </div>
-                                @if (appliedResultsOverview.aggregationActive) {
+                                @if (appliedResultsOverviewValue.aggregationActive) {
                                   <div
                                     class="aggregation-note"
                                     >
@@ -1850,13 +1860,13 @@
                                       | translate
                                       : {
                                       rawCases:
-                                      appliedResultsOverview.rawTotalIncompleteResponses,
+                                      appliedResultsOverviewValue.rawTotalIncompleteResponses,
                                       effectiveCases:
-                                      appliedResultsOverview.totalIncompleteResponses,
+                                      appliedResultsOverviewValue.totalIncompleteResponses,
                                       threshold:
-                                      appliedResultsOverview.aggregationThreshold,
+                                      appliedResultsOverviewValue.aggregationThreshold,
                                       collapsedCases:
-                                      appliedResultsOverview.aggregatedDuplicateCases
+                                      appliedResultsOverviewValue.aggregatedDuplicateCases
                                     }
                                     }}
                                   </span>
@@ -1865,7 +1875,7 @@
                               <div class="coverage-bar">
                                 <div
                                   class="coverage-fill"
-                                  [style.width.%]="appliedResultsOverview.completionPercentage"
+                                  [style.width.%]="appliedResultsOverviewValue.completionPercentage"
                                 ></div>
                               </div>
                               <div
@@ -1903,16 +1913,16 @@
                                       (click)="applyAllCompletedJobResults()"
                     [disabled]="
                       !canApplyCompletedJobResults() ||
-                      isApplyingCodingResults ||
-                      isLoadingCompletedJobsReadyForApply
+                      isApplyingCodingResults() ||
+                      isLoadingCompletedJobsReadyForApply()
                     "
                                       >
-                                      @if (!isApplyingCodingResults) {
+                                      @if (!isApplyingCodingResults()) {
                                         <mat-icon
                                           >done_all</mat-icon
                                           >
                                         }
-                                        @if (isApplyingCodingResults) {
+                                        @if (isApplyingCodingResults()) {
                                           <mat-spinner
                                             diameter="18"
                                           ></mat-spinner>
@@ -1926,7 +1936,7 @@
                                   <div
                                     class="completed-jobs-apply-list"
                                     >
-                                    @for (job of completedJobsReadyForApply; track job) {
+                                    @for (job of completedJobsReadyForApply(); track job) {
                                       <div
                                         class="completed-job-apply-row"
                                         >
@@ -1948,7 +1958,7 @@
                                             type="button"
                                             (click)="applyCompletedJobResults(job)"
                     [disabled]="
-                      isApplyingCodingResults || isApplyingJobResults(job.id)
+                      isApplyingCodingResults() || isApplyingJobResults(job.id)
                     "
                                             >
                                             @if (!isApplyingJobResults(job.id)) {
@@ -1986,7 +1996,7 @@
                                     <div
                                       class="completed-jobs-apply-list review-required-list"
                                       >
-                                      @for (job of completedJobsBlockedForReview; track job) {
+                                      @for (job of completedJobsBlockedForReview(); track job) {
                                         <div
                                           class="completed-job-apply-row"
                                           >
@@ -2026,7 +2036,7 @@
                                 Kodierer-Schulungen
                                 <button
                                   mat-icon-button
-                                  (click)="showCoderTrainingsInfo = !showCoderTrainingsInfo"
+                                  (click)="showCoderTrainingsInfo.set(!showCoderTrainingsInfo())"
               [matTooltip]="
                 'coding-management-manual.coder-trainings.info-tooltip'
                   | translate
@@ -2040,7 +2050,7 @@
                                   <mat-icon class="section-info-icon">info</mat-icon>
                                 </button>
                               </h3>
-                              @if (showCoderTrainingsInfo) {
+                              @if (showCoderTrainingsInfo()) {
                                 <div
                                   class="info-alert coder-trainings-info"
                                   >
@@ -2070,7 +2080,7 @@
                                   mat-stroked-button
                                   color="primary"
                                   type="button"
-                                  [disabled]="isStartingManualExport || isLoadingCodersForExport"
+                                  [disabled]="isStartingManualExport() || isLoadingCodersForExport()"
                                   (click)="openTrainingExport()"
                                   >
                                   <mat-icon>download</mat-icon>
@@ -2170,7 +2180,7 @@
                                 Variablenbündel
                                 <button
                                   mat-icon-button
-                                  (click)="showVariableBundlesInfo = !showVariableBundlesInfo"
+                                  (click)="showVariableBundlesInfo.set(!showVariableBundlesInfo())"
               [matTooltip]="
                 'coding-management-manual.variable-bundles.info-tooltip'
                   | translate
@@ -2184,7 +2194,7 @@
                                   <mat-icon class="section-info-icon">info</mat-icon>
                                 </button>
                               </h3>
-                              @if (showVariableBundlesInfo) {
+                              @if (showVariableBundlesInfo()) {
                                 <div
                                   class="info-alert variable-bundles-info"
                                   >
@@ -2235,11 +2245,11 @@
                         />
 
                       <!-- Coder Training Component -->
-                      @if (showCoderTraining) {
+                      @if (showCoderTraining()) {
                         <div class="coder-training-overlay">
                           <div class="coder-training-modal">
                             <coding-box-coder-training
-                              [editTraining]="editTraining"
+                              [editTraining]="editTrainingValue"
                               (close)="closeCoderTraining()"
                               (startTraining)="onTrainingStart($event)"
                               >

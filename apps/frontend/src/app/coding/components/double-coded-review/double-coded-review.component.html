@@ -46,7 +46,7 @@
                   "
                     >
                     @for (
-                      definition of availableJobDefinitions;
+                      definition of availableJobDefinitions();
                       track definition.id
                       ) {
                       <mat-option [value]="'job_' + definition.id">{{
@@ -60,7 +60,7 @@
                   "
                     >
                     @for (
-                      training of availableCoderTrainings;
+                      training of availableCoderTrainings();
                       track training.id
                       ) {
                       <mat-option [value]="'training_' + training.id">{{
@@ -103,7 +103,7 @@
                   <mat-option [value]="null">{{
                     'double-coded-review.filter.all-coders' | translate
                   }}</mat-option>
-                  @for (coder of availableCoders; track coder.id) {
+                  @for (coder of availableCoders(); track coder.id) {
                     <mat-option [value]="coder.id">{{ coder.name }}</mat-option>
                   }
                 </mat-select>
@@ -146,7 +146,7 @@
                     {{
                     'double-coded-review.statistics.showing-conflicts'
                     | translate
-                    : { visible: dataSource.data.length, total: totalItems }
+                    : { visible: dataSource.data.length, total: totalItems() }
                     }}
                   </span>
                   @if (getUnresolvedCount() > 0) {
@@ -162,7 +162,7 @@
             </div>
           </mat-card-content>
         </mat-card>
-        @if (isLoading) {
+        @if (isLoading()) {
           <div class="loading-container">
             <mat-spinner diameter="40"></mat-spinner>
             <p>{{ 'double-coded-review.loading' | translate }}</p>
@@ -209,7 +209,7 @@
                     }}</mat-card-title>
                     <mat-card-subtitle>{{
                       'double-coded-review.table-subtitle'
-                      | translate: { count: totalItems }
+                      | translate: { count: totalItems() }
                     }}</mat-card-subtitle>
                   </div>
                   <div class="header-actions">
@@ -221,7 +221,7 @@
                       !canApplyReviewResults ||
                       dataSource.data.length === 0 ||
                       !areAllVisibleConflictsResolved() ||
-                      isLoading
+                      isLoading()
                     "
                       >
                       <mat-icon>check_circle</mat-icon>
@@ -245,8 +245,8 @@
                       mat-table
                       [dataSource]="dataSource"
                       matSort
-                      [matSortActive]="sortBy"
-                      [matSortDirection]="sortDirection"
+                      [matSortActive]="sortBy()"
+                      [matSortDirection]="sortDirection()"
                       [matSortDisableClear]="true"
                       (matSortChange)="onSortChange($event)"
                       class="review-table"
@@ -303,8 +303,8 @@
                               color="primary"
                               type="button"
                             [disabled]="
-                              isLoading ||
-                              replayLoadingByResponseId[element.responseId]
+                              isLoading() ||
+                              replayLoadingByResponseId()[element.responseId]
                             "
                             [matTooltip]="
                               'coding-management.tooltips.view-in-replay'
@@ -313,7 +313,7 @@
                               (click)="openReplay(element.responseId)"
                               >
                               <mat-icon>{{
-                                replayLoadingByResponseId[element.responseId]
+                                replayLoadingByResponseId()[element.responseId]
                                 ? 'hourglass_top'
                                 : 'play_circle'
                               }}</mat-icon>
@@ -330,7 +330,7 @@
                           </div>
                         </td>
                       </ng-container>
-                      @for (columnId of dynamicCoderColumns; track columnId) {
+                      @for (columnId of dynamicCoderColumns(); track columnId) {
                         <ng-container [matColumnDef]="columnId">
                           <th
                             mat-header-cell
@@ -420,7 +420,7 @@
                                   </td>
                                 </ng-container>
                               }
-                              @for (columnId of dynamicManagerColumns; track columnId) {
+                              @for (columnId of dynamicManagerColumns(); track columnId) {
                                 <ng-container [matColumnDef]="columnId">
                                   <th mat-header-cell *matHeaderCellDef>
                                     {{ getManagerColumnHeader(columnId) }}
@@ -477,7 +477,7 @@
                                       <coding-box-double-coded-decision-cell
                                         [item]="element"
                                         [canApply]="canApplyReviewResults"
-                                        [isLoading]="isLoading"
+                                        [isLoading]="isLoading()"
                           (selectionChanged)="
                             onSelectionChange(element, $event)
                           "
@@ -485,19 +485,19 @@
                                         />
                                     </td>
                                   </ng-container>
-                                  <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                                  <tr mat-header-row *matHeaderRowDef="displayedColumns()"></tr>
                                   <tr
                                     mat-row
-                                    *matRowDef="let row; columns: displayedColumns"
+                                    *matRowDef="let row; columns: displayedColumns()"
                                     [ngClass]="{ 'resolved-row': row.isResolved }"
                                   ></tr>
                                 </table>
                               </div>
                             </form>
                             <mat-paginator
-                              [length]="totalItems"
-                              [pageIndex]="currentPage - 1"
-                              [pageSize]="pageSize"
+                              [length]="totalItems()"
+                              [pageIndex]="currentPage() - 1"
+                              [pageSize]="pageSize()"
                               [pageSizeOptions]="[5, 10, 25, 50]"
                               (page)="onPageChange($event)"
                               showFirstLastButtons
@@ -568,7 +568,7 @@
                 "
                               >
                               @for (
-                                definition of availableJobDefinitions;
+                                definition of availableJobDefinitions();
                                 track definition.id
                                 ) {
                                 <mat-option [value]="'job_' + definition.id">{{
@@ -581,7 +581,7 @@
                   'double-coded-review.filter.scope-trainings' | translate
                 "
                               >
-                              @for (training of availableCoderTrainings; track training.id) {
+                              @for (training of availableCoderTrainings(); track training.id) {
                                 <mat-option [value]="'training_' + training.id">{{
                                   training.label
                                 }}</mat-option>
@@ -622,7 +622,7 @@
                             <mat-option [value]="null">{{
                               'double-coded-review.filter.all-coders' | translate
                             }}</mat-option>
-                            @for (coder of availableCoders; track coder.id) {
+                            @for (coder of availableCoders(); track coder.id) {
                               <mat-option [value]="coder.id">{{ coder.name }}</mat-option>
                             }
                           </mat-select>
@@ -665,7 +665,7 @@
                               {{
                               'double-coded-review.statistics.showing-conflicts'
                               | translate
-                              : { visible: dataSource.data.length, total: totalItems }
+                              : { visible: dataSource.data.length, total: totalItems() }
                               }}
                             </span>
                             @if (getUnresolvedCount() > 0) {
@@ -681,7 +681,7 @@
                       </div>
                     </mat-card-content>
                   </mat-card>
-                  @if (isLoading) {
+                  @if (isLoading()) {
                     <div class="loading-container">
                       <mat-spinner diameter="40"></mat-spinner>
                       <p>{{ 'double-coded-review.loading' | translate }}</p>
@@ -728,7 +728,7 @@
                               }}</mat-card-title>
                               <mat-card-subtitle>{{
                                 'double-coded-review.table-subtitle'
-                                | translate: { count: totalItems }
+                                | translate: { count: totalItems() }
                               }}</mat-card-subtitle>
                             </div>
                             <div class="header-actions">
@@ -740,7 +740,7 @@
                     !canApplyReviewResults ||
                     dataSource.data.length === 0 ||
                     !areAllVisibleConflictsResolved() ||
-                    isLoading
+                    isLoading()
                   "
                                 >
                                 <mat-icon>check_circle</mat-icon>
@@ -764,8 +764,8 @@
                                 mat-table
                                 [dataSource]="dataSource"
                                 matSort
-                                [matSortActive]="sortBy"
-                                [matSortDirection]="sortDirection"
+                                [matSortActive]="sortBy()"
+                                [matSortDirection]="sortDirection()"
                                 [matSortDisableClear]="true"
                                 (matSortChange)="onSortChange($event)"
                                 class="review-table"
@@ -817,8 +817,8 @@
                                         color="primary"
                                         type="button"
                           [disabled]="
-                            isLoading ||
-                            replayLoadingByResponseId[element.responseId]
+                            isLoading() ||
+                            replayLoadingByResponseId()[element.responseId]
                           "
                           [matTooltip]="
                             'coding-management.tooltips.view-in-replay'
@@ -827,7 +827,7 @@
                                         (click)="openReplay(element.responseId)"
                                         >
                                         <mat-icon>{{
-                                          replayLoadingByResponseId[element.responseId]
+                                          replayLoadingByResponseId()[element.responseId]
                                           ? 'hourglass_top'
                                           : 'play_circle'
                                         }}</mat-icon>
@@ -844,7 +844,7 @@
                                     </div>
                                   </td>
                                 </ng-container>
-                                @for (columnId of dynamicCoderColumns; track columnId) {
+                                @for (columnId of dynamicCoderColumns(); track columnId) {
                                   <ng-container [matColumnDef]="columnId">
                                     <th
                                       mat-header-cell
@@ -932,7 +932,7 @@
                                             </td>
                                           </ng-container>
                                         }
-                                        @for (columnId of dynamicManagerColumns; track columnId) {
+                                        @for (columnId of dynamicManagerColumns(); track columnId) {
                                           <ng-container [matColumnDef]="columnId">
                                             <th mat-header-cell *matHeaderCellDef>
                                               {{ getManagerColumnHeader(columnId) }}
@@ -989,25 +989,25 @@
                                                 <coding-box-double-coded-decision-cell
                                                   [item]="element"
                                                   [canApply]="canApplyReviewResults"
-                                                  [isLoading]="isLoading"
+                                                  [isLoading]="isLoading()"
                                                   (selectionChanged)="onSelectionChange(element, $event)"
                                                   (applyDecision)="applySingleDecision(element)"
                                                   />
                                               </td>
                                             </ng-container>
-                                            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                                            <tr mat-header-row *matHeaderRowDef="displayedColumns()"></tr>
                                             <tr
                                               mat-row
-                                              *matRowDef="let row; columns: displayedColumns"
+                                              *matRowDef="let row; columns: displayedColumns()"
                                               [ngClass]="{ 'resolved-row': row.isResolved }"
                                             ></tr>
                                           </table>
                                         </div>
                                       </form>
                                       <mat-paginator
-                                        [length]="totalItems"
-                                        [pageIndex]="currentPage - 1"
-                                        [pageSize]="pageSize"
+                                        [length]="totalItems()"
+                                        [pageIndex]="currentPage() - 1"
+                                        [pageSize]="pageSize()"
                                         [pageSizeOptions]="[5, 10, 25, 50]"
                                         (page)="onPageChange($event)"
                                         showFirstLastButtons

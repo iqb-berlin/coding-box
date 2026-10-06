@@ -313,8 +313,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
       undefined
     );
     expect(mockCoderService.getCoders).toHaveBeenCalled();
-    expect(component.variables.length).toBe(3);
-    expect(component.availableCoders.length).toBe(2);
+    expect(component.variables().length).toBe(3);
+    expect(component.availableCoders().length).toBe(2);
   });
 
   it('loads edit availability excluding the current definition and keeps its variables editable', () => {
@@ -353,8 +353,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
       undefined,
       55
     );
-    expect(component.isVariableDisabled(component.variables[0])).toBe(false);
-    expect(component.isVariableDisabled(component.variables[1])).toBe(true);
+    expect(component.isVariableDisabled(component.variables()[0])).toBe(false);
+    expect(component.isVariableDisabled(component.variables()[1])).toBe(true);
   });
 
   it('should apply availability filters correctly', () => {
@@ -364,19 +364,22 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.dataSource.data.length).toBe(3);
 
     // Filter 'full' (Unit 1: 10/10)
-    component.availabilityFilter = 'full';
+    // Filter 'full' (Unit 1: 10/10)
+    component.availabilityFilter.set('full');
     component.applyAvailabilityFilter();
     expect(component.dataSource.data.length).toBe(1);
     expect(component.dataSource.data[0].unitName).toBe('Unit 1');
 
     // Filter 'none' (Unit 2: 0/5)
-    component.availabilityFilter = 'none';
+    // Filter 'none' (Unit 2: 0/5)
+    component.availabilityFilter.set('none');
     component.applyAvailabilityFilter();
     expect(component.dataSource.data.length).toBe(1);
     expect(component.dataSource.data[0].unitName).toBe('Unit 2');
 
     // Filter 'partial' (Unit 3: 4/8)
-    component.availabilityFilter = 'partial';
+    // Filter 'partial' (Unit 3: 4/8)
+    component.availabilityFilter.set('partial');
     component.applyAvailabilityFilter();
     expect(component.dataSource.data.length).toBe(1);
     expect(component.dataSource.data[0].unitName).toBe('Unit 3');
@@ -402,10 +405,10 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
     createComponent();
 
-    component.unitNameFilter = 'DLV003';
+    component.unitNameFilter.set('DLV003');
     component.applyFilter();
     const selectedFilteredVariable = component.dataSource.data[0];
-    component.selectedVariables.select(selectedFilteredVariable);
+    component.selectedVariables().select(selectedFilteredVariable);
 
     component.clearFilters();
 
@@ -415,9 +418,9 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
     expect(reloadedVariable).toBeDefined();
     expect(reloadedVariable).not.toBe(selectedFilteredVariable);
-    expect(component.selectedVariables.isSelected(reloadedVariable!)).toBe(true);
-    expect(component.selectedVariables.selected).toContain(reloadedVariable);
-    expect(component.selectedVariables.selected).not.toContain(selectedFilteredVariable);
+    expect(component.selectedVariables().isSelected(reloadedVariable!)).toBe(true);
+    expect(component.selectedVariables().selected).toContain(reloadedVariable);
+    expect(component.selectedVariables().selected).not.toContain(selectedFilteredVariable);
   });
 
   it('should subtract existing definition usage from backend availability without repeated subtraction', () => {
@@ -442,9 +445,9 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
     createComponent();
 
-    expect(component.variables[0].availableCases).toBe(2);
+    expect(component.variables()[0].availableCases).toBe(2);
     component.applyJobDefinitionUsage();
-    expect(component.variables[0].availableCases).toBe(2);
+    expect(component.variables()[0].availableCases).toBe(2);
   });
 
   it('should not subtract DERIVE_ERROR-only planned usage from regular frontend availability', () => {
@@ -475,8 +478,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
     createComponent(undefined, true);
 
-    expect(component.variables[0].availableCases).toBe(5);
-    expect(component.variables[0].availableCasesWithDeriveError).toBe(5);
+    expect(component.variables()[0].availableCases).toBe(5);
+    expect(component.variables()[0].availableCasesWithDeriveError).toBe(5);
   });
 
   it('should not subtract planned usage for definitions with already created jobs', () => {
@@ -502,19 +505,19 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
     createComponent();
 
-    expect(component.variables[0].availableCases).toBe(6);
+    expect(component.variables()[0].availableCases).toBe(6);
     component.applyJobDefinitionUsage();
-    expect(component.variables[0].availableCases).toBe(6);
+    expect(component.variables()[0].availableCases).toBe(6);
   });
 
   it('should deselect individual variables if they are covered by a newly selected bundle', () => {
     createComponent();
     // Select Unit 1 individually
-    component.selectedVariables.select(mockVariables[0]);
-    expect(component.selectedVariables.isSelected(mockVariables[0])).toBe(true);
+    component.selectedVariables().select(mockVariables[0]);
+    expect(component.selectedVariables().isSelected(mockVariables[0])).toBe(true);
 
     // Helper to find the bundle containing Unit 1
-    const bundle = component.variableBundles.find(b => b.name === 'Bundle 1');
+    const bundle = component.variableBundles().find(b => b.name === 'Bundle 1');
     expect(bundle).toBeDefined();
 
     // Toggle bundle selection
@@ -522,7 +525,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
     // Should be deselected individually
     expect(component.selectedVariableBundles.isSelected(bundle!)).toBe(true);
-    expect(component.selectedVariables.isSelected(mockVariables[0])).toBe(false);
+    expect(component.selectedVariables().isSelected(mockVariables[0])).toBe(false);
   });
 
   it('should set double coding mode without toggling the selected value back', () => {
@@ -531,13 +534,13 @@ describe('CodingJobDefinitionDialogComponent', () => {
     component.codingJobForm.patchValue({ doubleCodingAbsolute: 3, doubleCodingPercentage: 25 });
     component.setDoubleCodingMode('percentage');
 
-    expect(component.doubleCodingMode).toBe('percentage');
+    expect(component.doubleCodingMode()).toBe('percentage');
     expect(component.codingJobForm.get('doubleCodingAbsolute')?.value).toBe(0);
     expect(component.codingJobForm.get('doubleCodingPercentage')?.value).toBe(25);
 
     component.setDoubleCodingMode('absolute');
 
-    expect(component.doubleCodingMode).toBe('absolute');
+    expect(component.doubleCodingMode()).toBe('absolute');
     expect(component.codingJobForm.get('doubleCodingPercentage')?.value).toBe(0);
   });
 
@@ -560,7 +563,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
     createComponent();
 
     component.selectedCoders.select(mockCoders[0]);
-    component.selectedVariables.select(mockVariables[0]);
+    component.selectedVariables().select(mockVariables[0]);
     component.codingJobForm.patchValue({ durationSeconds: 0 });
 
     await component.onSubmit();
@@ -571,7 +574,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
   it('should count planned coding jobs using selected items and coders', () => {
     createComponent();
-    const bundle = component.variableBundles.find(b => b.name === 'Bundle 1');
+    const bundle = component.variableBundles().find(b => b.name === 'Bundle 1');
     expect(bundle).toBeDefined();
 
     component.selectedCoders.select(mockCoders[0]);
@@ -580,7 +583,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
     expect(component.getCodingJobCount()).toBe(2);
 
-    component.selectedVariables.select(mockVariables[0]);
+    component.selectedVariables().select(mockVariables[0]);
 
     expect(component.getCodingJobCount()).toBe(4);
   });
@@ -588,12 +591,12 @@ describe('CodingJobDefinitionDialogComponent', () => {
   it('should distinguish selected effective cases from cases available for new jobs', () => {
     createComponent();
 
-    const unit2 = component.variables.find(variable => variable.unitName === 'Unit 2');
-    const unit3 = component.variables.find(variable => variable.unitName === 'Unit 3');
+    const unit2 = component.variables().find(variable => variable.unitName === 'Unit 2');
+    const unit3 = component.variables().find(variable => variable.unitName === 'Unit 3');
     expect(unit2).toBeDefined();
     expect(unit3).toBeDefined();
 
-    component.selectedVariables.select(unit2!, unit3!);
+    component.selectedVariables().select(unit2!, unit3!);
 
     expect(component.getSelectedEffectiveCodingCases()).toBe(13);
     expect(component.getDistributableCodingCasesBeforeLimit()).toBe(4);
@@ -612,7 +615,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
     (mockCodingJobBackendService.createJobDefinition as jest.Mock).mockReturnValue(saveSubject.asObservable());
 
     component.selectedCoders.select(mockCoders[0]);
-    component.selectedVariables.select(mockVariables[0]);
+    component.selectedVariables().select(mockVariables[0]);
 
     component.onSubmit();
     component.onSubmit();
@@ -630,10 +633,10 @@ describe('CodingJobDefinitionDialogComponent', () => {
     createComponent();
     (mockCodingJobBackendService.createJobDefinition as jest.Mock).mockReturnValue(of({ id: 123 }));
 
-    const coder = component.availableCoders[0];
+    const coder = component.availableCoders()[0];
     component.selectedCoders.select(coder);
     component.updateCoderCapacityPercent(coder, 50);
-    component.selectedVariables.select(mockVariables[0]);
+    component.selectedVariables().select(mockVariables[0]);
 
     await component.onSubmit();
 
@@ -766,7 +769,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
     (mockCodingJobBackendService.createJobDefinition as jest.Mock).mockReturnValue(of({ id: 123 }));
 
     component.selectedCoders.select(mockCoders[0]);
-    component.selectedVariables.select(mockVariables[0]);
+    component.selectedVariables().select(mockVariables[0]);
     component.setDeriveErrorIncluded(mockVariables[0], true);
 
     await component.onSubmit();
@@ -783,17 +786,17 @@ describe('CodingJobDefinitionDialogComponent', () => {
   it('should show the DERIVE_ERROR opt-in only for variables with DERIVE_ERROR responses', () => {
     createComponent(undefined, true);
 
-    expect(component.hasDeriveErrorResponses(component.variables[0])).toBe(true);
-    expect(component.hasDeriveErrorResponses(component.variables[1])).toBe(false);
+    expect(component.hasDeriveErrorResponses(component.variables()[0])).toBe(true);
+    expect(component.hasDeriveErrorResponses(component.variables()[1])).toBe(false);
     expect(component.dataSource.data.filter(variable => component.hasDeriveErrorResponses(variable))).toHaveLength(1);
   });
 
   it('should not enable DERIVE_ERROR opt-in for variables without DERIVE_ERROR responses', () => {
     createComponent(undefined, true);
 
-    component.setDeriveErrorIncluded(component.variables[1], true);
+    component.setDeriveErrorIncluded(component.variables()[1], true);
 
-    expect(component.variables[1].includeDeriveError).toBe(false);
+    expect(component.variables()[1].includeDeriveError).toBe(false);
   });
 
   it('should allow DERIVE_ERROR-only variables when the workspace opt-in is enabled', async () => {
@@ -815,12 +818,12 @@ describe('CodingJobDefinitionDialogComponent', () => {
     (mockCodingJobBackendService.createJobDefinition as jest.Mock).mockReturnValue(of({ id: 123 }));
 
     createComponent(undefined, true);
-    const variable = component.variables[0];
+    const variable = component.variables()[0];
 
     expect(component.isVariableDisabled(variable)).toBe(false);
 
     component.selectedCoders.select(mockCoders[0]);
-    component.selectedVariables.select(variable);
+    component.selectedVariables().select(variable);
     component.setDeriveErrorIncluded(variable, true);
 
     expect(component.getAvailabilityText(variable)).toBe('3/3');
@@ -864,8 +867,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
     createComponent(undefined, true);
 
-    const regularVariable = component.variables.find(variable => variable.unitName === 'Unit R');
-    const deriveOnlyVariable = component.variables.find(variable => variable.unitName === 'Unit D');
+    const regularVariable = component.variables().find(variable => variable.unitName === 'Unit R');
+    const deriveOnlyVariable = component.variables().find(variable => variable.unitName === 'Unit D');
 
     expect(regularVariable).toBeDefined();
     expect(deriveOnlyVariable).toBeDefined();
@@ -873,8 +876,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
     component.masterToggle();
 
-    expect(component.selectedVariables.isSelected(regularVariable!)).toBe(true);
-    expect(component.selectedVariables.isSelected(deriveOnlyVariable!)).toBe(false);
+    expect(component.selectedVariables().isSelected(regularVariable!)).toBe(true);
+    expect(component.selectedVariables().isSelected(deriveOnlyVariable!)).toBe(false);
     expect(component.isAllSelected()).toBe(true);
   });
 
@@ -898,7 +901,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
     createComponent(undefined, true);
 
     component.selectedCoders.select(mockCoders[0]);
-    component.selectedVariables.select(component.variables[0]);
+    component.selectedVariables().select(component.variables()[0]);
 
     await component.onSubmit();
 
@@ -930,7 +933,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
     createComponent(undefined, true);
 
     component.selectedCoders.select(mockCoders[0]);
-    component.selectedVariables.select(component.variables[0]);
+    component.selectedVariables().select(component.variables()[0]);
 
     component.onSubmitForReview();
 
@@ -947,7 +950,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
     (mockCodingJobBackendService.createJobDefinition as jest.Mock).mockReturnValue(of({ id: 123 }));
 
     component.selectedCoders.select(mockCoders[0]);
-    component.selectedVariables.select(mockVariables[0]);
+    component.selectedVariables().select(mockVariables[0]);
     component.codingJobForm.patchValue({
       name: '  Lesen Klasse 4  ',
       description: '  Erste Erhebung  ',
@@ -968,7 +971,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
       createComponent({ mode: 'job', isEdit: false });
 
       component.selectedCoders.select(mockCoders[0]);
-      component.selectedVariables.select(mockVariables[0]); // Only 1 variable
+      component.selectedVariables().select(mockVariables[0]); // Only 1 variable
 
       const mockCreatedJob = { id: 101, name: 'New Job' };
       (mockCodingJobBackendService.createCodingJob as jest.Mock).mockReturnValue(of(mockCreatedJob));
@@ -991,7 +994,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
       createComponent({ mode: 'job', isEdit: true, codingJob: existingJob as CodingJob });
 
       component.selectedCoders.select(mockCoders[1]); // Change coder
-      component.selectedVariables.select(mockVariables[0]);
+      component.selectedVariables().select(mockVariables[0]);
 
       (mockCodingJobBackendService.updateCodingJob as jest.Mock).mockReturnValue(of(existingJob));
 
@@ -1038,7 +1041,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
     it('should update definition when in definition mode and editing', fakeAsync(() => {
       createComponent({ mode: 'definition', isEdit: true, jobDefinitionId: 555 });
       component.selectedCoders.select(mockCoders[0]);
-      component.selectedVariables.select(mockVariables[0]);
+      component.selectedVariables().select(mockVariables[0]);
       component.codingJobForm.patchValue({
         showScore: true,
         allowComments: false,
@@ -1095,7 +1098,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
       codingJob: definitionAsCodingJob as CodingJob
     }, true);
 
-    component.selectedVariables.select(mockVariables[0]);
+    component.selectedVariables().select(mockVariables[0]);
     component.updateCoderCapacityPercent(component.selectedCoders.selected[0], 150);
     (mockCodingJobBackendService.updateJobDefinition as jest.Mock).mockReturnValue(of({ id: 555 }));
 
@@ -1125,10 +1128,10 @@ describe('CodingJobDefinitionDialogComponent', () => {
       codingJob: definitionAsCodingJob as CodingJob
     }, true);
 
-    const restoredVariable = component.variables.find(variable => variable.unitName === 'Unit 1' && variable.variableId === 'Var 1');
+    const restoredVariable = component.variables().find(variable => variable.unitName === 'Unit 1' && variable.variableId === 'Var 1');
 
     expect(restoredVariable).toBeDefined();
-    expect(component.selectedVariables.selected).toContain(restoredVariable);
+    expect(component.selectedVariables().selected).toContain(restoredVariable);
     expect(restoredVariable?.includeDeriveError).toBe(true);
   });
 
@@ -1180,10 +1183,10 @@ describe('CodingJobDefinitionDialogComponent', () => {
       codingJob: definitionAsCodingJob as CodingJob
     });
 
-    const restoredVariable = component.variables.find(variable => variable.unitName === 'Unit 1' && variable.variableId === 'Var 1');
+    const restoredVariable = component.variables().find(variable => variable.unitName === 'Unit 1' && variable.variableId === 'Var 1');
 
     expect(restoredVariable).toBeDefined();
-    expect(component.selectedVariables.selected).toContain(restoredVariable);
+    expect(component.selectedVariables().selected).toContain(restoredVariable);
     expect(restoredVariable?.includeDeriveError).toBe(false);
   });
 
@@ -1220,7 +1223,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
     await component.onSubmit();
 
     expect(component.selectedCoders.selected.map(coder => coder.id)).toEqual([1]);
-    expect(component.doubleCodingMode).toBe('absolute');
+    expect(component.doubleCodingMode()).toBe('absolute');
     expect(mockCodingJobBackendService.updateJobDefinition).not.toHaveBeenCalled();
     expect(mockDialogRef.close).toHaveBeenCalled();
   });
@@ -1231,8 +1234,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
       // Select 2 variables
       component.selectedCoders.select({ ...mockCoders[0], capacityPercent: 999 });
-      component.selectedVariables.select(mockVariables[0]);
-      component.selectedVariables.select(mockVariables[2]);
+      component.selectedVariables().select(mockVariables[0]);
+      component.selectedVariables().select(mockVariables[2]);
       component.codingJobForm.patchValue({
         caseOrderingMode: 'alternating',
         maxCodingCases: 3
@@ -1266,7 +1269,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
       createComponent({ mode: 'job', isEdit: false });
 
       component.selectedCoders.select(mockCoders[0], mockCoders[1]);
-      component.selectedVariables.select(mockVariables[0]);
+      component.selectedVariables().select(mockVariables[0]);
 
       const dialogRefMock = {
         afterClosed: () => of({
@@ -1301,7 +1304,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
     it('should open bulk creation dialog when a bundle has multiple coders selected', async () => {
       createComponent({ mode: 'job', isEdit: false });
 
-      const bundle = component.variableBundles.find(b => b.name === 'Bundle 1');
+      const bundle = component.variableBundles().find(b => b.name === 'Bundle 1');
       expect(bundle).toBeDefined();
 
       component.selectedCoders.select(mockCoders[0], mockCoders[1]);
@@ -1340,8 +1343,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
   it('should validate maxCodingCases against selected input', () => {
     createComponent();
-    component.selectedVariables.select(component.variables[0]); // 10 cases
-    component.selectedVariables.select(component.variables[2]); // 4 cases
+    component.selectedVariables().select(component.variables()[0]); // 10 cases
+    component.selectedVariables().select(component.variables()[2]); // 4 cases
     // Total 14
 
     // Set limit
@@ -1356,7 +1359,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
   it('should use synchronized availability for bundle variables in total case count', () => {
     createComponent();
 
-    const bundle = component.variableBundles.find(b => b.name === 'Bundle 1');
+    const bundle = component.variableBundles().find(b => b.name === 'Bundle 1');
     expect(bundle).toBeDefined();
 
     if (bundle) {
@@ -1394,7 +1397,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
     (mockCodingJobBackendService.createJobDefinition as jest.Mock).mockReturnValue(of({ id: 123 }));
 
     createComponent(undefined, true);
-    const bundle = component.variableBundles[0];
+    const bundle = component.variableBundles()[0];
     const bundleVariable = bundle.variables[0];
 
     component.selectedCoders.select(mockCoders[0]);
@@ -1469,17 +1472,17 @@ describe('CodingJobDefinitionDialogComponent', () => {
   it('should calculate double coding totals per selected variable', () => {
     createComponent();
 
-    component.selectedVariables.select(component.variables[0]);
-    component.selectedVariables.select(component.variables[2]);
+    component.selectedVariables().select(component.variables()[0]);
+    component.selectedVariables().select(component.variables()[2]);
 
-    component.doubleCodingMode = 'absolute';
+    component.doubleCodingMode.set('absolute');
     component.codingJobForm.patchValue({ doubleCodingAbsolute: 2 });
 
     expect(component.getTotalCodingCases()).toBe(14);
     expect(component.getTotalDoubleCodedCases()).toBe(4);
     expect(component.getTotalCodingTasks()).toBe(18);
 
-    component.doubleCodingMode = 'percentage';
+    component.doubleCodingMode.set('percentage');
     component.codingJobForm.patchValue({ doubleCodingPercentage: 10 });
 
     expect(component.getTotalDoubleCodedCases()).toBe(2);
@@ -1490,12 +1493,12 @@ describe('CodingJobDefinitionDialogComponent', () => {
     (mockCodingJobBackendService.getJobDefinitions as jest.Mock).mockReturnValue(of([]));
     createComponent();
 
-    const bundle = component.variableBundles.find(b => b.name === 'Bundle 1');
+    const bundle = component.variableBundles().find(b => b.name === 'Bundle 1');
     expect(bundle).toBeDefined();
 
     component.selectedVariableBundles.select(bundle!);
-    component.selectedVariables.select(component.variables[1]);
-    component.doubleCodingMode = 'absolute';
+    component.selectedVariables().select(component.variables()[1]);
+    component.doubleCodingMode.set('absolute');
     component.codingJobForm.patchValue({
       maxCodingCases: 6,
       doubleCodingAbsolute: 2
@@ -1528,10 +1531,10 @@ describe('CodingJobDefinitionDialogComponent', () => {
     createComponent();
     (mockDistributedCodingService.calculateDistribution as jest.Mock).mockClear();
 
-    const bundle = component.variableBundles.find(b => b.name === 'Bundle 1');
+    const bundle = component.variableBundles().find(b => b.name === 'Bundle 1');
     expect(bundle).toBeDefined();
 
-    component.selectedCoders.select(component.availableCoders[0], component.availableCoders[1]);
+    component.selectedCoders.select(component.availableCoders()[0], component.availableCoders()[1]);
     component.selectedVariableBundles.select(bundle!);
     component.codingJobForm.patchValue({
       maxCodingCases: 6,
@@ -1570,8 +1573,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
     createComponent();
     (mockDistributedCodingService.calculateDistribution as jest.Mock).mockClear();
 
-    component.selectedCoders.select(component.availableCoders[0]);
-    component.selectedVariables.select(component.variables[0]);
+    component.selectedCoders.select(component.availableCoders()[0]);
+    component.selectedVariables().select(component.variables()[0]);
     tick(300);
 
     expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledTimes(1);
@@ -1589,8 +1592,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
   it('should not recalculate distribution for unrelated definition fields', fakeAsync(() => {
     createComponent();
-    component.selectedCoders.select(component.availableCoders[0]);
-    component.selectedVariables.select(component.variables[0]);
+    component.selectedCoders.select(component.availableCoders()[0]);
+    component.selectedVariables().select(component.variables()[0]);
     tick(300);
     (mockDistributedCodingService.calculateDistribution as jest.Mock).mockClear();
 
@@ -1611,8 +1614,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
     expect(component.codingJobForm.get('name')?.invalid).toBe(true);
 
-    component.selectedCoders.select(component.availableCoders[0]);
-    component.selectedVariables.select(component.variables[0]);
+    component.selectedCoders.select(component.availableCoders()[0]);
+    component.selectedVariables().select(component.variables()[0]);
     tick(300);
 
     expect(mockDistributedCodingService.calculateDistribution).toHaveBeenCalledTimes(1);
@@ -1623,7 +1626,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
     (mockCodingJobBackendService.createJobDefinition as jest.Mock).mockReturnValue(of({ id: 123 }));
 
     component.selectedCoders.select(mockCoders[0]);
-    component.selectedVariables.select(mockVariables[0]);
+    component.selectedVariables().select(mockVariables[0]);
 
     component.onSubmitForReview();
 
@@ -1641,7 +1644,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
     component.selectedCoders.select(mockCoders[1]);
 
     // Select Unit 1 (10 cases)
-    component.selectedVariables.select(mockVariables[0]);
+    component.selectedVariables().select(mockVariables[0]);
 
     // Set duration to 60 seconds (1 minute per case)
     component.codingJobForm.patchValue({ durationSeconds: 60 });
@@ -1654,7 +1657,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.getFormattedTimePerCoder()).toBe('5:00');
 
     // Add double coding (absolute: 2)
-    component.doubleCodingMode = 'absolute';
+    // Add double coding (absolute: 2)
+    component.doubleCodingMode.set('absolute');
     component.codingJobForm.patchValue({ doubleCodingAbsolute: 2 });
 
     // Total tasks: 10 (unique) + 2 (double) = 12
@@ -1666,7 +1670,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.getFormattedTimePerCoder()).toBe('6:00');
 
     // Switch to percentage (50%)
-    component.doubleCodingMode = 'percentage';
+    // Switch to percentage (50%)
+    component.doubleCodingMode.set('percentage');
     component.codingJobForm.patchValue({ doubleCodingPercentage: 50 });
 
     // Total tasks: 10 + ceil(0.5 * 10) = 15
@@ -1680,7 +1685,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
   it('should include coder capacity in the time-per-coder estimate', () => {
     createComponent();
 
-    component.selectedVariables.select(mockVariables[0]);
+    component.selectedVariables().select(mockVariables[0]);
     component.codingJobForm.patchValue({ durationSeconds: 60 });
 
     component.selectedCoders.select(
@@ -1702,9 +1707,9 @@ describe('CodingJobDefinitionDialogComponent', () => {
     const sessionRecoveryService = TestBed.inject(SessionRecoveryService);
     sessionRecoveryService.clearAllDrafts();
 
-    const selectedCoder = component.availableCoders[0];
-    const selectedVariable = component.variables[1];
-    const selectedBundle = component.variableBundles[0];
+    const selectedCoder = component.availableCoders()[0];
+    const selectedVariable = component.variables()[1];
+    const selectedBundle = component.variableBundles()[0];
 
     component.codingJobForm.patchValue({
       name: 'Lesen Klasse 4',
@@ -1720,14 +1725,14 @@ describe('CodingJobDefinitionDialogComponent', () => {
     });
     component.updateCoderCapacityPercent(selectedCoder, 150);
     component.selectedCoders.select(selectedCoder);
-    component.selectedVariables.select(selectedVariable);
+    component.selectedVariables().select(selectedVariable);
     component.toggleBundleSelection(selectedBundle);
     component.setBundleOrderingMode(selectedBundle, 'alternating');
-    component.unitNameFilter = 'Unit';
-    component.variableIdFilter = 'Var';
-    component.bundleNameFilter = 'Bundle';
-    component.availabilityFilter = 'partial';
-    component.trainingRequiredFilter = 'false';
+    component.unitNameFilter.set('Unit');
+    component.variableIdFilter.set('Var');
+    component.bundleNameFilter.set('Bundle');
+    component.availabilityFilter.set('partial');
+    component.trainingRequiredFilter.set('false');
 
     sessionRecoveryService.captureRegisteredDrafts();
     expect(sessionRecoveryService.peekDraft('coding-job-definition-active-state')).toEqual(expect.objectContaining({
@@ -1766,15 +1771,15 @@ describe('CodingJobDefinitionDialogComponent', () => {
       expect.objectContaining({ id: 1, capacityPercent: 150 })
     ]);
     // The restored backend filter reload reapplies availability and prunes unavailable variables.
-    expect(component.selectedVariables.selected).toEqual([]);
+    expect(component.selectedVariables().selected).toEqual([]);
     expect(component.selectedVariableBundles.selected).toEqual([
       expect.objectContaining({ id: 1, caseOrderingMode: 'alternating' })
     ]);
-    expect(component.unitNameFilter).toBe('Unit');
-    expect(component.variableIdFilter).toBe('Var');
-    expect(component.bundleNameFilter).toBe('Bundle');
-    expect(component.availabilityFilter).toBe('partial');
-    expect(component.trainingRequiredFilter).toBe('false');
+    expect(component.unitNameFilter()).toBe('Unit');
+    expect(component.variableIdFilter()).toBe('Var');
+    expect(component.bundleNameFilter()).toBe('Bundle');
+    expect(component.availabilityFilter()).toBe('partial');
+    expect(component.trainingRequiredFilter()).toBe('false');
     expect(mockCodingJobBackendService.getCodingIncompleteVariables).toHaveBeenCalledWith(
       1,
       'Unit',

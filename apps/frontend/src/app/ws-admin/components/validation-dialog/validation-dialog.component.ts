@@ -1,6 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy,
-  ChangeDetectorRef
+  Component, Inject, OnInit, OnDestroy
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef
@@ -100,27 +99,11 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
     private appService: AppService,
     private validationTaskStateService: ValidationTaskStateService,
     private batchRunnerService: ValidationBatchRunnerService,
-    private cdr: ChangeDetectorRef,
     private fileService: FileService,
     private snackBar: MatSnackBar
   ) {}
 
   ngOnInit(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-
-    // Subscribe to state changes to ensure UI updates correctly
-    const sub1 = this.validationTaskStateService.observeValidationResults(workspaceId)
-      .subscribe(() => {
-        this.cdr.markForCheck();
-      });
-    this.subscriptions.push(sub1);
-
-    const sub2 = this.validationTaskStateService.observeTaskIds(workspaceId)
-      .subscribe(() => {
-        this.cdr.markForCheck();
-      });
-    this.subscriptions.push(sub2);
-
     // Auto-start functionality
     if (this.data?.autoStart) {
       this.startAllValidations();

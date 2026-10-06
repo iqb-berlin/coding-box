@@ -1,30 +1,30 @@
 <h1 mat-dialog-title>Itemliste</h1>
 <div mat-dialog-content class="dialog-content">
-  @if (isLoading) {
+  @if (isLoading()) {
     <div class="loading-container">
       <mat-spinner diameter="40"></mat-spinner>
       <p>Lade Item-IDs...</p>
     </div>
   }
 
-  @if (error) {
+  @if (error()) {
     <div class="error-container">
       <mat-icon color="warn">error</mat-icon>
-      <p>{{ error }}</p>
+      <p>{{ error() }}</p>
       <button mat-button color="primary" (click)="loadItemIds()">Erneut versuchen</button>
     </div>
   }
 
-  @if (!isLoading && !error) {
+  @if (!isLoading() && !error()) {
     <div>
-      @if (itemGroups.length === 0) {
+      @if (itemGroups().length === 0) {
         <div class="empty-state">
           <p>Keine Items in den Metadaten-Dateien gefunden.</p>
         </div>
       }
-      @if (itemGroups.length > 0) {
+      @if (itemGroups().length > 0) {
         <div class="groups-container">
-          @for (group of itemGroups; track group) {
+          @for (group of itemGroups(); track group) {
             <div class="file-group">
               <h3 class="group-header pointer" (click)="openMetadata(group)" matTooltip="Metadaten anzeigen (Unit)">
                 <mat-icon>folder_open</mat-icon>

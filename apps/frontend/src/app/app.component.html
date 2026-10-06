@@ -25,8 +25,8 @@
       </h1>
 
       <div class="admin-section">
-        @if (currentWorkspaceName) {
-          <span class="workspace-name" [matTooltip]="currentWorkspaceName">{{ currentWorkspaceName }}</span>
+        @if (currentWorkspaceName()) {
+          <span class="workspace-name" [matTooltip]="currentWorkspaceName()">{{ currentWorkspaceName() }}</span>
         }
 
         @if (isAdminUser()) {
