@@ -1,9 +1,11 @@
 # Angular 21 zoneless migration
 
 The regular `main.ts` entry point now uses `provideZonelessChangeDetection()`.
-Production and development builds omit the ZoneJS polyfill. The `zone.js`
-dependency remains for the existing Jest and Cypress component-test environments;
-removing it from those environments is a separate migration.
+Production and development builds omit the ZoneJS polyfill. All frontend Jest
+tests now use `setupZonelessTestEnv()`; timer tests use native Jest timers. Cypress
+component tests use the native zoneless mount adapter and omit the polyfill.
+`zone.js` is no longer a direct dependency;
+Angular tooling can still resolve it as an optional peer without loading it.
 
 This is a source/build change, not confirmation of a deployed production switch.
 The production artifact from PR #1039 was validated on the test instance on
@@ -79,17 +81,18 @@ the affected file-validation spec was rerun afterwards.
 
 ## Run and validate
 
+- `npx nx test frontend --configuration=ci --maxWorkers=2`
+- `npx nx serve frontend`
+- `npx nx build frontend --configuration=production`
+- `env -u ELECTRON_RUN_AS_NODE npx nx e2e frontend --configuration=ci` (requires the production build above)
+- `env -u ELECTRON_RUN_AS_NODE npx nx run frontend:e2e-replay-live --configuration=production`
 - `env -u ELECTRON_RUN_AS_NODE npx nx run frontend:e2e-auth-live --configuration=production`
-- `npx nx serve frontend --configuration=zoneless`
-- `npx nx build frontend --configuration=zoneless`
-- `env -u ELECTRON_RUN_AS_NODE npx nx e2e frontend --configuration=zoneless`
-- `env -u ELECTRON_RUN_AS_NODE npx nx run frontend:e2e-replay-live --configuration=zoneless`
 
-The `zoneless` configuration remains as a compatibility alias with the same
-`main.ts` entry point and writes diagnostic builds to `dist/apps/frontend-zoneless`.
-The regular E2E suite now also checks that ZoneJS is absent. Use
-`npx nx build frontend --configuration=production` for the production artifact.
-The preparation and validation notes below describe the earlier migration stages.
+The separate `zoneless` build, serve, Jest and Cypress configurations have been
+removed. The normal entry points and test environments are zoneless. CI runs the
+complete frontend unit suite once, serves the production artifact for one browser
+suite, and retains independent live replay and authentication checks.
+The dated validation notes below and above describe earlier migration stages.
 
 The code-selector replay integration tests and user-menu tests explicitly use
 `provideZonelessChangeDetection()` and wait for Angular stability rather than

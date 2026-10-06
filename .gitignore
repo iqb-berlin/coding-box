@@ -28,6 +28,8 @@ docker.env
 /cypress/replay-artifacts/
 /cypress/downloads/
 /cypress/screenshots/
+/cypress/component-screenshots/
+/cypress/component-videos/
 /out-tsc
 
 # dependencies

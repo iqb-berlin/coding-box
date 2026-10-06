@@ -1,7 +1,5 @@
 // eslint-disable-next-line max-classes-per-file
-import {
-  ComponentFixture, fakeAsync, TestBed, tick
-} from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -101,14 +99,19 @@ describe('WorkspaceGroupsComponent', () => {
     expect(component.workspacesChanged()).toBe(true);
   });
 
-  it('should refresh auth data after deleting a workspace', fakeAsync(() => {
-    component.deleteWorkspace([3]);
-    tick(1000);
+  it('should refresh auth data after deleting a workspace', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      component.deleteWorkspace([3]);
+      await jest.advanceTimersByTimeAsync(1000);
 
-    expect(appService.refreshAuthData).toHaveBeenCalledTimes(1);
-    expect(component.workspacesChanged()).toBe(true);
-    expect(component.isDeleting()).toBe(false);
-  }));
+      expect(appService.refreshAuthData).toHaveBeenCalledTimes(1);
+      expect(component.workspacesChanged()).toBe(true);
+      expect(component.isDeleting()).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   it('should refresh auth data after changing workspace users', () => {
     component.workspaceSelectionChanged([{ id: 3, name: 'Selected workspace' }]);

@@ -2209,7 +2209,10 @@ describe('ReplayComponent', () => {
 
     appService.emitAuthBootstrapStatus('session-expired');
     appService.emitAuthBootstrapStatus('ready');
-    await Promise.resolve();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
 
     expect(appService.createOwnToken).toHaveBeenCalledWith(
       47,

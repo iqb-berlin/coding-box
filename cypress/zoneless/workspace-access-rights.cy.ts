@@ -1,5 +1,3 @@
-import '../e2e/workspace-access-rights.cy';
-
 describe('zoneless users in workspace access rights', () => {
   for (const role of [{ name: 'administrator', isAdmin: true }, { name: 'study manager', isAdmin: false }]) {
     it(`retains edited rights after a delayed save failure and retries as ${role.name}`, () => {

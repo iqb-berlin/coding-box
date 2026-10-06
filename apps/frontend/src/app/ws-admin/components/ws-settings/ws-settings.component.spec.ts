@@ -1,7 +1,5 @@
 /* eslint-disable max-classes-per-file */
-import {
-  ComponentFixture, fakeAsync, TestBed, tick
-} from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
@@ -512,54 +510,67 @@ describe('WsSettingsComponent', () => {
       jest.spyOn(Storage.prototype, 'getItem').mockReturnValue('test-token');
     });
 
-    it('should start export job, poll status and download file', fakeAsync(() => {
-      const anchor = document.createElement('a');
-      const clickSpy = jest.spyOn(anchor, 'click').mockImplementation(() => {});
-      const createElementSpy = jest.spyOn(document, 'createElement').mockReturnValue(anchor as HTMLAnchorElement);
+    it('should start export job, poll status and download file', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        const anchor = document.createElement('a');
+        const clickSpy = jest.spyOn(anchor, 'click').mockImplementation(() => {});
+        const createElement = document.createElement.bind(document);
+        const createElementSpy = jest.spyOn(document, 'createElement').mockImplementation(
+          (tagName, options) => (tagName === 'a' ? anchor : createElement(tagName, options))
+        );
 
-      const appendChildSpy = jest.spyOn(document.body, 'appendChild').mockImplementation(node => node);
-      const removeChildSpy = jest.spyOn(document.body, 'removeChild').mockImplementation(node => node);
+        const appendChildSpy = jest.spyOn(document.body, 'appendChild').mockImplementation(node => node);
+        const removeChildSpy = jest.spyOn(document.body, 'removeChild').mockImplementation(node => node);
 
-      component.exportWorkspaceDatabase();
+        component.exportWorkspaceDatabase();
 
-      const startRequest = httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/job');
-      expect(startRequest.request.method).toBe('POST');
-      startRequest.flush({ jobId: 'job-1', message: 'started' });
+        const startRequest = httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/job');
+        expect(startRequest.request.method).toBe('POST');
+        startRequest.flush({ jobId: 'job-1', message: 'started' });
 
-      tick(0);
+        await jest.advanceTimersByTimeAsync(0);
 
-      const statusRequest = httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/job/job-1');
-      expect(statusRequest.request.method).toBe('GET');
-      statusRequest.flush({ status: 'completed', progress: 100 });
+        const statusRequest = httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/job/job-1');
+        expect(statusRequest.request.method).toBe('GET');
+        statusRequest.flush({ status: 'completed', progress: 100 });
 
-      const downloadRequest = httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/job/job-1/download');
-      expect(downloadRequest.request.method).toBe('GET');
-      downloadRequest.flush(new Blob(['test']));
+        const downloadRequest = httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/job/job-1/download');
+        expect(downloadRequest.request.method).toBe('GET');
+        downloadRequest.flush(new Blob(['test']));
 
-      expect(clickSpy).toHaveBeenCalled();
-      expect(component.isExporting()).toBe(false);
-      expect(component.databaseExportStatus()).toBe('completed');
+        expect(clickSpy).toHaveBeenCalled();
+        expect(component.isExporting()).toBe(false);
+        expect(component.databaseExportStatus()).toBe('completed');
 
-      appendChildSpy.mockRestore();
-      removeChildSpy.mockRestore();
-      createElementSpy.mockRestore();
-    }));
+        appendChildSpy.mockRestore();
+        removeChildSpy.mockRestore();
+        createElementSpy.mockRestore();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
-    it('renders background export progress after polling without another UI event', fakeAsync(() => {
-      component.exportWorkspaceDatabase();
-      fixture.detectChanges();
+    it('renders background export progress after polling without another UI event', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        component.exportWorkspaceDatabase();
+        fixture.detectChanges();
 
-      httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/job')
-        .flush({ jobId: 'job-1', message: 'started' });
-      tick(0);
-      httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/job/job-1')
-        .flush({ status: 'running', progress: 42 });
-      tick(0);
+        httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/job')
+          .flush({ jobId: 'job-1', message: 'started' });
+        await jest.advanceTimersByTimeAsync(0);
+        httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/job/job-1')
+          .flush({ status: 'running', progress: 42 });
+        await jest.advanceTimersByTimeAsync(0);
 
-      expect(fixture.nativeElement.querySelector('.database-export-card .progress-text').textContent)
-        .toContain('42');
-      component.ngOnDestroy();
-    }));
+        expect(fixture.nativeElement.querySelector('.database-export-card .progress-text').textContent)
+          .toContain('42');
+        component.ngOnDestroy();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
     it('should start export without a local token because auth is handled by the interceptor', () => {
       jest.spyOn(localStorage, 'getItem').mockReturnValue(null);

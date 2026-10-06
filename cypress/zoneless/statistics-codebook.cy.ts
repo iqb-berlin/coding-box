@@ -200,6 +200,7 @@ describe('Zoneless replay statistics and codebook export', () => {
       }).as('startCodebook');
       let finish = false;
       cy.intercept('GET', '**/api/admin/workspace/5/coding/codebook/job/job-1', request => {
+        if (finish) request.alias = 'terminalCodebookProgress';
         request.reply({ delay: 400, body: finish ? {
           status: outcome, progress: 100, error: outcome === 'failed' ? 'Codebook failed' : undefined
         } : { status: 'processing', progress: 64 } });
@@ -224,6 +225,7 @@ describe('Zoneless replay statistics and codebook export', () => {
       cy.wait('@codebookProgress');
       cy.get('@dialog').find('.progress-percentage').should('contain.text', '64%');
       cy.then(() => { finish = true; });
+      cy.wait('@terminalCodebookProgress').its('response.body.status').should('eq', outcome);
       cy.get('@dialog').find(`.progress-container.${outcome}`).should('be.visible');
       cy.get('@dialog').find('button[type="submit"]').should('not.be.disabled');
       if (outcome === 'completed') {
