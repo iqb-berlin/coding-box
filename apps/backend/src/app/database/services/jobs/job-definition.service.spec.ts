@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { In } from 'typeorm';
 import type { DistributionVariableUsageByStatus } from '../coding/coding-job.service';
 import { JobDefinitionService } from './job-definition.service';
+import { JournalService } from '../shared/journal.service';
 
 jest.mock('../coding/coding-job.service', () => ({
   CodingJobService: jest.fn()
@@ -21,7 +22,9 @@ const createRepo = () => {
     manager: {
       transaction: jest.fn(async (callback: (manager: {
         getRepository: jest.Mock;
+        query: jest.Mock;
       }) => Promise<unknown>) => callback({
+        query: jest.fn().mockResolvedValue([]),
         getRepository: jest.fn(() => repo)
       }))
     }
@@ -54,6 +57,7 @@ describe('JobDefinitionService', () => {
   let service: JobDefinitionService;
 
   beforeEach(() => {
+    jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     jobDefinitionRepository = createRepo();
     variableBundleRepository = createRepo();
     usersRepository = createRepo();
@@ -1915,7 +1919,8 @@ describe('JobDefinitionService', () => {
       },
       expect.objectContaining({
         getRepository: expect.any(Function)
-      })
+      }),
+      undefined
     );
     expect(jobDefinitionRepository.manager.transaction).toHaveBeenCalledTimes(1);
     expect(jobDefinitionRepository.save).toHaveBeenCalled();
@@ -2350,11 +2355,15 @@ describe('JobDefinitionService', () => {
         maxCodingCases: 4,
         distributionSeed: 'seed-2'
       }),
-      expect.any(Function)
+      expect.any(Function),
+      undefined
     );
     expect(jobDefinitionRepository.save).toHaveBeenCalledWith(expect.objectContaining({
       id: 2,
       max_coding_cases: 4
+    }));
+    expect(JournalService.recordEventInTransaction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      workspaceId: 7, entityId: 2, eventType: 'JOB_DEFINITION_UPDATED'
     }));
     expect(jobDefinitionRepository.save).toHaveBeenCalledWith(expect.objectContaining({
       distribution_snapshots: [
@@ -2432,7 +2441,8 @@ describe('JobDefinitionService', () => {
         maxCodingCases: 4,
         distributionSeed: 'seed-2'
       }),
-      expect.any(Function)
+      expect.any(Function),
+      undefined
     );
   });
 
@@ -2994,7 +3004,8 @@ describe('JobDefinitionService', () => {
         allowComments: false,
         suppressGeneralInstructions: true
       },
-      expect.any(Function)
+      expect.any(Function),
+      undefined
     );
     expect(jobDefinitionRepository.save).toHaveBeenCalledWith(expect.objectContaining({
       distribution_snapshots: [
@@ -3258,7 +3269,8 @@ describe('JobDefinitionService', () => {
           caseOrderingMode: undefined
         }]
       }),
-      expect.any(Function)
+      expect.any(Function),
+      undefined
     );
   });
 

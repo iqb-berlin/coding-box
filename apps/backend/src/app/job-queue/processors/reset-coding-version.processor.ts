@@ -44,7 +44,8 @@ export class ResetCodingVersionProcessor {
         job.data.version,
         job.data.unitFilters,
         job.data.variableFilters,
-        progressCallback
+        progressCallback,
+        { actorUserId: job.data.requestedByUserId, jobId: job.id }
       );
 
       await job.progress(100);

@@ -85,6 +85,11 @@ type FreshnessUpsert = {
 
 type ResetFreshnessUnitMap = Partial<Record<CodingFreshnessVersion, number[]>>;
 
+type ResetFreshnessScopeOptions = {
+  unitIds?: number[];
+  manager?: EntityManager;
+};
+
 type MarkManualCodingCurrentOptions = {
   codingJobId?: number;
   clearCoveredReviewJobs?: boolean;
@@ -768,8 +773,9 @@ export class CodingFreshnessService {
 
   async markVersionsPendingAfterReset(
     workspaceId: number,
-    resetUnitIdsByVersion: ResetFreshnessUnitMap
-  ): Promise<void> {
+    resetUnitIdsByVersion: ResetFreshnessUnitMap,
+    manager?: EntityManager
+  ): Promise<number[]> {
     const entries = this.uniqueVersions(
       Object.keys(resetUnitIdsByVersion) as CodingFreshnessVersion[]
     )
@@ -780,20 +786,21 @@ export class CodingFreshnessService {
       .filter(entry => entry.unitIds.length > 0);
 
     if (entries.length === 0) {
-      return;
+      return [];
     }
 
     const includedUnitIds = await this.filterIncludedUnitIds(
       workspaceId,
-      this.uniquePositiveIds(entries.flatMap(entry => entry.unitIds))
+      this.uniquePositiveIds(entries.flatMap(entry => entry.unitIds)),
+      manager
     );
     if (includedUnitIds.length === 0) {
-      return;
+      return [];
     }
 
     const includedUnitIdSet = new Set(includedUnitIds);
-    const revision = await this.getCurrentRevision(workspaceId);
-    const responseCounts = await this.getResponseCountsByUnit(workspaceId, includedUnitIds);
+    const revision = await this.getCurrentRevision(workspaceId, manager);
+    const responseCounts = await this.getResponseCountsByUnit(workspaceId, includedUnitIds, manager);
     const rows: FreshnessUpsert[] = [];
 
     entries.forEach(entry => {
@@ -813,7 +820,7 @@ export class CodingFreshnessService {
         )));
     });
 
-    await this.upsertRows(rows);
+    await this.upsertRows(rows, manager);
 
     const manualReviewUnitIds = this.uniquePositiveIds(entries
       .filter(entry => entry.version === 'v1')
@@ -825,27 +832,33 @@ export class CodingFreshnessService {
         workspaceId,
         manualReviewUnitIds,
         'RESET',
-        'stale_source'
+        'stale_source',
+        manager
       );
     }
+    return manualReviewUnitIds;
   }
 
   async markExistingAutoCodingVersionsPendingAfterResetScope(
     workspaceId: number,
     versions: CodingFreshnessVersion[],
     unitNames?: string[],
-    variableIds?: string[]
-  ): Promise<void> {
+    variableIds?: string[],
+    options: ResetFreshnessScopeOptions = {}
+  ): Promise<number[]> {
     const autoCodingVersions = this.uniqueVersions(versions)
       .filter((version): version is Extract<CodingFreshnessVersion, 'v1' | 'v3'> => (
         version === 'v1' || version === 'v3'
       ));
     if (autoCodingVersions.length === 0) {
-      return;
+      return [];
     }
     const autoCodingVersionSet = new Set<CodingFreshnessVersion>(autoCodingVersions);
 
-    const query = this.responseRepository
+    const unitIds = options.unitIds === undefined ? undefined : this.uniquePositiveIds(options.unitIds);
+    if (unitIds?.length === 0) return [];
+    const responseRepository = options.manager ? options.manager.getRepository(ResponseEntity) : this.responseRepository;
+    const query = responseRepository
       .createQueryBuilder('response')
       .select('response.unitid', 'unitId')
       .addSelect('freshness.version', 'version')
@@ -868,6 +881,10 @@ export class CodingFreshnessService {
       .groupBy('response.unitid')
       .addGroupBy('freshness.version');
 
+    if (unitIds) {
+      query.andWhere('response.unitid IN (:...unitIds)', { unitIds });
+    }
+
     const scopedUnitNames = this.uniqueStrings(unitNames || []);
     if (scopedUnitNames.length > 0) {
       query.andWhere('unit.name IN (:...unitNames)', { unitNames: scopedUnitNames });
@@ -880,7 +897,7 @@ export class CodingFreshnessService {
       });
     }
 
-    await this.applyWorkspaceExclusions(workspaceId, query);
+    await this.applyWorkspaceExclusions(workspaceId, query, options.manager);
 
     const rows = await query.getRawMany<{
       unitId: number | string;
@@ -900,30 +917,38 @@ export class CodingFreshnessService {
       ];
     });
 
-    await this.markVersionsPendingAfterReset(workspaceId, resetUnitIdsByVersion);
+    return this.markVersionsPendingAfterReset(workspaceId, resetUnitIdsByVersion, options.manager);
   }
 
   async clearVersionsAfterReset(
     workspaceId: number,
     versions: CodingFreshnessVersion[],
     unitNames?: string[],
-    variableIds?: string[]
+    variableIds?: string[],
+    options: ResetFreshnessScopeOptions = {}
   ): Promise<void> {
     if (versions.length === 0) {
       return;
     }
 
-    const query = this.freshnessRepository
+    const unitIds = options.unitIds === undefined ? undefined : this.uniquePositiveIds(options.unitIds);
+    if (unitIds?.length === 0) return;
+    const freshnessRepository = options.manager ? options.manager.getRepository(CodingUnitFreshness) : this.freshnessRepository;
+    const query = freshnessRepository
       .createQueryBuilder()
       .delete()
       .from(CodingUnitFreshness)
       .where('workspace_id = :workspaceId', { workspaceId })
       .andWhere('version IN (:...versions)', { versions });
 
+    if (unitIds) {
+      query.andWhere('unit_id IN (:...resetUnitIds)', { resetUnitIds: unitIds });
+    }
+
     const scopedUnitNames = this.uniqueStrings(unitNames || []);
     const scopedVariableIds = this.uniqueStrings(variableIds || []);
     if (scopedUnitNames.length > 0 || scopedVariableIds.length > 0) {
-      const unitQuery = this.connection
+      const unitQuery = (options.manager ?? this.connection)
         .createQueryBuilder()
         .select('DISTINCT unit.id', 'id')
         .from('unit', 'unit')
@@ -943,8 +968,8 @@ export class CodingFreshnessService {
           });
       }
 
-      const unitIds = await unitQuery.getRawMany<{ id: number | string }>();
-      const ids = this.uniquePositiveIds(unitIds.map(row => Number(row.id)));
+      const unitRows = await unitQuery.getRawMany<{ id: number | string }>();
+      const ids = this.uniquePositiveIds(unitRows.map(row => Number(row.id)));
       if (ids.length === 0) {
         return;
       }
@@ -961,11 +986,77 @@ export class CodingFreshnessService {
     status: Exclude<CodingJobFreshnessStatus, 'current'> = 'stale_source',
     manager?: EntityManager
   ): Promise<void> {
+    await this.markCodingJobsStaleForScope(workspaceId, unitIds, [], reason, status, manager);
+  }
+
+  async markCodingJobsStaleForResetScope(
+    workspaceId: number,
+    unitIds: number[],
+    responseIds: number[],
+    manager: EntityManager
+  ): Promise<void> {
+    await this.markCodingJobsStaleForScope(workspaceId, unitIds, responseIds, 'RESET', 'stale_source', manager);
+  }
+
+  async updateStaleCodingJobResetCountsForResponseIds(
+    workspaceId: number,
+    responseIds: number[],
+    manager: EntityManager
+  ): Promise<void> {
+    const ids = this.uniquePositiveIds(responseIds);
+    if (ids.length === 0) return;
+
+    await manager.query(
+      `
+        WITH affected_jobs AS (
+          SELECT
+            cju.coding_job_id,
+            COUNT(DISTINCT CONCAT_WS('|', cju.person_login, cju.booklet_name, cju.unit_name)) AS affected_units,
+            COUNT(DISTINCT cju.response_id) AS affected_responses
+          FROM coding_job_unit cju
+          INNER JOIN coding_job cj ON cj.id = cju.coding_job_id
+          WHERE cj.workspace_id = $1
+            AND COALESCE(cju.workspace_id, cj.workspace_id) = $1
+            AND cj.training_id IS NULL
+            AND ${getNonCodingIssueReviewJobSqlCondition('cj')}
+            AND cj.status = 'completed'
+            AND cj.freshness_status = 'stale_source'
+            AND cju.response_id = ANY($2::int[])
+          GROUP BY cju.coding_job_id
+        )
+        UPDATE coding_job cj
+        SET freshness_affected_units = GREATEST(
+              COALESCE(cj.freshness_affected_units, 0),
+              affected_jobs.affected_units::int
+            ),
+            freshness_affected_responses = GREATEST(
+              COALESCE(cj.freshness_affected_responses, 0),
+              affected_jobs.affected_responses::int
+            ),
+            freshness_updated_at = now(),
+            updated_at = now()
+        FROM affected_jobs
+        WHERE cj.id = affected_jobs.coding_job_id
+      `,
+      [workspaceId, ids]
+    );
+  }
+
+  private async markCodingJobsStaleForScope(
+    workspaceId: number,
+    unitIds: number[],
+    responseIds: number[],
+    reason: CodingFreshnessReason,
+    status: Exclude<CodingJobFreshnessStatus, 'current'>,
+    manager?: EntityManager
+  ): Promise<void> {
     const ids = this.uniquePositiveIds(unitIds);
-    if (ids.length === 0) {
+    const additionalResponseIds = this.uniquePositiveIds(responseIds);
+    if (ids.length === 0 && additionalResponseIds.length === 0) {
       return;
     }
 
+    const includeResponseIds = additionalResponseIds.length > 0;
     const queryRunner = manager ?? this.connection;
     await queryRunner.query(
       `
@@ -981,7 +1072,7 @@ export class CodingFreshnessService {
             AND COALESCE(cju.workspace_id, cj.workspace_id) = $1
             AND cj.training_id IS NULL
             AND ${getNonCodingIssueReviewJobSqlCondition('cj')}
-            AND resp.unitid = ANY($2::int[])
+            AND (resp.unitid = ANY($2::int[])${includeResponseIds ? ' OR cju.response_id = ANY($5::int[])' : ''})
           GROUP BY cju.coding_job_id
         )
         UPDATE coding_job cj
@@ -1006,7 +1097,7 @@ export class CodingFreshnessService {
         FROM affected_jobs
         WHERE cj.id = affected_jobs.coding_job_id
       `,
-      [workspaceId, ids, status, reason]
+      includeResponseIds ? [workspaceId, ids, status, reason, additionalResponseIds] : [workspaceId, ids, status, reason]
     );
   }
 
@@ -1852,6 +1943,7 @@ export class CodingFreshnessService {
       const includedIds = new Set(rows.map(row => Number(row.id)));
       return ids.filter(id => includedIds.has(id));
     } catch (error) {
+      if (manager) throw error;
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(
         `Could not apply workspace exclusions to coding freshness units: ${message}`
@@ -1950,6 +2042,7 @@ export class CodingFreshnessService {
         applyResolvedExclusionsToQuery(query, exclusions);
       }
     } catch (error) {
+      if (manager) throw error;
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(
         `Could not apply workspace exclusions to coding freshness summary: ${message}`

@@ -175,9 +175,9 @@ describe('WorkspaceCodingStatisticsController', () => {
       selectedCoders: [{ id: 1, name: 'Coder', username: 'coder' }]
     };
 
-    await controller.createDistributedCodingJobs(5, body);
+    await controller.createDistributedCodingJobs(5, body, { user: { id: 7 } });
 
-    expect(codingJobService.createDistributedCodingJobs).toHaveBeenCalledWith(5, body);
+    expect(codingJobService.createDistributedCodingJobs).toHaveBeenCalledWith(5, body, undefined, 7);
   });
 
   it('runs distribution previews through the concurrency limiter', async () => {

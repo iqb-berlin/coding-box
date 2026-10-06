@@ -31,6 +31,8 @@ import {
   JobDefinitionRefreshPreviewDto
 } from '../../../../../../../api-dto/coding/job-refresh.dto';
 import { sanitizeCsvText } from '../../../utils/csv.util';
+import { JournalService } from '../shared/journal.service';
+import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
 
 type JobDefinitionBundleForUsage = JobDefinitionVariableBundle & {
   variables?: JobDefinitionVariable[];
@@ -1013,80 +1015,85 @@ export class JobDefinitionService {
     await repository.save(jobDefinition);
   }
 
-  async createJobDefinition(createDto: CreateJobDefinitionDto, workspaceId: number): Promise<JobDefinition> {
-    const coderAssignments = this.resolveCoderAssignments(createDto);
-    const distributionSeed = createDto.distributionSeed || this.createDistributionSeed(workspaceId);
-    const missingsProfileId = await this.missingsProfilesService.resolveMissingsProfileId(
-      workspaceId,
-      createDto.missingsProfileId
-    );
-
-    await this.codingJobService.assertDeriveErrorManualCodingEnabled(
-      workspaceId,
-      {
-        selectedVariables: createDto.assignedVariables || [],
-        selectedVariableBundles: createDto.assignedVariableBundles || []
-      }
-    );
-
-    this.validateDefinitionState({
-      status: createDto.status ?? 'draft',
-      assignedVariables: createDto.assignedVariables,
-      assignedVariableBundles: createDto.assignedVariableBundles,
-      assignedCoders: coderAssignments.assignedCoders,
-      durationSeconds: createDto.durationSeconds,
-      maxCodingCases: createDto.maxCodingCases,
-      doubleCodingAbsolute: createDto.doubleCodingAbsolute,
-      doubleCodingPercentage: createDto.doubleCodingPercentage,
-      caseOrderingMode: createDto.caseOrderingMode
-    });
-    await this.codingJobService.assertCodersCanCodeInWorkspace(
-      coderAssignments.assignedCoders,
-      workspaceId
-    );
-
-    const conflicts = await this.checkVariableConflicts(
-      workspaceId,
-      {
-        assignedVariables: createDto.assignedVariables || [],
-        assignedVariableBundles: createDto.assignedVariableBundles || [],
-        maxCodingCases: createDto.maxCodingCases,
-        caseOrderingMode: createDto.caseOrderingMode,
-        distributionSeed,
-        requireAssignedBundles: true
-      }
-    );
-
-    if (conflicts.length > 0) {
-      throw new BadRequestException(
-        `The following variables have no remaining cases for this job definition: ${conflicts.join(', ')}`
+  async createJobDefinition(createDto: CreateJobDefinitionDto, workspaceId: number, actorUserId?: number): Promise<JobDefinition> {
+    return this.jobDefinitionRepository.manager.transaction(async manager => {
+      await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+      const coderAssignments = this.resolveCoderAssignments(createDto);
+      const distributionSeed = createDto.distributionSeed || this.createDistributionSeed(workspaceId);
+      const missingsProfileId = await this.missingsProfilesService.resolveMissingsProfileId(
+        workspaceId,
+        createDto.missingsProfileId
       );
-    }
 
-    const jobDefinition = this.jobDefinitionRepository.create({
-      workspace_id: workspaceId,
-      name: createDto.name,
-      description: createDto.description ?? null,
-      status: createDto.status ?? 'draft',
-      assigned_variables: createDto.assignedVariables,
-      assigned_variable_bundles: this.toStoredAssignedVariableBundles(
-        createDto.assignedVariableBundles
-      ),
-      assigned_coders: coderAssignments.assignedCoders,
-      assigned_coder_configs: coderAssignments.assignedCoderConfigs,
-      missings_profile_id: missingsProfileId,
-      distribution_seed: distributionSeed,
-      duration_seconds: createDto.durationSeconds,
-      max_coding_cases: createDto.maxCodingCases,
-      double_coding_absolute: createDto.doubleCodingAbsolute,
-      double_coding_percentage: createDto.doubleCodingPercentage,
-      case_ordering_mode: createDto.caseOrderingMode,
-      show_score: createDto.showScore ?? false,
-      allow_comments: createDto.allowComments ?? true,
-      suppress_general_instructions: createDto.suppressGeneralInstructions ?? false
+      await this.codingJobService.assertDeriveErrorManualCodingEnabled(
+        workspaceId,
+        {
+          selectedVariables: createDto.assignedVariables || [],
+          selectedVariableBundles: createDto.assignedVariableBundles || []
+        }
+      );
+
+      this.validateDefinitionState({
+        status: createDto.status ?? 'draft',
+        assignedVariables: createDto.assignedVariables,
+        assignedVariableBundles: createDto.assignedVariableBundles,
+        assignedCoders: coderAssignments.assignedCoders,
+        durationSeconds: createDto.durationSeconds,
+        maxCodingCases: createDto.maxCodingCases,
+        doubleCodingAbsolute: createDto.doubleCodingAbsolute,
+        doubleCodingPercentage: createDto.doubleCodingPercentage,
+        caseOrderingMode: createDto.caseOrderingMode
+      });
+      await this.codingJobService.assertCodersCanCodeInWorkspace(
+        coderAssignments.assignedCoders,
+        workspaceId
+      );
+
+      const conflicts = await this.checkVariableConflicts(
+        workspaceId,
+        {
+          assignedVariables: createDto.assignedVariables || [],
+          assignedVariableBundles: createDto.assignedVariableBundles || [],
+          maxCodingCases: createDto.maxCodingCases,
+          caseOrderingMode: createDto.caseOrderingMode,
+          distributionSeed,
+          requireAssignedBundles: true
+        }
+      );
+
+      if (conflicts.length > 0) {
+        throw new BadRequestException(
+          `The following variables have no remaining cases for this job definition: ${conflicts.join(', ')}`
+        );
+      }
+
+      const jobDefinition = this.jobDefinitionRepository.create({
+        workspace_id: workspaceId,
+        name: createDto.name,
+        description: createDto.description ?? null,
+        status: createDto.status ?? 'draft',
+        assigned_variables: createDto.assignedVariables,
+        assigned_variable_bundles: this.toStoredAssignedVariableBundles(
+          createDto.assignedVariableBundles
+        ),
+        assigned_coders: coderAssignments.assignedCoders,
+        assigned_coder_configs: coderAssignments.assignedCoderConfigs,
+        missings_profile_id: missingsProfileId,
+        distribution_seed: distributionSeed,
+        duration_seconds: createDto.durationSeconds,
+        max_coding_cases: createDto.maxCodingCases,
+        double_coding_absolute: createDto.doubleCodingAbsolute,
+        double_coding_percentage: createDto.doubleCodingPercentage,
+        case_ordering_mode: createDto.caseOrderingMode,
+        show_score: createDto.showScore ?? false,
+        allow_comments: createDto.allowComments ?? true,
+        suppress_general_instructions: createDto.suppressGeneralInstructions ?? false
+      });
+
+      const saved = await manager.getRepository(JobDefinition).save(jobDefinition);
+      await this.recordDefinitionEvent(manager, workspaceId, saved.id, 'JOB_DEFINITION_CREATED', actorUserId);
+      return saved;
     });
-
-    return this.jobDefinitionRepository.save(jobDefinition);
   }
 
   async getJobDefinition(id: number, workspaceId: number): Promise<JobDefinition> {
@@ -1922,35 +1929,33 @@ export class JobDefinitionService {
     }
   }
 
-  async updateJobDefinition(id: number, workspaceId: number, updateDto: UpdateJobDefinitionDto): Promise<JobDefinition> {
-    const normalizedId = Number(id);
-    const preparedUpdate = await this.prepareJobDefinitionUpdate(
-      normalizedId,
-      workspaceId,
-      updateDto
-    );
-    if (
-      preparedUpdate.createdJobsCount > 0 &&
-      preparedUpdate.changedExistingJobBoundFields.length > 0
-    ) {
-      throw new BadRequestException(
-        `Cannot update job definition ${normalizedId} because existing coding jobs must be refreshed for changes to: ${preparedUpdate.changedExistingJobBoundFields.join(', ')}`
+  async updateJobDefinition(id: number, workspaceId: number, updateDto: UpdateJobDefinitionDto, actorUserId?: number): Promise<JobDefinition> {
+    return this.jobDefinitionRepository.manager.transaction(async manager => {
+      await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+      const normalizedId = Number(id);
+      const preparedUpdate = await this.prepareJobDefinitionUpdate(
+        normalizedId,
+        workspaceId,
+        updateDto
       );
-    }
+      if (
+        preparedUpdate.createdJobsCount > 0 &&
+      preparedUpdate.changedExistingJobBoundFields.length > 0
+      ) {
+        throw new BadRequestException(
+          `Cannot update job definition ${normalizedId} because existing coding jobs must be refreshed for changes to: ${preparedUpdate.changedExistingJobBoundFields.join(', ')}`
+        );
+      }
 
-    const syncExistingJobDisplayOptions = preparedUpdate.createdJobsCount > 0 &&
+      const syncExistingJobDisplayOptions = preparedUpdate.createdJobsCount > 0 &&
       (
         updateDto.showScore !== undefined ||
         updateDto.allowComments !== undefined ||
         updateDto.suppressGeneralInstructions !== undefined
       );
 
-    if (syncExistingJobDisplayOptions) {
-      return this.jobDefinitionRepository.manager.transaction(async manager => {
-        const savedDefinition = await manager
-          .getRepository(JobDefinition)
-          .save(preparedUpdate.updatedDefinition);
-
+      const savedDefinition = await manager.getRepository(JobDefinition).save(preparedUpdate.updatedDefinition);
+      if (syncExistingJobDisplayOptions) {
         await this.codingJobService.updateCodingJobDisplayOptionsByDefinitionId(
           workspaceId,
           normalizedId,
@@ -1959,71 +1964,72 @@ export class JobDefinitionService {
             allowComments: updateDto.allowComments,
             suppressGeneralInstructions: updateDto.suppressGeneralInstructions
           },
-          manager
+          manager,
+          actorUserId
         );
-
-        return savedDefinition;
-      });
-    }
-
-    return this.jobDefinitionRepository.save(
-      preparedUpdate.updatedDefinition
-    );
+      }
+      await this.recordDefinitionEvent(manager, workspaceId, id, 'JOB_DEFINITION_UPDATED', actorUserId);
+      return savedDefinition;
+    });
   }
 
-  async approveJobDefinition(id: number, workspaceId: number, approveDto: ApproveJobDefinitionDto): Promise<JobDefinition> {
-    const jobDefinition = await this.getJobDefinition(id, workspaceId);
-    const coderAssignments = this.getStoredCoderAssignments(jobDefinition);
+  async approveJobDefinition(id: number, workspaceId: number, approveDto: ApproveJobDefinitionDto, actorUserId?: number): Promise<JobDefinition> {
+    return this.jobDefinitionRepository.manager.transaction(async manager => {
+      await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+      const jobDefinition = await this.getJobDefinition(id, workspaceId);
+      const coderAssignments = this.getStoredCoderAssignments(jobDefinition);
 
-    this.validateStatusTransition(jobDefinition.status, approveDto.status);
-    this.validateDefinitionState({
-      status: approveDto.status,
-      assignedVariables: jobDefinition.assigned_variables || [],
-      assignedVariableBundles: jobDefinition.assigned_variable_bundles || [],
-      assignedCoders: coderAssignments.assignedCoders,
-      durationSeconds: jobDefinition.duration_seconds,
-      maxCodingCases: jobDefinition.max_coding_cases,
-      doubleCodingAbsolute: jobDefinition.double_coding_absolute,
-      doubleCodingPercentage: this.toOptionalNumber(jobDefinition.double_coding_percentage),
-      caseOrderingMode: jobDefinition.case_ordering_mode
+      this.validateStatusTransition(jobDefinition.status, approveDto.status);
+      this.validateDefinitionState({
+        status: approveDto.status,
+        assignedVariables: jobDefinition.assigned_variables || [],
+        assignedVariableBundles: jobDefinition.assigned_variable_bundles || [],
+        assignedCoders: coderAssignments.assignedCoders,
+        durationSeconds: jobDefinition.duration_seconds,
+        maxCodingCases: jobDefinition.max_coding_cases,
+        doubleCodingAbsolute: jobDefinition.double_coding_absolute,
+        doubleCodingPercentage: this.toOptionalNumber(jobDefinition.double_coding_percentage),
+        caseOrderingMode: jobDefinition.case_ordering_mode
+      });
+
+      if (approveDto.status === jobDefinition.status) {
+        return jobDefinition;
+      }
+
+      if (approveDto.status === 'pending_review' && jobDefinition.status === 'draft') {
+        jobDefinition.status = 'pending_review';
+      } else if (approveDto.status === 'approved' && ['draft', 'pending_review'].includes(jobDefinition.status)) {
+        await this.codingJobService.assertDeriveErrorManualCodingEnabled(
+          workspaceId,
+          this.buildPlannedVariableUsageBatchRequest(jobDefinition.id, {
+            id: jobDefinition.id,
+            assigned_variables: jobDefinition.assigned_variables || [],
+            assigned_variable_bundles: jobDefinition.assigned_variable_bundles || [],
+            max_coding_cases: jobDefinition.max_coding_cases,
+            case_ordering_mode: jobDefinition.case_ordering_mode,
+            distribution_seed: this.getDefinitionDistributionSeed(jobDefinition)
+          })
+        );
+        await this.codingJobService.assertCodersCanCodeInWorkspace(
+          coderAssignments.assignedCoders,
+          jobDefinition.workspace_id
+        );
+        // Validate variable availability before approving
+        await this.validateVariableAvailability(jobDefinition);
+        jobDefinition.status = 'approved';
+      } else {
+        throw new BadRequestException(`Invalid status transition from ${jobDefinition.status} to ${approveDto.status}`);
+      }
+
+      jobDefinition.missings_profile_id = await this.missingsProfilesService.resolveMissingsProfileId(
+        jobDefinition.workspace_id,
+        jobDefinition.missings_profile_id
+      );
+
+      const savedDefinition = await manager.getRepository(JobDefinition).save(jobDefinition);
+      await this.recordDefinitionEvent(manager, workspaceId, id, approveDto.status === 'approved' ? 'JOB_DEFINITION_APPROVED' : 'JOB_DEFINITION_UPDATED', actorUserId);
+      return savedDefinition;
     });
-
-    if (approveDto.status === jobDefinition.status) {
-      return jobDefinition;
-    }
-
-    if (approveDto.status === 'pending_review' && jobDefinition.status === 'draft') {
-      jobDefinition.status = 'pending_review';
-    } else if (approveDto.status === 'approved' && ['draft', 'pending_review'].includes(jobDefinition.status)) {
-      await this.codingJobService.assertDeriveErrorManualCodingEnabled(
-        workspaceId,
-        this.buildPlannedVariableUsageBatchRequest(jobDefinition.id, {
-          id: jobDefinition.id,
-          assigned_variables: jobDefinition.assigned_variables || [],
-          assigned_variable_bundles: jobDefinition.assigned_variable_bundles || [],
-          max_coding_cases: jobDefinition.max_coding_cases,
-          case_ordering_mode: jobDefinition.case_ordering_mode,
-          distribution_seed: this.getDefinitionDistributionSeed(jobDefinition)
-        })
-      );
-      await this.codingJobService.assertCodersCanCodeInWorkspace(
-        coderAssignments.assignedCoders,
-        jobDefinition.workspace_id
-      );
-      // Validate variable availability before approving
-      await this.validateVariableAvailability(jobDefinition);
-      jobDefinition.status = 'approved';
-    } else {
-      throw new BadRequestException(`Invalid status transition from ${jobDefinition.status} to ${approveDto.status}`);
-    }
-
-    jobDefinition.missings_profile_id = await this.missingsProfilesService.resolveMissingsProfileId(
-      jobDefinition.workspace_id,
-      jobDefinition.missings_profile_id
-    );
-
-    const savedDefinition = await this.jobDefinitionRepository.save(jobDefinition);
-    return savedDefinition;
   }
 
   /**
@@ -2050,10 +2056,14 @@ export class JobDefinitionService {
     }
   }
 
-  async deleteJobDefinition(id: number, workspaceId: number): Promise<void> {
-    const jobDefinition = await this.getJobDefinition(id, workspaceId);
-    await this.assertJobDefinitionHasNoBlockingCreatedJobs(jobDefinition);
-    await this.jobDefinitionRepository.remove(jobDefinition);
+  async deleteJobDefinition(id: number, workspaceId: number, actorUserId?: number): Promise<void> {
+    await this.jobDefinitionRepository.manager.transaction(async manager => {
+      await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+      const jobDefinition = await this.getJobDefinition(id, workspaceId);
+      await this.assertJobDefinitionHasNoBlockingCreatedJobs(jobDefinition);
+      await manager.getRepository(JobDefinition).remove(jobDefinition);
+      await this.recordDefinitionEvent(manager, workspaceId, id, 'JOB_DEFINITION_DELETED', actorUserId);
+    });
   }
 
   async getApprovedJobDefinitions(workspaceId?: number): Promise<JobDefinition[]> {
@@ -2170,7 +2180,7 @@ export class JobDefinitionService {
     };
   }
 
-  async createCodingJobFromDefinition(jobDefinitionId: number, workspaceId: number) {
+  async createCodingJobFromDefinition(jobDefinitionId: number, workspaceId: number, actorUserId?: number) {
     const request = await this.buildDistributionRequestFromDefinition(jobDefinitionId, workspaceId);
     return this.codingJobService.createDistributedCodingJobs(
       workspaceId,
@@ -2183,7 +2193,8 @@ export class JobDefinitionService {
           result,
           manager
         );
-      }
+      },
+      actorUserId
     );
   }
 
@@ -2234,7 +2245,8 @@ export class JobDefinitionService {
 
   async refreshCodingJobFromDefinition(
     jobDefinitionId: number,
-    workspaceId: number
+    workspaceId: number,
+    actorUserId?: number
   ): Promise<JobDefinitionRefreshApplyResultDto> {
     const request = await this.buildDistributionRequestFromDefinition(jobDefinitionId, workspaceId);
     const result = await this.codingJobService.refreshDistributedCodingJobs(
@@ -2248,7 +2260,8 @@ export class JobDefinitionService {
           transactionResult,
           manager
         );
-      }
+      },
+      actorUserId
     );
     if (!result.success) {
       throw new BadRequestException(result.message);
@@ -2265,7 +2278,8 @@ export class JobDefinitionService {
   async refreshCodingJobFromUpdatedDefinition(
     jobDefinitionId: number,
     workspaceId: number,
-    updateDto: UpdateJobDefinitionDto
+    updateDto: UpdateJobDefinitionDto,
+    actorUserId?: number
   ): Promise<JobDefinitionRefreshApplyResultDto> {
     const preparedUpdate = await this.prepareJobDefinitionUpdate(
       jobDefinitionId,
@@ -2288,6 +2302,7 @@ export class JobDefinitionService {
         await manager.getRepository(JobDefinition).save(
           preparedUpdate.updatedDefinition
         );
+        await this.recordDefinitionEvent(manager, workspaceId, jobDefinitionId, 'JOB_DEFINITION_UPDATED', actorUserId);
         await this.appendDistributionSnapshot(
           jobDefinitionId,
           'refresh',
@@ -2295,7 +2310,8 @@ export class JobDefinitionService {
           transactionResult,
           manager
         );
-      }
+      },
+      actorUserId
     );
 
     if (!result.success) {
@@ -2308,5 +2324,19 @@ export class JobDefinitionService {
       preview: result.preview,
       jobsCreated: result.jobsCreated
     };
+  }
+
+  private recordDefinitionEvent(manager: EntityManager, workspaceId: number, id: number,
+                                eventType: string, actorUserId?: number) {
+    return JournalService.recordEventInTransaction(manager, {
+      workspaceId,
+      actorUserId,
+      actorType: actorUserId ? 'user' : 'system',
+      eventType,
+      entityType: 'job-definition',
+      entityId: id,
+      result: 'success',
+      summary: eventType
+    });
   }
 }

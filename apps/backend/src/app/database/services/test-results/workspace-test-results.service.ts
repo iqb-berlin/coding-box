@@ -41,7 +41,6 @@ import { CoderTrainingDiscussionResult } from '../../entities/coder-training-dis
 import { UnitLastState } from '../../entities/unitLastState.entity';
 import { UnitTagService } from '../workspace/unit-tag.service';
 import { JournalService, Chunk, TcMergeResponse } from '../shared';
-import type { RecordAuditJournalEventInput } from '../shared/journal.service';
 import { CacheService } from '../../../cache/cache.service';
 // eslint-disable-next-line import/no-cycle
 import { CodingListService } from '../coding/coding-list.service';
@@ -4720,7 +4719,6 @@ export class WorkspaceTestResultsService {
       this.connection,
       workspaceId,
       async () => {
-        const auditEvents: RecordAuditJournalEventInput[] = [];
         const result = await this.connection.transaction(async manager => {
           const ids = testPersonIds.split(',').map(id => id.trim());
           const report = {
@@ -4740,6 +4738,7 @@ export class WorkspaceTestResultsService {
               'persons.source'
             ])
             .where('persons.id IN (:...ids)', { ids })
+            .andWhere('persons.workspace_id = :workspaceId', { workspaceId })
             .getMany();
 
           if (!existingPersons.length) {
@@ -4756,12 +4755,13 @@ export class WorkspaceTestResultsService {
             .delete()
             .from(Persons)
             .where('id IN (:...ids)', { ids: existingIds })
+            .andWhere('workspace_id = :workspaceId', { workspaceId })
             .execute();
 
           report.deletedPersons = existingIds;
 
           for (const person of existingPersons) {
-            auditEvents.push({
+            await this.journalService.recordEvent({
               workspaceId,
               actorUserId: userId,
               eventType: 'TEST_PERSON_DELETED',
@@ -4773,7 +4773,7 @@ export class WorkspaceTestResultsService {
                 personId: person.id,
                 message: 'Test person deleted'
               }
-            });
+            }, manager);
           }
 
           return { success: true, report };
@@ -4781,10 +4781,6 @@ export class WorkspaceTestResultsService {
 
         if (result.success) {
           await this.invalidateCachesAfterTestResultDeletion(workspaceId);
-          await Promise.all(auditEvents.map(event => this.tryRecordAuditEvent(
-            event,
-            `Failed to create journal entry for deleting test person ${event.entityId}`
-          )));
         }
         return result;
       }
@@ -4854,119 +4850,106 @@ export class WorkspaceTestResultsService {
     };
     let deletedTargetCount = 0;
 
-    for (const [index, ids] of chunks.entries()) {
-      const chunkSnapshot = await this.collectDeleteDependencySnapshot(
-        targets.kind,
-        ids
-      );
-      WorkspaceTestResultsService.mergeDeleteDependencySnapshot(
-        dependencySnapshot,
-        chunkSnapshot
-      );
-
-      const deleteResult = await this.connection.transaction(async manager => {
-        await this.codingFreshnessService?.markCodingJobsStaleForResponseIds?.(
-          workspaceId,
-          chunkSnapshot.responseIds,
-          'RESULT_DELETED',
-          'stale_source',
-          manager
-        );
-
-        await this.deleteKnownDeleteDependents(
-          manager,
+    try {
+      for (const [index, ids] of chunks.entries()) {
+        const chunkSnapshot = await this.collectDeleteDependencySnapshot(
           targets.kind,
+          ids
+        );
+        WorkspaceTestResultsService.mergeDeleteDependencySnapshot(
+          dependencySnapshot,
           chunkSnapshot
         );
 
-        switch (targets.kind) {
-          case 'persons':
-            return manager
-              .createQueryBuilder()
-              .delete()
-              .from(Persons)
-              .where('id IN (:...ids)', { ids })
-              .execute();
-          case 'booklets':
-            return manager
-              .createQueryBuilder()
-              .delete()
-              .from(Booklet)
-              .where('id IN (:...ids)', { ids })
-              .execute();
-          case 'units':
-            return manager
-              .createQueryBuilder()
-              .delete()
-              .from(Unit)
-              .where('id IN (:...ids)', { ids })
-              .execute();
-          default:
+        const deleteResult = await this.connection.transaction(async manager => {
+          await this.codingFreshnessService?.markCodingJobsStaleForResponseIds?.(
+            workspaceId,
+            chunkSnapshot.responseIds,
+            'RESULT_DELETED',
+            'stale_source',
+            manager
+          );
+
+          await this.deleteKnownDeleteDependents(
+            manager,
+            targets.kind,
+            chunkSnapshot
+          );
+
+          const targetEntity = { persons: Persons, booklets: Booklet, units: Unit }[targets.kind];
+          if (!targetEntity) {
             throw new Error('Unknown test result deletion target');
-        }
-      });
+          }
+          const result = await manager.createQueryBuilder().delete().from(targetEntity)
+            .where('id IN (:...ids)', { ids })
+            .execute();
+          await this.journalService.recordEvent({
+            workspaceId,
+            actorUserId: userId,
+            actorType: userId ? 'user' : 'job',
+            eventType: 'TEST_RESULTS_DELETED',
+            entityType: 'test-results',
+            result: 'success',
+            summary: 'Test results deletion batch committed',
+            details: {
+              scope: request.scope,
+              deletedTargetKind: targets.kind,
+              deletedTargetCount: result.affected ?? ids.length,
+              batchNumber: index + 1,
+              batchCount: chunks.length
+            }
+          }, manager);
+          return result;
+        });
 
-      deletedTargetCount += deleteResult.affected || ids.length;
+        deletedTargetCount += deleteResult.affected ?? ids.length;
 
-      const progress = Math.min(
-        90,
-        10 + Math.round((deletedTargetCount / totalTargets) * 80)
-      );
-      await onProgress?.(
-        progress,
-        `Löschung läuft: ${deletedTargetCount}/${totalTargets} Datensätze verarbeitet (${index + 1}/${chunks.length} Stapel).`
-      );
-    }
+        const progress = Math.min(
+          90,
+          10 + Math.round((deletedTargetCount / totalTargets) * 80)
+        );
+        await onProgress?.(
+          progress,
+          `Löschung läuft: ${deletedTargetCount}/${totalTargets} Datensätze verarbeitet (${index + 1}/${chunks.length} Stapel).`
+        );
+      }
 
-    const finalSnapshot =
+      const finalSnapshot =
       WorkspaceTestResultsService.dedupeDeleteDependencySnapshot(
         dependencySnapshot
       );
 
-    await onProgress?.(92, 'Verwaiste Testheft-Metadaten werden bereinigt...');
-    await this.deleteOrphanedBookletInfos(finalSnapshot.bookletInfoIds);
+      await onProgress?.(92, 'Verwaiste Testheft-Metadaten werden bereinigt...');
+      await this.deleteOrphanedBookletInfos(finalSnapshot.bookletInfoIds);
 
-    await onProgress?.(95, 'Löschung wird abschließend geprüft...');
-    await this.assertDeleteCompleted(
-      targets.kind,
-      targets.ids,
-      finalSnapshot
-    );
+      await onProgress?.(95, 'Löschung wird abschließend geprüft...');
+      await this.assertDeleteCompleted(
+        targets.kind,
+        targets.ids,
+        finalSnapshot
+      );
 
-    await onProgress?.(97, 'Caches und Statistiken werden aktualisiert...');
-    await this.invalidateCachesAfterTestResultDeletion(workspaceId);
+      await onProgress?.(97, 'Caches und Statistiken werden aktualisiert...');
+      await this.invalidateCachesAfterTestResultDeletion(workspaceId);
 
-    if (userId) {
-      try {
-        await this.journalService.recordEvent(
-          {
-            workspaceId,
-            actorUserId: userId,
-            eventType: 'TEST_RESULTS_DELETED',
-            entityType: 'test-results',
-            entityId: null,
-            result: 'success',
-            summary: 'Test results deleted by bulk job',
-            details: {
-              scope: request.scope,
-              deletedTargetKind: targets.kind,
-              deletedTargetCount,
-              preview: targets.preview
-            }
-          }
-        );
-      } catch (error) {
-        this.logger.error(
-          `Failed to create journal entry for bulk test result deletion: ${error.message}`,
-          error.stack
-        );
+      return {
+        ...targets.preview,
+        deletedTargetCount
+      };
+    } catch (error) {
+      if (deletedTargetCount > 0) {
+        await this.invalidateCachesAfterPartialDeletion(workspaceId);
       }
+      throw error;
     }
+  }
 
-    return {
-      ...targets.preview,
-      deletedTargetCount
-    };
+  private async invalidateCachesAfterPartialDeletion(workspaceId: number): Promise<void> {
+    try {
+      await this.invalidateCachesAfterTestResultDeletion(workspaceId);
+    } catch (error) {
+      this.logger.error(`Could not invalidate caches after partial deletion in workspace ${workspaceId}: ${error.message}`);
+    }
   }
 
   async deleteTestLogsByRequest(
@@ -5043,79 +5026,86 @@ export class WorkspaceTestResultsService {
     );
     let deletedTargetCount = 0;
 
-    for (const [index, responseIds] of chunks.entries()) {
-      const deleteResult = await this.connection.transaction(async manager => {
-        await this.codingFreshnessService?.markCodingJobsStaleForResponseIds?.(
-          workspaceId,
-          responseIds,
-          'RESULT_DELETED',
-          'stale_source',
-          manager
+    try {
+      for (const [index, responseIds] of chunks.entries()) {
+        const deleteResult = await this.connection.transaction(async manager => {
+          await this.codingFreshnessService?.markCodingJobsStaleForResponseIds?.(
+            workspaceId,
+            responseIds,
+            'RESULT_DELETED',
+            'stale_source',
+            manager
+          );
+
+          await this.deleteRowsByIds(
+            manager,
+            CodingJobUnit,
+            'response_id',
+            responseIds
+          );
+          await this.deleteRowsByIds(
+            manager,
+            CoderTrainingDiscussionResult,
+            'response_id',
+            responseIds
+          );
+          const result = await manager
+            .createQueryBuilder()
+            .delete()
+            .from(ResponseEntity)
+            .where('id IN (:...responseIds)', { responseIds })
+            .execute();
+          await this.journalService.recordEvent({
+            workspaceId,
+            actorUserId: userId,
+            actorType: userId ? 'user' : 'job',
+            eventType: 'TEST_RESULT_RESPONSES_DELETED',
+            entityType: 'responses',
+            result: 'success',
+            summary: 'Test result response deletion batch committed',
+            details: {
+              deletedTargetCount: result.affected ?? responseIds.length,
+              batchNumber: index + 1,
+              batchCount: chunks.length
+            }
+          }, manager);
+          return result;
+        });
+
+        deletedTargetCount += deleteResult.affected ?? responseIds.length;
+        const progress = Math.min(
+          90,
+          10 + Math.round((deletedTargetCount / totalResponses) * 80)
         );
-
-        await this.deleteRowsByIds(
-          manager,
-          CodingJobUnit,
-          'response_id',
-          responseIds
+        await onProgress?.(
+          progress,
+          `Antwort-Löschung läuft: ${deletedTargetCount}/${totalResponses} Antwort(en) verarbeitet (${index + 1}/${chunks.length} Stapel).`
         );
-        await this.deleteRowsByIds(
-          manager,
-          CoderTrainingDiscussionResult,
-          'response_id',
-          responseIds
-        );
-        return manager
-          .createQueryBuilder()
-          .delete()
-          .from(ResponseEntity)
-          .where('id IN (:...responseIds)', { responseIds })
-          .execute();
-      });
-
-      deletedTargetCount += deleteResult.affected || responseIds.length;
-      const progress = Math.min(
-        90,
-        10 + Math.round((deletedTargetCount / totalResponses) * 80)
-      );
-      await onProgress?.(
-        progress,
-        `Antwort-Löschung läuft: ${deletedTargetCount}/${totalResponses} Antwort(en) verarbeitet (${index + 1}/${chunks.length} Stapel).`
-      );
-    }
-
-    await onProgress?.(92, 'Kodierstatus wird aktualisiert...');
-    await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
-      workspaceId,
-      targets.unitIds,
-      'RESULT_DELETED'
-    );
-
-    await onProgress?.(95, 'Antwort-Löschung wird abschließend geprüft...');
-    await this.assertResponseCleanupCompleted(targets.responseIds);
-
-    await onProgress?.(97, 'Caches und Statistiken werden aktualisiert...');
-    await this.invalidateCachesAfterTestResultDeletion(workspaceId);
-
-    await this.tryRecordAuditEvent({
-      workspaceId,
-      actorUserId: userId,
-      eventType: 'TEST_RESULT_RESPONSES_DELETED',
-      entityType: 'responses',
-      entityId: null,
-      result: 'success',
-      summary: 'Test result responses deleted by cleanup job',
-      details: {
-        deletedTargetCount,
-        request,
-        preview: targets.preview
       }
-    }, 'Failed to create journal entry for response cleanup deletion');
 
-    return {
-      ...targets.preview,
-      deletedTargetCount
-    };
+      await onProgress?.(92, 'Kodierstatus wird aktualisiert...');
+      await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
+        workspaceId,
+        targets.unitIds,
+        'RESULT_DELETED'
+      );
+
+      await onProgress?.(95, 'Antwort-Löschung wird abschließend geprüft...');
+      await this.assertResponseCleanupCompleted(targets.responseIds);
+
+      await onProgress?.(97, 'Caches und Statistiken werden aktualisiert...');
+      await this.invalidateCachesAfterTestResultDeletion(workspaceId);
+
+      return {
+        ...targets.preview,
+        deletedTargetCount
+      };
+    } catch (error) {
+      if (deletedTargetCount > 0) {
+        await this.invalidateCachesAfterPartialDeletion(workspaceId);
+      }
+      throw error;
+    }
   }
 
   private async resolveResponseCleanupTargets(
@@ -5504,7 +5494,21 @@ export class WorkspaceTestResultsService {
         deletedUnitLogs,
         deletedSessions
       };
-
+      await this.journalService.recordEvent({
+        workspaceId,
+        actorUserId: userId,
+        actorType: userId ? 'user' : 'job',
+        eventType: 'TEST_LOGS_DELETED',
+        entityType: 'test-logs',
+        result: 'success',
+        summary: 'Test logs deleted',
+        details: {
+          scope: request.scope,
+          deletedTargetKind: targets.kind,
+          deletedTargetCount: deletedBookletLogs + deletedUnitLogs + deletedSessions,
+          ...counts
+        }
+      }, manager);
       return counts;
     });
 
@@ -5518,25 +5522,6 @@ export class WorkspaceTestResultsService {
       deletedCounts.deletedBookletLogs +
       deletedCounts.deletedUnitLogs +
       deletedCounts.deletedSessions;
-
-    if (userId) {
-      await this.tryRecordAuditEvent({
-        workspaceId,
-        actorUserId: userId,
-        eventType: 'TEST_LOGS_DELETED',
-        entityType: 'test-logs',
-        entityId: null,
-        result: 'success',
-        summary: 'Test logs deleted by bulk job',
-        details: {
-          scope: request.scope,
-          deletedTargetKind: targets.kind,
-          deletedTargetCount,
-          ...deletedCounts,
-          preview
-        }
-      }, 'Failed to create journal entry for bulk test log deletion');
-    }
 
     return {
       ...preview,
@@ -6546,7 +6531,6 @@ export class WorkspaceTestResultsService {
       this.connection,
       workspaceId,
       async () => {
-        let auditEvent: RecordAuditJournalEventInput | null = null;
         const result = await this.connection.transaction(async manager => {
           const report = {
             deletedUnit: null,
@@ -6577,7 +6561,7 @@ export class WorkspaceTestResultsService {
 
           report.deletedUnit = unitId;
 
-          auditEvent = {
+          await this.journalService.recordEvent({
             workspaceId,
             actorUserId: userId,
             eventType: 'UNIT_DELETED',
@@ -6592,19 +6576,13 @@ export class WorkspaceTestResultsService {
               bookletId: unit.booklet?.id,
               personId: unit.booklet?.person?.id
             }
-          };
+          }, manager);
 
           return { success: true, report };
         });
 
         if (result.success) {
           await this.invalidateCachesAfterTestResultDeletion(workspaceId);
-          if (auditEvent) {
-            await this.tryRecordAuditEvent(
-              auditEvent,
-              `Failed to create journal entry for deleting unit ${unitId}`
-            );
-          }
         }
         return result;
       }
@@ -6651,7 +6629,6 @@ export class WorkspaceTestResultsService {
       this.connection,
       workspaceId,
       async () => {
-        let auditEvent: RecordAuditJournalEventInput | null = null;
         const result = await this.connection.transaction(async manager => {
           const report = {
             deletedBooklet: null,
@@ -6682,7 +6659,7 @@ export class WorkspaceTestResultsService {
 
           report.deletedBooklet = bookletId;
 
-          auditEvent = {
+          await this.journalService.recordEvent({
             workspaceId,
             actorUserId: userId,
             eventType: 'BOOKLET_DELETED',
@@ -6695,36 +6672,17 @@ export class WorkspaceTestResultsService {
               bookletName: booklet.bookletinfo?.name || 'Unknown',
               personId: booklet.personid
             }
-          };
+          }, manager);
 
           return { success: true, report };
         });
 
         if (result.success) {
           await this.invalidateCachesAfterTestResultDeletion(workspaceId);
-          if (auditEvent) {
-            await this.tryRecordAuditEvent(
-              auditEvent,
-              `Failed to create journal entry for deleting booklet ${bookletId}`
-            );
-          }
         }
         return result;
       }
     );
-  }
-
-  private async tryRecordAuditEvent(
-    event: RecordAuditJournalEventInput,
-    failureMessage: string
-  ): Promise<void> {
-    try {
-      await this.journalService.recordEvent(event);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const stack = error instanceof Error ? error.stack : undefined;
-      this.logger.error(`${failureMessage}: ${message}`, stack);
-    }
   }
 
   async searchResponses(

@@ -20,6 +20,7 @@ import {
   Brackets
 } from 'typeorm';
 import * as cheerio from 'cheerio';
+import { JournalService } from '../shared/journal.service';
 import { SaveCodingProgressDto } from '../../../admin/coding-job/dto/save-coding-progress.dto';
 import { SaveCodingNotesDto } from '../../../admin/coding-job/dto/save-coding-notes.dto';
 import {
@@ -1973,13 +1974,20 @@ export class CodingJobService {
 
   async deleteCodingJobsByDefinition(
     workspaceId: number,
-    jobDefinitionId: number
+    jobDefinitionId: number,
+    actorUserId?: number
   ): Promise<number> {
-    const deletedJobs = await this.deleteCodingJobsByDefinitionInManager(
-      undefined,
-      workspaceId,
-      jobDefinitionId
-    );
+    const deletedJobs = await this.connection.transaction(async manager => {
+      await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+      const jobs = await manager.getRepository(CodingJob).find({
+        where: { workspace_id: workspaceId, job_definition_id: jobDefinitionId }
+      });
+      const count = await this.deleteCodingJobsByDefinitionInManager(manager, workspaceId, jobDefinitionId);
+      for (const job of jobs) {
+        await this.recordJobEvent(manager, workspaceId, job.id, 'CODING_JOB_DELETED', actorUserId);
+      }
+      return count;
+    });
     await this.invalidateIncompleteVariablesCache(workspaceId);
     return deletedJobs;
   }
@@ -2521,7 +2529,8 @@ export class CodingJobService {
 
   async createCodingJob(
     workspaceId: number,
-    createCodingJobDto: CreateCodingJobDto
+    createCodingJobDto: CreateCodingJobDto,
+    actorUserId?: number
   ): Promise<CodingJob> {
     const missingsProfileId = await this.resolveMissingsProfileId(
       workspaceId,
@@ -2623,7 +2632,7 @@ export class CodingJobService {
           normalizedCreateCodingJobDto.maxCodingCases,
           manager
         );
-
+        await this.recordJobEvent(manager, workspaceId, savedCodingJob.id, 'CODING_JOB_CREATED', actorUserId);
         return savedCodingJob;
       }
     );
@@ -2635,154 +2644,162 @@ export class CodingJobService {
   async updateCodingJob(
     id: number,
     workspaceId: number,
-    updateCodingJobDto: UpdateCodingJobDto
+    updateCodingJobDto: UpdateCodingJobDto,
+    actorUserId?: number
   ): Promise<CodingJob> {
-    const codingJob = await this.getCodingJob(id, workspaceId);
+    return this.connection.transaction(async manager => {
+      await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+      const codingJob = { codingJob: await this.getCodingJobByIdForWorkspace(id, workspaceId, manager) };
 
-    if (updateCodingJobDto.name !== undefined) {
-      codingJob.codingJob.name = updateCodingJobDto.name;
-    }
-    if (updateCodingJobDto.description !== undefined) {
-      codingJob.codingJob.description = updateCodingJobDto.description;
-    }
-    if (updateCodingJobDto.status !== undefined) {
-      const targetStatus = updateCodingJobDto.status;
-      if (!UPDATABLE_CODING_JOB_STATUSES.has(targetStatus)) {
-        throw new BadRequestException(
-          `Unsupported coding job status: ${targetStatus}`
-        );
+      if (updateCodingJobDto.name !== undefined) {
+        codingJob.codingJob.name = updateCodingJobDto.name;
       }
-      if (codingJob.codingJob.status === 'results_applied') {
-        throw new Error(
-          `Cannot change status of coding job ${id} because it has already been applied to results (status: results_applied)`
-        );
+      if (updateCodingJobDto.description !== undefined) {
+        codingJob.codingJob.description = updateCodingJobDto.description;
       }
-      if (
-        codingJob.codingJob.status === 'review' &&
-        targetStatus !== 'review'
-      ) {
-        throw new BadRequestException(
-          `Cannot change status of coding job ${id} because it has been submitted for review`
-        );
-      }
-      if (
-        codingJob.codingJob.status === 'completed' &&
-        !['active', 'completed', 'review'].includes(targetStatus)
-      ) {
-        throw new BadRequestException(
-          `Cannot change status of completed coding job ${id}`
-        );
-      }
-      if (
-        targetStatus === 'review' &&
-        codingJob.codingJob.status !== 'completed'
-      ) {
-        throw new BadRequestException(
-          `Cannot submit coding job ${id} for review because it is not completed`
-        );
-      }
-      if (
-        codingJob.codingJob.status !== 'completed' &&
-        targetStatus === 'completed'
-      ) {
-        await this.assertCodingJobCanBeCompleted(id);
-      }
-      codingJob.codingJob.status = targetStatus;
-    }
-    if (updateCodingJobDto.comment !== undefined) {
-      codingJob.codingJob.comment = updateCodingJobDto.comment;
-    }
-    if (updateCodingJobDto.missingsProfileId !== undefined) {
-      const nextMissingsProfileId = await this.resolveMissingsProfileId(
-        workspaceId,
-        updateCodingJobDto.missingsProfileId
-      );
-      await this.assertMissingsProfileCanChange(
-        codingJob.codingJob,
-        nextMissingsProfileId
-      );
-      codingJob.codingJob.missings_profile_id = nextMissingsProfileId;
-    }
-    if (updateCodingJobDto.showScore !== undefined) {
-      codingJob.codingJob.showScore = updateCodingJobDto.showScore;
-    }
-    if (updateCodingJobDto.allowComments !== undefined) {
-      codingJob.codingJob.allowComments = updateCodingJobDto.allowComments;
-    }
-    if (updateCodingJobDto.suppressGeneralInstructions !== undefined) {
-      codingJob.codingJob.suppressGeneralInstructions =
-        updateCodingJobDto.suppressGeneralInstructions;
-    }
-
-    if (updateCodingJobDto.assignedCoders !== undefined) {
-      if (updateCodingJobDto.assignedCoders.length > 0) {
-        await this.assertCodersCanCodeInWorkspace(
-          updateCodingJobDto.assignedCoders,
-          workspaceId
-        );
-      }
-    }
-
-    const savedCodingJob = await this.codingJobRepository.save(
-      codingJob.codingJob
-    );
-
-    if (updateCodingJobDto.assignedCoders !== undefined) {
-      if (updateCodingJobDto.assignedCoders.length > 0) {
-        await this.assignCoders(
-          id,
-          updateCodingJobDto.assignedCoders,
-          undefined,
-          workspaceId
-        );
-      } else {
-        await this.codingJobCoderRepository.delete({ coding_job_id: id });
-      }
-    }
-
-    if (updateCodingJobDto.variables !== undefined) {
-      await this.codingJobVariableRepository.delete({ coding_job_id: id });
-      if (updateCodingJobDto.variables.length > 0) {
-        await this.assignVariables(id, updateCodingJobDto.variables);
-      }
-    }
-
-    if (updateCodingJobDto.variableBundleIds !== undefined) {
-      await this.codingJobVariableBundleRepository.delete({
-        coding_job_id: id
-      });
-      if (updateCodingJobDto.variableBundleIds.length > 0) {
-        await this.assignVariableBundles(
-          id,
-          updateCodingJobDto.variableBundleIds
-        );
-      }
-    } else if (updateCodingJobDto.variableBundles !== undefined) {
-      await this.codingJobVariableBundleRepository.delete({
-        coding_job_id: id
-      });
-
-      if (updateCodingJobDto.variableBundles.length > 0) {
-        if (updateCodingJobDto.variableBundles[0].id) {
-          const bundleIds = updateCodingJobDto.variableBundles
-            .filter(bundle => bundle.id)
-            .map(bundle => bundle.id);
-
-          if (bundleIds.length > 0) {
-            await this.assignVariableBundles(id, bundleIds);
-          }
-        } else {
-          const variables = updateCodingJobDto.variableBundles.flatMap(
-            bundle => bundle.variables || []
+      if (updateCodingJobDto.status !== undefined) {
+        const targetStatus = updateCodingJobDto.status;
+        if (!UPDATABLE_CODING_JOB_STATUSES.has(targetStatus)) {
+          throw new BadRequestException(
+            `Unsupported coding job status: ${targetStatus}`
           );
-          if (variables.length > 0) {
-            await this.assignVariables(id, variables);
+        }
+        if (codingJob.codingJob.status === 'results_applied') {
+          throw new Error(
+            `Cannot change status of coding job ${id} because it has already been applied to results (status: results_applied)`
+          );
+        }
+        if (
+          codingJob.codingJob.status === 'review' &&
+        targetStatus !== 'review'
+        ) {
+          throw new BadRequestException(
+            `Cannot change status of coding job ${id} because it has been submitted for review`
+          );
+        }
+        if (
+          codingJob.codingJob.status === 'completed' &&
+        !['active', 'completed', 'review'].includes(targetStatus)
+        ) {
+          throw new BadRequestException(
+            `Cannot change status of completed coding job ${id}`
+          );
+        }
+        if (
+          targetStatus === 'review' &&
+        codingJob.codingJob.status !== 'completed'
+        ) {
+          throw new BadRequestException(
+            `Cannot submit coding job ${id} for review because it is not completed`
+          );
+        }
+        if (
+          codingJob.codingJob.status !== 'completed' &&
+        targetStatus === 'completed'
+        ) {
+          await this.assertCodingJobCanBeCompleted(id);
+        }
+        codingJob.codingJob.status = targetStatus;
+      }
+      if (updateCodingJobDto.comment !== undefined) {
+        codingJob.codingJob.comment = updateCodingJobDto.comment;
+      }
+      if (updateCodingJobDto.missingsProfileId !== undefined) {
+        const nextMissingsProfileId = await this.resolveMissingsProfileId(
+          workspaceId,
+          updateCodingJobDto.missingsProfileId
+        );
+        await this.assertMissingsProfileCanChange(
+          codingJob.codingJob,
+          nextMissingsProfileId
+        );
+        codingJob.codingJob.missings_profile_id = nextMissingsProfileId;
+      }
+      if (updateCodingJobDto.showScore !== undefined) {
+        codingJob.codingJob.showScore = updateCodingJobDto.showScore;
+      }
+      if (updateCodingJobDto.allowComments !== undefined) {
+        codingJob.codingJob.allowComments = updateCodingJobDto.allowComments;
+      }
+      if (updateCodingJobDto.suppressGeneralInstructions !== undefined) {
+        codingJob.codingJob.suppressGeneralInstructions =
+        updateCodingJobDto.suppressGeneralInstructions;
+      }
+
+      if (updateCodingJobDto.assignedCoders !== undefined) {
+        if (updateCodingJobDto.assignedCoders.length > 0) {
+          await this.assertCodersCanCodeInWorkspace(
+            updateCodingJobDto.assignedCoders,
+            workspaceId
+          );
+        }
+      }
+
+      const savedCodingJob = await manager.getRepository(CodingJob).save(
+        codingJob.codingJob
+      );
+
+      if (updateCodingJobDto.assignedCoders !== undefined) {
+        if (updateCodingJobDto.assignedCoders.length > 0) {
+          await this.assignCoders(
+            id,
+            updateCodingJobDto.assignedCoders,
+            manager,
+            workspaceId
+          );
+        } else {
+          await manager.getRepository(CodingJobCoder).delete({ coding_job_id: id });
+        }
+      }
+
+      if (updateCodingJobDto.variables !== undefined) {
+        await manager.getRepository(CodingJobVariable).delete({ coding_job_id: id });
+        if (updateCodingJobDto.variables.length > 0) {
+          await this.assignVariables(id, updateCodingJobDto.variables, manager);
+        }
+      }
+
+      if (updateCodingJobDto.variableBundleIds !== undefined) {
+        await manager.getRepository(CodingJobVariableBundle).delete({
+          coding_job_id: id
+        });
+        if (updateCodingJobDto.variableBundleIds.length > 0) {
+          await this.assignVariableBundles(
+            id,
+            updateCodingJobDto.variableBundleIds,
+            manager
+          );
+        }
+      } else if (updateCodingJobDto.variableBundles !== undefined) {
+        await manager.getRepository(CodingJobVariableBundle).delete({
+          coding_job_id: id
+        });
+
+        if (updateCodingJobDto.variableBundles.length > 0) {
+          if (updateCodingJobDto.variableBundles[0].id) {
+            const bundleIds = updateCodingJobDto.variableBundles
+              .filter(bundle => bundle.id)
+              .map(bundle => bundle.id);
+
+            if (bundleIds.length > 0) {
+              await this.assignVariableBundles(id, bundleIds, manager);
+            }
+          } else {
+            const variables = updateCodingJobDto.variableBundles.flatMap(
+              bundle => bundle.variables || []
+            );
+            if (variables.length > 0) {
+              await this.assignVariables(id, variables, manager);
+            }
           }
         }
       }
-    }
 
-    return savedCodingJob;
+      await this.recordJobEvent(manager, workspaceId, id, 'CODING_JOB_UPDATED', actorUserId, {
+        changedFields: Object.keys(updateCodingJobDto), status: savedCodingJob.status
+      });
+      return savedCodingJob;
+    });
   }
 
   async updateCodingJobDisplayOptionsByDefinitionId(
@@ -2793,8 +2810,17 @@ export class CodingJobService {
       allowComments?: boolean;
       suppressGeneralInstructions?: boolean;
     },
-    manager?: EntityManager
+    manager?: EntityManager,
+    actorUserId?: number
   ): Promise<number> {
+    if (!manager) {
+      return this.connection.transaction(async transactionManager => {
+        await lockWorkspaceTestResultsMutationInTransaction(transactionManager, workspaceId);
+        return this.updateCodingJobDisplayOptionsByDefinitionId(
+          workspaceId, jobDefinitionId, options, transactionManager, actorUserId
+        );
+      });
+    }
     const updateValues: Partial<CodingJob> = {};
 
     if (options.showScore !== undefined) {
@@ -2812,9 +2838,10 @@ export class CodingJobService {
       return 0;
     }
 
-    const repository = manager ?
-      manager.getRepository(CodingJob) :
-      this.codingJobRepository;
+    const repository = manager.getRepository(CodingJob);
+    const jobs = await repository.find({
+      where: { workspace_id: workspaceId, job_definition_id: jobDefinitionId }
+    });
     const result = await repository.update(
       {
         workspace_id: workspaceId,
@@ -2823,48 +2850,63 @@ export class CodingJobService {
       updateValues
     );
 
+    for (const job of jobs) {
+      await this.recordJobEvent(manager, workspaceId, job.id, 'CODING_JOB_UPDATED', actorUserId, {
+        changedFields: Object.keys(updateValues)
+      });
+    }
     return result.affected || 0;
   }
 
-  async pauseCodingJob(id: number, workspaceId: number): Promise<CodingJob> {
-    return this.setOwnCodingJobStatus(id, workspaceId, 'paused');
+  async pauseCodingJob(id: number, workspaceId: number, actorUserId?: number): Promise<CodingJob> {
+    return this.setOwnCodingJobStatus(id, workspaceId, 'paused', actorUserId);
   }
 
-  async resumeCodingJob(id: number, workspaceId: number): Promise<CodingJob> {
-    return this.setOwnCodingJobStatus(id, workspaceId, 'active');
+  async resumeCodingJob(id: number, workspaceId: number, actorUserId?: number): Promise<CodingJob> {
+    return this.setOwnCodingJobStatus(id, workspaceId, 'active', actorUserId);
   }
 
-  async submitCodingJob(id: number, workspaceId: number): Promise<CodingJob> {
-    return this.updateCodingJob(id, workspaceId, { status: 'completed' });
+  async submitCodingJob(id: number, workspaceId: number, actorUserId?: number): Promise<CodingJob> {
+    return this.updateCodingJob(id, workspaceId, { status: 'completed' }, actorUserId);
   }
 
   private async setOwnCodingJobStatus(
     id: number,
     workspaceId: number,
-    status: 'active' | 'paused'
+    status: 'active' | 'paused',
+    actorUserId?: number
   ): Promise<CodingJob> {
-    const codingJob = await this.codingJobRepository.findOne({
-      where: { id, workspace_id: workspaceId }
+    return this.connection.transaction(async manager => {
+      await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+      const repository = manager.getRepository(CodingJob);
+      const codingJob = await repository.findOne({
+        where: { id, workspace_id: workspaceId }
+      });
+
+      if (!codingJob) {
+        throw new NotFoundException(`Coding job with ID ${id} not found`);
+      }
+
+      if (['review', 'results_applied'].includes(codingJob.status)) {
+        return codingJob;
+      }
+
+      if (codingJob.status === 'completed' && status === 'paused') {
+        return codingJob;
+      }
+
+      if (codingJob.status === status) {
+        return codingJob;
+      }
+
+      const previousStatus = codingJob.status;
+      codingJob.status = status;
+      const saved = await repository.save(codingJob);
+      await this.recordJobEvent(manager, workspaceId, id, 'CODING_JOB_UPDATED', actorUserId, {
+        changedFields: ['status'], previousStatus, status
+      });
+      return saved;
     });
-
-    if (!codingJob) {
-      throw new NotFoundException(`Coding job with ID ${id} not found`);
-    }
-
-    if (['review', 'results_applied'].includes(codingJob.status)) {
-      return codingJob;
-    }
-
-    if (codingJob.status === 'completed' && status === 'paused') {
-      return codingJob;
-    }
-
-    if (codingJob.status === status) {
-      return codingJob;
-    }
-
-    codingJob.status = status;
-    return this.codingJobRepository.save(codingJob);
   }
 
   async markCodingJobResultsApplied(
@@ -2928,11 +2970,15 @@ export class CodingJobService {
 
   async deleteCodingJob(
     id: number,
-    workspaceId: number
+    workspaceId: number,
+    actorUserId?: number
   ): Promise<{ success: boolean }> {
-    const codingJob = await this.getCodingJob(id, workspaceId);
-
-    await this.codingJobRepository.remove(codingJob.codingJob);
+    await this.connection.transaction(async manager => {
+      await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+      const codingJob = await this.getCodingJobByIdForWorkspace(id, workspaceId, manager);
+      await manager.getRepository(CodingJob).remove(codingJob);
+      await this.recordJobEvent(manager, workspaceId, id, 'CODING_JOB_DELETED', actorUserId);
+    });
 
     // Invalidate the incomplete variables cache since coding job units were deleted
     await this.invalidateIncompleteVariablesCache(workspaceId);
@@ -2955,13 +3001,45 @@ export class CodingJobService {
     );
   }
 
+  private recordJobEvent(manager: EntityManager, workspaceId: number, id: number,
+                         eventType: 'CODING_JOB_CREATED' | 'CODING_JOB_UPDATED' | 'CODING_JOB_DELETED',
+                         actorUserId?: number, details?: Record<string, unknown>) {
+    return JournalService.recordEventInTransaction(manager, {
+      workspaceId,
+      actorUserId,
+      actorType: actorUserId ? 'user' : 'system',
+      eventType,
+      entityType: 'coding-job',
+      entityId: id,
+      result: 'success',
+      summary: eventType,
+      details
+    });
+  }
+
   async assignCoders(
     codingJobId: number,
     userIds: number[],
     manager?: EntityManager,
-    workspaceId?: number
+    workspaceId?: number,
+    actorUserId?: number
   ): Promise<CodingJobCoder[]> {
     this.assertAssignedCoderIdsAreUnique(userIds);
+    if (!manager) {
+      return this.connection.transaction(async transactionManager => {
+        const job = await transactionManager.getRepository(CodingJob).findOne({
+          where: { id: codingJobId, ...(workspaceId === undefined ? {} : { workspace_id: workspaceId }) },
+          select: ['id', 'workspace_id']
+        });
+        if (!job) throw new NotFoundException(`Coding job with ID ${codingJobId} not found`);
+        await lockWorkspaceTestResultsMutationInTransaction(transactionManager, job.workspace_id);
+        const coders = await this.assignCoders(codingJobId, userIds, transactionManager, job.workspace_id);
+        await this.recordJobEvent(transactionManager, job.workspace_id, codingJobId, 'CODING_JOB_UPDATED', actorUserId, {
+          assignedCoderIds: userIds
+        });
+        return coders;
+      });
+    }
     await this.assertCodingJobCodersCanCode(
       codingJobId,
       userIds,
@@ -5445,7 +5523,8 @@ export class CodingJobService {
     workspaceId: number,
     createCodingJobDto: InternalCreateCodingJobDto,
     unitSubset: SlimResponse[],
-    manager: EntityManager
+    manager: EntityManager,
+    actorUserId?: number
   ): Promise<CodingJob> {
     const codingJobRepo = manager.getRepository(CodingJob);
     const aggregationSettings =
@@ -5546,7 +5625,7 @@ export class CodingJobService {
       unitSubsetWithBundleIds,
       manager
     );
-
+    await this.recordJobEvent(manager, workspaceId, savedCodingJob.id, 'CODING_JOB_CREATED', actorUserId);
     return savedCodingJob;
   }
 
@@ -7754,7 +7833,8 @@ export class CodingJobService {
   async refreshDistributedCodingJobs(
     workspaceId: number,
     request: DistributionPlanRequest,
-    afterRefreshInTransaction?: RefreshDistributedCodingJobsTransactionHook
+    afterRefreshInTransaction?: RefreshDistributedCodingJobsTransactionHook,
+    actorUserId?: number
   ): Promise<JobDefinitionRefreshCodingJobsResult> {
     const jobDefinitionId = Number(request.jobDefinitionId);
     if (!Number.isInteger(jobDefinitionId) || jobDefinitionId < 1) {
@@ -7819,11 +7899,17 @@ export class CodingJobService {
       }
 
       if (preview.existingJobsCount > 0) {
+        const affectedJobs = await manager.getRepository(CodingJob).find({
+          where: { workspace_id: workspaceId, job_definition_id: jobDefinitionId }
+        });
         await this.deleteCodingJobsByDefinitionInManager(
           manager,
           workspaceId,
           jobDefinitionId
         );
+        for (const job of affectedJobs) {
+          await this.recordJobEvent(manager, workspaceId, job.id, 'CODING_JOB_DELETED', actorUserId);
+        }
       }
 
       createdJobs.push(
@@ -7831,7 +7917,8 @@ export class CodingJobService {
           workspaceId,
           request,
           transactionPlan,
-          manager
+          manager,
+          actorUserId
         ))
       );
 
@@ -7863,7 +7950,8 @@ export class CodingJobService {
     workspaceId: number,
     request: DistributionPlanRequest,
     plan: DistributionPlan,
-    manager: EntityManager
+    manager: EntityManager,
+    actorUserId?: number
   ): Promise<DistributionCreatedJob[]> {
     const createdJobs: DistributionCreatedJob[] = [];
 
@@ -7889,7 +7977,8 @@ export class CodingJobService {
         workspaceId,
         createCodingJobDto,
         job.unitSubset,
-        manager
+        manager,
+        actorUserId
       );
 
       createdJobs.push({
@@ -7939,7 +8028,8 @@ export class CodingJobService {
   async createDistributedCodingJobs(
     workspaceId: number,
     request: DistributionPlanRequest,
-    afterCreateInTransaction?: DistributedCodingJobsTransactionHook
+    afterCreateInTransaction?: DistributedCodingJobsTransactionHook,
+    actorUserId?: number
   ): Promise<DistributedCodingJobsResult> {
     this.logger.log(
       `Creating distributed coding jobs for workspace ${workspaceId}`
@@ -7967,7 +8057,8 @@ export class CodingJobService {
               workspaceId,
               request,
               plan,
-              manager
+              manager,
+              actorUserId
             ))
           );
 

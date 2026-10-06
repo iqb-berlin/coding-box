@@ -182,7 +182,8 @@ export class WorkspaceTestResultsImportController {
       @Query('bookletName') bookletName?: string,
       @Query('unitNameOrAlias') unitNameOrAlias?: string,
       @Query('variableId') variableId?: string,
-      @Query('subform') subform?: string
+      @Query('subform') subform?: string,
+      @Req() request?: { user: { id: number } }
   ): Promise<TestResultsUploadJobDto[]> {
     const startTime = Date.now();
 
@@ -260,7 +261,8 @@ export class WorkspaceTestResultsImportController {
           unitNameOrAlias,
           variableId,
           subform
-        }
+        },
+        request?.user.id
       );
 
       const totalTime = Date.now() - startTime;
@@ -503,7 +505,8 @@ export class WorkspaceTestResultsImportController {
   async completeChunkedUpload(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
       @Param('uploadId') uploadId: string,
-      @Body() body: ChunkedUploadCompleteRequestDto
+      @Body() body: ChunkedUploadCompleteRequestDto,
+      @Req() request?: { user: { id: number } }
   ): Promise<TestResultsUploadJobDto[]> {
     const session = await this.cacheService.get<ChunkedUploadSession>(
       this.uploadSessionKey(uploadId)
@@ -615,7 +618,8 @@ export class WorkspaceTestResultsImportController {
         unitNameOrAlias: body.unitNameOrAlias,
         variableId: body.variableId,
         subform: body.subform
-      }
+      },
+      request?.user.id
     );
 
     // Cleanup session from Redis

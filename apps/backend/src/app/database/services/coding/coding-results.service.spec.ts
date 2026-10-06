@@ -10,6 +10,7 @@ import { MissingsProfilesService } from './missings-profiles.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { EmptyResponseSelectionService } from './empty-response-selection.service';
+import { JournalService } from '../shared/journal.service';
 
 describe('CodingResultsService', () => {
   let service: CodingResultsService;
@@ -59,6 +60,7 @@ describe('CodingResultsService', () => {
   });
 
   beforeEach(() => {
+    jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     queryRunner = {
       connect: jest.fn().mockResolvedValue(undefined),
       query: jest.fn().mockResolvedValue([]),
@@ -196,7 +198,8 @@ describe('CodingResultsService', () => {
   });
 
   it('applies code 0 as a completed coding result', async () => {
-    const result = await service.applyCodingResults(17, 10);
+    jest.mocked(JournalService.recordEventInTransaction).mockClear();
+    const result = await service.applyCodingResults(17, 10, { actorUserId: 7 });
 
     expect(result.success).toBe(true);
     expect(result.updatedResponsesCount).toBe(1);
@@ -226,6 +229,23 @@ describe('CodingResultsService', () => {
     );
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
     expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(17);
+    expect(JournalService.recordEventInTransaction).toHaveBeenCalledWith(queryRunner.manager, expect.objectContaining({
+      workspaceId: 17,
+      actorUserId: 7,
+      eventType: 'CODING_RESULTS_APPLIED',
+      entityId: 10,
+      details: expect.objectContaining({ updatedResponsesCount: 1, overwriteExisting: false })
+    }));
+    expect(jest.mocked(JournalService.recordEventInTransaction).mock.invocationCallOrder[0])
+      .toBeLessThan(queryRunner.commitTransaction.mock.invocationCallOrder[0]);
+  });
+
+  it('rolls back applied results if audit persistence fails', async () => {
+    jest.mocked(JournalService.recordEventInTransaction).mockRejectedValueOnce(new Error('audit unavailable'));
+    await expect(service.applyCodingResults(17, 10)).rejects.toThrow('audit unavailable');
+    expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
+    expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
+    expect(codingStatisticsService.invalidateCache).not.toHaveBeenCalled();
   });
 
   it('applies a coding job submitted for review', async () => {

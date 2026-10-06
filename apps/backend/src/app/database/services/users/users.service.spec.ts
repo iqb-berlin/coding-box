@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import WorkspaceUser from '../../entities/workspace_user.entity';
 import { UsersService } from './users.service';
+import { JournalService } from '../shared/journal.service';
 
 const createLockedRowsQuery = (rows: unknown[] = []) => ({
   setLock: jest.fn().mockReturnThis(),
@@ -43,6 +44,7 @@ describe('UsersService', () => {
   let service: UsersService;
 
   beforeEach(() => {
+    jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
     usersRepository = createRepo();
     workspaceUserRepository = createRepo();
     const transactionManager = {
@@ -510,6 +512,51 @@ describe('UsersService', () => {
         canCode: true
       }
     ]);
+  });
+
+  it('audits a membership re-created after it was removed before acquiring the workspace lock', async () => {
+    workspaceUserRepository.find.mockResolvedValueOnce([{
+      userId: 1, workspaceId: 2, accessLevel: 1, canCode: true
+    }]);
+    mockLockedWorkspaceUsers(workspaceUserRepository, [{
+      userId: 9, workspaceId: 2, accessLevel: 3, canCode: false
+    }]);
+    jest.mocked(JournalService.recordEventInTransaction).mockClear();
+
+    await expect(service.assignUserWorkspaces(1, [2], 8)).resolves.toBe(true);
+
+    expect(JournalService.recordEventInTransaction).toHaveBeenCalledTimes(1);
+    expect(JournalService.recordEventInTransaction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      workspaceId: 2,
+      actorUserId: 8,
+      eventType: 'ACCESS_LEVEL_CHANGED',
+      entityId: 1,
+      details: {
+        previousAccessLevel: 0, accessLevel: 1, previousCanCode: false, canCode: true
+      }
+    }));
+  });
+
+  it('does not audit stale rights when the locked membership already has the requested rights', async () => {
+    workspaceUserRepository.find.mockResolvedValueOnce([{
+      userId: 1, workspaceId: 2, accessLevel: 1, canCode: true
+    }]);
+    mockLockedWorkspaceUsers(workspaceUserRepository, [
+      {
+        userId: 1, workspaceId: 2, accessLevel: 2, canCode: false
+      },
+      {
+        userId: 9, workspaceId: 2, accessLevel: 3, canCode: false
+      }
+    ]);
+    jest.mocked(JournalService.recordEventInTransaction).mockClear();
+
+    await expect(service.assignUserWorkspaces(1, [2], 8)).resolves.toBe(true);
+
+    expect(workspaceUserRepository.save).toHaveBeenCalledWith([{
+      userId: 1, workspaceId: 2, accessLevel: 2, canCode: false
+    }]);
+    expect(JournalService.recordEventInTransaction).not.toHaveBeenCalled();
   });
 
   it('rejects workspace assignment changes that remove the final study manager', async () => {

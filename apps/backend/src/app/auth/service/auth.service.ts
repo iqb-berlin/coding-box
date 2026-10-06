@@ -7,6 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../../database/services/users';
+import { JournalService } from '../../database/services/shared/journal.service';
 import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
 import {
   createWorkspaceTokenPolicy,
@@ -24,7 +25,8 @@ export class AuthService {
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
-    private configService: ConfigService
+    private configService: ConfigService,
+    private journalService: JournalService
   ) {
   }
 
@@ -52,7 +54,7 @@ export class AuthService {
         throw new ForbiddenException('Users need workspace admin access to create tokens for another identity');
       }
     }
-    return this.signWorkspaceToken(user, workspaceId, duration, scopes);
+    return this.createAuditedWorkspaceToken(user, workspaceId, duration, scopes, requesterUserId ?? user.id);
   }
 
   async createTokenForUserId(
@@ -66,7 +68,24 @@ export class AuthService {
       throw new NotFoundException(`User with id ${userId} not found`);
     }
 
-    return this.signWorkspaceToken(user, workspaceId, duration, scopes);
+    return this.createAuditedWorkspaceToken(user, workspaceId, duration, scopes, userId);
+  }
+
+  private async createAuditedWorkspaceToken(user: UserFullDto, workspaceId: number, duration: number,
+                                            scopes: WorkspaceTokenScope[], actorUserId: number): Promise<string> {
+    const token = this.signWorkspaceToken(user, workspaceId, duration, scopes);
+    await this.journalService.recordEvent({
+      workspaceId,
+      actorUserId,
+      actorType: 'user',
+      eventType: 'ACCESS_TOKEN_CREATED',
+      entityType: 'workspace-user',
+      entityId: user.id,
+      result: 'success',
+      summary: 'Workspace access token created',
+      details: { durationDays: duration, scopes: Array.from(new Set(scopes)) }
+    });
+    return token;
   }
 
   private signWorkspaceToken(

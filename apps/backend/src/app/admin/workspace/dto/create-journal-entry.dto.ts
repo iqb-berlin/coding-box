@@ -1,6 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
-  IsNotEmpty,
   IsString,
   IsIn,
   IsOptional
@@ -18,15 +17,16 @@ import {
 export class CreateJournalEntryDto {
   @ApiProperty({
     description: 'Type of action performed (e.g., create, update, delete)',
-    example: 'create'
+    example: 'create',
+    required: false
   })
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-    action_type: string;
+    action_type?: string;
 
   @ApiProperty({
-    description: 'Canonical audit event type',
-    example: 'WORKSPACE_SETTINGS_CHANGED',
+    description: 'Manual note event type; trusted backend event types are not accepted',
+    example: 'MANUAL_NOTE_CREATED',
     required: false
   })
   @IsOptional()
@@ -35,11 +35,12 @@ export class CreateJournalEntryDto {
 
   @ApiProperty({
     description: 'Type of entity that was affected (e.g., unit, response, file)',
-    example: 'unit'
+    example: 'unit',
+    required: false
   })
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-    entity_type: string;
+    entity_type?: string;
 
   @ApiProperty({
     description: 'Type of entity that was affected',
@@ -52,11 +53,12 @@ export class CreateJournalEntryDto {
 
   @ApiProperty({
     description: 'ID of the entity that was affected',
-    example: '123'
+    example: '123',
+    required: false
   })
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-    entity_id: string;
+    entity_id?: string;
 
   @ApiProperty({
     description: 'ID of the entity that was affected',
@@ -89,7 +91,7 @@ export class CreateJournalEntryDto {
 
   @ApiProperty({
     description: 'Privacy-conscious human-readable summary',
-    example: 'Workspace settings changed',
+    example: 'Manual workspace note',
     required: false
   })
   @IsOptional()
@@ -98,13 +100,14 @@ export class CreateJournalEntryDto {
 
   @ApiProperty({
     description: 'Additional details about the action in JSON format',
-    example: '{"method":"POST","url":"/api/units","requestBody":{"name":"Test Unit"}}'
+    example: '{"note":"Import checked"}',
+    required: false
   })
   @IsOptional()
     details?: string | Record<string, unknown>;
 
   @ApiProperty({
-    description: 'Optional request or job correlation ID',
+    description: 'Reserved for backend events; must be omitted for manual notes',
     example: 'f9ec1a0b-03bc-4d73-a92c-713cc2e1eb63',
     required: false
   })
@@ -113,7 +116,7 @@ export class CreateJournalEntryDto {
     correlationId?: string;
 
   @ApiProperty({
-    description: 'Optional background job ID',
+    description: 'Reserved for backend events; must be omitted for manual notes',
     example: '42',
     required: false
   })

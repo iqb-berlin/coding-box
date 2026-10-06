@@ -6,6 +6,13 @@ import { Unit } from '../../entities/unit.entity';
 import Persons from '../../entities/persons.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import Workspace from '../../entities/workspace.entity';
+import { JournalService } from '../shared/journal.service';
+
+function enableDeletionTransactions(repository: Repository<ResponseEntity>): void {
+  Object.assign(repository, {
+    manager: { ...repository.manager, transaction: jest.fn(async callback => callback({ getRepository: () => repository })) }
+  });
+}
 
 describe('WorkspaceResponseValidationService.validateVariables', () => {
   const makeUnitXml = (
@@ -1402,6 +1409,8 @@ const createMutationLockMock = () => {
 };
 
 describe('WorkspaceResponseValidationService.deleteInvalidResponses', () => {
+  beforeEach(() => { jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue(undefined as never); });
+  afterEach(() => { jest.restoreAllMocks(); });
   const makeQueryBuilder = (units: Unit[]) => ({
     innerJoin: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
@@ -1430,6 +1439,7 @@ describe('WorkspaceResponseValidationService.deleteInvalidResponses', () => {
       find: jest.fn().mockResolvedValue([{ id: 100, unitid: 10 }]),
       manager: mutationLock.manager
     } as unknown as Repository<ResponseEntity>;
+    enableDeletionTransactions(responseRepo);
 
     const service = new WorkspaceResponseValidationService(
       responseRepo,
@@ -1438,7 +1448,7 @@ describe('WorkspaceResponseValidationService.deleteInvalidResponses', () => {
       {} as Repository<Booklet>,
       {} as Repository<FileUpload>
     );
-    const result = await service.deleteInvalidResponses(1, [100]);
+    const result = await service.deleteInvalidResponses(1, [100], { actorUserId: 7, jobId: 'validation-1' });
     expect(result).toBe(1);
     expect(deleteMock).toHaveBeenCalled();
     expect(mutationLock.queryRunner.query).toHaveBeenNthCalledWith(
@@ -1458,6 +1468,35 @@ describe('WorkspaceResponseValidationService.deleteInvalidResponses', () => {
 
     expect(lockOrder).toBeLessThan(deleteOrder);
     expect(deleteOrder).toBeLessThan(unlockOrder);
+    expect(JournalService.recordEventInTransaction).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      actorUserId: 7,
+      actorType: 'job',
+      jobId: 'validation-1',
+      workspaceId: 1,
+      eventType: 'TEST_RESULT_RESPONSES_DELETED'
+    }));
+  });
+
+  it('rejects the deletion transaction when its audit write fails and still releases the lock', async () => {
+    const mutationLock = createMutationLockMock();
+    const repository = {
+      delete: jest.fn().mockResolvedValue({ affected: 1 }),
+      find: jest.fn().mockResolvedValue([{ id: 100, unitid: 10 }]),
+      manager: mutationLock.manager
+    } as unknown as Repository<ResponseEntity>;
+    enableDeletionTransactions(repository);
+    const service = new WorkspaceResponseValidationService(
+      repository,
+      { createQueryBuilder: jest.fn().mockReturnValue(makeQueryBuilder([{ id: 10 } as Unit])) } as never,
+      { find: jest.fn().mockResolvedValue([{ id: 1 }]) } as never,
+      {} as Repository<Booklet>,
+      {} as Repository<FileUpload>
+    );
+    jest.mocked(JournalService.recordEventInTransaction).mockRejectedValueOnce(new Error('audit unavailable'));
+    await expect(service.deleteInvalidResponses(1, [100], { actorUserId: 7 })).rejects.toThrow('audit unavailable');
+    expect(repository.manager.transaction).toHaveBeenCalled();
+    expect(mutationLock.queryRunner.release).toHaveBeenCalled();
+    expect(mutationLock.queryRunner.query).toHaveBeenLastCalledWith('SELECT pg_advisory_unlock($1::int, $2::int)', [774020251, 1]);
   });
 
   it('returns 0 when no response IDs provided', async () => {
@@ -1489,6 +1528,8 @@ describe('WorkspaceResponseValidationService.deleteInvalidResponses', () => {
 });
 
 describe('WorkspaceResponseValidationService.deleteAllInvalidResponses', () => {
+  beforeEach(() => { jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue(undefined as never); });
+  afterEach(() => { jest.restoreAllMocks(); });
   const makeUnitXml = (
     unitId: string,
     variables: Array<{ alias: string; type: string }>
@@ -1553,6 +1594,7 @@ describe('WorkspaceResponseValidationService.deleteAllInvalidResponses', () => {
       {} as Repository<Booklet>,
       filesRepo
     );
+    enableDeletionTransactions(responseRepo);
     const result = await service.deleteAllInvalidResponses(1, 'variables');
     expect(result).toBe(1);
     expect(mutationLock.connection.createQueryRunner).toHaveBeenCalledTimes(1);
@@ -1607,6 +1649,7 @@ describe('WorkspaceResponseValidationService.deleteAllInvalidResponses', () => {
       bookletRepo,
       {} as Repository<FileUpload>
     );
+    enableDeletionTransactions(responseRepo);
     const result = await service.deleteAllInvalidResponses(
       1,
       'duplicateResponses'
@@ -1684,13 +1727,14 @@ describe('WorkspaceResponseValidationService.deleteAllInvalidResponses', () => {
       bookletRepo,
       {} as Repository<FileUpload>
     );
+    enableDeletionTransactions(responseRepo);
     const result = await service.deleteAllInvalidResponses(
       1,
       'duplicateResponses'
     );
 
     expect(result).toBe(2);
-    expect(deleteMock).toHaveBeenCalledWith({ id: In([100, 101]) });
+    expect(deleteMock).toHaveBeenCalledWith({ id: In([100, 101]), unitid: In([10]) });
   });
 
   it('returns 0 when workspaceId is not provided', async () => {

@@ -652,7 +652,6 @@ describe('ResponseManagementService', () => {
       workspaceTestResultsService as never,
       codingFreshnessService as never
     );
-    journalService.recordEvent.mockRejectedValueOnce(new Error('audit down'));
 
     const result = await service.deleteResponse(1, 50, 'user-1');
 
@@ -673,7 +672,8 @@ describe('ResponseManagementService', () => {
         entityType: 'response',
         entityId: 50,
         result: 'success'
-      })
+      }),
+      manager
     );
   });
 

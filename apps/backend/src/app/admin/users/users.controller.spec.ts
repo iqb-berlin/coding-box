@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { ExecutionContext, INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { createMock } from '@golevelup/ts-jest';
 import { UsersController } from './users.controller';
@@ -50,7 +50,12 @@ describe('UsersController', () => {
       ]
     })
       .overrideGuard(JwtAuthGuard)
-      .useValue({ canActivate: () => true })
+      .useValue({
+        canActivate: (context: ExecutionContext) => {
+          context.switchToHttp().getRequest().user = { id: 7 };
+          return true;
+        }
+      })
       .compile();
 
     const app = module.createNestApplication();
@@ -92,7 +97,7 @@ describe('UsersController', () => {
 
         expect(response.status).toBe(200);
         await expect(response.json()).resolves.toBe(true);
-        expect(usersService.updateUsersAccess).toHaveBeenCalledWith(3, payload);
+        expect(usersService.updateUsersAccess).toHaveBeenCalledWith(3, payload, 7);
       } finally {
         await app?.close();
       }
@@ -158,7 +163,7 @@ describe('UsersController', () => {
 
         expect(response.status).toBe(201);
         await expect(response.json()).resolves.toBe(true);
-        expect(usersService.assignUserWorkspaces).toHaveBeenCalledWith(5, [2, 3]);
+        expect(usersService.assignUserWorkspaces).toHaveBeenCalledWith(5, [2, 3], 7);
       } finally {
         await app?.close();
       }
