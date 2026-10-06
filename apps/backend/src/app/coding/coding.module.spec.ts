@@ -20,6 +20,23 @@ import { CodingItemMatrixExportService } from '../database/services/coding/codin
 import { WorkspaceModule } from '../workspace/workspace.module';
 import { CodingModule } from './coding.module';
 
+// Supply isolated infrastructure credentials while retaining real startup validation.
+jest.mock('../config/environment.validation', () => {
+  const actual = jest.requireActual('../config/environment.validation');
+  return {
+    ...actual,
+    validateEnvironment: (config: Record<string, unknown>) => actual.validateEnvironment({
+      POSTGRES_HOST: 'localhost',
+      POSTGRES_PORT: '5432',
+      POSTGRES_USER: 'test',
+      POSTGRES_PASSWORD: 'test-password',
+      POSTGRES_DB: 'test',
+      JWT_SECRET: 'test-secret',
+      ...config
+    })
+  };
+});
+
 const sharedCodingProviders = [
   CodingValidationService,
   CodingAnalysisService,
