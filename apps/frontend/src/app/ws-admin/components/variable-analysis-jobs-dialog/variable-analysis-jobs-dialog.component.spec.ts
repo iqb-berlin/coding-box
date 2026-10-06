@@ -104,10 +104,10 @@ describe('VariableAnalysisJobsDialogComponent', () => {
 
       component.refreshJobs();
 
-      expect(component.isLoading).toBe(false);
+      expect(component.isLoading()).toBe(false);
       expect(variableAnalysisService.getAllJobs).toHaveBeenCalledWith(1);
-      expect(component.data.jobs.length).toBe(2); // Only variable-analysis type jobs
-      expect(component.data.jobs.every(job => job.type === 'variable-analysis')).toBe(true);
+      expect(component.jobs().length).toBe(2); // Only variable-analysis type jobs
+      expect(component.jobs().every(job => job.type === 'variable-analysis')).toBe(true);
     });
 
     it('should set isLoading to true during loading', () => {
@@ -123,7 +123,7 @@ describe('VariableAnalysisJobsDialogComponent', () => {
 
       component.refreshJobs();
 
-      expect(component.isLoading).toBe(false);
+      expect(component.isLoading()).toBe(false);
       expect(snackBar.open).toHaveBeenCalledWith(
         'Fehler beim Laden der Analyse-Aufträge',
         'Fehler',
@@ -136,7 +136,7 @@ describe('VariableAnalysisJobsDialogComponent', () => {
 
       component.refreshJobs();
 
-      expect(component.isLoading).toBe(false);
+      expect(component.isLoading()).toBe(false);
     });
 
     it('should set isLoading to false after error', () => {
@@ -144,7 +144,7 @@ describe('VariableAnalysisJobsDialogComponent', () => {
 
       component.refreshJobs();
 
-      expect(component.isLoading).toBe(false);
+      expect(component.isLoading()).toBe(false);
     });
   });
 
@@ -198,7 +198,7 @@ describe('VariableAnalysisJobsDialogComponent', () => {
         'Fehler',
         { duration: 3000 }
       );
-      expect(component.isLoading).toBe(false);
+      expect(component.isLoading()).toBe(false);
     });
 
     it('should use default error message for unsuccessful cancellation', () => {
@@ -222,7 +222,7 @@ describe('VariableAnalysisJobsDialogComponent', () => {
 
       component.cancelJob(1);
 
-      expect(component.isLoading).toBe(false);
+      expect(component.isLoading()).toBe(false);
       expect(snackBar.open).toHaveBeenCalledWith(
         'Fehler beim Abbrechen des Analyse-Auftrags',
         'Fehler',
@@ -301,8 +301,8 @@ describe('VariableAnalysisJobsDialogComponent', () => {
     });
 
     it('should have jobs from dialog data', () => {
-      expect(component.data.jobs).toBeDefined();
-      expect(Array.isArray(component.data.jobs)).toBe(true);
+      expect(component.jobs()).toBeDefined();
+      expect(Array.isArray(component.jobs())).toBe(true);
     });
   });
 });

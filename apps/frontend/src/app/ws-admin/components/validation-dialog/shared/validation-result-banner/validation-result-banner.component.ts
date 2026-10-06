@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 
@@ -8,6 +8,7 @@ export type OverallValidationStatus = 'not-run' | 'running' | 'success' | 'faile
  * Component for displaying overall validation status banner
  */
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-validation-result-banner',
   standalone: true,
   imports: [CommonModule, MatIconModule],

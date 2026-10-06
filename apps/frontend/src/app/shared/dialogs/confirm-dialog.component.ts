@@ -1,4 +1,6 @@
-import { Component, OnInit, inject } from '@angular/core';
+import {
+  Component, OnInit, inject, ChangeDetectionStrategy
+} from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogTitle,
@@ -11,6 +13,7 @@ import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'tc-confirm-dialog',
   standalone: true,
   template: `

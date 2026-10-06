@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnDestroy, inject, signal
+  Component, Inject, OnDestroy, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
@@ -40,6 +40,7 @@ export interface ContentPoolUploadDialogResult {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-content-pool-upload-dialog',
   templateUrl: './content-pool-upload-dialog.component.html',
   styleUrls: ['./content-pool-upload-dialog.component.scss'],

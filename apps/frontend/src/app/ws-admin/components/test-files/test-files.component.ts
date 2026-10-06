@@ -1,6 +1,6 @@
 import {
   Component, DestroyRef, OnDestroy, OnInit, ViewChild, inject, signal,
-  computed
+  computed, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
@@ -115,6 +115,7 @@ type ValidationProgressStep = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-files',
   templateUrl: './test-files.component.html',
   styleUrls: ['./test-files.component.scss'],

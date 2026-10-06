@@ -2,7 +2,7 @@ import {
   Component,
   input,
   output,
-  inject
+  inject, ChangeDetectionStrategy
 } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -12,6 +12,7 @@ import { UnitsReplay, UnitsReplayUnit } from '../../services/units-replay.servic
 import { ReplayCodingService } from '../../services/replay-coding.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-units-replay',
   imports: [MatButtonModule, MatIconModule, MatTooltipModule, TranslateModule],
   templateUrl: './units-replay.component.html',

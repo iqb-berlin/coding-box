@@ -2,7 +2,7 @@ import {
   MatTableDataSource
 } from '@angular/material/table';
 import {
-  ViewChild, Component, OnInit, inject, signal
+  ViewChild, Component, OnInit, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatSort } from '@angular/material/sort';
@@ -23,6 +23,7 @@ import {
 } from '../../../core/utils/auth-data-refresh';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-users',
   templateUrl: './users.component.html',
   styleUrls: ['./users.component.scss'],

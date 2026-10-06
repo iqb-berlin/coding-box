@@ -1,6 +1,6 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import {
-  Component, OnDestroy, OnInit, SecurityContext, inject, signal
+  Component, OnDestroy, OnInit, SecurityContext, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
@@ -42,6 +42,7 @@ interface DatabaseExportJobState {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-sys-admin-settings',
   templateUrl: './sys-admin-settings.component.html',
   styleUrls: ['./sys-admin-settings.component.scss'],

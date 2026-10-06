@@ -1,11 +1,12 @@
 import {
-  Component, OnDestroy, OnInit, input, signal
+  Component, OnDestroy, OnInit, input, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'cb-spinner',
   templateUrl: './spinner.component.html',
   styleUrls: ['./spinner.component.scss'],

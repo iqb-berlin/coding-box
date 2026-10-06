@@ -1,7 +1,7 @@
 import { Clipboard } from '@angular/cdk/clipboard';
 
 import {
-  Component, Input, OnChanges, OnDestroy, signal
+  Component, Input, OnChanges, OnDestroy, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -14,6 +14,7 @@ type XmlFormatResult = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-xml-viewer',
   standalone: true,
   imports: [

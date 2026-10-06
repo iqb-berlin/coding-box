@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, ViewChild, AfterViewInit, inject
+  Component, OnInit, ViewChild, AfterViewInit, inject, ChangeDetectionStrategy
 } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatSort, MatSortModule } from '@angular/material/sort';
@@ -29,6 +29,7 @@ import { CoderService } from '../../services/coder.service';
 import { Coder } from '../../models/coder.model';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coder-list',
   templateUrl: './coder-list.component.html',
   styleUrls: ['./coder-list.component.scss'],
