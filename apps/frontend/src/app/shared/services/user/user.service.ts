@@ -6,10 +6,9 @@ import {
   Observable,
   of
 } from 'rxjs';
-import { CreateUserDto } from '../../../../../../../api-dto/user/create-user-dto';
+import type { RequestBody } from '../../../../../../../api-dto/request-contracts';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { UserInListDto } from '../../../../../../../api-dto/user/user-in-list-dto';
-import { UserWorkspaceAccessDto } from '../../../../../../../api-dto/workspaces/user-workspace-access-dto';
 import { SERVER_URL } from '../../../injection-tokens';
 
 @Injectable({
@@ -24,7 +23,7 @@ export class UserService {
       .get<UserInListDto[]>(`${this.serverUrl}admin/users/access/${workspaceId}`, {});
   }
 
-  saveUsers(workspaceId: number, users: UserWorkspaceAccessDto[]): Observable<boolean> {
+  saveUsers(workspaceId: number, users: RequestBody<'UsersController_updateUsersAccess'>): Observable<boolean> {
     return this.http
       .patch<boolean>(`${this.serverUrl}admin/users/access/${workspaceId}`,
       users,
@@ -42,7 +41,7 @@ export class UserService {
       );
   }
 
-  addUser(newUser: CreateUserDto): Observable<boolean> {
+  addUser(newUser: RequestBody<'CreateUserDto'>): Observable<boolean> {
     return this.http
       .post(
         `${this.serverUrl}admin/users`,
@@ -55,7 +54,7 @@ export class UserService {
       );
   }
 
-  changeUserData(userId: number, newData: UserFullDto): Observable<boolean> {
+  changeUserData(userId: number, newData: RequestBody<'UserFullDto'>): Observable<boolean> {
     return this.http
       .patch(
         `${this.serverUrl}admin/users/${userId}`,

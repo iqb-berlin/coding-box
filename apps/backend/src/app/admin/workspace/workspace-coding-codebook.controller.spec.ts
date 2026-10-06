@@ -272,10 +272,11 @@ describe('WorkspaceCodingCodebookController', () => {
       .mockReturnValue(failingStream as fs.ReadStream);
     const response = createMockResponse();
 
-    await controller.downloadCodebook('42', 12, response);
+    await expect(controller.downloadCodebook('42', 12, response))
+      .rejects.toThrow('stream failed');
 
-    expect(response.status).toHaveBeenCalledWith(500);
-    expect(response.json).toHaveBeenCalledWith({ error: 'stream failed' });
+    expect(response.status).not.toHaveBeenCalled();
+    expect(response.json).not.toHaveBeenCalled();
     expect(cacheService.delete).not.toHaveBeenCalled();
   });
 

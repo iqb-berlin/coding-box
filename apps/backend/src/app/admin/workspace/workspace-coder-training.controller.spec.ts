@@ -332,7 +332,7 @@ describe('WorkspaceCoderTrainingController', () => {
       canApply: true
     });
 
-    const result = await controller.previewApplyDiscussionResults(12, 5, 'manual');
+    const result = await controller.previewApplyDiscussionResults(12, 5, { source: 'manual' });
 
     expect(coderTrainingResultsApplyService.previewTrainingDiscussionResults)
       .toHaveBeenCalledWith(12, 5, 'manual');

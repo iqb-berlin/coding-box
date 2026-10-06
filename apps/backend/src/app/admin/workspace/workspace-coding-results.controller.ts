@@ -1,16 +1,7 @@
 import {
-  Controller,
-  Body,
-  Get,
-  Param,
-  Post,
-  UseGuards
+  Controller, Body, Get, Param, Post, UseGuards
 } from '@nestjs/common';
-import {
-  ApiOkResponse,
-  ApiParam,
-  ApiTags
-} from '@nestjs/swagger';
+import { ApiOkResponse, ApiParam, ApiTags } from '@nestjs/swagger';
 import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
 import { requestBodySchemas } from '../../http/request-body.schemas';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';

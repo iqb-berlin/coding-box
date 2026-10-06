@@ -1,18 +1,13 @@
 import {
-  BadRequestException,
-  ConflictException,
-  forwardRef,
-  Inject,
-  Injectable,
-  Logger
+  BadRequestException, ConflictException, forwardRef, Inject, Injectable, Logger
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Connection, In, Repository } from 'typeorm';
+import type { RequestBody } from '../../../../../../../api-dto/request-contracts';
 import Workspace from '../../entities/workspace.entity';
 import WorkspaceUser from '../../entities/workspace_user.entity';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/workspace-full-dto';
-import { CreateWorkspaceDto } from '../../../../../../../api-dto/workspaces/create-workspace-dto';
 import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/workspace-settings-dto';
 import { AdminWorkspaceNotFoundException } from '../../../exceptions/admin-workspace-not-found.exception';
 import FileUpload from '../../entities/file_upload.entity';
@@ -21,21 +16,10 @@ import { CacheService } from '../../../cache/cache.service';
 import { EXCLUSION_CACHE_PREFIX } from './workspace-constants';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceTestResultsService } from '../test-results/workspace-test-results.service';
-import {
-  CODING_STATISTICS_CACHE_VERSIONS,
-  getCodingStatisticsCacheKey,
-  getLegacyCodingStatisticsCacheKeys
-} from '../coding/coding-statistics-cache-key.util';
-import {
-  getCodingIncompleteVariablesCacheKeys,
-  getCodingIncompleteVariablesCacheVersionKey
-} from '../coding/coding-incomplete-variables-cache-key.util';
-import {
-  tryWithWorkspaceFilesMutationLock
-} from '../shared/workspace-files-lock.util';
-import {
-  tryWithWorkspaceAutocoderInputMutationLocks
-} from '../shared/workspace-autocoder-input-lock.util';
+import { CODING_STATISTICS_CACHE_VERSIONS, getCodingStatisticsCacheKey, getLegacyCodingStatisticsCacheKeys } from '../coding/coding-statistics-cache-key.util';
+import { getCodingIncompleteVariablesCacheKeys, getCodingIncompleteVariablesCacheVersionKey } from '../coding/coding-incomplete-variables-cache-key.util';
+import { tryWithWorkspaceFilesMutationLock } from '../shared/workspace-files-lock.util';
+import { tryWithWorkspaceAutocoderInputMutationLocks } from '../shared/workspace-autocoder-input-lock.util';
 
 @Injectable()
 export class WorkspaceCoreService {
@@ -91,7 +75,7 @@ export class WorkspaceCoreService {
     throw new AdminWorkspaceNotFoundException(id, 'GET');
   }
 
-  async create(workspace: CreateWorkspaceDto, creatorUserId: number): Promise<number> {
+  async create(workspace: RequestBody<'CreateWorkspaceDto'>, creatorUserId: number): Promise<number> {
     this.logger.log(`Creating workspace with name: ${workspace.name}`);
     const normalizedCreatorUserId = Number(creatorUserId);
     if (!Number.isInteger(normalizedCreatorUserId) || normalizedCreatorUserId < 1) {

@@ -1,35 +1,18 @@
 import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Query,
-  UseGuards,
-  ParseIntPipe,
-  ParseFloatPipe,
-  DefaultValuePipe
+  Controller, Get, Param, Post, Query, UseGuards, ParseIntPipe, ParseFloatPipe, DefaultValuePipe
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import {
-  ApiOkResponse,
-  ApiOperation,
-  ApiParam,
-  ApiQuery,
-  ApiTags,
-  ApiBadRequestResponse
+  ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiTags, ApiBadRequestResponse
 } from '@nestjs/swagger';
-import { Repository } from 'typeorm';
-import { requestBodySchemas } from '../../http/request-body.schemas';
-import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
-import { FlatResponseFrequenciesRequest, FlatResponseFilterOptions } from './dto/workspace-test-results.interfaces';
+import { FlatResponseFilterOptions } from './dto/workspace-test-results.interfaces';
 import { CacheService } from '../../cache/cache.service';
-import { Setting } from '../../database/entities/setting.entity';
-import { getWorkspaceRegexSearchEnabled } from '../../utils/regex-search.util';
+import { WorkspaceSettingsService } from '../../workspace/workspace-settings.service';
 
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')
@@ -37,8 +20,7 @@ export class WorkspaceTestResultsAnalysisController {
   constructor(
     private workspaceTestResultsService: WorkspaceTestResultsService,
     private cacheService: CacheService,
-    @InjectRepository(Setting)
-    private readonly settingRepository: Repository<Setting>
+    private readonly workspaceSettingsService: WorkspaceSettingsService
   ) { }
 
   @Get(':workspace_id/test-results/flat-responses')
@@ -105,7 +87,7 @@ export class WorkspaceTestResultsAnalysisController {
                                          @Query('repeatedStartThreshold', new DefaultValuePipe(2), ParseIntPipe) repeatedStartThreshold?: number
   ): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
     const effectiveRegexSearch = regexSearch === 'true' &&
-      await getWorkspaceRegexSearchEnabled(this.settingRepository, workspace_id);
+      await this.workspaceSettingsService.isRegexSearchEnabled(workspace_id);
     const [data, total] =
       await this.workspaceTestResultsService.findFlatResponses(workspace_id, {
         page,
@@ -230,7 +212,7 @@ export class WorkspaceTestResultsAnalysisController {
   @RequireAccessLevel(3)
   async findFlatResponseFrequencies(
     @Param('workspace_id') workspaceId: number,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.FlatResponseFrequenciesRequest)) body: FlatResponseFrequenciesRequest
+      @ValidatedBody('FlatResponseFrequenciesRequest') body: RequestBody<'FlatResponseFrequenciesRequest'>
   ): Promise<Record<string, { total: number; values: Array<{ value: string; count: number; p: number }> }>> {
     return this.workspaceTestResultsService.findFlatResponseFrequencies(
       workspaceId,

@@ -1,3 +1,4 @@
+import type { RequestBody } from '../request-contracts';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class LegalNoticeDto {
@@ -8,7 +9,4 @@ export class LegalNoticeDto {
     isDefault!: boolean;
 }
 
-export class UpdateLegalNoticeDto {
-  @ApiProperty({ description: 'HTML content for the imprint/privacy dialog' })
-    html!: string;
-}
+export type UpdateLegalNoticeDto = RequestBody<'UpdateLegalNoticeDto'>;

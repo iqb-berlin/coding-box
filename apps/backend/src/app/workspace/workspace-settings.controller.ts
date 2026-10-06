@@ -1,14 +1,12 @@
 import {
-  Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, UseGuards
+  Controller, Delete, Get, Param, ParseIntPipe, Post, Put, UseGuards
 } from '@nestjs/common';
-import { requestBodySchemas } from '../http/request-body.schemas';
-import { JsonSchemaValidationPipe } from '../http/json-schema-validation.pipe';
+import { ValidatedBody } from '../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../api-dto/request-contracts';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../admin/workspace/workspace.guard';
 import { AccessLevelGuard, RequireAccessLevel } from '../admin/workspace/access-level.guard';
-import {
-  WorkspaceSettingsService, WorkspaceSettingWriteDto, WorkspaceSettingsBatchDto
-} from './workspace-settings.service';
+import { WorkspaceSettingsService } from './workspace-settings.service';
 
 @UseGuards(JwtAuthGuard, WorkspaceGuard)
 @Controller('workspace/:workspaceId/settings')
@@ -28,7 +26,7 @@ export class WorkspaceSettingsController {
   @RequireAccessLevel(3)
   createWorkspaceSettings(
   @Param('workspaceId', ParseIntPipe) workspaceId: number,
-    @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceSettingsBatchDto)) body: WorkspaceSettingsBatchDto
+    @ValidatedBody('WorkspaceSettingsBatchDto') body: RequestBody<'WorkspaceSettingsBatchDto'>
   ) {
     return this.settingsService.createWorkspaceSettings(workspaceId, body);
   }
@@ -38,7 +36,7 @@ export class WorkspaceSettingsController {
   @RequireAccessLevel(3)
   createWorkspaceSetting(
   @Param('workspaceId', ParseIntPipe) workspaceId: number,
-    @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceSettingWriteDto)) body: WorkspaceSettingWriteDto
+    @ValidatedBody('WorkspaceSettingWriteDto') body: RequestBody<'WorkspaceSettingWriteDto'>
   ) {
     return this.settingsService.createWorkspaceSetting(workspaceId, body);
   }
@@ -49,7 +47,7 @@ export class WorkspaceSettingsController {
   updateWorkspaceSetting(
   @Param('workspaceId', ParseIntPipe) workspaceId: number,
     @Param('settingId') settingId: string,
-    @Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceSettingsController_updateWorkspaceSetting)) body: { value: string }
+    @ValidatedBody('WorkspaceSettingsController_updateWorkspaceSetting') body: RequestBody<'WorkspaceSettingsController_updateWorkspaceSetting'>
   ) {
     return this.settingsService.updateWorkspaceSetting(workspaceId, settingId, body);
   }

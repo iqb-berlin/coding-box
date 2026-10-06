@@ -74,7 +74,7 @@ describe('JSON request contracts', () => {
   it('allows partial user/workspace updates and logo settings without response-only fields', () => {
     const requests = [
       [requestBodySchemas.UserFullDto, { username: 'user' }],
-      [requestBodySchemas.WorkspaceFullDto, { name: 'Workspace' }],
+      [requestBodySchemas.WorkspaceFullDto, { id: 47, name: 'Workspace' }],
       [requestBodySchemas.AppLogoDto, { bodyBackground: '#ffffff' }]
     ] as const;
     requests.forEach(([schema, payload]) => {
@@ -89,6 +89,13 @@ describe('JSON request contracts', () => {
     expect(() => pipe.transform('false')).toThrow(BadRequestException);
     expect(() => pipe.transform(null)).toThrow(BadRequestException);
   });
+
+  it.each([{}, { name: 'Workspace' }, { id: 0 }, { id: -1 }, { id: 1.5 }, { id: '47' }])(
+    'rejects workspace patches without a positive integer ID: %j', payload => {
+      expect(() => new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceFullDto).transform(payload))
+        .toThrow(BadRequestException);
+    }
+  );
 
   it('does not include rejected input values in validation errors', () => {
     const pipe = new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceSettingWriteDto);

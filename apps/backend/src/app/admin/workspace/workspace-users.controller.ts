@@ -1,24 +1,11 @@
 import {
-  BadRequestException,
-  Body,
-  Controller,
-  DefaultValuePipe,
-  Get,
-  Logger,
-  Param,
-  ParseIntPipe,
-  Post,
-  Query,
-  Req,
-  UseGuards
+  BadRequestException, Controller, DefaultValuePipe, Get, Logger, Param, ParseIntPipe, Post, Query, Req, UseGuards
 } from '@nestjs/common';
 import {
-  ApiBadRequestResponse,
-  ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation,
-  ApiParam, ApiQuery, ApiTags
+  ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
-import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
-import { requestBodySchemas } from '../../http/request-body.schemas';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
@@ -26,11 +13,7 @@ import WorkspaceUser from '../../database/entities/workspace_user.entity';
 import { WorkspaceUsersService } from '../../database/services/workspace/workspace-users.service';
 import { WorkspaceId } from './workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
-import {
-  WORKSPACE_TOKEN_SCOPES,
-  WorkspaceTokenPolicy,
-  WorkspaceTokenScope
-} from '../../auth/workspace-token';
+import { WORKSPACE_TOKEN_SCOPES, WorkspaceTokenPolicy, WorkspaceTokenScope } from '../../auth/workspace-token';
 
 interface RequestWithUser {
   user: {
@@ -230,22 +213,14 @@ export class WorkspaceUsersController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiOperation({ summary: 'Set workspace users', description: 'Assigns users to a workspace' })
   @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
-  @ApiBody({
-    schema: {
-      type: 'array',
-      items: {
-        type: 'number'
-      },
-      description: 'Array of user IDs to assign to the workspace'
-    }
-  })
+
   @ApiCreatedResponse({
     description: 'Sends back the id of the new user in database',
     type: Number
   })
   @ApiBadRequestResponse({ description: 'Invalid user IDs or workspace ID' })
   @ApiTags('admin users')
-  async setWorkspaceUsers(@Body(new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceUsersController_setWorkspaceUsers)) userIds: number[],
+  async setWorkspaceUsers(@ValidatedBody('WorkspaceUsersController_setWorkspaceUsers') userIds: RequestBody<'WorkspaceUsersController_setWorkspaceUsers'>,
     @Param('workspace_id', ParseIntPipe) workspaceId: number) {
     return this.workspaceUsersService.setWorkspaceUsers(workspaceId, userIds);
   }

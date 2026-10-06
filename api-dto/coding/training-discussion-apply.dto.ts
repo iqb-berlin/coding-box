@@ -1,14 +1,11 @@
-export type TrainingDiscussionApplySource = 'manual' | 'auto_agreement';
+import type { RequestBody } from '../request-contracts';
+export type TrainingDiscussionApplySource = RequestBody<'TrainingDiscussionApplySource'>;
 
-export type TrainingDiscussionExistingResultStrategy = 'skip' | 'overwrite';
+export type TrainingDiscussionExistingResultStrategy = NonNullable<RequestBody<'ApplyTrainingDiscussionResultsRequestDto'>['existingResultStrategy']>;
 
-export type TrainingDiscussionJobConflictStrategy = 'skip' | 'removeFromJobs';
+export type TrainingDiscussionJobConflictStrategy = NonNullable<RequestBody<'ApplyTrainingDiscussionResultsRequestDto'>['jobConflictStrategy']>;
 
-export interface ApplyTrainingDiscussionResultsRequestDto {
-  source: TrainingDiscussionApplySource;
-  existingResultStrategy?: TrainingDiscussionExistingResultStrategy;
-  jobConflictStrategy?: TrainingDiscussionJobConflictStrategy;
-}
+export type ApplyTrainingDiscussionResultsRequestDto = RequestBody<'ApplyTrainingDiscussionResultsRequestDto'>;
 
 export interface TrainingDiscussionApplyPreviewDto {
   trainingId: number;

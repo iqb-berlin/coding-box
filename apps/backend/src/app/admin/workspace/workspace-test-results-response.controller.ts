@@ -1,52 +1,24 @@
 import {
-  BadRequestException,
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Post,
-  Query,
-  Req,
-  UseGuards,
-  ParseIntPipe,
-  DefaultValuePipe,
-  Logger
+  BadRequestException, Controller, Delete, Get, Param, Post, Query, Req, UseGuards, ParseIntPipe, DefaultValuePipe, Logger
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import {
-  ApiOkResponse,
-  ApiOperation,
-  ApiParam,
-  ApiQuery,
-  ApiTags,
-  ApiBadRequestResponse
+  ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiTags, ApiBadRequestResponse
 } from '@nestjs/swagger';
-import { Repository } from 'typeorm';
-import { requestBodySchemas } from '../../http/request-body.schemas';
-import { JsonSchemaValidationPipe } from '../../http/json-schema-validation.pipe';
+import { ValidatedBody } from '../../http/validated-body.decorator';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
-import {
-  AllowWorkspaceTokenScopes,
-  WORKSPACE_TOKEN_SCOPE_REPLAY_READ
-} from '../../auth/workspace-token';
+import { AllowWorkspaceTokenScopes, WORKSPACE_TOKEN_SCOPE_REPLAY_READ } from '../../auth/workspace-token';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { WorkspaceTestResultsService, ResponseManagementService } from '../../database/services/test-results';
-import {
-  ResponseSearchSortBy,
-  ResponseSearchSortDirection
-} from '../../database/services/test-results/workspace-test-results.service';
+import { ResponseSearchSortBy, ResponseSearchSortDirection } from '../../database/services/test-results/workspace-test-results.service';
 import { ResponseEntity } from '../../database/entities/response.entity';
-import { RequestWithUser, ResolveDuplicateResponsesRequest, ResponseSearchResult } from './dto/workspace-test-results.interfaces';
+import { RequestWithUser, ResponseSearchResult } from './dto/workspace-test-results.interfaces';
 import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
-import { Setting } from '../../database/entities/setting.entity';
-import {
-  getWorkspaceRegexSearchEnabled,
-  toRegexSearchException
-} from '../../utils/regex-search.util';
+import { WorkspaceSettingsService } from '../../workspace/workspace-settings.service';
+import { toRegexSearchException } from '../../utils/regex-search.util';
 
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')
@@ -58,8 +30,7 @@ export class WorkspaceTestResultsResponseController {
     private responseManagementService: ResponseManagementService,
     private cacheService: CacheService,
     private jobQueueService: JobQueueService,
-    @InjectRepository(Setting)
-    private readonly settingRepository: Repository<Setting>
+    private readonly workspaceSettingsService: WorkspaceSettingsService
   ) { }
 
   private async invalidateFlatResponseFilterOptionsCache(
@@ -143,7 +114,7 @@ export class WorkspaceTestResultsResponseController {
   })
   async resolveDuplicateResponses(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Body(new JsonSchemaValidationPipe(requestBodySchemas.ResolveDuplicateResponsesRequest)) body: ResolveDuplicateResponsesRequest,
+      @ValidatedBody('ResolveDuplicateResponsesRequest') body: RequestBody<'ResolveDuplicateResponsesRequest'>,
       @Req() req: RequestWithUser
   ): Promise<{ resolvedCount: number; success: boolean }> {
     return this.responseManagementService.resolveDuplicateResponses(
@@ -292,7 +263,7 @@ export class WorkspaceTestResultsResponseController {
 
     try {
       const effectiveRegexSearch = regexSearch === 'true' &&
-        await getWorkspaceRegexSearchEnabled(this.settingRepository, workspace_id);
+        await this.workspaceSettingsService.isRegexSearchEnabled(workspace_id);
       return await this.workspaceTestResultsService.searchResponses(
         workspace_id,
         {
