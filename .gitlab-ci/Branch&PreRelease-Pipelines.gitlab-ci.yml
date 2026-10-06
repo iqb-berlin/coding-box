@@ -634,7 +634,7 @@ lint-app:
     - !reference [ .default_rules, rules ]
   image: ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
   script:
-    - npx nx affected --base=HEAD~1 --target=lint --parallel=2
+    - npx nx run-many --target=lint --parallel=2
 
 audit-app:
   stage: audit

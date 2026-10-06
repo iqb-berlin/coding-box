@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync,
+  symlinkSync, utimesSync, writeFileSync
+} from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
+import { hashFrontendArtifact } from './hash-frontend-artifact.mjs';
 
 const workspace = fileURLToPath(new URL('../..', import.meta.url));
 const require = createRequire(new URL('../../package.json', import.meta.url));
@@ -133,6 +137,122 @@ test('image builds authenticate with the Dependency Proxy only when it is used',
   }
 });
 
+test('the actual lint job checks earlier commits and rejects frontend failures', () => {
+  const yaml = require('js-yaml');
+  const schema = yaml.DEFAULT_SCHEMA.extend([
+    new yaml.Type('!reference', { kind: 'sequence', construct: data => data })
+  ]);
+  const config = yaml.load(readFileSync(join(workspace,
+    '.gitlab-ci/Branch&PreRelease-Pipelines.gitlab-ci.yml'), 'utf8'), { schema });
+  assert.equal(config['lint-app'].allow_failure, false);
+  const directory = mkdtempSync(join(tmpdir(), 'lint-commit-gate-'));
+  const env = {
+    ...process.env, NX_DAEMON: 'false', NX_NO_CLOUD: 'true', NX_TUI: 'false',
+    NX_WORKSPACE_ROOT_PATH: directory, NX_CACHE_DIRECTORY: join(directory, '.nx/cache')
+  };
+  const run = (command, args) => spawnSync(command, args, {
+    cwd: directory, env, encoding: 'utf8', timeout: 30000
+  });
+  const succeed = (command, args) => {
+    const result = run(command, args);
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    return result;
+  };
+  try {
+    symlinkSync(join(workspace, 'node_modules'), join(directory, 'node_modules'), 'junction');
+    writeFileSync(join(directory, 'package.json'), '{"name":"lint-gate-fixture","private":true}');
+    writeFileSync(join(directory, 'nx.json'), '{"plugins":[],"targetDefaults":{"lint":{"cache":false}}}');
+    writeFileSync(join(directory, '.gitignore'), 'node_modules/\n.nx/\n*.linted\nfail-frontend\n');
+    writeFileSync(join(directory, 'lint.cjs'), `
+      const fs = require('node:fs');
+      const project = process.argv[2];
+      fs.writeFileSync(project + '.linted', 'checked');
+      if (project === 'frontend' && fs.existsSync('fail-frontend')) process.exitCode = 1;
+    `);
+    for (const project of ['frontend', 'backend']) {
+      const root = join(directory, 'apps', project);
+      mkdirSync(root, { recursive: true });
+      writeFileSync(join(root, 'project.json'), JSON.stringify({
+        name: project,
+        targets: { lint: { executor: 'nx:run-commands', options: {
+          command: `node lint.cjs ${project}`
+        } } }
+      }));
+      writeFileSync(join(root, 'source.ts'), 'export const value = 1;\n');
+    }
+    succeed('git', ['init', '-b', 'lint-fixture']);
+    const commit = message => {
+      succeed('git', ['add', '.']);
+      succeed('git', ['-c', 'user.name=Quality Gate', '-c', 'user.email=qa@example.invalid',
+        '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', 'commit', '-m', message]);
+    };
+    commit('initial projects');
+    writeFileSync(join(directory, 'apps/frontend/source.ts'), 'export const value = 2;\n');
+    commit('change frontend');
+    writeFileSync(join(directory, 'README.md'), 'Documentation only.\n');
+    commit('update documentation');
+    const affected = succeed('npx', ['nx', 'show', 'projects', '--affected', '--base=HEAD~1',
+      '--withTarget=lint', '--json']);
+    assert.deepEqual(JSON.parse(affected.stdout), []);
+
+    const script = config['lint-app'].script.join('\n');
+    succeed('sh', ['-eu', '-c', script]);
+    for (const project of ['frontend', 'backend']) {
+      assert.equal(readFileSync(join(directory, `${project}.linted`), 'utf8'), 'checked');
+    }
+    writeFileSync(join(directory, 'fail-frontend'), 'fail');
+    const failed = run('sh', ['-eu', '-c', script]);
+    assert.ifError(failed.error);
+    assert.equal(failed.status, 1, failed.stdout + failed.stderr);
+    assert.match(failed.stdout + failed.stderr, /frontend:lint/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('artifact fingerprints follow served bytes and paths, not timestamps or directory order', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'frontend-artifact-gate-'));
+  const artifact = join(directory, 'dist');
+  try {
+    const missing = await hashFrontendArtifact(artifact);
+    mkdirSync(join(artifact, 'assets'), { recursive: true });
+    assert.notEqual(await hashFrontendArtifact(artifact), missing);
+    writeFileSync(join(artifact, 'index.html'), '<app-root></app-root>');
+    const asset = join(artifact, 'assets', 'de.json');
+    const original = '{"title":"Coding Box"}';
+    writeFileSync(asset, original);
+    const baseline = await hashFrontendArtifact(artifact);
+    writeFileSync(asset, '{"title":"Broken"}');
+    assert.notEqual(await hashFrontendArtifact(artifact), baseline);
+    writeFileSync(asset, original);
+    utimesSync(asset, 1, 1);
+    assert.equal(await hashFrontendArtifact(artifact), baseline);
+    const renamed = join(artifact, 'assets', 'en.json');
+    renameSync(asset, renamed);
+    assert.notEqual(await hashFrontendArtifact(artifact), baseline);
+    renameSync(renamed, asset);
+    writeFileSync(renamed, original);
+    assert.notEqual(await hashFrontendArtifact(artifact), baseline);
+    rmSync(renamed);
+    rmSync(asset);
+    assert.notEqual(await hashFrontendArtifact(artifact), baseline);
+    // Recreate the same bytes in a different creation order.
+    rmSync(join(artifact, 'index.html'));
+    writeFileSync(asset, original);
+    writeFileSync(join(artifact, 'index.html'), '<app-root></app-root>');
+    assert.equal(await hashFrontendArtifact(artifact), baseline);
+    const cli = spawnSync(process.execPath, [join(workspace,
+      'scripts/qa/hash-frontend-artifact.mjs'), artifact], { encoding: 'utf8' });
+    assert.equal(cli.status, 0, cli.stderr);
+    assert.equal(cli.stdout, `${baseline}\n`);
+    symlinkSync(asset, renamed);
+    await assert.rejects(hashFrontendArtifact(artifact), /Unsupported artifact entry/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('CI selects coverage, rejects empty suites, and publishes reports as a required job', () => {
   const project = JSON.parse(readFileSync(join(workspace, 'apps/frontend/project.json'), 'utf8'));
   assert.equal(project.targets.test.configurations.ci.codeCoverage, true);
@@ -159,6 +279,10 @@ test('CI selects coverage, rejects empty suites, and publishes reports as a requ
   assert.equal(project.targets['component-test'].options.skipServe, true);
   assert.ok(project.targets['component-test'].inputs.includes('frontendE2e'));
   assert.equal(project.targets.e2e.configurations.ci.devServerTarget, 'frontend:serve-static');
+  assert.ok(project.targets.e2e.inputs.includes('frontendE2e'));
+  assert.ok(project.targets.e2e.inputs.includes('{workspaceRoot}/scripts/qa/hash-frontend-artifact.mjs'));
+  assert.ok(project.targets.e2e.inputs.some(input =>
+    input.runtime === 'node scripts/qa/hash-frontend-artifact.mjs'));
   assert.equal(project.targets['serve-static'].options.staticFilePath, 'dist/apps/frontend');
   assert.equal(project.targets['serve-static'].options.watch, false);
   assert.equal(project.targets['serve-static'].options.buildTarget, undefined);
