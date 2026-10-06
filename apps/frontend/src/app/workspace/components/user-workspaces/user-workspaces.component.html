@@ -23,7 +23,7 @@
             mat-raised-button
             color="primary"
             type="button"
-            [disabled]="authDataReloadRunning"
+            [disabled]="authDataReloadRunning()"
             (click)="reloadAuthData()">
             <mat-icon>refresh</mat-icon>
             <span>{{ 'home.retry-auth-data' | translate }}</span>

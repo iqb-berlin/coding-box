@@ -1,4 +1,6 @@
-import { Component, Input, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy, Component, Input, inject, signal
+} from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { RouterLink } from '@angular/router';
 import { MatAnchor, MatButton } from '@angular/material/button';
@@ -9,6 +11,7 @@ import { AuthService } from '../../../core/services/auth.service';
 import { AppService, AuthBootstrapStatus } from '../../../core/services/app.service';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-book-user-workspaces',
   templateUrl: './user-workspaces.component.html',
   styleUrls: ['./user-workspaces.component.scss'],
@@ -21,7 +24,7 @@ export class UserWorkspacesComponent {
   @Input() workspaces!: WorkspaceFullDto[];
   @Input() authBootstrapStatus: AuthBootstrapStatus = 'checking';
   @Input() authDataLoaded = false;
-  authDataReloadRunning = false;
+  readonly authDataReloadRunning = signal(false);
 
   get showLoading(): boolean {
     return this.authService.isLoggedIn() === true &&
@@ -48,17 +51,17 @@ export class UserWorkspacesComponent {
   }
 
   reloadAuthData(): void {
-    if (this.authDataReloadRunning) {
+    if (this.authDataReloadRunning()) {
       return;
     }
 
-    this.authDataReloadRunning = true;
+    this.authDataReloadRunning.set(true);
     this.appService.retryAuthDataLoad().subscribe({
       error: () => {
-        this.authDataReloadRunning = false;
+        this.authDataReloadRunning.set(false);
       },
       complete: () => {
-        this.authDataReloadRunning = false;
+        this.authDataReloadRunning.set(false);
       }
     });
   }
