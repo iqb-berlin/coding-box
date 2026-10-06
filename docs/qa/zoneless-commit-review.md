@@ -1,34 +1,77 @@
-# Manuelle Review-Anleitung für PR #1039
+# Manuelle Review-Anleitung zur Angular-21-PR-Kette
 
-Stand: 06.10.2026. Analysierter Migrationsstand: `3fa3779c` gegen
-`develop` (`39468e5a`): 71 Commits, 533 geänderte Dateien.
-Diese Anleitung ersetzt die frühere Zuordnung vor der veröffentlichten Konsolidierung.
-Sie ordnet alle 71 Commits genau einem Thema zu; sie schreibt die Historie nicht um.
+Stand: 06.10.2026. Die ursprüngliche PR #1039 wurde in vier vorbereitende PRs
+und die verbleibende Migration in #1039 aufgeteilt.
 
-## Vorgehen
+PR-Kette: [Basis #1048](https://github.com/iqb-berlin/coding-box/pull/1048) → [Signals #1049](https://github.com/iqb-berlin/coding-box/pull/1049) → [OnPush #1050](https://github.com/iqb-berlin/coding-box/pull/1050) → [Stil #1051](https://github.com/iqb-berlin/coding-box/pull/1051) → [Rest #1039](https://github.com/iqb-berlin/coding-box/pull/1039).
 
-1. Pro Thema zuerst den endgültigen Code und die unten genannten Regressionen
-   prüfen. Danach die zugeordneten Commits nachvollziehen. Spätere Pakete ändern
-   teilweise dieselben Dateien; ein älterer Commit allein beschreibt deshalb
-   nicht immer das abschließende Verhalten.
-2. Produktkorrektur und Test zusammen lesen: provoziert der Test den Fehler,
-   und prüft er das sichtbare Ergebnis oder die gespeicherten Werte?
-3. Große mechanische Änderungen (Signals, OnPush, Stil und `inject()`) von
-   fachlichen Änderungen wie Speicherreihenfolge, Rechteprüfung und Abbruch trennen.
-4. Lockfile und generiertes `zoneless-coverage.json` separat lesen. Das Inventar
-   hilft beim Finden von Quellen; eine Referenz ist kein ausgeführter Test.
-5. Erfolgreiche CI dem exakten finalen SHA zuordnen. Einzelne Zwischenstände
-   dieser Historie sind nicht sämtlich als eigenständig grün nachgewiesen.
 
-Für den endgültigen Diff im aktuellen Checkout:
+| Schritt | Branch | Basis für das Review | Inhalt |
+| --- | --- | --- | --- |
+| 1 | `angular-zoneless-foundation` | `develop` | 16 ursprüngliche Vorbereitungscommits: Bootstrap, Auth, Speicherreihenfolge, gemeinsame Zustände, Abhängigkeiten und CI |
+| 2 | `angular-signals-views` | `angular-zoneless-foundation` | Unveränderter ursprünglicher Signals-Commit `e5276171`, 159 Dateien |
+| 3 | `angular-onpush-components` | `angular-signals-views` | OnPush plus benötigte asynchrone Benachrichtigungen und Regressionen, drei getrennte Commits |
+| 4 | `angular-style-conventions` | `angular-onpush-components` | Selektoren, geschützte Template-Member, Lifecycle-Interfaces, Klassenbindungen und passende Angular-Lint-Regeln |
+| 5 | `refactor/angular-21-zoneless-preparation` (#1039) | `angular-style-conventions` | Übrige Workflow-Korrekturen, inject()-Umstellung, vollständige native Tests und konsolidierte CI-/Cache-Gates |
+
+Die PRs in dieser Reihenfolge prüfen und nach `develop` mergen. Nach jedem
+Vorgänger-Merge den Basisbranch des nächsten PRs auf `develop` umstellen.
+Das Repository erlaubt Merge-Commits; Squash- und Rebase-Merges sind deaktiviert.
+Die Review-Basen oben dienen den isolierten Diffs, nicht dem Merge in einen
+Feature-Branch.
+
+## Was sich an der Historie geändert hat
+
+Die Basis und der Signals-Commit behalten ihre ursprünglichen SHAs. OnPush und
+Stil wurden an den früheren API-Stand angepasst, damit ihre jeweiligen Köpfe
+separat bauen und getestet werden können. Spätere API- und Funktionsänderungen
+wurden nicht allein zur Konfliktauflösung in die Stil-PR aufgenommen.
+
+Die vor dem ursprünglichen Stil-Commit liegenden übrigen Änderungen werden im
+ersten Rest-Commit gesammelt; die neun nachfolgenden ursprünglichen Änderungen
+(einschließlich des ergänzten Backend-Gates) bleiben separate Commits mit neuem
+Parent. Die alte vollständige Historie ist im Branch
+`angular-zoneless-before-split` erhalten. Die Zuordnung im Anhang beschreibt
+bewusst diesen historischen Stand (`3fa3779c`, 71 Commits), nicht den neuen Diff.
+
+Für einzelne Reviews jeweils die Branch-Basis benutzen, zum Beispiel:
 
 ```sh
-git diff 39468e5a28a24dc9ec860aee46daf8d4ed5c8682...HEAD -- apps/frontend/src/app/replay
-# Einzelnen Commit einschließlich seines Tests ansehen:
-git show 5c9375b2
+git diff angular-signals-views...angular-onpush-components
+git diff angular-onpush-components...angular-style-conventions
+git diff angular-style-conventions...refactor/angular-21-zoneless-preparation
 ```
 
-## Themen und Commit-Zuordnung
+## Nachweise und Grenzen
+
+Der vollständige bisherige Anwendungsstand wird bei der Aufteilung erhalten.
+Ein Vergleich gegen `angular-zoneless-before-split` bestätigt identische
+Produktionsquellen, Abhängigkeiten, Konfigurationen und CI-Skripte. Neu sind diese
+Anleitung und ein zusätzlicher Test für verzögerte Auth-Retry-Antworten.
+
+Signals: Produktionsbuild, Lint, 224 Unit-Suites / 2.509 Tests sowie 29 ausgewählte
+native Zoneless-Suites / 747 Tests. OnPush und Stil: Produktionsbuild und Lint,
+jeweils 230 Unit-Suites / 2.544 Tests und 35 ausgewählte native Suites / 782 Tests.
+Der Stil-Stand besteht zusätzlich 35 Cypress-Fälle gegen den Produktionsbuild
+(Dateiliste, Validierungs-/Metadatendialoge, Schemer-Vorschau).
+Die Basis besteht Produktionsbuild, Lint, 224 Unit-Suites / 2.508 Tests und
+29 ausgewählte native Suites / 747 Tests. Der vollständige Rest-Stand besteht 268 native Frontend-Suites / 2.811 Tests
+mit Coverage-Gates, Frontend-Lint und zwölf CI-/Cache-Gate-Regressionen.
+Die Backend-Prüfung am erhaltenen Ausgangsstand bestand 176 Suites / 2.643 Tests
+(17 bestehende übersprungene Tests); ihre Code- und Konfigurationseingaben
+bleiben identisch. Weitere Nachweise stehen in der Beschreibung von #1039.
+
+Die frühen Zweige sind Schritte einer Migration: vollständige Entfernung von
+Zone.js, vollständige native Suite und abschließende Coverage-/Browser-Gates
+liegen in #1039. Lokale Ergebnisse beweisen keine erfolgreiche Remote-CI für
+die neuen SHAs. Vor einem Merge die Pipeline am jeweiligen Kopf prüfen.
+
+Produktkorrektur und Test gemeinsam lesen: verzögerte Antworten, Fehler und
+Retry, Workspace-/Request-Wechsel, zerstörte Views und Speicherreihenfolge sind
+die wesentlichen Risiken. Signal-Anzahl und generiertes Inventar allein sind
+kein Verhaltensnachweis.
+
+## Historische Zuordnung der ursprünglichen 71 Commits
 
 Die Reihenfolge ist eine Lesereihenfolge, keine neue Commit-Historie.
 Frontend-Verzeichnisse ohne `apps/frontend/src/app/` sind relativ zu diesem Ordner.
