@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   UseGuards
@@ -60,7 +61,7 @@ export class UnitTagsController {
     @WorkspaceId() workspaceId: number,
       @Body(new JsonSchemaValidationPipe(requestBodySchemas.CreateUnitTagDto)) createUnitTagDto: CreateUnitTagDto
   ): Promise<UnitTagDto> {
-    return this.unitTagService.create(createUnitTagDto);
+    return this.unitTagService.create(workspaceId, createUnitTagDto);
   }
 
   @Get('unit/:unitId')
@@ -91,9 +92,9 @@ export class UnitTagsController {
   })
   async findAllByUnitId(
     @WorkspaceId() workspaceId: number,
-      @Param('unitId') unitId: number
+      @Param('unitId', ParseIntPipe) unitId: number
   ): Promise<UnitTagDto[]> {
-    return this.unitTagService.findAllByUnitId(unitId);
+    return this.unitTagService.findAllByUnitId(workspaceId, unitId);
   }
 
   @Get(':id')
@@ -124,9 +125,9 @@ export class UnitTagsController {
   })
   async findOne(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number
+      @Param('id', ParseIntPipe) id: number
   ): Promise<UnitTagDto> {
-    return this.unitTagService.findOne(id);
+    return this.unitTagService.findOne(workspaceId, id);
   }
 
   @Patch(':id')
@@ -160,10 +161,10 @@ export class UnitTagsController {
   })
   async update(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number,
+      @Param('id', ParseIntPipe) id: number,
       @Body(new JsonSchemaValidationPipe(requestBodySchemas.UpdateUnitTagDto)) updateUnitTagDto: UpdateUnitTagDto
   ): Promise<UnitTagDto> {
-    return this.unitTagService.update(id, updateUnitTagDto);
+    return this.unitTagService.update(workspaceId, id, updateUnitTagDto);
   }
 
   @Delete(':id')
@@ -194,8 +195,8 @@ export class UnitTagsController {
   })
   async remove(
     @WorkspaceId() workspaceId: number,
-      @Param('id') id: number
+      @Param('id', ParseIntPipe) id: number
   ): Promise<boolean> {
-    return this.unitTagService.remove(id);
+    return this.unitTagService.remove(workspaceId, id);
   }
 }

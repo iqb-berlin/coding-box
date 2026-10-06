@@ -21,9 +21,9 @@ export class UnitNoteService {
    * @param createUnitNoteDto The data to create the note with
    * @returns The created note
    */
-  async create(createUnitNoteDto: CreateUnitNoteDto): Promise<UnitNoteDto> {
+  async create(workspaceId: number, createUnitNoteDto: CreateUnitNoteDto): Promise<UnitNoteDto> {
     const unit = await this.unitRepository.findOne({
-      where: { id: createUnitNoteDto.unitId }
+      where: { id: createUnitNoteDto.unitId, booklet: { person: { workspace_id: workspaceId } } }
     });
 
     if (!unit) {
@@ -51,9 +51,9 @@ export class UnitNoteService {
    * @param unitId The ID of the unit
    * @returns An array of notes
    */
-  async findAllByUnitId(unitId: number): Promise<UnitNoteDto[]> {
+  async findAllByUnitId(workspaceId: number, unitId: number): Promise<UnitNoteDto[]> {
     const unit = await this.unitRepository.findOne({
-      where: { id: unitId }
+      where: { id: unitId, booklet: { person: { workspace_id: workspaceId } } }
     });
 
     if (!unit) {
@@ -61,7 +61,7 @@ export class UnitNoteService {
     }
 
     const notes = await this.unitNoteRepository.find({
-      where: { unitId },
+      where: { unitId, unit: { booklet: { person: { workspace_id: workspaceId } } } },
       order: { createdAt: 'DESC' }
     });
 
@@ -79,9 +79,9 @@ export class UnitNoteService {
    * @param id The ID of the note
    * @returns The note
    */
-  async findOne(id: number): Promise<UnitNoteDto> {
+  async findOne(workspaceId: number, id: number): Promise<UnitNoteDto> {
     const note = await this.unitNoteRepository.findOne({
-      where: { id }
+      where: { id, unit: { booklet: { person: { workspace_id: workspaceId } } } }
     });
 
     if (!note) {
@@ -103,9 +103,9 @@ export class UnitNoteService {
    * @param updateUnitNoteDto The data to update the note with
    * @returns The updated note
    */
-  async update(id: number, updateUnitNoteDto: UpdateUnitNoteDto): Promise<UnitNoteDto> {
+  async update(workspaceId: number, id: number, updateUnitNoteDto: UpdateUnitNoteDto): Promise<UnitNoteDto> {
     const note = await this.unitNoteRepository.findOne({
-      where: { id }
+      where: { id, unit: { booklet: { person: { workspace_id: workspaceId } } } }
     });
 
     if (!note) {
@@ -130,9 +130,9 @@ export class UnitNoteService {
    * @param id The ID of the note
    * @returns True if the note was deleted
    */
-  async remove(id: number): Promise<boolean> {
+  async remove(workspaceId: number, id: number): Promise<boolean> {
     const note = await this.unitNoteRepository.findOne({
-      where: { id }
+      where: { id, unit: { booklet: { person: { workspace_id: workspaceId } } } }
     });
 
     if (!note) {
@@ -148,13 +148,13 @@ export class UnitNoteService {
    * @param unitIds Array of unit IDs
    * @returns An array of notes grouped by unit ID
    */
-  async findAllByUnitIds(unitIds: number[]): Promise<{ [unitId: number]: UnitNoteDto[] }> {
+  async findAllByUnitIds(workspaceId: number, unitIds: number[]): Promise<{ [unitId: number]: UnitNoteDto[] }> {
     if (!unitIds || unitIds.length === 0) {
       return {};
     }
 
     const notes = await this.unitNoteRepository.find({
-      where: { unitId: In(unitIds) },
+      where: { unitId: In(unitIds), unit: { booklet: { person: { workspace_id: workspaceId } } } },
       order: { createdAt: 'DESC' }
     });
 
