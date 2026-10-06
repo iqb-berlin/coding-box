@@ -43,6 +43,66 @@ describe('VariableBundleService', () => {
     await expect(service.deleteVariableBundle(1, 3)).resolves.toEqual({ success: true });
   });
 
+  it('creates only allowed fields even when JSON includes protected entity properties', async () => {
+    await service.createVariableBundle(3, {
+      name: 'Bundle',
+      description: 'Description',
+      variables: [],
+      id: 99,
+      workspace_id: 8,
+      created_at: 'attacker-date',
+      codingJobVariableBundles: [{ id: 42 }]
+    } as never);
+    expect(repo.create).toHaveBeenCalledWith({
+      name: 'Bundle',
+      description: 'Description',
+      variables: [],
+      workspace_id: 3,
+      codingJobVariableBundles: []
+    });
+    expect(repo.save.mock.calls[0][0]).not.toHaveProperty('id');
+  });
+
+  it('retains ownership, identity, timestamps and relationships when updating', async () => {
+    const entity = {
+      id: 1,
+      workspace_id: 3,
+      name: 'Original',
+      description: 'Description',
+      variables: [],
+      created_at: new Date(0),
+      updated_at: new Date(1),
+      codingJobVariableBundles: [{ id: 42 }]
+    };
+    repo.findOne.mockResolvedValue(entity);
+    await service.updateVariableBundle(1, 3, {
+      name: 'Renamed',
+      id: 99,
+      workspace_id: 8,
+      created_at: 'attacker-date',
+      updated_at: 'attacker-date',
+      codingJobVariableBundles: [{ id: 88 }]
+    } as never);
+    expect(repo.findOne).toHaveBeenCalledWith({ where: { id: 1, workspace_id: 3 } });
+    expect(repo.save).toHaveBeenCalledWith({
+      ...entity,
+      name: 'Renamed',
+      id: 1,
+      workspace_id: 3,
+      created_at: new Date(0),
+      updated_at: new Date(1),
+      codingJobVariableBundles: [{ id: 42 }]
+    });
+  });
+
+  it('allows clearing a description without changing omitted fields', async () => {
+    repo.findOne.mockResolvedValue({
+      id: 1, workspace_id: 3, name: 'Original', variables: []
+    });
+    await expect(service.updateVariableBundle(1, 3, { description: null } as never))
+      .resolves.toMatchObject({ name: 'Original', variables: [], description: null });
+  });
+
   it('throws for missing bundles', async () => {
     repo.findOne.mockResolvedValue(null);
 
