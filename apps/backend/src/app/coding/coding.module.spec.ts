@@ -17,6 +17,19 @@ import { CodingValidationService } from '../database/services/coding/coding-vali
 import { CodingAnalysisService } from '../database/services/coding/coding-analysis.service';
 import { CodingFreshnessService } from '../database/services/coding/coding-freshness.service';
 import { CodingItemMatrixExportService } from '../database/services/coding/coding-item-matrix-export.service';
+import { CodingJobMutationService } from '../database/services/coding/coding-job-mutation.service';
+import { CodingJobResponsesService } from '../database/services/coding/coding-job-responses.service';
+import { CodingJobAccessService } from '../database/services/coding/coding-job-access.service';
+import { CodingJobQueryService } from '../database/services/coding/coding-job-query.service';
+import { CodingJobDistributionService } from '../database/services/coding/coding-job-distribution.service';
+import { CodingJobStatusService } from '../database/services/coding/coding-job-status.service';
+import { CodingJobProgressService } from '../database/services/coding/coding-job-progress.service';
+import { CodingJobSchemeService } from '../database/services/coding/coding-job-scheme.service';
+import { CodingJobReplayService } from '../database/services/coding/coding-job-replay.service';
+import { CodingJobAggregationService } from '../database/services/coding/coding-job-aggregation.service';
+import { CodingJobService } from '../database/services/coding/coding-job.service';
+import { WorkspaceFilesService } from '../database/services/workspace/workspace-files.service';
+import { DERIVED_VARIABLE_READER } from '../database/services/workspace/derived-variable-reader.token';
 import { WorkspaceModule } from '../workspace/workspace.module';
 import { CodingModule } from './coding.module';
 
@@ -38,6 +51,7 @@ jest.mock('../config/environment.validation', () => {
 });
 
 const sharedCodingProviders = [
+  CodingJobService,
   CodingValidationService,
   CodingAnalysisService,
   CodingFreshnessService,
@@ -105,6 +119,20 @@ describe('CodingModule', () => {
 
     const module = await builder.compile();
     try {
+      const facade = module.get(CodingJobService);
+      const featureProviders = [
+        CodingJobMutationService, CodingJobResponsesService, CodingJobAccessService,
+        CodingJobQueryService, CodingJobDistributionService, CodingJobStatusService,
+        CodingJobProgressService, CodingJobSchemeService, CodingJobReplayService,
+        CodingJobAggregationService
+      ];
+      featureProviders.forEach(provider => expect(module.get(provider)).toBeInstanceOf(provider));
+      expect(module.get(DERIVED_VARIABLE_READER)).toBe(module.get(WorkspaceFilesService));
+      const query = module.get(CodingJobQueryService);
+      const getJob = jest.spyOn(query, 'getCodingJobByIdForWorkspace').mockResolvedValue({ id: 42 } as never);
+      await expect(facade.getCodingJobByIdForWorkspace(42, 7)).resolves.toEqual({ id: 42 });
+      expect(getJob).toHaveBeenCalledWith(42, 7, undefined);
+      getJob.mockRestore();
       const fromWorkspace = module.get<unknown[]>('workspaceConsumer');
       const fromCoding = module.get<unknown[]>('codingConsumer');
       sharedCodingProviders.forEach((provider, index) => {

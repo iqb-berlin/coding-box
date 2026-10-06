@@ -1,0 +1,7 @@
+
+
+export enum ResponseMatchingFlag {
+  NO_AGGREGATION = 'NO_AGGREGATION',
+  IGNORE_CASE = 'IGNORE_CASE',
+  IGNORE_WHITESPACE = 'IGNORE_WHITESPACE'
+}

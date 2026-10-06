@@ -2,18 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
-// eslint-disable-next-line import/no-cycle
-import { WorkspaceCoreService } from './workspace-core.service';
+import { AdminWorkspaceNotFoundException } from '../../../exceptions/admin-workspace-not-found.exception';
 import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/workspace-settings-dto';
 import FileUpload from '../../entities/file_upload.entity';
 import Workspace from '../../entities/workspace.entity';
 import { CacheService } from '../../../cache/cache.service';
 import { EXCLUSION_CACHE_PREFIX } from './workspace-constants';
-import {
-  normalizeExclusionBookletId,
-  normalizeExclusionUnitId,
-  ResolvedWorkspaceExclusions
-} from './workspace-exclusion-query.util';
+import { normalizeExclusionBookletId, normalizeExclusionUnitId, ResolvedWorkspaceExclusions } from './workspace-exclusion-query.util';
 
 export {
   applyResolvedExclusionsToQuery,
@@ -21,6 +16,7 @@ export {
   normalizeExclusionBookletId,
   normalizeExclusionUnitId
 } from './workspace-exclusion-query.util';
+
 export type {
   ExclusionQueryOptions,
   ResolvedWorkspaceExclusions
@@ -37,7 +33,8 @@ export class WorkspaceExclusionService {
   private readonly logger = new Logger(WorkspaceExclusionService.name);
 
   constructor(
-    private readonly workspaceCoreService: WorkspaceCoreService,
+    @InjectRepository(Workspace)
+    private readonly workspaceRepository: Repository<Workspace>,
     @InjectRepository(FileUpload)
     private readonly fileUploadRepository: Repository<FileUpload>,
     private readonly cacheService: CacheService
@@ -56,8 +53,12 @@ export class WorkspaceExclusionService {
         where: { id: workspaceId },
         select: { id: true, name: true, settings: true }
       }) :
-      await this.workspaceCoreService.findOne(workspaceId);
+      await this.workspaceRepository.findOne({
+        where: { id: workspaceId },
+        select: { id: true, name: true, settings: true }
+      });
     if (!workspace) {
+      if (!manager) throw new AdminWorkspaceNotFoundException(workspaceId, 'GET');
       return {};
     }
     return (workspace.settings as WorkspaceSettingsDto) || {};

@@ -1,10 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
+import { createCodingJobService } from '../coding/coding-job-test.factory';
 import { CodingJobService } from '../coding/coding-job.service';
 import { CodingAggregationPeerService } from '../coding/coding-aggregation-peer.service';
-import {
-  JobDefinition,
-  JobDefinitionVariable
-} from '../../entities/job-definition.entity';
+import { JobDefinition, JobDefinitionVariable } from '../../entities/job-definition.entity';
 import { JobDefinitionService } from './job-definition.service';
 
 type ScenarioResponse = {
@@ -148,7 +146,7 @@ describe('JobDefinitionService realistic manual-coding edit scenarios', () => {
 
     existingDefinition = createExistingDefinition();
 
-    codingJobService = new CodingJobService(
+    codingJobService = createCodingJobService(
       codingJobRepository as never,
       codingJobCoderRepository as never,
       codingJobVariableRepository as never,
