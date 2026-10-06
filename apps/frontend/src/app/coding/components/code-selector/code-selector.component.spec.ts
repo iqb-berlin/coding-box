@@ -1,7 +1,5 @@
 import { SimpleChange } from '@angular/core';
-import {
-  ComponentFixture, fakeAsync, TestBed, tick
-} from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { CodingScheme } from '../../../models/coding-interfaces';
@@ -243,19 +241,24 @@ describe('CodeSelectorComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-code-id="1"]')).toBeNull();
   });
 
-  it('keeps a user selection after the initial render has settled', fakeAsync(() => {
-    fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
-    fixture.componentRef.setInput('variableId', 'VAR1');
-    fixture.detectChanges();
-    const issueRow = fixture.nativeElement.querySelector('[data-code-id="-3"]') as HTMLElement;
+  it('keeps a user selection after the initial render has settled', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      fixture.componentRef.setInput('codingScheme', mixedCodingScheme);
+      fixture.componentRef.setInput('variableId', 'VAR1');
+      fixture.detectChanges();
+      const issueRow = fixture.nativeElement.querySelector('[data-code-id="-3"]') as HTMLElement;
 
-    issueRow.click();
-    tick();
-    fixture.detectChanges();
+      issueRow.click();
+      await jest.advanceTimersByTimeAsync(0);
+      fixture.detectChanges();
 
-    expect(component.selectedCodingIssueOption()).toBe(-3);
-    expect(issueRow.classList.contains('selected')).toBe(true);
-  }));
+      expect(component.selectedCodingIssueOption()).toBe(-3);
+      expect(issueRow.classList.contains('selected')).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   it('closes navigation panels only for clicks outside the component', () => {
     component.isVariablePanelOpen.set(true);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -47,13 +47,37 @@ test('Jest configurations load through ts-node regardless of configuration order
     const { readInitialOptions } = require('jest-config');
     (async () => {
       await readInitialOptions(process.cwd() + '/' + ${JSON.stringify(first)});
-      const result = await readInitialOptions(process.cwd() + '/apps/frontend/jest.zoneless.config.ts');
-      assert.equal(result.config.displayName, 'frontend-zoneless');
+      const result = await readInitialOptions(process.cwd() + '/apps/frontend/jest.config.ts');
+      assert.equal(result.config.displayName, 'frontend');
     })().catch(error => { console.error(error); process.exitCode = 1; });
     `], { cwd: workspace, env, encoding: 'utf8', timeout: 30000 });
     assert.ifError(result.error);
     assert.equal(result.status, 0, `${first}: ${result.stdout}${result.stderr}`);
   }
+});
+
+test('frontend tests cannot reintroduce Zone.js or its timer helpers', () => {
+  const filesUnder = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const path = join(directory, entry.name);
+    return entry.isDirectory() ? filesUnder(path) : [path];
+  });
+  const files = filesUnder(join(workspace, 'apps/frontend/src')).filter(path =>
+    path.endsWith('.spec.ts') || path.endsWith('/test-setup.ts'));
+  assert.ok(files.length > 0);
+  for (const path of files) {
+    const source = readFileSync(path, 'utf8');
+    assert.doesNotMatch(source, /(?:import|require)[^;]*(?:zone\.js|setup-env\/zone['"])/, path);
+    assert.doesNotMatch(source, /\bfakeAsync\s*\(/, path);
+  }
+  const manifest = JSON.parse(readFileSync(join(workspace, 'package.json'), 'utf8'));
+  assert.equal(manifest.dependencies?.['zone.js'], undefined);
+  assert.equal(manifest.devDependencies?.['zone.js'], undefined);
+  for (const path of filesUnder(join(workspace, 'cypress')).filter(file => file.endsWith('.cy.ts'))) {
+    assert.doesNotMatch(readFileSync(path, 'utf8'), /import\s+['"][^'"]+\.cy['"]/, path);
+  }
+  const componentSetup = readFileSync(join(workspace, 'cypress/support/component.ts'), 'utf8');
+  assert.match(componentSetup, /from 'cypress\/angular-zoneless'/);
+  assert.doesNotMatch(componentSetup, /from 'cypress\/angular'/);
 });
 
 test('CI selects coverage, rejects empty suites, and publishes reports as a required job', () => {
@@ -63,10 +87,32 @@ test('CI selects coverage, rejects empty suites, and publishes reports as a requ
   assert.equal(project.targets.test.options.passWithNoTests, false);
   assert.equal(project.targets.lint.options.maxWarnings, 0);
   const ci = readFileSync(join(workspace, '.gitlab-ci/Branch&PreRelease-Pipelines.gitlab-ci.yml'), 'utf8');
-  const job = ci.split('\ntest-frontend-zoneless:\n')[1].split('\ntest-zoneless-approval:\n')[0];
+  const job = ci.split('\ntest-frontend:\n')[1].split('\ntest-browser:\n')[0];
   assert.match(job, /allow_failure: false/);
   assert.match(job, /frontend:test --configuration=ci/);
   assert.match(job, /frontend:test-quality-gates/);
+  assert.match(job, /frontend:zoneless-approval/);
+  assert.match(job, /frontend:zoneless-inventory-test/);
+  assert.doesNotMatch(job, /frontend:lint|nx build frontend|frontend:test-zoneless/);
+  assert.doesNotMatch(ci, /\ntest-(?:frontend-zoneless|zoneless-approval|browser-zoneless|browser-production):/);
+  const backend = ci.split('\ntest-backend:\n')[1].split('\ntest-frontend:\n')[0];
+  assert.match(backend, /--target=test --exclude=frontend/);
+  assert.match(backend, /allow_failure: false/);
+  const browser = ci.split('\ntest-browser:\n')[1].split('\ntest-replay-live:\n')[0];
+  assert.match(browser, /- build-app/);
+  assert.match(browser, /frontend:e2e --configuration=ci/);
+  assert.match(browser, /frontend:component-test --browser=electron/);
+  assert.equal(project.targets['component-test'].options.testingType, 'component');
+  assert.equal(project.targets['component-test'].options.skipServe, true);
+  assert.ok(project.targets['component-test'].inputs.includes('frontendE2e'));
+  assert.equal(project.targets.e2e.configurations.ci.devServerTarget, 'frontend:serve-static');
+  assert.equal(project.targets['serve-static'].options.staticFilePath, 'dist/apps/frontend');
+  assert.equal(project.targets['serve-static'].options.watch, false);
+  assert.equal(project.targets['serve-static'].options.buildTarget, undefined);
+  assert.equal(project.targets['test-zoneless'], undefined);
+  const setup = readFileSync(join(workspace, 'apps/frontend/src/test-setup.ts'), 'utf8');
+  assert.match(setup, /setupZonelessTestEnv/);
+  assert.doesNotMatch(setup, /setupZoneTestEnv/);
   assert.match(job, /coverage_format: cobertura/);
   assert.match(job, /coverage\/apps\/frontend\/junit.xml/);
   const expression = job.match(/coverage: '\/(.+)\/'/)?.[1];

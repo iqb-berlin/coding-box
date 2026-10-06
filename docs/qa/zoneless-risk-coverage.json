@@ -169,7 +169,7 @@
         "cypress/zoneless/info-dialogs.cy.ts",
         "cypress/zoneless/test-files-upload.cy.ts",
         "cypress/zoneless/scheme-preview.cy.ts",
-        "cypress/zoneless/export-item-dataset.cy.ts",
+        "cypress/e2e/export-item-dataset.cy.ts",
         "cypress/auth/coding-session.cy.ts",
         "apps/frontend/src/app/ws-admin/components/test-center-import/test-center-import.component.zoneless.spec.ts",
         "cypress/zoneless/testcenter-import.cy.ts",

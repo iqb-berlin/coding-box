@@ -1,5 +1,3 @@
-import '../e2e/app.cy';
-
 describe('zoneless migration build', () => {
   it('boots without loading ZoneJS', () => {
     cy.visit('/');

@@ -1,6 +1,4 @@
-import {
-  ComponentFixture, fakeAsync, TestBed, tick
-} from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { HttpClientModule } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
@@ -198,151 +196,171 @@ describe('TestFilesComponent', () => {
       fileService.getFilesList.mockClear();
     });
 
-    it('should upload files successfully and refresh list', fakeAsync(() => {
-      const uploadResult: TestFilesUploadResultDto = {
-        total: 1,
-        uploaded: 1,
-        failed: 0,
-        uploadedFiles: [{ fileId: '1', filename: 'test.txt' }],
-        failedFiles: [],
-        conflicts: []
-      };
+    it('should upload files successfully and refresh list', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        const uploadResult: TestFilesUploadResultDto = {
+          total: 1,
+          uploaded: 1,
+          failed: 0,
+          uploadedFiles: [{ fileId: '1', filename: 'test.txt' }],
+          failedFiles: [],
+          conflicts: []
+        };
 
-      const uploadSubject = new Subject<TestFilesUploadResultDto>();
-      fileService.uploadTestFiles.mockReturnValue(uploadSubject.asObservable());
-      fileService.getFilesList.mockReturnValue(of({
-        data: [], total: 0, page: 1, limit: 100, fileTypes: []
-      }));
+        const uploadSubject = new Subject<TestFilesUploadResultDto>();
+        fileService.uploadTestFiles.mockReturnValue(uploadSubject.asObservable());
+        fileService.getFilesList.mockReturnValue(of({
+          data: [], total: 0, page: 1, limit: 100, fileTypes: []
+        }));
 
-      const event = {
-        target: {
-          files: mockFiles
-        }
-      } as unknown as Event;
-
-      component.onFileSelected(event.target);
-
-      expect(component.isUploading()).toBe(true);
-      expect(fileService.uploadTestFiles).toHaveBeenCalledWith(1, mockFiles, false);
-
-      uploadSubject.next(uploadResult);
-      uploadSubject.complete();
-
-      tick(); // process upload subscription
-
-      expect(component.isUploading()).toBe(false);
-      expect(snackBar.open).toHaveBeenCalledWith(expect.stringContaining('Upload abgeschlossen'), 'OK', { duration: 5000 });
-      expect(dialog.open).toHaveBeenCalled(); // Should open openUploadResultDialog
-
-      tick(1000); // Wait for setTimeout in onUploadSuccess
-      expect(fileService.getFilesList).toHaveBeenCalled();
-    }));
-
-    it('should show failed upload details in the upload result dialog only', fakeAsync(() => {
-      const uploadResult: TestFilesUploadResultDto = {
-        total: 1,
-        uploaded: 0,
-        failed: 2,
-        uploadedFiles: [],
-        failedFiles: [
-          {
-            filename: 'bad.xml',
-            reason: 'XSD validation failed: bad.xml',
-            details: ['line 12: Duplicate key']
-          },
-          {
-            filename: 'bad.xml',
-            reason: 'XSD validation failed: bad.xml',
-            details: ['line 12: Duplicate key']
+        const event = {
+          target: {
+            files: mockFiles
           }
-        ],
-        conflicts: []
-      };
+        } as unknown as Event;
 
-      fileService.uploadTestFiles.mockReturnValue(of(uploadResult));
+        component.onFileSelected(event.target);
 
-      const event = {
-        target: {
-          files: mockFiles
-        }
-      } as unknown as Event;
+        expect(component.isUploading()).toBe(true);
+        expect(fileService.uploadTestFiles).toHaveBeenCalledWith(1, mockFiles, false);
 
-      component.onFileSelected(event.target);
-      tick();
+        uploadSubject.next(uploadResult);
+        uploadSubject.complete();
 
-      expect(snackBar.open).toHaveBeenCalledWith(
-        'Upload abgeschlossen: 0 erfolgreich, 1 fehlgeschlagen',
-        'OK',
-        { duration: 5000 }
-      );
-      expect(dialog.open).toHaveBeenCalledTimes(1);
-      expect(dialog.open).toHaveBeenCalledWith(
-        TestFilesUploadResultDialogComponent,
-        expect.objectContaining({
-          data: expect.objectContaining({
-            failedFiles: uploadResult.failedFiles
+        await jest.advanceTimersByTimeAsync(0); // process upload subscription
+
+        expect(component.isUploading()).toBe(false);
+        expect(snackBar.open).toHaveBeenCalledWith(expect.stringContaining('Upload abgeschlossen'), 'OK', { duration: 5000 });
+        expect(dialog.open).toHaveBeenCalled(); // Should open openUploadResultDialog
+
+        await jest.advanceTimersByTimeAsync(1000); // Wait for setTimeout in onUploadSuccess
+        expect(fileService.getFilesList).toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('should show failed upload details in the upload result dialog only', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        const uploadResult: TestFilesUploadResultDto = {
+          total: 1,
+          uploaded: 0,
+          failed: 2,
+          uploadedFiles: [],
+          failedFiles: [
+            {
+              filename: 'bad.xml',
+              reason: 'XSD validation failed: bad.xml',
+              details: ['line 12: Duplicate key']
+            },
+            {
+              filename: 'bad.xml',
+              reason: 'XSD validation failed: bad.xml',
+              details: ['line 12: Duplicate key']
+            }
+          ],
+          conflicts: []
+        };
+
+        fileService.uploadTestFiles.mockReturnValue(of(uploadResult));
+
+        const event = {
+          target: {
+            files: mockFiles
+          }
+        } as unknown as Event;
+
+        component.onFileSelected(event.target);
+        await jest.advanceTimersByTimeAsync(0);
+
+        expect(snackBar.open).toHaveBeenCalledWith(
+          'Upload abgeschlossen: 0 erfolgreich, 1 fehlgeschlagen',
+          'OK',
+          { duration: 5000 }
+        );
+        expect(dialog.open).toHaveBeenCalledTimes(1);
+        expect(dialog.open).toHaveBeenCalledWith(
+          TestFilesUploadResultDialogComponent,
+          expect.objectContaining({
+            data: expect.objectContaining({
+              failedFiles: uploadResult.failedFiles
+            })
           })
-        })
-      );
-    }));
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
-    it('should handle upload conflicts by opening conflicts dialog', fakeAsync(() => {
-      const initialResult: TestFilesUploadResultDto = {
-        total: 1,
-        uploaded: 0,
-        failed: 0,
-        uploadedFiles: [],
-        failedFiles: [],
-        conflicts: [{ fileId: '101', filename: 'test.txt', fileType: 'Test' }]
-      };
+    it('should handle upload conflicts by opening conflicts dialog', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        const initialResult: TestFilesUploadResultDto = {
+          total: 1,
+          uploaded: 0,
+          failed: 0,
+          uploadedFiles: [],
+          failedFiles: [],
+          conflicts: [{ fileId: '101', filename: 'test.txt', fileType: 'Test' }]
+        };
 
-      fileService.uploadTestFiles.mockReturnValueOnce(of(initialResult));
+        fileService.uploadTestFiles.mockReturnValueOnce(of(initialResult));
 
-      const dialogRefMock = {
-        afterClosed: jest.fn().mockReturnValue(of({ overwrite: true, overwriteFileIds: ['101'] }))
-      } as unknown as MatDialogRef<unknown>;
+        const dialogRefMock = {
+          afterClosed: jest.fn().mockReturnValue(of({ overwrite: true, overwriteFileIds: ['101'] }))
+        } as unknown as MatDialogRef<unknown>;
 
-      dialog.open.mockReturnValue(dialogRefMock as MatDialogRef<unknown>);
+        dialog.open.mockReturnValue(dialogRefMock as MatDialogRef<unknown>);
 
-      const overwriteResult: TestFilesUploadResultDto = {
-        total: 1,
-        uploaded: 1,
-        failed: 0,
-        uploadedFiles: [{ fileId: '101', filename: 'test.txt' }],
-        failedFiles: [],
-        conflicts: []
-      };
-      fileService.uploadTestFiles.mockReturnValueOnce(of(overwriteResult));
+        const overwriteResult: TestFilesUploadResultDto = {
+          total: 1,
+          uploaded: 1,
+          failed: 0,
+          uploadedFiles: [{ fileId: '101', filename: 'test.txt' }],
+          failedFiles: [],
+          conflicts: []
+        };
+        fileService.uploadTestFiles.mockReturnValueOnce(of(overwriteResult));
 
-      const event = {
-        target: {
-          files: mockFiles
-        }
-      } as unknown as Event;
+        const event = {
+          target: {
+            files: mockFiles
+          }
+        } as unknown as Event;
 
-      component.onFileSelected(event.target);
-      tick();
+        component.onFileSelected(event.target);
+        await jest.advanceTimersByTimeAsync(0);
 
-      expect(dialog.open).toHaveBeenCalledWith(TestFilesUploadConflictsDialogComponent, expect.anything());
-      expect(fileService.uploadTestFiles).toHaveBeenCalledTimes(2);
-      expect(fileService.uploadTestFiles).toHaveBeenLastCalledWith(1, mockFiles, true, ['101']);
-    }));
+        expect(dialog.open).toHaveBeenCalledWith(TestFilesUploadConflictsDialogComponent, expect.anything());
+        expect(fileService.uploadTestFiles).toHaveBeenCalledTimes(2);
+        expect(fileService.uploadTestFiles).toHaveBeenLastCalledWith(1, mockFiles, true, ['101']);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
-    it('should handle upload failure', fakeAsync(() => {
-      fileService.uploadTestFiles.mockReturnValue(throwError(() => new Error('Upload failed')));
+    it('should handle upload failure', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        fileService.uploadTestFiles.mockReturnValue(throwError(() => new Error('Upload failed')));
 
-      const event = {
-        target: {
-          files: mockFiles
-        }
-      } as unknown as Event;
+        const event = {
+          target: {
+            files: mockFiles
+          }
+        } as unknown as Event;
 
-      component.onFileSelected(event.target);
-      tick();
+        component.onFileSelected(event.target);
+        await jest.advanceTimersByTimeAsync(0);
 
-      expect(component.isUploading()).toBe(false);
-      expect(snackBar.open).toHaveBeenCalledWith('Fehler beim Hochladen der Dateien.', 'error', { duration: 3000 });
-    }));
+        expect(component.isUploading()).toBe(false);
+        expect(snackBar.open).toHaveBeenCalledWith('Fehler beim Hochladen der Dateien.', 'error', { duration: 3000 });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 
   describe('deleteFiles', () => {
