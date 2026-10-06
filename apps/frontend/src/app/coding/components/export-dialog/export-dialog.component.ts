@@ -1,6 +1,8 @@
 import {
-  Component, inject, OnInit, OnDestroy, ChangeDetectionStrategy
+  Component, computed, DestroyRef, inject, OnInit, signal, ChangeDetectionStrategy
 } from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { Subscription, takeUntil } from 'rxjs';
 import { MatDialogRef, MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatRadioModule } from '@angular/material/radio';
@@ -11,11 +13,11 @@ import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import * as ExcelJS from 'exceljs';
-import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
+import { finalize } from 'rxjs/operators';
 import { MatButtonToggle, MatButtonToggleGroup } from '@angular/material/button-toggle';
+import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
-import { ValidationStateService, ValidationProgress } from '../../services/validation-state.service';
+import { ValidationStateService } from '../../services/validation-state.service';
 import { AppService } from '../../../core/services/app.service';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 import {
@@ -44,61 +46,82 @@ export type ExportFormat = 'json' | 'csv' | 'excel';
     MatButtonToggle
   ],
   providers: [
-    DatePipe
+    DatePipe,
+    ValidationStateService
   ]
 })
-export class ExportDialogComponent implements OnInit, OnDestroy {
+export class ExportDialogComponent implements OnInit {
   dialogRef = inject<MatDialogRef<ExportDialogComponent>>(MatDialogRef);
   private testPersonCodingService = inject(TestPersonCodingService);
   private appService: AppService = inject(AppService);
   private validationStateService = inject(ValidationStateService);
   private translate = inject(TranslateService);
   private matDialog = inject(MatDialog);
-  private destroy$ = new Subject<void>();
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly workspaceId = this.appService.selectedWorkspaceId;
+  private fileRunId = 0;
+  private closed = false;
+  private fileReadTimer: ReturnType<typeof setTimeout> | null = null;
+  private fileReader: FileReader | null = null;
+  private validationRequest?: Subscription;
+  private resultsDialogRef?: MatDialogRef<CodingValidationResultsDialogComponent>;
+  private readonly isDownloadingValidation = signal(false);
 
   protected selectedFormat: ExportFormat = 'json';
   protected trainingRequiredFilter: 'all' | 'true' | 'false' = 'all';
 
-  protected validationResults: ValidateCodingCompletenessResponseDto | null = null;
-  protected validationProgress: ValidationProgress | null = null;
-  isValidating = false;
-  protected validationCacheKey: string | null = null;
+  protected readonly validationResults = toSignal(this.validationStateService.validationResults$, { requireSync: true });
+  protected readonly validationProgress = toSignal(this.validationStateService.validationProgress$, { requireSync: true });
+  readonly isValidating = computed(() => this.isDownloadingValidation() ||
+    this.validationProgress().status === 'loading' || this.validationProgress().status === 'processing');
+
+  protected readonly validationCacheKey = computed(() => this.validationResults()?.cacheKey || null);
   validationCurrentPage = 1;
   expectedCombinations: ExpectedCombinationDto[] = [];
   private readonly maxDisplayedMappingErrors = 5;
 
-  ngOnInit(): void {
-    this.validationStateService.validationProgress$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(progress => {
-        this.validationProgress = progress;
-        this.isValidating = progress.status === 'loading' || progress.status === 'processing';
-      });
+  constructor() {
+    this.destroyRef.onDestroy(() => this.cancelValidation());
+  }
 
+  private cancelValidation(): void {
+    this.fileRunId += 1;
+    if (this.fileReadTimer !== null) clearTimeout(this.fileReadTimer);
+    this.fileReadTimer = null;
+    if (this.fileReader) {
+      this.fileReader.onload = null;
+      this.fileReader.onerror = null;
+      if (this.fileReader.readyState === FileReader.LOADING) this.fileReader.abort();
+      this.fileReader = null;
+    }
+    this.validationRequest?.unsubscribe();
+    const resultsDialogRef = this.resultsDialogRef;
+    this.resultsDialogRef = undefined;
+    resultsDialogRef?.close();
+    this.validationStateService.resetValidation();
+  }
+
+  private isCurrentFile(runId: number): boolean {
+    return !this.closed && !this.destroyRef.destroyed && runId === this.fileRunId &&
+      this.workspaceId === this.appService.selectedWorkspaceId;
+  }
+
+  ngOnInit(): void {
+    this.dialogRef.beforeClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.closed = true;
+      this.cancelValidation();
+    });
+    this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(id => {
+      if (id !== this.workspaceId) this.dialogRef.close();
+    });
     this.validationStateService.validationResults$
-      .pipe(takeUntil(this.destroy$))
+      .pipe(takeUntil(this.dialogRef.beforeClosed()), takeUntilDestroyed(this.destroyRef))
       .subscribe(results => {
-        this.validationResults = results;
         if (results) {
-          this.validationCacheKey = results.cacheKey || null;
           // Open validation results dialog when validation completes
           this.openValidationResultsDialog(results);
         }
       });
-
-    const currentResults = this.validationStateService.getValidationResults();
-    if (currentResults) {
-      this.validationResults = currentResults;
-    }
-
-    const currentProgress = this.validationStateService.getValidationProgress();
-    this.validationProgress = currentProgress;
-    this.isValidating = currentProgress.status === 'loading' || currentProgress.status === 'processing';
-  }
-
-  ngOnDestroy(): void {
-    this.destroy$.next();
-    this.destroy$.complete();
   }
 
   protected onCancel(): void {
@@ -115,6 +138,7 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
 
   // Validation methods
   protected onValidationFileSelected(event: Event): void {
+    if (this.closed || this.destroyRef.destroyed) return;
     const input = event.target as HTMLInputElement;
 
     if (!input.files || input.files.length === 0) {
@@ -122,14 +146,17 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
     }
 
     const file = input.files[0];
+    this.cancelValidation();
+    const runId = this.fileRunId;
     if (!this.isExcelFile(file)) {
       this.validationStateService.setValidationError(this.translate.instant('export-dialog.validation.invalid-file-type'));
       return;
     }
 
     this.validationStateService.startValidation();
-    setTimeout(() => {
-      this.readExcelFile(file);
+    this.fileReadTimer = setTimeout(() => {
+      this.fileReadTimer = null;
+      if (this.isCurrentFile(runId)) this.readExcelFile(file, runId);
     }, 0);
   }
 
@@ -137,15 +164,18 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
     return file.name.toLowerCase().endsWith('.xlsx');
   }
 
-  private readExcelFile(file: File): void {
+  private readExcelFile(file: File, runId: number): void {
     const workbook = new ExcelJS.Workbook();
     const reader = new FileReader();
+    this.fileReader = reader;
 
     reader.onload = async (e: ProgressEvent<FileReader>) => {
+      if (!this.isCurrentFile(runId)) return;
       try {
         const buffer = e.target?.result as ArrayBuffer;
         this.validationStateService.updateProgress(10, this.translate.instant('export-dialog.validation.file-loading'));
         await workbook.xlsx.load(buffer);
+        if (!this.isCurrentFile(runId)) return;
         this.validationStateService.updateProgress(30, 'Excel-Datei wird verarbeitet...');
         const worksheet = workbook.getWorksheet(1);
         if (!worksheet || worksheet.rowCount <= 1) {
@@ -202,12 +232,12 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
         this.validationStateService.updateProgress(70, 'Validierung wird durchgeführt...');
         this.validateCodingCompleteness(expectedCombinations);
       } catch (error) {
-        this.validationStateService.setValidationError('Fehler beim Parsen der Excel-Datei');
+        if (this.isCurrentFile(runId)) this.validationStateService.setValidationError('Fehler beim Parsen der Excel-Datei');
       }
     };
 
     reader.onerror = () => {
-      this.validationStateService.setValidationError('Fehler beim Lesen der Datei');
+      if (this.isCurrentFile(runId)) this.validationStateService.setValidationError('Fehler beim Lesen der Datei');
     };
 
     reader.readAsArrayBuffer(file);
@@ -310,7 +340,7 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
   }
 
   private loadValidationPage(page: number): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
+    const workspaceId = this.workspaceId;
 
     if (!workspaceId) {
       this.validationStateService.setValidationError('Kein Arbeitsbereich ausgewählt');
@@ -320,12 +350,13 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
     this.validationStateService.updateProgress(80, `Validierung wird durchgeführt (Seite ${page})...`);
     this.validationCurrentPage = page;
 
-    this.testPersonCodingService.validateCodingCompleteness(
+    this.validationRequest?.unsubscribe();
+    this.validationRequest = this.testPersonCodingService.validateCodingCompleteness(
       workspaceId,
       this.expectedCombinations,
       page,
       50
-    ).subscribe({
+    ).pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntil(this.dialogRef.beforeClosed()), takeUntilDestroyed(this.destroyRef)).subscribe({
       next: results => {
         this.validationStateService.setValidationResults(results);
       },
@@ -336,17 +367,23 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
   }
 
   protected downloadValidationExcel(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
+    const workspaceId = this.workspaceId;
 
-    if (!workspaceId || !this.validationCacheKey) {
+    const validationCacheKey = this.validationCacheKey();
+    if (!workspaceId || !validationCacheKey) {
       return;
     }
 
-    this.isValidating = true;
+    this.isDownloadingValidation.set(true);
 
     this.testPersonCodingService.downloadValidationResultsAsExcel(
       workspaceId,
-      this.validationCacheKey
+      validationCacheKey
+    ).pipe(
+      takeUntilWorkspaceChanged(this.appService, workspaceId),
+      takeUntil(this.dialogRef.beforeClosed()),
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.isDownloadingValidation.set(false))
     ).subscribe({
       next: blob => {
         const url = window.URL.createObjectURL(blob);
@@ -358,22 +395,19 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
-        this.isValidating = false;
       },
-      error: () => {
-        this.isValidating = false;
-      }
+      error: () => {}
     });
   }
 
   protected openValidationResultsDialog(results: ValidateCodingCompletenessResponseDto): void {
-    this.matDialog.open(CodingValidationResultsDialogComponent, {
+    this.resultsDialogRef = this.matDialog.open(CodingValidationResultsDialogComponent, {
       width: '90vw',
       maxWidth: '1400px',
       maxHeight: '90vh',
       data: {
         validationResults: results,
-        validationCacheKey: this.validationCacheKey,
+        validationCacheKey: results.cacheKey || null,
         expectedCombinations: this.expectedCombinations
       }
     });

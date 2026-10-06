@@ -14,14 +14,14 @@
       }
     </p>
 
-    @if (isLoading) {
+    @if (isLoading()) {
       <div class="loading-container">
         <mat-spinner diameter="40"></mat-spinner>
         <p class="loading-text">Berechne Verteilung und erstelle Vorschau...</p>
       </div>
     }
 
-    @if (!isLoading && ((data.creationResults && data.creationResults.doubleCodingInfo) || doubleCodingPreview)) {
+    @if (!isLoading() && ((data.creationResults && data.creationResults.doubleCodingInfo) || doubleCodingPreview())) {
       <div class="double-coding-summary">
         <h3 class="section-title">
           <mat-icon>repeat</mat-icon>
@@ -45,26 +45,26 @@
             </div>
 
             <!-- Data rows for double coding -->
-            @for (variableKey of objectKeys((data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)!); track variableKey) {
+            @for (variableKey of objectKeys((data.creationResults?.doubleCodingInfo || doubleCodingPreview()?.doubleCodingInfo)!); track variableKey) {
               <div class="matrix-row" [style.grid-template-columns]="getDoubleCodingGridTemplate()">
                 <div class="matrix-cell variable-cell">
                   <div class="variable-name">{{ getVariableDisplayNameFromKey(variableKey) }}</div>
                 </div>
                 <div class="matrix-cell data-cell">
-                  {{ (data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)![variableKey].totalCases }}
+                  {{ (data.creationResults?.doubleCodingInfo || doubleCodingPreview()?.doubleCodingInfo)![variableKey].totalCases }}
                 </div>
                 <div class="matrix-cell data-cell double-coded-cell">
-                  <span class="double-coded-indicator">{{ (data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)![variableKey].doubleCodedCases }}</span>
-                  @if ((data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)![variableKey].doubleCodedCases > 0) {
+                  <span class="double-coded-indicator">{{ (data.creationResults?.doubleCodingInfo || doubleCodingPreview()?.doubleCodingInfo)![variableKey].doubleCodedCases }}</span>
+                  @if ((data.creationResults?.doubleCodingInfo || doubleCodingPreview()?.doubleCodingInfo)![variableKey].doubleCodedCases > 0) {
                     <mat-icon class="double-coding-icon">repeat</mat-icon>
                   }
                 </div>
                 <div class="matrix-cell data-cell">
-                  {{ (data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)![variableKey].singleCodedCasesAssigned }}
+                  {{ (data.creationResults?.doubleCodingInfo || doubleCodingPreview()?.doubleCodingInfo)![variableKey].singleCodedCasesAssigned }}
                 </div>
                 @for (coder of data.selectedCoders; track coder.id) {
                   <div class="matrix-cell data-cell">
-                    {{ getDoubleCodedCasesForCoder((data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)![variableKey], coder) }}
+                    {{ getDoubleCodedCasesForCoder((data.creationResults?.doubleCodingInfo || doubleCodingPreview()?.doubleCodingInfo)![variableKey], coder) }}
                   </div>
                 }
               </div>
@@ -79,21 +79,21 @@
     </div>
     }
 
-    @if (!isLoading && warnings.length > 0) {
+    @if (!isLoading() && warnings().length > 0) {
       <mat-accordion class="warnings-section">
-        <mat-expansion-panel class="warnings-panel" [expanded]="showWarningsPanel">
+        <mat-expansion-panel class="warnings-panel" [expanded]="showWarningsPanel()">
           <mat-expansion-panel-header>
             <mat-panel-title class="warnings-title">
               <mat-icon class="warning-icon">warning</mat-icon>
               {{ 'coding-job-bulk-creation-dialog.warnings.title' | translate }}
-              <span class="warning-count">({{ warnings.length }})</span>
+              <span class="warning-count">({{ warnings().length }})</span>
             </mat-panel-title>
           </mat-expansion-panel-header>
 
           <div class="warnings-content">
             <p class="warnings-description">{{ 'coding-job-bulk-creation-dialog.warnings.description' | translate }}</p>
             <div class="warnings-list">
-              @for (warning of warnings; track warning.unitName + '::' + warning.variableId) {
+              @for (warning of warnings(); track warning.unitName + '::' + warning.variableId) {
                 <div class="warning-item">
                   <div class="warning-header">
                     <mat-icon class="warning-item-icon">warning_amber</mat-icon>
@@ -111,14 +111,14 @@
       </mat-accordion>
     }
 
-    @if (!isLoading) {
+    @if (!isLoading()) {
     <div class="distribution-summary">
       <h3 class="section-title">
         <mat-icon>table_chart</mat-icon>
         {{ 'coding-job-bulk-creation-dialog.distribution-summary.title' | translate }}
       </h3>
 
-      @if (distributionMatrix && distributionMatrix.length > 0) {
+      @if (distributionMatrix() && distributionMatrix().length > 0) {
         <div class="distribution-matrix">
           <div class="matrix-container">
             <!-- Header row with coder names -->
@@ -134,7 +134,7 @@
             </div>
 
             <!-- Data rows -->
-            @for (row of distributionMatrix; track row.variableKey) {
+            @for (row of distributionMatrix(); track row.variableKey) {
               <div class="matrix-row" [style.grid-template-columns]="getDistributionGridTemplate()">
                 <div class="matrix-cell variable-cell">
                   <div class="variable-name">{{ row.variable ? getVariableDisplayName(row.variable) : getVariableDisplayNameFromKey(row.variableKey) }}</div>
@@ -173,17 +173,17 @@
     </div>
     }
 
-    @if (!isLoading) {
+    @if (!isLoading()) {
     <div class="jobs-summary">
       <h3 class="section-title">
         <mat-icon>work</mat-icon>
         {{ 'coding-job-bulk-creation-dialog.jobs-summary.title' | translate }}
       </h3>
       <p class="section-description">
-        {{ 'coding-job-bulk-creation-dialog.jobs-summary.description' | translate:{count: jobPreviews.length} }}
+        {{ 'coding-job-bulk-creation-dialog.jobs-summary.description' | translate:{count: jobPreviews().length} }}
       </p>
       <div class="jobs-list">
-        @for (job of jobPreviews; track job.name) {
+        @for (job of jobPreviews(); track job.name) {
           <div class="job-preview-item">
             <mat-icon class="job-icon">task</mat-icon>
             <div class="job-content">
@@ -213,7 +213,7 @@
     </div>
     }
 
-    @if (!isLoading && !data.creationResults && !data.displayOptionsLocked) {
+    @if (!isLoading() && !data.creationResults && !data.displayOptionsLocked) {
     <div class="display-options-section">
       <h3 class="section-title">
         <mat-icon>settings</mat-icon>
@@ -246,13 +246,13 @@
       </button>
     } @else {
       <button mat-button (click)="onCancel()">{{ 'coding-job-bulk-creation-dialog.buttons.cancel' | translate }}</button>
-      @if (warnings.length > 0 && !warningsConfirmed) {
-      <button mat-raised-button color="warn" [disabled]="isLoading" (click)="onConfirm()">
+      @if (warnings().length > 0 && !warningsConfirmed()) {
+      <button mat-raised-button color="warn" [disabled]="isLoading()" (click)="onConfirm()">
         {{ 'coding-job-bulk-creation-dialog.buttons.continue' | translate }}
       </button>
       } @else {
-      <button mat-raised-button color="primary" [disabled]="isLoading || jobPreviews.length === 0" (click)="onConfirm()">
-        {{ 'coding-job-bulk-creation-dialog.buttons.confirm' | translate:{count: jobPreviews.length} }}
+      <button mat-raised-button color="primary" [disabled]="isLoading() || jobPreviews().length === 0" (click)="onConfirm()">
+        {{ 'coding-job-bulk-creation-dialog.buttons.confirm' | translate:{count: jobPreviews().length} }}
       </button>
       }
     }

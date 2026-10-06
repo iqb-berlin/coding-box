@@ -229,21 +229,21 @@ describe('ExportCodingBookComponent', () => {
       expect(codingJobBackendService.getJobDefinitions).toHaveBeenCalledWith(1);
       expect(codingJobBackendService.getVariableBundles).toHaveBeenCalledWith(1);
       expect(missingsProfileService.getMissingsProfiles).toHaveBeenCalledWith(1);
-      expect(component.availableUnits.length).toBe(3);
-      expect(component.availableJobDefinitions.length).toBe(1);
-      expect(component.availableVariableBundles.map(bundle => bundle.id)).toEqual([5, 7, 8]);
-      expect(component.missingsProfiles.length).toBe(3); // includes default empty profile
+      expect(component.availableUnits().length).toBe(3);
+      expect(component.availableJobDefinitions().length).toBe(1);
+      expect(component.availableVariableBundles().map(bundle => bundle.id)).toEqual([5, 7, 8]);
+      expect(component.missingsProfiles().length).toBe(3); // includes default empty profile
     });
 
     it('should setup validation state subscriptions', () => {
       fixture.detectChanges();
 
-      expect(component.validationProgress).toEqual({
+      expect(component.validationProgress()).toEqual({
         status: 'idle',
         progress: 0,
         message: ''
       });
-      expect(component.isValidating).toBe(false);
+      expect(component.isValidating()).toBe(false);
     });
 
     it('should update validation progress when state changes', () => {
@@ -255,8 +255,8 @@ describe('ExportCodingBookComponent', () => {
         message: 'Validating...'
       });
 
-      expect(component.validationProgress?.status).toBe('loading');
-      expect(component.isValidating).toBe(true);
+      expect(component.validationProgress()?.status).toBe('loading');
+      expect(component.isValidating()).toBe(true);
     });
 
     it('should update validation results when available', () => {
@@ -276,8 +276,8 @@ describe('ExportCodingBookComponent', () => {
 
       mockValidationResults$.next(mockResults);
 
-      expect(component.validationResults).toEqual(mockResults);
-      expect(component.validationCacheKey).toBe('test-cache-key');
+      expect(component.validationResults()).toEqual(mockResults);
+      expect(component.validationCacheKey()).toBe('test-cache-key');
     });
 
     it('should load existing validation results on init', () => {
@@ -297,7 +297,7 @@ describe('ExportCodingBookComponent', () => {
 
       fixture.detectChanges();
 
-      expect(component.validationResults).toEqual(existingResults);
+      expect(component.validationResults()).toEqual(existingResults);
     });
   });
 
@@ -317,7 +317,7 @@ describe('ExportCodingBookComponent', () => {
     it('should load units and setup data source', () => {
       fixture.detectChanges();
 
-      expect(component.availableUnits).toEqual([
+      expect(component.availableUnits()).toEqual([
         {
           unitId: 1,
           unitKey: 'unit1',
@@ -341,7 +341,7 @@ describe('ExportCodingBookComponent', () => {
         }
       ]);
       expect(component.dataSource.data.length).toBe(3);
-      expect(component.isLoading).toBe(false);
+      expect(component.isLoading()).toBe(false);
     });
 
     it('should handle empty units response', () => {
@@ -349,8 +349,8 @@ describe('ExportCodingBookComponent', () => {
 
       fixture.detectChanges();
 
-      expect(component.availableUnits).toEqual([]);
-      expect(component.isLoading).toBe(false);
+      expect(component.availableUnits()).toEqual([]);
+      expect(component.isLoading()).toBe(false);
     });
 
     it('should handle error when loading units', () => {
@@ -358,8 +358,8 @@ describe('ExportCodingBookComponent', () => {
 
       fixture.detectChanges();
 
-      expect(component.isLoading).toBe(false);
-      expect(component.availableUnits).toEqual([]);
+      expect(component.isLoading()).toBe(false);
+      expect(component.availableUnits()).toEqual([]);
     });
 
     it('should not load units if no workspace selected', () => {
@@ -392,12 +392,12 @@ describe('ExportCodingBookComponent', () => {
     it('should load missings profiles with default empty profile', () => {
       fixture.detectChanges();
 
-      expect(component.missingsProfiles).toEqual([
+      expect(component.missingsProfiles()).toEqual([
         { id: 0, label: '' },
         { id: 1, label: 'Profile 1' },
         { id: 2, label: 'Profile 2' }
       ]);
-      expect(component.selectedMissingsProfile).toBe(0);
+      expect(component.selectedMissingsProfile()).toBe(0);
     });
 
     it('should handle error when loading profiles', () => {
@@ -406,7 +406,7 @@ describe('ExportCodingBookComponent', () => {
       fixture.detectChanges();
 
       // Should still have default profile
-      expect(component.missingsProfiles).toEqual([{ id: 0, label: '' }]);
+      expect(component.missingsProfiles()).toEqual([{ id: 0, label: '' }]);
     });
 
     it('should not load profiles if no workspace selected', () => {
@@ -425,8 +425,8 @@ describe('ExportCodingBookComponent', () => {
 
       component.onJobDefinitionFilterChange(10);
 
-      expect(component.contentOptions.jobDefinitionId).toBe(10);
-      expect(component.unitList).toEqual([1, 3]);
+      expect(component.contentOptions().jobDefinitionId).toBe(10);
+      expect(component.unitList()).toEqual([1, 3]);
     });
 
     it('should clear unit selection when the job definition filter is removed', () => {
@@ -435,14 +435,14 @@ describe('ExportCodingBookComponent', () => {
 
       component.onJobDefinitionFilterChange(null);
 
-      expect(component.contentOptions.jobDefinitionId).toBeNull();
-      expect(component.unitList).toEqual([]);
+      expect(component.contentOptions().jobDefinitionId).toBeNull();
+      expect(component.unitList()).toEqual([]);
     });
 
     it('should update training requirement filter option', () => {
       component.onTrainingRequirementChange('required');
 
-      expect(component.contentOptions.trainingRequirement).toBe('required');
+      expect(component.contentOptions().trainingRequirement).toBe('required');
     });
 
     it('should select units from selected variable bundles', () => {
@@ -450,8 +450,8 @@ describe('ExportCodingBookComponent', () => {
 
       component.onVariableBundleFilterChange([8]);
 
-      expect(component.contentOptions.variableBundleIds).toEqual([8]);
-      expect(component.unitList).toEqual([2]);
+      expect(component.contentOptions().variableBundleIds).toEqual([8]);
+      expect(component.unitList()).toEqual([2]);
     });
 
     it('should clear unit selection when the variable bundle filter is removed', () => {
@@ -460,8 +460,8 @@ describe('ExportCodingBookComponent', () => {
 
       component.onVariableBundleFilterChange([]);
 
-      expect(component.contentOptions.variableBundleIds).toEqual([]);
-      expect(component.unitList).toEqual([]);
+      expect(component.contentOptions().variableBundleIds).toEqual([]);
+      expect(component.unitList()).toEqual([]);
     });
 
     it('should intersect job definition and variable bundle quick filter unit selections', () => {
@@ -470,22 +470,22 @@ describe('ExportCodingBookComponent', () => {
       component.onJobDefinitionFilterChange(10);
       component.onVariableBundleFilterChange([7]);
 
-      expect(component.unitList).toEqual([1]);
+      expect(component.unitList()).toEqual([1]);
     });
 
     it('should clear unit selection if quick filters share only a unit but no variable', () => {
       fixture.detectChanges();
 
-      component.availableJobDefinitions = [{
+      component.availableJobDefinitions.set([{
         id: 11,
         assignedVariables: [{ unitName: 'unit2', variableId: 'OTHER_VAR' }],
         assignedVariableBundles: []
-      }];
+      }]);
 
       component.onJobDefinitionFilterChange(11);
       component.onVariableBundleFilterChange([8]);
 
-      expect(component.unitList).toEqual([]);
+      expect(component.unitList()).toEqual([]);
     });
 
     it('should open job definition picker with precomputed options and apply selected definition', () => {
@@ -508,8 +508,8 @@ describe('ExportCodingBookComponent', () => {
           })
         })
       );
-      expect(component.selectedJobDefinitionId).toBe(10);
-      expect(component.contentOptions.jobDefinitionId).toBe(10);
+      expect(component.selectedJobDefinitionId()).toBe(10);
+      expect(component.contentOptions().jobDefinitionId).toBe(10);
     });
 
     it('should keep current job definition when picker is cancelled', () => {
@@ -521,12 +521,12 @@ describe('ExportCodingBookComponent', () => {
 
       component.openJobDefinitionPicker();
 
-      expect(component.selectedJobDefinitionId).toBe(10);
-      expect(component.contentOptions.jobDefinitionId).toBe(10);
+      expect(component.selectedJobDefinitionId()).toBe(10);
+      expect(component.contentOptions().jobDefinitionId).toBe(10);
     });
 
     it('should not open job definition picker while job definitions are loading', () => {
-      component.isLoadingJobDefinitions = true;
+      component.isLoadingJobDefinitions.set(true);
 
       component.openJobDefinitionPicker();
 
@@ -570,33 +570,33 @@ describe('ExportCodingBookComponent', () => {
     it('should add unit to selection list when selected', () => {
       component.toggleUnitSelection(1, true);
 
-      expect(component.unitList).toContain(1);
+      expect(component.unitList()).toContain(1);
     });
 
     it('should not add duplicate units', () => {
-      component.unitList = [1];
+      component.unitList.set([1]);
       component.toggleUnitSelection(1, true);
 
-      expect(component.unitList).toEqual([1]);
+      expect(component.unitList()).toEqual([1]);
     });
 
     it('should remove unit from selection list when deselected', () => {
-      component.unitList = [1, 2, 3];
+      component.unitList.set([1, 2, 3]);
       component.toggleUnitSelection(2, false);
 
-      expect(component.unitList).toEqual([1, 3]);
+      expect(component.unitList()).toEqual([1, 3]);
     });
   });
 
   describe('isUnitSelected', () => {
     it('should return true if unit is selected', () => {
-      component.unitList = [1, 2, 3];
+      component.unitList.set([1, 2, 3]);
 
       expect(component.isUnitSelected(2)).toBe(true);
     });
 
     it('should return false if unit is not selected', () => {
-      component.unitList = [1, 2, 3];
+      component.unitList.set([1, 2, 3]);
 
       expect(component.isUnitSelected(4)).toBe(false);
     });
@@ -626,22 +626,22 @@ describe('ExportCodingBookComponent', () => {
     it('should select all units when isSelected is true', () => {
       component.toggleAllUnits(true);
 
-      expect(component.unitList).toEqual([1, 2, 3]);
+      expect(component.unitList()).toEqual([1, 2, 3]);
     });
 
     it('should deselect all units when isSelected is false', () => {
-      component.unitList = [1, 2, 3];
+      component.unitList.set([1, 2, 3]);
       component.toggleAllUnits(false);
 
-      expect(component.unitList).toEqual([]);
+      expect(component.unitList()).toEqual([]);
     });
   });
 
   describe('exportCodingBook', () => {
     beforeEach(() => {
       fixture.detectChanges();
-      component.unitList = [1, 2];
-      component.selectedMissingsProfile = 1;
+      component.unitList.set([1, 2]);
+      component.selectedMissingsProfile.set(1);
     });
 
     it('should start a codebook job with correct parameters', () => {
@@ -653,11 +653,11 @@ describe('ExportCodingBookComponent', () => {
       expect(exportService.startCodebookJob).toHaveBeenCalledWith(
         1,
         '1',
-        component.contentOptions,
+        component.contentOptions(),
         [1, 2]
       );
-      expect(component.codebookJobId).toBe('123');
-      expect(component.codebookJobStatus).toBe('pending');
+      expect(component.codebookJobId()).toBe('123');
+      expect(component.codebookJobStatus()).toBe('pending');
     });
 
     it('should not export if no workspace selected', () => {
@@ -669,7 +669,7 @@ describe('ExportCodingBookComponent', () => {
     });
 
     it('should not export if no units selected', () => {
-      component.unitList = [];
+      component.unitList.set([]);
 
       component.exportCodingBook();
 
@@ -681,8 +681,8 @@ describe('ExportCodingBookComponent', () => {
 
       component.exportCodingBook();
 
-      expect(component.codebookJobStatus).toBe('failed');
-      expect(component.codebookJobError).toBe('Failed to start codebook generation job');
+      expect(component.codebookJobStatus()).toBe('failed');
+      expect(component.codebookJobError()).toBe('Failed to start codebook generation job');
     });
 
     it('should set status to pending when starting', () => {
@@ -691,23 +691,23 @@ describe('ExportCodingBookComponent', () => {
 
       component.exportCodingBook();
 
-      expect(component.codebookJobProgress).toBe(0);
+      expect(component.codebookJobProgress()).toBe(0);
     });
   });
 
   describe('resetCodebookJob', () => {
     it('should reset all codebook job state', () => {
-      component.codebookJobId = '123';
-      component.codebookJobStatus = 'failed';
-      component.codebookJobProgress = 50;
-      component.codebookJobError = 'some error';
+      component.codebookJobId.set('123');
+      component.codebookJobStatus.set('failed');
+      component.codebookJobProgress.set(50);
+      component.codebookJobError.set('some error');
 
       component.resetCodebookJob();
 
-      expect(component.codebookJobId).toBeNull();
-      expect(component.codebookJobStatus).toBe('idle');
-      expect(component.codebookJobProgress).toBe(0);
-      expect(component.codebookJobError).toBeNull();
+      expect(component.codebookJobId()).toBeNull();
+      expect(component.codebookJobStatus()).toBe('idle');
+      expect(component.codebookJobProgress()).toBe(0);
+      expect(component.codebookJobError()).toBeNull();
     });
   });
 
@@ -721,8 +721,8 @@ describe('ExportCodingBookComponent', () => {
         downloadCodebookResult: (workspaceId: number, jobId: string) => void;
       }).downloadCodebookResult(1, 'job-1');
 
-      expect(component.codebookJobStatus).toBe('failed');
-      expect(component.codebookJobError).toBe('Failed to download codebook file');
+      expect(component.codebookJobStatus()).toBe('failed');
+      expect(component.codebookJobError()).toBe('Failed to download codebook file');
     });
   });
 
@@ -734,7 +734,7 @@ describe('ExportCodingBookComponent', () => {
 
   describe('contentOptions', () => {
     it('should have default content options', () => {
-      expect(component.contentOptions).toEqual({
+      expect(component.contentOptions()).toEqual({
         exportFormat: 'docx',
         missingsProfile: '',
         hasOnlyManualCoding: true,

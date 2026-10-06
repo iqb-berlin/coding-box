@@ -1,5 +1,4 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -32,7 +31,6 @@ describe('MyCodingJobsComponent', () => {
     await TestBed.configureTestingModule({
       imports: [MyCodingJobsComponent, TranslateModule.forRoot()],
       providers: [
-        provideNoopAnimations(),
         {
           provide: AppService,
           useValue: {
@@ -200,7 +198,7 @@ describe('MyCodingJobsComponent', () => {
     ) as unknown as {
       getCodingJobs: jest.Mock;
     };
-    component.workspaceId = 5;
+    fixture.componentRef.setInput('workspaceId', 5);
 
     component.loadMyCodingJobs([
       { id: 1, name: 'Other workspace' },
@@ -274,7 +272,6 @@ describe('MyCodingJobsComponent', () => {
     TestBed.configureTestingModule({
       imports: [MyCodingJobsComponent, TranslateModule.forRoot()],
       providers: [
-        provideNoopAnimations(),
         {
           provide: AppService,
           useValue: {
@@ -355,7 +352,6 @@ describe('MyCodingJobsComponent', () => {
     TestBed.configureTestingModule({
       imports: [MyCodingJobsComponent, TranslateModule.forRoot()],
       providers: [
-        provideNoopAnimations(),
         {
           provide: AppService,
           useValue: {

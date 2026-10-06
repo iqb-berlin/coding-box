@@ -1,8 +1,12 @@
+import { ChangeDetectorRef } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { of, Subject } from 'rxjs';
 import {
   DownloadCodingResultsDialogComponent,
   DownloadCodingResultsDialogData
 } from './download-coding-results-dialog.component';
+import { MissingsProfileService } from '../../../services/missings-profile.service';
 
 describe('DownloadCodingResultsDialogComponent', () => {
   const createComponent = (
@@ -17,11 +21,15 @@ describe('DownloadCodingResultsDialogComponent', () => {
       workspaceId: 5,
       currentVersion
     };
-    const component = new DownloadCodingResultsDialogComponent(
-      dialogRef as never,
-      data,
-      missingsProfileService as never
-    );
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: MatDialogRef, useValue: dialogRef },
+        { provide: MAT_DIALOG_DATA, useValue: data },
+        { provide: MissingsProfileService, useValue: missingsProfileService },
+        { provide: ChangeDetectorRef, useValue: { markForCheck: jest.fn() } }
+      ]
+    });
+    const component = TestBed.runInInjectionContext(() => new DownloadCodingResultsDialogComponent());
 
     return { component, dialogRef, missingsProfileService };
   };

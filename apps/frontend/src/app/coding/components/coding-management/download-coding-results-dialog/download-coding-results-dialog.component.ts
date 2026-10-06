@@ -1,6 +1,7 @@
 import {
-  ChangeDetectionStrategy, Component, Inject, OnInit
+  ChangeDetectorRef, Component, OnInit, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -394,6 +395,13 @@ export interface DownloadCodingResultsDialogData {
   `]
 })
 export class DownloadCodingResultsDialogComponent implements OnInit {
+  dialogRef = inject<MatDialogRef<DownloadCodingResultsDialogComponent>>(MatDialogRef);
+  protected data = inject<DownloadCodingResultsDialogData>(MAT_DIALOG_DATA);
+  private readonly missingsProfileService = inject(MissingsProfileService);
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
+
+  private readonly destroyRef = inject(DestroyRef);
+
   selectedVersion: 'v1' | 'v2' | 'v3' = 'v1';
   protected selectedFormat: CodingResultsExportFormat = 'csv';
   protected includeReplayUrls: boolean = false;
@@ -406,11 +414,9 @@ export class DownloadCodingResultsDialogComponent implements OnInit {
   protected missingsProfilesError = false;
   private hasLoadedMissingsProfiles = false;
 
-  constructor(
-    public dialogRef: MatDialogRef<DownloadCodingResultsDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: DownloadCodingResultsDialogData,
-    private readonly missingsProfileService: MissingsProfileService
-  ) {
+  constructor() {
+    const data = this.data;
+
     this.selectedVersion = data.currentVersion;
   }
 
@@ -440,8 +446,9 @@ export class DownloadCodingResultsDialogComponent implements OnInit {
 
     this.missingsProfilesError = false;
     this.isLoadingMissingsProfiles = true;
+    this.changeDetectorRef.markForCheck();
     this.missingsProfileService
-      .getExportMissingsProfilesOrThrow(this.data.workspaceId)
+      .getExportMissingsProfilesOrThrow(this.data.workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: profiles => {
           this.missingsProfiles = profiles.filter(profile => (
@@ -454,10 +461,12 @@ export class DownloadCodingResultsDialogComponent implements OnInit {
             this.missingsProfiles[0]?.id ?? null;
           this.hasLoadedMissingsProfiles = true;
           this.isLoadingMissingsProfiles = false;
+          this.changeDetectorRef.markForCheck();
         },
         error: () => {
           this.missingsProfilesError = true;
           this.isLoadingMissingsProfiles = false;
+          this.changeDetectorRef.markForCheck();
         }
       });
   }

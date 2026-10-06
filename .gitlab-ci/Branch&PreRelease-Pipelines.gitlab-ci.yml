@@ -240,7 +240,7 @@ build-cicd-base-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${REGISTRY_PASSWORD}" | docker login -u ${REGISTRY_USER} --password-stdin ${REGISTRY}
   script:
     - docker build
@@ -255,7 +255,7 @@ build-cicd-base-image:
         .
     - docker push -q ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${REGISTRY}
 
 .distributed:
@@ -290,7 +290,7 @@ build-db-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${REGISTRY_PASSWORD}" | docker login -u ${REGISTRY_USER} --password-stdin ${REGISTRY}
   script:
     - docker build
@@ -305,7 +305,7 @@ build-db-image:
         .
     - docker push -q -a ${DB_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${REGISTRY}
 
 build-liquibase-image:
@@ -327,7 +327,7 @@ build-liquibase-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${REGISTRY_PASSWORD}" | docker login -u ${REGISTRY_USER} --password-stdin ${REGISTRY}
   script:
     - docker build
@@ -342,7 +342,7 @@ build-liquibase-image:
         .
     - docker push -q -a ${LIQUIBASE_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${REGISTRY}
 
 build-app:
@@ -353,7 +353,8 @@ build-app:
     - !reference [ .default_rules, rules ]
   image: ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
   script:
-    - npx nx affected --base=HEAD~1 --target=build --parallel=3
+    - npx nx build frontend --configuration=production
+    - npx nx affected --base=HEAD~1 --target=build --exclude=frontend --parallel=3
   artifacts:
     paths:
       - dist
@@ -455,20 +456,21 @@ test-db:
               --classpath changelog
             history
 
-test-app:
+test-backend:
   stage: test-units
   interruptible: true
-  allow_failure: true
+  allow_failure: false
   extends: .distributed
   rules:
     - !reference [ .default_rules, rules ]
   image: ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
   script:
-    - npx nx affected --base=HEAD~1 --target=test --parallel=1 -- --maxWorkers=2
+    - npx nx run-many --target=test --exclude=frontend --parallel=1 -- --maxWorkers=2 --passWithNoTests=false
 
-test-frontend-zoneless:
+test-frontend:
   stage: test-units
   interruptible: true
+  allow_failure: false
   image: ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
   needs:
     - install-dependencies
@@ -483,8 +485,12 @@ test-frontend-zoneless:
         - docs/qa/**/*
         - cypress/**/*
         - cypress*.config.ts
+        - jest.preset.js
+        - nx.json
+        - tsconfig.base.json
+        - .nvmrc
         - scripts/e2e/replay/**/*
-        - api-dto/coding/**/*
+        - api-dto/**/*
         - package.json
         - package-lock.json
         - .gitlab-ci/Branch&PreRelease-Pipelines.gitlab-ci.yml
@@ -498,48 +504,55 @@ test-frontend-zoneless:
         - docs/qa/**/*
         - cypress/**/*
         - cypress*.config.ts
+        - jest.preset.js
+        - nx.json
+        - tsconfig.base.json
+        - .nvmrc
         - scripts/e2e/replay/**/*
-        - api-dto/coding/**/*
+        - api-dto/**/*
         - package.json
         - package-lock.json
         - .gitlab-ci/Branch&PreRelease-Pipelines.gitlab-ci.yml
     - when: never
   script:
-    - npx nx run frontend:lint
-    - npx nx run frontend:test --maxWorkers=2
-    - npx nx run frontend:zoneless-inventory
+    - npx nx run frontend:test-quality-gates
+    - npx nx run frontend:test --configuration=ci --maxWorkers=2
     - npx nx run frontend:zoneless-inventory-test
-    - npx nx run frontend:test-zoneless --maxWorkers=2
-    - npx nx build frontend --configuration=production
-
-test-zoneless-approval:
-  extends: test-frontend-zoneless
-  script:
     - npx nx run frontend:zoneless-approval
+  coverage: '/Statements\s*:\s*(\d+(?:\.\d+)?)%/'
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - coverage/apps/frontend/
+    reports:
+      junit:
+        - coverage/apps/frontend/junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/apps/frontend/cobertura-coverage.xml
 
-test-browser-zoneless:
+test-browser:
   stage: test-replay
   interruptible: true
   image: ${CYPRESS_IMAGE}
   needs:
     - install-dependencies
+    - build-app
   rules:
     - !reference [ .default_rules, rules ]
   script:
     - npx cypress install
-    - npx nx run frontend:e2e --configuration=zoneless --browser=electron
+    - npx nx run frontend:component-test --browser=electron
+    - npx nx run frontend:e2e --configuration=ci --browser=electron
   artifacts:
     when: always
     expire_in: 7 days
     paths:
       - cypress/screenshots
       - cypress/videos
-
-test-browser-production:
-  extends: test-browser-zoneless
-  script:
-    - npx cypress install
-    - npx nx run frontend:e2e --configuration=production --cypressConfig=cypress.zoneless.config.ts --browser=electron
+      - cypress/component-screenshots
+      - cypress/component-videos
 
 test-replay-live:
   stage: test-replay
@@ -559,7 +572,7 @@ test-replay-live:
   rules:
     - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
       changes:
-        - api-dto/coding/**/*
+        - api-dto/**/*
         - apps/backend/src/app/admin/workspace/workspace-coding-replay*
         - apps/backend/src/app/database/services/test-results/**/*
         - apps/frontend/**/*
@@ -577,7 +590,7 @@ test-replay-live:
         $CI_COMMIT_BRANCH != "develop" &&
         $CI_PIPELINE_SOURCE != "external_pull_request_event"
       changes:
-        - api-dto/coding/**/*
+        - api-dto/**/*
         - apps/backend/src/app/admin/workspace/workspace-coding-replay*
         - apps/backend/src/app/database/services/test-results/**/*
         - apps/frontend/**/*
@@ -597,7 +610,7 @@ test-replay-live:
     - until docker info > /dev/null 2>&1; do sleep 1; done
     - npx cypress install
   script:
-    - npx nx run frontend:e2e-replay-live --configuration=zoneless
+    - npx nx run frontend:e2e-replay-live --configuration=production
   artifacts:
     when: always
     expire_in: 7 days
@@ -606,23 +619,22 @@ test-replay-live:
       - cypress/replay-artifacts/videos
       - tmp/replay-e2e-artifacts
 
-test-auth-live-zoneless:
+test-auth-live:
   extends: test-replay-live
   script:
     - npx nx run frontend:test-e2e-harness
-    - npx nx run frontend:e2e-auth-live --configuration=zoneless
     - npx nx run frontend:e2e-auth-live --configuration=production
 
 lint-app:
   stage: lint
   extends: .distributed
   interruptible: true
-  allow_failure: true
+  allow_failure: false
   rules:
     - !reference [ .default_rules, rules ]
   image: ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
   script:
-    - npx nx affected --base=HEAD~1 --target=lint --parallel=2
+    - npx nx run-many --target=lint --parallel=2
 
 audit-app:
   stage: audit
@@ -633,6 +645,7 @@ audit-app:
   needs:
     - install-dependencies
   script:
+    - npx nx run frontend:test-dependency-patches
     - npm audit --audit-level high
 
 build-develop-commit-db-image:
@@ -653,7 +666,7 @@ build-develop-commit-db-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
@@ -668,7 +681,7 @@ build-develop-commit-db-image:
         .
     - docker push --quiet --all-tags ${DB_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 build-develop-commit-liquibase-image:
@@ -689,7 +702,7 @@ build-develop-commit-liquibase-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
@@ -704,7 +717,7 @@ build-develop-commit-liquibase-image:
         .
     - docker push --quiet --all-tags ${LIQUIBASE_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 build-develop-commit-base-image:
@@ -725,7 +738,7 @@ build-develop-commit-base-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
@@ -737,7 +750,7 @@ build-develop-commit-base-image:
         .
     - docker push --quiet --all-tags ${BASE_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 build-develop-commit-backend-image:
@@ -761,7 +774,7 @@ build-develop-commit-backend-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
@@ -779,7 +792,7 @@ build-develop-commit-backend-image:
         .
     - docker push --quiet --all-tags ${BACKEND_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 build-develop-commit-frontend-image:
@@ -803,7 +816,7 @@ build-develop-commit-frontend-image:
     - until docker info &> /dev/null; do println "Wait until docker daemon is started ...\n" && sleep 1; done
     - ip a | grep mtu
     - docker network inspect bridge | grep mtu
-    - docker login -u ${CI_DEPENDENCY_PROXY_USER} -p ${CI_DEPENDENCY_PROXY_PASSWORD} ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker login -u "${CI_DEPENDENCY_PROXY_USER}" -p "${CI_DEPENDENCY_PROXY_PASSWORD}" "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
   script:
     - docker build
@@ -821,7 +834,7 @@ build-develop-commit-frontend-image:
         .
     - docker push --quiet --all-tags ${FRONTEND_IMAGE_NAME}
   after_script:
-    - docker logout ${CI_DEPENDENCY_PROXY_SERVER}
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${CI_REGISTRY}
 
 scan-develop-commit-db-image:

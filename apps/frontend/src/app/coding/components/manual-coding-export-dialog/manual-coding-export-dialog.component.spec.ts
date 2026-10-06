@@ -3,20 +3,25 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSelect } from '@angular/material/select';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { ManualCodingExportDialogComponent } from './manual-coding-export-dialog.component';
+import { ManualCodingExportDialogComponent, ManualCodingExportDialogData } from './manual-coding-export-dialog.component';
 
 describe('ManualCodingExportDialogComponent', () => {
   const createComponent = (
-    data: ConstructorParameters<typeof ManualCodingExportDialogComponent>[1]
+    data: ManualCodingExportDialogData
   ): {
     component: ManualCodingExportDialogComponent;
     dialogRef: { close: jest.Mock };
   } => {
     const dialogRef = { close: jest.fn() };
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: MatDialogRef, useValue: dialogRef },
+        { provide: MAT_DIALOG_DATA, useValue: data }
+      ]
+    });
     return {
-      component: new ManualCodingExportDialogComponent(dialogRef as never, data),
+      component: TestBed.runInInjectionContext(() => new ManualCodingExportDialogComponent()),
       dialogRef
     };
   };
@@ -216,7 +221,6 @@ describe('ManualCodingExportDialogComponent', () => {
       await TestBed.configureTestingModule({
         imports: [
           ManualCodingExportDialogComponent,
-          NoopAnimationsModule,
           TranslateModule.forRoot()
         ],
         providers: [
@@ -260,20 +264,20 @@ describe('ManualCodingExportDialogComponent', () => {
       expect(textContent).not.toContain('ws-admin.export-options.double-coding-methods');
     });
 
-    it('selects and deselects all trainings through the first select option', () => {
+    it('selects and deselects all trainings through the first select option', async () => {
       const select = fixture.debugElement.query(By.directive(MatSelect)).componentInstance as MatSelect;
       const overlayContainer = TestBed.inject(OverlayContainer).getContainerElement();
 
       select.open();
-      fixture.detectChanges();
+      await fixture.whenStable();
       const toggleOption = overlayContainer.querySelector('mat-option') as HTMLElement;
       toggleOption.click();
-      fixture.detectChanges();
+      await fixture.whenStable();
 
       expect(fixture.componentInstance.selectedCoderTrainingIds).toEqual([7, 8]);
 
       toggleOption.click();
-      fixture.detectChanges();
+      await fixture.whenStable();
 
       expect(fixture.componentInstance.selectedCoderTrainingIds).toEqual([]);
     });

@@ -1,10 +1,4 @@
-import {
-  ComponentFixture,
-  TestBed,
-  fakeAsync,
-  tick,
-  flush
-} from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ActivatedRoute } from '@angular/router';
@@ -12,7 +6,6 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { of, Subject, throwError } from 'rxjs';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { CodingJobsComponent } from './coding-jobs.component';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
@@ -162,7 +155,6 @@ describe('CodingJobsComponent', () => {
       imports: [TranslateModule.forRoot(), CodingJobsComponent],
       providers: [
         provideZonelessChangeDetection(),
-        provideNoopAnimations(),
         {
           provide: CodingJobBackendService,
           useValue: codingJobBackendServiceMock
@@ -252,15 +244,20 @@ describe('CodingJobsComponent', () => {
     expect(component.jobsTotal()).toBe(2);
   });
 
-  it('should not emit jobsChanged for a plain reload', fakeAsync(() => {
-    const jobsChangedSpy = jest.spyOn(component.jobsChanged, 'emit');
+  it('should not emit jobsChanged for a plain reload', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      const jobsChangedSpy = jest.spyOn(component.jobsChanged, 'emit');
 
-    component.loadCodingJobs();
-    tick();
-    flush();
+      component.loadCodingJobs();
+      await jest.advanceTimersByTimeAsync(0);
+      await jest.runOnlyPendingTimersAsync();
 
-    expect(jobsChangedSpy).not.toHaveBeenCalled();
-  }));
+      expect(jobsChangedSpy).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   it('should remove the window focus listener on destroy', () => {
     const removeListenerSpy = jest.spyOn(window, 'removeEventListener');
@@ -365,40 +362,45 @@ describe('CodingJobsComponent', () => {
     );
   });
 
-  it('should reload jobs with server-side status, coder, and job name filters', fakeAsync(() => {
-    const getCodingJobs =
-      codingJobBackendServiceMock.getCodingJobs as jest.Mock;
+  it('should reload jobs with server-side status, coder, and job name filters', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      const getCodingJobs =
+        codingJobBackendServiceMock.getCodingJobs as jest.Mock;
 
-    component.selectedCoderId.set(1);
-    component.onCoderFilterChange();
-    expect(getCodingJobs).toHaveBeenLastCalledWith(
-      1,
-      1,
-      50,
-      expect.objectContaining({ coderId: 1 })
-    );
+      component.selectedCoderId.set(1);
+      component.onCoderFilterChange();
+      expect(getCodingJobs).toHaveBeenLastCalledWith(
+        1,
+        1,
+        50,
+        expect.objectContaining({ coderId: 1 })
+      );
 
-    component.selectedCoderId.set(null);
-    component.selectedJobName.set('Job 2');
-    component.onJobNameFilterChange();
-    tick(300);
-    expect(getCodingJobs).toHaveBeenLastCalledWith(
-      1,
-      1,
-      50,
-      expect.objectContaining({ jobName: 'Job 2' })
-    );
+      component.selectedCoderId.set(null);
+      component.selectedJobName.set('Job 2');
+      component.onJobNameFilterChange();
+      await jest.advanceTimersByTimeAsync(300);
+      expect(getCodingJobs).toHaveBeenLastCalledWith(
+        1,
+        1,
+        50,
+        expect.objectContaining({ jobName: 'Job 2' })
+      );
 
-    component.selectedJobName.set(null);
-    component.selectedStatus.set('active');
-    component.onStatusFilterChange();
-    expect(getCodingJobs).toHaveBeenLastCalledWith(
-      1,
-      1,
-      50,
-      expect.objectContaining({ status: 'active' })
-    );
-  }));
+      component.selectedJobName.set(null);
+      component.selectedStatus.set('active');
+      component.onStatusFilterChange();
+      expect(getCodingJobs).toHaveBeenLastCalledWith(
+        1,
+        1,
+        50,
+        expect.objectContaining({ status: 'active' })
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   it('keeps filters and table mounted while coding jobs refresh', () => {
     const response$ = new Subject<{
@@ -481,20 +483,25 @@ describe('CodingJobsComponent', () => {
     initialFixture.destroy();
   });
 
-  it('should handle loading coding jobs failure', fakeAsync(() => {
-    (
-      codingJobBackendServiceMock.getCodingJobs as jest.Mock
-    ).mockReturnValueOnce(throwError(() => new Error('Error')));
+  it('should handle loading coding jobs failure', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      (
+        codingJobBackendServiceMock.getCodingJobs as jest.Mock
+      ).mockReturnValueOnce(throwError(() => new Error('Error')));
 
-    component.loadCodingJobs();
-    tick();
+      component.loadCodingJobs();
+      await jest.advanceTimersByTimeAsync(0);
 
-    expect(matSnackBarMock.open).toHaveBeenCalledWith(
-      'Fehler beim Laden der Kodierjobs',
-      'Schließen',
-      expect.objectContaining({})
-    );
-  }));
+      expect(matSnackBarMock.open).toHaveBeenCalledWith(
+        'Fehler beim Laden der Kodierjobs',
+        'Schließen',
+        expect.objectContaining({})
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   it('should view coding results', () => {
     const job = mockCodingJobs[0] as CodingJob;
@@ -601,7 +608,7 @@ describe('CodingJobsComponent', () => {
   });
 
   it('hides the refresh action when manual refresh is not available', () => {
-    component.showRefreshAction = false;
+    fixture.componentRef.setInput('showRefreshAction', false);
     fixture.detectChanges();
 
     expect(
@@ -619,12 +626,12 @@ describe('CodingJobsComponent', () => {
       'apply'
     );
 
-    component.showApplyActions = false;
+    fixture.componentRef.setInput('showApplyActions', false);
     expect(component.getPrimaryJobAction(mockCodingJobs[1] as CodingJob)).toBe(
       'review'
     );
 
-    component.showApplyActions = true;
+    fixture.componentRef.setInput('showApplyActions', true);
     component.canApplyResults.set(false);
     expect(component.getPrimaryJobAction(mockCodingJobs[1] as CodingJob)).toBe(
       'review'
@@ -819,43 +826,53 @@ describe('CodingJobsComponent', () => {
     );
   });
 
-  it('blocks direct management actions without coding-manager access', fakeAsync(() => {
-    component.canManageCodingJobs.set(false);
-    component.selection.select(component.dataSource.data[0]);
+  it('blocks direct management actions without coding-manager access', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      component.canManageCodingJobs.set(false);
+      component.selection.select(component.dataSource.data[0]);
 
-    component.deleteCodingJob(mockCodingJobs[0] as CodingJob);
-    component.bulkDeleteCodingJobs();
-    component.openTransferCodingCasesDialog();
-    tick();
+      component.deleteCodingJob(mockCodingJobs[0] as CodingJob);
+      component.bulkDeleteCodingJobs();
+      component.openTransferCodingCasesDialog();
+      await jest.advanceTimersByTimeAsync(0);
 
-    expect(matDialogMock.open).not.toHaveBeenCalled();
-    expect(codingJobBackendServiceMock.deleteCodingJob).not.toHaveBeenCalled();
-    expect(codingJobBackendServiceMock.transferCodingCases).not.toHaveBeenCalled();
-    expect(matSnackBarMock.open).toHaveBeenCalledWith(
-      'Keine Berechtigung zum Verwalten von Kodierjobs.',
-      'Schließen',
-      { duration: 4000 }
-    );
-  }));
+      expect(matDialogMock.open).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.deleteCodingJob).not.toHaveBeenCalled();
+      expect(codingJobBackendServiceMock.transferCodingCases).not.toHaveBeenCalled();
+      expect(matSnackBarMock.open).toHaveBeenCalledWith(
+        'Keine Berechtigung zum Verwalten von Kodierjobs.',
+        'Schließen',
+        { duration: 4000 }
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
-  it('should handle bulk delete', fakeAsync(() => {
-    const jobs = [component.dataSource.data[0]];
-    component.selection.select(...jobs);
-    expect(component.selection.selected.length).toBe(1);
+  it('should handle bulk delete', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      const jobs = [component.dataSource.data[0]];
+      component.selection.select(...jobs);
+      expect(component.selection.selected.length).toBe(1);
 
-    (matDialogMock.open as jest.Mock).mockReturnValue({
-      afterClosed: () => of(true)
-    });
+      (matDialogMock.open as jest.Mock).mockReturnValue({
+        afterClosed: () => of(true)
+      });
 
-    component.bulkDeleteCodingJobs();
-    tick(); // Dialog afterClosed
-    flush(); // All deletions
+      component.bulkDeleteCodingJobs();
+      await jest.advanceTimersByTimeAsync(0); // Dialog afterClosed
+      await jest.runOnlyPendingTimersAsync(); // All deletions
 
-    expect(codingJobBackendServiceMock.deleteCodingJob).toHaveBeenCalledTimes(
-      1
-    );
-    expect(matSnackBarMock.open).toHaveBeenCalled();
-  }));
+      expect(codingJobBackendServiceMock.deleteCodingJob).toHaveBeenCalledTimes(
+        1
+      );
+      expect(matSnackBarMock.open).toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   it('should ignore window focus by default', () => {
     const loadSpy = jest.spyOn(component, 'loadCodingJobs');
@@ -864,7 +881,7 @@ describe('CodingJobsComponent', () => {
   });
 
   it('should handle window focus when auto reload is enabled', () => {
-    component.autoReloadOnFocus = true;
+    fixture.componentRef.setInput('autoReloadOnFocus', true);
     const loadSpy = jest.spyOn(component, 'loadCodingJobs');
     window.dispatchEvent(new Event('focus'));
     expect(loadSpy).toHaveBeenCalled();
@@ -945,48 +962,53 @@ describe('CodingJobsComponent', () => {
     );
   });
 
-  it('should handle restart coding job', fakeAsync(() => {
-    const job = mockCodingJobs[0] as CodingJob;
-    (matDialogMock.open as jest.Mock).mockReturnValue({
-      afterClosed: () => of(true)
-    });
-    (
-      codingJobBackendServiceMock.restartCodingJobWithOpenUnits as jest.Mock
-    ).mockReturnValue(of(job));
-    (codingJobBackendServiceMock.startCodingJob as jest.Mock).mockReturnValue(
-      of({
-        total: 1,
-        firstReplayUrl: 'http://replay.url',
-        items: [
-          {
-            unitName: 'Unit 1',
-            variableId: 'Var 1',
-            personLogin: 'Person 1',
-            personCode: 'Code 1',
-            bookletName: 'Booklet 1',
-            replayUrl: 'http://replay.url'
-          }
-        ]
-      })
-    );
-    window.open = jest.fn();
+  it('should handle restart coding job', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      const job = mockCodingJobs[0] as CodingJob;
+      (matDialogMock.open as jest.Mock).mockReturnValue({
+        afterClosed: () => of(true)
+      });
+      (
+        codingJobBackendServiceMock.restartCodingJobWithOpenUnits as jest.Mock
+      ).mockReturnValue(of(job));
+      (codingJobBackendServiceMock.startCodingJob as jest.Mock).mockReturnValue(
+        of({
+          total: 1,
+          firstReplayUrl: 'http://replay.url',
+          items: [
+            {
+              unitName: 'Unit 1',
+              variableId: 'Var 1',
+              personLogin: 'Person 1',
+              personCode: 'Code 1',
+              bookletName: 'Booklet 1',
+              replayUrl: 'http://replay.url'
+            }
+          ]
+        })
+      );
+      window.open = jest.fn();
 
-    component.restartCodingJob(job);
-    tick();
+      component.restartCodingJob(job);
+      await jest.advanceTimersByTimeAsync(0);
 
-    expect(matDialogMock.open).toHaveBeenCalled();
-    expect(
-      codingJobBackendServiceMock.restartCodingJobWithOpenUnits
-    ).toHaveBeenCalledWith(1, job.id);
-    expect(codingJobBackendServiceMock.startCodingJob).toHaveBeenCalledWith(
-      1,
-      job.id
-    );
-    expect(window.open).toHaveBeenCalled();
-    expect((window.open as jest.Mock).mock.calls[0][0]).toContain(
-      'onlyOpen=true'
-    );
-  }));
+      expect(matDialogMock.open).toHaveBeenCalled();
+      expect(
+        codingJobBackendServiceMock.restartCodingJobWithOpenUnits
+      ).toHaveBeenCalledWith(1, job.id);
+      expect(codingJobBackendServiceMock.startCodingJob).toHaveBeenCalledWith(
+        1,
+        job.id
+      );
+      expect(window.open).toHaveBeenCalled();
+      expect((window.open as jest.Mock).mock.calls[0][0]).toContain(
+        'onlyOpen=true'
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   it('should calculate next id correctly', () => {
     expect(

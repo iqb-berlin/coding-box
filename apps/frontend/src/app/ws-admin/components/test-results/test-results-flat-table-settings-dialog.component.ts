@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogModule,
@@ -56,6 +56,9 @@ export type TestResultsFlatTableSettingsDialogResult = {
   templateUrl: './test-results-flat-table-settings-dialog.component.html'
 })
 export class TestResultsFlatTableSettingsDialogComponent {
+  private dialogRef = inject<MatDialogRef<TestResultsFlatTableSettingsDialogComponent, TestResultsFlatTableSettingsDialogResult | undefined>>(MatDialogRef);
+  data = inject<TestResultsFlatTableSettingsDialogData>(MAT_DIALOG_DATA);
+
   protected audioLowThreshold: number;
   protected shortProcessingThresholdMs: number;
   protected longLoadingThresholdMs: number;
@@ -71,13 +74,9 @@ export class TestResultsFlatTableSettingsDialogComponent {
   protected availableSessionOs: string[];
   protected availableSessionScreens: string[];
 
-  constructor(
-    private dialogRef: MatDialogRef<
-    TestResultsFlatTableSettingsDialogComponent,
-    TestResultsFlatTableSettingsDialogResult | undefined
-    >,
-    @Inject(MAT_DIALOG_DATA) public data: TestResultsFlatTableSettingsDialogData
-  ) {
+  constructor() {
+    const data = this.data;
+
     this.audioLowThreshold = Number(data.audioLowThreshold ?? 0.9);
     this.shortProcessingThresholdMs = Number(
       data.shortProcessingThresholdMs ?? 60000

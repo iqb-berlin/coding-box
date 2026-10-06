@@ -1,9 +1,7 @@
 import {
-  Component,
-  Input,
-  OnInit,
-  inject, ChangeDetectionStrategy, OnDestroy
+  Component, DestroyRef, OnInit, inject, signal, input, ChangeDetectionStrategy, OnDestroy
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -76,6 +74,7 @@ import { TestPersonCodingJobResultDialogComponent } from '../test-person-coding-
   ]
 })
 export class TestPersonCodingComponent implements OnInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
   private testPersonCodingService = inject(TestPersonCodingService);
   private snackBar = inject(MatSnackBar);
   private appService = inject(AppService);
@@ -84,8 +83,8 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
   private backendMessageTranslator = inject(BackendMessageTranslatorService);
   private dialog = inject(MatDialog);
   private codingBackgroundJobsService = inject(CodingBackgroundJobsService);
-  @Input() initialJobId: string | null = null;
-  @Input() initialAutoCoderRun: 1 | 2 | null = null;
+  readonly initialJobId = input<string | null>(null);
+  readonly initialAutoCoderRun = input<1 | 2 | null>(null);
 
   Math = Math;
   get workspaceId(): number {
@@ -110,38 +109,48 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
     'actions'
   ];
 
-  protected isLoading = false;
+  protected readonly isLoading = signal(false);
 
   currentPage = 1;
   pageSize = 20;
 
-  activeJobId: string | null = null;
-  jobStatus: JobStatus | null = null;
+  readonly activeJobId = signal<string | null>(null);
+  readonly jobStatus = signal<JobStatus | null>(null);
   jobStatusInterval: number | null = null;
   lastObservedJobId: string | null = null;
   private observedJobStatuses = new Map<string, JobStatus['status']>();
   private hasShownJobStatusPollingError = false;
 
-  protected allJobs: JobInfo[] = [];
-  protected jobsLoading = false;
+  private jobsRequestId = 0;
+  private latestAppliedJobsRequestId = 0;
+  private groupsRequestId = 0;
+  private latestAppliedGroupsRequestId = 0;
+  private jobStatusPollingGeneration = 0;
+  private jobStatusRequestId = 0;
+  private latestAppliedJobStatusRequestId = 0;
+
+  protected readonly allJobs = signal<JobInfo[]>([]);
+  protected readonly jobsLoading = signal(false);
   jobsRefreshInterval: number | null = null;
 
-  protected availableGroups: WorkspaceGroupCodingStats[] = [];
+  protected readonly availableGroups = signal<WorkspaceGroupCodingStats[]>([]);
   protected selectedGroups: string[] = [];
-  protected groupsLoading = false;
+  protected readonly groupsLoading = signal(false);
 
   protected autoCoderRun: 1 | 2 = 1;
   private lastNotifiedCompletedJobId: string | null = null;
 
   ngOnInit(): void {
-    if (this.initialAutoCoderRun) {
-      this.autoCoderRun = this.initialAutoCoderRun;
+    const initialAutoCoderRun = this.initialAutoCoderRun();
+    if (initialAutoCoderRun) {
+      this.autoCoderRun = initialAutoCoderRun;
     }
 
-    if (this.initialJobId) {
-      this.activeJobId = this.initialJobId;
-      this.setFreshnessCodingGuard(this.initialJobId, true);
-      this.startJobStatusPolling(this.initialJobId);
+    const initialJobId = this.initialJobId();
+    if (initialJobId) {
+      this.activeJobId.set(initialJobId);
+      this.setFreshnessCodingGuard(initialJobId, true);
+      this.startJobStatusPolling(initialJobId);
     }
 
     this.loadAllJobs();
@@ -150,16 +159,23 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
   }
 
   loadWorkspaceGroups(): void {
-    this.groupsLoading = true;
+    const workspaceId = this.workspaceId;
+    this.groupsRequestId += 1;
+    const requestId = this.groupsRequestId;
+    this.groupsLoading.set(true);
     this.testPersonCodingService
-      .getWorkspaceGroups(this.workspaceId)
+      .getWorkspaceGroups(workspaceId)
       .pipe(
         tap(groups => {
-          this.availableGroups = groups;
+          if (this.workspaceId !== workspaceId ||
+            requestId < this.latestAppliedGroupsRequestId) return;
+          this.latestAppliedGroupsRequestId = requestId;
+          this.availableGroups.set(groups);
         }),
         finalize(() => {
-          this.groupsLoading = false;
-        })
+          if (requestId === this.groupsRequestId) this.groupsLoading.set(false);
+        }),
+        takeUntilDestroyed(this.destroyRef)
       )
       .subscribe();
   }
@@ -170,37 +186,31 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
   }
 
   loadAllJobs(): void {
-    this.jobsLoading = true;
+    const workspaceId = this.workspaceId;
+    this.jobsRequestId += 1;
+    const requestId = this.jobsRequestId;
+    this.jobsLoading.set(true);
     this.testPersonCodingService
-      .getAllJobs(this.workspaceId)
+      .getAllJobs(workspaceId)
       .pipe(
         tap(jobs => {
-          this.allJobs = jobs;
-          if (this.activeJobId) {
+          if (this.workspaceId !== workspaceId ||
+            requestId < this.latestAppliedJobsRequestId) return;
+          this.latestAppliedJobsRequestId = requestId;
+          this.allJobs.set(jobs);
+          if (this.activeJobId()) {
             const activeJob = jobs.find(
-              job => job.jobId === this.activeJobId
+              job => job.jobId === this.activeJobId()
             );
             if (activeJob) {
-              this.rememberJobStatus(activeJob.jobId, activeJob);
-              this.jobStatus = activeJob;
-              this.updateFreshnessCodingGuardFromStatus(activeJob.jobId, activeJob);
-              if (
-                ['completed', 'failed', 'cancelled', 'paused'].includes(
-                  activeJob.status
-                )
-              ) {
-                this.stopJobStatusPolling();
-
-                if (activeJob.status === 'completed') {
-                  this.handleAutoCodingCompleted(activeJob.jobId);
-                }
-              }
+              this.applyJobStatus(activeJob.jobId, activeJob);
             }
           }
         }),
         finalize(() => {
-          this.jobsLoading = false;
-        })
+          if (requestId === this.jobsRequestId) this.jobsLoading.set(false);
+        }),
+        takeUntilDestroyed(this.destroyRef)
       )
       .subscribe();
   }
@@ -226,7 +236,7 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
   }
 
   loadCodingList(page = 1, limit = 20): void {
-    this.isLoading = true;
+    this.isLoading.set(true);
     this.currentPage = page;
     this.pageSize = limit;
     const serverUrl = window.location.origin;
@@ -236,8 +246,9 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
       .pipe(
         tap(result => this.codingList$.next(result)),
         finalize(() => {
-          this.isLoading = false;
-        })
+          this.isLoading.set(false);
+        }),
+        takeUntilDestroyed(this.destroyRef)
       )
       .subscribe();
   }
@@ -254,14 +265,14 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.isLoading = true;
+    this.isLoading.set(true);
 
     this.testPersonCodingService
       .codeTestPersons(this.workspaceId, testPersonIds, this.autoCoderRun)
       .pipe(
         tap(result => {
           if (result && result.jobId) {
-            this.activeJobId = result.jobId;
+            this.activeJobId.set(result.jobId);
             this.startJobStatusPolling(result.jobId);
             const translatedMessage = result.message ?
               this.backendMessageTranslator.translateMessage(result.message) :
@@ -309,19 +320,21 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
           return of(null);
         }),
         finalize(() => {
-          this.isLoading = false;
-        })
+          this.isLoading.set(false);
+        }),
+        takeUntilDestroyed(this.destroyRef)
       )
       .subscribe();
   }
 
   startJobStatusPolling(jobId: string): void {
+    this.jobStatusPollingGeneration += 1;
     if (this.jobStatusInterval) {
       clearInterval(this.jobStatusInterval);
     }
 
-    this.activeJobId = jobId;
-    this.jobStatus = null;
+    this.activeJobId.set(jobId);
+    this.jobStatus.set(null);
     this.hasShownJobStatusPollingError = false;
     this.jobStatusInterval = window.setInterval(() => {
       this.loadJobStatus(jobId);
@@ -330,9 +343,18 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
   }
 
   private loadJobStatus(jobId: string): void {
+    const workspaceId = this.workspaceId;
+    const generation = this.jobStatusPollingGeneration;
+    this.jobStatusRequestId += 1;
+    const requestId = this.jobStatusRequestId;
     this.testPersonCodingService
-      .getJobStatus(this.workspaceId, jobId)
+      .getJobStatus(workspaceId, jobId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(status => {
+        if (this.activeJobId() !== jobId || this.workspaceId !== workspaceId ||
+          generation !== this.jobStatusPollingGeneration ||
+          requestId < this.latestAppliedJobStatusRequestId) return;
+        this.latestAppliedJobStatusRequestId = requestId;
         if (!('status' in status)) {
           if (!this.hasShownJobStatusPollingError) {
             this.hasShownJobStatusPollingError = true;
@@ -354,60 +376,65 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
         }
 
         this.hasShownJobStatusPollingError = false;
-        this.jobStatus = status;
-        this.rememberJobStatus(jobId, status);
-        this.updateFreshnessCodingGuardFromStatus(jobId, status);
-
-        if (
-          ['completed', 'failed', 'cancelled', 'paused'].includes(
-            status.status
-          )
-        ) {
-          this.stopJobStatusPolling();
-
-          if (status.status === 'completed') {
-            const warnings = status.result?.warnings || [];
-            this.snackBar.open(
-              this.translateService.instant(
-                warnings.length > 0 ?
-                  'test-person-coding.job-completed-with-warnings' :
-                  'test-person-coding.job-completed',
-                { warning: warnings.join(' ') }
-              ),
-              this.translateService.instant('close'),
-              { duration: warnings.length > 0 ? 8000 : 3000 }
-            );
-            this.handleAutoCodingCompleted(jobId);
-          } else if (status.status === 'failed') {
-            this.snackBar.open(
-              this.translateService.instant(
-                'test-person-coding.job-completed-with-error',
-                {
-                  error:
-                    status.error ||
-                    this.translateService.instant('error.unknown')
-                }
-              ),
-              this.translateService.instant('close'),
-              { duration: 5000 }
-            );
-          } else if (status.status === 'cancelled') {
-            this.snackBar.open(
-              this.translateService.instant(
-                'test-person-coding.job-cancelled'
-              ),
-              this.translateService.instant('close'),
-              { duration: 3000 }
-            );
-          } else if (status.status === 'paused') {
-            this.snackBar.open(
-              this.translateService.instant('test-person-coding.job-paused'),
-              this.translateService.instant('close'),
-              { duration: 3000 }
-            );
-          }
-        }
+        this.applyJobStatus(jobId, status);
       });
+  }
+
+  private applyJobStatus(jobId: string, status: JobStatus): void {
+    this.jobStatus.set(status);
+    this.rememberJobStatus(jobId, status);
+    this.updateFreshnessCodingGuardFromStatus(jobId, status);
+
+    if (
+      ['completed', 'failed', 'cancelled', 'paused'].includes(
+        status.status
+      )
+    ) {
+      // Invalidate other pending responses before emitting terminal feedback.
+      this.stopJobStatusPolling();
+
+      if (status.status === 'completed') {
+        const warnings = status.result?.warnings || [];
+        this.snackBar.open(
+          this.translateService.instant(
+            warnings.length > 0 ?
+              'test-person-coding.job-completed-with-warnings' :
+              'test-person-coding.job-completed',
+            { warning: warnings.join(' ') }
+          ),
+          this.translateService.instant('close'),
+          { duration: warnings.length > 0 ? 8000 : 3000 }
+        );
+        this.handleAutoCodingCompleted(jobId);
+      } else if (status.status === 'failed') {
+        this.snackBar.open(
+          this.translateService.instant(
+            'test-person-coding.job-completed-with-error',
+            {
+              error:
+                status.error ||
+                this.translateService.instant('error.unknown')
+            }
+          ),
+          this.translateService.instant('close'),
+          { duration: 5000 }
+        );
+      } else if (status.status === 'cancelled') {
+        this.snackBar.open(
+          this.translateService.instant(
+            'test-person-coding.job-cancelled'
+          ),
+          this.translateService.instant('close'),
+          { duration: 3000 }
+        );
+      } else if (status.status === 'paused') {
+        this.snackBar.open(
+          this.translateService.instant('test-person-coding.job-paused'),
+          this.translateService.instant('close'),
+          { duration: 3000 }
+        );
+      }
+    }
   }
 
   getLastObservedJobStatus(jobId?: string | null): JobStatus['status'] | null {
@@ -421,12 +448,13 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
   }
 
   stopJobStatusPolling(): void {
+    this.jobStatusPollingGeneration += 1;
     if (this.jobStatusInterval) {
       clearInterval(this.jobStatusInterval);
       this.jobStatusInterval = null;
     }
-    this.activeJobId = null;
-    this.jobStatus = null;
+    this.activeJobId.set(null);
+    this.jobStatus.set(null);
     this.hasShownJobStatusPollingError = false;
   }
 
@@ -461,7 +489,7 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
   }
 
   private isFreshnessCodingJob(jobId: string, status?: JobStatus): boolean {
-    return jobId === this.initialJobId || status?.source === 'coding-freshness';
+    return jobId === this.initialJobId() || status?.source === 'coding-freshness';
   }
 
   private setFreshnessCodingGuard(jobId: string, isRunning: boolean): void {
@@ -474,11 +502,12 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
   }
 
   protected cancelJob(jobId?: string): void {
-    const idToCancel = jobId || this.activeJobId;
+    const idToCancel = jobId || this.activeJobId();
     if (!idToCancel) return;
 
     this.testPersonCodingService
       .cancelJob(this.workspaceId, idToCancel)
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(result => {
         if (result.success) {
           const translatedMessage =
@@ -510,6 +539,7 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
 
     this.testPersonCodingService
       .deleteJob(this.workspaceId, jobId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(result => {
         if (result.success) {
           const translatedMessage =
@@ -541,6 +571,7 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
 
     this.testPersonCodingService
       .restartJob(this.workspaceId, jobId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(result => {
         if (result.success) {
           const translatedMessage = result.message ?
@@ -552,7 +583,7 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
             { duration: 3000 }
           );
           if (result.jobId) {
-            this.activeJobId = result.jobId;
+            this.activeJobId.set(result.jobId);
             this.startJobStatusPolling(result.jobId);
             const translatedBackgroundMessage = result.message ?
               this.backendMessageTranslator.translateMessage(result.message) :
@@ -607,8 +638,8 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
   }
 
   protected codeAllTestPersons(): void {
-    if (this.availableGroups.length > 0) {
-      this.selectedGroups = this.availableGroups.map(
+    if (this.availableGroups().length > 0) {
+      this.selectedGroups = this.availableGroups().map(
         group => group.groupName
       );
       this.codeTestPersons(this.selectedGroups.join(','));
@@ -622,7 +653,8 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.isLoading = true;
+    this.isLoading.set(true);
+    let codingStarted = false;
     this.testResultService
       .getTestPersons(this.workspaceId)
       .pipe(
@@ -642,8 +674,10 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
           return of([]);
         }),
         finalize(() => {
-          this.isLoading = false;
-        })
+          // The coding request owns the loading state once the lookup hands over.
+          if (!codingStarted) this.isLoading.set(false);
+        }),
+        takeUntilDestroyed(this.destroyRef)
       )
       .subscribe(testPersonIds => {
         if (testPersonIds.length === 0) {
@@ -655,6 +689,7 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
           return;
         }
         const testPersonIdsString = testPersonIds.join(',');
+        codingStarted = true;
         this.codeTestPersons(testPersonIdsString);
         this.snackBar.open(
           this.translateService.instant(
@@ -697,7 +732,7 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
   }
 
   protected selectAllGroups(): void {
-    this.selectedGroups = this.availableGroups.map(group => group.groupName);
+    this.selectedGroups = this.availableGroups().map(group => group.groupName);
   }
 
   protected truncateText(text: string, maxLength: number): string {

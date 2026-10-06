@@ -1,7 +1,7 @@
 <div class="coder-trainings-container">
   <div class="header-row">
     <div class="header-actions">
-      @if (showCreateButton) {
+      @if (showCreateButton()) {
         <button mat-stroked-button color="primary" (click)="createTraining()">
           <mat-icon>add</mat-icon>
           {{ 'coding.trainings.create.button' | translate }}

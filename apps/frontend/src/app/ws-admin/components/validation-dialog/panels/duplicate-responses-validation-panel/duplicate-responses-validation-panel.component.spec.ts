@@ -1,8 +1,10 @@
 import { ChangeDetectorRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { of } from 'rxjs';
 import { DuplicateResponseSelectionDto } from '../../../../models/duplicate-response-selection.dto';
 import { DuplicateResponsesValidationPanelComponent } from './duplicate-responses-validation-panel.component';
+import { DuplicateResponsesValidationService } from '../../../../services/validation';
 
 describe('DuplicateResponsesValidationPanelComponent', () => {
   it('should resolve selected duplicate groups without clearing untouched selections', () => {
@@ -13,12 +15,13 @@ describe('DuplicateResponsesValidationPanelComponent', () => {
       open: jest.fn()
     };
     TestBed.configureTestingModule({
-      providers: [{ provide: ChangeDetectorRef, useValue: { markForCheck: jest.fn() } }]
+      providers: [
+        { provide: ChangeDetectorRef, useValue: { markForCheck: jest.fn() } },
+        { provide: DuplicateResponsesValidationService, useValue: validationService },
+        { provide: MatSnackBar, useValue: snackBar }
+      ]
     });
-    const component = TestBed.runInInjectionContext(() => new DuplicateResponsesValidationPanelComponent(
-      validationService as never,
-      snackBar as never
-    ));
+    const component = TestBed.runInInjectionContext(() => new DuplicateResponsesValidationPanelComponent());
     jest.spyOn(component, 'onValidate').mockImplementation();
 
     component.duplicateResponses.set([

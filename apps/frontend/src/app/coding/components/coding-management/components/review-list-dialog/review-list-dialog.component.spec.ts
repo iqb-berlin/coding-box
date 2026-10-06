@@ -1,7 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { ReviewListDialogComponent } from './review-list-dialog.component';
 import { CodingManagementUiService } from '../../services/coding-management-ui.service';
@@ -42,8 +41,7 @@ describe('ReviewListDialogComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         ReviewListDialogComponent,
-        TranslateModule.forRoot(),
-        NoopAnimationsModule
+        TranslateModule.forRoot()
       ],
       providers: [
         {

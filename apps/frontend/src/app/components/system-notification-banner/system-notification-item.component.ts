@@ -1,9 +1,6 @@
 import { DatePipe } from '@angular/common';
 import {
-  Component,
-  EventEmitter,
-  Input,
-  Output, ChangeDetectionStrategy
+  Component, input, output, ChangeDetectionStrategy
 } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -18,11 +15,11 @@ import type { SystemNotificationDto } from '../../../../../../api-dto/system-not
   styleUrl: './system-notification-item.component.scss'
 })
 export class SystemNotificationItemComponent {
-  @Input({ required: true }) notification!: SystemNotificationDto;
+  readonly notification = input.required<SystemNotificationDto>();
 
-  @Input() preview = false;
+  readonly preview = input(false);
 
-  @Output() dismissed = new EventEmitter<SystemNotificationDto>();
+  readonly dismissed = output<SystemNotificationDto>();
 
   protected icon(): string {
     return {
@@ -30,6 +27,6 @@ export class SystemNotificationItemComponent {
       maintenance: 'build',
       update: 'system_update',
       info: 'info'
-    }[this.notification.type];
+    }[this.notification().type];
   }
 }

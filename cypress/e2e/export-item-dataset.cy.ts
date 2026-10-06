@@ -99,6 +99,18 @@ describe('Itemdatensatz-Export', () => {
 
     cy.wait('@startExport');
     cy.get('coding-box-export-toast').should('contain.text', 'Itemdatensatz');
+    // Electron's native Enter dispatch omits button activation; use Space for the nested button.
+    cy.get('coding-box-export-toast .collapse-btn').focus().should('have.focus');
+    cy.press(Cypress.Keyboard.Keys.SPACE);
+    cy.get('coding-box-export-toast .toast-content').should('not.exist');
+    cy.get('coding-box-export-toast .collapse-btn').should('have.focus');
+    cy.press(Cypress.Keyboard.Keys.SPACE);
+    cy.get('coding-box-export-toast .toast-content').should('be.visible');
+    cy.get('coding-box-export-toast .toast-header').focus().should('have.focus');
+    cy.press(Cypress.Keyboard.Keys.ENTER);
+    cy.get('coding-box-export-toast .toast-content').should('not.exist');
+    cy.press(Cypress.Keyboard.Keys.ENTER);
+    cy.get('coding-box-export-toast .toast-content').should('be.visible');
   });
 
   it('explains genuine mapping errors and blocks the export', () => {

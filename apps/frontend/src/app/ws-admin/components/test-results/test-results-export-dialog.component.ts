@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import {
   MAT_DIALOG_DATA,
@@ -172,10 +172,8 @@ export type TestResultsExportDialogData = {
   ]
 })
 export class TestResultsExportDialogComponent {
-  constructor(
-    private dialogRef: MatDialogRef<TestResultsExportDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) protected data: TestResultsExportDialogData
-  ) {}
+  private dialogRef = inject<MatDialogRef<TestResultsExportDialogComponent>>(MatDialogRef);
+  protected data = inject<TestResultsExportDialogData>(MAT_DIALOG_DATA);
 
   protected selectExportType(type: 'results' | 'logs'): void {
     this.dialogRef.close({ type });

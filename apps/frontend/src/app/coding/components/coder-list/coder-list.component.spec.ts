@@ -1,5 +1,4 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -31,7 +30,7 @@ describe('CoderListComponent', () => {
     snackBar = { open: jest.fn() };
 
     await TestBed.configureTestingModule({
-      imports: [CoderListComponent, NoopAnimationsModule, TranslateModule.forRoot()],
+      imports: [CoderListComponent, TranslateModule.forRoot()],
       providers: [
         { provide: CoderService, useValue: coderService },
         { provide: MatSnackBar, useValue: snackBar }
@@ -43,10 +42,11 @@ describe('CoderListComponent', () => {
   });
 
   it('loads, filters, selects and edits coders', async () => {
-    component.ngOnInit();
-    component.ngAfterViewInit();
+    fixture.detectChanges();
+    await fixture.whenStable();
 
     expect(component.dataSource.data).toEqual(coders);
+    expect(component.dataSource.sort).toBe(component.sort());
     component.applyFilter('ONE');
     expect(component.dataSource.filter).toBe('one');
     expect(component.isAllSelected()).toBe(false);

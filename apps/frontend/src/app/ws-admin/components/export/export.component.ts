@@ -153,7 +153,7 @@ export class ExportComponent {
     if (!workspaceId) return;
 
     this.responseService
-      .hasGeogebraResponses(workspaceId)
+      .hasGeogebraResponses(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(hasGeoGebraResponses => {
         if (workspaceId !== this.appService.selectedWorkspaceId) return;
         this.hasGeoGebraResponses.set(hasGeoGebraResponses);
@@ -181,7 +181,7 @@ export class ExportComponent {
       domains: this.asOptionLoadResult(
         this.exportJobService.getPsychometricDomainCandidates(workspaceId)
       )
-    }).subscribe(result => {
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (workspaceId !== this.appService.selectedWorkspaceId) return;
       this.applyMissingsProfileResult(
         result.profiles,
@@ -216,7 +216,7 @@ export class ExportComponent {
       items: this.asOptionLoadResult(
         this.exportJobService.getItemDatasetOptions(workspaceId)
       )
-    }).subscribe(result => {
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (workspaceId !== this.appService.selectedWorkspaceId) return;
       this.applyMissingsProfileResult(
         result.profiles,
@@ -245,7 +245,7 @@ export class ExportComponent {
     this.resultsOptionsLoadFailed.set(false);
     this.isLoadingResultsOptions.set(true);
     this.loadingResultsOptionsWorkspaceId = workspaceId;
-    this.missingsProfileService.getExportMissingsProfilesOrThrow(workspaceId)
+    this.missingsProfileService.getExportMissingsProfilesOrThrow(workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: profiles => {
           if (workspaceId !== this.appService.selectedWorkspaceId) return;
@@ -380,7 +380,7 @@ export class ExportComponent {
     this.isStartingExport.set(true);
 
     this.exportJobService
-      .startJob(workspaceId, this.buildExportConfig())
+      .startJob(workspaceId, this.buildExportConfig()).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.snackBar.open(
@@ -391,13 +391,6 @@ export class ExportComponent {
           this.isStartingExport.set(false);
         },
         error: () => {
-          this.snackBar.open(
-            this.translateService.instant(
-              'ws-admin.export.errors.start-failed'
-            ),
-            this.translateService.instant('close'),
-            { duration: 5000 }
-          );
           this.isStartingExport.set(false);
         }
       });

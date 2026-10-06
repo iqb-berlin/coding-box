@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -28,13 +28,13 @@ export type AffectedUnitsDialogResult = {
   ]
 })
 export class AffectedUnitsDialogComponent {
-  protected filterText = '';
+  private dialogRef = inject<MatDialogRef<AffectedUnitsDialogComponent, AffectedUnitsDialogResult>>(MatDialogRef);
+  protected data = inject<{
+    title: string;
+    units: string[];
+  }>(MAT_DIALOG_DATA);
 
-  constructor(
-    private dialogRef: MatDialogRef<AffectedUnitsDialogComponent, AffectedUnitsDialogResult>,
-    @Inject(MAT_DIALOG_DATA)
-    protected data: { title: string; units: string[] }
-  ) {}
+  protected filterText = '';
 
   protected get filteredUnits(): string[] {
     const all = (this.data?.units || []).slice();

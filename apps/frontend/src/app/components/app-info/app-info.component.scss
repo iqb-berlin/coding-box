@@ -109,7 +109,7 @@ $iqb-accent: rgb(0, 96, 100);
   padding: 12px 0 0;
   margin-top: auto;
 
-  a {
+  button {
     width: auto;
     min-width: 200px;
     border-radius: 25px;
@@ -149,7 +149,7 @@ $iqb-accent: rgb(0, 96, 100);
     }
   }
 
-  .impressum a {
+  .impressum button {
     width: 100%;
     min-width: 0;
   }

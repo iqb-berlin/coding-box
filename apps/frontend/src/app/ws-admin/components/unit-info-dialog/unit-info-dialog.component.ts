@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, ChangeDetectionStrategy
+  Component, OnInit, ChangeDetectionStrategy, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -29,16 +29,14 @@ import { XmlViewerComponent } from '../../../shared/components/xml-viewer/xml-vi
   ]
 })
 export class UnitInfoDialogComponent implements OnInit {
+  dialogRef = inject<MatDialogRef<UnitInfoDialogComponent>>(MatDialogRef);
+  protected data = inject<{
+    unitInfo: UnitInfoDto;
+    unitId: string;
+  }>(MAT_DIALOG_DATA);
+
   protected isLoading = true;
   protected errorMessage: string | null = null;
-
-  constructor(
-    public dialogRef: MatDialogRef<UnitInfoDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) protected data: {
-      unitInfo: UnitInfoDto;
-      unitId: string;
-    }
-  ) {}
 
   ngOnInit(): void {
     if (this.data.unitInfo) {

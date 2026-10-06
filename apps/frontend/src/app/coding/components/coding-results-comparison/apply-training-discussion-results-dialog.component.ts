@@ -1,4 +1,4 @@
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   MAT_DIALOG_DATA,
@@ -197,14 +197,11 @@ export interface ApplyTrainingDiscussionResultsDialogResult {
   `]
 })
 export class ApplyTrainingDiscussionResultsDialogComponent {
+  protected dialogRef = inject<MatDialogRef<ApplyTrainingDiscussionResultsDialogComponent, ApplyTrainingDiscussionResultsDialogResult | undefined>>(MatDialogRef);
+  protected data = inject<ApplyTrainingDiscussionResultsDialogData>(MAT_DIALOG_DATA);
+
   protected existingResultStrategy: TrainingDiscussionExistingResultStrategy = 'skip';
   protected jobConflictStrategy: TrainingDiscussionJobConflictStrategy = 'skip';
-
-  constructor(
-    protected dialogRef: MatDialogRef<ApplyTrainingDiscussionResultsDialogComponent, ApplyTrainingDiscussionResultsDialogResult | undefined>,
-    @Inject(MAT_DIALOG_DATA)
-    protected data: ApplyTrainingDiscussionResultsDialogData
-  ) { }
 
   protected confirm(): void {
     this.dialogRef.close({

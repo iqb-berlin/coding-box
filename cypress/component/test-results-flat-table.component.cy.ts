@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { TranslateModule } from '@ngx-translate/core';
 
 import { SERVER_URL } from '../../apps/frontend/src/app/injection-tokens';
 import { AppService } from '../../apps/frontend/src/app/core/services/app.service';
@@ -59,9 +59,9 @@ describe('TestResultsFlatTableComponent', () => {
     ).as('flatResponses');
 
     cy.mount(TestResultsFlatTableComponent, {
+      imports: [TranslateModule.forRoot()],
       providers: [
         provideHttpClient(),
-        provideNoopAnimations(),
         TestResultService,
         { provide: SERVER_URL, useValue: '/api/' },
         { provide: AppService, useClass: AppServiceMock },

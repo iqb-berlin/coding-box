@@ -1,7 +1,11 @@
-import { Injectable, inject, signal } from '@angular/core';
+import {
+  Injectable, inject, signal, OnDestroy
+} from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { firstValueFrom } from 'rxjs';
+import {
+  firstValueFrom, forkJoin, Subject, takeUntil
+} from 'rxjs';
 import { CodingJobBackendService } from '../../coding/services/coding-job-backend.service';
 import {
   Code, CodingScheme, CodeSelectedEvent
@@ -40,7 +44,20 @@ interface CodingContextSnapshot {
 @Injectable({
   providedIn: 'root'
 })
-export class ReplayCodingService {
+export class ReplayCodingService implements OnDestroy {
+  private progressLoadRunId = 0;
+  private readonly progressLoadCancelled = new Subject<void>();
+
+  private cancelProgressLoad(): void {
+    this.progressLoadRunId += 1;
+    this.progressLoadCancelled.next();
+  }
+
+  ngOnDestroy(): void {
+    this.resetCodingData();
+    this.progressLoadCancelled.complete();
+  }
+
   private codingJobBackendService = inject(CodingJobBackendService);
   private translate = inject(TranslateService);
   private snackBar = inject(MatSnackBar);
@@ -255,6 +272,7 @@ export class ReplayCodingService {
   private recoveredCodingJobCommentChanged = false;
 
   resetCodingData() {
+    this.cancelProgressLoad();
     this.codingDataRunId += 1;
     this.codingScheme = null;
     this.codingSchemeSource = null;
@@ -475,31 +493,26 @@ export class ReplayCodingService {
   }
 
   async loadSavedCodingProgress(workspaceId: number, jobId: number): Promise<void> {
+    this.cancelProgressLoad();
     if (!jobId || !workspaceId) return;
 
+    const runId = this.progressLoadRunId;
+    const authTokenArg = this.authTokenArg;
     this.resetLoadedCodingState();
 
-    try {
-      const savedProgress = await firstValueFrom(
-        this.codingJobBackendService.getCodingProgress(workspaceId, jobId, ...this.authTokenArg)
-      ) as { [key: string]: SavedCode };
-      this.applySavedProgress(savedProgress);
-
-      const savedNotes = await firstValueFrom(
-        this.codingJobBackendService.getCodingNotes(workspaceId, jobId, ...this.authTokenArg)
-      );
-      this.applySavedNotes(savedNotes ?? {});
-
-      const codingJob = await firstValueFrom(
-        this.codingJobBackendService.getCodingJob(workspaceId, jobId, ...this.authTokenArg)
-      );
-      this.setCodingJobMetadata(codingJob);
-    } catch (error) {
-      // Ignore errors when loading saved coding progress
-    }
+    const saved = await firstValueFrom(forkJoin({
+      progress: this.codingJobBackendService.getCodingProgress(workspaceId, jobId, ...authTokenArg),
+      notes: this.codingJobBackendService.getCodingNotes(workspaceId, jobId, ...authTokenArg),
+      job: this.codingJobBackendService.getCodingJob(workspaceId, jobId, ...authTokenArg)
+    }).pipe(takeUntil(this.progressLoadCancelled)), { defaultValue: null });
+    if (!saved || runId !== this.progressLoadRunId) return;
+    this.applySavedProgress(saved.progress as Record<string, SavedCode>);
+    this.applySavedNotes(saved.notes ?? {});
+    this.setCodingJobMetadata(saved.job);
   }
 
   applyReplayCodingSession(session: ReplayCodingSessionDto): void {
+    this.cancelProgressLoad();
     this.resetLoadedCodingState();
     const progress = Object.fromEntries(
       Object.entries(session.progress)
@@ -851,6 +864,7 @@ export class ReplayCodingService {
   }
 
   getOpenCount(unitsData: UnitsReplay | null = null): number {
+    this.codingStateVersion();
     if (!unitsData) return this.openUnitKeys.size;
 
     return unitsData.units.filter((unit: UnitsReplayUnit) => {
@@ -870,18 +884,21 @@ export class ReplayCodingService {
   }
 
   getPreSelectedCodeId(testPerson: string, unitId: string, variableId: string): number | null {
+    this.codingStateVersion();
     const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
     const selectedCode = this.selectedCodes.get(compositeKey);
     return selectedCode ? selectedCode.id : null;
   }
 
   getPreSelectedCodingIssueOptionId(testPerson: string, unitId: string, variableId: string): number | null {
+    this.codingStateVersion();
     const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
     const selectedCode = this.selectedCodes.get(compositeKey);
     return selectedCode && selectedCode.codingIssueOption ? selectedCode.codingIssueOption : null;
   }
 
   getNotes(testPerson: string, unitId: string, variableId: string): string {
+    this.codingStateVersion();
     const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
     return this.notes.get(compositeKey) || '';
   }

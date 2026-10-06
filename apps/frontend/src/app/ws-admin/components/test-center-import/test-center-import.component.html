@@ -11,7 +11,7 @@
     </p>
   </div>
 
-  @if(!authenticated) {
+  @if(!authenticated()) {
   <div class="auth-section">
     <form class="auth-form" [formGroup]="loginForm" (ngSubmit)="authenticate()">
       <div class="form-fields">
@@ -74,7 +74,7 @@
         </button>
       </div>
 
-      @if (authenticationError){
+      @if (authenticationError()){
       <div class="error-message">
         <mat-icon>error</mat-icon>
         <span>{{ 'login-error' | translate }}</span>
@@ -82,15 +82,15 @@
       }
     </form>
   </div>
-  } @else { @if (workspaces){
+  } @else { @if (workspaces()){
   <div class="session-info">
     <div class="user-info">
       <mat-icon>account_circle</mat-icon>
       <h3>
         Angemeldet in
         {{
-          this.testCenterInstance[0]?.label ||
-            this.loginForm.get('testCenterIndividual')?.value
+          this.testCenterInstance()[0]?.label ||
+            loginForm.controls.testCenterIndividual.value
         }}
       </h3>
     </div>
@@ -100,7 +100,7 @@
     </button>
   </div>
   @if (data.importType === 'testFiles' || (data.importType === 'testResults' &&
-  !showTestGroups)){
+  !showTestGroups())){
   <div class="import-section">
     <form
       class="import-form"
@@ -145,7 +145,7 @@
                 Importiert Testergebnisse der Teilnehmenden
               </div>
             </div>
-            @if (importFilesForm.get('responses')?.value) {
+            @if (importFilesForm.controls.responses.value) {
             <mat-form-field appearance="outline">
               <mat-label>Umgang mit vorhandenen Antworten</mat-label>
               <mat-select formControlName="responseOverwriteMode">
@@ -229,7 +229,7 @@
           <mat-form-field appearance="outline">
             <mat-label>Studie auswählen</mat-label>
             <mat-select formControlName="workspace">
-              @for (workspace of workspaces;track workspace){
+              @for (workspace of workspaces();track workspace){
               <mat-option [value]="workspace.id">{{
                 workspace.label
               }}</mat-option>
@@ -240,20 +240,20 @@
         </div>
       </div>
 
-      @if (isLoadingTestGroups || isUploadingTestResults || isUploadingTestFiles) {
+      @if (isLoadingTestGroups() || isUploadingTestResults() || isUploadingTestFiles()) {
       <div class="loading-container">
         <mat-spinner diameter="40"></mat-spinner>
-        @if (isLoadingTestGroups) {
+        @if (isLoadingTestGroups()) {
         <p class="loading-text">
           Verfügbare Testgruppen im Arbeitsbereich werden abgerufen...
         </p>
         <div class="test-groups-load-progress">
           <p class="loading-subtext">{{ testGroupsLoadMessage }}</p>
-          @if ((testGroupsLoadProgress?.totalGroups || 0) > 0) {
+          @if ((testGroupsLoadProgress()?.totalGroups || 0) > 0) {
           <p class="loading-subtext">
             Testgruppen verarbeitet:
-            {{ testGroupsLoadProgress?.processedGroups || 0 }} /
-            {{ testGroupsLoadProgress?.totalGroups || 0 }}
+            {{ testGroupsLoadProgress()?.processedGroups || 0 }} /
+            {{ testGroupsLoadProgress()?.totalGroups || 0 }}
             ({{ testGroupsLoadPercent }}%)
           </p>
           <mat-progress-bar
@@ -263,23 +263,23 @@
           } @else {
           <mat-progress-bar mode="indeterminate"></mat-progress-bar>
           }
-          @if (testGroupsLoadElapsedSeconds > 2) {
+          @if (testGroupsLoadElapsedSeconds() > 2) {
           <p class="loading-subtext">
             Laufzeit: {{ testGroupsLoadElapsedText }}
           </p>
           }
         </div>
-        } @if (isUploadingTestResults) {
+        } @if (isUploadingTestResults()) {
         <p class="loading-text">
           Verfügbare Testgruppen im Arbeitsbereich werden abgerufen...
         </p>
-        } @if (isUploadingTestFiles) {
+        } @if (isUploadingTestFiles()) {
         <p class="loading-text">Testdateien werden hochgeladen...</p>
-        @if (totalUploadsExpected > 0) {
+        @if (totalUploadsExpected() > 0) {
         <div class="upload-progress">
           <p class="loading-subtext">
-            Uploads abgeschlossen: {{ completedUploads }} /
-            {{ totalUploadsExpected }}
+            Uploads abgeschlossen: {{ completedUploads() }} /
+            {{ totalUploadsExpected() }}
           </p>
           <mat-progress-bar
             mode="determinate"
@@ -287,7 +287,7 @@
           ></mat-progress-bar>
         </div>
         }
-        @if (uploadProgressDetails && visibleOptionProgress.length > 0) {
+        @if (uploadProgressDetails() && visibleOptionProgress.length > 0) {
         <div class="option-progress-list">
           @for (option of visibleOptionProgress; track option.optionKey) {
           <div class="option-progress-item">
@@ -304,14 +304,14 @@
           </div>
           }
         </div>
-        } @if (uploadProgressDetails?.currentFile) {
+        } @if (uploadProgressDetails()?.currentFile) {
         <p class="loading-subtext">
-          Aktuell wird verarbeitet: {{ uploadProgressDetails?.currentFile }}
+          Aktuell wird verarbeitet: {{ uploadProgressDetails()?.currentFile }}
         </p>
         }
         }
       </div>
-      } @if (!isLoadingTestGroups && !isUploadingTestResults && !isUploadingTestFiles) {
+      } @if (!isLoadingTestGroups() && !isUploadingTestResults() && !isUploadingTestFiles()) {
       <div class="form-actions">
         @if (data.importType === 'testResults') {
         <button
@@ -335,17 +335,22 @@
         </button>
         }
       </div>
-      } @if(filesSelectionError){
+      } @if(filesSelectionError()){
       <div class="error-message">
         <mat-icon>error</mat-icon>
         <span>Bitte mindestens eine Import Option auswählen</span>
       </div>
-      } @if(testGroupsLoadError){
+      } @if(testGroupsLoadError()){
       <div class="error-message">
         <mat-icon>error</mat-icon>
-        <span>{{ testGroupsLoadError }}</span>
+        <span>{{ testGroupsLoadError() }}</span>
       </div>
-      } @if (authenticationError){
+      } @if (uploadError()) {
+      <div class="error-message">
+        <mat-icon>error</mat-icon>
+        <span>{{ uploadError() }}</span>
+      </div>
+      } @if (authenticationError()){
       <div class="error-message">
         <mat-icon>error</mat-icon>
         <span>{{ 'login-error' | translate }}</span>
@@ -353,7 +358,7 @@
       }
     </form>
   </div>
-  } @if (data.importType === 'testResults' && showTestGroups){
+  } @if (data.importType === 'testResults' && showTestGroups()){
   <div class="testgroups-section">
     <div class="section-header">
       <div class="section-header-content">
@@ -373,15 +378,15 @@
       </div>
     </div>
 
-    @if (isUploadingTestResults) {
+    @if (isUploadingTestResults()) {
     <div class="loading-container">
       <mat-spinner diameter="40"></mat-spinner>
-      <p class="loading-text">{{ loadingMessage }}</p>
-      @if (totalUploadsExpected > 0) {
+      <p class="loading-text">{{ loadingMessage() }}</p>
+      @if (totalUploadsExpected() > 0) {
       <div class="upload-progress">
         <p class="loading-subtext">
-          Uploads abgeschlossen: {{ completedUploads }} /
-          {{ totalUploadsExpected }}
+          Uploads abgeschlossen: {{ completedUploads() }} /
+          {{ totalUploadsExpected() }}
         </p>
         <mat-progress-bar
           mode="determinate"
@@ -389,25 +394,25 @@
         ></mat-progress-bar>
       </div>
       <p class="loading-subtext">Fortschritt: {{ uploadProgressPercent }}%</p>
-      } @else if (importProgressPercent > 0) {
-      <p class="loading-subtext">Fortschritt: {{ importProgressPercent }}%</p>
+      } @else if (importProgressPercent() > 0) {
+      <p class="loading-subtext">Fortschritt: {{ importProgressPercent() }}%</p>
       }
     </div>
-    } @if (!isUploadingTestResults) {
-      @if (uploadError) {
+    } @if (!isUploadingTestResults()) {
+      @if (uploadError()) {
       <div class="error-message">
         <mat-icon>error</mat-icon>
-        <span>{{ uploadError }}</span>
+        <span>{{ uploadError() }}</span>
       </div>
       }
-      @if (testGroups.length === 0) {
+      @if (testGroups().length === 0) {
       <div class="empty-state">
         <mat-icon>info</mat-icon>
         <span>Keine Testgruppen gefunden.</span>
       </div>
       } @else {
       <div class="table-container">
-        <table mat-table [dataSource]="testGroups" class="testgroups-table">
+        <table mat-table [dataSource]="testGroups()" class="testgroups-table">
         <ng-container matColumnDef="select">
           <th mat-header-cell *matHeaderCellDef>
             <mat-checkbox
@@ -522,7 +527,7 @@
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  @if (testGroups && testGroups.length > 0) {
+  @if (testGroups() && testGroups().length > 0) {
   <button
     mat-raised-button
     [disabled]="this.selectedRows.length === 0"
@@ -535,7 +540,7 @@
   }
   <button
     mat-stroked-button
-    [disabled]="isUploadingTestFiles || isUploadingTestResults"
+    [disabled]="isUploadingTestFiles() || isUploadingTestResults()"
     [mat-dialog-close]="true"
   >
     {{ 'close' | translate }}

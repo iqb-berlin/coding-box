@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, Inject, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogModule,
@@ -45,11 +45,9 @@ interface RefreshStat {
   styleUrls: ['./job-definition-refresh-dialog.component.scss']
 })
 export class JobDefinitionRefreshDialogComponent {
-  constructor(
-    public dialogRef: MatDialogRef<JobDefinitionRefreshDialogComponent, boolean>,
-    @Inject(MAT_DIALOG_DATA) protected data: JobDefinitionRefreshDialogData,
-    private translateService: TranslateService
-  ) {}
+  dialogRef = inject<MatDialogRef<JobDefinitionRefreshDialogComponent, boolean>>(MatDialogRef);
+  protected data = inject<JobDefinitionRefreshDialogData>(MAT_DIALOG_DATA);
+  private translateService = inject(TranslateService);
 
   protected get preview(): JobDefinitionRefreshPreviewDto {
     return this.data.preview;

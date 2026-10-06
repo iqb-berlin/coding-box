@@ -67,17 +67,6 @@
           "extractLicenses": false,
           "sourceMap": true,
           "namedChunks": true
-        },
-        "zoneless": {
-          "polyfills": [],
-          "outputPath": {
-            "base": "dist/apps/frontend-zoneless",
-            "browser": ""
-          },
-          "optimization": false,
-          "extractLicenses": false,
-          "sourceMap": true,
-          "namedChunks": true
         }
       },
       "defaultConfiguration": "production"
@@ -90,9 +79,6 @@
         },
         "development": {
           "buildTarget": "frontend:build:development"
-        },
-        "zoneless": {
-          "buildTarget": "frontend:build:zoneless"
         }
       },
       "options": {
@@ -113,7 +99,8 @@
         "lintFilePatterns": [
           "apps/frontend/src/**/*.ts",
           "apps/frontend/src/**/*.html"
-        ]
+        ],
+        "maxWarnings": 0
       }
     },
     "test": {
@@ -123,11 +110,26 @@
       ],
       "options": {
         "jestConfig": "apps/frontend/jest.config.ts",
-        "passWithNoTests": true
+        "passWithNoTests": false
+      },
+      "configurations": {
+        "ci": {
+          "ci": true,
+          "codeCoverage": true
+        }
       }
     },
     "e2e": {
       "executor": "@nx/cypress:cypress",
+      "inputs": [
+        "default",
+        "^production",
+        "frontendE2e",
+        "{workspaceRoot}/scripts/qa/hash-frontend-artifact.mjs",
+        {
+          "runtime": "node scripts/qa/hash-frontend-artifact.mjs"
+        }
+      ],
       "options": {
         "cypressConfig": "cypress.config.ts",
         "testingType": "e2e",
@@ -137,10 +139,42 @@
         "production": {
           "devServerTarget": "frontend:serve:production"
         },
-        "zoneless": {
-          "devServerTarget": "frontend:serve:zoneless",
-          "cypressConfig": "cypress.zoneless.config.ts"
+        "ci": {
+          "devServerTarget": "frontend:serve-static"
         }
+      }
+    },
+    "component-test": {
+      "executor": "@nx/cypress:cypress",
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production",
+        "frontendE2e"
+      ],
+      "outputs": [
+        "{workspaceRoot}/cypress/component-screenshots",
+        "{workspaceRoot}/cypress/component-videos"
+      ],
+      "options": {
+        "cypressConfig": "cypress.config.ts",
+        "testingType": "component",
+        "devServerTarget": "frontend:build",
+        "skipServe": true
+      }
+    },
+    "test-quality-gates": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node --test scripts/qa/frontend-quality-gates.test.mjs"
+      }
+    },
+    "test-dependency-patches": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node --test scripts/qa/dependency-patches.test.mjs"
       }
     },
     "test-e2e-harness": {
@@ -157,8 +191,8 @@
         "command": "node scripts/e2e/replay/run-replay-e2e.mjs"
       },
       "configurations": {
-        "zoneless": {
-          "command": "node scripts/e2e/replay/run-replay-e2e.mjs --zoneless"
+        "production": {
+          "command": "node scripts/e2e/replay/run-replay-e2e.mjs --production"
         }
       }
     },
@@ -176,22 +210,9 @@
         "command": "node scripts/e2e/replay/run-replay-e2e.mjs --auth"
       },
       "configurations": {
-        "zoneless": {
-          "command": "node scripts/e2e/replay/run-replay-e2e.mjs --auth --zoneless"
-        },
         "production": {
           "command": "node scripts/e2e/replay/run-replay-e2e.mjs --auth --production"
         }
-      }
-    },
-    "test-zoneless": {
-      "executor": "@nx/jest:jest",
-      "outputs": [
-        "{workspaceRoot}/coverage/apps/frontend-zoneless"
-      ],
-      "options": {
-        "jestConfig": "apps/frontend/jest.zoneless.config.ts",
-        "passWithNoTests": false
       }
     },
     "zoneless-inventory": {
@@ -220,6 +241,18 @@
       "cache": false,
       "options": {
         "command": "node --test scripts/qa/zoneless-inventory.test.mjs"
+      }
+    },
+    "serve-static": {
+      "executor": "@nx/web:file-server",
+      "continuous": true,
+      "cache": false,
+      "options": {
+        "staticFilePath": "dist/apps/frontend",
+        "watch": false,
+        "spa": true,
+        "host": "127.0.0.1",
+        "port": 4200
       }
     }
   }

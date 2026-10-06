@@ -27,6 +27,7 @@ describe('Workspace access rights', () => {
     }).as('saveRights');
     cy.visit('/');
     cy.wait('@authData');
+    cy.get('coding-box-home').should('be.visible');
     cy.window().then(win => { win.location.hash = '/admin/users'; });
     cy.wait('@workspaceList');
     cy.contains('coding-box-users-selection mat-row', 'e2e-user').find('mat-checkbox').click();
@@ -78,6 +79,7 @@ describe('Workspace access rights', () => {
     }).as('saveRights');
     cy.visit('/');
     cy.wait('@authData');
+    cy.get('coding-box-home').should('be.visible');
     cy.window().then(win => { win.location.hash = '/admin/users'; });
     cy.wait('@workspaceList');
     cy.contains('coding-box-users-selection mat-row', 'e2e-user').find('mat-checkbox').click();
@@ -109,6 +111,7 @@ describe('Workspace access rights', () => {
     it(`preserves rights beyond page one when the second page ${failSecondPage ? 'fails' : 'loads'}`, () => {
       let releasePage: (() => void) | undefined;
       let dialogOpen = false;
+      let pendingInitialLists = 0;
       const rows = Array.from({ length: 20 }, (_, index) => ({ id: index + 1, name: `Workspace ${index + 1}` }));
       cy.mockKeycloakAuthentication();
       cy.stubWorkspace({ workspaceId: 5 });
@@ -122,6 +125,7 @@ describe('Workspace access rights', () => {
           return;
         }
         if (request.query.page !== '2') {
+          if (!dialogOpen) pendingInitialLists += 1;
           request.reply({ data: rows, total: 21, page: 1, limit: 20 });
           return;
         }
@@ -130,6 +134,7 @@ describe('Workspace access rights', () => {
           else request.reply({ data: [{ id: 21, name: 'Later workspace' }], total: 21, page: 2, limit: 20 });
         };
         if (!dialogOpen) {
+          pendingInitialLists -= 1;
           reply();
           return;
         }
@@ -144,9 +149,12 @@ describe('Workspace access rights', () => {
       }).as('saveRights');
       cy.visit('/');
       cy.wait('@authData');
+      cy.get('coding-box-home').should('be.visible');
       cy.window().then(win => { win.location.hash = '/admin/users'; });
       cy.contains('coding-box-users-selection mat-row', 'e2e-user').find('mat-checkbox').click();
       cy.wait('@rights');
+      // Keep background pagination out of the gate reserved for the dialog.
+      cy.wrap(null).should(() => { expect(pendingInitialLists).to.equal(0); });
       cy.then(() => { dialogOpen = true; });
       cy.get('coding-box-users-menu button').eq(2).click();
       cy.wrap(null).should(() => { expect(releasePage).to.be.a('function'); });

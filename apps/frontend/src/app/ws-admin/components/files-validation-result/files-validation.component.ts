@@ -1,7 +1,7 @@
 import {
   ChangeDetectionStrategy, Component, DestroyRef, inject, OnInit, signal, computed
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import {
   firstValueFrom, from, Observable, of, Subject, timer
 } from 'rxjs';
@@ -33,6 +33,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { activateOnKeyboard } from '../../../shared/utils/keyboard-activation.util';
 import { WorkspaceService } from '../../../workspace/services/workspace.service';
 import { FileService } from '../../../shared/services/file/file.service';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
@@ -180,6 +181,8 @@ type FilesValidationView = Omit<FilesValidation, ValidationSectionKey> & {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class FilesValidationDialogComponent implements OnInit {
+  protected readonly onActionKeydown = activateOnKeyboard;
+
   dialogRef = inject<MatDialogRef<FilesValidationDialogComponent>>(MatDialogRef);
   private dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
@@ -203,7 +206,15 @@ export class FilesValidationDialogComponent implements OnInit {
   protected readonly replayCompatibilityWarnings = signal<ReplayCompatibilityWarning[]>([]);
   protected readonly validationResults = signal<FilesValidationView[]>([]);
 
-  selection = new SelectionModel<FilteredTestTaker>(true, []);
+  readonly selection = new SelectionModel<FilteredTestTaker>(true, []);
+  private readonly selectionChanges = toSignal(this.selection.changed, { initialValue: null });
+
+  // Read the selected collection lazily, once per render rather than once per batch item.
+  protected readonly selectedTestTakerCount = computed(() => {
+    this.selectionChanges();
+    return this.selection.selected.length;
+  });
+
   readonly duplicateSelection = signal(new Map<string, string>()); // Maps login to selected testTaker file
 
   unusedFilesSelection = new SelectionModel<UnusedTestFile>(true, []);
@@ -417,24 +428,31 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   private resetExpandedFilesLists(results: FilesValidation[]): void {
-    const previous = new Map(this.expandedFilesLists());
-    this.expandedFilesLists.set(new Map());
+    const previous = this.expandedFilesLists();
+    const next = new Map<string, ExpandedFilesLists>();
     results.forEach(val => {
       const prev = previous.get(val.testTaker);
-      this.expandedFilesLists.update(value => {
-        const next = new Map(value);
-        next.set(val.testTaker, {
-          booklets: prev?.booklets || false,
-          units: prev?.units || false,
-          schemes: prev?.schemes || false,
-          schemer: prev?.schemer || false,
-          definitions: prev?.definitions || false,
-          player: prev?.player || false,
-          metadata: prev?.metadata || false
-        });
-        return next;
+      next.set(val.testTaker, {
+        booklets: prev?.booklets || false,
+        units: prev?.units || false,
+        schemes: prev?.schemes || false,
+        schemer: prev?.schemer || false,
+        definitions: prev?.definitions || false,
+        player: prev?.player || false,
+        metadata: prev?.metadata || false
       });
     });
+    this.expandedFilesLists.set(next);
+  }
+
+  private resetDuplicateSelection(): void {
+    const next = new Map<string, string>();
+    this.duplicateTestTakers().forEach(duplicate => {
+      if (duplicate.occurrences.length > 0) {
+        next.set(duplicate.login, duplicate.occurrences[0].testTaker);
+      }
+    });
+    this.duplicateSelection.set(next);
   }
 
   private updateModeGroups(): void {
@@ -461,17 +479,7 @@ export class FilesValidationDialogComponent implements OnInit {
     this.allSelected.set(false);
     this.unusedFilesSelection.clear();
     this.allUnusedFilesSelected.set(false);
-    this.duplicateSelection.set(new Map());
-
-    this.duplicateTestTakers().forEach(duplicate => {
-      if (duplicate.occurrences.length > 0) {
-        this.duplicateSelection.update(value => {
-          const next = new Map(value);
-          next.set(duplicate.login, duplicate.occurrences[0].testTaker);
-          return next;
-        });
-      }
-    });
+    this.resetDuplicateSelection();
 
     this.resetExpandedFilesLists(filteredResults);
     this.updateModeGroups();
@@ -502,7 +510,7 @@ export class FilesValidationDialogComponent implements OnInit {
       finalize(() => {
         this.isRefreshingValidation.set(false);
       })
-    ).subscribe({
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: response => {
         if (typeof response === 'boolean') {
           this.snackBar.open('Validierungsergebnisse konnten nicht aktualisiert werden', 'OK', { duration: 3000 });
@@ -564,7 +572,7 @@ export class FilesValidationDialogComponent implements OnInit {
       }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result === true) {
         this.refreshValidationData('GeoGebra-Ressourcenpakete wurden aktualisiert.');
       }
@@ -581,7 +589,7 @@ export class FilesValidationDialogComponent implements OnInit {
     this.fileService.installCompatibleAspectPlayer(this.data.workspaceId)
       .pipe(finalize(() => {
         this.isInstallingCompatibleAspectPlayer.set(false);
-      }))
+      })).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.refreshValidationData(
@@ -699,7 +707,7 @@ export class FilesValidationDialogComponent implements OnInit {
       }
     });
 
-    ref.afterClosed().subscribe(result => {
+    ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
       if (result?.unitId) {
         onSelect(result.unitId);
       }
@@ -721,21 +729,7 @@ export class FilesValidationDialogComponent implements OnInit {
   constructor() {
     if (this.data) {
       if (this.data.validationResults) {
-        this.data.validationResults.forEach((val: FilesValidation) => {
-          this.expandedFilesLists.update(value => {
-            const next = new Map(value);
-            next.set(val.testTaker, {
-              booklets: false,
-              units: false,
-              schemes: false,
-              schemer: false,
-              definitions: false,
-              player: false,
-              metadata: false
-            });
-            return next;
-          });
-        });
+        this.resetExpandedFilesLists(this.data.validationResults);
         this.rebuildValidationResults();
       }
 
@@ -747,16 +741,7 @@ export class FilesValidationDialogComponent implements OnInit {
       if (this.data.duplicateTestTakers) {
         this.duplicateTestTakers.set(this.data.duplicateTestTakers);
 
-        // Initialize selection with the first occurrence for each duplicate
-        this.duplicateTestTakers().forEach(duplicate => {
-          if (duplicate.occurrences.length > 0) {
-            this.duplicateSelection.update(value => {
-              const next = new Map(value);
-              next.set(duplicate.login, duplicate.occurrences[0].testTaker);
-              return next;
-            });
-          }
-        });
+        this.resetDuplicateSelection();
       }
 
       if (this.data.unusedTestFiles) {
@@ -781,7 +766,7 @@ export class FilesValidationDialogComponent implements OnInit {
 
   loadWorkspaceSettings(): void {
     if (!this.data.workspaceId) return;
-    this.workspaceService.getWorkspaceSettings(this.data.workspaceId).subscribe(settings => {
+    this.workspaceService.getWorkspaceSettings(this.data.workspaceId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(settings => {
       this.ignoredUnits.set(new Set((settings.ignoredUnits || []).map(u => u.toUpperCase())));
       this.ignoredBooklets.set(new Set((settings.ignoredBooklets || []).map(b => b.toUpperCase())));
       this.ignoredTestlets.set((settings.ignoredTestlets || []).map(t => ({ bookletId: t.bookletId.toUpperCase(), testletId: t.testletId.toUpperCase() })));
@@ -969,7 +954,7 @@ export class FilesValidationDialogComponent implements OnInit {
       next.add(bookletId);
       return next;
     });
-    this.fileService.getBookletInfo(this.data.workspaceId, bookletId).subscribe({
+    this.fileService.getBookletInfo(this.data.workspaceId, bookletId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: info => {
         this.bookletData.update(value => {
           const next = new Map(value);
@@ -999,7 +984,7 @@ export class FilesValidationDialogComponent implements OnInit {
       ignoredBooklets: Array.from(this.ignoredBooklets()),
       ignoredTestlets: this.ignoredTestlets()
     };
-    this.workspaceService.saveWorkspaceSettings(this.data.workspaceId, settings).subscribe({
+    this.workspaceService.saveWorkspaceSettings(this.data.workspaceId, settings).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: success => {
         if (success) {
           if (this.data.workspaceId) {
@@ -1186,7 +1171,7 @@ export class FilesValidationDialogComponent implements OnInit {
     this.isDeletingUnusedFiles.set(true);
     const idsToDelete = this.unusedFilesSelection.selected.map(f => f.id);
 
-    this.fileService.deleteFilesWithResult(this.data.workspaceId, idsToDelete)
+    this.fileService.deleteFilesWithResult(this.data.workspaceId, idsToDelete).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: result => {
           this.isDeletingUnusedFiles.set(false);
@@ -1289,7 +1274,7 @@ export class FilesValidationDialogComponent implements OnInit {
     });
 
     // Call service to resolve duplicates
-    this.workspaceService.resolveDuplicateTestTakers(this.data.workspaceId, Object.fromEntries(resolutionMap))
+    this.workspaceService.resolveDuplicateTestTakers(this.data.workspaceId, Object.fromEntries(resolutionMap)).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: success => {
           if (success) {
@@ -1400,9 +1385,15 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   protected isModeSelected(mode: string): boolean {
+    this.selectionChanges();
     return this.filteredTestTakers()
       .filter(item => item.mode === mode && this.isKnownTestTaker(item))
       .every(item => this.selection.isSelected(item));
+  }
+
+  protected isTestTakerSelected(testTaker: FilteredTestTaker): boolean {
+    this.selectionChanges();
+    return this.selection.isSelected(testTaker);
   }
 
   protected markTestTakersAsConsidered(): void {
@@ -1423,7 +1414,7 @@ export class FilesValidationDialogComponent implements OnInit {
         const batchItems = selectedItems.slice(startIndex, endIndex);
         const batchLogins = batchItems.map(item => item.login);
 
-        this.workspaceService.markTestTakersAsConsidered(this.data.workspaceId!, batchLogins)
+        this.workspaceService.markTestTakersAsConsidered(this.data.workspaceId!, batchLogins).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: success => {
               if (success) {
@@ -1461,7 +1452,7 @@ export class FilesValidationDialogComponent implements OnInit {
       const logins = this.selection.selected.map(item => item.login);
       this.consideringProgress.set(50);
 
-      this.workspaceService.markTestTakersAsConsidered(this.data.workspaceId!, logins)
+      this.workspaceService.markTestTakersAsConsidered(this.data.workspaceId!, logins).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: success => {
             if (success) {
@@ -1506,7 +1497,7 @@ export class FilesValidationDialogComponent implements OnInit {
         const batchLogins = batchItems.map(item => item.login);
 
         // Call service to mark this batch as excluded
-        this.workspaceService.markTestTakersAsExcluded(this.data.workspaceId!, batchLogins)
+        this.workspaceService.markTestTakersAsExcluded(this.data.workspaceId!, batchLogins).pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: success => {
               if (success) {
@@ -1555,7 +1546,7 @@ export class FilesValidationDialogComponent implements OnInit {
       this.excludingProgress.set(50);
 
       // Call service to mark these test takers as excluded
-      this.workspaceService.markTestTakersAsExcluded(this.data.workspaceId!, logins)
+      this.workspaceService.markTestTakersAsExcluded(this.data.workspaceId!, logins).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: success => {
             if (success) {
@@ -1580,10 +1571,13 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   toggleFilesList(testTaker: string, section: keyof ExpandedFilesLists): void {
-    const sections = this.expandedFilesLists().get(testTaker);
-    if (sections) {
-      sections[section] = !sections[section];
-    }
+    this.expandedFilesLists.update(current => {
+      const sections = current.get(testTaker);
+      if (!sections) return current;
+      const next = new Map(current);
+      next.set(testTaker, { ...sections, [section]: !sections[section] });
+      return next;
+    });
   }
 
   isFilesListExpanded(testTaker: string, section: keyof ExpandedFilesLists): boolean {
@@ -1801,7 +1795,7 @@ export class FilesValidationDialogComponent implements OnInit {
       canceled$.next();
       loadingSnackBar.dismiss();
     };
-    const closingSubscription = this.dialogRef.beforeClosed().subscribe(cancel);
+    const closingSubscription = this.dialogRef.beforeClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(cancel);
     const unregisterDestroy = this.destroyRef.onDestroy(cancel);
     const waitFor = <T>(source: Observable<T>) => firstValueFrom(
       source.pipe(takeUntil(canceled$)), { defaultValue: undefined }

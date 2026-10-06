@@ -6,7 +6,6 @@ import {
 import { provideHttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import {
   BehaviorSubject,
   of,
@@ -250,8 +249,7 @@ describe('CodingManagementComponent', () => {
       ],
       imports: [
         TranslateModule.forRoot(),
-        CodingManagementComponent,
-        NoopAnimationsModule
+        CodingManagementComponent
       ]
     }).compileComponents();
 
@@ -1738,7 +1736,7 @@ describe('CodingManagementComponent', () => {
     it('should handle show unit XML from table component', () => {
       component.onShowUnitXml(789);
 
-      expect(mockUiService.showUnitXmlDialog).toHaveBeenCalledWith(789);
+      expect(mockUiService.showUnitXmlDialog).toHaveBeenCalledWith(789, expect.anything());
     });
 
     it('should load all filtered responses before opening the review dialog', () => {

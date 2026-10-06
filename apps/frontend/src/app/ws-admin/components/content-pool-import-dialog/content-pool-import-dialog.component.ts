@@ -1,6 +1,7 @@
 import {
-  Component, Inject, OnDestroy, inject, signal, ChangeDetectionStrategy
+  Component, OnDestroy, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import {
   MAT_DIALOG_DATA,
@@ -53,6 +54,10 @@ export interface ContentPoolImportDialogResult {
   ]
 })
 export class ContentPoolImportDialogComponent implements OnDestroy {
+  readonly data = inject<ContentPoolImportDialogData>(MAT_DIALOG_DATA);
+
+  private readonly destroyRef = inject(DestroyRef);
+
   private readonly contentPoolIntegrationService = inject(
     ContentPoolIntegrationService
   );
@@ -77,10 +82,6 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
 
   private importSubscription?: Subscription;
 
-  constructor(
-    @Inject(MAT_DIALOG_DATA) readonly data: ContentPoolImportDialogData
-  ) {}
-
   ngOnDestroy(): void {
     this.importSubscription?.unsubscribe();
   }
@@ -93,7 +94,7 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
     this.acps.set([]);
 
     this.contentPoolIntegrationService
-      .listAccessibleAcps(this.data.workspaceId)
+      .listAccessibleAcps(this.data.workspaceId).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: response => {
           this.isLoadingAcps.set(false);

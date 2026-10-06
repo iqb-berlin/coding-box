@@ -1,5 +1,5 @@
 import { computed } from '@angular/core';
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { of } from 'rxjs';
@@ -173,43 +173,53 @@ describe('AppService', () => {
       reqAuth.flush(mockAuthData);
     });
 
-    it('should retry auth data after transient backend errors', fakeAsync(() => {
-      const mockAuthData = { userId: 1, userName: 'user' } as unknown as AuthDataDto;
-      let loginResult: boolean | undefined;
+    it('should retry auth data after transient backend errors', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        const mockAuthData = { userId: 1, userName: 'user' } as unknown as AuthDataDto;
+        let loginResult: boolean | undefined;
 
-      service.loadAuthenticatedUser('id1').subscribe(result => {
-        loginResult = result;
-      });
+        service.loadAuthenticatedUser('id1').subscribe(result => {
+          loginResult = result;
+        });
 
-      const firstAuthRequest = httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`);
-      firstAuthRequest.flush('Service unavailable', { status: 503, statusText: 'Service Unavailable' });
+        const firstAuthRequest = httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`);
+        firstAuthRequest.flush('Service unavailable', { status: 503, statusText: 'Service Unavailable' });
 
-      tick(500);
+        await jest.advanceTimersByTimeAsync(500);
 
-      const reqAuth = httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`);
-      expect(reqAuth.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
-      reqAuth.flush(mockAuthData);
+        const reqAuth = httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`);
+        expect(reqAuth.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
+        reqAuth.flush(mockAuthData);
 
-      expect(loginResult).toBe(true);
-      expect(service.authBootstrapStatus).toBe('ready');
-    }));
+        expect(loginResult).toBe(true);
+        expect(service.authBootstrapStatus).toBe('ready');
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
-    it('should not retry auth data after authorization errors', fakeAsync(() => {
-      let loginResult: boolean | undefined;
+    it('should not retry auth data after authorization errors', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        let loginResult: boolean | undefined;
 
-      service.loadAuthenticatedUser('id1').subscribe(result => {
-        loginResult = result;
-      });
+        service.loadAuthenticatedUser('id1').subscribe(result => {
+          loginResult = result;
+        });
 
-      const reqAuth = httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`);
-      reqAuth.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+        const reqAuth = httpMock.expectOne(`${mockServerUrl}auth-data?identity=id1`);
+        reqAuth.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
 
-      tick(2000);
+        await jest.advanceTimersByTimeAsync(2000);
 
-      httpMock.expectNone(`${mockServerUrl}auth-data?identity=id1`);
-      expect(loginResult).toBe(false);
-      expect(service.authBootstrapStatus).toBe('auth-data-failed');
-    }));
+        httpMock.expectNone(`${mockServerUrl}auth-data?identity=id1`);
+        expect(loginResult).toBe(false);
+        expect(service.authBootstrapStatus).toBe('auth-data-failed');
+      } finally {
+        jest.useRealTimers();
+      }
+    });
 
     it('should return false on auth data failure', () => {
       service.loadAuthenticatedUser('id1').subscribe(result => {

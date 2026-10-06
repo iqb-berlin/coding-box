@@ -72,6 +72,8 @@ describe('ImportComparisonDialogComponent', () => {
     };
     testPersonCodingServiceMock.getExternalCodingImportResult
       .mockReturnValueOnce(of(importResult));
+    component.isLoading.set(true);
+    component.applyProgress.set(100);
 
     (component as unknown as {
       fetchImportResult: (workspaceId: number, jobId: string) => void;
@@ -86,11 +88,15 @@ describe('ImportComparisonDialogComponent', () => {
       applied: true,
       result: importResult
     });
+    expect(component.isLoading()).toBe(false);
+    expect(component.applyProgress()).toBe(-1);
   });
 
   it('should notify status consumers when import finished but result loading fails', () => {
     testPersonCodingServiceMock.getExternalCodingImportResult
       .mockReturnValueOnce(throwError(() => new Error('result unavailable')));
+    component.isLoading.set(true);
+    component.applyProgress.set(100);
 
     (component as unknown as {
       fetchImportResult: (workspaceId: number, jobId: string) => void;
@@ -107,5 +113,7 @@ describe('ImportComparisonDialogComponent', () => {
       { duration: 5000 }
     );
     expect(dialogRefMock.close).toHaveBeenCalledWith({ applied: true });
+    expect(component.isLoading()).toBe(false);
+    expect(component.applyProgress()).toBe(-1);
   });
 });

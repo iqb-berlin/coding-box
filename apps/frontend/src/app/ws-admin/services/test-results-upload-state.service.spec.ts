@@ -1,9 +1,7 @@
-import {
-  TestBed, fakeAsync, tick, discardPeriodicTasks, flushMicrotasks
-} from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import { TestResultService, TestResultsOverviewResponse } from '../../shared/services/test-result/test-result.service';
 import { FileService } from '../../shared/services/file/file.service';
@@ -12,7 +10,7 @@ import { TestPersonCodingService } from '../../coding/services/test-person-codin
 
 describe('TestResultsUploadStateService', () => {
   let service: TestResultsUploadStateService;
-  let fileServiceMock: { getUploadJobStatus: jest.Mock };
+  let fileServiceMock: { getUploadJobStatus: jest.Mock; uploadTestResultsChunked: jest.Mock };
   let testResultServiceMock: {
     invalidateCache: jest.Mock;
     getWorkspaceOverview: jest.Mock;
@@ -27,10 +25,22 @@ describe('TestResultsUploadStateService', () => {
   };
   let dialogMock: { open: jest.Mock };
   let snackBarMock: { open: jest.Mock };
+  const uploadStartOverview: TestResultsOverviewResponse = {
+    testPersons: 10,
+    testGroups: 2,
+    uniqueBooklets: 5,
+    uniqueUnits: 20,
+    uniqueResponses: 100,
+    responseStatusCounts: {},
+    sessionBrowserCounts: {},
+    sessionOsCounts: {},
+    sessionScreenCounts: {}
+  };
 
   beforeEach(() => {
     fileServiceMock = {
-      getUploadJobStatus: jest.fn()
+      getUploadJobStatus: jest.fn(),
+      uploadTestResultsChunked: jest.fn()
     };
     testResultServiceMock = {
       invalidateCache: jest.fn(),
@@ -101,6 +111,62 @@ describe('TestResultsUploadStateService', () => {
 
     // Clear localStorage before each test
     localStorage.clear();
+  });
+
+  it('shares one upload and registers its accepted batch after view unsubscription', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      service = TestBed.inject(TestResultsUploadStateService);
+      const accepted = new Subject<unknown[]>();
+      const status = new Subject<unknown>();
+      const progressRef = { close: jest.fn() };
+      fileServiceMock.uploadTestResultsChunked.mockReturnValue(accepted);
+      fileServiceMock.getUploadJobStatus.mockReturnValue(status);
+      dialogMock.open.mockReturnValue(progressRef);
+      const registerBatch = jest.spyOn(service, 'registerBatch');
+      const request = service.startChunkedUpload(47, new File(['data'], 'responses.json'), 'responses', { overwriteMode: 'skip', scope: 'person' }, uploadStartOverview);
+      request.subscribe().unsubscribe();
+      request.subscribe().unsubscribe();
+      expect(accepted.observed).toBe(true);
+      expect(fileServiceMock.uploadTestResultsChunked).toHaveBeenCalledTimes(1);
+      expect(dialogMock.open).toHaveBeenCalledTimes(1);
+
+      accepted.next([{ jobId: 'job-1' }]);
+      accepted.complete();
+      request.subscribe();
+      expect(registerBatch).toHaveBeenCalledTimes(1);
+      expect(registerBatch).toHaveBeenCalledWith(
+        expect.objectContaining({ workspaceId: 47, jobIds: ['job-1'] }),
+        expect.objectContaining({ dialogRef: progressRef })
+      );
+      expect(fileServiceMock.getUploadJobStatus).toHaveBeenCalledWith(47, 'job-1');
+      TestBed.resetTestingModule();
+      expect(status.observed).toBe(false);
+      expect(progressRef.close).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(2000);
+      expect(fileServiceMock.getUploadJobStatus).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('cancels an unfinished upload and closes progress when its root provider is destroyed', () => {
+    service = TestBed.inject(TestResultsUploadStateService);
+    const accepted = new Subject<unknown[]>();
+    const progressRef = { close: jest.fn() };
+    fileServiceMock.uploadTestResultsChunked.mockReturnValue(accepted);
+    dialogMock.open.mockReturnValue(progressRef);
+    const registerBatch = jest.spyOn(service, 'registerBatch');
+    service.startChunkedUpload(47, new File(['data'], 'responses.json'), 'responses', { overwriteMode: 'skip', scope: 'person' }, uploadStartOverview).subscribe();
+    const state = dialogMock.open.mock.calls[0][1].data.state$;
+
+    TestBed.resetTestingModule();
+    expect(accepted.observed).toBe(false);
+    expect(progressRef.close).toHaveBeenCalledTimes(1);
+    expect(state.isStopped).toBe(true);
+    accepted.next([{ jobId: 'too-late' }]);
+    expect(registerBatch).not.toHaveBeenCalled();
+    expect(snackBarMock.open).not.toHaveBeenCalled();
   });
 
   it('should show explicit feedback when log anomaly summary loading fails', () => {
@@ -187,524 +253,554 @@ describe('TestResultsUploadStateService', () => {
     );
   });
 
-  it('should register a batch and start polling', fakeAsync(() => {
-    service = TestBed.inject(TestResultsUploadStateService);
-    const batch: PendingUploadBatch = {
-      workspaceId: 1,
-      jobIds: ['job1'],
-      resultType: 'responses',
-      beforeOverview: {
-        testPersons: 5,
-        testGroups: 1,
-        uniqueBooklets: 2,
-        uniqueUnits: 10,
-        uniqueResponses: 50,
-        responseStatusCounts: {},
-        sessionBrowserCounts: {},
-        sessionOsCounts: {},
-        sessionScreenCounts: {}
-      },
-      initialIssues: [],
-      progress: 0,
-      completedCount: 0,
-      totalJobs: 1
-    };
-
-    fileServiceMock.getUploadJobStatus.mockReturnValue(of({ status: 'active', progress: 50 }));
-
-    service.registerBatch(batch);
-
-    tick(1001); // First interval tick
-
-    let currentBatches: PendingUploadBatch[] = [];
-    service.uploadingBatches$.subscribe(b => { currentBatches = b; });
-
-    expect(currentBatches.length).toBe(1);
-    expect(currentBatches[0].progress).toBe(50);
-
-    // Now complete it
-    fileServiceMock.getUploadJobStatus.mockReturnValue(of({
-      status: 'completed',
-      progress: 100,
-      result: {
-        expected: {
+  it('should register a batch and start polling', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      service = TestBed.inject(TestResultsUploadStateService);
+      const batch: PendingUploadBatch = {
+        workspaceId: 1,
+        jobIds: ['job1'],
+        resultType: 'responses',
+        beforeOverview: {
           testPersons: 5,
           testGroups: 1,
-          uniqueBooklets: 3,
+          uniqueBooklets: 2,
           uniqueUnits: 10,
-          uniqueResponses: 50
+          uniqueResponses: 50,
+          responseStatusCounts: {},
+          sessionBrowserCounts: {},
+          sessionOsCounts: {},
+          sessionScreenCounts: {}
         },
-        before: batch.beforeOverview,
-        after: {
-          testPersons: 10,
-          testGroups: 2,
-          uniqueBooklets: 5,
-          uniqueUnits: 20,
-          uniqueResponses: 100
-        },
-        delta: {
-          testPersons: 5,
-          testGroups: 1,
-          uniqueBooklets: 3,
-          uniqueUnits: 10,
-          uniqueResponses: 50
-        },
-        importedResponses: true
-      }
-    }));
+        initialIssues: [],
+        progress: 0,
+        completedCount: 0,
+        totalJobs: 1
+      };
 
-    tick(1001); // Trigger competition detection
-    tick(1000); // Allow async finishBatch (setTimeout 500ms + async calls)
-    flushMicrotasks();
+      fileServiceMock.getUploadJobStatus.mockReturnValue(of({ status: 'active', progress: 50 }));
 
-    expect(currentBatches.length).toBe(0);
-    expect(testPersonCodingServiceMock.invalidateCodingStatusCache).toHaveBeenCalledWith(1);
-    expect(dialogMock.open).toHaveBeenCalled();
-    expect(snackBarMock.open).toHaveBeenCalled();
+      service.registerBatch(batch);
 
-    discardPeriodicTasks();
-  }));
+      await jest.advanceTimersByTimeAsync(1001); // First interval tick
 
-  it('should keep polling after a transient polling error', fakeAsync(() => {
-    service = TestBed.inject(TestResultsUploadStateService);
-    const batch: PendingUploadBatch = {
-      workspaceId: 1,
-      jobIds: ['job-error'],
-      resultType: 'responses',
-      beforeOverview: {
-        testPersons: 0,
-        testGroups: 0,
-        uniqueBooklets: 0,
-        uniqueUnits: 0,
-        uniqueResponses: 0,
-        responseStatusCounts: {},
-        sessionBrowserCounts: {},
-        sessionOsCounts: {},
-        sessionScreenCounts: {}
-      },
-      initialIssues: [],
-      progress: 0,
-      completedCount: 0,
-      totalJobs: 1
-    };
+      let currentBatches: PendingUploadBatch[] = [];
+      service.uploadingBatches$.subscribe(b => { currentBatches = b; });
 
-    const errorResponse = new HttpErrorResponse({
-      error: 'Not Found',
-      status: 404
-    });
-    fileServiceMock.getUploadJobStatus.mockReturnValue(throwError(() => errorResponse));
+      expect(currentBatches.length).toBe(1);
+      expect(currentBatches[0].progress).toBe(50);
 
-    service.registerBatch(batch);
-
-    tick(1001); // Poll once
-    expect(dialogMock.open).not.toHaveBeenCalled();
-    expect(snackBarMock.open).not.toHaveBeenCalled();
-
-    fileServiceMock.getUploadJobStatus.mockReturnValue(of({
-      status: 'completed',
-      progress: 100,
-      result: {
-        expected: {
-          testPersons: 1,
-          testGroups: 1,
-          uniqueBooklets: 1,
-          uniqueUnits: 1,
-          uniqueResponses: 1
-        },
-        before: batch.beforeOverview,
-        after: {
-          testPersons: 10,
-          testGroups: 2,
-          uniqueBooklets: 5,
-          uniqueUnits: 20,
-          uniqueResponses: 100
-        },
-        delta: {
-          testPersons: 10,
-          testGroups: 2,
-          uniqueBooklets: 5,
-          uniqueUnits: 20,
-          uniqueResponses: 100
-        },
-        importedResponses: true
-      }
-    }));
-    tick(1001);
-    tick(1000);
-    flushMicrotasks();
-    expect(dialogMock.open).toHaveBeenCalled();
-
-    discardPeriodicTasks();
-  }));
-
-  it('should refetch a completed job until its upload result is available', fakeAsync(() => {
-    service = TestBed.inject(TestResultsUploadStateService);
-    const batch: PendingUploadBatch = {
-      workspaceId: 1,
-      jobIds: ['job-result-lag'],
-      resultType: 'responses',
-      beforeOverview: {
-        testPersons: 0,
-        testGroups: 0,
-        uniqueBooklets: 0,
-        uniqueUnits: 0,
-        uniqueResponses: 0,
-        responseStatusCounts: {},
-        sessionBrowserCounts: {},
-        sessionOsCounts: {},
-        sessionScreenCounts: {}
-      },
-      initialIssues: [],
-      progress: 0,
-      completedCount: 0,
-      totalJobs: 1
-    };
-
-    const completedResult = {
-      expected: {
-        testPersons: 1,
-        testGroups: 1,
-        uniqueBooklets: 1,
-        uniqueUnits: 2,
-        uniqueResponses: 3
-      },
-      before: batch.beforeOverview,
-      after: {
-        testPersons: 1,
-        testGroups: 1,
-        uniqueBooklets: 1,
-        uniqueUnits: 2,
-        uniqueResponses: 3
-      },
-      delta: {
-        testPersons: 1,
-        testGroups: 1,
-        uniqueBooklets: 1,
-        uniqueUnits: 2,
-        uniqueResponses: 3
-      },
-      responseStatusCounts: { DISPLAYED: 3 },
-      importedResponses: true
-    };
-
-    fileServiceMock.getUploadJobStatus
-      .mockReturnValueOnce(of({ status: 'completed', progress: 100 }))
-      .mockReturnValue(of({
+      // Now complete it
+      fileServiceMock.getUploadJobStatus.mockReturnValue(of({
         status: 'completed',
         progress: 100,
-        result: completedResult
-      }));
-    testResultServiceMock.getWorkspaceOverview.mockReturnValue(of({
-      ...completedResult.after,
-      responseStatusCounts: completedResult.responseStatusCounts,
-      sessionBrowserCounts: {},
-      sessionOsCounts: {},
-      sessionScreenCounts: {}
-    }));
-    testPersonCodingServiceMock.getCodingFreshness.mockReturnValueOnce(of({
-      workspaceId: 1,
-      currentRevision: 2,
-      items: [
-        {
-          version: 'v3',
-          state: 'PENDING',
-          unitCount: 3,
-          affectedResponseCount: 3
+        result: {
+          expected: {
+            testPersons: 5,
+            testGroups: 1,
+            uniqueBooklets: 3,
+            uniqueUnits: 10,
+            uniqueResponses: 50
+          },
+          before: batch.beforeOverview,
+          after: {
+            testPersons: 10,
+            testGroups: 2,
+            uniqueBooklets: 5,
+            uniqueUnits: 20,
+            uniqueResponses: 100
+          },
+          delta: {
+            testPersons: 5,
+            testGroups: 1,
+            uniqueBooklets: 3,
+            uniqueUnits: 10,
+            uniqueResponses: 50
+          },
+          importedResponses: true
         }
-      ]
-    }));
+      }));
 
-    service.registerBatch(batch);
+      await jest.advanceTimersByTimeAsync(1001); // Trigger competition detection
+      await jest.advanceTimersByTimeAsync(1000); // Allow async finishBatch (setTimeout 500ms + async calls)
+      await jest.advanceTimersByTimeAsync(0);
 
-    tick(500);
-    flushMicrotasks();
-    tick(1000);
-    flushMicrotasks();
+      expect(currentBatches.length).toBe(0);
+      expect(testPersonCodingServiceMock.invalidateCodingStatusCache).toHaveBeenCalledWith(1);
+      expect(dialogMock.open).toHaveBeenCalled();
+      expect(snackBarMock.open).toHaveBeenCalled();
 
-    expect(fileServiceMock.getUploadJobStatus).toHaveBeenCalledTimes(2);
-    expect(testPersonCodingServiceMock.getCodingFreshness).toHaveBeenCalledWith(1);
-    expect(dialogMock.open).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-      data: expect.objectContaining({
-        manualAppliedResultsOverview: expect.objectContaining({
-          remainingResponses: 0
-        }),
-        manualAppliedResultsOverviewLoadFailed: false,
-        result: expect.objectContaining({
-          overviewPending: false,
-          expected: expect.objectContaining({
-            uniqueResponses: 3
-          }),
-          responseStatusCounts: completedResult.responseStatusCounts,
-          codingFreshness: expect.objectContaining({
-            currentRevision: 2,
-            items: [
-              expect.objectContaining({ version: 'v3' })
-            ]
-          })
-        })
-      })
-    }));
-
-    discardPeriodicTasks();
-  }));
-
-  it('should not show stale zero overview as final result for completed response uploads', fakeAsync(() => {
-    service = TestBed.inject(TestResultsUploadStateService);
-    const batch: PendingUploadBatch = {
-      workspaceId: 1,
-      jobIds: ['job-stale-overview'],
-      resultType: 'responses',
-      beforeOverview: {
-        testPersons: 0,
-        testGroups: 0,
-        uniqueBooklets: 0,
-        uniqueUnits: 0,
-        uniqueResponses: 0,
-        responseStatusCounts: {},
-        sessionBrowserCounts: {},
-        sessionOsCounts: {},
-        sessionScreenCounts: {}
-      },
-      initialIssues: [],
-      progress: 0,
-      completedCount: 0,
-      totalJobs: 1
-    };
-
-    fileServiceMock.getUploadJobStatus.mockReturnValue(of({
-      status: 'completed',
-      progress: 100,
-      result: {
-        expected: {
-          testPersons: 1,
-          testGroups: 1,
-          uniqueBooklets: 1,
-          uniqueUnits: 1,
-          uniqueResponses: 3
-        },
-        before: {
-          testPersons: 0,
-          testGroups: 0,
-          uniqueBooklets: 0,
-          uniqueUnits: 0,
-          uniqueResponses: 0
-        },
-        after: {
-          testPersons: 0,
-          testGroups: 0,
-          uniqueBooklets: 0,
-          uniqueUnits: 0,
-          uniqueResponses: 0
-        },
-        delta: {
-          testPersons: 0,
-          testGroups: 0,
-          uniqueBooklets: 0,
-          uniqueUnits: 0,
-          uniqueResponses: 0
-        },
-        importedResponses: true
-      }
-    }));
-    testResultServiceMock.getWorkspaceOverview.mockReturnValue(of({
-      ...batch.beforeOverview
-    }));
-
-    service.registerBatch(batch);
-
-    tick(1001);
-    for (let i = 0; i < 12; i += 1) {
-      flushMicrotasks();
-      tick(1000);
+      jest.clearAllTimers();
+    } finally {
+      jest.useRealTimers();
     }
-    flushMicrotasks();
+  });
 
-    expect(dialogMock.open).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-      data: expect.objectContaining({
-        result: expect.objectContaining({
-          overviewPending: true,
-          expected: expect.objectContaining({
-            uniqueResponses: 3
-          })
-        })
-      })
-    }));
-    expect(snackBarMock.open).toHaveBeenCalledWith(
-      'Upload abgeschlossen; die Übersicht wird noch aktualisiert.',
-      'OK',
-      { duration: 5000 }
-    );
+  it('should keep polling after a transient polling error', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      service = TestBed.inject(TestResultsUploadStateService);
+      const batch: PendingUploadBatch = {
+        workspaceId: 1,
+        jobIds: ['job-error'],
+        resultType: 'responses',
+        beforeOverview: {
+          testPersons: 0,
+          testGroups: 0,
+          uniqueBooklets: 0,
+          uniqueUnits: 0,
+          uniqueResponses: 0,
+          responseStatusCounts: {},
+          sessionBrowserCounts: {},
+          sessionOsCounts: {},
+          sessionScreenCounts: {}
+        },
+        initialIssues: [],
+        progress: 0,
+        completedCount: 0,
+        totalJobs: 1
+      };
 
-    discardPeriodicTasks();
-  }));
+      const errorResponse = new HttpErrorResponse({
+        error: 'Not Found',
+        status: 404
+      });
+      fileServiceMock.getUploadJobStatus.mockReturnValue(throwError(() => errorResponse));
 
-  it('should retry the workspace overview when the first refresh request fails', fakeAsync(() => {
-    service = TestBed.inject(TestResultsUploadStateService);
-    const batch: PendingUploadBatch = {
-      workspaceId: 1,
-      jobIds: ['job-overview-retry'],
-      resultType: 'responses',
-      beforeOverview: {
-        testPersons: 0,
-        testGroups: 0,
-        uniqueBooklets: 0,
-        uniqueUnits: 0,
-        uniqueResponses: 0,
-        responseStatusCounts: {},
-        sessionBrowserCounts: {},
-        sessionOsCounts: {},
-        sessionScreenCounts: {}
-      },
-      initialIssues: [],
-      progress: 0,
-      completedCount: 0,
-      totalJobs: 1
-    };
-    const overview = {
-      testPersons: 1,
-      testGroups: 1,
-      uniqueBooklets: 1,
-      uniqueUnits: 1,
-      uniqueResponses: 3,
-      responseStatusCounts: { DISPLAYED: 3 },
-      sessionBrowserCounts: {},
-      sessionOsCounts: {},
-      sessionScreenCounts: {}
-    };
+      service.registerBatch(batch);
 
-    fileServiceMock.getUploadJobStatus.mockReturnValue(of({
-      status: 'completed',
-      progress: 100,
-      result: {
+      await jest.advanceTimersByTimeAsync(1001); // Poll once
+      expect(dialogMock.open).not.toHaveBeenCalled();
+      expect(snackBarMock.open).not.toHaveBeenCalled();
+
+      fileServiceMock.getUploadJobStatus.mockReturnValue(of({
+        status: 'completed',
+        progress: 100,
+        result: {
+          expected: {
+            testPersons: 1,
+            testGroups: 1,
+            uniqueBooklets: 1,
+            uniqueUnits: 1,
+            uniqueResponses: 1
+          },
+          before: batch.beforeOverview,
+          after: {
+            testPersons: 10,
+            testGroups: 2,
+            uniqueBooklets: 5,
+            uniqueUnits: 20,
+            uniqueResponses: 100
+          },
+          delta: {
+            testPersons: 10,
+            testGroups: 2,
+            uniqueBooklets: 5,
+            uniqueUnits: 20,
+            uniqueResponses: 100
+          },
+          importedResponses: true
+        }
+      }));
+      await jest.advanceTimersByTimeAsync(1001);
+      await jest.advanceTimersByTimeAsync(1000);
+      await jest.advanceTimersByTimeAsync(0);
+      expect(dialogMock.open).toHaveBeenCalled();
+
+      jest.clearAllTimers();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should refetch a completed job until its upload result is available', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      service = TestBed.inject(TestResultsUploadStateService);
+      const batch: PendingUploadBatch = {
+        workspaceId: 1,
+        jobIds: ['job-result-lag'],
+        resultType: 'responses',
+        beforeOverview: {
+          testPersons: 0,
+          testGroups: 0,
+          uniqueBooklets: 0,
+          uniqueUnits: 0,
+          uniqueResponses: 0,
+          responseStatusCounts: {},
+          sessionBrowserCounts: {},
+          sessionOsCounts: {},
+          sessionScreenCounts: {}
+        },
+        initialIssues: [],
+        progress: 0,
+        completedCount: 0,
+        totalJobs: 1
+      };
+
+      const completedResult = {
         expected: {
           testPersons: 1,
           testGroups: 1,
           uniqueBooklets: 1,
-          uniqueUnits: 1,
+          uniqueUnits: 2,
           uniqueResponses: 3
         },
         before: batch.beforeOverview,
-        after: overview,
+        after: {
+          testPersons: 1,
+          testGroups: 1,
+          uniqueBooklets: 1,
+          uniqueUnits: 2,
+          uniqueResponses: 3
+        },
         delta: {
           testPersons: 1,
           testGroups: 1,
           uniqueBooklets: 1,
-          uniqueUnits: 1,
+          uniqueUnits: 2,
           uniqueResponses: 3
         },
-        responseStatusCounts: overview.responseStatusCounts,
+        responseStatusCounts: { DISPLAYED: 3 },
         importedResponses: true
-      }
-    }));
-    testResultServiceMock.getWorkspaceOverview
-      .mockReturnValueOnce(throwError(() => new Error('temporary offline')))
-      .mockReturnValue(of(overview));
+      };
 
-    service.registerBatch(batch);
+      fileServiceMock.getUploadJobStatus
+        .mockReturnValueOnce(of({ status: 'completed', progress: 100 }))
+        .mockReturnValue(of({
+          status: 'completed',
+          progress: 100,
+          result: completedResult
+        }));
+      testResultServiceMock.getWorkspaceOverview.mockReturnValue(of({
+        ...completedResult.after,
+        responseStatusCounts: completedResult.responseStatusCounts,
+        sessionBrowserCounts: {},
+        sessionOsCounts: {},
+        sessionScreenCounts: {}
+      }));
+      testPersonCodingServiceMock.getCodingFreshness.mockReturnValueOnce(of({
+        workspaceId: 1,
+        currentRevision: 2,
+        items: [
+          {
+            version: 'v3',
+            state: 'PENDING',
+            unitCount: 3,
+            affectedResponseCount: 3
+          }
+        ]
+      }));
 
-    tick(1001);
-    flushMicrotasks();
-    tick(1000);
-    flushMicrotasks();
+      service.registerBatch(batch);
 
-    expect(dialogMock.open).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-      data: expect.objectContaining({
-        result: expect.objectContaining({
-          overviewPending: false,
-          after: expect.objectContaining({
-            uniqueResponses: 3
+      await jest.advanceTimersByTimeAsync(500);
+      await jest.advanceTimersByTimeAsync(0);
+      await jest.advanceTimersByTimeAsync(1000);
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect(fileServiceMock.getUploadJobStatus).toHaveBeenCalledTimes(2);
+      expect(testPersonCodingServiceMock.getCodingFreshness).toHaveBeenCalledWith(1);
+      expect(dialogMock.open).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        data: expect.objectContaining({
+          manualAppliedResultsOverview: expect.objectContaining({
+            remainingResponses: 0
+          }),
+          manualAppliedResultsOverviewLoadFailed: false,
+          result: expect.objectContaining({
+            overviewPending: false,
+            expected: expect.objectContaining({
+              uniqueResponses: 3
+            }),
+            responseStatusCounts: completedResult.responseStatusCounts,
+            codingFreshness: expect.objectContaining({
+              currentRevision: 2,
+              items: [
+                expect.objectContaining({ version: 'v3' })
+              ]
+            })
           })
         })
-      })
-    }));
+      }));
 
-    discardPeriodicTasks();
-  }));
+      jest.clearAllTimers();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
-  it('should show a repeated response upload as finished when the loaded overview is unchanged', fakeAsync(() => {
-    service = TestBed.inject(TestResultsUploadStateService);
-    const beforeOverview: TestResultsOverviewResponse = {
-      testPersons: 45,
-      testGroups: 2,
-      uniqueBooklets: 47,
-      uniqueUnits: 320,
-      uniqueResponses: 10219,
-      responseStatusCounts: {
-        DISPLAYED: 7414,
-        NOT_REACHED: 289,
-        VALUE_CHANGED: 2298,
-        UNSET: 218
-      },
-      sessionBrowserCounts: {},
-      sessionOsCounts: {},
-      sessionScreenCounts: {}
-    };
-    const batch: PendingUploadBatch = {
-      workspaceId: 1,
-      jobIds: ['job-repeat-upload'],
-      resultType: 'responses',
-      beforeOverview,
-      initialIssues: [],
-      progress: 0,
-      completedCount: 0,
-      totalJobs: 1
-    };
-
-    fileServiceMock.getUploadJobStatus.mockReturnValue(of({
-      status: 'completed',
-      progress: 100,
-      result: {
-        expected: {
+  it('should not show stale zero overview as final result for completed response uploads', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      service = TestBed.inject(TestResultsUploadStateService);
+      const batch: PendingUploadBatch = {
+        workspaceId: 1,
+        jobIds: ['job-stale-overview'],
+        resultType: 'responses',
+        beforeOverview: {
           testPersons: 0,
           testGroups: 0,
           uniqueBooklets: 0,
           uniqueUnits: 0,
-          uniqueResponses: 0
+          uniqueResponses: 0,
+          responseStatusCounts: {},
+          sessionBrowserCounts: {},
+          sessionOsCounts: {},
+          sessionScreenCounts: {}
         },
-        before: beforeOverview,
-        after: beforeOverview,
-        delta: {
-          testPersons: 0,
-          testGroups: 0,
-          uniqueBooklets: 0,
-          uniqueUnits: 0,
-          uniqueResponses: 0
-        },
-        responseStatusCounts: beforeOverview.responseStatusCounts,
-        importedResponses: true
+        initialIssues: [],
+        progress: 0,
+        completedCount: 0,
+        totalJobs: 1
+      };
+
+      fileServiceMock.getUploadJobStatus.mockReturnValue(of({
+        status: 'completed',
+        progress: 100,
+        result: {
+          expected: {
+            testPersons: 1,
+            testGroups: 1,
+            uniqueBooklets: 1,
+            uniqueUnits: 1,
+            uniqueResponses: 3
+          },
+          before: {
+            testPersons: 0,
+            testGroups: 0,
+            uniqueBooklets: 0,
+            uniqueUnits: 0,
+            uniqueResponses: 0
+          },
+          after: {
+            testPersons: 0,
+            testGroups: 0,
+            uniqueBooklets: 0,
+            uniqueUnits: 0,
+            uniqueResponses: 0
+          },
+          delta: {
+            testPersons: 0,
+            testGroups: 0,
+            uniqueBooklets: 0,
+            uniqueUnits: 0,
+            uniqueResponses: 0
+          },
+          importedResponses: true
+        }
+      }));
+      testResultServiceMock.getWorkspaceOverview.mockReturnValue(of({
+        ...batch.beforeOverview
+      }));
+
+      service.registerBatch(batch);
+
+      await jest.advanceTimersByTimeAsync(1001);
+      for (let i = 0; i < 12; i += 1) {
+        await jest.advanceTimersByTimeAsync(0);
+        await jest.advanceTimersByTimeAsync(1000);
       }
-    }));
-    testResultServiceMock.getWorkspaceOverview.mockReturnValue(of(beforeOverview));
+      await jest.advanceTimersByTimeAsync(0);
 
-    service.registerBatch(batch);
+      expect(dialogMock.open).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        data: expect.objectContaining({
+          result: expect.objectContaining({
+            overviewPending: true,
+            expected: expect.objectContaining({
+              uniqueResponses: 3
+            })
+          })
+        })
+      }));
+      expect(snackBarMock.open).toHaveBeenCalledWith(
+        'Upload abgeschlossen; die Übersicht wird noch aktualisiert.',
+        'OK',
+        { duration: 5000 }
+      );
 
-    tick(1001);
-    tick(1000);
-    flushMicrotasks();
+      jest.clearAllTimers();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
-    const resultCall = dialogMock.open.mock.calls.find(
-      call => call[1]?.data?.result
-    );
+  it('should retry the workspace overview when the first refresh request fails', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      service = TestBed.inject(TestResultsUploadStateService);
+      const batch: PendingUploadBatch = {
+        workspaceId: 1,
+        jobIds: ['job-overview-retry'],
+        resultType: 'responses',
+        beforeOverview: {
+          testPersons: 0,
+          testGroups: 0,
+          uniqueBooklets: 0,
+          uniqueUnits: 0,
+          uniqueResponses: 0,
+          responseStatusCounts: {},
+          sessionBrowserCounts: {},
+          sessionOsCounts: {},
+          sessionScreenCounts: {}
+        },
+        initialIssues: [],
+        progress: 0,
+        completedCount: 0,
+        totalJobs: 1
+      };
+      const overview = {
+        testPersons: 1,
+        testGroups: 1,
+        uniqueBooklets: 1,
+        uniqueUnits: 1,
+        uniqueResponses: 3,
+        responseStatusCounts: { DISPLAYED: 3 },
+        sessionBrowserCounts: {},
+        sessionOsCounts: {},
+        sessionScreenCounts: {}
+      };
 
-    expect(resultCall?.[1].data.result).toEqual(expect.objectContaining({
-      overviewPending: false,
-      delta: expect.objectContaining({
-        testPersons: 0,
-        testGroups: 0,
-        uniqueBooklets: 0,
-        uniqueUnits: 0,
-        uniqueResponses: 0
-      }),
-      responseStatusCounts: beforeOverview.responseStatusCounts
-    }));
-    expect(snackBarMock.open).toHaveBeenCalledWith(
-      'Upload abgeschlossen: Δ Testpersonen 0, Δ Responses 0',
-      'OK',
-      { duration: 5000 }
-    );
+      fileServiceMock.getUploadJobStatus.mockReturnValue(of({
+        status: 'completed',
+        progress: 100,
+        result: {
+          expected: {
+            testPersons: 1,
+            testGroups: 1,
+            uniqueBooklets: 1,
+            uniqueUnits: 1,
+            uniqueResponses: 3
+          },
+          before: batch.beforeOverview,
+          after: overview,
+          delta: {
+            testPersons: 1,
+            testGroups: 1,
+            uniqueBooklets: 1,
+            uniqueUnits: 1,
+            uniqueResponses: 3
+          },
+          responseStatusCounts: overview.responseStatusCounts,
+          importedResponses: true
+        }
+      }));
+      testResultServiceMock.getWorkspaceOverview
+        .mockReturnValueOnce(throwError(() => new Error('temporary offline')))
+        .mockReturnValue(of(overview));
 
-    discardPeriodicTasks();
-  }));
+      service.registerBatch(batch);
+
+      await jest.advanceTimersByTimeAsync(1001);
+      await jest.advanceTimersByTimeAsync(0);
+      await jest.advanceTimersByTimeAsync(1000);
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect(dialogMock.open).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        data: expect.objectContaining({
+          result: expect.objectContaining({
+            overviewPending: false,
+            after: expect.objectContaining({
+              uniqueResponses: 3
+            })
+          })
+        })
+      }));
+
+      jest.clearAllTimers();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should show a repeated response upload as finished when the loaded overview is unchanged', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      service = TestBed.inject(TestResultsUploadStateService);
+      const beforeOverview: TestResultsOverviewResponse = {
+        testPersons: 45,
+        testGroups: 2,
+        uniqueBooklets: 47,
+        uniqueUnits: 320,
+        uniqueResponses: 10219,
+        responseStatusCounts: {
+          DISPLAYED: 7414,
+          NOT_REACHED: 289,
+          VALUE_CHANGED: 2298,
+          UNSET: 218
+        },
+        sessionBrowserCounts: {},
+        sessionOsCounts: {},
+        sessionScreenCounts: {}
+      };
+      const batch: PendingUploadBatch = {
+        workspaceId: 1,
+        jobIds: ['job-repeat-upload'],
+        resultType: 'responses',
+        beforeOverview,
+        initialIssues: [],
+        progress: 0,
+        completedCount: 0,
+        totalJobs: 1
+      };
+
+      fileServiceMock.getUploadJobStatus.mockReturnValue(of({
+        status: 'completed',
+        progress: 100,
+        result: {
+          expected: {
+            testPersons: 0,
+            testGroups: 0,
+            uniqueBooklets: 0,
+            uniqueUnits: 0,
+            uniqueResponses: 0
+          },
+          before: beforeOverview,
+          after: beforeOverview,
+          delta: {
+            testPersons: 0,
+            testGroups: 0,
+            uniqueBooklets: 0,
+            uniqueUnits: 0,
+            uniqueResponses: 0
+          },
+          responseStatusCounts: beforeOverview.responseStatusCounts,
+          importedResponses: true
+        }
+      }));
+      testResultServiceMock.getWorkspaceOverview.mockReturnValue(of(beforeOverview));
+
+      service.registerBatch(batch);
+
+      await jest.advanceTimersByTimeAsync(1001);
+      await jest.advanceTimersByTimeAsync(1000);
+      await jest.advanceTimersByTimeAsync(0);
+
+      const resultCall = dialogMock.open.mock.calls.find(
+        call => call[1]?.data?.result
+      );
+
+      expect(resultCall?.[1].data.result).toEqual(expect.objectContaining({
+        overviewPending: false,
+        delta: expect.objectContaining({
+          testPersons: 0,
+          testGroups: 0,
+          uniqueBooklets: 0,
+          uniqueUnits: 0,
+          uniqueResponses: 0
+        }),
+        responseStatusCounts: beforeOverview.responseStatusCounts
+      }));
+      expect(snackBarMock.open).toHaveBeenCalledWith(
+        'Upload abgeschlossen: Δ Testpersonen 0, Δ Responses 0',
+        'OK',
+        { duration: 5000 }
+      );
+
+      jest.clearAllTimers();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   it('should resume from localStorage on startup', () => {
     const batch: PendingUploadBatch = {
@@ -719,6 +815,7 @@ describe('TestResultsUploadStateService', () => {
     };
 
     localStorage.setItem('pendingUploadJobs_2', JSON.stringify(batch));
+    fileServiceMock.getUploadJobStatus.mockReturnValue(of({ status: 'active', progress: 10 }));
 
     // Inject AFTER setting localStorage
     service = TestBed.inject(TestResultsUploadStateService);
@@ -728,51 +825,57 @@ describe('TestResultsUploadStateService', () => {
 
     expect(currentBatches.length).toBe(1);
     expect(currentBatches[0].workspaceId).toBe(2);
+    expect(fileServiceMock.getUploadJobStatus).toHaveBeenCalledWith(2, 'job2');
   });
 
-  it('should handle a very large number of issues without stack overflow', fakeAsync(() => {
-    service = TestBed.inject(TestResultsUploadStateService);
-    const batch: PendingUploadBatch = {
-      workspaceId: 3,
-      jobIds: ['job-large'],
-      resultType: 'responses',
-      beforeOverview: { testPersons: 0, uniqueResponses: 0 } as TestResultsOverviewResponse,
-      initialIssues: [],
-      progress: 0,
-      completedCount: 0,
-      totalJobs: 1
-    };
+  it('should handle a very large number of issues without stack overflow', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      service = TestBed.inject(TestResultsUploadStateService);
+      const batch: PendingUploadBatch = {
+        workspaceId: 3,
+        jobIds: ['job-large'],
+        resultType: 'responses',
+        beforeOverview: { testPersons: 0, uniqueResponses: 0 } as TestResultsOverviewResponse,
+        initialIssues: [],
+        progress: 0,
+        completedCount: 0,
+        totalJobs: 1
+      };
 
-    const largeIssues = Array.from({ length: 100000 }, (_, i) => ({
-      type: 'warning',
-      message: `Issue ${i}`
-    }));
+      const largeIssues = Array.from({ length: 100000 }, (_, i) => ({
+        type: 'warning',
+        message: `Issue ${i}`
+      }));
 
-    fileServiceMock.getUploadJobStatus.mockReturnValue(of({
-      status: 'completed',
-      progress: 100,
-      result: { issues: largeIssues }
-    }));
+      fileServiceMock.getUploadJobStatus.mockReturnValue(of({
+        status: 'completed',
+        progress: 100,
+        result: { issues: largeIssues }
+      }));
 
-    service.registerBatch(batch);
-    tick(1001); // Poll
-    tick(1000); // Finish
-    flushMicrotasks();
+      service.registerBatch(batch);
+      await jest.advanceTimersByTimeAsync(1001); // Poll
+      await jest.advanceTimersByTimeAsync(1000); // Finish
+      await jest.advanceTimersByTimeAsync(0);
 
-    expect(dialogMock.open).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-      data: expect.objectContaining({
-        result: expect.objectContaining({
-          issues: expect.arrayContaining([{ type: 'warning', message: 'Issue 0' }])
+      expect(dialogMock.open).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        data: expect.objectContaining({
+          result: expect.objectContaining({
+            issues: expect.arrayContaining([{ type: 'warning', message: 'Issue 0' }])
+          })
         })
-      })
-    }));
+      }));
 
-    // Check length separately to avoid massive error messages if it fails
-    const lastCall = dialogMock.open.mock.calls[0];
-    expect(lastCall[1].data.result.issues.length).toBe(100000);
+      // Check length separately to avoid massive error messages if it fails
+      const lastCall = dialogMock.open.mock.calls[0];
+      expect(lastCall[1].data.result.issues.length).toBe(100000);
 
-    discardPeriodicTasks();
-  }));
+      jest.clearAllTimers();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   it('should merge response import mode counters across completed jobs', () => {
     service = TestBed.inject(TestResultsUploadStateService);

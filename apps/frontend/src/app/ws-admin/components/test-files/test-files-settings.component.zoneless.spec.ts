@@ -93,10 +93,10 @@ describe('File view settings with real services without Zone', () => {
       enabled: true, baseUrl: 'https://synthetic.example', hasApplicationToken: true
     });
     await fixture.whenStable();
-    const buttons = Array.from(fixture.nativeElement.querySelectorAll('a')) as HTMLAnchorElement[];
+    const buttons = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
     const importButton = buttons.find(button => button.textContent?.includes('ACP aus Content Pool'));
     expect(importButton).toBeDefined();
-    expect(importButton?.getAttribute('aria-disabled')).not.toBe('true');
+    expect(importButton?.disabled).toBe(false);
   });
 
   it('releases configuration loading after an actual HTTP error', async () => {

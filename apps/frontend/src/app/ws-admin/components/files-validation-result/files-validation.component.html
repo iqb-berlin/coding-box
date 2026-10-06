@@ -235,7 +235,7 @@
 
           <div class="mode-selection">
             <div class="select-all-row">
-              <mat-checkbox [checked]="allSelected()" [indeterminate]="selection.hasValue() && !allSelected()"
+              <mat-checkbox [checked]="allSelected()" [indeterminate]="selectedTestTakerCount() > 0 && !allSelected()"
                 (change)="toggleAllSelection()">
                 Alle auswählen
               </mat-checkbox>
@@ -253,7 +253,7 @@
 
           <cdk-virtual-scroll-viewport class="test-takers-list" [itemSize]="48" [minBufferPx]="200" [maxBufferPx]="400">
             <div *cdkVirtualFor="let item of filteredTestTakers(); trackBy: trackByFn" class="virtual-item">
-              <mat-checkbox [checked]="selection.isSelected(item)" (change)="toggleSelection(item)">
+              <mat-checkbox [checked]="isTestTakerSelected(item)" (change)="toggleSelection(item)">
                 <strong>{{ item.testTaker }}:</strong> {{ item.login }} ({{ item.mode }})
                 @if (item.consider === true) {
                 <mat-icon matTooltip="Wird berücksichtigt">check_circle</mat-icon>
@@ -267,22 +267,22 @@
 
           <div class="exclude-button-container">
             <button mat-raised-button color="primary" class="exclude-button" (click)="markTestTakersAsConsidered()"
-              [disabled]="isConsidering() || selection.selected.length === 0">
+              [disabled]="isConsidering() || selectedTestTakerCount() === 0">
               <mat-icon>{{ isConsidering() ? 'hourglass_empty' : 'check_circle' }}</mat-icon>
               @if (isConsidering()) {
               Wird bearbeitet... ({{ consideringProgress() }}%)
               } @else {
-              Ausgewählte TestTaker berücksichtigen ({{ selection.selected.length }})
+              Ausgewählte TestTaker berücksichtigen ({{ selectedTestTakerCount() }})
               }
             </button>
 
             <button mat-raised-button color="warn" class="exclude-button" (click)="markTestTakersAsExcluded()"
-              [disabled]="isExcluding() || selection.selected.length === 0">
+              [disabled]="isExcluding() || selectedTestTakerCount() === 0">
               <mat-icon>{{ isExcluding() ? 'hourglass_empty' : 'block' }}</mat-icon>
               @if (isExcluding()) {
               Wird bearbeitet... ({{ excludingProgress() }}%)
               } @else {
-              Ausgewählte TestTaker ausschließen ({{ selection.selected.length }})
+              Ausgewählte TestTaker ausschließen ({{ selectedTestTakerCount() }})
               }
             </button>
 
@@ -395,7 +395,11 @@
                   <span class="value success">{{ summary().booklets.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
                 <div class="card-stat" [class.clickable-stat]="summary().booklets.missingFiles > 0"
-                  (click)="summary().booklets.missingFiles > 0 ? toggleSummaryList('booklets') : null">
+                  (click)="summary().booklets.missingFiles > 0 ? toggleSummaryList('booklets') : null"
+                  role="button"
+                  tabindex="0"
+                  (keydown.enter)="onActionKeydown($event)"
+                  (keydown.space)="onActionKeydown($event)">
                   <span class="label">So viele fehlen (einzigartig):</span>
                   <span class="value" [class.error]="summary().booklets.missingFiles > 0">{{ summary().booklets.missingFiles
                     }}</span>
@@ -428,7 +432,11 @@
                   <span class="value success">{{ summary().units.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
                 <div class="card-stat" [class.clickable-stat]="summary().units.missingFiles > 0"
-                  (click)="summary().units.missingFiles > 0 ? toggleSummaryList('units') : null">
+                  (click)="summary().units.missingFiles > 0 ? toggleSummaryList('units') : null"
+                  role="button"
+                  tabindex="0"
+                  (keydown.enter)="onActionKeydown($event)"
+                  (keydown.space)="onActionKeydown($event)">
                   <span class="label">So viele fehlen (einzigartig):</span>
                   <span class="value" [class.error]="summary().units.missingFiles > 0">{{ summary().units.missingFiles
                     }}</span>
@@ -461,7 +469,11 @@
                   <span class="value success">{{ summary().schemes.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
                 <div class="card-stat" [class.clickable-stat]="summary().schemes.missingFiles > 0"
-                  (click)="summary().schemes.missingFiles > 0 ? toggleSummaryList('schemes') : null">
+                  (click)="summary().schemes.missingFiles > 0 ? toggleSummaryList('schemes') : null"
+                  role="button"
+                  tabindex="0"
+                  (keydown.enter)="onActionKeydown($event)"
+                  (keydown.space)="onActionKeydown($event)">
                   <span class="label">So viele fehlen (einzigartig):</span>
                   <span class="value" [class.error]="summary().schemes.missingFiles > 0">{{ summary().schemes.missingFiles
                     }}</span>
@@ -494,7 +506,11 @@
                   <span class="value success">{{ summary().schemer.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
                 <div class="card-stat" [class.clickable-stat]="summary().schemer.missingFiles > 0"
-                  (click)="summary().schemer.missingFiles > 0 ? toggleSummaryList('schemer') : null">
+                  (click)="summary().schemer.missingFiles > 0 ? toggleSummaryList('schemer') : null"
+                  role="button"
+                  tabindex="0"
+                  (keydown.enter)="onActionKeydown($event)"
+                  (keydown.space)="onActionKeydown($event)">
                   <span class="label">So viele fehlen (einzigartig):</span>
                   <span class="value" [class.error]="summary().schemer.missingFiles > 0">{{ summary().schemer.missingFiles
                     }}</span>
@@ -527,7 +543,11 @@
                   <span class="value success">{{ summary().definitions.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
                 <div class="card-stat" [class.clickable-stat]="summary().definitions.missingFiles > 0"
-                  (click)="summary().definitions.missingFiles > 0 ? toggleSummaryList('definitions') : null">
+                  (click)="summary().definitions.missingFiles > 0 ? toggleSummaryList('definitions') : null"
+                  role="button"
+                  tabindex="0"
+                  (keydown.enter)="onActionKeydown($event)"
+                  (keydown.space)="onActionKeydown($event)">
                   <span class="label">So viele fehlen (einzigartig):</span>
                   <span class="value" [class.error]="summary().definitions.missingFiles > 0">{{
                     summary().definitions.missingFiles }}</span>
@@ -560,7 +580,11 @@
                   <span class="value success">{{ summary().player.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
                 <div class="card-stat" [class.clickable-stat]="summary().player.missingFiles > 0"
-                  (click)="summary().player.missingFiles > 0 ? toggleSummaryList('player') : null">
+                  (click)="summary().player.missingFiles > 0 ? toggleSummaryList('player') : null"
+                  role="button"
+                  tabindex="0"
+                  (keydown.enter)="onActionKeydown($event)"
+                  (keydown.space)="onActionKeydown($event)">
                   <span class="label">So viele fehlen (einzigartig):</span>
                   <span class="value" [class.error]="summary().player.missingFiles > 0">{{ summary().player.missingFiles
                     }}</span>
@@ -593,7 +617,11 @@
                   <span class="value success">{{ summary().metadata.complete }} / {{ summary().totalTestTakers }}</span>
                 </div>
                 <div class="card-stat" [class.clickable-stat]="summary().metadata.missingFiles > 0"
-                  (click)="summary().metadata.missingFiles > 0 ? toggleSummaryList('metadata') : null">
+                  (click)="summary().metadata.missingFiles > 0 ? toggleSummaryList('metadata') : null"
+                  role="button"
+                  tabindex="0"
+                  (keydown.enter)="onActionKeydown($event)"
+                  (keydown.space)="onActionKeydown($event)">
                   <span class="label">So viele fehlen (einzigartig):</span>
                   <span class="value" [class.error]="summary().metadata.missingFiles > 0">{{ summary().metadata.missingFiles
                     }}</span>
@@ -675,7 +703,11 @@
               }
             </p>
             <div class="files-list-container">
-              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'booklets')">
+              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'booklets')"
+                role="button"
+                tabindex="0"
+                (keydown.enter)="onActionKeydown($event)"
+                (keydown.space)="onActionKeydown($event)">
                 <mat-icon class="files-icon">list</mat-icon>
                 <span>
                   Alle Dateien: {{ val.booklets.files.length }}
@@ -791,7 +823,11 @@
               }
             </p>
             <div class="files-list-container">
-              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'units')">
+              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'units')"
+                role="button"
+                tabindex="0"
+                (keydown.enter)="onActionKeydown($event)"
+                (keydown.space)="onActionKeydown($event)">
                 <mat-icon class="files-icon">list</mat-icon>
                 <span>
                   Alle Dateien: {{ val.units.files.length }}
@@ -891,7 +927,11 @@
               }
             </p>
             <div class="files-list-container">
-              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'schemes')">
+              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'schemes')"
+                role="button"
+                tabindex="0"
+                (keydown.enter)="onActionKeydown($event)"
+                (keydown.space)="onActionKeydown($event)">
                 <mat-icon class="files-icon">list</mat-icon>
                 <span>
                   Alle Dateien: {{ val.schemes.files.length }}
@@ -982,7 +1022,11 @@
               }
             </p>
             <div class="files-list-container">
-              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'schemer')">
+              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'schemer')"
+                role="button"
+                tabindex="0"
+                (keydown.enter)="onActionKeydown($event)"
+                (keydown.space)="onActionKeydown($event)">
                 <mat-icon class="files-icon">list</mat-icon>
                 <span>
                   Alle Dateien: {{ val.schemer.files.length }}
@@ -1067,7 +1111,11 @@
               }
             </p>
             <div class="files-list-container">
-              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'definitions')">
+              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'definitions')"
+                role="button"
+                tabindex="0"
+                (keydown.enter)="onActionKeydown($event)"
+                (keydown.space)="onActionKeydown($event)">
                 <mat-icon class="files-icon">list</mat-icon>
                 <span>
                   Alle Dateien: {{ val.definitions.files.length }}
@@ -1158,7 +1206,11 @@
               }
             </p>
             <div class="files-list-container">
-              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'player')">
+              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'player')"
+                role="button"
+                tabindex="0"
+                (keydown.enter)="onActionKeydown($event)"
+                (keydown.space)="onActionKeydown($event)">
                 <mat-icon class="files-icon">list</mat-icon>
                 <span>
                   Alle Dateien: {{ val.player.files.length }}
@@ -1243,7 +1295,11 @@
               }
             </p>
             <div class="files-list-container">
-              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'metadata')">
+              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'metadata')"
+                role="button"
+                tabindex="0"
+                (keydown.enter)="onActionKeydown($event)"
+                (keydown.space)="onActionKeydown($event)">
                 <mat-icon class="files-icon">list</mat-icon>
                 <span>
                   Alle Dateien: {{ val.metadata.files.length }}

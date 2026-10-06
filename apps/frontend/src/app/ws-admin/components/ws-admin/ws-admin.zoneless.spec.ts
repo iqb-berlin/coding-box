@@ -2,7 +2,6 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { BehaviorSubject, of, Subject } from 'rxjs';
 import { WsAdminComponent } from './ws-admin.component';
@@ -25,7 +24,6 @@ describe('Workspace navigation without Zone', () => {
       imports: [WsAdminComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
-        provideNoopAnimations(),
         provideRouter([{ path: 'workspace-admin/:ws/test-results', component: WsAdminComponent }]),
         { provide: AppService, useValue: { authData: authData.value, authData$: authData, selectedWorkspaceId: 5 } },
         { provide: UserBackendService, useValue: { getUsers } },

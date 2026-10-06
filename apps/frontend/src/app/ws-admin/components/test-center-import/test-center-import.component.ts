@@ -1,6 +1,7 @@
 import {
-  ChangeDetectionStrategy, Component, inject, OnInit, OnDestroy
+  Component, DestroyRef, inject, signal, ChangeDetectionStrategy, OnInit, OnDestroy
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 import {
@@ -15,8 +16,7 @@ import { MatFormField, MatHint, MatLabel } from '@angular/material/form-field';
 import {
   FormsModule,
   ReactiveFormsModule,
-  UntypedFormBuilder,
-  UntypedFormGroup,
+  NonNullableFormBuilder,
   Validators
 } from '@angular/forms';
 import { MatInput } from '@angular/material/input';
@@ -123,6 +123,7 @@ export interface ImportFormValues {
   ]
 })
 export class TestCenterImportComponent implements OnInit, OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
   private userBackendService = inject(UserBackendService);
   private importService = inject(ImportService);
   private dialogRef = inject(MatDialogRef<TestCenterImportComponent>);
@@ -131,7 +132,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
   }>(MAT_DIALOG_DATA);
 
   private workspaceAdminService = inject(WorkspaceAdminService);
-  private fb = inject(UntypedFormBuilder);
+  private fb = inject(NonNullableFormBuilder);
   private appService = inject(AppService);
   private dialog = inject(MatDialog);
 
@@ -158,6 +159,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
     }
   ];
 
+  private authenticationRequestId = 0;
   authToken: string = '';
   protected displayedColumns: string[] = [
     'select',
@@ -172,60 +174,55 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
   ];
 
   selectedRows: TestGroupsInfoDto[] = [];
-  testGroups: TestGroupsInfoDto[] = [];
-  workspaces: WorkspaceAdmin[] = [];
-  loginForm: UntypedFormGroup;
-  importFilesForm: UntypedFormGroup;
-  authenticationError: boolean = false;
-  protected filesSelectionError: boolean = false;
-  protected testGroupsLoadError: string | null = null;
-  protected uploadError: string | null = null;
-  authenticated: boolean = false;
-  isLoadingTestGroups: boolean = false;
-  protected isUploadingTestFiles: boolean = false;
-  isUploadingTestResults: boolean = false;
-  uploadData: Result | null = null;
+  readonly testGroups = signal<TestGroupsInfoDto[]>([]);
+  readonly workspaces = signal<WorkspaceAdmin[]>([]);
+  readonly loginForm = this.fb.group({
+    name: this.fb.control('', [Validators.required, Validators.minLength(1)]),
+    pw: this.fb.control('', [Validators.required, Validators.minLength(1)]),
+    testCenter: this.fb.control<number | ''>('', [Validators.required]),
+    testCenterIndividual: this.fb.control({ value: '', disabled: true }, [Validators.required])
+  });
+
+  readonly importFilesForm = this.fb.group({
+    workspace: this.fb.control('', [Validators.required]),
+    responses: this.fb.control(false),
+    definitions: this.fb.control(false),
+    units: this.fb.control(false),
+    player: this.fb.control(false),
+    codings: this.fb.control(false),
+    logs: this.fb.control(false),
+    responseOverwriteMode: this.fb.control<TestResultsOverwriteMode>('skip'),
+    testTakers: this.fb.control(false),
+    booklets: this.fb.control(false),
+    metadata: this.fb.control(false)
+  });
+
+  readonly authenticationError = signal<boolean>(false);
+  protected readonly filesSelectionError = signal<boolean>(false);
+  protected readonly testGroupsLoadError = signal<string | null>(null);
+  protected readonly uploadError = signal<string | null>(null);
+  readonly authenticated = signal<boolean>(false);
+  readonly isLoadingTestGroups = signal<boolean>(false);
+  protected readonly isUploadingTestFiles = signal<boolean>(false);
+  readonly isUploadingTestResults = signal<boolean>(false);
+  readonly uploadData = signal<Result | null>(null);
   private firstTestFilesImportData: Result | null = null;
-  testCenterInstance: Testcenter[] = [];
-  showTestGroups: boolean = false;
-  importingTestGroups: string[] = [];
-  protected importProgressPercent: number = 0;
-  protected totalUploadsExpected: number = 0;
-  protected completedUploads: number = 0;
+  readonly testCenterInstance = signal<Testcenter[]>([]);
+  readonly showTestGroups = signal<boolean>(false);
+  readonly importingTestGroups = signal<string[]>([]);
+  protected readonly importProgressPercent = signal<number>(0);
+  protected readonly totalUploadsExpected = signal<number>(0);
+  protected readonly completedUploads = signal<number>(0);
   importRunId: string | null = null;
-  protected uploadProgressDetails: ImportWorkspaceFilesProgressDto | null = null;
-  protected testGroupsLoadProgress: TestGroupsLoadProgressDto | null = null;
-  protected testGroupsLoadElapsedSeconds: number = 0;
+  protected readonly uploadProgressDetails = signal<ImportWorkspaceFilesProgressDto | null>(null);
+  protected readonly testGroupsLoadProgress = signal<TestGroupsLoadProgressDto | null>(null);
+  protected readonly testGroupsLoadElapsedSeconds = signal<number>(0);
   private progressPollingSub?: Subscription;
   private testGroupsProgressPollingSub?: Subscription;
   private testGroupsLoadStartedAt: number | null = null;
 
-  constructor() {
-    this.loginForm = this.fb.group({
-      name: this.fb.control('', [Validators.required, Validators.minLength(1)]),
-      pw: this.fb.control('', [Validators.required, Validators.minLength(1)]),
-      testCenter: this.fb.control('', [Validators.required]),
-      testCenterIndividual: this.fb.control({ value: '', disabled: true }, [
-        Validators.required
-      ])
-    });
-    this.importFilesForm = this.fb.group({
-      workspace: this.fb.control('', [Validators.required]),
-      responses: this.fb.control(false),
-      definitions: this.fb.control(false),
-      units: this.fb.control(false),
-      player: this.fb.control(false),
-      codings: this.fb.control(false),
-      logs: this.fb.control(false),
-      responseOverwriteMode: this.fb.control('skip'),
-      testTakers: this.fb.control(false),
-      booklets: this.fb.control(false),
-      metadata: this.fb.control(false)
-    });
-  }
-
   protected selectAllImportOptions(): void {
-    let optionControls: string[];
+    let optionControls: (keyof ImportOptions)[];
 
     if (this.data.importType === 'testResults') {
       // For results import, only responses and logs are relevant
@@ -244,14 +241,14 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
     }
 
     optionControls.forEach(name => {
-      this.importFilesForm.get(name)?.setValue(true);
+      this.importFilesForm.controls[name].setValue(true);
     });
 
-    this.filesSelectionError = false;
+    this.filesSelectionError.set(false);
   }
 
   protected clearAllImportOptions(): void {
-    const optionControls: string[] = [
+    const optionControls: (keyof ImportOptions)[] = [
       'responses',
       'definitions',
       'units',
@@ -264,31 +261,30 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
     ];
 
     optionControls.forEach(name => {
-      this.importFilesForm.get(name)?.setValue(false);
+      this.importFilesForm.controls[name].setValue(false);
     });
   }
 
   ngOnInit(): void {
     // Ensure we always start with a clean state when the dialog opens
-    this.uploadData = null;
-    this.isUploadingTestFiles = false;
-    this.isUploadingTestResults = false;
-    this.filesSelectionError = false;
+    this.uploadData.set(null);
+    this.isUploadingTestFiles.set(false);
+    this.isUploadingTestResults.set(false);
+    this.filesSelectionError.set(false);
 
     if (this.workspaceAdminService.getAuthToken()) {
-      this.authenticated = true;
+      this.authenticated.set(true);
       this.authToken = this.workspaceAdminService.getAuthToken();
-      this.workspaces = this.workspaceAdminService.getClaims();
-      this.testCenterInstance =
-        this.workspaceAdminService.getlastTestcenterInstance();
-      this.testGroups = this.workspaceAdminService.getTestGroups();
+      this.workspaces.set(this.workspaceAdminService.getClaims());
+      this.testCenterInstance.set(this.workspaceAdminService.getlastTestcenterInstance());
+      this.testGroups.set(this.workspaceAdminService.getTestGroups());
       const storedServer = this.workspaceAdminService.getLastServer();
       const storedUrl = this.workspaceAdminService.getLastUrl();
       if (storedServer) {
-        this.loginForm.get('testCenter')?.setValue(parseInt(storedServer, 10));
+        this.loginForm.controls.testCenter.setValue(parseInt(storedServer, 10));
         if (storedUrl) {
-          this.loginForm.get('testCenterIndividual')?.setValue(storedUrl);
-          this.loginForm.get('testCenterIndividual')?.enable();
+          this.loginForm.controls.testCenterIndividual.setValue(storedUrl);
+          this.loginForm.controls.testCenterIndividual.enable();
         }
       }
     }
@@ -309,80 +305,91 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
   }
 
   protected isAllSelected(): boolean {
-    return this.testGroups.length > 0 &&
-      this.selectedRows.length === this.testGroups.length;
+    return this.testGroups().length > 0 &&
+      this.selectedRows.length === this.testGroups().length;
   }
 
   toggleAllRows(event: { checked: boolean }): void {
     if (event.checked) {
-      this.selectedRows = [...this.testGroups];
+      this.selectedRows = [...this.testGroups()];
     } else {
       this.selectedRows = [];
     }
   }
 
   authenticate(): void {
-    const name = this.loginForm.get('name')?.value;
-    const pw = this.loginForm.get('pw')?.value;
-    const url: string = this.loginForm.get('testCenterIndividual')?.value;
-    this.testCenterInstance = this.testCenters.filter(
-      testcenter => testcenter.id === this.loginForm.get('testCenter')?.value
-    );
+    const {
+      name, pw, testCenter, testCenterIndividual: url
+    } = this.loginForm.getRawValue();
+    if (this.loginForm.invalid || testCenter === '') {
+      this.loginForm.markAllAsTouched();
+      return;
+    }
+    this.authenticationRequestId += 1;
+    const requestId = this.authenticationRequestId;
+    this.testCenterInstance.set(this.testCenters.filter(
+      testcenter => testcenter.id === testCenter
+    ));
+    // The backend selects a custom URL only when no numbered server is sent.
+    const server = testCenter === 6 ? '' : testCenter.toString();
     this.userBackendService
-      .authenticate(name, pw, this.testCenterInstance[0]?.id.toString(), url)
+      .authenticate(name, pw, server, url)
       .pipe(
         catchError(() => {
-          this.authenticationError = true;
+          if (requestId === this.authenticationRequestId) this.authenticationError.set(true);
           return of();
-        })
+        }),
+        takeUntilDestroyed(this.destroyRef)
       )
       .subscribe((response: { token?: string; claims?: { workspaceAdmin: WorkspaceAdmin[] } }) => {
+        if (requestId !== this.authenticationRequestId) return;
         if (!response || !response.token || !response.claims) {
-          this.authenticationError = true;
+          this.authenticationError.set(true);
           return;
         }
         this.authToken = response.token;
-        this.authenticationError = false;
+        this.authenticationError.set(false);
         this.workspaceAdminService.setLastAuthToken(response.token);
         this.workspaceAdminService.setLastServer(
-          this.testCenterInstance[0]?.id.toString()
+          testCenter.toString()
         );
         this.workspaceAdminService.setLastUrl(url);
         this.workspaceAdminService.setClaims(response.claims.workspaceAdmin);
         this.workspaceAdminService.setlastTestcenterInstance(
-          this.testCenterInstance
+          this.testCenterInstance()
         );
-        this.workspaces = response.claims.workspaceAdmin;
-        this.authenticated = true;
+        this.workspaces.set(response.claims.workspaceAdmin);
+        this.authenticated.set(true);
       });
   }
 
   logout(): boolean {
-    this.authenticated = false;
+    this.authenticationRequestId += 1;
+    this.authenticated.set(false);
     this.authToken = '';
     this.workspaceAdminService.setLastAuthToken('');
     this.workspaceAdminService.setLastServer('');
     this.workspaceAdminService.setLastUrl('');
     this.workspaceAdminService.setClaims([]);
     this.workspaceAdminService.setlastTestcenterInstance([]);
-    this.workspaces = [];
+    this.workspaces.set([]);
     return true;
   }
 
   isIndividualTcSelected(value: number): void {
     if (value !== 6) {
-      this.loginForm.get('testCenterIndividual')?.disable();
+      this.loginForm.controls.testCenterIndividual.disable();
     } else {
-      this.loginForm.get('testCenterIndividual')?.enable();
+      this.loginForm.controls.testCenterIndividual.enable();
     }
   }
 
   getTestGroups(): void {
     const formValues = {
-      testCenter: this.loginForm.get('testCenter')?.value,
-      workspace: this.importFilesForm.get('workspace')?.value,
+      testCenter: this.loginForm.controls.testCenter.value,
+      workspace: this.importFilesForm.controls.workspace.value,
       testCenterIndividual:
-        this.loginForm.get('testCenterIndividual')?.value || ''
+        this.loginForm.controls.testCenterIndividual.value || ''
     };
 
     // Use stored server and url if available, otherwise fall back to form values
@@ -394,12 +401,12 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
       formValues.testCenterIndividual;
 
     const importRunId = this.createImportRunId();
-    this.isLoadingTestGroups = true;
-    this.importProgressPercent = 0;
-    this.testGroupsLoadProgress = null;
-    this.testGroupsLoadElapsedSeconds = 0;
-    this.testGroupsLoadError = null;
-    this.uploadError = null;
+    this.isLoadingTestGroups.set(true);
+    this.importProgressPercent.set(0);
+    this.testGroupsLoadProgress.set(null);
+    this.testGroupsLoadElapsedSeconds.set(0);
+    this.testGroupsLoadError.set(null);
+    this.uploadError.set(null);
     this.startTestGroupsProgressPolling(importRunId);
     this.importService
       .importTestcenterGroups(
@@ -410,31 +417,32 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
         this.authToken,
         importRunId
       )
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response: TestGroupsInfoDto[]) => {
-          this.isLoadingTestGroups = false;
+          this.isLoadingTestGroups.set(false);
           this.stopTestGroupsProgressPolling();
           this.workspaceAdminService.setTestGroups(response);
-          this.testGroups = response;
+          this.testGroups.set(response);
           this.selectedRows = [];
-          this.showTestGroups = true;
+          this.showTestGroups.set(true);
         },
         error: error => {
-          this.isLoadingTestGroups = false;
+          this.isLoadingTestGroups.set(false);
           this.stopTestGroupsProgressPolling();
-          this.testGroups = [];
+          this.testGroups.set([]);
           this.selectedRows = [];
-          this.showTestGroups = false;
-          this.testGroupsLoadError = this.getErrorMessage(
+          this.showTestGroups.set(false);
+          this.testGroupsLoadError.set(this.getErrorMessage(
             error,
             'Testgruppen konnten nicht abgerufen werden. Bitte Verbindung und Testcenter-Sitzung prüfen.'
-          );
+          ));
         }
       });
   }
 
   protected goBackToOptions(): void {
-    this.showTestGroups = false;
+    this.showTestGroups.set(false);
     this.selectedRows = [];
   }
 
@@ -466,68 +474,63 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
       }
     });
 
-    const result = await firstValueFrom(dialogRef.afterClosed());
+    const result = await firstValueFrom(
+      dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)),
+      { defaultValue: false }
+    );
     if (result === true) return 'overwrite';
     if (result === 'skip') return 'skip';
     return 'cancel';
   }
 
   getTestData(): void {
-    const formValues = {
-      testCenter: this.loginForm.get('testCenter')?.value,
-      workspace: this.importFilesForm.get('workspace')?.value,
-      testCenterIndividual:
-        this.loginForm.get('testCenterIndividual')?.value || '',
-      importOptions: {
-        definitions: this.importFilesForm.get('definitions')?.value,
-        responses: this.importFilesForm.get('responses')?.value,
-        units: this.importFilesForm.get('units')?.value,
-        player: this.importFilesForm.get('player')?.value,
-        codings: this.importFilesForm.get('codings')?.value,
-        logs: this.importFilesForm.get('logs')?.value,
-        testTakers: this.importFilesForm.get('testTakers')?.value,
-        booklets: this.importFilesForm.get('booklets')?.value,
-        metadata: this.importFilesForm.get('metadata')?.value
-      },
-      responseOverwriteMode:
-        this.importFilesForm.get('responseOverwriteMode')?.value || 'skip'
+    const { testCenter, testCenterIndividual } = this.loginForm.getRawValue();
+    if (testCenter === '') return;
+    const { workspace, responseOverwriteMode, ...importOptions } = this.importFilesForm.getRawValue();
+    const formValues: ImportFormValues = {
+      testCenter,
+      workspace,
+      testCenterIndividual,
+      importOptions,
+      responseOverwriteMode
     };
 
-    this.uploadData = null;
+    this.uploadData.set(null);
     this.firstTestFilesImportData = null;
-    this.uploadError = null;
-    this.isUploadingTestFiles = true;
-    this.isUploadingTestResults = this.data.importType === 'testResults';
-    this.importProgressPercent = 0;
+    this.uploadError.set(null);
+    this.isUploadingTestFiles.set(true);
+    this.isUploadingTestResults.set(this.data.importType === 'testResults');
+    this.importProgressPercent.set(0);
     const selectedGroupNames = this.selectedRows.map(
       group => group.groupName
     );
     this.initializeUploadProgress(selectedGroupNames.length);
 
     // Store the test group names for display in loading message
-    this.importingTestGroups = selectedGroupNames;
+    this.importingTestGroups.set(selectedGroupNames);
 
     const needsConfirmation =
       formValues.importOptions.logs && this.hasSelectedGroupsWithLogs();
 
     if (needsConfirmation) {
-      this.isUploadingTestFiles = false;
-      this.isUploadingTestResults = false;
+      this.isUploadingTestFiles.set(false);
+      this.isUploadingTestResults.set(false);
       this.resetUploadProgress();
 
       this.confirmOverwriteLogs().then(choice => {
+        if (this.destroyRef.destroyed) return;
         if (choice === 'cancel') {
           this.resetUploadProgress();
           return;
         }
         if (choice === 'overwrite') {
-          this.isUploadingTestFiles = true;
-          this.isUploadingTestResults = this.data.importType === 'testResults';
+          this.isUploadingTestFiles.set(true);
+          this.isUploadingTestResults.set(this.data.importType === 'testResults');
           this.initializeUploadProgress(selectedGroupNames.length);
           this.performImport(formValues, selectedGroupNames, true);
         } else {
-          this.isUploadingTestFiles = true;
-          this.isUploadingTestResults = this.data.importType === 'testResults';
+          this.isUploadingTestFiles.set(true);
+          this.isUploadingTestResults.set(this.data.importType === 'testResults');
           this.initializeUploadProgress(selectedGroupNames.length);
           this.performImport(formValues, selectedGroupNames, false);
         }
@@ -537,7 +540,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
     }
   }
 
-  protected loadingMessage = 'Testresultate werden hochgeladen...';
+  protected readonly loadingMessage = signal('Testresultate werden hochgeladen...');
 
   protected readonly optionLabels: Record<ImportWorkspaceOptionKey, string> = {
     definitions: 'Aufgabendefinitionen',
@@ -560,13 +563,13 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
     const importedLogs = !!formValues.importOptions.logs;
 
     if (importedLogs && importedResponses) {
-      this.loadingMessage = `Importiere Antworten und Logs für Testgruppen: ${selectedGroupNames.join(', ')}...`;
+      this.loadingMessage.set(`Importiere Antworten und Logs für Testgruppen: ${selectedGroupNames.join(', ')}...`);
     } else if (importedLogs) {
-      this.loadingMessage = `Importiere Logs für Testgruppen: ${selectedGroupNames.join(', ')}...`;
+      this.loadingMessage.set(`Importiere Logs für Testgruppen: ${selectedGroupNames.join(', ')}...`);
     } else if (importedResponses) {
-      this.loadingMessage = `Importiere Antworten für Testgruppen: ${selectedGroupNames.join(', ')}...`;
+      this.loadingMessage.set(`Importiere Antworten für Testgruppen: ${selectedGroupNames.join(', ')}...`);
     } else {
-      this.loadingMessage = `Importiere Daten für Testgruppen: ${selectedGroupNames.join(', ')}...`;
+      this.loadingMessage.set(`Importiere Daten für Testgruppen: ${selectedGroupNames.join(', ')}...`);
     }
 
     if (this.data.importType === 'testResults') {
@@ -595,14 +598,15 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
         this.importRunId,
         responseOverwriteMode
       )
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: data => {
           this.incrementCompletedUploads();
           // Keep the latest response for non-testFiles flows.
           // For the two-step testFiles flow we store the initial response separately to avoid self-merging.
-          this.uploadData = data;
-          this.isUploadingTestFiles = false;
-          this.isUploadingTestResults = false;
+          this.uploadData.set(data);
+          this.isUploadingTestFiles.set(false);
+          this.isUploadingTestResults.set(false);
           this.stopUploadProgressPolling();
 
           if (this.data.importType === 'testResults') {
@@ -641,27 +645,28 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
                 data: { conflicts: initialConflicts }
               });
 
-              ref.afterClosed().subscribe((choice: TestFilesUploadConflictsDialogResult | undefined) => {
-                if (
-                  choice?.overwrite === true &&
-                  (choice.overwriteFileIds || []).length > 0
-                ) {
-                  this.isUploadingTestFiles = true;
-                  this.performImport(
-                    formValues,
-                    selectedGroupNames,
-                    overwriteExistingLogs,
-                    choice.overwriteFileIds
-                  );
-                } else {
-                  // User chose not to overwrite (or selected none): close with initial result.
-                  this.dialogRef.close({
-                    didImport: true,
-                    importType: 'testFiles',
-                    result: data
-                  });
-                }
-              });
+              ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef))
+                .subscribe((choice: TestFilesUploadConflictsDialogResult | undefined) => {
+                  if (
+                    choice?.overwrite === true &&
+                    (choice.overwriteFileIds || []).length > 0
+                  ) {
+                    this.isUploadingTestFiles.set(true);
+                    this.performImport(
+                      formValues,
+                      selectedGroupNames,
+                      overwriteExistingLogs,
+                      choice.overwriteFileIds
+                    );
+                  } else {
+                    // User chose not to overwrite (or selected none): close with initial result.
+                    this.dialogRef.close({
+                      didImport: true,
+                      importType: 'testFiles',
+                      result: data
+                    });
+                  }
+                });
               return;
             }
 
@@ -727,12 +732,12 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
           this.selectedRows = [];
         },
         error: error => {
-          this.uploadError = this.getErrorMessage(
+          this.uploadError.set(this.getErrorMessage(
             error,
             'Testcenter-Import fehlgeschlagen. Bitte Verbindung prüfen und erneut versuchen.'
-          );
-          this.isUploadingTestFiles = false;
-          this.isUploadingTestResults = false;
+          ));
+          this.isUploadingTestFiles.set(false);
+          this.isUploadingTestResults.set(false);
           this.stopUploadProgressPolling();
           this.resetUploadProgress();
         }
@@ -766,8 +771,8 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
       const total = selectedGroupNames.length;
       for (let i = 0; i < total; i++) {
         const groupName = selectedGroupNames[i];
-        this.importProgressPercent = Math.round((i / total) * 100);
-        this.loadingMessage = `Importiere Testgruppe ${i + 1}/${total}: ${groupName} (${this.importProgressPercent}%)...`;
+        this.importProgressPercent.set(Math.round((i / total) * 100));
+        this.loadingMessage.set(`Importiere Testgruppe ${i + 1}/${total}: ${groupName} (${this.importProgressPercent()}%)...`);
 
         const currentResult = await firstValueFrom(
           this.importService.importWorkspaceFiles(
@@ -782,8 +787,9 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
             undefined,
             undefined,
             formValues.responseOverwriteMode
-          )
+          ).pipe(takeUntilDestroyed(this.destroyRef))
         );
+        if (this.destroyRef.destroyed) return;
 
         if (currentResult.success === false) {
           throw new Error(
@@ -795,11 +801,11 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
         this.incrementCompletedUploads();
       }
 
-      this.importProgressPercent = 100;
-      this.loadingMessage = 'Import abgeschlossen (100%)';
-      this.uploadData = mergedResult;
-      this.isUploadingTestFiles = false;
-      this.isUploadingTestResults = false;
+      this.importProgressPercent.set(100);
+      this.loadingMessage.set('Import abgeschlossen (100%)');
+      this.uploadData.set(mergedResult);
+      this.isUploadingTestFiles.set(false);
+      this.isUploadingTestResults.set(false);
 
       const importedResponses = !!formValues.importOptions.responses;
       const importedLogs = !!formValues.importOptions.logs;
@@ -813,13 +819,14 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
         uploadResult: mergedResult
       });
     } catch (error) {
-      this.uploadError = this.getErrorMessage(
+      if (this.destroyRef.destroyed) return;
+      this.uploadError.set(this.getErrorMessage(
         error,
         'Testcenter-Import fehlgeschlagen. Bitte Verbindung prüfen und erneut versuchen.'
-      );
-      this.isUploadingTestFiles = false;
-      this.isUploadingTestResults = false;
-      this.importProgressPercent = 0;
+      ));
+      this.isUploadingTestFiles.set(false);
+      this.isUploadingTestResults.set(false);
+      this.importProgressPercent.set(0);
       this.resetUploadProgress();
     }
   }
@@ -844,63 +851,63 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
   }
 
   protected get uploadProgressPercent(): number {
-    if (this.totalUploadsExpected <= 0) return 0;
-    return Math.round((this.completedUploads / this.totalUploadsExpected) * 100);
+    if (this.totalUploadsExpected() <= 0) return 0;
+    return Math.round((this.completedUploads() / this.totalUploadsExpected()) * 100);
   }
 
   get testGroupsLoadPercent(): number {
-    const totalGroups = this.testGroupsLoadProgress?.totalGroups || 0;
+    const totalGroups = this.testGroupsLoadProgress()?.totalGroups || 0;
     if (totalGroups <= 0) return 0;
-    if (this.testGroupsLoadProgress?.status === 'completed') return 100;
+    if (this.testGroupsLoadProgress()?.status === 'completed') return 100;
     return Math.round(
-      ((this.testGroupsLoadProgress?.processedGroups || 0) / totalGroups) * 100
+      ((this.testGroupsLoadProgress()?.processedGroups || 0) / totalGroups) * 100
     );
   }
 
   get testGroupsLoadMessage(): string {
-    if (this.testGroupsLoadProgress?.status === 'unknown') {
+    if (this.testGroupsLoadProgress()?.status === 'unknown') {
       return 'Verbindung zum Testcenter wird hergestellt.';
     }
-    return this.testGroupsLoadProgress?.message ||
+    return this.testGroupsLoadProgress()?.message ||
       'Testgruppen werden vom Testcenter abgerufen.';
   }
 
   protected get testGroupsLoadElapsedText(): string {
-    if (this.testGroupsLoadElapsedSeconds < 60) {
-      return `${this.testGroupsLoadElapsedSeconds} s`;
+    if (this.testGroupsLoadElapsedSeconds() < 60) {
+      return `${this.testGroupsLoadElapsedSeconds()} s`;
     }
-    const minutes = Math.floor(this.testGroupsLoadElapsedSeconds / 60);
-    const seconds = this.testGroupsLoadElapsedSeconds % 60;
+    const minutes = Math.floor(this.testGroupsLoadElapsedSeconds() / 60);
+    const seconds = this.testGroupsLoadElapsedSeconds() % 60;
     return `${minutes} min ${seconds} s`;
   }
 
   private initializeUploadProgress(selectedGroupCount: number): void {
     if (this.data.importType === 'testResults') {
-      this.totalUploadsExpected = selectedGroupCount;
-      this.completedUploads = 0;
-      this.uploadProgressDetails = null;
+      this.totalUploadsExpected.set(selectedGroupCount);
+      this.completedUploads.set(0);
+      this.uploadProgressDetails.set(null);
       return;
     }
 
-    this.totalUploadsExpected = 1;
-    this.completedUploads = 0;
-    this.uploadProgressDetails = null;
+    this.totalUploadsExpected.set(1);
+    this.completedUploads.set(0);
+    this.uploadProgressDetails.set(null);
   }
 
   private incrementCompletedUploads(): void {
-    if (this.totalUploadsExpected <= 0) return;
-    this.completedUploads = Math.min(
-      this.completedUploads + 1,
-      this.totalUploadsExpected
-    );
+    if (this.totalUploadsExpected() <= 0) return;
+    this.completedUploads.set(Math.min(
+      this.completedUploads() + 1,
+      this.totalUploadsExpected()
+    ));
   }
 
   private resetUploadProgress(): void {
     this.stopUploadProgressPolling();
-    this.totalUploadsExpected = 0;
-    this.completedUploads = 0;
+    this.totalUploadsExpected.set(0);
+    this.completedUploads.set(0);
     this.importRunId = null;
-    this.uploadProgressDetails = null;
+    this.uploadProgressDetails.set(null);
   }
 
   private createImportRunId(): string {
@@ -915,17 +922,19 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
       switchMap(() => this.importService.getTestGroupsLoadProgress(
         this.appService.selectedWorkspaceId,
         importRunId
-      ))
-    ).subscribe(progress => {
-      this.updateTestGroupsLoadElapsedSeconds();
-      if (!progress) return;
+      )),
+      takeUntilDestroyed(this.destroyRef)
+    )
+      .subscribe(progress => {
+        this.updateTestGroupsLoadElapsedSeconds();
+        if (!progress) return;
 
-      this.testGroupsLoadProgress = progress;
+        this.testGroupsLoadProgress.set(progress);
 
-      if (progress.status === 'completed' || progress.status === 'failed') {
-        this.stopTestGroupsProgressPolling();
-      }
-    });
+        if (progress.status === 'completed' || progress.status === 'failed') {
+          this.stopTestGroupsProgressPolling();
+        }
+      });
   }
 
   private stopTestGroupsProgressPolling(): void {
@@ -935,13 +944,13 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
 
   private updateTestGroupsLoadElapsedSeconds(): void {
     if (!this.testGroupsLoadStartedAt) {
-      this.testGroupsLoadElapsedSeconds = 0;
+      this.testGroupsLoadElapsedSeconds.set(0);
       return;
     }
 
-    this.testGroupsLoadElapsedSeconds = Math.floor(
+    this.testGroupsLoadElapsedSeconds.set(Math.floor(
       (Date.now() - this.testGroupsLoadStartedAt) / 1000
-    );
+    ));
   }
 
   private startUploadProgressPolling(importRunId: string): void {
@@ -951,18 +960,20 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
       switchMap(() => this.importService.getImportWorkspaceFilesProgress(
         this.appService.selectedWorkspaceId,
         importRunId
-      ))
-    ).subscribe(progress => {
-      if (!progress) return;
+      )),
+      takeUntilDestroyed(this.destroyRef)
+    )
+      .subscribe(progress => {
+        if (!progress) return;
 
-      this.uploadProgressDetails = progress;
-      this.totalUploadsExpected = progress.totalPlanned;
-      this.completedUploads = progress.totalUploaded;
+        this.uploadProgressDetails.set(progress);
+        this.totalUploadsExpected.set(progress.totalPlanned);
+        this.completedUploads.set(progress.totalUploaded);
 
-      if (progress.status === 'completed' || progress.status === 'failed') {
-        this.stopUploadProgressPolling();
-      }
-    });
+        if (progress.status === 'completed' || progress.status === 'failed') {
+          this.stopUploadProgressPolling();
+        }
+      });
   }
 
   private stopUploadProgressPolling(): void {
@@ -971,6 +982,6 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
   }
 
   protected get visibleOptionProgress(): NonNullable<ImportWorkspaceFilesProgressDto['options']> {
-    return (this.uploadProgressDetails?.options || []).filter(option => option.planned > 0);
+    return (this.uploadProgressDetails()?.options || []).filter(option => option.planned > 0);
   }
 }

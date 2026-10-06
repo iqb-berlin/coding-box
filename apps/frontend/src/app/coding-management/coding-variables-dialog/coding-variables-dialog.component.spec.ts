@@ -3,9 +3,8 @@ import { delay } from 'rxjs/operators';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { CodingVariablesDialogComponent } from './coding-variables-dialog.component';
 import { FileBackendService } from '../../shared/services/file/file-backend.service';
 import { FileService } from '../../shared/services/file/file.service';
@@ -77,7 +76,6 @@ describe('CodingVariablesDialogComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [
-        NoopAnimationsModule,
         TranslateModule.forRoot(),
         CodingVariablesDialogComponent
       ],
@@ -106,6 +104,24 @@ describe('CodingVariablesDialogComponent', () => {
       'Alias_2',
       'Alias_3'
     ]);
+  });
+
+  it.each(['unit', 'scheme'])('dismisses the %s loading snackbar when the dialog cancels its read', kind => {
+    const pending = new Subject<unknown>();
+    if (kind === 'unit') {
+      fileServiceMock.getUnitInfo.mockReturnValue(pending);
+      component.openUnitInfo('Unit A');
+    } else {
+      fileServiceMock.getCodingSchemeFile.mockReturnValue(pending);
+      component.openCodingScheme('Unit A.VOCS');
+    }
+    const loadingSnackBar = snackBarMock.open.mock.results[0].value;
+    fixture.destroy();
+    expect(loadingSnackBar.dismiss).toHaveBeenCalled();
+    expect(pending.observed).toBe(false);
+    pending.error(new Error('Late failure'));
+    expect(snackBarMock.open).toHaveBeenCalledTimes(1);
+    expect(dialogMock.open).not.toHaveBeenCalled();
   });
 
   it('should expose aliases as public variable ids', () => {

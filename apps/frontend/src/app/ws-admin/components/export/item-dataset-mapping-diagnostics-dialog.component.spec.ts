@@ -1,5 +1,4 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import type {
@@ -57,7 +56,6 @@ describe('ItemDatasetMappingDiagnosticsDialogComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         ItemDatasetMappingDiagnosticsDialogComponent,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [

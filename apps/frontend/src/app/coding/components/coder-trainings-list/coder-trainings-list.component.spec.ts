@@ -1,7 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { delay } from 'rxjs/operators';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -60,7 +59,6 @@ describe('CoderTrainingsListComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         CoderTrainingsListComponent,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [
@@ -189,9 +187,9 @@ describe('CoderTrainingsListComponent', () => {
       workspaceId === 1 ? workspace1$.asObservable() : of(workspace2Trainings)
     ));
 
-    component.workspaceId = 1;
+    fixture.componentRef.setInput('workspaceId', 1);
     component.ngOnInit();
-    component.workspaceId = 2;
+    fixture.componentRef.setInput('workspaceId', 2);
     component.ngOnChanges({
       workspaceId: {
         currentValue: 2,

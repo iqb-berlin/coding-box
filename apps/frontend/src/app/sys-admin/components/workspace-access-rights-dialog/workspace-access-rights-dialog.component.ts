@@ -1,6 +1,7 @@
 import {
-  Component, inject, signal, ChangeDetectionStrategy
+  Component, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton } from '@angular/material/button';
 import {
@@ -20,6 +21,8 @@ import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/work
 })
 
 export class WorkspaceAccessRightsDialogComponent {
+  private readonly destroyRef = inject(DestroyRef);
+
   data = inject<{
     selectedUser: UserFullDto[];
   }>(MAT_DIALOG_DATA);
@@ -34,7 +37,7 @@ export class WorkspaceAccessRightsDialogComponent {
   constructor() {
     if (this.data && this.data.selectedUser && Array.isArray(this.data.selectedUser) && this.data.selectedUser.length > 0) {
       this.isLoadingUserWorkspaces.set(true);
-      this.userBackendService.getWorkspacesByUserListOrFail(this.data.selectedUser[0].id)
+      this.userBackendService.getWorkspacesByUserListOrFail(this.data.selectedUser[0].id).pipe(takeUntilDestroyed(this.destroyRef))
         .subscribe({
           next: workspaces => {
             this.selectedWorkspacesIds.set(workspaces || []);

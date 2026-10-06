@@ -117,13 +117,14 @@
       "{workspaceRoot}/.nvmrc",
       "{workspaceRoot}/package.json",
       "{workspaceRoot}/package-lock.json",
+      "{workspaceRoot}/vendor/**/*",
       "{workspaceRoot}/tsconfig.base.json"
     ],
     "sharedApiDto": [
       "{workspaceRoot}/api-dto/**/*"
     ],
     "frontendE2e": [
-      "{workspaceRoot}/cypress.config.ts",
+      "{workspaceRoot}/cypress*.config.ts",
       "{workspaceRoot}/cypress/**/*"
     ],
     "production": [

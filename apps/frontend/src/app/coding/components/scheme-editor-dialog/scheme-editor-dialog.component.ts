@@ -1,6 +1,5 @@
 import {
-  Component, Inject, OnInit, DestroyRef, inject, signal,
-  computed, ChangeDetectionStrategy
+  Component, OnInit, DestroyRef, inject, signal, computed, ChangeDetectionStrategy
 } from '@angular/core';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 
@@ -10,7 +9,7 @@ import {
 import { MatButton } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import {
-  of, catchError, finalize, map, switchMap
+  of, catchError, finalize, map, switchMap, take, takeUntil
 } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDivider } from '@angular/material/divider';
@@ -60,7 +59,7 @@ export interface SchemeEditorDialogData {
           [unitScheme]="unitScheme()"
           [schemerConfig]="{ definitionReportPolicy: 'eager', role: data.readOnly ? 'viewer' : 'editor' }"
           (schemeChanged)="onSchemeChanged($event)"
-          (error)="onError($event)">
+          (schemerError)="onError($event)">
         </coding-box-unit-schemer>
       } @else {
         @if (loadError()) {
@@ -125,6 +124,14 @@ export interface SchemeEditorDialogData {
   `]
 })
 export class SchemeEditorDialogComponent implements OnInit {
+  dialogRef = inject<MatDialogRef<SchemeEditorDialogComponent>>(MatDialogRef);
+  protected data = inject<SchemeEditorDialogData>(MAT_DIALOG_DATA);
+  private snackBar = inject(MatSnackBar);
+  private fileService = inject(FileService);
+  private translate = inject(TranslateService);
+  private dialog = inject(MatDialog);
+  private router = inject(Router);
+
   private readonly destroyRef = inject(DestroyRef);
   protected readonly loadError = signal('');
   readonly schemerHtml = signal('');
@@ -146,16 +153,6 @@ export class SchemeEditorDialogComponent implements OnInit {
       return raw.toString?.() ?? String(raw);
     }
   });
-
-  constructor(
-    public dialogRef: MatDialogRef<SchemeEditorDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) protected data: SchemeEditorDialogData,
-    private snackBar: MatSnackBar,
-    private fileService: FileService,
-    private translate: TranslateService,
-    private dialog: MatDialog,
-    private router: Router
-  ) { }
 
   ngOnInit(): void {
     this.unitScheme.set({
@@ -273,7 +270,7 @@ export class SchemeEditorDialogComponent implements OnInit {
         }
       });
 
-      confirmRef.afterClosed().subscribe(result => {
+      confirmRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
         if (result === true) {
           this.dialogRef.close(false);
         }
@@ -290,7 +287,7 @@ export class SchemeEditorDialogComponent implements OnInit {
     }
 
     const schemeFilename = this.data.fileName;
-    this.fileService.getFilesList(this.data.workspaceId, 1, 10000, 'Resource')
+    this.fileService.getFilesList(this.data.workspaceId, 1, 10000, 'Resource').pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: response => {
           const existingFile = response.data?.find(file => file.filename === schemeFilename && file.file_type === 'Resource');
@@ -322,7 +319,7 @@ export class SchemeEditorDialogComponent implements OnInit {
       formData,
       overwriteExisting,
       overwriteFileIds
-    )
+    ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(result => {
         const conflicts = result.conflicts || [];
         const ok = result.failed === 0 && conflicts.length === 0;
@@ -372,9 +369,12 @@ export class SchemeEditorDialogComponent implements OnInit {
   private navigateToCodingStatusOnAction(
     snackBarRef: ReturnType<MatSnackBar['open']> | undefined
   ): void {
-    snackBarRef?.onAction().subscribe(() => {
-      this.router.navigate(
-        [`/workspace-admin/${this.data.workspaceId}/coding/management`],
+    if (!snackBarRef) return;
+    const workspaceId = this.data.workspaceId;
+    const router = this.router;
+    snackBarRef.onAction().pipe(take(1), takeUntil(snackBarRef.afterDismissed())).subscribe(() => {
+      router.navigate(
+        [`/workspace-admin/${workspaceId}/coding/management`],
         { queryParams: { refreshCodingFreshness: '1' } }
       );
     });

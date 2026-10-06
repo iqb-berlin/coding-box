@@ -1,5 +1,5 @@
 import {
-  Component, Inject, OnInit, OnDestroy, ElementRef, ViewChild, inject, CUSTOM_ELEMENTS_SCHEMA, signal, ChangeDetectionStrategy
+  Component, OnInit, OnDestroy, ElementRef, inject, CUSTOM_ELEMENTS_SCHEMA, signal, viewChild, ChangeDetectionStrategy
 } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -208,7 +208,10 @@ export interface MetadataDialogData {
   `]
 })
 export class MetadataDialogComponent implements OnInit, OnDestroy {
-  @ViewChild('metadataForm') private metadataFormElement?: ElementRef<MetadataProfileFormElement>;
+  dialogRef = inject<MatDialogRef<MetadataDialogComponent>>(MatDialogRef);
+  data = inject<MetadataDialogData>(MAT_DIALOG_DATA);
+
+  private readonly metadataFormElement = viewChild<ElementRef<MetadataProfileFormElement>>('metadataForm');
 
   private readonly webComponents = inject(MetadataWebComponentService);
   private destroyed = false;
@@ -230,11 +233,6 @@ export class MetadataDialogComponent implements OnInit, OnDestroy {
 
   protected readonly isEditing = signal(false);
   readonly hasChanges = signal(false);
-
-  constructor(
-    public dialogRef: MatDialogRef<MetadataDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: MetadataDialogData
-  ) { }
 
   async ngOnInit() {
     // Deep copy metadata values to avoid mutating reference passed in
@@ -271,7 +269,7 @@ export class MetadataDialogComponent implements OnInit, OnDestroy {
   }
 
   private initializeWebComponent(): void {
-    const form = this.metadataFormElement?.nativeElement;
+    const form = this.metadataFormElement()?.nativeElement;
 
     if (!form) {
       return;
@@ -344,14 +342,14 @@ export class MetadataDialogComponent implements OnInit, OnDestroy {
   protected onViewChange(): void {
     // We don't save here because the listener already updates local state on every change
     // But we need to update the form with the new view's data
-    const form = this.metadataFormElement?.nativeElement;
+    const form = this.metadataFormElement()?.nativeElement;
     if (form && this.webComponentInitialized) {
       this.updateFormData(form);
     }
   }
 
   protected onEditModeChange(): void {
-    const form = this.metadataFormElement?.nativeElement;
+    const form = this.metadataFormElement()?.nativeElement;
     if (form) {
       form.readonly = !this.isEditing();
     }

@@ -4,7 +4,6 @@ import { provideHttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { OverlayContainer } from '@angular/cdk/overlay';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { of, throwError } from 'rxjs';
 
 import { CodingJobDefinitionsComponent } from './coding-job-definitions.component';
@@ -36,7 +35,6 @@ describe('CodingJobDefinitionsComponent', () => {
 
     await TestBed.configureTestingModule({
       providers: [
-        provideNoopAnimations(),
         { provide: SERVER_URL, useValue: environment.backendUrl },
         { provide: MatSnackBar, useValue: { open: jest.fn() } },
         {
@@ -188,7 +186,7 @@ describe('CodingJobDefinitionsComponent', () => {
 
   it('separates delete from regular definition actions', async () => {
     component.isLoading.set(false);
-    component.selectionMode = false;
+    fixture.componentRef.setInput('selectionMode', false);
     component.jobDefinitions.set([{
       id: 6,
       status: 'approved',
@@ -215,7 +213,7 @@ describe('CodingJobDefinitionsComponent', () => {
 
   it('does not offer job creation again once jobs exist for a definition', () => {
     component.isLoading.set(false);
-    component.selectionMode = false;
+    fixture.componentRef.setInput('selectionMode', false);
     component.jobDefinitions.set([{
       id: 6,
       status: 'approved',
@@ -235,7 +233,7 @@ describe('CodingJobDefinitionsComponent', () => {
 
   it('opens definitions with known existing jobs editable and blocks delete while jobs still block deletion', async () => {
     component.isLoading.set(false);
-    component.selectionMode = false;
+    fixture.componentRef.setInput('selectionMode', false);
     const definition = {
       id: 6,
       status: 'approved' as const,
@@ -303,7 +301,7 @@ describe('CodingJobDefinitionsComponent', () => {
 
   it('blocks job creation when the created jobs count is missing', () => {
     component.isLoading.set(false);
-    component.selectionMode = false;
+    fixture.componentRef.setInput('selectionMode', false);
     component.jobDefinitions.set([{
       id: 6,
       status: 'approved',

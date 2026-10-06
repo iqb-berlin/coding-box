@@ -1,6 +1,5 @@
-import { ChangeDetectorRef } from '@angular/core';
+import { ChangeDetectorRef, computed } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -97,7 +96,6 @@ describe('CoderTrainingComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         CoderTrainingComponent,
-        NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [
@@ -181,7 +179,7 @@ describe('CoderTrainingComponent', () => {
     const trainingStarted = jest.fn();
     const closed = jest.fn();
     component.startTraining.subscribe(trainingStarted);
-    component.close.subscribe(closed);
+    component.trainingClosed.subscribe(closed);
     component.ngOnInit();
     component.addVariable('VAR', 'UNIT', 3);
     component.onVariableChange('VAR2', 0);
@@ -215,6 +213,23 @@ describe('CoderTrainingComponent', () => {
       selectedCoders: component.coders()
     }));
     expect(closed).toHaveBeenCalledTimes(1);
+  });
+
+  it('invalidates bundle ordering computations without mutating the previous bundle', () => {
+    component.ngOnInit();
+    const previousBundles = component.availableBundles();
+    const previousBundle = previousBundles[0];
+    const ordering = computed(() => component.availableBundles()[0].caseOrderingMode);
+    expect(ordering()).toBe('alternating');
+
+    component.updateBundleCaseOrderingMode(5, 'continuous');
+    expect(ordering()).toBe('continuous');
+    expect(component.availableBundles()).not.toBe(previousBundles);
+    expect(component.availableBundles()[0]).not.toBe(previousBundle);
+    expect(previousBundle.caseOrderingMode).toBe('alternating');
+
+    component.addBundleVariables(5, 2, 'alternating');
+    expect(ordering()).toBe('alternating');
   });
 
   it('releases pending training requests when the component is destroyed', () => {
