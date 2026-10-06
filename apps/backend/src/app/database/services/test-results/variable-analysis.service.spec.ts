@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import { VariableAnalysisService } from './variable-analysis.service';
 
@@ -66,6 +66,38 @@ describe('VariableAnalysisService', () => {
         'log'
       )
       .mockImplementation(jest.fn());
+  });
+
+  it.each(['active', 'waiting', 'failed'])('rejects results of a %s job with a client error', async state => {
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob({ state }));
+    await expect(service.getAnalysisResults('job-1', 1)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.getAnalysisResultsPage('job-1', 1)).rejects.toBeInstanceOf(BadRequestException);
+    expect(cacheService.get).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    'getAnalysisResults',
+    'getAnalysisResultsPage',
+    'exportAnalysisResultsAsCsv',
+    'exportAnalysisResultsAsXlsx'
+  ] as const)('%s rejects expired cached results with a client error', async method => {
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob());
+    cacheService.get.mockResolvedValue(null);
+    await expect(service[method]('job-1', 1)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it.each([
+    'getAnalysisResults',
+    'getAnalysisResultsPage',
+    'exportAnalysisResultsAsCsv',
+    'exportAnalysisResultsAsXlsx'
+  ] as const)('%s rejects completed jobs without results with a client error', async method => {
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob({
+      data: { workspaceId: 1 },
+      returnvalue: undefined
+    }));
+    await expect(service[method]('job-1', 1)).rejects.toBeInstanceOf(BadRequestException);
+    expect(cacheService.get).not.toHaveBeenCalled();
   });
 
   it('creates jobs unless one is already active', async () => {

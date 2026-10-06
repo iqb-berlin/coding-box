@@ -2653,7 +2653,7 @@ export class CodingJobService {
         );
       }
       if (codingJob.codingJob.status === 'results_applied') {
-        throw new Error(
+        throw new BadRequestException(
           `Cannot change status of coding job ${id} because it has already been applied to results (status: results_applied)`
         );
       }
