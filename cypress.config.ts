@@ -1,9 +1,20 @@
 import { defineConfig } from 'cypress';
 
+function requireExecutedSpec(on: Cypress.PluginEvents): void {
+  on('after:spec', (spec, results) => {
+    if (results && results.stats.tests === 0) {
+      throw new Error(`Cypress did not execute any tests in ${spec.relative}`);
+    }
+  });
+}
+
 export default defineConfig({
   retries: 0,
   component: {
-    setupNodeEvents(_on, config) {
+    // Cold Angular compilation in CI needs more time than a regular page load.
+    pageLoadTimeout: 120000,
+    setupNodeEvents(on, config) {
+      requireExecutedSpec(on);
       config.screenshotsFolder = 'cypress/component-screenshots';
       config.videosFolder = 'cypress/component-videos';
       return config;
@@ -36,6 +47,9 @@ export default defineConfig({
     supportFile: 'cypress/support/component.ts'
   },
   e2e: {
+    setupNodeEvents(on) {
+      requireExecutedSpec(on);
+    },
     baseUrl: 'http://localhost:4200',
     specPattern: ['cypress/e2e/**/*.cy.ts', 'cypress/zoneless/**/*.cy.ts'],
     // Live suites need the disposable backend and tasks in cypress.replay.config.ts.
