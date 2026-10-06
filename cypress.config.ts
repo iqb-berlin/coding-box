@@ -11,8 +11,9 @@ function requireExecutedSpec(on: Cypress.PluginEvents): void {
 export default defineConfig({
   retries: 0,
   component: {
-    // Cold Angular compilation in CI needs more time than a regular page load.
-    pageLoadTimeout: 120000,
+    // Cypress 15's webpack JIT runner can load a stale bundle before compilation finishes.
+    // Compile all component specs up front: https://github.com/cypress-io/cypress/pull/34120
+    justInTimeCompile: false,
     setupNodeEvents(on, config) {
       requireExecutedSpec(on);
       config.screenshotsFolder = 'cypress/component-screenshots';

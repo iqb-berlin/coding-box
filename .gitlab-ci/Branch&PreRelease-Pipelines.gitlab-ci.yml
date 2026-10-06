@@ -543,8 +543,8 @@ test-browser:
     - !reference [ .default_rules, rules ]
   script:
     - npx cypress install
-    - npx nx run frontend:e2e --configuration=ci --browser=electron
     - npx nx run frontend:component-test --browser=electron
+    - npx nx run frontend:e2e --configuration=ci --browser=electron
   artifacts:
     when: always
     expire_in: 7 days
