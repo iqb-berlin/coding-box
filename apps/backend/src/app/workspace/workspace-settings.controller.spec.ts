@@ -2,6 +2,7 @@ import { Repository } from 'typeorm';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { WorkspaceSettingsController } from './workspace-settings.controller';
+import { WorkspaceSettingsService } from './workspace-settings.service';
 import { Setting } from '../database/entities/setting.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../admin/workspace/workspace.guard';
@@ -52,7 +53,7 @@ describe('WorkspaceSettingsController', () => {
       }
     };
     controller = new WorkspaceSettingsController(
-      settingRepository as unknown as Repository<Setting>
+      new WorkspaceSettingsService(settingRepository as unknown as Repository<Setting>)
     );
   });
 
