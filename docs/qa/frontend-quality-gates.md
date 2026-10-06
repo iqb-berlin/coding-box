@@ -7,10 +7,17 @@ and the existing risk-based inventory approval. It rejects failures and publishe
 JUnit and Cobertura reports even when tests fail.
 
 `test-backend` excludes the frontend and rejects backend test failures. `lint-app`
-runs affected lint targets once and rejects failures. `build-app` builds the
+runs every project's lint target once and rejects failures, including frontend
+changes preceding a final documentation or CI commit. `build-app` builds the
 production frontend once and builds affected backend projects separately.
 `test-browser` runs all mocked end-to-end regressions against that production
 artifact using `frontend:serve-static`; it does not rebuild the frontend.
+The E2E cache includes a deterministic SHA-256 fingerprint of every file path and
+file content in `dist/apps/frontend`, computed by
+`scripts/qa/hash-frontend-artifact.mjs`. Changed, added, removed, or renamed assets
+invalidate cached results even though Nx ignores `dist`. Identical bytes retain
+the fingerprint regardless of timestamps. A missing build has its own fingerprint
+so dev-server E2E can still start before a disk build exists.
 Each browser suite runs once; migration wrappers no longer import other spec files.
 The same job runs the existing component suites with Cypress's native zoneless
 mount adapter. Component screenshots and videos use separate artifact folders.
@@ -80,7 +87,11 @@ The frontend Jest configuration explicitly selects `ts-node` and loads after
 other project configurations without setting `TS_NODE_COMPILER_OPTIONS`.
 
 `frontend:test-quality-gates` tests invalid templates, inaccessible external and
-inline controls, configuration loading, and CI wiring. It also runs an isolated
+inline controls, configuration loading, and CI wiring. An isolated Nx/Git fixture
+executes the actual lint job after a frontend change followed by a docs-only
+commit, and verifies that frontend lint failures reject the job. Artifact hashing
+regressions cover content changes, additions, deletions, renames, and timestamps.
+It also runs an isolated
 Jest fixture twice using the actual workspace thresholds: full coverage passes,
 while a passing test with uncovered functions fails the coverage gate.
 
