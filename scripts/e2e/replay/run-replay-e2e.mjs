@@ -21,7 +21,6 @@ const runDir = path.join(repoDir, 'tmp', 'replay-e2e', runId);
 const artifactDir = path.join(repoDir, 'tmp', 'replay-e2e-artifacts', runId);
 const composeFile = path.join(scriptDir, 'docker-compose.replay.yml');
 const authMode = process.argv.includes('--auth');
-const zoneless = process.argv.includes('--zoneless');
 const production = process.argv.includes('--production');
 const dockerConnectHost = process.env.REPLAY_E2E_CONNECT_HOST || '127.0.0.1';
 const connectHost = authMode ? '127.0.0.1' : dockerConnectHost;
@@ -43,7 +42,7 @@ const replayEnvironment = {
   ...process.env,
   ...authEnvironment,
   REPLAY_E2E_CONNECT_HOST: connectHost,
-  REPLAY_E2E_FRONTEND_CONFIGURATION: production ? 'production' : (zoneless ? 'zoneless' : 'development'),
+  REPLAY_E2E_FRONTEND_CONFIGURATION: production ? 'production' : 'development',
   REPLAY_E2E_API_PORT: String(dockerApiPort),
   REPLAY_E2E_API_URL: `http://${connectHost}:${apiPort}`,
   REPLAY_E2E_BASE_URL: `http://${connectHost}:${frontendPort}`,

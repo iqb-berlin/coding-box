@@ -1,7 +1,5 @@
 import { Clipboard } from '@angular/cdk/clipboard';
-import {
-  ComponentFixture, fakeAsync, TestBed, tick
-} from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { XmlViewerComponent } from './xml-viewer.component';
 
@@ -82,20 +80,25 @@ describe('XmlViewerComponent', () => {
     expect(component.lineWrap()).toBe(true);
   });
 
-  it('should copy the original XML', fakeAsync(() => {
-    const rawXml = '<Unit><Value>42</Value></Unit>';
-    fixture.componentRef.setInput('xml', rawXml);
-    fixture.detectChanges();
+  it('should copy the original XML', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    try {
+      const rawXml = '<Unit><Value>42</Value></Unit>';
+      fixture.componentRef.setInput('xml', rawXml);
+      fixture.detectChanges();
 
-    expect(component.formattedXml()).not.toBe(rawXml);
+      expect(component.formattedXml()).not.toBe(rawXml);
 
-    component.copyToClipboard();
+      component.copyToClipboard();
 
-    expect(clipboard.copy).toHaveBeenCalledWith(rawXml);
-    expect(component.copySucceeded()).toBe(true);
+      expect(clipboard.copy).toHaveBeenCalledWith(rawXml);
+      expect(component.copySucceeded()).toBe(true);
 
-    tick(1500);
+      await jest.advanceTimersByTimeAsync(1500);
 
-    expect(component.copySucceeded()).toBe(false);
-  }));
+      expect(component.copySucceeded()).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

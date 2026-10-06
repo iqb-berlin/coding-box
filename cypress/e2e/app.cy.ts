@@ -1,6 +1,15 @@
 describe('Kodierbox App E2E', () => {
   beforeEach(() => {
+    cy.intercept('GET', '**/realms/coding-box/protocol/openid-connect/auth*', request => {
+      const url = new URL(request.url);
+      const redirectUri = url.searchParams.get('redirect_uri') || '';
+      const state = url.searchParams.get('state') || '';
+      request.redirect(`${redirectUri}#error=login_required&state=${state}`, 302);
+    });
+    cy.intercept('GET', '**/api//admin/logo/settings', { statusCode: 404, body: {} });
+    cy.intercept('GET', '**/api/system-notifications/active', { body: [] });
     cy.visit('/');
+    cy.get('coding-box-home').should('be.visible');
   });
 
   it('should display the landing page structure', () => {
@@ -16,11 +25,11 @@ describe('Kodierbox App E2E', () => {
   });
 
   it('should redirect to home or login when accessing protected route without auth', () => {
-    // Attempt to visit protected route
-    cy.visit('/coding');
-
-    // Should likely redirect back to home or login URL
-    // Since we are not logged in, we expect url not to be /coding
-    cy.location('pathname').should('not.eq', '/coding');
+    cy.window().then(win => { win.location.hash = '/coding'; });
+    cy.location('hash').should('include', '/home');
+    cy.location('hash').should('include', 'auth=session-expired');
+    cy.location('hash').should('include', 'returnUrl=%2Fcoding');
+    cy.get('coding-box-my-coding-jobs').should('not.exist');
+    cy.get('.login-button').should('be.visible');
   });
 });

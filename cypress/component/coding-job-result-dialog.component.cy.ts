@@ -1,4 +1,3 @@
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { provideHttpClient } from '@angular/common/http';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -24,7 +23,7 @@ describe('CodingJobResultDialogComponent review flow', () => {
       id: 1,
       workspace_id: 5,
       name: 'Job Review',
-      status: 'completed',
+      status: 'review',
       created_at: new Date('2026-05-26T08:00:00Z'),
       updated_at: new Date('2026-05-26T08:00:00Z'),
       assignedCoders: [1],
@@ -39,7 +38,6 @@ describe('CodingJobResultDialogComponent review flow', () => {
     cy.mount(CodingJobResultDialogComponent, {
       imports: [TranslateModule.forRoot()],
       providers: [
-        provideNoopAnimations(),
         provideHttpClient(),
         { provide: SERVER_URL, useValue: '/api/' },
         {

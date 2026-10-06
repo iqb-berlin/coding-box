@@ -264,20 +264,20 @@ describe('ManualCodingExportDialogComponent', () => {
       expect(textContent).not.toContain('ws-admin.export-options.double-coding-methods');
     });
 
-    it('selects and deselects all trainings through the first select option', () => {
+    it('selects and deselects all trainings through the first select option', async () => {
       const select = fixture.debugElement.query(By.directive(MatSelect)).componentInstance as MatSelect;
       const overlayContainer = TestBed.inject(OverlayContainer).getContainerElement();
 
       select.open();
-      fixture.detectChanges();
+      await fixture.whenStable();
       const toggleOption = overlayContainer.querySelector('mat-option') as HTMLElement;
       toggleOption.click();
-      fixture.detectChanges();
+      await fixture.whenStable();
 
       expect(fixture.componentInstance.selectedCoderTrainingIds).toEqual([7, 8]);
 
       toggleOption.click();
-      fixture.detectChanges();
+      await fixture.whenStable();
 
       expect(fixture.componentInstance.selectedCoderTrainingIds).toEqual([]);
     });
